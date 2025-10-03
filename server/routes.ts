@@ -12523,6 +12523,31 @@ Respond in JSON format:
     }
   });
 
+  // Comprehensive final diagnosis for completed assessments
+  app.post("/api/joint-analysis/final-diagnosis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { jointType, testsPerformed, currentHypotheses } = req.body;
+      
+      // Validate required fields
+      if (!jointType || !testsPerformed || !Array.isArray(testsPerformed)) {
+        return res.status(400).json({ message: 'jointType and testsPerformed array are required' });
+      }
+
+      // Generate comprehensive final diagnosis
+      const result = await jointAnalysisService.generateFinalDiagnosis({
+        jointType,
+        testsPerformed,
+        currentHypotheses: currentHypotheses || []
+      });
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error generating final diagnosis:', error);
+      res.status(500).json({ message: 'Failed to generate final diagnosis' });
+    }
+  });
+
   app.patch("/api/body-scanner/scans/:id/review", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const scanId = parseInt(req.params.id);

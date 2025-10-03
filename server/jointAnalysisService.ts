@@ -149,6 +149,85 @@ Think like a skilled clinician: each test should add valuable diagnostic informa
   }
 
   /**
+   * Generates comprehensive final diagnosis synthesizing all test results
+   */
+  async generateFinalDiagnosis(sessionData: {
+    jointType: string;
+    testsPerformed: Array<{
+      movementType: string;
+      instruction: string;
+      movementRange: number;
+      smoothness: number;
+      compensations: string[];
+      symmetry?: number;
+      findings: string;
+    }>;
+    currentHypotheses: Array<{
+      diagnosis: string;
+      likelihood: "high" | "moderate" | "low";
+      supportingEvidence: string[];
+    }>;
+  }): Promise<{
+    primaryDiagnosis: {
+      condition: string;
+      confidence: "high" | "moderate" | "low";
+      clinicalReasoning: string;
+      keyFindings: string[];
+    };
+    differentialDiagnoses: Array<{
+      condition: string;
+      likelihood: "high" | "moderate" | "low";
+      supportingEvidence: string[];
+      ruledOutBy?: string;
+    }>;
+    clinicalReasoningChain: string[];
+    treatmentRecommendations: {
+      immediateActions: string[];
+      exercises: string[];
+      manualTherapy: string[];
+      precautions: string[];
+    };
+    redFlags: string[];
+    prognosticIndicators: string[];
+  }> {
+    try {
+      const prompt = this.buildFinalDiagnosisPrompt(sessionData);
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert musculoskeletal physiotherapist providing comprehensive final diagnostic synthesis. Your role is to:
+
+1. SYNTHESIZE all test findings into a coherent primary diagnosis
+2. RANK differential diagnoses with clear supporting evidence
+3. PROVIDE step-by-step clinical reasoning demonstrating your diagnostic process
+4. DEVELOP comprehensive, evidence-based treatment recommendations
+5. IDENTIFY any red flags requiring medical referral
+6. ASSESS prognostic indicators for recovery
+
+Use evidence-based clinical reasoning and current best practices in musculoskeletal physiotherapy. Be specific, actionable, and clinically precise.`
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 3000,
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+      return this.processFinalDiagnosisResult(result);
+
+    } catch (error) {
+      console.error('Error in final diagnosis generation:', error);
+      throw new Error('Failed to generate final diagnosis');
+    }
+  }
+
+  /**
    * Builds the clinical reasoning prompt for adaptive testing
    */
   private buildClinicalReasoningPrompt(sessionData: {
@@ -361,6 +440,215 @@ Provide your clinical analysis in the following JSON format:
 Base your analysis on current evidence-based physiotherapy practice and functional movement principles.
 `;
     }
+  }
+
+  /**
+   * Builds the comprehensive final diagnosis prompt
+   */
+  private buildFinalDiagnosisPrompt(sessionData: {
+    jointType: string;
+    testsPerformed: Array<{
+      movementType: string;
+      instruction: string;
+      movementRange: number;
+      smoothness: number;
+      compensations: string[];
+      symmetry?: number;
+      findings: string;
+    }>;
+    currentHypotheses: Array<{
+      diagnosis: string;
+      likelihood: "high" | "moderate" | "low";
+      supportingEvidence: string[];
+    }>;
+  }): string {
+    const jointName = sessionData.jointType.charAt(0).toUpperCase() + sessionData.jointType.slice(1);
+    const testCount = sessionData.testsPerformed.length;
+    
+    let testsHistory = '';
+    sessionData.testsPerformed.forEach((test, index) => {
+      const compensations = test.compensations.join(', ') || 'None';
+      const symmetry = test.symmetry !== undefined ? `${test.symmetry.toFixed(1)}%` : 'N/A';
+      
+      testsHistory += `
+Test ${index + 1}: ${test.movementType}
+- Instruction: "${test.instruction}"
+- Movement Range: ${test.movementRange.toFixed(1)}°
+- Smoothness: ${test.smoothness.toFixed(2)}
+- Compensations: ${compensations}
+- Symmetry: ${symmetry}
+- Findings: ${test.findings}
+`;
+    });
+
+    let hypothesesSummary = '';
+    sessionData.currentHypotheses.forEach((hypothesis, index) => {
+      const evidence = hypothesis.supportingEvidence.join('; ');
+      hypothesesSummary += `
+${index + 1}. ${hypothesis.diagnosis} (${hypothesis.likelihood} likelihood)
+   Supporting Evidence: ${evidence}
+`;
+    });
+
+    return `
+COMPREHENSIVE FINAL DIAGNOSIS - ${jointName.toUpperCase()} JOINT ASSESSMENT
+Total Tests Performed: ${testCount}
+
+COMPLETE TEST HISTORY:
+${testsHistory}
+
+CURRENT DIAGNOSTIC HYPOTHESES:
+${hypothesesSummary}
+
+TASK: Provide a comprehensive final diagnostic synthesis based on ALL assessment data.
+
+REQUIRED ANALYSIS:
+
+1. PRIMARY DIAGNOSIS
+   - Identify the single most likely diagnosis based on all evidence
+   - Assign confidence level (high/moderate/low)
+   - Provide detailed clinical reasoning explaining WHY this is the primary diagnosis
+   - List key findings that support this diagnosis
+
+2. DIFFERENTIAL DIAGNOSES
+   - List other possible diagnoses ranked by likelihood
+   - For each, provide supporting evidence from the tests
+   - If ruled out, explain what finding(s) ruled it out
+
+3. CLINICAL REASONING CHAIN
+   - Provide step-by-step reasoning showing how you arrived at the diagnosis
+   - Each step should reference specific test findings
+   - Show the logical progression from findings → pattern recognition → diagnosis
+
+4. TREATMENT RECOMMENDATIONS
+   - Immediate Actions: What should be done first (e.g., pain management, activity modification)
+   - Exercises: Specific therapeutic exercises targeting the diagnosed condition
+   - Manual Therapy: Hands-on techniques indicated for this condition
+   - Precautions: What to avoid or monitor carefully
+
+5. RED FLAGS
+   - Identify any concerning patterns requiring medical referral or imaging
+   - List specific indicators that suggest serious pathology
+
+6. PROGNOSTIC INDICATORS
+   - Expected recovery timeline
+   - Factors that may influence recovery (positive and negative)
+   - Functional goals and milestones
+
+Respond in this EXACT JSON format:
+{
+  "primaryDiagnosis": {
+    "condition": "Specific diagnosis name (e.g., 'Subacromial impingement syndrome with rotator cuff tendinopathy')",
+    "confidence": "high" | "moderate" | "low",
+    "clinicalReasoning": "Detailed explanation of why this is the primary diagnosis (2-3 sentences)",
+    "keyFindings": ["Specific test findings supporting this diagnosis (e.g., 'Painful arc 80-120° during abduction')"]
+  },
+  "differentialDiagnoses": [
+    {
+      "condition": "Alternative diagnosis name",
+      "likelihood": "high" | "moderate" | "low",
+      "supportingEvidence": ["Evidence from tests that could support this diagnosis"],
+      "ruledOutBy": "Optional: Specific finding that rules this out (e.g., 'No restriction in passive ROM rules out adhesive capsulitis')"
+    }
+  ],
+  "clinicalReasoningChain": [
+    "Step 1: Initial observation from first test (e.g., 'Abduction test revealed limited range to 85° with compensation')",
+    "Step 2: Pattern recognition (e.g., 'Painful arc pattern combined with scapular compensation suggests impingement')",
+    "Step 3: Hypothesis testing (e.g., 'Internal rotation limitation confirmed capsular involvement')",
+    "Step 4: Final synthesis (e.g., 'Pattern consistent with subacromial impingement with secondary rotator cuff weakness')"
+  ],
+  "treatmentRecommendations": {
+    "immediateActions": [
+      "Specific immediate interventions (e.g., 'Avoid overhead activities above 90° for 2 weeks')"
+    ],
+    "exercises": [
+      "Specific exercises with dosage (e.g., 'External rotation strengthening: 3 sets x 15 reps, 2x daily')"
+    ],
+    "manualTherapy": [
+      "Specific techniques (e.g., 'Posterior capsule mobilization', 'Scapular stabilization training')"
+    ],
+    "precautions": [
+      "Important warnings (e.g., 'Monitor for increased pain with overhead movements - may indicate progression')"
+    ]
+  },
+  "redFlags": [
+    "Any concerning indicators (e.g., 'Consider imaging if no improvement in 4 weeks')"
+  ],
+  "prognosticIndicators": [
+    "Recovery expectations (e.g., 'Expected 6-8 week recovery with consistent treatment')",
+    "Positive/negative factors (e.g., 'Good prognosis due to preserved passive ROM and no acute injury')"
+  ]
+}
+
+Provide comprehensive, evidence-based analysis using all available test data and current hypotheses.
+`;
+  }
+
+  /**
+   * Processes and validates the final diagnosis result
+   */
+  private processFinalDiagnosisResult(result: any): {
+    primaryDiagnosis: {
+      condition: string;
+      confidence: "high" | "moderate" | "low";
+      clinicalReasoning: string;
+      keyFindings: string[];
+    };
+    differentialDiagnoses: Array<{
+      condition: string;
+      likelihood: "high" | "moderate" | "low";
+      supportingEvidence: string[];
+      ruledOutBy?: string;
+    }>;
+    clinicalReasoningChain: string[];
+    treatmentRecommendations: {
+      immediateActions: string[];
+      exercises: string[];
+      manualTherapy: string[];
+      precautions: string[];
+    };
+    redFlags: string[];
+    prognosticIndicators: string[];
+  } {
+    return {
+      primaryDiagnosis: {
+        condition: result.primaryDiagnosis?.condition || 'Diagnosis pending further evaluation',
+        confidence: result.primaryDiagnosis?.confidence || 'moderate',
+        clinicalReasoning: result.primaryDiagnosis?.clinicalReasoning || 'Clinical reasoning in progress',
+        keyFindings: Array.isArray(result.primaryDiagnosis?.keyFindings) 
+          ? result.primaryDiagnosis.keyFindings 
+          : []
+      },
+      differentialDiagnoses: Array.isArray(result.differentialDiagnoses)
+        ? result.differentialDiagnoses.map((d: any) => ({
+            condition: d.condition || 'Alternative diagnosis',
+            likelihood: d.likelihood || 'low',
+            supportingEvidence: Array.isArray(d.supportingEvidence) ? d.supportingEvidence : [],
+            ruledOutBy: d.ruledOutBy
+          }))
+        : [],
+      clinicalReasoningChain: Array.isArray(result.clinicalReasoningChain)
+        ? result.clinicalReasoningChain
+        : [],
+      treatmentRecommendations: {
+        immediateActions: Array.isArray(result.treatmentRecommendations?.immediateActions)
+          ? result.treatmentRecommendations.immediateActions
+          : [],
+        exercises: Array.isArray(result.treatmentRecommendations?.exercises)
+          ? result.treatmentRecommendations.exercises
+          : [],
+        manualTherapy: Array.isArray(result.treatmentRecommendations?.manualTherapy)
+          ? result.treatmentRecommendations.manualTherapy
+          : [],
+        precautions: Array.isArray(result.treatmentRecommendations?.precautions)
+          ? result.treatmentRecommendations.precautions
+          : []
+      },
+      redFlags: Array.isArray(result.redFlags) ? result.redFlags : [],
+      prognosticIndicators: Array.isArray(result.prognosticIndicators) 
+        ? result.prognosticIndicators 
+        : []
+    };
   }
 
   /**

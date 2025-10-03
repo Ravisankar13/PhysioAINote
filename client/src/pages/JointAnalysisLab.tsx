@@ -955,6 +955,11 @@ export default function JointAnalysisLab() {
   const startAutomatedNextTest = (testData: { movementType: string; instruction: string; rationale: string }) => {
     console.log('Starting automated next test. Instruction:', testData.instruction);
     
+    // Clear previous test results to allow auto-analysis to trigger for new test
+    setAnalysisResult(null);
+    setMovementData([]);
+    setRecordingProgress(0);
+    
     // Update state immediately with the new test data
     setNextTestRecommendation(testData);
     

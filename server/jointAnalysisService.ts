@@ -359,13 +359,29 @@ CLINICAL DECISION RULES:
     completionReason?: string;
   } {
     // Validate that the recommended test is novel (not a repeat)
-    const performedMovementTypes = testsPerformed.map(t => t.movementType.toLowerCase());
+    // Normalize movement types by extracting key movement words
+    const normalizeMovementType = (type: string): string => {
+      return type
+        .toLowerCase()
+        .replace(/\(.*?\)/g, '') // Remove parenthetical descriptions
+        .replace(/active|passive|resisted/gi, '') // Remove modifiers
+        .replace(/[^a-z\s]/g, '') // Remove special chars
+        .trim()
+        .split(/\s+/)
+        .filter(word => word.length > 2) // Keep words longer than 2 chars
+        .sort()
+        .join(' ');
+    };
+    
+    const performedMovementTypes = testsPerformed.map(t => normalizeMovementType(t.movementType));
     let validatedNextTest = null;
     
     if (result.nextTest && !result.isAssessmentComplete) {
-      const recommendedType = (result.nextTest.movementType || '').toLowerCase();
+      const recommendedType = normalizeMovementType(result.nextTest.movementType || '');
       const isRepeat = performedMovementTypes.some(performed => 
-        recommendedType.includes(performed) || performed.includes(recommendedType)
+        performed === recommendedType || 
+        recommendedType.includes(performed) || 
+        performed.includes(recommendedType)
       );
       
       if (isRepeat) {

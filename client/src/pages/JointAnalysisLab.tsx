@@ -292,6 +292,7 @@ export default function JointAnalysisLab() {
   const recordingPhaseRef = useRef<RecordingPhase>('idle');
   const animationFrameRef = useRef<number | null>(null);
   const currentInstructionRef = useRef<string>('');
+  const currentMovementTypeRef = useRef<string>('');
 
   const calculateAngle = (a: any, b: any, c: any): number => {
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -962,8 +963,9 @@ export default function JointAnalysisLab() {
     // Update state immediately with the new test data
     setNextTestRecommendation(testData);
     
-    // Store instruction in ref for persistent overlay display
+    // Store instruction and movement type in refs for persistent tracking
     currentInstructionRef.current = testData.instruction;
+    currentMovementTypeRef.current = testData.movementType;
     
     setRecordingPhase('preparing_next_test');
     recordingPhaseRef.current = 'preparing_next_test';
@@ -986,10 +988,11 @@ export default function JointAnalysisLab() {
   };
 
   const startRecording = () => {
-    // Set instruction in ref if not already set (for first test)
+    // Set instruction and movement type in refs if not already set (for first test)
     if (!currentInstructionRef.current) {
       const config = JOINT_CONFIGS[selectedJoint];
       currentInstructionRef.current = config.movementInstruction;
+      currentMovementTypeRef.current = `Active ${config.label.toLowerCase()} flexion`;
     }
     
     setRecordingPhase('countdown');
@@ -1148,10 +1151,15 @@ export default function JointAnalysisLab() {
     setIsGettingNextTest(true);
     
     try {
-      // Add current test to history
+      // Add current test to history using refs for accurate tracking
+      const movementType = currentMovementTypeRef.current || 
+        `Active ${currentResult.jointType} movement`;
+      const instruction = currentInstructionRef.current || 
+        JOINT_CONFIGS[currentResult.jointType].movementInstruction;
+      
       const newTest = {
-        movementType: JOINT_CONFIGS[currentResult.jointType].label,
-        instruction: JOINT_CONFIGS[currentResult.jointType].movementInstruction,
+        movementType: movementType,
+        instruction: instruction,
         movementRange: currentResult.movementMetrics.totalRange,
         smoothness: currentResult.movementMetrics.smoothness,
         compensations: currentResult.movementMetrics.compensations,

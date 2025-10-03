@@ -1571,6 +1571,97 @@ export default function JointAnalysisLab() {
           </CardContent>
         </Card>
 
+        {isSessionActive && clinicalReasoning && (
+          <Card className="mt-6 border-purple-200" data-testid="card-clinical-thinking">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Cpu className="h-5 w-5 text-purple-600" />
+                  Clinical Thinking
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    AI Reasoning
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setShowClinicalThinking(!showClinicalThinking)}
+                    data-testid="button-toggle-clinical-thinking"
+                  >
+                    {showClinicalThinking ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            {showClinicalThinking && (
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-purple-600">Clinical Reasoning</h3>
+                  <p className="text-xs leading-relaxed whitespace-pre-line bg-muted p-3 rounded">
+                    {clinicalReasoning}
+                  </p>
+                </div>
+                
+                {currentHypotheses.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-sm text-purple-600">Current Hypotheses</h3>
+                      {currentHypotheses.map((hyp, idx) => (
+                        <div key={idx} className="bg-muted p-3 rounded space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-xs">{hyp.diagnosis}</span>
+                            <Badge 
+                              variant={hyp.likelihood === 'high' ? 'default' : 'secondary'}
+                              className="text-xs"
+                            >
+                              {hyp.likelihood}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {hyp.supportingEvidence.join(', ')}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                
+                {nextTestRecommendation && !isAssessmentComplete && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-sm text-green-600">Next Test</h3>
+                      <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded space-y-1">
+                        <p className="font-medium text-xs">{nextTestRecommendation.instruction}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {nextTestRecommendation.rationale}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {isAssessmentComplete && (
+                  <>
+                    <Separator />
+                    <Alert>
+                      <CheckCircle className="h-4 w-4" />
+                      <AlertTitle className="text-sm">Assessment Complete</AlertTitle>
+                      <AlertDescription className="text-xs">
+                        {completionReason}
+                      </AlertDescription>
+                    </Alert>
+                  </>
+                )}
+              </CardContent>
+            )}
+          </Card>
+        )}
+
         {isSessionActive && testHistory.length > 0 && (
           <div className="fixed right-4 top-24 w-80 z-50">
             <Card className="shadow-lg border-blue-200">
@@ -1831,99 +1922,6 @@ export default function JointAnalysisLab() {
                   </>
                 )}
               </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {isSessionActive && clinicalReasoning && isAssessmentComplete && (
-          <div className="fixed left-4 top-24 w-96 z-50">
-            <Card className="shadow-lg border-purple-200">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Cpu className="h-5 w-5 text-purple-600" />
-                    Clinical Thinking
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">
-                      <Sparkles className="h-3 w-3 mr-1" />
-                      AI Reasoning
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => setShowClinicalThinking(!showClinicalThinking)}
-                      data-testid="button-toggle-clinical-thinking"
-                    >
-                      {showClinicalThinking ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              {showClinicalThinking && (
-                <CardContent className="space-y-4 max-h-[60vh] overflow-y-auto">
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm text-purple-600">Clinical Reasoning</h3>
-                  <p className="text-xs leading-relaxed whitespace-pre-line bg-muted p-3 rounded">
-                    {clinicalReasoning}
-                  </p>
-                </div>
-                
-                {currentHypotheses.length > 0 && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <h3 className="font-semibold text-sm text-purple-600">Current Hypotheses</h3>
-                      {currentHypotheses.map((hyp, idx) => (
-                        <div key={idx} className="bg-muted p-3 rounded space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-xs">{hyp.diagnosis}</span>
-                            <Badge 
-                              variant={hyp.likelihood === 'high' ? 'default' : 'secondary'}
-                              className="text-xs"
-                            >
-                              {hyp.likelihood}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {hyp.supportingEvidence.join(', ')}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                
-                {nextTestRecommendation && !isAssessmentComplete && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <h3 className="font-semibold text-sm text-green-600">Next Test</h3>
-                      <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded space-y-1">
-                        <p className="font-medium text-xs">{nextTestRecommendation.instruction}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {nextTestRecommendation.rationale}
-                        </p>
-                      </div>
-                    </div>
-                  </>
-                )}
-                
-                {isAssessmentComplete && (
-                  <>
-                    <Separator />
-                    <Alert>
-                      <CheckCircle className="h-4 w-4" />
-                      <AlertTitle className="text-sm">Assessment Complete</AlertTitle>
-                      <AlertDescription className="text-xs">
-                        {completionReason}
-                      </AlertDescription>
-                    </Alert>
-                  </>
-                )}
-              </CardContent>
-              )}
             </Card>
           </div>
         )}

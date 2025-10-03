@@ -685,12 +685,17 @@ export default function JointAnalysisLab() {
           overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
           overlayCtx.fillRect(canvas.width / 2 - 300, instructionY - 40, 600, 80);
           
+          // Use AI-recommended instruction if available, otherwise use default
+          const displayInstruction = nextTestRecommendation?.instruction 
+            ? nextTestRecommendation.instruction 
+            : config.movementInstruction;
+          
           overlayCtx.fillStyle = '#22c55e';
           overlayCtx.font = 'bold 24px Arial';
           overlayCtx.textAlign = 'center';
           overlayCtx.textBaseline = 'middle';
           overlayCtx.fillText(
-            nextTestRecommendation?.instruction || config.movementInstruction,
+            displayInstruction,
             canvas.width / 2,
             instructionY
           );
@@ -948,15 +953,19 @@ export default function JointAnalysisLab() {
   };
 
   const startAutomatedNextTest = () => {
+    console.log('Starting automated next test. Next test instruction:', nextTestRecommendation?.instruction);
+    
     setRecordingPhase('preparing_next_test');
     recordingPhaseRef.current = 'preparing_next_test';
     setPreparationCountdown(4);
     
     const prepInterval = setInterval(() => {
       setPreparationCountdown(prev => {
+        console.log('Preparation countdown:', prev);
         if (prev <= 1) {
           clearInterval(prepInterval);
           setTimeout(() => {
+            console.log('Starting recording after preparation');
             startRecording();
           }, 500);
           return 0;
@@ -1154,6 +1163,8 @@ export default function JointAnalysisLab() {
       }
 
       const result = await response.json();
+      
+      console.log('AI Next Test Response:', result.nextTest);
       
       setClinicalReasoning(result.clinicalReasoning);
       setCurrentHypotheses(result.currentHypotheses || []);

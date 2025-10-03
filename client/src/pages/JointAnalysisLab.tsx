@@ -216,6 +216,7 @@ export default function JointAnalysisLab() {
   const centeredStartTimeRef = useRef<number | null>(null);
   const recordingStartTimeRef = useRef<number | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const jointPositionHistoryRef = useRef<{x: number, y: number, timestamp: number}[]>([]);
 
   const calculateAngle = (a: any, b: any, c: any): number => {
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -224,21 +225,31 @@ export default function JointAnalysisLab() {
     return angle;
   };
 
-  const isJointInTarget = useCallback((landmarks: any[], config: JointConfig, width: number, height: number): boolean => {
-    const primaryLandmark = landmarks[config.landmarks.primary];
-    if (!primaryLandmark) return false;
+  const isJointStable = useCallback((currentX: number, currentY: number): boolean => {
+    const now = Date.now();
+    const history = jointPositionHistoryRef.current;
     
-    const jointX = primaryLandmark.x * width;
-    const jointY = primaryLandmark.y * height;
-    const targetX = config.targetPosition.x * width;
-    const targetY = config.targetPosition.y * height;
+    // Add current position to history
+    history.push({ x: currentX, y: currentY, timestamp: now });
     
-    const distance = Math.sqrt(
-      Math.pow(jointX - targetX, 2) + 
-      Math.pow(jointY - targetY, 2)
-    );
+    // Keep only last 1.5 seconds of data
+    const cutoff = now - 1500;
+    jointPositionHistoryRef.current = history.filter(pos => pos.timestamp > cutoff);
     
-    return distance <= config.toleranceRadius;
+    // Need at least 10 frames over 1.5 seconds to determine stability
+    if (jointPositionHistoryRef.current.length < 10) return false;
+    
+    // Calculate variance in position
+    const positions = jointPositionHistoryRef.current;
+    const avgX = positions.reduce((sum, p) => sum + p.x, 0) / positions.length;
+    const avgY = positions.reduce((sum, p) => sum + p.y, 0) / positions.length;
+    
+    const variance = positions.reduce((sum, p) => {
+      return sum + Math.pow(p.x - avgX, 2) + Math.pow(p.y - avgY, 2);
+    }, 0) / positions.length;
+    
+    // Joint is stable if variance is very low (less than 0.0001 in normalized coordinates)
+    return variance < 0.0001;
   }, []);
 
   const calculateMovementMetrics = (frames: MovementFrame[], jointType: JointType): MovementMetrics => {
@@ -424,17 +435,17 @@ export default function JointAnalysisLab() {
         }
         
         if (recordingPhase === 'idle' || recordingPhase === 'countdown') {
-          const centered = isJointInTarget(results.poseLandmarks, config, canvas.width, canvas.height);
-          setIsJointCentered(centered);
+          const stable = isJointStable(primary.x, primary.y);
+          setIsJointCentered(stable);
           
-          if (centered) {
+          if (stable) {
             if (!centeredStartTimeRef.current) {
               centeredStartTimeRef.current = Date.now();
             }
             const duration = (Date.now() - centeredStartTimeRef.current) / 1000;
             setCenteredDuration(duration);
             
-            // Auto-start recording after 1.5 seconds of being centered
+            // Auto-start recording after 1.5 seconds of being stable
             if (duration >= 1.5 && recordingPhase === 'idle') {
               startRecording();
             }
@@ -444,18 +455,19 @@ export default function JointAnalysisLab() {
           }
         }
         
-        const targetX = config.targetPosition.x * canvas.width;
-        const targetY = config.targetPosition.y * canvas.height;
+        // Draw circle at current joint position (follows the joint)
+        const targetX = primary.x * canvas.width;
+        const targetY = primary.y * canvas.height;
         
-        const centered = isJointInTarget(results.poseLandmarks, config, canvas.width, canvas.height);
+        const isStable = jointPositionHistoryRef.current.length >= 10 && isJointStable(primary.x, primary.y);
         
-        overlayCtx.strokeStyle = centered ? '#22c55e' : '#ef4444';
+        overlayCtx.strokeStyle = isStable ? '#22c55e' : '#ef4444';
         overlayCtx.lineWidth = 4;
         overlayCtx.beginPath();
         overlayCtx.arc(targetX, targetY, config.toleranceRadius, 0, Math.PI * 2);
         overlayCtx.stroke();
         
-        overlayCtx.strokeStyle = centered ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+        overlayCtx.strokeStyle = isStable ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
         overlayCtx.lineWidth = 2;
         overlayCtx.beginPath();
         overlayCtx.moveTo(targetX - 20, targetY);
@@ -520,7 +532,7 @@ export default function JointAnalysisLab() {
           
           const currentDuration = centeredStartTimeRef.current ? (Date.now() - centeredStartTimeRef.current) / 1000 : 0;
           overlayCtx.fillText(
-            centered ? `Hold steady... ${Math.max(0, 1.5 - currentDuration).toFixed(1)}s` : 'Center your joint in the green circle',
+            isStable ? `Hold steady... ${Math.max(0, 1.5 - currentDuration).toFixed(1)}s` : 'Hold your position steady',
             canvas.width / 2,
             instructionY
           );
@@ -570,7 +582,7 @@ export default function JointAnalysisLab() {
         }
       }
     }
-  }, [selectedJoint, isJointInTarget, calculateAngle, recordingPhase, countdown]);
+  }, [selectedJoint, isJointStable, calculateAngle, recordingPhase, countdown]);
 
   useEffect(() => {
     const initMediaPipe = async () => {
@@ -670,6 +682,7 @@ export default function JointAnalysisLab() {
     setRecordingPhase('idle');
     setMovementData([]);
     centeredStartTimeRef.current = null;
+    jointPositionHistoryRef.current = [];
   };
 
   const handleJointChange = (joint: JointType) => {
@@ -680,6 +693,7 @@ export default function JointAnalysisLab() {
     setRecordingPhase('idle');
     setMovementData([]);
     centeredStartTimeRef.current = null;
+    jointPositionHistoryRef.current = [];
   };
 
   const startRecording = () => {

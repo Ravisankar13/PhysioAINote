@@ -208,6 +208,35 @@ export default function JointAnalysisLab() {
   const [currentLandmarks, setCurrentLandmarks] = useState<any[] | null>(null);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   
+  // Session management for adaptive assessments
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [testHistory, setTestHistory] = useState<Array<{
+    movementType: string;
+    instruction: string;
+    movementRange: number;
+    smoothness: number;
+    compensations: string[];
+    symmetry?: number;
+    findings: string;
+    timestamp: Date;
+  }>>([]);
+  const [currentHypotheses, setCurrentHypotheses] = useState<Array<{
+    diagnosis: string;
+    likelihood: "high" | "moderate" | "low";
+    supportingEvidence: string[];
+    testsNeeded: string[];
+  }>>([]);
+  const [clinicalReasoning, setClinicalReasoning] = useState<string>('');
+  const [nextTestRecommendation, setNextTestRecommendation] = useState<{
+    movementType: string;
+    instruction: string;
+    rationale: string;
+  } | null>(null);
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [isAssessmentComplete, setIsAssessmentComplete] = useState(false);
+  const [completionReason, setCompletionReason] = useState<string>('');
+  const [isGettingNextTest, setIsGettingNextTest] = useState(false);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -588,7 +617,7 @@ export default function JointAnalysisLab() {
           overlayCtx.textAlign = 'center';
           overlayCtx.textBaseline = 'middle';
           overlayCtx.fillText(
-            config.movementInstruction,
+            nextTestRecommendation?.instruction || config.movementInstruction,
             canvas.width / 2,
             instructionY
           );
@@ -905,6 +934,11 @@ export default function JointAnalysisLab() {
       
       setAnalysisResult(result);
       
+      // Auto-trigger next test recommendation after analysis
+      setTimeout(() => {
+        getNextTestRecommendation(result);
+      }, 500);
+      
       toast({
         title: "AI Analysis Complete",
         description: "Movement analysis results are ready",
@@ -937,6 +971,86 @@ export default function JointAnalysisLab() {
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const getNextTestRecommendation = async (currentResult: JointAnalysisResult) => {
+    setIsGettingNextTest(true);
+    
+    try {
+      // Add current test to history
+      const newTest = {
+        movementType: JOINT_CONFIGS[currentResult.jointType].label,
+        instruction: JOINT_CONFIGS[currentResult.jointType].movementInstruction,
+        movementRange: currentResult.movementMetrics.totalRange,
+        smoothness: currentResult.movementMetrics.smoothness,
+        compensations: currentResult.movementMetrics.compensations,
+        symmetry: currentResult.movementMetrics.symmetry,
+        findings: currentResult.clinicalInterpretation,
+        timestamp: currentResult.timestamp
+      };
+      
+      const updatedHistory = [...testHistory, newTest];
+      setTestHistory(updatedHistory);
+      
+      // Call AI reasoning endpoint
+      const response = await fetch('/api/joint-analysis/next-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          jointType: selectedJoint,
+          testsPerformed: updatedHistory
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get next test recommendation');
+      }
+
+      const result = await response.json();
+      
+      setClinicalReasoning(result.clinicalReasoning);
+      setCurrentHypotheses(result.currentHypotheses || []);
+      setNextTestRecommendation(result.nextTest);
+      setIsAssessmentComplete(result.isAssessmentComplete);
+      setCompletionReason(result.completionReason || '');
+      
+      if (!isSessionActive) {
+        setIsSessionActive(true);
+        setSessionId(`session-${Date.now()}`);
+      }
+      
+      toast({
+        title: result.isAssessmentComplete ? "Assessment Complete" : "Next Test Recommended",
+        description: result.isAssessmentComplete 
+          ? "AI has gathered sufficient diagnostic information"
+          : `Recommended: ${result.nextTest?.movementType}`,
+      });
+      
+    } catch (error) {
+      console.error('Error getting next test:', error);
+      toast({
+        title: "Error",
+        description: "Failed to get AI recommendation. You can continue manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGettingNextTest(false);
+    }
+  };
+
+  const resetSession = () => {
+    setSessionId(null);
+    setTestHistory([]);
+    setCurrentHypotheses([]);
+    setClinicalReasoning('');
+    setNextTestRecommendation(null);
+    setIsSessionActive(false);
+    setIsAssessmentComplete(false);
+    setCompletionReason('');
+    setAnalysisResult(null);
+    setRecordingPhase('idle');
+    setMovementData([]);
   };
 
   useEffect(() => {
@@ -981,19 +1095,33 @@ export default function JointAnalysisLab() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-3">
-              {(Object.keys(JOINT_CONFIGS) as JointType[]).map((joint) => (
+            <div className="flex items-center gap-3">
+              <div className="flex flex-wrap gap-3 flex-1">
+                {(Object.keys(JOINT_CONFIGS) as JointType[]).map((joint) => (
+                  <Button
+                    key={joint}
+                    variant={selectedJoint === joint ? 'default' : 'outline'}
+                    onClick={() => handleJointChange(joint)}
+                    disabled={isTracking}
+                    data-testid={`button-select-${joint}`}
+                    className="flex-1 min-w-[120px]"
+                  >
+                    {JOINT_CONFIGS[joint].label}
+                  </Button>
+                ))}
+              </div>
+              {isSessionActive && (
                 <Button
-                  key={joint}
-                  variant={selectedJoint === joint ? 'default' : 'outline'}
-                  onClick={() => handleJointChange(joint)}
-                  disabled={isTracking}
-                  data-testid={`button-select-${joint}`}
-                  className="flex-1 min-w-[120px]"
+                  onClick={resetSession}
+                  variant="outline"
+                  size="sm"
+                  className="ml-2"
+                  data-testid="button-reset-session"
                 >
-                  {JOINT_CONFIGS[joint].label}
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  New Assessment
                 </Button>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1146,6 +1274,86 @@ export default function JointAnalysisLab() {
             )}
           </CardContent>
         </Card>
+
+        {isSessionActive && clinicalReasoning && (
+          <div className="fixed left-4 top-24 w-96 z-50">
+            <Card className="shadow-lg border-purple-200">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Cpu className="h-5 w-5 text-purple-600" />
+                    Clinical Thinking
+                  </CardTitle>
+                  <Badge variant="outline" className="text-xs">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    AI Reasoning
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-purple-600">Clinical Reasoning</h3>
+                  <p className="text-xs leading-relaxed whitespace-pre-line bg-muted p-3 rounded">
+                    {clinicalReasoning}
+                  </p>
+                </div>
+                
+                {currentHypotheses.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-sm text-purple-600">Current Hypotheses</h3>
+                      {currentHypotheses.map((hyp, idx) => (
+                        <div key={idx} className="bg-muted p-3 rounded space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-xs">{hyp.diagnosis}</span>
+                            <Badge 
+                              variant={hyp.likelihood === 'high' ? 'default' : 'secondary'}
+                              className="text-xs"
+                            >
+                              {hyp.likelihood}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {hyp.supportingEvidence.join(', ')}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                
+                {nextTestRecommendation && !isAssessmentComplete && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-sm text-green-600">Next Test</h3>
+                      <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded space-y-1">
+                        <p className="font-medium text-xs">{nextTestRecommendation.instruction}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {nextTestRecommendation.rationale}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {isAssessmentComplete && (
+                  <>
+                    <Separator />
+                    <Alert>
+                      <CheckCircle className="h-4 w-4" />
+                      <AlertTitle className="text-sm">Assessment Complete</AlertTitle>
+                      <AlertDescription className="text-xs">
+                        {completionReason}
+                      </AlertDescription>
+                    </Alert>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {analysisResult && (
           <div 

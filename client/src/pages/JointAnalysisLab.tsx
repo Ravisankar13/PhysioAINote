@@ -828,8 +828,13 @@ export default function JointAnalysisLab() {
                   
                   toast({
                     title: "Recording Complete",
-                    description: "Movement data captured. Click Analyze to see results.",
+                    description: "Analyzing movement...",
                   });
+                  
+                  // Automatically analyze after a short delay
+                  setTimeout(() => {
+                    performAnalysis();
+                  }, 500);
                 }
               }
             }, 100);
@@ -1083,12 +1088,12 @@ export default function JointAnalysisLab() {
               </Alert>
             )}
 
-            {recordingPhase === 'complete' && (
+            {recordingPhase === 'complete' && !isAnalyzing && !analysisResult && (
               <Alert className="mb-4 bg-green-50 border-green-200" data-testid="alert-complete">
                 <CheckCircle className="h-4 w-4 text-green-600" />
                 <AlertTitle className="text-green-600">Recording Complete</AlertTitle>
                 <AlertDescription>
-                  Captured {movementData.length} frames. Click "Analyze Movement" to see results.
+                  Captured {movementData.length} frames. Analysis starting...
                 </AlertDescription>
               </Alert>
             )}
@@ -1124,29 +1129,14 @@ export default function JointAnalysisLab() {
               )}
             </div>
 
-            <div className="mt-4 flex gap-3 justify-center">
-              {canAnalyze && (
-                <Button
-                  size="lg"
-                  onClick={performAnalysis}
-                  disabled={isAnalyzing}
-                  data-testid="button-analyze"
-                  className="min-w-[200px]"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Analyze Movement
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
+            {isAnalyzing && (
+              <div className="mt-4 flex gap-3 justify-center">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Analyzing movement...</span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

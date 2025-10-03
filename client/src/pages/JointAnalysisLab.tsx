@@ -433,6 +433,11 @@ export default function JointAnalysisLab() {
             }
             const duration = (Date.now() - centeredStartTimeRef.current) / 1000;
             setCenteredDuration(duration);
+            
+            // Auto-start recording after 1.5 seconds of being centered
+            if (duration >= 1.5 && recordingPhase === 'idle') {
+              startRecording();
+            }
           } else {
             centeredStartTimeRef.current = null;
             setCenteredDuration(0);
@@ -502,6 +507,24 @@ export default function JointAnalysisLab() {
           primary.y * canvas.height - 10
         );
 
+        // Instruction overlay at top of video frame
+        if (recordingPhase === 'idle') {
+          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+          overlayCtx.fillRect(0, 0, canvas.width, 80);
+          
+          overlayCtx.fillStyle = '#ffffff';
+          overlayCtx.font = 'bold 22px Arial';
+          overlayCtx.textAlign = 'center';
+          overlayCtx.textBaseline = 'middle';
+          
+          const currentDuration = centeredStartTimeRef.current ? (Date.now() - centeredStartTimeRef.current) / 1000 : 0;
+          overlayCtx.fillText(
+            centered ? `Hold steady... ${Math.max(0, 1.5 - currentDuration).toFixed(1)}s` : 'Center your joint in the green circle',
+            canvas.width / 2,
+            40
+          );
+        }
+        
         if (recordingPhase === 'countdown') {
           overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
           overlayCtx.fillRect(canvas.width / 2 - 100, canvas.height / 2 - 100, 200, 200);
@@ -518,6 +541,7 @@ export default function JointAnalysisLab() {
         }
         
         if (recordingPhase === 'recording') {
+          // Recording indicator dot
           overlayCtx.fillStyle = 'rgba(239, 68, 68, 0.8)';
           overlayCtx.beginPath();
           overlayCtx.arc(50, 50, 15, 0, Math.PI * 2);
@@ -527,6 +551,20 @@ export default function JointAnalysisLab() {
           overlayCtx.font = 'bold 18px Arial';
           overlayCtx.textAlign = 'left';
           overlayCtx.fillText('RECORDING', 75, 55);
+          
+          // Movement instruction overlay at top
+          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+          overlayCtx.fillRect(0, 0, canvas.width, 80);
+          
+          overlayCtx.fillStyle = '#22c55e';
+          overlayCtx.font = 'bold 24px Arial';
+          overlayCtx.textAlign = 'center';
+          overlayCtx.textBaseline = 'middle';
+          overlayCtx.fillText(
+            config.movementInstruction,
+            canvas.width / 2,
+            40
+          );
         }
       }
     }
@@ -963,18 +1001,6 @@ export default function JointAnalysisLab() {
             </div>
 
             <div className="mt-4 flex gap-3 justify-center">
-              {canStartRecording && (
-                <Button
-                  size="lg"
-                  onClick={startRecording}
-                  data-testid="button-record-movement"
-                  className="min-w-[200px]"
-                >
-                  <Video className="h-4 w-4 mr-2" />
-                  Record Movement
-                </Button>
-              )}
-              
               {canAnalyze && (
                 <Button
                   size="lg"

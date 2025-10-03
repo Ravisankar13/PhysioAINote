@@ -507,13 +507,14 @@ export default function JointAnalysisLab() {
           primary.y * canvas.height - 10
         );
 
-        // Instruction overlay at top of video frame
+        // Instruction overlay - positioned in upper-center for visibility
         if (recordingPhase === 'idle') {
-          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-          overlayCtx.fillRect(0, 0, canvas.width, 80);
+          const instructionY = 120;
+          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+          overlayCtx.fillRect(canvas.width / 2 - 300, instructionY - 40, 600, 80);
           
           overlayCtx.fillStyle = '#ffffff';
-          overlayCtx.font = 'bold 22px Arial';
+          overlayCtx.font = 'bold 24px Arial';
           overlayCtx.textAlign = 'center';
           overlayCtx.textBaseline = 'middle';
           
@@ -521,7 +522,7 @@ export default function JointAnalysisLab() {
           overlayCtx.fillText(
             centered ? `Hold steady... ${Math.max(0, 1.5 - currentDuration).toFixed(1)}s` : 'Center your joint in the green circle',
             canvas.width / 2,
-            40
+            instructionY
           );
         }
         
@@ -552,9 +553,10 @@ export default function JointAnalysisLab() {
           overlayCtx.textAlign = 'left';
           overlayCtx.fillText('RECORDING', 75, 55);
           
-          // Movement instruction overlay at top
-          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-          overlayCtx.fillRect(0, 0, canvas.width, 80);
+          // Movement instruction overlay - positioned in upper-center for visibility
+          const instructionY = 120;
+          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+          overlayCtx.fillRect(canvas.width / 2 - 300, instructionY - 40, 600, 80);
           
           overlayCtx.fillStyle = '#22c55e';
           overlayCtx.font = 'bold 24px Arial';
@@ -563,7 +565,7 @@ export default function JointAnalysisLab() {
           overlayCtx.fillText(
             config.movementInstruction,
             canvas.width / 2,
-            40
+            instructionY
           );
         }
       }

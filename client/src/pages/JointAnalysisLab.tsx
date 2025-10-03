@@ -783,8 +783,8 @@ export default function JointAnalysisLab() {
   const canAnalyze = recordingPhase === 'complete' && movementData.length > 0;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background">
+      <div className="space-y-6 p-4">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold tracking-tight">Joint Analysis Lab</h1>
           <p className="text-muted-foreground text-lg">
@@ -925,7 +925,7 @@ export default function JointAnalysisLab() {
               </Alert>
             )}
 
-            <div className="relative bg-black rounded-lg overflow-hidden aspect-[3/4] max-w-3xl mx-auto">
+            <div className="relative bg-black rounded-lg overflow-hidden aspect-[3/4] max-w-5xl mx-auto">
               <video
                 ref={videoRef}
                 className="absolute inset-0 w-full h-full object-cover hidden"

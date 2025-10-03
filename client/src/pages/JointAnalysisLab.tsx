@@ -187,7 +187,7 @@ interface JointAnalysisResult {
 type Pose = any;
 type Camera = any;
 
-type RecordingPhase = 'idle' | 'countdown' | 'recording' | 'complete';
+type RecordingPhase = 'idle' | 'preparing_next_test' | 'countdown' | 'recording' | 'complete';
 
 // Helper function to detect mobile device
 const isMobileDevice = () => {
@@ -216,6 +216,7 @@ export default function JointAnalysisLab() {
   
   const [recordingPhase, setRecordingPhase] = useState<RecordingPhase>('idle');
   const [countdown, setCountdown] = useState(3);
+  const [preparationCountdown, setPreparationCountdown] = useState(4);
   const [recordingProgress, setRecordingProgress] = useState(0);
   const [movementData, setMovementData] = useState<MovementFrame[]>([]);
   
@@ -623,6 +624,35 @@ export default function JointAnalysisLab() {
           );
         }
         
+        if (recordingPhase === 'preparing_next_test') {
+          // Black background overlay with next test instruction
+          const instructionY = 150;
+          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+          overlayCtx.fillRect(canvas.width / 2 - 320, instructionY - 80, 640, 160);
+          
+          overlayCtx.fillStyle = '#3b82f6';
+          overlayCtx.font = 'bold 20px Arial';
+          overlayCtx.textAlign = 'center';
+          overlayCtx.textBaseline = 'middle';
+          overlayCtx.fillText('NEXT TEST', canvas.width / 2, instructionY - 40);
+          
+          overlayCtx.fillStyle = '#ffffff';
+          overlayCtx.font = 'bold 26px Arial';
+          overlayCtx.fillText(
+            nextTestRecommendation?.instruction || 'Prepare for next movement',
+            canvas.width / 2,
+            instructionY
+          );
+          
+          overlayCtx.fillStyle = '#22c55e';
+          overlayCtx.font = 'bold 22px Arial';
+          overlayCtx.fillText(
+            `Starting in ${preparationCountdown}...`,
+            canvas.width / 2,
+            instructionY + 45
+          );
+        }
+        
         if (recordingPhase === 'countdown') {
           overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
           overlayCtx.fillRect(canvas.width / 2 - 100, canvas.height / 2 - 100, 200, 200);
@@ -667,7 +697,7 @@ export default function JointAnalysisLab() {
         }
       }
     }
-  }, [selectedJoint, isJointStable, calculateAngle, recordingPhase, countdown]);
+  }, [selectedJoint, isJointStable, calculateAngle, recordingPhase, countdown, preparationCountdown, nextTestRecommendation]);
 
   useEffect(() => {
     const initMediaPipe = async () => {
@@ -917,6 +947,25 @@ export default function JointAnalysisLab() {
     jointPositionHistoryRef.current = [];
   };
 
+  const startAutomatedNextTest = () => {
+    setRecordingPhase('preparing_next_test');
+    recordingPhaseRef.current = 'preparing_next_test';
+    setPreparationCountdown(4);
+    
+    const prepInterval = setInterval(() => {
+      setPreparationCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(prepInterval);
+          setTimeout(() => {
+            startRecording();
+          }, 500);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   const startRecording = () => {
     setRecordingPhase('countdown');
     recordingPhaseRef.current = 'countdown';
@@ -1121,6 +1170,11 @@ export default function JointAnalysisLab() {
         setTimeout(() => {
           getFinalDiagnosis();
         }, 1000);
+      } else if (result.nextTest) {
+        // Automatically start preparation for next test
+        setTimeout(() => {
+          startAutomatedNextTest();
+        }, 1500);
       }
       
       toast({
@@ -1197,6 +1251,7 @@ export default function JointAnalysisLab() {
     setIsGettingFinalDiagnosis(false);
     setShowTestHistory(false);
     setShowClinicalThinking(true);
+    setPreparationCountdown(4);
   };
 
   useEffect(() => {
@@ -1282,8 +1337,9 @@ export default function JointAnalysisLab() {
                 </CardTitle>
                 <CardDescription>
                   {recordingPhase === 'idle' && 'Position your joint within the target circle'}
+                  {recordingPhase === 'preparing_next_test' && `Next: ${nextTestRecommendation?.movementType || 'Preparing next test'}...`}
                   {recordingPhase === 'countdown' && 'Get ready...'}
-                  {recordingPhase === 'recording' && `Performing: ${JOINT_CONFIGS[selectedJoint].movementInstruction}`}
+                  {recordingPhase === 'recording' && `Performing: ${nextTestRecommendation?.instruction || JOINT_CONFIGS[selectedJoint].movementInstruction}`}
                   {recordingPhase === 'complete' && 'Recording complete - ready to analyze'}
                 </CardDescription>
               </div>

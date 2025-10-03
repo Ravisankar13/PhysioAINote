@@ -25,7 +25,8 @@ import {
   ChevronDown,
   X,
   Minimize2,
-  Maximize2
+  Maximize2,
+  SwitchCamera
 } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 
@@ -188,6 +189,18 @@ type Camera = any;
 
 type RecordingPhase = 'idle' | 'countdown' | 'recording' | 'complete';
 
+// Helper function to detect mobile device
+const isMobileDevice = () => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+// Helper function to detect if device is a phone (not tablet)
+const isPhoneDevice = () => {
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isPhone = /iphone|android.*mobile/i.test(userAgent);
+  return isPhone;
+};
+
 export default function JointAnalysisLab() {
   const { toast } = useToast();
   
@@ -197,6 +210,9 @@ export default function JointAnalysisLab() {
   const [isTracking, setIsTracking] = useState(false);
   const [isJointCentered, setIsJointCentered] = useState(false);
   const [centeredDuration, setCenteredDuration] = useState(0);
+  const [cameraFacingMode, setCameraFacingMode] = useState<'user' | 'environment'>(
+    isPhoneDevice() ? 'environment' : 'user'
+  );
   
   const [recordingPhase, setRecordingPhase] = useState<RecordingPhase>('idle');
   const [countdown, setCountdown] = useState(3);
@@ -267,7 +283,6 @@ export default function JointAnalysisLab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const poseRef = useRef<Pose | null>(null);
-  const cameraRef = useRef<Camera | null>(null);
   const centeredStartTimeRef = useRef<number | null>(null);
   const recordingStartTimeRef = useRef<number | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -686,15 +701,6 @@ export default function JointAnalysisLab() {
   // Cleanup effect - runs on component unmount
   useEffect(() => {
     return () => {
-      // Clean up camera on unmount
-      if (cameraRef.current) {
-        try {
-          cameraRef.current.stop();
-        } catch (e) {
-          console.error('Error stopping camera on unmount:', e);
-        }
-      }
-      
       // Stop all video stream tracks
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
@@ -766,18 +772,30 @@ export default function JointAnalysisLab() {
       pose.onResults(onPoseResults);
       poseRef.current = pose;
       
-      const camera = new window.Camera(videoRef.current, {
-        onFrame: async () => {
-          if (poseRef.current) {
-            await poseRef.current.send({ image: videoRef.current });
-          }
-        },
-        width: 1280,
-        height: 720
+      // Use getUserMedia directly to support camera selection
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: cameraFacingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
       });
       
-      await camera.start();
-      cameraRef.current = camera;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        
+        // Create a manual camera loop
+        const sendFrame = async () => {
+          if (poseRef.current && videoRef.current && videoRef.current.readyState === 4) {
+            await poseRef.current.send({ image: videoRef.current });
+          }
+          if (isTracking || !poseRef.current) {
+            requestAnimationFrame(sendFrame);
+          }
+        };
+        requestAnimationFrame(sendFrame);
+      }
       
       setIsTracking(true);
       
@@ -789,23 +807,13 @@ export default function JointAnalysisLab() {
       console.error('Tracking start error:', error);
       toast({
         title: "Tracking Error",
-        description: "Failed to start pose tracking",
+        description: "Failed to start pose tracking. Please check camera permissions.",
         variant: "destructive",
       });
     }
   };
 
   const stopTracking = () => {
-    // Stop the camera properly
-    if (cameraRef.current) {
-      try {
-        cameraRef.current.stop();
-      } catch (e) {
-        console.error('Error stopping camera:', e);
-      }
-      cameraRef.current = null;
-    }
-    
     // Stop all video stream tracks
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
@@ -840,6 +848,43 @@ export default function JointAnalysisLab() {
     setMovementData([]);
     centeredStartTimeRef.current = null;
     jointPositionHistoryRef.current = [];
+  };
+
+  const switchCamera = async () => {
+    if (!isTracking || recordingPhase !== 'idle') {
+      toast({
+        title: "Cannot Switch Camera",
+        description: "Please stop tracking or wait for recording to complete before switching camera",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Stop current tracking
+      stopTracking();
+      
+      // Switch camera facing mode
+      const newFacingMode = cameraFacingMode === 'user' ? 'environment' : 'user';
+      setCameraFacingMode(newFacingMode);
+      
+      // Small delay to ensure cleanup
+      setTimeout(async () => {
+        await startTracking();
+        
+        toast({
+          title: "Camera Switched",
+          description: `Now using ${newFacingMode === 'user' ? 'front' : 'rear'} camera`,
+        });
+      }, 300);
+    } catch (error) {
+      console.error('Camera switch error:', error);
+      toast({
+        title: "Switch Failed",
+        description: "Failed to switch camera",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleJointChange = (joint: JointType) => {
@@ -1234,14 +1279,27 @@ export default function JointAnalysisLab() {
                     Start Camera
                   </Button>
                 ) : (
-                  <Button
-                    onClick={stopTracking}
-                    variant="destructive"
-                    data-testid="button-stop-tracking"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Stop
-                  </Button>
+                  <>
+                    <Button
+                      onClick={stopTracking}
+                      variant="destructive"
+                      data-testid="button-stop-tracking"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Stop
+                    </Button>
+                    {isMobileDevice() && (
+                      <Button
+                        onClick={switchCamera}
+                        variant="outline"
+                        disabled={recordingPhase !== 'idle'}
+                        data-testid="button-switch-camera"
+                      >
+                        <SwitchCamera className="h-4 w-4 mr-2" />
+                        Switch
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             </div>

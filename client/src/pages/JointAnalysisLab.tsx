@@ -288,6 +288,7 @@ export default function JointAnalysisLab() {
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const jointPositionHistoryRef = useRef<{x: number, y: number, timestamp: number}[]>([]);
   const recordingPhaseRef = useRef<RecordingPhase>('idle');
+  const animationFrameRef = useRef<number | null>(null);
 
   const calculateAngle = (a: any, b: any, c: any): number => {
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -701,10 +702,9 @@ export default function JointAnalysisLab() {
   // Cleanup effect - runs on component unmount
   useEffect(() => {
     return () => {
-      // Stop all video stream tracks
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
+      // Cancel animation frame
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
       
       // Close pose
@@ -714,6 +714,12 @@ export default function JointAnalysisLab() {
         } catch (e) {
           console.error('Error closing pose on unmount:', e);
         }
+      }
+      
+      // Stop all video stream tracks
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
       }
       
       // Clear intervals
@@ -785,16 +791,21 @@ export default function JointAnalysisLab() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         
-        // Create a manual camera loop
+        // Create a manual camera loop that continues until stopped
         const sendFrame = async () => {
           if (poseRef.current && videoRef.current && videoRef.current.readyState === 4) {
-            await poseRef.current.send({ image: videoRef.current });
+            try {
+              await poseRef.current.send({ image: videoRef.current });
+            } catch (e) {
+              console.error('Error sending frame to pose detection:', e);
+            }
           }
-          if (isTracking || !poseRef.current) {
-            requestAnimationFrame(sendFrame);
+          // Keep looping as long as poseRef exists (it's set to null when stopping)
+          if (poseRef.current) {
+            animationFrameRef.current = requestAnimationFrame(sendFrame);
           }
         };
-        requestAnimationFrame(sendFrame);
+        animationFrameRef.current = requestAnimationFrame(sendFrame);
       }
       
       setIsTracking(true);
@@ -814,16 +825,13 @@ export default function JointAnalysisLab() {
   };
 
   const stopTracking = () => {
-    // Stop all video stream tracks
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => {
-        track.stop();
-      });
-      videoRef.current.srcObject = null;
+    // Cancel animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
     
-    // Clean up pose
+    // Clean up pose first (this stops the loop)
     if (poseRef.current) {
       try {
         poseRef.current.close();
@@ -831,6 +839,15 @@ export default function JointAnalysisLab() {
         console.error('Error closing pose:', e);
       }
       poseRef.current = null;
+    }
+    
+    // Stop all video stream tracks
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => {
+        track.stop();
+      });
+      videoRef.current.srcObject = null;
     }
     
     // Clear intervals

@@ -703,9 +703,9 @@ export default function JointAnalysisLab() {
           const displayTitle = formatMovementType(movementType);
           const displayText = `${displayTitle} - ${instruction}`;
           
-          // Larger box for title + instruction
-          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          overlayCtx.fillRect(canvas.width / 2 - 400, instructionY - 50, 800, 100);
+          // Larger box for title + instruction + progress bar
+          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+          overlayCtx.fillRect(canvas.width / 2 - 400, instructionY - 60, 800, 140);
           
           overlayCtx.fillStyle = '#22c55e';
           overlayCtx.font = 'bold 22px Arial';
@@ -714,12 +714,41 @@ export default function JointAnalysisLab() {
           overlayCtx.fillText(
             displayText,
             canvas.width / 2,
-            instructionY
+            instructionY - 10
+          );
+          
+          // Progress bar
+          const barY = instructionY + 35;
+          const barWidth = 700;
+          const barHeight = 25;
+          const barX = canvas.width / 2 - barWidth / 2;
+          
+          // Progress bar background
+          overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+          overlayCtx.fillRect(barX, barY, barWidth, barHeight);
+          
+          // Progress bar fill
+          const fillWidth = (barWidth * recordingProgress) / 100;
+          overlayCtx.fillStyle = '#22c55e';
+          overlayCtx.fillRect(barX, barY, fillWidth, barHeight);
+          
+          // Progress bar border
+          overlayCtx.strokeStyle = '#22c55e';
+          overlayCtx.lineWidth = 2;
+          overlayCtx.strokeRect(barX, barY, barWidth, barHeight);
+          
+          // Progress percentage text
+          overlayCtx.fillStyle = '#ffffff';
+          overlayCtx.font = 'bold 16px Arial';
+          overlayCtx.fillText(
+            `${Math.round(recordingProgress)}%`,
+            canvas.width / 2,
+            barY + barHeight / 2
           );
         }
       }
     }
-  }, [selectedJoint, isJointStable, calculateAngle, recordingPhase, countdown, preparationCountdown, nextTestRecommendation]);
+  }, [selectedJoint, isJointStable, calculateAngle, recordingPhase, countdown, preparationCountdown, nextTestRecommendation, recordingProgress]);
 
   useEffect(() => {
     const initMediaPipe = async () => {

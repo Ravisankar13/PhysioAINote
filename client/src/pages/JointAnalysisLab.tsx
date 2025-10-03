@@ -217,6 +217,7 @@ export default function JointAnalysisLab() {
   const recordingStartTimeRef = useRef<number | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const jointPositionHistoryRef = useRef<{x: number, y: number, timestamp: number}[]>([]);
+  const recordingPhaseRef = useRef<RecordingPhase>('idle');
 
   const calculateAngle = (a: any, b: any, c: any): number => {
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -425,7 +426,8 @@ export default function JointAnalysisLab() {
       if (primary && secondary && tertiary) {
         const angle = calculateAngle(tertiary, primary, secondary);
         
-        if (recordingPhase === 'recording') {
+        // Use ref instead of state to avoid stale closure
+        if (recordingPhaseRef.current === 'recording') {
           const timestamp = Date.now();
           setMovementData(prev => [...prev, {
             timestamp,
@@ -434,7 +436,7 @@ export default function JointAnalysisLab() {
           }]);
         }
         
-        if (recordingPhase === 'idle' || recordingPhase === 'countdown') {
+        if (recordingPhaseRef.current === 'idle' || recordingPhaseRef.current === 'countdown') {
           const stable = isJointStable(primary.x, primary.y);
           setIsJointCentered(stable);
           
@@ -446,7 +448,7 @@ export default function JointAnalysisLab() {
             setCenteredDuration(duration);
             
             // Auto-start recording after 1.5 seconds of being stable
-            if (duration >= 1.5 && recordingPhase === 'idle') {
+            if (duration >= 1.5 && recordingPhaseRef.current === 'idle') {
               startRecording();
             }
           } else {
@@ -680,6 +682,7 @@ export default function JointAnalysisLab() {
     setIsJointCentered(false);
     setCenteredDuration(0);
     setRecordingPhase('idle');
+    recordingPhaseRef.current = 'idle';
     setMovementData([]);
     centeredStartTimeRef.current = null;
     jointPositionHistoryRef.current = [];
@@ -691,6 +694,7 @@ export default function JointAnalysisLab() {
     setIsJointCentered(false);
     setCenteredDuration(0);
     setRecordingPhase('idle');
+    recordingPhaseRef.current = 'idle';
     setMovementData([]);
     centeredStartTimeRef.current = null;
     jointPositionHistoryRef.current = [];
@@ -698,6 +702,7 @@ export default function JointAnalysisLab() {
 
   const startRecording = () => {
     setRecordingPhase('countdown');
+    recordingPhaseRef.current = 'countdown';
     setCountdown(3);
     
     const countdownInterval = setInterval(() => {
@@ -706,6 +711,7 @@ export default function JointAnalysisLab() {
           clearInterval(countdownInterval);
           setTimeout(() => {
             setRecordingPhase('recording');
+            recordingPhaseRef.current = 'recording';
             setMovementData([]);
             recordingStartTimeRef.current = Date.now();
             
@@ -718,6 +724,7 @@ export default function JointAnalysisLab() {
                 if (elapsed >= 5) {
                   clearInterval(progressInterval);
                   setRecordingPhase('complete');
+                  recordingPhaseRef.current = 'complete';
                   setRecordingProgress(100);
                   
                   toast({

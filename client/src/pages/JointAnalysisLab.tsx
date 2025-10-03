@@ -291,6 +291,7 @@ export default function JointAnalysisLab() {
   const jointPositionHistoryRef = useRef<{x: number, y: number, timestamp: number}[]>([]);
   const recordingPhaseRef = useRef<RecordingPhase>('idle');
   const animationFrameRef = useRef<number | null>(null);
+  const currentInstructionRef = useRef<string>('');
 
   const calculateAngle = (a: any, b: any, c: any): number => {
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -685,10 +686,8 @@ export default function JointAnalysisLab() {
           overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
           overlayCtx.fillRect(canvas.width / 2 - 300, instructionY - 40, 600, 80);
           
-          // Use AI-recommended instruction if available, otherwise use default
-          const displayInstruction = nextTestRecommendation?.instruction 
-            ? nextTestRecommendation.instruction 
-            : config.movementInstruction;
+          // Use instruction from ref (persists through state updates)
+          const displayInstruction = currentInstructionRef.current || config.movementInstruction;
           
           overlayCtx.fillStyle = '#22c55e';
           overlayCtx.font = 'bold 24px Arial';
@@ -963,6 +962,9 @@ export default function JointAnalysisLab() {
     // Update state immediately with the new test data
     setNextTestRecommendation(testData);
     
+    // Store instruction in ref for persistent overlay display
+    currentInstructionRef.current = testData.instruction;
+    
     setRecordingPhase('preparing_next_test');
     recordingPhaseRef.current = 'preparing_next_test';
     setPreparationCountdown(4);
@@ -984,6 +986,12 @@ export default function JointAnalysisLab() {
   };
 
   const startRecording = () => {
+    // Set instruction in ref if not already set (for first test)
+    if (!currentInstructionRef.current) {
+      const config = JOINT_CONFIGS[selectedJoint];
+      currentInstructionRef.current = config.movementInstruction;
+    }
+    
     setRecordingPhase('countdown');
     recordingPhaseRef.current = 'countdown';
     setCountdown(3);

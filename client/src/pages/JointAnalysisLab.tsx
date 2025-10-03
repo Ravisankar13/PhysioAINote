@@ -684,18 +684,35 @@ export default function JointAnalysisLab() {
           
           // Movement instruction overlay - positioned in upper-center for visibility
           const instructionY = 120;
-          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          overlayCtx.fillRect(canvas.width / 2 - 300, instructionY - 40, 600, 80);
           
-          // Use instruction from ref (persists through state updates)
-          const displayInstruction = currentInstructionRef.current || config.movementInstruction;
+          // Get movement type and instruction from refs
+          const movementType = currentMovementTypeRef.current || `Active ${config.label} movement`;
+          const instruction = currentInstructionRef.current || config.movementInstruction;
+          
+          // Format movement type for display (title case, clean up)
+          const formatMovementType = (type: string): string => {
+            return type
+              .replace(/^Active\s+/i, '') // Remove "Active" prefix
+              .replace(/\(.*?\)/g, '') // Remove parenthetical descriptions
+              .trim()
+              .split(' ')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+              .join(' ');
+          };
+          
+          const displayTitle = formatMovementType(movementType);
+          const displayText = `${displayTitle} - ${instruction}`;
+          
+          // Larger box for title + instruction
+          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+          overlayCtx.fillRect(canvas.width / 2 - 400, instructionY - 50, 800, 100);
           
           overlayCtx.fillStyle = '#22c55e';
-          overlayCtx.font = 'bold 24px Arial';
+          overlayCtx.font = 'bold 22px Arial';
           overlayCtx.textAlign = 'center';
           overlayCtx.textBaseline = 'middle';
           overlayCtx.fillText(
-            displayInstruction,
+            displayText,
             canvas.width / 2,
             instructionY
           );

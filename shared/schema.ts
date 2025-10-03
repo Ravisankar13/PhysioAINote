@@ -8,6 +8,7 @@ import {
   json,
   boolean,
   pgEnum,
+  numeric,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -4519,6 +4520,107 @@ export type QuizAttempt = typeof quizAttempts.$inferSelect;
 export type InsertQuizAttempt = z.infer<typeof insertQuizAttemptSchema>;
 export type DiscussionUpvote = typeof discussionUpvoteTracking.$inferSelect;
 export type InsertDiscussionUpvote = z.infer<typeof insertDiscussionUpvoteSchema>;
+
+// Adaptive Joint Assessment Sessions
+// Main assessment session table
+export const assessmentSessions = pgTable("assessment_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  jointType: text("joint_type").notNull(),
+  isComplete: boolean("is_complete").default(false).notNull(),
+  completionReason: text("completion_reason"),
+  finalDiagnosis: json("final_diagnosis").$type<{
+    primary: string;
+    secondary?: string[];
+    differential?: string[];
+    reasoning: string;
+    treatment: string[];
+    prognosis: string;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Individual movement tests within a session
+export const sessionTests = pgTable("session_tests", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => assessmentSessions.id, { onDelete: "cascade" }),
+  testNumber: integer("test_number").notNull(),
+  movementType: text("movement_type").notNull(),
+  instruction: text("instruction").notNull(),
+  frameCount: integer("frame_count").notNull(),
+  angleMin: numeric("angle_min").notNull(),
+  angleMax: numeric("angle_max").notNull(),
+  angleRange: numeric("angle_range").notNull(),
+  smoothness: numeric("smoothness").notNull(),
+  compensations: json("compensations").$type<string[]>().default([]).notNull(),
+  symmetry: numeric("symmetry"),
+  findings: text("findings").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Working hypotheses formed during assessment
+export const sessionHypotheses = pgTable("session_hypotheses", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => assessmentSessions.id, { onDelete: "cascade" }),
+  testNumber: integer("test_number").notNull(),
+  diagnosis: text("diagnosis").notNull(),
+  likelihood: text("likelihood").notNull(),
+  supportingEvidence: json("supporting_evidence").$type<string[]>().default([]).notNull(),
+  testsNeeded: json("tests_needed").$type<string[]>().default([]).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// AI recommendations for next test
+export const sessionRecommendations = pgTable("session_recommendations", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => assessmentSessions.id, { onDelete: "cascade" }),
+  afterTestNumber: integer("after_test_number").notNull(),
+  movementType: text("movement_type").notNull(),
+  instruction: text("instruction").notNull(),
+  rationale: text("rationale").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Insert Schemas for Assessment Sessions
+export const insertAssessmentSessionSchema = createInsertSchema(assessmentSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSessionTestSchema = createInsertSchema(sessionTests).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSessionHypothesisSchema = createInsertSchema(sessionHypotheses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSessionRecommendationSchema = createInsertSchema(sessionRecommendations).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types for Assessment Sessions
+export type AssessmentSession = typeof assessmentSessions.$inferSelect;
+export type InsertAssessmentSession = z.infer<typeof insertAssessmentSessionSchema>;
+export type SessionTest = typeof sessionTests.$inferSelect;
+export type InsertSessionTest = z.infer<typeof insertSessionTestSchema>;
+export type SessionHypothesis = typeof sessionHypotheses.$inferSelect;
+export type InsertSessionHypothesis = z.infer<typeof insertSessionHypothesisSchema>;
+export type SessionRecommendation = typeof sessionRecommendations.$inferSelect;
+export type InsertSessionRecommendation = z.infer<typeof insertSessionRecommendationSchema>;
 
 // Export all movement analysis schema tables
 export * from './movementAnalysisSchema';

@@ -821,7 +821,7 @@ export default function JointAnalysisLab() {
               </Alert>
             )}
 
-            <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
+            <div className="relative bg-black rounded-lg overflow-hidden aspect-[3/4] max-w-3xl mx-auto">
               <video
                 ref={videoRef}
                 className="absolute inset-0 w-full h-full object-cover hidden"
@@ -830,15 +830,15 @@ export default function JointAnalysisLab() {
               <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full object-cover"
-                width={1280}
-                height={720}
+                width={960}
+                height={1280}
                 data-testid="canvas-video"
               />
               <canvas
                 ref={overlayCanvasRef}
                 className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                width={1280}
-                height={720}
+                width={960}
+                height={1280}
                 data-testid="canvas-overlay"
               />
               

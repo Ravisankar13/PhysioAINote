@@ -41,12 +41,14 @@ function getDatabaseUrl(): string {
 // Get database URL with fail-fast validation
 const databaseUrl = getDatabaseUrl();
 
-// Create pool with enhanced configuration for stability
+// Create pool with enhanced configuration for stability and reconnection
 export const pool = new Pool({ 
   connectionString: databaseUrl,
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: 20000,
+  // Neon-specific settings for better reliability
+  allowExitOnIdle: false,
 });
 
 // Test database connection on startup with fail-fast behavior
@@ -57,11 +59,18 @@ pool.query('SELECT 1').then(() => {
   console.log('✅ Database connection verified successfully');
 }).catch((err) => {
   dbConnectionStatus = 'failed';
-  console.error('❌ CRITICAL: Database connection failed:', err.message);
-  console.error('   This will cause "no data" in the application');
-  console.error('   Check DATABASE_URL configuration in deployment secrets');
-  // Exit the process to prevent silent failure
-  process.exit(1);
+  console.error('❌ Database connection test failed:', err.message);
+  console.error('   Retrying connection...');
+  // Don't exit immediately, let the app try to reconnect
+  setTimeout(() => {
+    pool.query('SELECT 1').then(() => {
+      dbConnectionStatus = 'connected';
+      console.log('✅ Database reconnected successfully');
+    }).catch((retryErr) => {
+      console.error('❌ CRITICAL: Database connection retry failed:', retryErr.message);
+      process.exit(1);
+    });
+  }, 2000);
 });
 
 // Export connection status for health checks

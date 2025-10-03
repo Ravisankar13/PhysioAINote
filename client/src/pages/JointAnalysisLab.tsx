@@ -685,9 +685,9 @@ export default function JointAnalysisLab() {
           // Movement instruction overlay - positioned in upper-center for visibility
           const instructionY = 120;
           
-          // Get movement type and instruction from current test recommendation (same source as Camera Feed subtitle)
-          const movementType = nextTestRecommendation?.movementType || `Active ${config.label} movement`;
+          // Get movement type and instruction - use same source as Camera Feed subtitle
           const instruction = nextTestRecommendation?.instruction || config.movementInstruction;
+          const movementType = nextTestRecommendation?.movementType || `Active ${config.label} movement`;
           
           // Format movement type for display (title case, clean up)
           const formatMovementType = (type: string): string => {

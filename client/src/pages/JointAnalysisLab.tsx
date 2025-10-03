@@ -830,11 +830,6 @@ export default function JointAnalysisLab() {
                     title: "Recording Complete",
                     description: "Analyzing movement...",
                   });
-                  
-                  // Automatically analyze after a short delay
-                  setTimeout(() => {
-                    performAnalysis();
-                  }, 500);
                 }
               }
             }, 100);
@@ -949,6 +944,18 @@ export default function JointAnalysisLab() {
       stopTracking();
     };
   }, []);
+
+  // Auto-trigger analysis when recording completes
+  useEffect(() => {
+    if (recordingPhase === 'complete' && movementData.length > 0 && !isAnalyzing && !analysisResult) {
+      console.log('Auto-triggering analysis with', movementData.length, 'frames');
+      // Small delay to ensure UI updates
+      const timer = setTimeout(() => {
+        performAnalysis();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [recordingPhase, movementData.length, isAnalyzing, analysisResult]);
 
   const canStartRecording = isTracking && isJointCentered && centeredDuration >= 1 && recordingPhase === 'idle';
   const canAnalyze = recordingPhase === 'complete' && movementData.length > 0;

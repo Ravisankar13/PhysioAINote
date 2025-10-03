@@ -596,7 +596,35 @@ export default function JointAnalysisLab() {
           primary.y * canvas.height - 10
         );
 
-        // No text overlays during any phase - keep it clean
+        // Display the same instruction text that appears in Camera Feed subtitle
+        if (recordingPhase === 'recording') {
+          const instructionY = 120;
+          const instruction = nextTestRecommendation?.instruction || config.movementInstruction;
+          const displayText = `Performing: ${instruction}`;
+          
+          // Background box for better readability
+          const textWidth = displayText.length * 13; // Approximate width based on font size
+          const boxWidth = Math.min(textWidth + 60, canvas.width - 100);
+          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+          overlayCtx.fillRect(canvas.width / 2 - boxWidth / 2, instructionY - 30, boxWidth, 60);
+          
+          // Display instruction text
+          overlayCtx.fillStyle = '#ffffff';
+          overlayCtx.font = 'bold 20px Arial';
+          overlayCtx.textAlign = 'center';
+          overlayCtx.textBaseline = 'middle';
+          overlayCtx.fillText(
+            displayText,
+            canvas.width / 2,
+            instructionY
+          );
+          
+          // Small recording indicator
+          overlayCtx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+          overlayCtx.beginPath();
+          overlayCtx.arc(50, 50, 8, 0, Math.PI * 2);
+          overlayCtx.fill();
+        }
       }
     }
   }, [selectedJoint, isJointStable, calculateAngle, recordingPhase, countdown, preparationCountdown, nextTestRecommendation, recordingProgress]);

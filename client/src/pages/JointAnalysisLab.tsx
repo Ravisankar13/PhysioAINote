@@ -278,6 +278,7 @@ export default function JointAnalysisLab() {
   } | null>(null);
   const [isGettingFinalDiagnosis, setIsGettingFinalDiagnosis] = useState(false);
   const [showTestHistory, setShowTestHistory] = useState(false);
+  const [showClinicalThinking, setShowClinicalThinking] = useState(true);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1195,6 +1196,7 @@ export default function JointAnalysisLab() {
     setFinalDiagnosis(null);
     setIsGettingFinalDiagnosis(false);
     setShowTestHistory(false);
+    setShowClinicalThinking(true);
   };
 
   useEffect(() => {
@@ -1696,7 +1698,7 @@ export default function JointAnalysisLab() {
           </div>
         )}
 
-        {isSessionActive && clinicalReasoning && (
+        {isSessionActive && clinicalReasoning && isAssessmentComplete && (
           <div className="fixed left-4 top-24 w-96 z-50">
             <Card className="shadow-lg border-purple-200">
               <CardHeader className="pb-3">
@@ -1705,13 +1707,25 @@ export default function JointAnalysisLab() {
                     <Cpu className="h-5 w-5 text-purple-600" />
                     Clinical Thinking
                   </CardTitle>
-                  <Badge variant="outline" className="text-xs">
-                    <Sparkles className="h-3 w-3 mr-1" />
-                    AI Reasoning
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      AI Reasoning
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setShowClinicalThinking(!showClinicalThinking)}
+                      data-testid="button-toggle-clinical-thinking"
+                    >
+                      {showClinicalThinking ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4 max-h-[60vh] overflow-y-auto">
+              {showClinicalThinking && (
+                <CardContent className="space-y-4 max-h-[60vh] overflow-y-auto">
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm text-purple-600">Clinical Reasoning</h3>
                   <p className="text-xs leading-relaxed whitespace-pre-line bg-muted p-3 rounded">
@@ -1772,6 +1786,7 @@ export default function JointAnalysisLab() {
                   </>
                 )}
               </CardContent>
+              )}
             </Card>
           </div>
         )}

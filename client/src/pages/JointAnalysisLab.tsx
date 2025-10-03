@@ -261,32 +261,107 @@ export default function JointAnalysisLab() {
     const compensations: string[] = [];
     
     const config = JOINT_CONFIGS[jointType];
-    for (const frame of frames) {
-      const leftShoulder = frame.landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
-      const rightShoulder = frame.landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
-      const leftHip = frame.landmarks[POSE_LANDMARKS.LEFT_HIP];
-      const rightHip = frame.landmarks[POSE_LANDMARKS.RIGHT_HIP];
+    
+    if (jointType === 'shoulder') {
+      let earlyScapularElevation = false;
+      let forwardHeadPosture = false;
+      let scapularWinging = false;
+      let rhythmDisturbance = false;
       
-      if (leftShoulder && rightShoulder && leftHip && rightHip) {
-        const shoulderTilt = Math.abs(leftShoulder.y - rightShoulder.y);
-        const hipTilt = Math.abs(leftHip.y - rightHip.y);
+      const shoulderHeights: number[] = [];
+      const armAngles: number[] = [];
+      
+      for (let i = 0; i < frames.length; i++) {
+        const frame = frames[i];
+        const nose = frame.landmarks[POSE_LANDMARKS.NOSE];
+        const leftEar = frame.landmarks[POSE_LANDMARKS.LEFT_EAR];
+        const rightEar = frame.landmarks[POSE_LANDMARKS.RIGHT_EAR];
+        const leftShoulder = frame.landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+        const rightShoulder = frame.landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+        const leftElbow = frame.landmarks[POSE_LANDMARKS.LEFT_ELBOW];
+        const leftHip = frame.landmarks[POSE_LANDMARKS.LEFT_HIP];
+        const rightHip = frame.landmarks[POSE_LANDMARKS.RIGHT_HIP];
         
-        if (shoulderTilt > 0.1) {
-          if (!compensations.includes('Shoulder elevation detected')) {
-            compensations.push('Shoulder elevation detected');
+        if (leftShoulder && rightShoulder && leftElbow && leftHip) {
+          const shoulderMidpointY = (leftShoulder.y + rightShoulder.y) / 2;
+          shoulderHeights.push(shoulderMidpointY);
+          armAngles.push(frame.angle);
+          
+          const shoulderTilt = Math.abs(leftShoulder.y - rightShoulder.y);
+          if (shoulderTilt > 0.08) {
+            earlyScapularElevation = true;
+          }
+          
+          if (nose && leftShoulder && rightShoulder) {
+            const shoulderMidpointX = (leftShoulder.x + rightShoulder.x) / 2;
+            const headProtraction = nose.x - shoulderMidpointX;
+            if (Math.abs(headProtraction) > 0.08) {
+              forwardHeadPosture = true;
+            }
+          }
+          
+          if (leftShoulder && rightShoulder && leftHip && rightHip) {
+            const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+            const hipWidth = Math.abs(leftHip.x - rightHip.x);
+            const shoulderProtraction = shoulderWidth / hipWidth;
+            if (shoulderProtraction > 1.15) {
+              scapularWinging = true;
+            }
           }
         }
+      }
+      
+      if (shoulderHeights.length > 2 && armAngles.length > 2) {
+        const midIndex = Math.floor(shoulderHeights.length / 2);
+        const earlyShoulderElevation = shoulderHeights[0] - shoulderHeights[midIndex];
+        const earlyArmElevation = armAngles[midIndex] - armAngles[0];
         
-        if (hipTilt > 0.08) {
-          if (!compensations.includes('Hip hiking observed')) {
-            compensations.push('Hip hiking observed');
-          }
+        if (earlyShoulderElevation > 0.03 && earlyArmElevation > 30) {
+          rhythmDisturbance = true;
         }
+      }
+      
+      if (earlyScapularElevation) {
+        compensations.push('Scapular elevation - early shoulder shrug during arm raise');
+      }
+      if (forwardHeadPosture) {
+        compensations.push('Forward head posture - cervical protraction detected');
+      }
+      if (scapularWinging) {
+        compensations.push('Scapular protraction - possible serratus anterior weakness');
+      }
+      if (rhythmDisturbance) {
+        compensations.push('Altered scapulohumeral rhythm - scapular compensation before 30° abduction');
+      }
+      
+    } else {
+      for (const frame of frames) {
+        const leftShoulder = frame.landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+        const rightShoulder = frame.landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+        const leftHip = frame.landmarks[POSE_LANDMARKS.LEFT_HIP];
+        const rightHip = frame.landmarks[POSE_LANDMARKS.RIGHT_HIP];
         
-        const trunkAngle = calculateAngle(leftShoulder, leftHip, rightHip);
-        if (Math.abs(trunkAngle - 90) > 15) {
-          if (!compensations.includes('Trunk lean detected')) {
-            compensations.push('Trunk lean detected');
+        if (leftShoulder && rightShoulder && leftHip && rightHip) {
+          const shoulderTilt = Math.abs(leftShoulder.y - rightShoulder.y);
+          const hipTilt = Math.abs(leftHip.y - rightHip.y);
+          
+          if (shoulderTilt > 0.1) {
+            if (!compensations.includes('Shoulder elevation detected')) {
+              compensations.push('Shoulder elevation detected');
+            }
+          }
+          
+          if (hipTilt > 0.08) {
+            if (!compensations.includes('Hip hiking observed')) {
+              compensations.push('Hip hiking observed');
+            }
+          }
+          
+          const trunkAngle = calculateAngle(leftShoulder, leftHip, rightHip);
+          if (Math.abs(trunkAngle - 90) > 15) {
+            if (!compensations.includes('Trunk lean detected')) {
+              compensations.push('Trunk lean detected');
+            }
           }
         }
       }

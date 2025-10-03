@@ -525,18 +525,29 @@ export default function JointAnalysisLab() {
         if (recordingPhase === 'idle') {
           const instructionY = 120;
           overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          overlayCtx.fillRect(canvas.width / 2 - 300, instructionY - 40, 600, 80);
+          overlayCtx.fillRect(canvas.width / 2 - 300, instructionY - 50, 600, 100);
           
           overlayCtx.fillStyle = '#ffffff';
-          overlayCtx.font = 'bold 24px Arial';
+          overlayCtx.font = 'bold 22px Arial';
           overlayCtx.textAlign = 'center';
           overlayCtx.textBaseline = 'middle';
           
           const currentDuration = centeredStartTimeRef.current ? (Date.now() - centeredStartTimeRef.current) / 1000 : 0;
+          
+          if (isStable) {
+            overlayCtx.fillText(
+              `Get ready... ${Math.max(0, 1.5 - currentDuration).toFixed(1)}s`,
+              canvas.width / 2,
+              instructionY - 15
+            );
+          }
+          
+          overlayCtx.fillStyle = isStable ? '#22c55e' : '#fbbf24';
+          overlayCtx.font = isStable ? 'bold 24px Arial' : 'bold 20px Arial';
           overlayCtx.fillText(
-            isStable ? `Hold steady... ${Math.max(0, 1.5 - currentDuration).toFixed(1)}s` : 'Hold your position steady',
+            config.movementInstruction,
             canvas.width / 2,
-            instructionY
+            instructionY + 15
           );
         }
         
@@ -954,17 +965,19 @@ export default function JointAnalysisLab() {
                 {isJointCentered ? (
                   <>
                     <CheckCircle className="h-4 w-4 text-green-600" />
-                    <AlertTitle className="text-green-600">Joint Centered</AlertTitle>
+                    <AlertTitle className="text-green-600">Ready to Record</AlertTitle>
                     <AlertDescription>
-                      Hold steady... {centeredDuration >= 1 ? 'Ready to record!' : `${(1 - centeredDuration).toFixed(1)}s`}
+                      <div className="font-semibold mb-1">{JOINT_CONFIGS[selectedJoint].movementInstruction}</div>
+                      <div className="text-sm">Starting in {centeredDuration >= 1.5 ? 'now!' : `${(1.5 - centeredDuration).toFixed(1)}s`}</div>
                     </AlertDescription>
                   </>
                 ) : (
                   <>
                     <Target className="h-4 w-4" />
-                    <AlertTitle>Position Your Joint</AlertTitle>
+                    <AlertTitle>Position Yourself</AlertTitle>
                     <AlertDescription>
-                      Move your {JOINT_CONFIGS[selectedJoint].label.toLowerCase()} into the target circle
+                      <div className="mb-1">Move your {JOINT_CONFIGS[selectedJoint].label.toLowerCase()} into the target circle</div>
+                      <div className="text-sm font-semibold text-yellow-600">Then: {JOINT_CONFIGS[selectedJoint].movementInstruction}</div>
                     </AlertDescription>
                   </>
                 )}

@@ -952,8 +952,11 @@ export default function JointAnalysisLab() {
     jointPositionHistoryRef.current = [];
   };
 
-  const startAutomatedNextTest = () => {
-    console.log('Starting automated next test. Next test instruction:', nextTestRecommendation?.instruction);
+  const startAutomatedNextTest = (testData: { movementType: string; instruction: string; rationale: string }) => {
+    console.log('Starting automated next test. Instruction:', testData.instruction);
+    
+    // Update state immediately with the new test data
+    setNextTestRecommendation(testData);
     
     setRecordingPhase('preparing_next_test');
     recordingPhaseRef.current = 'preparing_next_test';
@@ -965,7 +968,7 @@ export default function JointAnalysisLab() {
         if (prev <= 1) {
           clearInterval(prepInterval);
           setTimeout(() => {
-            console.log('Starting recording after preparation');
+            console.log('Starting recording after preparation with instruction:', testData.instruction);
             startRecording();
           }, 500);
           return 0;
@@ -1184,7 +1187,7 @@ export default function JointAnalysisLab() {
       } else if (result.nextTest) {
         // Automatically start preparation for next test
         setTimeout(() => {
-          startAutomatedNextTest();
+          startAutomatedNextTest(result.nextTest);
         }, 1500);
       }
       

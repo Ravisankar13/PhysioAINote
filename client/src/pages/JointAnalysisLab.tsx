@@ -628,6 +628,68 @@ export default function JointAnalysisLab() {
     initMediaPipe();
   }, [toast]);
 
+  // Cleanup effect - runs on component unmount
+  useEffect(() => {
+    return () => {
+      // Clean up camera on unmount
+      if (cameraRef.current) {
+        try {
+          cameraRef.current.stop();
+        } catch (e) {
+          console.error('Error stopping camera on unmount:', e);
+        }
+      }
+      
+      // Stop all video stream tracks
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+      
+      // Close pose
+      if (poseRef.current) {
+        try {
+          poseRef.current.close();
+        } catch (e) {
+          console.error('Error closing pose on unmount:', e);
+        }
+      }
+      
+      // Clear intervals
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Handle page visibility changes (tab switching)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Page is hidden - pause camera processing
+        if (videoRef.current && videoRef.current.srcObject) {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getVideoTracks().forEach(track => {
+            track.enabled = false;
+          });
+        }
+      } else {
+        // Page is visible - resume camera processing
+        if (videoRef.current && videoRef.current.srcObject) {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getVideoTracks().forEach(track => {
+            track.enabled = true;
+          });
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   const startTracking = async () => {
     if (!mediapipeLoaded || !videoRef.current || !canvasRef.current) return;
     
@@ -679,16 +741,42 @@ export default function JointAnalysisLab() {
   };
 
   const stopTracking = () => {
+    // Stop the camera properly
     if (cameraRef.current) {
-      cameraRef.current.stop();
+      try {
+        cameraRef.current.stop();
+      } catch (e) {
+        console.error('Error stopping camera:', e);
+      }
       cameraRef.current = null;
     }
+    
+    // Stop all video stream tracks
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => {
+        track.stop();
+      });
+      videoRef.current.srcObject = null;
+    }
+    
+    // Clean up pose
     if (poseRef.current) {
+      try {
+        poseRef.current.close();
+      } catch (e) {
+        console.error('Error closing pose:', e);
+      }
       poseRef.current = null;
     }
+    
+    // Clear intervals
     if (recordingIntervalRef.current) {
       clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
     }
+    
+    // Reset state
     setIsTracking(false);
     setIsJointCentered(false);
     setCenteredDuration(0);

@@ -80,6 +80,193 @@ export class JointAnalysisService {
   }
 
   /**
+   * Determines the next test to perform using AI-driven clinical reasoning
+   */
+  async determineNextTest(sessionData: {
+    jointType: string;
+    testsPerformed: Array<{
+      movementType: string;
+      instruction: string;
+      movementRange: number;
+      smoothness: number;
+      compensations: string[];
+      symmetry?: number;
+      findings: string;
+    }>;
+  }): Promise<{
+    clinicalReasoning: string;
+    currentHypotheses: Array<{
+      diagnosis: string;
+      likelihood: "high" | "moderate" | "low";
+      supportingEvidence: string[];
+      testsNeeded: string[];
+    }>;
+    nextTest: {
+      movementType: string;
+      instruction: string;
+      rationale: string;
+    } | null;
+    isAssessmentComplete: boolean;
+    completionReason?: string;
+  }> {
+    try {
+      const prompt = this.buildClinicalReasoningPrompt(sessionData);
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert musculoskeletal physiotherapist using hypothesis-deductive reasoning for clinical assessment. Your role is to:
+
+1. FORM DIFFERENTIAL DIAGNOSES based on movement patterns, compensations, and test findings
+2. THINK STRATEGICALLY about which test to perform next to confirm or rule out hypotheses
+3. USE CLINICAL REASONING to identify the most discriminative test for differential diagnosis
+4. KNOW WHEN TO STOP - assessment is complete when:
+   - Primary diagnosis has high confidence with supporting evidence
+   - Key differential diagnoses have been adequately ruled in/out
+   - Additional tests would not meaningfully change clinical decision-making
+   - Typically 3-5 well-chosen tests provide sufficient data
+
+Think like a skilled clinician: each test should add valuable diagnostic information. Avoid redundant testing. Focus on tests that differentiate between competing hypotheses.`
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 2000,
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+      return this.processClinicalReasoningResult(result);
+
+    } catch (error) {
+      console.error('Error in clinical reasoning:', error);
+      throw new Error('Failed to determine next test');
+    }
+  }
+
+  /**
+   * Builds the clinical reasoning prompt for adaptive testing
+   */
+  private buildClinicalReasoningPrompt(sessionData: {
+    jointType: string;
+    testsPerformed: Array<{
+      movementType: string;
+      instruction: string;
+      movementRange: number;
+      smoothness: number;
+      compensations: string[];
+      symmetry?: number;
+      findings: string;
+    }>;
+  }): string {
+    const jointName = sessionData.jointType.charAt(0).toUpperCase() + sessionData.jointType.slice(1);
+    const testCount = sessionData.testsPerformed.length;
+    
+    let testsHistory = '';
+    sessionData.testsPerformed.forEach((test, index) => {
+      const compensations = test.compensations.join(', ') || 'None';
+      const symmetry = test.symmetry !== undefined ? `${test.symmetry.toFixed(1)}%` : 'N/A';
+      
+      testsHistory += `
+Test ${index + 1}: ${test.movementType}
+- Instruction: "${test.instruction}"
+- Movement Range: ${test.movementRange.toFixed(1)}°
+- Smoothness: ${test.smoothness.toFixed(2)} (lower = smoother)
+- Compensations: ${compensations}
+- Symmetry: ${symmetry}
+- Findings: ${test.findings}
+`;
+    });
+
+    return `
+CLINICAL ASSESSMENT SESSION - ${jointName.toUpperCase()} JOINT
+Tests Performed So Far: ${testCount}
+
+${testsHistory}
+
+TASK: Use hypothesis-deductive reasoning to determine the next step in this assessment.
+
+ANALYSIS REQUIRED:
+1. CLINICAL REASONING: Synthesize all test findings into a coherent clinical picture
+2. DIFFERENTIAL DIAGNOSES: List current diagnostic hypotheses ranked by likelihood (high/moderate/low)
+   - For each hypothesis, provide supporting evidence from tests performed
+   - Identify what additional tests are needed to confirm/rule out each hypothesis
+3. NEXT TEST SELECTION: Choose the most strategic next test OR determine if assessment is complete
+   - If more testing needed: specify the exact movement type, clear instruction, and clinical rationale
+   - If assessment complete: explain why (sufficient evidence, clear diagnosis, no additional tests needed)
+
+Respond in this JSON format:
+{
+  "clinicalReasoning": "Comprehensive synthesis of findings and clinical thinking process (2-3 sentences explaining the pattern you see)",
+  "currentHypotheses": [
+    {
+      "diagnosis": "Specific diagnostic hypothesis (e.g., 'Subacromial impingement syndrome')",
+      "likelihood": "high" | "moderate" | "low",
+      "supportingEvidence": ["Evidence from tests performed (e.g., 'Painful arc during abduction at 80-120°')"],
+      "testsNeeded": ["Specific tests that would confirm/rule out this diagnosis (e.g., 'Neer impingement test', 'Hawkins-Kennedy test')"]
+    }
+  ],
+  "nextTest": {
+    "movementType": "Specific movement (e.g., 'Internal rotation', 'Flexion with resistance')",
+    "instruction": "Clear, specific instruction for the test (e.g., 'Raise your arm forward and up as high as possible')",
+    "rationale": "Why this test is the most important next step (e.g., 'Will differentiate between capsular restriction and impingement')"
+  } OR null if assessment complete,
+  "isAssessmentComplete": true/false,
+  "completionReason": "Explanation if complete (e.g., 'Primary diagnosis of rotator cuff tendinopathy confirmed with high confidence. Key differentials ruled out. 4 tests provided sufficient diagnostic clarity.')"
+}
+
+CLINICAL DECISION RULES:
+- Perform ${testCount >= 5 ? 'CRITICAL EVALUATION - assessment should likely be complete by now unless complex presentation' : `${5 - testCount} more strategic tests maximum`}
+- Each new test must target a specific diagnostic question
+- Avoid redundant tests that confirm what's already known
+- Assessment complete when primary diagnosis has high confidence AND key differentials addressed
+`;
+  }
+
+  /**
+   * Processes and validates the clinical reasoning result
+   */
+  private processClinicalReasoningResult(result: any): {
+    clinicalReasoning: string;
+    currentHypotheses: Array<{
+      diagnosis: string;
+      likelihood: "high" | "moderate" | "low";
+      supportingEvidence: string[];
+      testsNeeded: string[];
+    }>;
+    nextTest: {
+      movementType: string;
+      instruction: string;
+      rationale: string;
+    } | null;
+    isAssessmentComplete: boolean;
+    completionReason?: string;
+  } {
+    return {
+      clinicalReasoning: result.clinicalReasoning || 'Clinical reasoning analysis completed',
+      currentHypotheses: Array.isArray(result.currentHypotheses) 
+        ? result.currentHypotheses.map((h: any) => ({
+            diagnosis: h.diagnosis || 'Undifferentiated diagnosis',
+            likelihood: h.likelihood || 'moderate',
+            supportingEvidence: Array.isArray(h.supportingEvidence) ? h.supportingEvidence : [],
+            testsNeeded: Array.isArray(h.testsNeeded) ? h.testsNeeded : []
+          }))
+        : [],
+      nextTest: result.nextTest ? {
+        movementType: result.nextTest.movementType || '',
+        instruction: result.nextTest.instruction || '',
+        rationale: result.nextTest.rationale || ''
+      } : null,
+      isAssessmentComplete: result.isAssessmentComplete || false,
+      completionReason: result.completionReason
+    };
+  }
+
+  /**
    * Builds the analysis prompt based on joint metrics
    */
   private buildAnalysisPrompt(metrics: JointMetrics): string {

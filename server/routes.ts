@@ -12499,6 +12499,30 @@ Respond in JSON format:
     }
   });
 
+  // Adaptive clinical reasoning for multi-test assessments
+  app.post("/api/joint-analysis/next-test", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { jointType, testsPerformed } = req.body;
+      
+      // Validate required fields
+      if (!jointType || !testsPerformed || !Array.isArray(testsPerformed)) {
+        return res.status(400).json({ message: 'jointType and testsPerformed array are required' });
+      }
+
+      // Get AI recommendation for next test
+      const result = await jointAnalysisService.determineNextTest({
+        jointType,
+        testsPerformed
+      });
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('Error in adaptive clinical reasoning:', error);
+      res.status(500).json({ message: 'Failed to determine next test' });
+    }
+  });
+
   app.patch("/api/body-scanner/scans/:id/review", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const scanId = parseInt(req.params.id);

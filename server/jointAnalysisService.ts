@@ -140,7 +140,7 @@ Think like a skilled clinician: each test should add valuable diagnostic informa
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
-      return this.processClinicalReasoningResult(result);
+      return this.processClinicalReasoningResult(result, sessionData.testsPerformed);
 
     } catch (error) {
       console.error('Error in clinical reasoning:', error);
@@ -245,6 +245,12 @@ Use evidence-based clinical reasoning and current best practices in musculoskele
     const jointName = sessionData.jointType.charAt(0).toUpperCase() + sessionData.jointType.slice(1);
     const testCount = sessionData.testsPerformed.length;
     
+    // Extract previously performed movement types to prevent repetition
+    const performedMovementTypes = sessionData.testsPerformed.map(t => t.movementType);
+    const performedMovementsList = performedMovementTypes.length > 0 
+      ? performedMovementTypes.map((m, i) => `${i + 1}. ${m}`).join('\n')
+      : 'None yet';
+    
     let testsHistory = '';
     sessionData.testsPerformed.forEach((test, index) => {
       const compensations = test.compensations.join(', ') || 'None';
@@ -261,13 +267,36 @@ Test ${index + 1}: ${test.movementType}
 `;
     });
 
+    // Define curated test sequences for different joints
+    const shoulderTests = [
+      'Active abduction (raising arm out to side)',
+      'Active flexion (raising arm forward/overhead)', 
+      'Active external rotation (rotating arm outward)',
+      'Active internal rotation (rotating arm inward/behind back)',
+      'Scaption (raising arm at 30° angle between front and side)',
+      'Horizontal adduction (crossing arm across chest)',
+      'Extension (moving arm backward)',
+      'Combined movements (e.g., flexion with rotation)'
+    ];
+
+    const curatedTests = sessionData.jointType === 'shoulder' ? shoulderTests : [];
+    const availableTestsList = curatedTests.length > 0 
+      ? '\n\nAVAILABLE TEST OPTIONS (choose from these):\n' + curatedTests.map((t, i) => `${i + 1}. ${t}`).join('\n')
+      : '';
+
     return `
 CLINICAL ASSESSMENT SESSION - ${jointName.toUpperCase()} JOINT
 Tests Performed So Far: ${testCount}
 
+MOVEMENT TYPES ALREADY TESTED (DO NOT REPEAT):
+${performedMovementsList}
+${availableTestsList}
+
 ${testsHistory}
 
 TASK: Use hypothesis-deductive reasoning to determine the next step in this assessment.
+
+CRITICAL CONSTRAINT: You MUST select a different movement type than those already tested. The "movementType" field in your response must NOT match any of the movement types listed above unless assessment is complete.
 
 ANALYSIS REQUIRED:
 1. CLINICAL REASONING: Synthesize all test findings into a coherent clinical picture
@@ -290,9 +319,10 @@ Respond in this JSON format:
     }
   ],
   "nextTest": {
-    "movementType": "Specific movement (e.g., 'Internal rotation', 'Flexion with resistance')",
-    "instruction": "Clear, specific instruction for the test (e.g., 'Raise your arm forward and up as high as possible')",
-    "rationale": "Why this test is the most important next step (e.g., 'Will differentiate between capsular restriction and impingement')"
+    "movementType": "Specific movement that is DIFFERENT from all previously tested movements",
+    "instruction": "Clear, specific instruction for the test (e.g., 'Rotate your arm outward while keeping elbow at side')",
+    "rationale": "Why this test is the most important next step (e.g., 'Will differentiate between capsular restriction and impingement')",
+    "isNovelTest": true (MUST be true - confirms this is a NEW movement type not previously tested)
   } OR null if assessment complete,
   "isAssessmentComplete": true/false,
   "completionReason": "Explanation if complete (e.g., 'Primary diagnosis of rotator cuff tendinopathy confirmed with high confidence. Key differentials ruled out. 4 tests provided sufficient diagnostic clarity.')"
@@ -309,7 +339,10 @@ CLINICAL DECISION RULES:
   /**
    * Processes and validates the clinical reasoning result
    */
-  private processClinicalReasoningResult(result: any): {
+  private processClinicalReasoningResult(
+    result: any,
+    testsPerformed: Array<{ movementType: string }>
+  ): {
     clinicalReasoning: string;
     currentHypotheses: Array<{
       diagnosis: string;
@@ -325,6 +358,29 @@ CLINICAL DECISION RULES:
     isAssessmentComplete: boolean;
     completionReason?: string;
   } {
+    // Validate that the recommended test is novel (not a repeat)
+    const performedMovementTypes = testsPerformed.map(t => t.movementType.toLowerCase());
+    let validatedNextTest = null;
+    
+    if (result.nextTest && !result.isAssessmentComplete) {
+      const recommendedType = (result.nextTest.movementType || '').toLowerCase();
+      const isRepeat = performedMovementTypes.some(performed => 
+        recommendedType.includes(performed) || performed.includes(recommendedType)
+      );
+      
+      if (isRepeat) {
+        console.warn(`AI recommended repeat test: "${result.nextTest.movementType}". Rejecting to force variety.`);
+        // Don't include the repeated test - this will trigger assessment completion
+        validatedNextTest = null;
+      } else {
+        validatedNextTest = {
+          movementType: result.nextTest.movementType || '',
+          instruction: result.nextTest.instruction || '',
+          rationale: result.nextTest.rationale || ''
+        };
+      }
+    }
+    
     return {
       clinicalReasoning: result.clinicalReasoning || 'Clinical reasoning analysis completed',
       currentHypotheses: Array.isArray(result.currentHypotheses) 
@@ -335,13 +391,11 @@ CLINICAL DECISION RULES:
             testsNeeded: Array.isArray(h.testsNeeded) ? h.testsNeeded : []
           }))
         : [],
-      nextTest: result.nextTest ? {
-        movementType: result.nextTest.movementType || '',
-        instruction: result.nextTest.instruction || '',
-        rationale: result.nextTest.rationale || ''
-      } : null,
-      isAssessmentComplete: result.isAssessmentComplete || false,
-      completionReason: result.completionReason
+      nextTest: validatedNextTest,
+      isAssessmentComplete: result.isAssessmentComplete || (result.nextTest && validatedNextTest === null) || false,
+      completionReason: validatedNextTest === null && result.nextTest 
+        ? 'Assessment complete - all available movement patterns tested'
+        : result.completionReason
     };
   }
 

@@ -12483,9 +12483,12 @@ Respond in JSON format:
     try {
       const metrics: JointMetrics = req.body;
       
-      // Validate required fields
-      if (!metrics.joint || metrics.alignmentScore === undefined || metrics.rangeOfMotion === undefined) {
-        return res.status(400).json({ message: 'Joint, alignment score, and range of motion are required' });
+      // Validate required fields - support both new movement-based format and legacy format
+      const hasNewFormat = metrics.joint && metrics.movementRange !== undefined;
+      const hasLegacyFormat = metrics.joint && metrics.alignmentScore !== undefined && metrics.rangeOfMotion !== undefined;
+      
+      if (!hasNewFormat && !hasLegacyFormat) {
+        return res.status(400).json({ message: 'Joint and either movement metrics (movementRange, smoothness) or legacy metrics (alignmentScore, rangeOfMotion) are required' });
       }
 
       // Analyze with AI

@@ -20,7 +20,12 @@ import {
   RotateCw,
   Cpu,
   Video,
-  Clock
+  Clock,
+  ChevronRight,
+  ChevronDown,
+  X,
+  Minimize2,
+  Maximize2
 } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 
@@ -201,6 +206,7 @@ export default function JointAnalysisLab() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<JointAnalysisResult | null>(null);
   const [currentLandmarks, setCurrentLandmarks] = useState<any[] | null>(null);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -995,94 +1001,132 @@ export default function JointAnalysisLab() {
         </Card>
 
         {analysisResult && (
-          <Card data-testid="card-analysis-results">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5" />
-                Movement Analysis - {JOINT_CONFIGS[analysisResult.jointType].label}
-              </CardTitle>
-              <CardDescription>
-                Captured at {analysisResult.timestamp.toLocaleTimeString()} • {movementData.length} frames analyzed
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <RotateCw className="h-4 w-4 text-blue-600" />
-                    <h3 className="font-semibold">Movement Range</h3>
-                  </div>
-                  <div className="space-y-1" data-testid="text-movement-range">
-                    <p className="text-2xl font-bold text-blue-600">
-                      {analysisResult.movementMetrics.totalRange.toFixed(1)}°
-                    </p>
-                    <p className="text-sm text-muted-foreground">Total Range</p>
-                    <p className="text-xs text-muted-foreground">
-                      {analysisResult.movementRange.min.toFixed(1)}° - {analysisResult.movementRange.max.toFixed(1)}°
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-purple-600" />
-                    <h3 className="font-semibold">Smoothness</h3>
-                  </div>
-                  <div className="space-y-2" data-testid="text-smoothness">
-                    <p className="text-2xl font-bold text-purple-600">
-                      {analysisResult.movementMetrics.smoothness.toFixed(2)}
-                    </p>
-                    <Badge variant={analysisResult.movementMetrics.smoothness < 2 ? 'default' : 'secondary'}>
-                      {analysisResult.movementMetrics.smoothness < 2 ? 'Smooth' : 
-                       analysisResult.movementMetrics.smoothness < 4 ? 'Moderate' : 'Jerky'}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground">Lower is better</p>
+          <div 
+            className={`fixed ${isPanelCollapsed ? 'right-0 top-20' : 'right-4 top-20'} 
+                       ${isPanelCollapsed ? 'w-12' : 'w-96'} 
+                       transition-all duration-300 ease-in-out z-50 max-h-[calc(100vh-6rem)] overflow-hidden`}
+            data-testid="card-analysis-results"
+          >
+            <Card className="shadow-2xl border-2">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  {!isPanelCollapsed && (
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Activity className="h-4 w-4" />
+                      Analysis Results
+                    </CardTitle>
+                  )}
+                  <div className="flex items-center gap-1 ml-auto">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
+                      data-testid="button-toggle-panel"
+                    >
+                      {isPanelCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setAnalysisResult(null)}
+                      data-testid="button-close-panel"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Ruler className="h-4 w-4 text-green-600" />
-                    <h3 className="font-semibold">Compensations</h3>
-                  </div>
-                  <div className="space-y-2" data-testid="text-compensations">
-                    <p className="text-2xl font-bold text-green-600">
-                      {analysisResult.movementMetrics.compensations.length}
-                    </p>
-                    {analysisResult.movementMetrics.compensations.length > 0 ? (
-                      <div className="space-y-1">
-                        {analysisResult.movementMetrics.compensations.map((comp, idx) => (
-                          <Badge key={idx} variant="outline" className="text-xs block w-full">
-                            {comp}
-                          </Badge>
-                        ))}
+                {!isPanelCollapsed && (
+                  <CardDescription className="text-xs">
+                    {JOINT_CONFIGS[analysisResult.jointType].label} • {analysisResult.timestamp.toLocaleTimeString()}
+                  </CardDescription>
+                )}
+              </CardHeader>
+              
+              {!isPanelCollapsed && (
+                <CardContent className="space-y-4 overflow-y-auto max-h-[calc(100vh-12rem)] pb-4">
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <RotateCw className="h-3.5 w-3.5 text-blue-600" />
+                        <h3 className="font-semibold text-sm">Movement Range</h3>
                       </div>
-                    ) : (
-                      <Badge variant="default" className="bg-green-600">No Compensations</Badge>
-                    )}
+                      <div className="space-y-1" data-testid="text-movement-range">
+                        <p className="text-xl font-bold text-blue-600">
+                          {analysisResult.movementMetrics.totalRange.toFixed(1)}°
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {analysisResult.movementRange.min.toFixed(1)}° - {analysisResult.movementRange.max.toFixed(1)}°
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-3.5 w-3.5 text-purple-600" />
+                        <h3 className="font-semibold text-sm">Smoothness</h3>
+                      </div>
+                      <div className="space-y-2" data-testid="text-smoothness">
+                        <p className="text-xl font-bold text-purple-600">
+                          {analysisResult.movementMetrics.smoothness.toFixed(2)}
+                        </p>
+                        <Badge variant={analysisResult.movementMetrics.smoothness < 2 ? 'default' : 'secondary'} className="text-xs">
+                          {analysisResult.movementMetrics.smoothness < 2 ? 'Smooth' : 
+                           analysisResult.movementMetrics.smoothness < 4 ? 'Moderate' : 'Jerky'}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Ruler className="h-3.5 w-3.5 text-green-600" />
+                        <h3 className="font-semibold text-sm">Compensations</h3>
+                      </div>
+                      <div className="space-y-2" data-testid="text-compensations">
+                        <p className="text-xl font-bold text-green-600">
+                          {analysisResult.movementMetrics.compensations.length}
+                        </p>
+                        {analysisResult.movementMetrics.compensations.length > 0 ? (
+                          <div className="space-y-1">
+                            {analysisResult.movementMetrics.compensations.map((comp, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs block w-full py-1.5">
+                                {comp}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <Badge variant="default" className="bg-green-600 text-xs">No Compensations</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="h-3.5 w-3.5 text-orange-600" />
+                        <h3 className="font-semibold text-sm">AI Interpretation</h3>
+                        <Badge variant="outline" className="ml-auto text-xs">
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          AI
+                        </Badge>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg" data-testid="text-clinical-interpretation">
+                        <p className="text-xs leading-relaxed whitespace-pre-line">
+                          {analysisResult.clinicalInterpretation}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Cpu className="h-5 w-5 text-orange-600" />
-                  <h3 className="font-semibold text-lg">AI Clinical Interpretation</h3>
-                  <Badge variant="outline" className="ml-auto">
-                    <Sparkles className="h-3 w-3 mr-1" />
-                    AI-Generated
-                  </Badge>
-                </div>
-                <div className="p-4 bg-muted rounded-lg" data-testid="text-clinical-interpretation">
-                  <p className="text-sm leading-relaxed whitespace-pre-line">
-                    {analysisResult.clinicalInterpretation}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              )}
+            </Card>
+          </div>
         )}
       </div>
     </div>

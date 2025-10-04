@@ -5,6 +5,7 @@ import { createAdditionalComplexCases2024 } from "./additionalComplexCases2024";
 import { competitionScheduler } from "./competitionScheduler";
 import { notificationService } from "./notificationService";
 import { realTimeCompetitionService } from "./realTimeCompetitionService";
+import { addSampleMultimediaContent } from "./sampleMultimediaContent";
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -295,6 +296,16 @@ app.use((req, res, next) => {
         log('✓ Real-time competition WebSocket server temporarily disabled');
       } catch (error) {
         log('Real-time WebSocket setup failed:', error instanceof Error ? error.message : 'Unknown error');
+      }
+
+      // Add sample multimedia content to education modules
+      try {
+        if (process.env.NODE_ENV === 'development') {
+          await addSampleMultimediaContent();
+          log('✓ Sample multimedia content added to education modules');
+        }
+      } catch (error) {
+        log('Sample multimedia content setup failed:', error instanceof Error ? error.message : 'Unknown error');
       }
     };
 

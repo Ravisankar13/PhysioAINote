@@ -335,8 +335,6 @@ export default function JointAnalysisLab() {
         const jointY = joint.y * overlayCanvasRef.current.height;
         const distance = Math.sqrt(Math.pow(jointX - clickX, 2) + Math.pow(jointY - clickY, 2));
         
-        console.log(`Joint ${label} at (${jointX.toFixed(0)}, ${jointY.toFixed(0)}), distance: ${distance.toFixed(0)}`);
-        
         if (distance < minDistance && distance < clickThreshold) {
           minDistance = distance;
           closestJoint = jointType;
@@ -344,32 +342,25 @@ export default function JointAnalysisLab() {
       }
     });
     
-    console.log(`Closest joint: ${closestJoint}, distance: ${minDistance.toFixed(0)}`);
     return closestJoint;
   };
 
   // Handle canvas click
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    console.log('Canvas clicked! Tracking:', isTracking, 'Landmarks:', !!currentLandmarks, 'Phase:', recordingPhase);
-    
-    if (!isTracking || !currentLandmarks || recordingPhase !== 'idle') {
-      console.log('Click ignored - conditions not met');
+    if (!isTracking || !currentLandmarks) {
       return;
     }
     
     const canvas = overlayCanvasRef.current;
     if (!canvas) {
-      console.log('Canvas ref not found');
       return;
     }
     
     const rect = canvas.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
-    console.log('Click coordinates:', { clickX, clickY });
     
     const closestJoint = findClosestJoint(clickX, clickY, currentLandmarks);
-    console.log('Closest joint found:', closestJoint);
     
     if (closestJoint && closestJoint !== selectedJoint) {
       handleJointChange(closestJoint);
@@ -382,7 +373,7 @@ export default function JointAnalysisLab() {
 
   // Handle mouse move for hover effect
   const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isTracking || !currentLandmarks || recordingPhase !== 'idle') {
+    if (!isTracking || !currentLandmarks) {
       setHoveredJoint(null);
       return;
     }
@@ -723,8 +714,8 @@ export default function JointAnalysisLab() {
           primary.y * canvas.height - 10
         );
 
-        // Draw clickable joint indicators when not recording
-        if (recordingPhaseRef.current === 'idle' && currentLandmarks) {
+        // Draw clickable joint indicators at all times
+        if (currentLandmarks) {
           CLICKABLE_JOINTS.forEach(({ landmark, jointType, label }) => {
             const joint = results.poseLandmarks[landmark];
             if (joint) {
@@ -1048,14 +1039,25 @@ export default function JointAnalysisLab() {
 
   const handleJointChange = (joint: JointType) => {
     setSelectedJoint(joint);
-    setAnalysisResult(null);
-    setIsJointCentered(false);
-    setCenteredDuration(0);
-    setRecordingPhase('idle');
-    recordingPhaseRef.current = 'idle';
-    setMovementData([]);
-    centeredStartTimeRef.current = null;
-    jointPositionHistoryRef.current = [];
+    
+    // If we're actively recording, don't reset everything - just switch the joint
+    if (recordingPhase === 'recording' || recordingPhase === 'countdown' || recordingPhase === 'preparing_next_test') {
+      // Keep recording with the new joint
+      toast({
+        title: "Joint Switched",
+        description: `Now analyzing ${JOINT_CONFIGS[joint].label}`,
+      });
+    } else {
+      // Only reset if we're idle or complete
+      setAnalysisResult(null);
+      setIsJointCentered(false);
+      setCenteredDuration(0);
+      setRecordingPhase('idle');
+      recordingPhaseRef.current = 'idle';
+      setMovementData([]);
+      centeredStartTimeRef.current = null;
+      jointPositionHistoryRef.current = [];
+    }
   };
 
   const startAutomatedNextTest = (testData: { movementType: string; instruction: string; rationale: string }) => {
@@ -1634,7 +1636,7 @@ export default function JointAnalysisLab() {
               <canvas
                 ref={overlayCanvasRef}
                 className="absolute inset-0 w-full h-full object-cover z-10"
-                style={{ cursor: hoveredJoint && isTracking && recordingPhase === 'idle' ? 'pointer' : 'default' }}
+                style={{ cursor: hoveredJoint && isTracking ? 'pointer' : 'default' }}
                 width={960}
                 height={1280}
                 onClick={handleCanvasClick}

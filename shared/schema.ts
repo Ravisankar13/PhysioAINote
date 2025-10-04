@@ -4110,7 +4110,7 @@ export const courses = pgTable("courses", {
 
 // Module content structure types
 export type ModuleContentSection = {
-  type: "text" | "video" | "interactive" | "quiz" | "3d_scanner";
+  type: "text" | "video" | "interactive" | "quiz" | "3d_scanner" | "biodigital_3d" | "clinical_images" | "anatomy_images";
   title?: string;
   content?: string; // Markdown or HTML text
   videoUrl?: string;
@@ -4123,6 +4123,39 @@ export type ModuleContentSection = {
   }>;
   interactiveType?: "decision_tree" | "case_study" | "image_analysis" | "3d_model";
   interactiveData?: any;
+  // New multimedia fields
+  biodigitalModelId?: string; // BioDigital model identifier
+  biodigitalConfig?: {
+    modelId: string;
+    viewAngle?: string;
+    highlightStructures?: string[];
+    labels?: boolean;
+  };
+  clinicalImages?: Array<{
+    source: "nih_openi" | "manual_upload";
+    imageUrl: string;
+    thumbnail?: string;
+    title: string;
+    description?: string;
+    imageType?: "xray" | "mri" | "ct" | "ultrasound" | "clinical_photo";
+    attribution?: string;
+    pmid?: string; // PubMed ID if from NIH
+  }>;
+  anatomyImages?: Array<{
+    source: "z_anatomy" | "manual_upload";
+    imageUrl: string;
+    thumbnail?: string;
+    structure: string; // e.g., "biceps tendon", "rotator cuff"
+    viewType?: "anterior" | "posterior" | "lateral" | "medial" | "superior" | "inferior";
+    labels?: string[]; // anatomical labels
+    description?: string;
+  }>;
+  researchSummary?: {
+    articleIds: number[]; // Reference to research_articles table
+    keyPoints: string[]; // AI-generated bullet points
+    clinicalRelevance: string;
+    lastUpdated?: Date;
+  };
 };
 
 export type ModuleContent = {

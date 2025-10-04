@@ -454,7 +454,7 @@ export default function JointAnalysisLab() {
 
   // Handle mouse move for hover effect
   const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isTracking || !currentLandmarks) {
+    if (!isTracking || !currentLandmarks || analysisStarted) {
       setHoveredJoint(null);
       return;
     }
@@ -1403,6 +1403,7 @@ export default function JointAnalysisLab() {
       } else {
         // All joints tested
         setCurrentTestingJoint(null);
+        setAnalysisStarted(false); // Reset so user can start new analysis
         console.log('All selected joints tested');
         
         toast({
@@ -1937,7 +1938,7 @@ export default function JointAnalysisLab() {
               <canvas
                 ref={overlayCanvasRef}
                 className="absolute inset-0 w-full h-full object-cover z-10"
-                style={{ cursor: hoveredJoint && isTracking ? 'pointer' : 'default' }}
+                style={{ cursor: hoveredJoint && isTracking && !analysisStarted ? 'pointer' : 'default' }}
                 width={960}
                 height={1280}
                 onClick={handleCanvasClick}
@@ -1951,7 +1952,8 @@ export default function JointAnalysisLab() {
                 <div className="absolute top-0 left-0 right-0 z-20 p-4">
                   <div className="bg-black/70 backdrop-blur-sm rounded-lg px-4 py-2 mx-auto w-fit max-w-[90%]">
                     <p className="text-white text-center text-sm font-medium">
-                      {recordingPhase === 'idle' && (isTracking ? 'Click on any joint or position within the target circle' : 'Position your joint within the target circle')}
+                      {recordingPhase === 'idle' && !analysisStarted && 'Click on joints to select them, then press Start Analysis'}
+                      {recordingPhase === 'idle' && analysisStarted && 'Position your joint within the target circle'}
                       {recordingPhase === 'preparing_next_test' && `Next: ${nextTestRecommendation?.movementType || 'Preparing next test'}...`}
                       {recordingPhase === 'countdown' && 'Get ready...'}
                       {recordingPhase === 'recording' && `Performing: ${nextTestRecommendation?.instruction || JOINT_CONFIGS[getCurrentJoint()].movementInstruction}`}

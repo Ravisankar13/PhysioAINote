@@ -17,6 +17,13 @@ interface StreamingSession {
   lastChunkTime: Date;
   audioBuffer: Buffer[];
   processingQueue: Promise<void>;
+  processedTranscriptLength: number; // Track what's been processed
+  currentSOAPSections: {
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+  };
 }
 
 class StreamingTranscriptionService {
@@ -39,7 +46,14 @@ class StreamingTranscriptionService {
         fullTranscript: '',
         lastChunkTime: new Date(),
         audioBuffer: [],
-        processingQueue: Promise.resolve()
+        processingQueue: Promise.resolve(),
+        processedTranscriptLength: 0,
+        currentSOAPSections: {
+          subjective: '',
+          objective: '',
+          assessment: '',
+          plan: ''
+        }
       };
       this.sessions.set(sessionId, session);
     }
@@ -94,10 +108,20 @@ class StreamingTranscriptionService {
       const newText = transcription.text;
       session.fullTranscript += ' ' + newText;
 
-      // Parse into SOAP sections if enough content
+      // Parse only new content into SOAP sections
       let soapSections = null;
       if (session.fullTranscript.length > 100) {
-        soapSections = await this.parseIntoSOAP(session.fullTranscript);
+        // Only process the unprocessed portion
+        const unprocessedText = session.fullTranscript.substring(session.processedTranscriptLength);
+        if (unprocessedText.trim().length > 50) { // Only process if meaningful new content
+          const newSections = await this.parseIntoSOAP(unprocessedText, session.currentSOAPSections);
+          if (newSections) {
+            // Merge new content with existing sections
+            session.currentSOAPSections = this.mergeSOAPSections(session.currentSOAPSections, newSections);
+            session.processedTranscriptLength = session.fullTranscript.length;
+            soapSections = session.currentSOAPSections;
+          }
+        }
       }
 
       return {
@@ -110,21 +134,37 @@ class StreamingTranscriptionService {
     }
   }
 
-  private async parseIntoSOAP(transcript: string): Promise<any> {
+  private async parseIntoSOAP(
+    transcript: string, 
+    existingSections?: { subjective: string; objective: string; assessment: string; plan: string }
+  ): Promise<any> {
     try {
-      const prompt = `Parse this medical consultation transcript into SOAP format. 
-      Identify which parts belong to Subjective, Objective, Assessment, and Plan.
+      const prompt = `You are parsing a NEW PORTION of an ongoing medical consultation transcript.
+      This is NOT the complete transcript - just a recent segment.
       
-      Transcript: ${transcript}
+      ${existingSections ? `Current SOAP sections already contain:
+      - Subjective: ${existingSections.subjective.length > 100 ? existingSections.subjective.substring(0, 100) + '...' : existingSections.subjective}
+      - Objective: ${existingSections.objective.length > 100 ? existingSections.objective.substring(0, 100) + '...' : existingSections.objective}
+      - Assessment: ${existingSections.assessment.length > 100 ? existingSections.assessment.substring(0, 100) + '...' : existingSections.assessment}
+      - Plan: ${existingSections.plan.length > 100 ? existingSections.plan.substring(0, 100) + '...' : existingSections.plan}
+      ` : ''}
       
-      Return as JSON with keys: subjective, objective, assessment, plan`;
+      New transcript segment to parse:
+      "${transcript}"
+      
+      IMPORTANT: Only extract NEW information from this segment that should be ADDED to the appropriate sections.
+      Do not repeat information already present in existing sections.
+      If the new segment doesn't contain relevant information for a section, return empty string for that section.
+      
+      Return as JSON with keys: subjective, objective, assessment, plan
+      Each value should contain ONLY the new content to be appended, not the complete section.`;
 
       const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: 'You are a medical documentation assistant. Parse transcripts into SOAP format.'
+            content: 'You are a medical documentation assistant. Extract ONLY new information from transcript segments to append to existing SOAP sections. Never duplicate existing content.'
           },
           {
             role: 'user',
@@ -143,6 +183,31 @@ class StreamingTranscriptionService {
     }
   }
 
+  private mergeSOAPSections(
+    existing: { subjective: string; objective: string; assessment: string; plan: string },
+    newContent: { subjective: string; objective: string; assessment: string; plan: string }
+  ): { subjective: string; objective: string; assessment: string; plan: string } {
+    return {
+      subjective: this.mergeSection(existing.subjective, newContent.subjective),
+      objective: this.mergeSection(existing.objective, newContent.objective),
+      assessment: this.mergeSection(existing.assessment, newContent.assessment),
+      plan: this.mergeSection(existing.plan, newContent.plan)
+    };
+  }
+
+  private mergeSection(existing: string, newContent: string): string {
+    if (!newContent || newContent.trim() === '') {
+      return existing;
+    }
+    
+    if (!existing || existing.trim() === '') {
+      return newContent;
+    }
+
+    // Add a separator if both have content
+    return existing.trim() + '\n' + newContent.trim();
+  }
+
   // Force process remaining buffer
   async flushSession(sessionId: string): Promise<{ fullTranscript: string; soapSections: any }> {
     const session = this.sessions.get(sessionId);
@@ -153,8 +218,16 @@ class StreamingTranscriptionService {
     // Process any remaining audio
     const result = await this.transcribeBuffer(session);
     
-    // Parse final SOAP
-    const finalSoap = await this.parseIntoSOAP(session.fullTranscript);
+    // Parse any remaining unprocessed transcript
+    const unprocessedText = session.fullTranscript.substring(session.processedTranscriptLength);
+    if (unprocessedText.trim().length > 0) {
+      const finalNewSections = await this.parseIntoSOAP(unprocessedText, session.currentSOAPSections);
+      if (finalNewSections) {
+        session.currentSOAPSections = this.mergeSOAPSections(session.currentSOAPSections, finalNewSections);
+      }
+    }
+
+    const finalSoap = session.currentSOAPSections;
 
     // Clean up session
     this.sessions.delete(sessionId);
@@ -176,12 +249,12 @@ class StreamingTranscriptionService {
     const now = new Date();
     const maxAge = 2 * 60 * 60 * 1000; // 2 hours
 
-    for (const [sessionId, session] of this.sessions.entries()) {
+    Array.from(this.sessions.entries()).forEach(([sessionId, session]) => {
       if (now.getTime() - session.lastChunkTime.getTime() > maxAge) {
         this.sessions.delete(sessionId);
         console.log(`Cleaned up stale session: ${sessionId}`);
       }
-    }
+    });
   }
 }
 

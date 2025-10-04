@@ -21,6 +21,7 @@ import { Helmet } from "react-helmet";
 import { Link } from "wouter";
 import { SectionRenderer } from "@/components/course/SectionRenderer";
 import { AskPhysioGPTButton } from "@/components/course/AskPhysioGPTButton";
+import { EnhancedCourseViewer } from "@/components/education/EnhancedCourseViewer";
 import type { ModuleContent } from "@shared/schema";
 
 interface CourseModule {
@@ -388,11 +389,36 @@ export default function CourseContent() {
                 <CardContent>
                   
                   <div className="space-y-6">
-                    <ModuleContentRenderer 
-                      content={selectedModule.content} 
-                      course={course}
-                      onQuizComplete={() => handleCompleteModule(selectedModule.id)}
-                    />
+                    {/* Check if module has multimedia content */}
+                    {selectedModule.content?.sections?.some((section: any) => 
+                      section.type === 'biodigital_3d' || 
+                      section.type === 'anatomy_images' || 
+                      section.type === 'clinical_images' ||
+                      section.researchSummary?.articleIds?.length > 0
+                    ) ? (
+                      <EnhancedCourseViewer
+                        moduleTitle={selectedModule.title}
+                        moduleContent={selectedModule.content}
+                        bodyPart={course.bodyPart}
+                        condition={selectedModule.title.toLowerCase().includes('pain') ? 'pain' : undefined}
+                        currentModuleIndex={modules.findIndex(m => m.id === selectedModule.id)}
+                        totalModules={modules.length}
+                        onNavigate={(direction) => {
+                          const currentIndex = modules.findIndex(m => m.id === selectedModule.id);
+                          const targetIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+                          if (targetIndex >= 0 && targetIndex < modules.length) {
+                            setSelectedModuleId(modules[targetIndex].id);
+                          }
+                        }}
+                        onComplete={() => handleCompleteModule(selectedModule.id)}
+                      />
+                    ) : (
+                      <ModuleContentRenderer 
+                        content={selectedModule.content} 
+                        course={course}
+                        onQuizComplete={() => handleCompleteModule(selectedModule.id)}
+                      />
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between mt-6 pt-6 border-t border-border">

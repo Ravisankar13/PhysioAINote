@@ -232,7 +232,9 @@ Use clear, professional language suitable for healthcare practitioners.`
     // Clear old cache entries if too large
     if (this.summaryCache.size > 100) {
       const firstKey = this.summaryCache.keys().next().value;
-      this.summaryCache.delete(firstKey);
+      if (firstKey !== undefined) {
+        this.summaryCache.delete(firstKey);
+      }
     }
     
     return summary;

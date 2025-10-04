@@ -204,7 +204,9 @@ const isPhoneDevice = () => {
 export default function JointAnalysisLab() {
   const { toast } = useToast();
   
-  const [selectedJoint, setSelectedJoint] = useState<JointType>('shoulder');
+  const [selectedJoints, setSelectedJoints] = useState<Set<JointType>>(new Set(['shoulder'] as JointType[]));
+  const [currentTestingJoint, setCurrentTestingJoint] = useState<JointType | null>(null);
+  const [completedJoints, setCompletedJoints] = useState<Set<JointType>>(new Set());
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'initializing' | 'ready' | 'error'>('idle');
   const [mediapipeLoaded, setMediapipeLoaded] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
@@ -283,6 +285,17 @@ export default function JointAnalysisLab() {
   const [hoveredJoint, setHoveredJoint] = useState<JointType | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
+  // Helper function to get the first selected joint (for backward compatibility)
+  const getFirstSelectedJoint = (): JointType => {
+    const joints = Array.from(selectedJoints);
+    return joints.length > 0 ? joints[0] : 'shoulder';
+  };
+  
+  // Helper function to get the joint being tested or the first selected
+  const getCurrentJoint = (): JointType => {
+    return currentTestingJoint || getFirstSelectedJoint();
+  };
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -345,14 +358,22 @@ export default function JointAnalysisLab() {
     return closestJoint;
   };
 
-  // Handle canvas click
+  // Handle canvas click with multi-joint selection
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    console.log('Canvas clicked!', { 
+      isTracking, 
+      hasLandmarks: !!currentLandmarks,
+      clickPosition: { x: event.clientX, y: event.clientY }
+    });
+    
     if (!isTracking || !currentLandmarks) {
+      console.log('Click ignored: Not tracking or no landmarks');
       return;
     }
     
     const canvas = overlayCanvasRef.current;
     if (!canvas) {
+      console.log('Click ignored: No overlay canvas');
       return;
     }
     
@@ -360,14 +381,35 @@ export default function JointAnalysisLab() {
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
     
+    console.log('Click coordinates:', { clickX, clickY });
+    
     const closestJoint = findClosestJoint(clickX, clickY, currentLandmarks);
     
-    if (closestJoint && closestJoint !== selectedJoint) {
-      handleJointChange(closestJoint);
-      toast({
-        title: "Joint Selected",
-        description: `Now analyzing ${JOINT_CONFIGS[closestJoint].label}`,
-      });
+    if (closestJoint) {
+      console.log('Closest joint found:', closestJoint);
+      
+      // Toggle joint selection
+      const newSelectedJoints = new Set(selectedJoints);
+      if (newSelectedJoints.has(closestJoint)) {
+        newSelectedJoints.delete(closestJoint);
+        console.log('Joint deselected:', closestJoint);
+        toast({
+          title: "Joint Deselected",
+          description: `Removed ${JOINT_CONFIGS[closestJoint].label} from selection`,
+        });
+      } else {
+        newSelectedJoints.add(closestJoint);
+        console.log('Joint selected:', closestJoint);
+        toast({
+          title: "Joint Selected",
+          description: `Added ${JOINT_CONFIGS[closestJoint].label} to selection`,
+        });
+      }
+      
+      setSelectedJoints(newSelectedJoints);
+      console.log('Updated selected joints:', Array.from(newSelectedJoints));
+    } else {
+      console.log('No joint found near click position');
     }
   };
 
@@ -611,45 +653,71 @@ export default function JointAnalysisLab() {
     if (results.poseLandmarks) {
       setCurrentLandmarks(results.poseLandmarks);
       
-      // Draw clickable joint indicators at all times when we have landmarks
+      // Draw clickable joint indicators with multi-joint selection colors
       CLICKABLE_JOINTS.forEach(({ landmark, jointType, label }) => {
         const joint = results.poseLandmarks[landmark];
         if (joint) {
           const jointX = joint.x * canvas.width;
           const jointY = joint.y * canvas.height;
           
-          // Check if this joint is being hovered or selected
+          // Check joint state
           const isHovered = hoveredJoint === jointType;
-          const isSelected = selectedJoint === jointType;
+          const isSelected = selectedJoints.has(jointType);
+          const isTesting = currentTestingJoint === jointType;
+          const isCompleted = completedJoints.has(jointType);
           
-          // Draw larger circle for selected joint (green)
-          if (isSelected) {
-            // Outer glow for selected joint
-            overlayCtx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
-            overlayCtx.lineWidth = 15;
+          // Determine color based on state
+          let fillColor = '#3B82F6'; // Blue for unselected
+          let strokeColor = 'rgba(59, 130, 246, 0.3)';
+          
+          if (isTesting) {
+            // Green pulsing for currently testing
+            fillColor = '#22c55e';
+            strokeColor = 'rgba(34, 197, 94, 0.5)';
+            
+            // Add pulsing effect
+            const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+            overlayCtx.globalAlpha = pulse;
+          } else if (isCompleted) {
+            // Gray for completed
+            fillColor = '#6B7280';
+            strokeColor = 'rgba(107, 114, 128, 0.3)';
+          } else if (isSelected) {
+            // Yellow for selected (waiting to be tested)
+            fillColor = '#FFC107';
+            strokeColor = 'rgba(255, 193, 7, 0.3)';
+          }
+          
+          // Draw outer glow
+          overlayCtx.globalAlpha = isHovered ? 0.8 : 0.5;
+          overlayCtx.strokeStyle = strokeColor;
+          overlayCtx.lineWidth = isTesting ? 20 : 15;
+          overlayCtx.beginPath();
+          overlayCtx.arc(jointX, jointY, isTesting ? 25 : 20, 0, Math.PI * 2);
+          overlayCtx.stroke();
+          
+          // Reset alpha
+          overlayCtx.globalAlpha = 1;
+          
+          // Main circle
+          overlayCtx.fillStyle = fillColor;
+          overlayCtx.beginPath();
+          overlayCtx.arc(jointX, jointY, isHovered ? 14 : 12, 0, Math.PI * 2);
+          overlayCtx.fill();
+          
+          // Draw checkmark for selected or completed joints
+          if (isSelected || isCompleted) {
+            overlayCtx.strokeStyle = '#ffffff';
+            overlayCtx.lineWidth = 2;
             overlayCtx.beginPath();
-            overlayCtx.arc(jointX, jointY, 20, 0, Math.PI * 2);
+            overlayCtx.moveTo(jointX - 5, jointY);
+            overlayCtx.lineTo(jointX - 2, jointY + 3);
+            overlayCtx.lineTo(jointX + 5, jointY - 4);
             overlayCtx.stroke();
-            
-            // Main circle for selected joint
-            overlayCtx.fillStyle = '#22c55e'; // Green for selected
-            overlayCtx.beginPath();
-            overlayCtx.arc(jointX, jointY, 12, 0, Math.PI * 2);
-            overlayCtx.fill();
-            
-            // White inner dot
-            overlayCtx.fillStyle = '#ffffff';
-            overlayCtx.beginPath();
-            overlayCtx.arc(jointX, jointY, 4, 0, Math.PI * 2);
-            overlayCtx.fill();
-          } else {
-            // Draw blue circle for non-selected clickable joints
-            overlayCtx.fillStyle = '#3b82f6'; // Blue for clickable
-            overlayCtx.beginPath();
-            overlayCtx.arc(jointX, jointY, 8, 0, Math.PI * 2);
-            overlayCtx.fill();
-            
-            // White center dot
+          }
+          
+          // White center dot for testing joint
+          if (isTesting) {
             overlayCtx.fillStyle = '#ffffff';
             overlayCtx.beginPath();
             overlayCtx.arc(jointX, jointY, 2, 0, Math.PI * 2);
@@ -684,7 +752,7 @@ export default function JointAnalysisLab() {
         }
       });
       
-      const config = JOINT_CONFIGS[selectedJoint];
+      const config = JOINT_CONFIGS[getCurrentJoint()];
       const primary = results.poseLandmarks[config.landmarks.primary];
       const secondary = results.poseLandmarks[config.landmarks.secondary];
       const tertiary = results.poseLandmarks[config.landmarks.tertiary];
@@ -797,7 +865,7 @@ export default function JointAnalysisLab() {
         }
       }
     }
-  }, [selectedJoint, isJointStable, calculateAngle, recordingPhase, countdown, preparationCountdown, nextTestRecommendation, recordingProgress, hoveredJoint, currentLandmarks]);
+  }, [selectedJoints, currentTestingJoint, isJointStable, calculateAngle, recordingPhase, countdown, preparationCountdown, nextTestRecommendation, recordingProgress, hoveredJoint, currentLandmarks]);
 
   useEffect(() => {
     const initMediaPipe = async () => {
@@ -943,7 +1011,7 @@ export default function JointAnalysisLab() {
       
       toast({
         title: "Tracking Started",
-        description: `Position your ${JOINT_CONFIGS[selectedJoint].label.toLowerCase()} in the target circle`,
+        description: `Position your ${JOINT_CONFIGS[getCurrentJoint()].label.toLowerCase()} in the target circle`,
       });
     } catch (error) {
       console.error('Tracking start error:', error);
@@ -1036,22 +1104,31 @@ export default function JointAnalysisLab() {
   };
 
   const handleJointChange = (joint: JointType) => {
-    setSelectedJoint(joint);
-    
-    // If we're actively recording, don't reset everything - just switch the joint
-    if (recordingPhase === 'recording' || recordingPhase === 'countdown' || recordingPhase === 'preparing_next_test') {
-      // Keep recording with the new joint
+    // Toggle joint selection
+    const newSelectedJoints = new Set(selectedJoints);
+    if (newSelectedJoints.has(joint)) {
+      newSelectedJoints.delete(joint);
+      console.log('Joint deselected from button:', joint);
       toast({
-        title: "Joint Switched",
-        description: `Now analyzing ${JOINT_CONFIGS[joint].label}`,
+        title: "Joint Deselected",
+        description: `Removed ${JOINT_CONFIGS[joint].label} from selection`,
       });
     } else {
-      // Only reset if we're idle or complete
+      newSelectedJoints.add(joint);
+      console.log('Joint selected from button:', joint);
+      toast({
+        title: "Joint Selected",
+        description: `Added ${JOINT_CONFIGS[joint].label} to selection`,
+      });
+    }
+    
+    setSelectedJoints(newSelectedJoints);
+    
+    // Reset analysis if we're idle
+    if (recordingPhase === 'idle') {
       setAnalysisResult(null);
       setIsJointCentered(false);
       setCenteredDuration(0);
-      setRecordingPhase('idle');
-      recordingPhaseRef.current = 'idle';
       setMovementData([]);
       centeredStartTimeRef.current = null;
       jointPositionHistoryRef.current = [];
@@ -1094,12 +1171,26 @@ export default function JointAnalysisLab() {
   };
 
   const startRecording = () => {
-    // Set instruction and movement type in refs if not already set (for first test)
-    if (!currentInstructionRef.current) {
-      const config = JOINT_CONFIGS[selectedJoint];
-      currentInstructionRef.current = config.movementInstruction;
-      currentMovementTypeRef.current = `Active ${config.label.toLowerCase()} flexion`;
+    // For multi-joint selection, start sequential testing
+    const jointsToTest = Array.from(selectedJoints).filter(j => !completedJoints.has(j));
+    
+    if (jointsToTest.length === 0) {
+      toast({
+        title: "No Joints to Test",
+        description: "All selected joints have been tested",
+      });
+      return;
     }
+    
+    // Set the first joint as the current testing joint
+    const firstJoint = jointsToTest[0];
+    setCurrentTestingJoint(firstJoint);
+    console.log('Starting sequential testing. First joint:', firstJoint);
+    
+    // Set instruction and movement type in refs
+    const config = JOINT_CONFIGS[firstJoint];
+    currentInstructionRef.current = config.movementInstruction;
+    currentMovementTypeRef.current = `Active ${config.label.toLowerCase()} flexion`;
     
     setRecordingPhase('countdown');
     recordingPhaseRef.current = 'countdown';
@@ -1157,7 +1248,8 @@ export default function JointAnalysisLab() {
     setIsAnalyzing(true);
     
     try {
-      const metrics = calculateMovementMetrics(movementData, selectedJoint);
+      const currentJoint = getCurrentJoint();
+      const metrics = calculateMovementMetrics(movementData, currentJoint);
       
       const angles = movementData.map(f => f.angle);
       const minAngle = Math.min(...angles);
@@ -1171,7 +1263,7 @@ export default function JointAnalysisLab() {
       };
       
       const analysisPayload = {
-        joint: selectedJoint,
+        joint: currentJoint,
         movementRange: metrics.totalRange,
         smoothness: metrics.smoothness,
         compensationPatterns: metrics.compensations,
@@ -1194,7 +1286,7 @@ export default function JointAnalysisLab() {
       const aiAnalysis = await response.json();
       
       const result: JointAnalysisResult = {
-        jointType: selectedJoint,
+        jointType: currentJoint,
         movementMetrics: metrics,
         movementRange: {
           min: minAngle,
@@ -1207,10 +1299,62 @@ export default function JointAnalysisLab() {
       
       setAnalysisResult(result);
       
-      // Auto-trigger next test recommendation after analysis
-      setTimeout(() => {
-        getNextTestRecommendation(result);
-      }, 500);
+      // Mark current joint as completed
+      if (currentTestingJoint) {
+        const newCompleted = new Set(completedJoints);
+        newCompleted.add(currentTestingJoint);
+        setCompletedJoints(newCompleted);
+        console.log('Joint testing completed:', currentTestingJoint);
+      }
+      
+      // Check if there are more joints to test
+      const remainingJoints = Array.from(selectedJoints).filter(j => 
+        !completedJoints.has(j) && j !== currentTestingJoint
+      );
+      
+      if (remainingJoints.length > 0) {
+        // Move to next joint automatically
+        const nextJoint = remainingJoints[0];
+        console.log('Moving to next joint:', nextJoint);
+        
+        toast({
+          title: "Moving to Next Joint",
+          description: `Now testing ${JOINT_CONFIGS[nextJoint].label}`,
+        });
+        
+        setTimeout(() => {
+          setCurrentTestingJoint(nextJoint);
+          const config = JOINT_CONFIGS[nextJoint];
+          currentInstructionRef.current = config.movementInstruction;
+          currentMovementTypeRef.current = `Active ${config.label.toLowerCase()} flexion`;
+          
+          // Reset for next joint
+          setMovementData([]);
+          setRecordingProgress(0);
+          setAnalysisResult(null);
+          
+          // Start recording for next joint
+          setTimeout(() => {
+            startRecording();
+          }, 1500);
+        }, 1000);
+      } else {
+        // All joints tested
+        setCurrentTestingJoint(null);
+        console.log('All selected joints tested');
+        
+        toast({
+          title: "All Joints Tested",
+          description: "Sequential testing complete for all selected joints",
+        });
+        
+        // Auto-trigger adaptive assessment if it's a single joint or continue with overall analysis
+        if (selectedJoints.size === 1) {
+          setTimeout(() => {
+            getNextTestRecommendation(result);
+          }, 500);
+        }
+      }
       
       toast({
         title: "AI Analysis Complete",
@@ -1220,13 +1364,13 @@ export default function JointAnalysisLab() {
     } catch (error) {
       console.error('Analysis error:', error);
       
-      const metrics = calculateMovementMetrics(movementData, selectedJoint);
+      const metrics = calculateMovementMetrics(movementData, getCurrentJoint());
       const angles = movementData.map(f => f.angle);
       const minAngle = Math.min(...angles);
       const maxAngle = Math.max(...angles);
       
       const fallbackResult: JointAnalysisResult = {
-        jointType: selectedJoint,
+        jointType: getCurrentJoint(),
         movementMetrics: metrics,
         movementRange: {
           min: minAngle,
@@ -1283,7 +1427,7 @@ export default function JointAnalysisLab() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          jointType: selectedJoint,
+          jointType: getCurrentJoint(),
           testsPerformed: updatedHistory
         })
       });
@@ -1346,7 +1490,7 @@ export default function JointAnalysisLab() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          jointType: selectedJoint,
+          jointType: getCurrentJoint(),
           testsPerformed: testHistory,
           currentHypotheses: currentHypotheses
         })
@@ -1473,7 +1617,7 @@ export default function JointAnalysisLab() {
                 {(Object.keys(JOINT_CONFIGS) as JointType[]).map((joint) => (
                   <Button
                     key={joint}
-                    variant={selectedJoint === joint ? 'default' : 'outline'}
+                    variant={selectedJoints.has(joint) ? 'default' : 'outline'}
                     onClick={() => handleJointChange(joint)}
                     disabled={isTracking}
                     data-testid={`button-select-${joint}`}
@@ -1575,7 +1719,7 @@ export default function JointAnalysisLab() {
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <AlertTitle className="text-green-600">Ready to Record</AlertTitle>
                     <AlertDescription>
-                      <div className="font-semibold mb-1">{JOINT_CONFIGS[selectedJoint].movementInstruction}</div>
+                      <div className="font-semibold mb-1">{JOINT_CONFIGS[getCurrentJoint()].movementInstruction}</div>
                       <div className="text-sm">Starting in {centeredDuration >= 1.5 ? 'now!' : `${(1.5 - centeredDuration).toFixed(1)}s`}</div>
                     </AlertDescription>
                   </>
@@ -1584,8 +1728,8 @@ export default function JointAnalysisLab() {
                     <Target className="h-4 w-4" />
                     <AlertTitle>Position Yourself</AlertTitle>
                     <AlertDescription>
-                      <div className="mb-1">Move your {JOINT_CONFIGS[selectedJoint].label.toLowerCase()} into the target circle</div>
-                      <div className="text-sm font-semibold text-yellow-600">Then: {JOINT_CONFIGS[selectedJoint].movementInstruction}</div>
+                      <div className="mb-1">Move your {JOINT_CONFIGS[getCurrentJoint()].label.toLowerCase()} into the target circle</div>
+                      <div className="text-sm font-semibold text-yellow-600">Then: {JOINT_CONFIGS[getCurrentJoint()].movementInstruction}</div>
                     </AlertDescription>
                   </>
                 )}
@@ -1597,7 +1741,7 @@ export default function JointAnalysisLab() {
                 <Video className="h-4 w-4 text-red-600" />
                 <AlertTitle className="text-red-600">Recording Movement</AlertTitle>
                 <AlertDescription>
-                  {JOINT_CONFIGS[selectedJoint].movementInstruction}
+                  {JOINT_CONFIGS[getCurrentJoint()].movementInstruction}
                   <Progress value={recordingProgress} className="mt-2" />
                 </AlertDescription>
               </Alert>
@@ -1613,6 +1757,48 @@ export default function JointAnalysisLab() {
               </Alert>
             )}
 
+            {/* Select All / Clear Selection buttons */}
+            {isTracking && (
+              <div className="flex gap-2 mb-4 justify-center">
+                <Button
+                  onClick={() => {
+                    const allJoints = new Set(Object.keys(JOINT_CONFIGS) as JointType[]);
+                    setSelectedJoints(allJoints);
+                    console.log('All joints selected');
+                    toast({
+                      title: "All Joints Selected",
+                      description: `${allJoints.size} joints selected for analysis`,
+                    });
+                  }}
+                  variant="outline"
+                  size="sm"
+                  disabled={recordingPhase !== 'idle'}
+                  data-testid="button-select-all"
+                >
+                  Select All Joints
+                </Button>
+                <Button
+                  onClick={() => {
+                    setSelectedJoints(new Set());
+                    console.log('All joints cleared');
+                    toast({
+                      title: "Selection Cleared",
+                      description: "All joints deselected",
+                    });
+                  }}
+                  variant="outline"
+                  size="sm"
+                  disabled={recordingPhase !== 'idle'}
+                  data-testid="button-clear-selection"
+                >
+                  Clear Selection
+                </Button>
+                <Badge variant="secondary" className="px-3 py-1.5">
+                  {selectedJoints.size} joint{selectedJoints.size !== 1 ? 's' : ''} selected
+                </Badge>
+              </div>
+            )}
+            
             <div 
               ref={videoContainerRef}
               className={`relative bg-black rounded-lg overflow-hidden aspect-[3/4] mx-auto ${
@@ -1651,7 +1837,7 @@ export default function JointAnalysisLab() {
                       {recordingPhase === 'idle' && (isTracking ? 'Click on any joint or position within the target circle' : 'Position your joint within the target circle')}
                       {recordingPhase === 'preparing_next_test' && `Next: ${nextTestRecommendation?.movementType || 'Preparing next test'}...`}
                       {recordingPhase === 'countdown' && 'Get ready...'}
-                      {recordingPhase === 'recording' && `Performing: ${nextTestRecommendation?.instruction || JOINT_CONFIGS[selectedJoint].movementInstruction}`}
+                      {recordingPhase === 'recording' && `Performing: ${nextTestRecommendation?.instruction || JOINT_CONFIGS[getCurrentJoint()].movementInstruction}`}
                       {recordingPhase === 'complete' && 'Recording complete - ready to analyze'}
                     </p>
                   </div>
@@ -1861,7 +2047,7 @@ export default function JointAnalysisLab() {
                       Final Diagnostic Report
                     </CardTitle>
                     <CardDescription className="mt-2">
-                      Comprehensive assessment of {JOINT_CONFIGS[selectedJoint].label} • {testHistory.length} tests performed
+                      Comprehensive assessment of {selectedJoints.size} joint{selectedJoints.size !== 1 ? 's' : ''} • {testHistory.length} tests performed
                     </CardDescription>
                   </div>
                   <Button

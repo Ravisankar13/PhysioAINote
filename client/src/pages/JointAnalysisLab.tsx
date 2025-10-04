@@ -798,30 +798,9 @@ export default function JointAnalysisLab() {
           });
         }
 
-        // Display the same instruction text that appears in Camera Feed subtitle
+        // Display recording indicator
         if (recordingPhase === 'recording') {
-          const instructionY = 120;
-          const instruction = nextTestRecommendation?.instruction || config.movementInstruction;
-          const displayText = `Performing: ${instruction}`;
-          
-          // Background box for better readability
-          const textWidth = displayText.length * 13; // Approximate width based on font size
-          const boxWidth = Math.min(textWidth + 60, canvas.width - 100);
-          overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-          overlayCtx.fillRect(canvas.width / 2 - boxWidth / 2, instructionY - 30, boxWidth, 60);
-          
-          // Display instruction text
-          overlayCtx.fillStyle = '#ffffff';
-          overlayCtx.font = 'bold 20px Arial';
-          overlayCtx.textAlign = 'center';
-          overlayCtx.textBaseline = 'middle';
-          overlayCtx.fillText(
-            displayText,
-            canvas.width / 2,
-            instructionY
-          );
-          
-          // Small recording indicator
+          // Small recording indicator dot
           overlayCtx.fillStyle = 'rgba(239, 68, 68, 0.8)';
           overlayCtx.beginPath();
           overlayCtx.arc(50, 50, 8, 0, Math.PI * 2);
@@ -1528,13 +1507,6 @@ export default function JointAnalysisLab() {
                   <CameraIcon className="h-5 w-5" />
                   Camera Feed
                 </CardTitle>
-                <CardDescription>
-                  {recordingPhase === 'idle' && (isTracking ? 'Click on any joint or position within the target circle' : 'Position your joint within the target circle')}
-                  {recordingPhase === 'preparing_next_test' && `Next: ${nextTestRecommendation?.movementType || 'Preparing next test'}...`}
-                  {recordingPhase === 'countdown' && 'Get ready...'}
-                  {recordingPhase === 'recording' && `Performing: ${nextTestRecommendation?.instruction || JOINT_CONFIGS[selectedJoint].movementInstruction}`}
-                  {recordingPhase === 'complete' && 'Recording complete - ready to analyze'}
-                </CardDescription>
               </div>
               <div className="flex gap-2">
                 {!isTracking ? (
@@ -1670,6 +1642,21 @@ export default function JointAnalysisLab() {
                 onMouseLeave={handleCanvasMouseLeave}
                 data-testid="canvas-overlay"
               />
+              
+              {/* Status text overlay at the top of the video */}
+              {isTracking && (
+                <div className="absolute top-0 left-0 right-0 z-20 p-4">
+                  <div className="bg-black/70 backdrop-blur-sm rounded-lg px-4 py-2 mx-auto w-fit max-w-[90%]">
+                    <p className="text-white text-center text-sm font-medium">
+                      {recordingPhase === 'idle' && (isTracking ? 'Click on any joint or position within the target circle' : 'Position your joint within the target circle')}
+                      {recordingPhase === 'preparing_next_test' && `Next: ${nextTestRecommendation?.movementType || 'Preparing next test'}...`}
+                      {recordingPhase === 'countdown' && 'Get ready...'}
+                      {recordingPhase === 'recording' && `Performing: ${nextTestRecommendation?.instruction || JOINT_CONFIGS[selectedJoint].movementInstruction}`}
+                      {recordingPhase === 'complete' && 'Recording complete - ready to analyze'}
+                    </p>
+                  </div>
+                </div>
+              )}
               
               {/* Fullscreen toggle button */}
               <button

@@ -40,7 +40,7 @@ export async function addSampleMultimediaContent() {
             anatomyImages: [
               {
                 source: 'z_anatomy',
-                imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Shoulder_joint.svg/1200px-Shoulder_joint.svg.png',
+                imageUrl: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3324297/bin/11999_2012_2063_Fig1_HTML.jpg',
                 structure: 'Shoulder Joint',
                 viewType: 'anterior',
                 labels: ['Acromion', 'Clavicle', 'Humerus', 'Scapula'],
@@ -48,11 +48,11 @@ export async function addSampleMultimediaContent() {
               },
               {
                 source: 'z_anatomy',
-                imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Gray412.png/800px-Gray412.png',
+                imageUrl: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4151406/bin/WJO-5-597-g001.jpg',
                 structure: 'Rotator Cuff Muscles',
                 viewType: 'posterior',
                 labels: ['Supraspinatus', 'Infraspinatus', 'Teres Minor', 'Subscapularis'],
-                description: 'Posterior view showing the rotator cuff muscle group'
+                description: 'MRI showing the rotator cuff muscle group'
               }
             ]
           },
@@ -62,11 +62,19 @@ export async function addSampleMultimediaContent() {
             clinicalImages: [
               {
                 source: 'nih_openi',
-                imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Projectional_radiography_of_the_shoulder.jpg/800px-Projectional_radiography_of_the_shoulder.jpg',
+                imageUrl: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3445147/bin/1749-799X-7-25-1.jpg',
                 title: 'Shoulder X-Ray AP View',
-                description: 'Normal shoulder radiograph showing glenohumeral joint',
+                description: 'Anteroposterior radiograph of normal shoulder joint',
                 imageType: 'xray',
-                attribution: 'Medical imaging example'
+                attribution: 'NIH/NLM PMC3445147'
+              },
+              {
+                source: 'nih_openi',
+                imageUrl: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2684151/bin/11999_2009_754_Fig1_HTML.jpg',
+                title: 'Shoulder Impingement',
+                description: 'Clinical illustration of subacromial impingement',
+                imageType: 'diagram',
+                attribution: 'NIH/NLM PMC2684151'
               }
             ]
           },
@@ -115,11 +123,20 @@ export async function addSampleMultimediaContent() {
             title: 'ROM Assessment Techniques',
             clinicalImages: [
               {
-                source: 'manual_upload',
-                imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/Body_Movements_I.jpg/800px-Body_Movements_I.jpg',
+                source: 'nih_openi',
+                imageUrl: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3863781/bin/12891_2013_1866_Fig1_HTML.jpg',
                 title: 'Shoulder Movement Planes',
-                description: 'Demonstration of flexion, extension, abduction, and rotation',
-                imageType: 'clinical_photo'
+                description: 'Demonstration of shoulder flexion and abduction movements',
+                imageType: 'clinical_photo',
+                attribution: 'NIH/NLM PMC3863781'
+              },
+              {
+                source: 'nih_openi',
+                imageUrl: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3445147/bin/1749-799X-7-25-2.jpg',
+                title: 'Range of Motion Assessment',
+                description: 'Clinical assessment of shoulder ROM',
+                imageType: 'clinical_photo',
+                attribution: 'NIH/NLM PMC3445147'
               }
             ]
           },

@@ -611,6 +611,79 @@ export default function JointAnalysisLab() {
     if (results.poseLandmarks) {
       setCurrentLandmarks(results.poseLandmarks);
       
+      // Draw clickable joint indicators at all times when we have landmarks
+      CLICKABLE_JOINTS.forEach(({ landmark, jointType, label }) => {
+        const joint = results.poseLandmarks[landmark];
+        if (joint) {
+          const jointX = joint.x * canvas.width;
+          const jointY = joint.y * canvas.height;
+          
+          // Check if this joint is being hovered or selected
+          const isHovered = hoveredJoint === jointType;
+          const isSelected = selectedJoint === jointType;
+          
+          // Draw larger circle for selected joint (green)
+          if (isSelected) {
+            // Outer glow for selected joint
+            overlayCtx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
+            overlayCtx.lineWidth = 15;
+            overlayCtx.beginPath();
+            overlayCtx.arc(jointX, jointY, 20, 0, Math.PI * 2);
+            overlayCtx.stroke();
+            
+            // Main circle for selected joint
+            overlayCtx.fillStyle = '#22c55e'; // Green for selected
+            overlayCtx.beginPath();
+            overlayCtx.arc(jointX, jointY, 12, 0, Math.PI * 2);
+            overlayCtx.fill();
+            
+            // White inner dot
+            overlayCtx.fillStyle = '#ffffff';
+            overlayCtx.beginPath();
+            overlayCtx.arc(jointX, jointY, 4, 0, Math.PI * 2);
+            overlayCtx.fill();
+          } else {
+            // Draw blue circle for non-selected clickable joints
+            overlayCtx.fillStyle = '#3b82f6'; // Blue for clickable
+            overlayCtx.beginPath();
+            overlayCtx.arc(jointX, jointY, 8, 0, Math.PI * 2);
+            overlayCtx.fill();
+            
+            // White center dot
+            overlayCtx.fillStyle = '#ffffff';
+            overlayCtx.beginPath();
+            overlayCtx.arc(jointX, jointY, 2, 0, Math.PI * 2);
+            overlayCtx.fill();
+          }
+          
+          // Hover effect - draw ring around joint
+          if (isHovered && !isSelected) {
+            overlayCtx.strokeStyle = '#fbbf24'; // Yellow for hover
+            overlayCtx.lineWidth = 3;
+            overlayCtx.setLineDash([5, 5]);
+            overlayCtx.beginPath();
+            overlayCtx.arc(jointX, jointY, 18, 0, Math.PI * 2);
+            overlayCtx.stroke();
+            overlayCtx.setLineDash([]);
+          }
+          
+          // Show label on hover or selection
+          if (isHovered || isSelected) {
+            // Draw background for label
+            const labelWidth = label.length * 8 + 16;
+            overlayCtx.fillStyle = isSelected ? 'rgba(34, 197, 94, 0.9)' : 'rgba(0, 0, 0, 0.8)';
+            overlayCtx.fillRect(jointX - labelWidth/2, jointY - 40, labelWidth, 25);
+            
+            // Draw label text
+            overlayCtx.fillStyle = '#ffffff';
+            overlayCtx.font = 'bold 14px Arial';
+            overlayCtx.textAlign = 'center';
+            overlayCtx.textBaseline = 'middle';
+            overlayCtx.fillText(label, jointX, jointY - 28);
+          }
+        }
+      });
+      
       const config = JOINT_CONFIGS[selectedJoint];
       const primary = results.poseLandmarks[config.landmarks.primary];
       const secondary = results.poseLandmarks[config.landmarks.secondary];
@@ -713,81 +786,6 @@ export default function JointAnalysisLab() {
           primary.x * canvas.width + 50,
           primary.y * canvas.height - 10
         );
-
-        // Draw clickable joint indicators at all times
-        if (currentLandmarks) {
-          CLICKABLE_JOINTS.forEach(({ landmark, jointType, label }) => {
-            const joint = results.poseLandmarks[landmark];
-            if (joint) {
-              const jointX = joint.x * canvas.width;
-              const jointY = joint.y * canvas.height;
-              
-              // Check if this joint is being hovered or selected
-              const isHovered = hoveredJoint === jointType;
-              const isSelected = selectedJoint === jointType;
-              
-              // Draw larger circle for selected joint (green)
-              if (isSelected) {
-                // Outer glow for selected joint
-                overlayCtx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
-                overlayCtx.lineWidth = 15;
-                overlayCtx.beginPath();
-                overlayCtx.arc(jointX, jointY, 20, 0, Math.PI * 2);
-                overlayCtx.stroke();
-                
-                // Main circle for selected joint
-                overlayCtx.fillStyle = '#22c55e'; // Green for selected
-                overlayCtx.beginPath();
-                overlayCtx.arc(jointX, jointY, 12, 0, Math.PI * 2);
-                overlayCtx.fill();
-                
-                // White inner dot
-                overlayCtx.fillStyle = '#ffffff';
-                overlayCtx.beginPath();
-                overlayCtx.arc(jointX, jointY, 4, 0, Math.PI * 2);
-                overlayCtx.fill();
-              } else {
-                // Draw blue circle for non-selected clickable joints
-                overlayCtx.fillStyle = '#3b82f6'; // Blue for clickable
-                overlayCtx.beginPath();
-                overlayCtx.arc(jointX, jointY, 8, 0, Math.PI * 2);
-                overlayCtx.fill();
-                
-                // White center dot
-                overlayCtx.fillStyle = '#ffffff';
-                overlayCtx.beginPath();
-                overlayCtx.arc(jointX, jointY, 2, 0, Math.PI * 2);
-                overlayCtx.fill();
-              }
-              
-              // Hover effect - draw ring around joint
-              if (isHovered && !isSelected) {
-                overlayCtx.strokeStyle = '#fbbf24'; // Yellow for hover
-                overlayCtx.lineWidth = 3;
-                overlayCtx.setLineDash([5, 5]);
-                overlayCtx.beginPath();
-                overlayCtx.arc(jointX, jointY, 18, 0, Math.PI * 2);
-                overlayCtx.stroke();
-                overlayCtx.setLineDash([]);
-              }
-              
-              // Show label on hover or selection
-              if (isHovered || isSelected) {
-                // Draw background for label
-                const labelWidth = label.length * 8 + 16;
-                overlayCtx.fillStyle = isSelected ? 'rgba(34, 197, 94, 0.9)' : 'rgba(0, 0, 0, 0.8)';
-                overlayCtx.fillRect(jointX - labelWidth/2, jointY - 40, labelWidth, 25);
-                
-                // Draw label text
-                overlayCtx.fillStyle = '#ffffff';
-                overlayCtx.font = 'bold 14px Arial';
-                overlayCtx.textAlign = 'center';
-                overlayCtx.textBaseline = 'middle';
-                overlayCtx.fillText(label, jointX, jointY - 28);
-              }
-            }
-          });
-        }
 
         // Display recording indicator
         if (recordingPhase === 'recording') {

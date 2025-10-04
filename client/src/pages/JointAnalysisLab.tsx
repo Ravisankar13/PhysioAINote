@@ -204,7 +204,7 @@ const isPhoneDevice = () => {
 export default function JointAnalysisLab() {
   const { toast } = useToast();
   
-  const [selectedJoints, setSelectedJoints] = useState<Set<JointType>>(new Set(['shoulder'] as JointType[]));
+  const [selectedJoints, setSelectedJoints] = useState<Set<JointType>>(new Set());
   const [currentTestingJoint, setCurrentTestingJoint] = useState<JointType | null>(null);
   const [completedJoints, setCompletedJoints] = useState<Set<JointType>>(new Set());
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'initializing' | 'ready' | 'error'>('idle');
@@ -215,6 +215,7 @@ export default function JointAnalysisLab() {
   const [cameraFacingMode, setCameraFacingMode] = useState<'user' | 'environment'>(
     isPhoneDevice() ? 'environment' : 'user'
   );
+  const [analysisStarted, setAnalysisStarted] = useState(false);
   
   const [recordingPhase, setRecordingPhase] = useState<RecordingPhase>('idle');
   const [countdown, setCountdown] = useState(3);
@@ -387,11 +388,13 @@ export default function JointAnalysisLab() {
     console.log('Canvas clicked!', { 
       isTracking, 
       hasLandmarks: !!currentLandmarks,
-      clickPosition: { x: event.clientX, y: event.clientY }
+      clickPosition: { x: event.clientX, y: event.clientY },
+      analysisStarted
     });
     
-    if (!isTracking || !currentLandmarks) {
-      console.log('Click ignored: Not tracking or no landmarks');
+    // Don't allow joint selection if analysis has started
+    if (!isTracking || !currentLandmarks || analysisStarted) {
+      console.log('Click ignored: Not tracking, no landmarks, or analysis started');
       return;
     }
     
@@ -839,8 +842,9 @@ export default function JointAnalysisLab() {
             const duration = (Date.now() - centeredStartTimeRef.current) / 1000;
             setCenteredDuration(duration);
             
-            // Auto-start recording after 1.5 seconds of being stable
-            if (duration >= 1.5 && recordingPhaseRef.current === 'idle') {
+            // Don't auto-start recording - wait for user to press Start Analysis
+            // Only show centered duration when analysis has been started
+            if (analysisStarted && duration >= 1.5 && recordingPhaseRef.current === 'idle') {
               startRecording();
             }
           } else {
@@ -1817,43 +1821,98 @@ export default function JointAnalysisLab() {
 
             {/* Select All / Clear Selection buttons */}
             {isTracking && (
-              <div className="flex gap-2 mb-4 justify-center">
-                <Button
-                  onClick={() => {
-                    const allJoints = new Set(Object.keys(JOINT_CONFIGS) as JointType[]);
-                    setSelectedJoints(allJoints);
-                    console.log('All joints selected');
-                    toast({
-                      title: "All Joints Selected",
-                      description: `${allJoints.size} joints selected for analysis`,
-                    });
-                  }}
-                  variant="outline"
-                  size="sm"
-                  disabled={recordingPhase !== 'idle'}
-                  data-testid="button-select-all"
-                >
-                  Select All Joints
-                </Button>
-                <Button
-                  onClick={() => {
-                    setSelectedJoints(new Set());
-                    console.log('All joints cleared');
-                    toast({
-                      title: "Selection Cleared",
-                      description: "All joints deselected",
-                    });
-                  }}
-                  variant="outline"
-                  size="sm"
-                  disabled={recordingPhase !== 'idle'}
-                  data-testid="button-clear-selection"
-                >
-                  Clear Selection
-                </Button>
-                <Badge variant="secondary" className="px-3 py-1.5">
-                  {selectedJoints.size} joint{selectedJoints.size !== 1 ? 's' : ''} selected
-                </Badge>
+              <div className="flex flex-col gap-3 mb-4">
+                <div className="flex gap-2 justify-center">
+                  <Button
+                    onClick={() => {
+                      const allJoints = new Set(Object.keys(JOINT_CONFIGS) as JointType[]);
+                      setSelectedJoints(allJoints);
+                      console.log('All joints selected');
+                      toast({
+                        title: "All Joints Selected",
+                        description: `${allJoints.size} joints selected for analysis`,
+                      });
+                    }}
+                    variant="outline"
+                    size="sm"
+                    disabled={recordingPhase !== 'idle' || analysisStarted}
+                    data-testid="button-select-all"
+                  >
+                    Select All Joints
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setSelectedJoints(new Set());
+                      console.log('All joints cleared');
+                      toast({
+                        title: "Selection Cleared",
+                        description: "All joints deselected",
+                      });
+                    }}
+                    variant="outline"
+                    size="sm"
+                    disabled={recordingPhase !== 'idle' || analysisStarted}
+                    data-testid="button-clear-selection"
+                  >
+                    Clear Selection
+                  </Button>
+                  <Badge variant="secondary" className="px-3 py-1.5">
+                    {selectedJoints.size} joint{selectedJoints.size !== 1 ? 's' : ''} selected
+                  </Badge>
+                </div>
+                
+                {/* Start Analysis Button */}
+                {selectedJoints.size > 0 && !analysisStarted && (
+                  <div className="flex justify-center">
+                    <Button
+                      onClick={() => {
+                        setAnalysisStarted(true);
+                        console.log('Analysis started with joints:', Array.from(selectedJoints));
+                        toast({
+                          title: "Analysis Started",
+                          description: `Testing ${selectedJoints.size} selected joint${selectedJoints.size > 1 ? 's' : ''}`,
+                        });
+                        // The actual recording will start when joint becomes centered
+                      }}
+                      variant="default"
+                      size="lg"
+                      className="bg-green-600 hover:bg-green-700"
+                      disabled={recordingPhase !== 'idle'}
+                      data-testid="button-start-analysis"
+                    >
+                      <Play className="h-5 w-5 mr-2" />
+                      Start Analysis ({selectedJoints.size} joint{selectedJoints.size > 1 ? 's' : ''})
+                    </Button>
+                  </div>
+                )}
+                
+                {/* Stop Analysis Button */}
+                {analysisStarted && (
+                  <div className="flex justify-center">
+                    <Button
+                      onClick={() => {
+                        setAnalysisStarted(false);
+                        setCurrentTestingJoint(null);
+                        setCompletedJoints(new Set());
+                        setRecordingPhase('idle');
+                        recordingPhaseRef.current = 'idle';
+                        setMovementData([]);
+                        setAnalysisResult(null);
+                        console.log('Analysis stopped');
+                        toast({
+                          title: "Analysis Stopped",
+                          description: "You can select different joints and start again",
+                        });
+                      }}
+                      variant="destructive"
+                      size="sm"
+                      data-testid="button-stop-analysis"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Stop Analysis
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
             

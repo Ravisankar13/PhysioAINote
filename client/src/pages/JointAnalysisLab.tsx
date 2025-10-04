@@ -324,14 +324,16 @@ export default function JointAnalysisLab() {
     
     let closestJoint: JointType | null = null;
     let minDistance = Infinity;
-    const clickThreshold = 50; // pixels
+    const clickThreshold = 80; // Increased threshold for easier clicking
     
-    CLICKABLE_JOINTS.forEach(({ landmark, jointType }) => {
+    CLICKABLE_JOINTS.forEach(({ landmark, jointType, label }) => {
       const joint = landmarks[landmark];
-      if (joint && canvasRef.current) {
-        const jointX = joint.x * canvasRef.current.width;
-        const jointY = joint.y * canvasRef.current.height;
+      if (joint && overlayCanvasRef.current) {
+        const jointX = joint.x * overlayCanvasRef.current.width;
+        const jointY = joint.y * overlayCanvasRef.current.height;
         const distance = Math.sqrt(Math.pow(jointX - clickX, 2) + Math.pow(jointY - clickY, 2));
+        
+        console.log(`Joint ${label} at (${jointX.toFixed(0)}, ${jointY.toFixed(0)}), distance: ${distance.toFixed(0)}`);
         
         if (distance < minDistance && distance < clickThreshold) {
           minDistance = distance;
@@ -340,21 +342,32 @@ export default function JointAnalysisLab() {
       }
     });
     
+    console.log(`Closest joint: ${closestJoint}, distance: ${minDistance.toFixed(0)}`);
     return closestJoint;
   };
 
   // Handle canvas click
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isTracking || !currentLandmarks || recordingPhase !== 'idle') return;
+    console.log('Canvas clicked! Tracking:', isTracking, 'Landmarks:', !!currentLandmarks, 'Phase:', recordingPhase);
     
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!isTracking || !currentLandmarks || recordingPhase !== 'idle') {
+      console.log('Click ignored - conditions not met');
+      return;
+    }
+    
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) {
+      console.log('Canvas ref not found');
+      return;
+    }
     
     const rect = canvas.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
+    console.log('Click coordinates:', { clickX, clickY });
     
     const closestJoint = findClosestJoint(clickX, clickY, currentLandmarks);
+    console.log('Closest joint found:', closestJoint);
     
     if (closestJoint && closestJoint !== selectedJoint) {
       handleJointChange(closestJoint);
@@ -690,37 +703,65 @@ export default function JointAnalysisLab() {
               const jointX = joint.x * canvas.width;
               const jointY = joint.y * canvas.height;
               
-              // Check if this joint is being hovered
+              // Check if this joint is being hovered or selected
               const isHovered = hoveredJoint === jointType;
               const isSelected = selectedJoint === jointType;
               
-              // Draw circle around clickable joint
-              if (isHovered || isSelected) {
-                overlayCtx.strokeStyle = isSelected ? '#3b82f6' : '#10b981';
-                overlayCtx.lineWidth = isSelected ? 3 : 2;
+              // Draw larger circle for selected joint (green)
+              if (isSelected) {
+                // Outer glow for selected joint
+                overlayCtx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
+                overlayCtx.lineWidth = 15;
+                overlayCtx.beginPath();
+                overlayCtx.arc(jointX, jointY, 20, 0, Math.PI * 2);
+                overlayCtx.stroke();
+                
+                // Main circle for selected joint
+                overlayCtx.fillStyle = '#22c55e'; // Green for selected
+                overlayCtx.beginPath();
+                overlayCtx.arc(jointX, jointY, 12, 0, Math.PI * 2);
+                overlayCtx.fill();
+                
+                // White inner dot
+                overlayCtx.fillStyle = '#ffffff';
+                overlayCtx.beginPath();
+                overlayCtx.arc(jointX, jointY, 4, 0, Math.PI * 2);
+                overlayCtx.fill();
+              } else {
+                // Draw blue circle for non-selected clickable joints
+                overlayCtx.fillStyle = '#3b82f6'; // Blue for clickable
+                overlayCtx.beginPath();
+                overlayCtx.arc(jointX, jointY, 8, 0, Math.PI * 2);
+                overlayCtx.fill();
+                
+                // White center dot
+                overlayCtx.fillStyle = '#ffffff';
+                overlayCtx.beginPath();
+                overlayCtx.arc(jointX, jointY, 2, 0, Math.PI * 2);
+                overlayCtx.fill();
+              }
+              
+              // Hover effect - draw ring around joint
+              if (isHovered && !isSelected) {
+                overlayCtx.strokeStyle = '#fbbf24'; // Yellow for hover
+                overlayCtx.lineWidth = 3;
                 overlayCtx.setLineDash([5, 5]);
                 overlayCtx.beginPath();
-                overlayCtx.arc(jointX, jointY, 25, 0, Math.PI * 2);
+                overlayCtx.arc(jointX, jointY, 18, 0, Math.PI * 2);
                 overlayCtx.stroke();
                 overlayCtx.setLineDash([]);
               }
               
-              // Draw small indicator for all clickable joints
-              overlayCtx.fillStyle = 'rgba(59, 130, 246, 0.6)';
-              overlayCtx.beginPath();
-              overlayCtx.arc(jointX, jointY, 4, 0, Math.PI * 2);
-              overlayCtx.fill();
-              
-              // Show label on hover
-              if (isHovered) {
+              // Show label on hover or selection
+              if (isHovered || isSelected) {
                 // Draw background for label
                 const labelWidth = label.length * 8 + 16;
-                overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                overlayCtx.fillStyle = isSelected ? 'rgba(34, 197, 94, 0.9)' : 'rgba(0, 0, 0, 0.8)';
                 overlayCtx.fillRect(jointX - labelWidth/2, jointY - 40, labelWidth, 25);
                 
                 // Draw label text
                 overlayCtx.fillStyle = '#ffffff';
-                overlayCtx.font = '14px Arial';
+                overlayCtx.font = 'bold 14px Arial';
                 overlayCtx.textAlign = 'center';
                 overlayCtx.textBaseline = 'middle';
                 overlayCtx.fillText(label, jointX, jointY - 28);
@@ -1556,7 +1597,7 @@ export default function JointAnalysisLab() {
               />
               <canvas
                 ref={overlayCanvasRef}
-                className="absolute inset-0 w-full h-full object-cover"
+                className="absolute inset-0 w-full h-full object-cover z-10"
                 style={{ cursor: hoveredJoint && isTracking && recordingPhase === 'idle' ? 'pointer' : 'default' }}
                 width={960}
                 height={1280}

@@ -176,11 +176,17 @@ export async function createModulesForAllCourses() {
     const { populateAllCoursesContent } = await import('./populateAllCoursesContent');
     const result = await populateAllCoursesContent();
     
+    // Populate detailed elbow course content
+    console.log('Populating detailed elbow rehabilitation content...');
+    const { populateElbowCourse } = await import('./populateElbowCourse');
+    const elbowResult = await populateElbowCourse();
+    
     return {
       success: true,
       coursesWithNewModules,
       totalModulesCreated,
-      contentPopulated: result
+      contentPopulated: result,
+      elbowCourseUpdated: elbowResult
     };
     
   } catch (error) {

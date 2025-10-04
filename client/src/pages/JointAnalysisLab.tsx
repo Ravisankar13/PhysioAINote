@@ -280,6 +280,7 @@ export default function JointAnalysisLab() {
   const [isGettingFinalDiagnosis, setIsGettingFinalDiagnosis] = useState(false);
   const [showTestHistory, setShowTestHistory] = useState(false);
   const [showClinicalThinking, setShowClinicalThinking] = useState(true);
+  const [hoveredJoint, setHoveredJoint] = useState<JointType | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -299,6 +300,91 @@ export default function JointAnalysisLab() {
     let angle = Math.abs(radians * 180 / Math.PI);
     if (angle > 180) angle = 360 - angle;
     return angle;
+  };
+
+  // Map of which joints are clickable and their associated JointType
+  const CLICKABLE_JOINTS: { landmark: number; jointType: JointType; label: string }[] = [
+    { landmark: POSE_LANDMARKS.LEFT_ANKLE, jointType: 'ankle', label: 'Left Ankle' },
+    { landmark: POSE_LANDMARKS.RIGHT_ANKLE, jointType: 'ankle', label: 'Right Ankle' },
+    { landmark: POSE_LANDMARKS.LEFT_KNEE, jointType: 'knee', label: 'Left Knee' },
+    { landmark: POSE_LANDMARKS.RIGHT_KNEE, jointType: 'knee', label: 'Right Knee' },
+    { landmark: POSE_LANDMARKS.LEFT_HIP, jointType: 'hip', label: 'Left Hip' },
+    { landmark: POSE_LANDMARKS.RIGHT_HIP, jointType: 'hip', label: 'Right Hip' },
+    { landmark: POSE_LANDMARKS.LEFT_SHOULDER, jointType: 'shoulder', label: 'Left Shoulder' },
+    { landmark: POSE_LANDMARKS.RIGHT_SHOULDER, jointType: 'shoulder', label: 'Right Shoulder' },
+    { landmark: POSE_LANDMARKS.LEFT_ELBOW, jointType: 'elbow', label: 'Left Elbow' },
+    { landmark: POSE_LANDMARKS.RIGHT_ELBOW, jointType: 'elbow', label: 'Right Elbow' },
+    { landmark: POSE_LANDMARKS.LEFT_WRIST, jointType: 'wrist', label: 'Left Wrist' },
+    { landmark: POSE_LANDMARKS.RIGHT_WRIST, jointType: 'wrist', label: 'Right Wrist' }
+  ];
+
+  // Find closest joint to a click position
+  const findClosestJoint = (clickX: number, clickY: number, landmarks: any[]): JointType | null => {
+    if (!landmarks || landmarks.length === 0) return null;
+    
+    let closestJoint: JointType | null = null;
+    let minDistance = Infinity;
+    const clickThreshold = 50; // pixels
+    
+    CLICKABLE_JOINTS.forEach(({ landmark, jointType }) => {
+      const joint = landmarks[landmark];
+      if (joint && canvasRef.current) {
+        const jointX = joint.x * canvasRef.current.width;
+        const jointY = joint.y * canvasRef.current.height;
+        const distance = Math.sqrt(Math.pow(jointX - clickX, 2) + Math.pow(jointY - clickY, 2));
+        
+        if (distance < minDistance && distance < clickThreshold) {
+          minDistance = distance;
+          closestJoint = jointType;
+        }
+      }
+    });
+    
+    return closestJoint;
+  };
+
+  // Handle canvas click
+  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isTracking || !currentLandmarks || recordingPhase !== 'idle') return;
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+    
+    const closestJoint = findClosestJoint(clickX, clickY, currentLandmarks);
+    
+    if (closestJoint && closestJoint !== selectedJoint) {
+      handleJointChange(closestJoint);
+      toast({
+        title: "Joint Selected",
+        description: `Now analyzing ${JOINT_CONFIGS[closestJoint].label}`,
+      });
+    }
+  };
+
+  // Handle mouse move for hover effect
+  const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isTracking || !currentLandmarks || recordingPhase !== 'idle') {
+      setHoveredJoint(null);
+      return;
+    }
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    
+    const closestJoint = findClosestJoint(mouseX, mouseY, currentLandmarks);
+    setHoveredJoint(closestJoint);
+  };
+
+  const handleCanvasMouseLeave = () => {
+    setHoveredJoint(null);
   };
 
   const isJointStable = useCallback((currentX: number, currentY: number): boolean => {
@@ -596,6 +682,53 @@ export default function JointAnalysisLab() {
           primary.y * canvas.height - 10
         );
 
+        // Draw clickable joint indicators when not recording
+        if (recordingPhaseRef.current === 'idle' && currentLandmarks) {
+          CLICKABLE_JOINTS.forEach(({ landmark, jointType, label }) => {
+            const joint = results.poseLandmarks[landmark];
+            if (joint) {
+              const jointX = joint.x * canvas.width;
+              const jointY = joint.y * canvas.height;
+              
+              // Check if this joint is being hovered
+              const isHovered = hoveredJoint === jointType;
+              const isSelected = selectedJoint === jointType;
+              
+              // Draw circle around clickable joint
+              if (isHovered || isSelected) {
+                overlayCtx.strokeStyle = isSelected ? '#3b82f6' : '#10b981';
+                overlayCtx.lineWidth = isSelected ? 3 : 2;
+                overlayCtx.setLineDash([5, 5]);
+                overlayCtx.beginPath();
+                overlayCtx.arc(jointX, jointY, 25, 0, Math.PI * 2);
+                overlayCtx.stroke();
+                overlayCtx.setLineDash([]);
+              }
+              
+              // Draw small indicator for all clickable joints
+              overlayCtx.fillStyle = 'rgba(59, 130, 246, 0.6)';
+              overlayCtx.beginPath();
+              overlayCtx.arc(jointX, jointY, 4, 0, Math.PI * 2);
+              overlayCtx.fill();
+              
+              // Show label on hover
+              if (isHovered) {
+                // Draw background for label
+                const labelWidth = label.length * 8 + 16;
+                overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                overlayCtx.fillRect(jointX - labelWidth/2, jointY - 40, labelWidth, 25);
+                
+                // Draw label text
+                overlayCtx.fillStyle = '#ffffff';
+                overlayCtx.font = '14px Arial';
+                overlayCtx.textAlign = 'center';
+                overlayCtx.textBaseline = 'middle';
+                overlayCtx.fillText(label, jointX, jointY - 28);
+              }
+            }
+          });
+        }
+
         // Display the same instruction text that appears in Camera Feed subtitle
         if (recordingPhase === 'recording') {
           const instructionY = 120;
@@ -627,7 +760,7 @@ export default function JointAnalysisLab() {
         }
       }
     }
-  }, [selectedJoint, isJointStable, calculateAngle, recordingPhase, countdown, preparationCountdown, nextTestRecommendation, recordingProgress]);
+  }, [selectedJoint, isJointStable, calculateAngle, recordingPhase, countdown, preparationCountdown, nextTestRecommendation, recordingProgress, hoveredJoint, currentLandmarks]);
 
   useEffect(() => {
     const initMediaPipe = async () => {
@@ -1252,7 +1385,7 @@ export default function JointAnalysisLab() {
               Select Joint to Analyze
             </CardTitle>
             <CardDescription>
-              Choose the joint you want to analyze
+              {isTracking ? "Click directly on body joints in the video or use buttons below" : "Choose the joint you want to analyze"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1296,7 +1429,7 @@ export default function JointAnalysisLab() {
                   Camera Feed
                 </CardTitle>
                 <CardDescription>
-                  {recordingPhase === 'idle' && 'Position your joint within the target circle'}
+                  {recordingPhase === 'idle' && (isTracking ? 'Click on any joint or position within the target circle' : 'Position your joint within the target circle')}
                   {recordingPhase === 'preparing_next_test' && `Next: ${nextTestRecommendation?.movementType || 'Preparing next test'}...`}
                   {recordingPhase === 'countdown' && 'Get ready...'}
                   {recordingPhase === 'recording' && `Performing: ${nextTestRecommendation?.instruction || JOINT_CONFIGS[selectedJoint].movementInstruction}`}
@@ -1423,9 +1556,13 @@ export default function JointAnalysisLab() {
               />
               <canvas
                 ref={overlayCanvasRef}
-                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ cursor: hoveredJoint && isTracking && recordingPhase === 'idle' ? 'pointer' : 'default' }}
                 width={960}
                 height={1280}
+                onClick={handleCanvasClick}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseLeave={handleCanvasMouseLeave}
                 data-testid="canvas-overlay"
               />
               

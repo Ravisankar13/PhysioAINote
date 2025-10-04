@@ -303,6 +303,15 @@ app.use((req, res, next) => {
         if (process.env.NODE_ENV === 'development') {
           await addSampleMultimediaContent();
           log('✓ Sample multimedia content added to education modules');
+          
+          // Populate all courses with comprehensive content
+          const { populateAllCoursesContent } = await import('./populateAllCoursesContent');
+          const result = await populateAllCoursesContent();
+          if (result.success) {
+            log(`✓ Successfully populated ${result.modulesUpdated} modules across ${result.coursesProcessed} courses`);
+          } else {
+            log('Failed to populate all course content:', result.error);
+          }
         }
       } catch (error) {
         log('Sample multimedia content setup failed:', error instanceof Error ? error.message : 'Unknown error');

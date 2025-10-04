@@ -281,10 +281,12 @@ export default function JointAnalysisLab() {
   const [showTestHistory, setShowTestHistory] = useState(false);
   const [showClinicalThinking, setShowClinicalThinking] = useState(true);
   const [hoveredJoint, setHoveredJoint] = useState<JointType | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const poseRef = useRef<Pose | null>(null);
   const centeredStartTimeRef = useRef<number | null>(null);
   const recordingStartTimeRef = useRef<number | null>(null);
@@ -398,6 +400,32 @@ export default function JointAnalysisLab() {
 
   const handleCanvasMouseLeave = () => {
     setHoveredJoint(null);
+  };
+
+  const toggleFullscreen = () => {
+    if (!videoContainerRef.current) return;
+    
+    if (!isFullscreen) {
+      // Enter fullscreen
+      if (videoContainerRef.current.requestFullscreen) {
+        videoContainerRef.current.requestFullscreen();
+      } else if ((videoContainerRef.current as any).webkitRequestFullscreen) {
+        (videoContainerRef.current as any).webkitRequestFullscreen();
+      } else if ((videoContainerRef.current as any).msRequestFullscreen) {
+        (videoContainerRef.current as any).msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      } else if ((document as any).msExitFullscreen) {
+        (document as any).msExitFullscreen();
+      }
+      setIsFullscreen(false);
+    }
   };
 
   const isJointStable = useCallback((currentX: number, currentY: number): boolean => {
@@ -1394,6 +1422,37 @@ export default function JointAnalysisLab() {
     };
   }, []);
 
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscKey);
+    
+    // Also listen for fullscreen change events to sync state
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && 
+          !(document as any).webkitFullscreenElement && 
+          !(document as any).msFullscreenElement) {
+        setIsFullscreen(false);
+      }
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
+    };
+  }, [isFullscreen]);
+
   // Auto-trigger analysis when recording completes
   useEffect(() => {
     if (recordingPhase === 'complete' && movementData.length > 0 && !isAnalyzing && !analysisResult) {
@@ -1582,7 +1641,12 @@ export default function JointAnalysisLab() {
               </Alert>
             )}
 
-            <div className="relative bg-black rounded-lg overflow-hidden aspect-[3/4] max-w-5xl mx-auto">
+            <div 
+              ref={videoContainerRef}
+              className={`relative bg-black rounded-lg overflow-hidden aspect-[3/4] mx-auto ${
+                isFullscreen ? 'max-w-full h-full' : 'max-w-2xl'
+              }`}
+            >
               <video
                 ref={videoRef}
                 className="absolute inset-0 w-full h-full object-cover hidden"
@@ -1606,6 +1670,19 @@ export default function JointAnalysisLab() {
                 onMouseLeave={handleCanvasMouseLeave}
                 data-testid="canvas-overlay"
               />
+              
+              {/* Fullscreen toggle button */}
+              <button
+                onClick={toggleFullscreen}
+                className="absolute top-4 right-4 z-20 bg-black/50 hover:bg-black/70 text-white p-2 rounded-lg transition-colors"
+                data-testid="button-toggle-fullscreen"
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="h-5 w-5" />
+                ) : (
+                  <Maximize2 className="h-5 w-5" />
+                )}
+              </button>
               
               {!isTracking && (
                 <div className="absolute inset-0 flex items-center justify-center">

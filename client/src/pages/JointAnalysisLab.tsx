@@ -335,11 +335,22 @@ export default function JointAnalysisLab() {
 
   // Find closest joint to a click position
   const findClosestJoint = (clickX: number, clickY: number, landmarks: any[]): JointType | null => {
-    if (!landmarks || landmarks.length === 0) return null;
+    if (!landmarks || landmarks.length === 0) {
+      console.log('No landmarks available');
+      return null;
+    }
     
     let closestJoint: JointType | null = null;
     let minDistance = Infinity;
-    const clickThreshold = 80; // Increased threshold for easier clicking
+    const clickThreshold = 150; // Increased threshold from 80 to 150 for easier clicking
+    
+    console.log('Finding closest joint to click position:', { clickX, clickY });
+    console.log('Canvas dimensions:', { 
+      width: overlayCanvasRef.current?.width,
+      height: overlayCanvasRef.current?.height
+    });
+    
+    const jointDistances: Array<{label: string, jointType: JointType, distance: number, x: number, y: number}> = [];
     
     CLICKABLE_JOINTS.forEach(({ landmark, jointType, label }) => {
       const joint = landmarks[landmark];
@@ -348,12 +359,25 @@ export default function JointAnalysisLab() {
         const jointY = joint.y * overlayCanvasRef.current.height;
         const distance = Math.sqrt(Math.pow(jointX - clickX, 2) + Math.pow(jointY - clickY, 2));
         
+        // Store all joint distances for debugging
+        jointDistances.push({
+          label,
+          jointType,
+          distance: Math.round(distance),
+          x: Math.round(jointX),
+          y: Math.round(jointY)
+        });
+        
         if (distance < minDistance && distance < clickThreshold) {
           minDistance = distance;
           closestJoint = jointType;
         }
       }
     });
+    
+    // Log all joint distances for debugging
+    console.log('Joint distances from click:', jointDistances.sort((a, b) => a.distance - b.distance));
+    console.log(`Closest joint: ${closestJoint}, distance: ${Math.round(minDistance)}, threshold: ${clickThreshold}`);
     
     return closestJoint;
   };
@@ -378,10 +402,22 @@ export default function JointAnalysisLab() {
     }
     
     const rect = canvas.getBoundingClientRect();
-    const clickX = event.clientX - rect.left;
-    const clickY = event.clientY - rect.top;
     
-    console.log('Click coordinates:', { clickX, clickY });
+    // Scale the click coordinates from display size to canvas internal size
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const clickX = (event.clientX - rect.left) * scaleX;
+    const clickY = (event.clientY - rect.top) * scaleY;
+    
+    console.log('Click coordinates (display):', { 
+      displayX: event.clientX - rect.left, 
+      displayY: event.clientY - rect.top 
+    });
+    console.log('Click coordinates (scaled to canvas):', { clickX, clickY });
+    console.log('Scale factors:', { scaleX, scaleY });
+    console.log('Canvas internal dimensions:', { width: canvas.width, height: canvas.height });
+    console.log('Canvas display dimensions:', { width: rect.width, height: rect.height });
     
     const closestJoint = findClosestJoint(clickX, clickY, currentLandmarks);
     
@@ -420,12 +456,17 @@ export default function JointAnalysisLab() {
       return;
     }
     
-    const canvas = canvasRef.current;
+    const canvas = overlayCanvasRef.current;
     if (!canvas) return;
     
     const rect = canvas.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+    
+    // Scale the mouse coordinates from display size to canvas internal size
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const mouseX = (event.clientX - rect.left) * scaleX;
+    const mouseY = (event.clientY - rect.top) * scaleY;
     
     const closestJoint = findClosestJoint(mouseX, mouseY, currentLandmarks);
     setHoveredJoint(closestJoint);
@@ -687,6 +728,23 @@ export default function JointAnalysisLab() {
             fillColor = '#FFC107';
             strokeColor = 'rgba(255, 193, 7, 0.3)';
           }
+          
+          // Draw clickable zone indicator (150px radius to match click threshold)
+          overlayCtx.globalAlpha = 0.1;
+          overlayCtx.fillStyle = isSelected ? '#FFC107' : '#3B82F6';
+          overlayCtx.beginPath();
+          overlayCtx.arc(jointX, jointY, 150, 0, Math.PI * 2);  // 150px clickable radius
+          overlayCtx.fill();
+          
+          // Draw dashed border around clickable zone
+          overlayCtx.globalAlpha = 0.3;
+          overlayCtx.strokeStyle = isSelected ? '#FFC107' : '#3B82F6';
+          overlayCtx.lineWidth = 2;
+          overlayCtx.setLineDash([5, 10]);
+          overlayCtx.beginPath();
+          overlayCtx.arc(jointX, jointY, 150, 0, Math.PI * 2);
+          overlayCtx.stroke();
+          overlayCtx.setLineDash([]);
           
           // Draw outer glow
           overlayCtx.globalAlpha = isHovered ? 0.8 : 0.5;

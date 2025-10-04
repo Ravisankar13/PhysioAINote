@@ -304,13 +304,16 @@ app.use((req, res, next) => {
           await addSampleMultimediaContent();
           log('✓ Sample multimedia content added to education modules');
           
-          // Populate all courses with comprehensive content
-          const { populateAllCoursesContent } = await import('./populateAllCoursesContent');
-          const result = await populateAllCoursesContent();
-          if (result.success) {
-            log(`✓ Successfully populated ${result.modulesUpdated} modules across ${result.coursesProcessed} courses`);
+          // First create modules for courses that don't have them
+          const { createModulesForAllCourses } = await import('./createModulesForAllCourses');
+          const moduleCreationResult = await createModulesForAllCourses();
+          if (moduleCreationResult.success) {
+            log(`✓ Created ${moduleCreationResult.totalModulesCreated} modules for ${moduleCreationResult.coursesWithNewModules} courses`);
+            if (moduleCreationResult.contentPopulated?.success) {
+              log(`✓ Successfully populated ${moduleCreationResult.contentPopulated.modulesUpdated} modules across ${moduleCreationResult.contentPopulated.coursesProcessed} courses`);
+            }
           } else {
-            log('Failed to populate all course content:', result.error);
+            log('Failed to create modules:', moduleCreationResult.error);
           }
         }
       } catch (error) {

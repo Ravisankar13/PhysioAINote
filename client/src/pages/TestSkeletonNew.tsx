@@ -1,5 +1,5 @@
 import { useState } from "react";
-import RiggedAnatomicalSkeleton from "@/components/3d/RiggedAnatomicalSkeleton";
+import SkeletonGLBViewer from "@/components/skeleton/SkeletonGLBViewer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
@@ -435,20 +435,11 @@ export default function TestSkeletonNew() {
             <CardTitle>3D Anatomical Model</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="w-full h-[700px] bg-gray-100 rounded-lg overflow-hidden">
-              <RiggedAnatomicalSkeleton 
-                patientData={{
-                  anthropometrics: {
-                    height: 170,
-                    weight: 70,
-                  },
-                  jointRestrictions: {},
-                  painAreas: [],
-                  movementPatterns: null
-                }}
+            <div className="w-full h-[700px] bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg overflow-hidden">
+              <SkeletonGLBViewer 
                 modelConfig={modelConfig}
                 className="w-full h-full"
-                showControls={false}
+                showControls={true}
               />
             </div>
           </CardContent>

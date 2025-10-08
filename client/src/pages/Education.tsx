@@ -65,6 +65,7 @@ export default function Education() {
   const [searchTerm, setSearchTerm] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState<string>("all");
   const [bodyPartFilter, setBodyPartFilter] = useState<string>("all");
+  const [enrollingCourseId, setEnrollingCourseId] = useState<number | null>(null);
 
   // Fetch available courses
   const { data: courses = [], isLoading: coursesLoading } = useQuery<Course[]>({
@@ -106,6 +107,8 @@ export default function Education() {
 
   const handleEnrollment = async (courseId: number) => {
     console.log("Enrolling in course:", courseId);
+    setEnrollingCourseId(courseId);
+    
     try {
       const response = await fetch("/api/education/enroll", {
         method: "POST",
@@ -113,21 +116,34 @@ export default function Education() {
         body: JSON.stringify({ courseId }),
       });
 
+      const responseData = await response.json();
+
       if (response.ok) {
-        const enrollment = await response.json();
         // Refetch enrollments to update the dashboard
-        refetchEnrollments();
+        await refetchEnrollments();
         toast({
           title: "Enrollment Successful!",
           description: "You have been enrolled in the course. Check your dashboard to start learning.",
         });
+        console.log("Enrollment successful:", responseData);
       } else {
-        const error = await response.json();
-        toast({
-          title: "Enrollment Failed",
-          description: error.error || "Failed to enroll in the course. Please try again.",
-          variant: "destructive",
-        });
+        // Handle specific error messages
+        const errorMessage = responseData.error || "Failed to enroll in the course.";
+        
+        if (errorMessage.includes("Already enrolled")) {
+          toast({
+            title: "Already Enrolled",
+            description: "You are already enrolled in this course. Check your dashboard to continue learning.",
+            variant: "default",
+          });
+        } else {
+          toast({
+            title: "Enrollment Failed",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
+        console.log("Enrollment failed:", errorMessage);
       }
     } catch (error) {
       console.error("Enrollment error:", error);
@@ -136,7 +152,14 @@ export default function Education() {
         description: "Unable to connect to the server. Please check your connection and try again.",
         variant: "destructive",
       });
+    } finally {
+      setEnrollingCourseId(null);
     }
+  };
+  
+  // Check if a course is already enrolled
+  const isEnrolled = (courseId: number): boolean => {
+    return enrollments.some(enrollment => enrollment.courseId === courseId);
   };
 
   if (!user) {
@@ -431,13 +454,33 @@ export default function Education() {
                         </div>
 
                         <div className="pt-4">
-                          <Button 
-                            className="w-full" 
-                            onClick={() => handleEnrollment(course.id)}
-                            data-testid={`enroll-course-${course.id}`}
-                          >
-                            {course.price > 0 ? `Enroll - $${(course.price / 100).toFixed(2)}` : "Enroll for Free"}
-                          </Button>
+                          {isEnrolled(course.id) ? (
+                            <Link to={`/education/course/${course.id}`}>
+                              <Button 
+                                className="w-full bg-green-600 hover:bg-green-700" 
+                                data-testid={`continue-course-${course.id}`}
+                              >
+                                <GraduationCap className="w-4 h-4 mr-2" />
+                                Continue Learning
+                              </Button>
+                            </Link>
+                          ) : (
+                            <Button 
+                              className="w-full" 
+                              onClick={() => handleEnrollment(course.id)}
+                              disabled={enrollingCourseId === course.id}
+                              data-testid={`enroll-course-${course.id}`}
+                            >
+                              {enrollingCourseId === course.id ? (
+                                <>
+                                  <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  Enrolling...
+                                </>
+                              ) : (
+                                course.price > 0 ? `Enroll - $${(course.price / 100).toFixed(2)}` : "Enroll for Free"
+                              )}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardContent>

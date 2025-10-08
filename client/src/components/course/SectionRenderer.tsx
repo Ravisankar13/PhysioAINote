@@ -60,7 +60,8 @@ function TextSection({ section, sectionIndex }: { section: ModuleContentSection;
       )}
       <CardContent>
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          {formatContent(section.content)}
+          {/* Render the main content with proper formatting and preserve whitespace */}
+          <div className="whitespace-pre-wrap leading-relaxed">{formatContent(section.content)}</div>
         </div>
       </CardContent>
     </Card>

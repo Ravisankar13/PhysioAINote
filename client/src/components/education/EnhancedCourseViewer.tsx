@@ -395,10 +395,41 @@ export function EnhancedCourseViewer({
                         </CardHeader>
                       )}
                       <CardContent>
-                        <div 
-                          className="prose prose-sm dark:prose-invert max-w-none"
-                          dangerouslySetInnerHTML={{ __html: section.content || '' }}
-                        />
+                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                          {/* Display comprehensive content with proper formatting */}
+                          <div className="whitespace-pre-wrap leading-relaxed text-gray-700 dark:text-gray-300">
+                            {section.content || ''}
+                          </div>
+                          
+                          {/* Display key learnings if available */}
+                          {(section as any).keyLearnings && (section as any).keyLearnings.length > 0 && (
+                            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                              <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">Key Learning Points:</h4>
+                              <ul className="space-y-2">
+                                {(section as any).keyLearnings.map((point: string, pidx: number) => (
+                                  <li key={pidx} className="flex items-start gap-2">
+                                    <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                                    <span className="text-sm text-blue-800 dark:text-blue-200">{point}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          {/* Display references if available */}
+                          {(section as any).references && (section as any).references.length > 0 && (
+                            <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg">
+                              <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Evidence & References:</h4>
+                              <ul className="space-y-1">
+                                {(section as any).references.map((ref: string, ridx: number) => (
+                                  <li key={ridx} className="text-sm text-gray-700 dark:text-gray-300">
+                                    • {ref}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
                   ))}

@@ -389,12 +389,9 @@ export default function CourseContent() {
                 <CardContent>
                   
                   <div className="space-y-6">
-                    {/* Check if module has multimedia content */}
+                    {/* Use EnhancedCourseViewer for modules with comprehensive text content */}
                     {selectedModule.content?.sections?.some((section: any) => 
-                      section.type === 'biodigital_3d' || 
-                      section.type === 'anatomy_images' || 
-                      section.type === 'clinical_images' ||
-                      section.researchSummary?.articleIds?.length > 0
+                      section.type === 'text' && section.content && section.content.length > 500
                     ) ? (
                       <EnhancedCourseViewer
                         moduleTitle={selectedModule.title}

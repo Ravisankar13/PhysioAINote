@@ -439,7 +439,6 @@ export default function TestSkeletonNew() {
               <SimpleGLBViewer 
                 modelConfig={modelConfig}
                 className="w-full h-full"
-                showControls={true}
               />
             </div>
           </CardContent>

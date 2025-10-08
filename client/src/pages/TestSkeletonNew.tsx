@@ -1,5 +1,5 @@
 import { useState } from "react";
-import SkeletonGLBViewer from "@/components/skeleton/SkeletonGLBViewer";
+import SimpleGLBViewer from "@/components/skeleton/SimpleGLBViewer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
@@ -436,7 +436,7 @@ export default function TestSkeletonNew() {
           </CardHeader>
           <CardContent>
             <div className="w-full h-[700px] bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg overflow-hidden">
-              <SkeletonGLBViewer 
+              <SimpleGLBViewer 
                 modelConfig={modelConfig}
                 className="w-full h-full"
                 showControls={true}

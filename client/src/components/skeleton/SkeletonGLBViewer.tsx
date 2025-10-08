@@ -1,6 +1,6 @@
 import { useRef, Suspense, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, useGLTF, Environment } from '@react-three/drei';
+import { OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface SkeletonGLBViewerProps {
@@ -151,13 +151,12 @@ export default function SkeletonGLBViewer({ modelConfig, className = "", showCon
     <div className={`w-full h-full ${className}`}>
       <Canvas 
         camera={{ position: [0, 0, 8], fov: 45 }}
-        gl={{ antialias: true, alpha: true }}
+        gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
       >
         <Suspense fallback={null}>
           <ambientLight intensity={0.5} />
           <directionalLight position={[10, 10, 5]} intensity={1} />
           <directionalLight position={[-10, -10, -5]} intensity={0.3} />
-          <Environment preset="studio" />
           <SkeletonModel modelConfig={modelConfig} />
           {showControls && (
             <OrbitControls 

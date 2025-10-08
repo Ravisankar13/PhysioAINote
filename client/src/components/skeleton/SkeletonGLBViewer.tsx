@@ -174,5 +174,3 @@ export default function SkeletonGLBViewer({ modelConfig, className = "", showCon
   );
 }
 
-// Preload the model
-useGLTF.preload('/models/skeleton_character.glb');

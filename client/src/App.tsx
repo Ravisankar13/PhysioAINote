@@ -42,6 +42,7 @@ import VirtualPatientsSimple from "@/pages/VirtualPatientsSimple";
 import VirtualPatientsMinimal from "@/pages/VirtualPatientsMinimal";
 import VirtualPatientsFixed from "@/pages/VirtualPatientsFixed";
 import VirtualPatientsManagement from "@/pages/VirtualPatientsManagement";
+import VirtualPatient2 from "@/pages/VirtualPatient2";
 import SharedCasesPage from "@/pages/SharedCasesPage";
 import SharedCaseDetailPage from "@/pages/SharedCaseDetailPage";
 import SharedCaseFormPage from "@/pages/SharedCaseFormPage";
@@ -121,6 +122,7 @@ function Router() {
           <Route path="/virtual-patients">
             <ProtectedRoute component={VirtualPatientsManagement} />
           </Route>
+          <Route path="/virtual-patient-2" component={VirtualPatient2} />
           <Route path="/test-skeleton" component={TestSkeleton} />
           <Route path="/test-skeleton-new" component={TestSkeletonNew} />
           <Route path="/test-skeleton-simple" component={TestSkeletonNewSimple} />

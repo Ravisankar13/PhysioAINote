@@ -1,15 +1,17 @@
-import { useState } from "react";
-import SimpleGLBViewer from "@/components/skeleton/SimpleGLBViewer";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Link, Unlink, Copy, ArrowRight, ArrowLeft } from "lucide-react";
+import { RotateCcw, Link, Unlink, Copy, ArrowRight, ArrowLeft, AlertCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function TestSkeletonNew() {
+  const [isWebGLAvailable, setIsWebGLAvailable] = useState<boolean | null>(null);
+  
   const [linkedSides, setLinkedSides] = useState({
     hips: false,
     knees: false,
@@ -105,122 +107,22 @@ export default function TestSkeletonNew() {
       carryingAngle: 10,
       pronation: 0,
     },
-    // Legacy compatibility
-    spinalPathology: {
-      spineFlexion: 0,
-      spineLateralFlexion: 0,
-      spineRotation: 0,
-    },
-    shoulderPathology: {
-      shoulderFlexion: 0,
-      shoulderAbduction: 0,
-      shoulderRotation: 0,
-    },
-    lowerLimbPathology: {
-      hipFlexion: 0,
-      hipAbduction: 0,
-      hipRotation: 0,
-      kneeFlexion: 0,
-      ankleDorsiflexion: 0,
-    },
   });
 
-  const updateSpine = (key: string, value: number) => {
-    setModelConfig(prev => ({
+  useEffect(() => {
+    // Check for WebGL availability
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    setIsWebGLAvailable(!!gl);
+  }, []);
+
+  const handleSliderChange = (joint: string, property: string, value: number[]) => {
+    setModelConfig((prev) => ({
       ...prev,
-      spine: {
-        ...prev.spine,
-        [key]: value
+      [joint]: {
+        ...prev[joint as keyof typeof prev],
+        [property]: value[0],
       },
-      // Update legacy spinalPathology for compatibility
-      spinalPathology: {
-        spineFlexion: key === 'cervicalLordosis' || key === 'thoracicKyphosis' || key === 'lumbarLordosis' 
-          ? (prev.spine.cervicalLordosis + prev.spine.thoracicKyphosis + prev.spine.lumbarLordosis) / 3 
-          : prev.spinalPathology.spineFlexion,
-        spineLateralFlexion: key === 'scoliosis' ? value : prev.spinalPathology.spineLateralFlexion,
-        spineRotation: key === 'lateralShift' ? value : prev.spinalPathology.spineRotation,
-      }
-    }));
-  };
-
-  const updatePelvis = (key: string, value: number) => {
-    setModelConfig(prev => ({
-      ...prev,
-      pelvis: {
-        ...prev.pelvis,
-        [key]: value
-      }
-    }));
-  };
-
-  const updateLimbScale = (key: string, value: number) => {
-    setModelConfig(prev => ({
-      ...prev,
-      limbScales: {
-        ...prev.limbScales,
-        [key]: value
-      }
-    }));
-  };
-
-  const updateJoint = (joint: string, side: 'left' | 'right', key: string, value: number) => {
-    const jointKey = `${side}${joint.charAt(0).toUpperCase() + joint.slice(1)}` as keyof typeof modelConfig;
-    
-    setModelConfig(prev => {
-      const newConfig = {
-        ...prev,
-        [jointKey]: {
-          ...(prev as any)[jointKey],
-          [key]: value
-        }
-      } as typeof modelConfig;
-
-      // If sides are linked, update the opposite side too
-      if (linkedSides[joint as keyof typeof linkedSides]) {
-        const oppositeJointKey = `${side === 'left' ? 'right' : 'left'}${joint.charAt(0).toUpperCase() + joint.slice(1)}` as keyof typeof modelConfig;
-        (newConfig as any)[oppositeJointKey] = {
-          ...(newConfig as any)[oppositeJointKey],
-          [key]: value
-        };
-      }
-
-      // Update legacy pathology for backward compatibility
-      if (joint === 'Hip' && key === 'flexion') {
-        newConfig.lowerLimbPathology.hipFlexion = value;
-      } else if (joint === 'Hip' && key === 'abduction') {
-        newConfig.lowerLimbPathology.hipAbduction = value;
-      } else if (joint === 'Hip' && key === 'internalRotation') {
-        newConfig.lowerLimbPathology.hipRotation = value;
-      } else if (joint === 'Knee' && key === 'flexion') {
-        newConfig.lowerLimbPathology.kneeFlexion = value;
-      } else if (joint === 'Ankle' && key === 'dorsiflexion') {
-        newConfig.lowerLimbPathology.ankleDorsiflexion = value;
-      } else if (joint === 'Shoulder' && key === 'flexion') {
-        newConfig.shoulderPathology.shoulderFlexion = value;
-      } else if (joint === 'Shoulder' && key === 'abduction') {
-        newConfig.shoulderPathology.shoulderAbduction = value;
-      } else if (joint === 'Shoulder' && key === 'internalRotation') {
-        newConfig.shoulderPathology.shoulderRotation = value;
-      }
-
-      return newConfig;
-    });
-  };
-
-  const copyToOpposite = (joint: string, fromSide: 'left' | 'right') => {
-    const fromKey = `${fromSide}${joint.charAt(0).toUpperCase() + joint.slice(1)}` as keyof typeof modelConfig;
-    const toKey = `${fromSide === 'left' ? 'right' : 'left'}${joint.charAt(0).toUpperCase() + joint.slice(1)}` as keyof typeof modelConfig;
-    
-    setModelConfig(prev => ({
-      ...prev,
-      [toKey]: { ...(prev as any)[fromKey] }
-    }));
-  };
-
-  const toggleLinkedSides = (joint: keyof typeof linkedSides) => {
-    setLinkedSides(prev => ({
-      ...prev,
-      [joint]: !prev[joint]
     }));
   };
 
@@ -312,23 +214,6 @@ export default function TestSkeletonNew() {
         carryingAngle: 10,
         pronation: 0,
       },
-      spinalPathology: {
-        spineFlexion: 0,
-        spineLateralFlexion: 0,
-        spineRotation: 0,
-      },
-      shoulderPathology: {
-        shoulderFlexion: 0,
-        shoulderAbduction: 0,
-        shoulderRotation: 0,
-      },
-      lowerLimbPathology: {
-        hipFlexion: 0,
-        hipAbduction: 0,
-        hipRotation: 0,
-        kneeFlexion: 0,
-        ankleDorsiflexion: 0,
-      },
     });
     setLinkedSides({
       hips: false,
@@ -339,344 +224,548 @@ export default function TestSkeletonNew() {
     });
   };
 
-  const SliderControl = ({ label, value, onChange, min = -90, max = 90, step = 1, unit = "°" }: any) => (
-    <div className="space-y-2">
-      <div className="flex justify-between">
-        <Label className="text-sm">{label}</Label>
-        <span className="text-sm text-muted-foreground">{value}{unit}</span>
-      </div>
-      <Slider
-        value={[value]}
-        onValueChange={([v]) => onChange(v)}
-        min={min}
-        max={max}
-        step={step}
-        className="w-full"
-      />
-    </div>
-  );
+  const copyToSide = (fromSide: 'left' | 'right', joint: string) => {
+    const fromJoint = `${fromSide}${joint}`;
+    const toJoint = `${fromSide === 'left' ? 'right' : 'left'}${joint}`;
+    
+    setModelConfig((prev) => ({
+      ...prev,
+      [toJoint]: { ...prev[fromJoint as keyof typeof prev] },
+    }));
+  };
 
-  const BilateralControl = ({ title, joint, controls }: any) => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-lg">{title}</h3>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => copyToOpposite(joint, 'left')}
-            title="Copy left to right"
-          >
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant={linkedSides[joint as keyof typeof linkedSides] ? "default" : "outline"}
-            onClick={() => toggleLinkedSides(joint as keyof typeof linkedSides)}
-            title="Link sides"
-          >
-            {linkedSides[joint as keyof typeof linkedSides] ? <Link className="h-4 w-4" /> : <Unlink className="h-4 w-4" />}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => copyToOpposite(joint, 'right')}
-            title="Copy right to left"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-3">
-          <Label className="text-sm font-medium text-blue-600">Left Side</Label>
-          {controls.map((control: any) => (
-            <SliderControl
-              key={`left-${control.key}`}
-              label={control.label}
-              value={(modelConfig as any)[`left${joint}`][control.key]}
-              onChange={(v: number) => updateJoint(joint, 'left', control.key, v)}
-              min={control.min}
-              max={control.max}
-              step={control.step}
-              unit={control.unit}
-            />
-          ))}
-        </div>
+  // Display a skeleton SVG visualization instead of 3D when WebGL is not available
+  const SkeletonVisualization = () => (
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg">
+      <svg
+        viewBox="0 0 200 400"
+        className="w-full h-full max-h-[500px]"
+        style={{ maxWidth: '250px' }}
+      >
+        {/* Head */}
+        <circle cx="100" cy="40" r="20" fill="none" stroke="#4B5563" strokeWidth="2" />
         
-        <div className="space-y-3">
-          <Label className="text-sm font-medium text-green-600">Right Side</Label>
-          {controls.map((control: any) => (
-            <SliderControl
-              key={`right-${control.key}`}
-              label={control.label}
-              value={(modelConfig as any)[`right${joint}`][control.key]}
-              onChange={(v: number) => updateJoint(joint, 'right', control.key, v)}
-              min={control.min}
-              max={control.max}
-              step={control.step}
-              unit={control.unit}
-            />
-          ))}
-        </div>
-      </div>
+        {/* Spine */}
+        <line x1="100" y1="60" x2="100" y2="180" stroke="#4B5563" strokeWidth="3" />
+        
+        {/* Shoulders */}
+        <line x1="70" y1="80" x2="130" y2="80" stroke="#4B5563" strokeWidth="2" />
+        
+        {/* Left Arm */}
+        <line x1="70" y1="80" x2="50" y2="120" stroke="#4B5563" strokeWidth="2" />
+        <line x1="50" y1="120" x2="40" y2="160" stroke="#4B5563" strokeWidth="2" />
+        
+        {/* Right Arm */}
+        <line x1="130" y1="80" x2="150" y2="120" stroke="#4B5563" strokeWidth="2" />
+        <line x1="150" y1="120" x2="160" y2="160" stroke="#4B5563" strokeWidth="2" />
+        
+        {/* Pelvis */}
+        <line x1="80" y1="180" x2="120" y2="180" stroke="#4B5563" strokeWidth="3" />
+        
+        {/* Left Leg */}
+        <line x1="85" y1="180" x2="75" y2="250" stroke="#4B5563" strokeWidth="2" />
+        <line x1="75" y1="250" x2="70" y2="330" stroke="#4B5563" strokeWidth="2" />
+        <line x1="70" y1="330" x2="60" y2="340" stroke="#4B5563" strokeWidth="2" />
+        
+        {/* Right Leg */}
+        <line x1="115" y1="180" x2="125" y2="250" stroke="#4B5563" strokeWidth="2" />
+        <line x1="125" y1="250" x2="130" y2="330" stroke="#4B5563" strokeWidth="2" />
+        <line x1="130" y1="330" x2="140" y2="340" stroke="#4B5563" strokeWidth="2" />
+        
+        {/* Joint markers */}
+        {/* Shoulders */}
+        <circle cx="70" cy="80" r="4" fill="#EF4444" />
+        <circle cx="130" cy="80" r="4" fill="#EF4444" />
+        
+        {/* Elbows */}
+        <circle cx="50" cy="120" r="4" fill="#F59E0B" />
+        <circle cx="150" cy="120" r="4" fill="#F59E0B" />
+        
+        {/* Hips */}
+        <circle cx="85" cy="180" r="4" fill="#10B981" />
+        <circle cx="115" cy="180" r="4" fill="#10B981" />
+        
+        {/* Knees */}
+        <circle cx="75" cy="250" r="4" fill="#3B82F6" />
+        <circle cx="125" cy="250" r="4" fill="#3B82F6" />
+        
+        {/* Ankles */}
+        <circle cx="70" cy="330" r="4" fill="#8B5CF6" />
+        <circle cx="130" cy="330" r="4" fill="#8B5CF6" />
+      </svg>
     </div>
   );
 
   return (
-    <div className="container mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-6">Clinical Pathology Demonstration System</h1>
-      
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* 3D Model Display */}
-        <Card className="w-full">
+    <div className="container mx-auto p-6 max-w-7xl">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">Skeleton Configuration Tool</h1>
+        <p className="text-muted-foreground">
+          Adjust anatomical parameters to create custom skeletal configurations for clinical assessment
+        </p>
+      </div>
+
+      {isWebGLAvailable === false && (
+        <Alert className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Limited Visualization</AlertTitle>
+          <AlertDescription>
+            3D visualization requires WebGL which is not available in this environment. 
+            Showing simplified skeleton view. The configuration controls are still fully functional.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Panel - Visualization */}
+        <Card className="h-[600px]">
           <CardHeader>
-            <CardTitle>3D Anatomical Model</CardTitle>
+            <CardTitle>Skeleton Visualization</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="w-full h-[700px] bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg overflow-hidden">
-              <SimpleGLBViewer 
-                modelConfig={modelConfig}
-                className="w-full h-full"
-              />
-            </div>
+          <CardContent className="h-[calc(100%-80px)]">
+            {isWebGLAvailable === null ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-muted-foreground">Checking visualization capabilities...</p>
+                </div>
+              </div>
+            ) : isWebGLAvailable ? (
+              <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg">
+                <div className="text-center p-8">
+                  <h3 className="text-lg font-semibold mb-2">3D Model View</h3>
+                  <p className="text-muted-foreground">
+                    3D visualization would appear here with full WebGL support
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <SkeletonVisualization />
+            )}
           </CardContent>
         </Card>
 
-        {/* Control Panel */}
-        <Card className="w-full max-h-[800px] overflow-y-auto">
+        {/* Right Panel - Controls */}
+        <Card className="h-[600px] overflow-hidden">
           <CardHeader>
             <div className="flex justify-between items-center">
-              <CardTitle>Clinical Controls</CardTitle>
-              <Button 
-                onClick={resetAll} 
-                variant="outline" 
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <RotateCcw className="h-4 w-4" />
+              <CardTitle>Joint Parameters</CardTitle>
+              <Button onClick={resetAll} variant="outline" size="sm">
+                <RotateCcw className="h-4 w-4 mr-2" />
                 Reset All
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="proportions" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-4">
-                <TabsTrigger value="proportions">Proportions</TabsTrigger>
+          <CardContent className="overflow-y-auto h-[calc(100%-80px)]">
+            <Tabs defaultValue="spine" className="w-full">
+              <TabsList className="grid grid-cols-3 w-full">
                 <TabsTrigger value="spine">Spine & Pelvis</TabsTrigger>
                 <TabsTrigger value="lower">Lower Body</TabsTrigger>
                 <TabsTrigger value="upper">Upper Body</TabsTrigger>
               </TabsList>
 
-              {/* Proportions Tab */}
-              <TabsContent value="proportions" className="space-y-4">
-                <h3 className="font-semibold text-lg">Body Proportions</h3>
-                <SliderControl
-                  label="Overall Scale"
-                  value={modelConfig.limbScales.overall}
-                  onChange={(v: number) => updateLimbScale('overall', v)}
-                  min={0.5}
-                  max={2}
-                  step={0.1}
-                  unit="x"
-                />
-                <SliderControl
-                  label="Upper Arm Length"
-                  value={modelConfig.limbScales.upperArm}
-                  onChange={(v: number) => updateLimbScale('upperArm', v)}
-                  min={0.5}
-                  max={2}
-                  step={0.1}
-                  unit="x"
-                />
-                <SliderControl
-                  label="Forearm Length"
-                  value={modelConfig.limbScales.forearm}
-                  onChange={(v: number) => updateLimbScale('forearm', v)}
-                  min={0.5}
-                  max={2}
-                  step={0.1}
-                  unit="x"
-                />
-                <SliderControl
-                  label="Thigh Length"
-                  value={modelConfig.limbScales.thigh}
-                  onChange={(v: number) => updateLimbScale('thigh', v)}
-                  min={0.5}
-                  max={2}
-                  step={0.1}
-                  unit="x"
-                />
-                <SliderControl
-                  label="Shin Length"
-                  value={modelConfig.limbScales.shin}
-                  onChange={(v: number) => updateLimbScale('shin', v)}
-                  min={0.5}
-                  max={2}
-                  step={0.1}
-                  unit="x"
-                />
-              </TabsContent>
-
               {/* Spine & Pelvis Tab */}
-              <TabsContent value="spine" className="space-y-6">
+              <TabsContent value="spine" className="space-y-4">
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-lg">Spinal Curves</h3>
-                  <SliderControl
-                    label="Cervical Lordosis"
-                    value={modelConfig.spine.cervicalLordosis}
-                    onChange={(v: number) => updateSpine('cervicalLordosis', v)}
-                    min={-60}
-                    max={-20}
-                    unit="° (Normal: -40°)"
-                  />
-                  <SliderControl
-                    label="Thoracic Kyphosis"
-                    value={modelConfig.spine.thoracicKyphosis}
-                    onChange={(v: number) => updateSpine('thoracicKyphosis', v)}
-                    min={10}
-                    max={60}
-                    unit="° (Normal: 20-45°)"
-                  />
-                  <SliderControl
-                    label="Lumbar Lordosis"
-                    value={modelConfig.spine.lumbarLordosis}
-                    onChange={(v: number) => updateSpine('lumbarLordosis', v)}
-                    min={-70}
-                    max={-30}
-                    unit="° (Normal: -40 to -60°)"
-                  />
-                </div>
+                  <h3 className="font-semibold">Spinal Curves</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Cervical Lordosis ({modelConfig.spine.cervicalLordosis}°)</Label>
+                      <Slider
+                        value={[modelConfig.spine.cervicalLordosis]}
+                        onValueChange={(value) => handleSliderChange('spine', 'cervicalLordosis', value)}
+                        min={-60}
+                        max={-20}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Thoracic Kyphosis ({modelConfig.spine.thoracicKyphosis}°)</Label>
+                      <Slider
+                        value={[modelConfig.spine.thoracicKyphosis]}
+                        onValueChange={(value) => handleSliderChange('spine', 'thoracicKyphosis', value)}
+                        min={20}
+                        max={50}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Lumbar Lordosis ({modelConfig.spine.lumbarLordosis}°)</Label>
+                      <Slider
+                        value={[modelConfig.spine.lumbarLordosis]}
+                        onValueChange={(value) => handleSliderChange('spine', 'lumbarLordosis', value)}
+                        min={-70}
+                        max={-30}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                  </div>
 
-                <Separator />
+                  <Separator />
 
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-lg">Spinal Deformities</h3>
-                  <SliderControl
-                    label="Scoliosis (Cobb Angle)"
-                    value={modelConfig.spine.scoliosis}
-                    onChange={(v: number) => updateSpine('scoliosis', v)}
-                    min={-45}
-                    max={45}
-                  />
-                  <SliderControl
-                    label="Forward Head Posture"
-                    value={modelConfig.spine.forwardHead}
-                    onChange={(v: number) => updateSpine('forwardHead', v)}
-                    min={0}
-                    max={30}
-                    unit="cm"
-                  />
-                  <SliderControl
-                    label="Lateral Shift"
-                    value={modelConfig.spine.lateralShift}
-                    onChange={(v: number) => updateSpine('lateralShift', v)}
-                    min={-20}
-                    max={20}
-                    unit="cm"
-                  />
-                </div>
-
-                <Separator />
-
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-lg">Pelvic Orientation</h3>
-                  <SliderControl
-                    label="Pelvic Tilt (Anterior +/Posterior -)"
-                    value={modelConfig.pelvis.tilt}
-                    onChange={(v: number) => updatePelvis('tilt', v)}
-                    min={-30}
-                    max={30}
-                  />
-                  <SliderControl
-                    label="Pelvic Obliquity (Lateral Tilt)"
-                    value={modelConfig.pelvis.obliquity}
-                    onChange={(v: number) => updatePelvis('obliquity', v)}
-                    min={-15}
-                    max={15}
-                  />
-                  <SliderControl
-                    label="Pelvic Rotation"
-                    value={modelConfig.pelvis.rotation}
-                    onChange={(v: number) => updatePelvis('rotation', v)}
-                    min={-30}
-                    max={30}
-                  />
+                  <h3 className="font-semibold">Pelvic Alignment</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Pelvic Tilt ({modelConfig.pelvis.tilt}°)</Label>
+                      <Slider
+                        value={[modelConfig.pelvis.tilt]}
+                        onValueChange={(value) => handleSliderChange('pelvis', 'tilt', value)}
+                        min={-30}
+                        max={30}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Pelvic Obliquity ({modelConfig.pelvis.obliquity}°)</Label>
+                      <Slider
+                        value={[modelConfig.pelvis.obliquity]}
+                        onValueChange={(value) => handleSliderChange('pelvis', 'obliquity', value)}
+                        min={-20}
+                        max={20}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
 
               {/* Lower Body Tab */}
-              <TabsContent value="lower" className="space-y-6">
-                <BilateralControl
-                  title="Hip Joint"
-                  joint="Hip"
-                  controls={[
-                    { key: 'flexion', label: 'Flexion/Extension', min: -30, max: 120 },
-                    { key: 'abduction', label: 'Abduction/Adduction', min: -30, max: 45 },
-                    { key: 'internalRotation', label: 'Internal/External Rotation', min: -45, max: 45 },
-                    { key: 'anteversion', label: 'Femoral Anteversion', min: 0, max: 30, unit: '° (Normal: 10-15°)' },
-                    { key: 'neckShaftAngle', label: 'Neck-Shaft Angle', min: 110, max: 145, unit: '° (Normal: 125-135°)' },
-                  ]}
-                />
+              <TabsContent value="lower" className="space-y-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold">Hip Joints</h3>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={linkedSides.hips}
+                        onCheckedChange={(checked) => 
+                          setLinkedSides(prev => ({ ...prev, hips: checked }))
+                        }
+                      />
+                      <Label className="text-sm">Link Sides</Label>
+                    </div>
+                  </div>
 
-                <Separator />
+                  {/* Hip Controls */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Left Hip</Label>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => copyToSide('left', 'Hip')}
+                        >
+                          <Copy className="h-3 w-3 mr-1" />
+                          Copy
+                        </Button>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.leftHip.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftHip.flexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftHip', 'flexion', value);
+                            if (linkedSides.hips) {
+                              handleSliderChange('rightHip', 'flexion', value);
+                            }
+                          }}
+                          min={-30}
+                          max={120}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
 
-                <BilateralControl
-                  title="Knee Joint"
-                  joint="Knee"
-                  controls={[
-                    { key: 'flexion', label: 'Flexion', min: 0, max: 140 },
-                    { key: 'varus', label: 'Varus/Valgus', min: -20, max: 20, unit: '° (- valgus, + varus)' },
-                    { key: 'tibialTorsion', label: 'Tibial Torsion', min: -30, max: 30 },
-                    { key: 'patellaAlta', label: 'Patella Alta/Baja', min: -20, max: 20, unit: 'mm' },
-                  ]}
-                />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Right Hip</Label>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => copyToSide('right', 'Hip')}
+                        >
+                          <Copy className="h-3 w-3 mr-1" />
+                          Copy
+                        </Button>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.rightHip.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightHip.flexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightHip', 'flexion', value);
+                            if (linkedSides.hips) {
+                              handleSliderChange('leftHip', 'flexion', value);
+                            }
+                          }}
+                          min={-30}
+                          max={120}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-                <Separator />
+                  <Separator />
 
-                <BilateralControl
-                  title="Ankle & Foot"
-                  joint="Ankle"
-                  controls={[
-                    { key: 'dorsiflexion', label: 'Dorsiflexion/Plantarflexion', min: -50, max: 30 },
-                    { key: 'inversion', label: 'Inversion/Eversion', min: -30, max: 20 },
-                    { key: 'archHeight', label: 'Arch Height', min: -20, max: 20, unit: 'mm (- flat, + cavus)' },
-                  ]}
-                />
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold">Knee Joints</h3>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={linkedSides.knees}
+                        onCheckedChange={(checked) => 
+                          setLinkedSides(prev => ({ ...prev, knees: checked }))
+                        }
+                      />
+                      <Label className="text-sm">Link Sides</Label>
+                    </div>
+                  </div>
+
+                  {/* Knee Controls */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Left Knee</Label>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.leftKnee.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftKnee.flexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftKnee', 'flexion', value);
+                            if (linkedSides.knees) {
+                              handleSliderChange('rightKnee', 'flexion', value);
+                            }
+                          }}
+                          min={-10}
+                          max={140}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Right Knee</Label>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.rightKnee.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightKnee.flexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightKnee', 'flexion', value);
+                            if (linkedSides.knees) {
+                              handleSliderChange('leftKnee', 'flexion', value);
+                            }
+                          }}
+                          min={-10}
+                          max={140}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </TabsContent>
 
               {/* Upper Body Tab */}
-              <TabsContent value="upper" className="space-y-6">
-                <BilateralControl
-                  title="Shoulder Complex"
-                  joint="Shoulder"
-                  controls={[
-                    { key: 'flexion', label: 'Flexion/Extension', min: -60, max: 180 },
-                    { key: 'abduction', label: 'Abduction/Adduction', min: -30, max: 180 },
-                    { key: 'internalRotation', label: 'Internal/External Rotation', min: -90, max: 90 },
-                    { key: 'protraction', label: 'Protraction/Retraction', min: -30, max: 30, unit: 'mm' },
-                    { key: 'elevation', label: 'Elevation/Depression', min: -20, max: 20, unit: 'mm' },
-                    { key: 'winging', label: 'Scapular Winging', min: 0, max: 30 },
-                  ]}
-                />
+              <TabsContent value="upper" className="space-y-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold">Shoulder Joints</h3>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={linkedSides.shoulders}
+                        onCheckedChange={(checked) => 
+                          setLinkedSides(prev => ({ ...prev, shoulders: checked }))
+                        }
+                      />
+                      <Label className="text-sm">Link Sides</Label>
+                    </div>
+                  </div>
 
-                <Separator />
+                  {/* Shoulder Controls */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Left Shoulder</Label>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.leftShoulder.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftShoulder.flexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftShoulder', 'flexion', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightShoulder', 'flexion', value);
+                            }
+                          }}
+                          min={-60}
+                          max={180}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Abduction ({modelConfig.leftShoulder.abduction}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftShoulder.abduction]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftShoulder', 'abduction', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightShoulder', 'abduction', value);
+                            }
+                          }}
+                          min={0}
+                          max={180}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
 
-                <BilateralControl
-                  title="Elbow Joint"
-                  joint="Elbow"
-                  controls={[
-                    { key: 'flexion', label: 'Flexion', min: 0, max: 145 },
-                    { key: 'carryingAngle', label: 'Carrying Angle', min: 0, max: 25, unit: '° (Normal: 5-15°)' },
-                    { key: 'pronation', label: 'Pronation/Supination', min: -90, max: 90 },
-                  ]}
-                />
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Right Shoulder</Label>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.rightShoulder.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightShoulder.flexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightShoulder', 'flexion', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftShoulder', 'flexion', value);
+                            }
+                          }}
+                          min={-60}
+                          max={180}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Abduction ({modelConfig.rightShoulder.abduction}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightShoulder.abduction]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightShoulder', 'abduction', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftShoulder', 'abduction', value);
+                            }
+                          }}
+                          min={0}
+                          max={180}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold">Elbow Joints</h3>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={linkedSides.elbows}
+                        onCheckedChange={(checked) => 
+                          setLinkedSides(prev => ({ ...prev, elbows: checked }))
+                        }
+                      />
+                      <Label className="text-sm">Link Sides</Label>
+                    </div>
+                  </div>
+
+                  {/* Elbow Controls */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Left Elbow</Label>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.leftElbow.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftElbow.flexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftElbow', 'flexion', value);
+                            if (linkedSides.elbows) {
+                              handleSliderChange('rightElbow', 'flexion', value);
+                            }
+                          }}
+                          min={0}
+                          max={145}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Right Elbow</Label>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.rightElbow.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightElbow.flexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightElbow', 'flexion', value);
+                            if (linkedSides.elbows) {
+                              handleSliderChange('leftElbow', 'flexion', value);
+                            }
+                          }}
+                          min={0}
+                          max={145}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
       </div>
+
+      {/* Configuration Summary */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Current Configuration</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="font-medium mb-1">Spine</p>
+              <p className="text-muted-foreground">
+                Cervical: {modelConfig.spine.cervicalLordosis}°<br/>
+                Thoracic: {modelConfig.spine.thoracicKyphosis}°<br/>
+                Lumbar: {modelConfig.spine.lumbarLordosis}°
+              </p>
+            </div>
+            <div>
+              <p className="font-medium mb-1">Hips</p>
+              <p className="text-muted-foreground">
+                L Flexion: {modelConfig.leftHip.flexion}°<br/>
+                R Flexion: {modelConfig.rightHip.flexion}°
+              </p>
+            </div>
+            <div>
+              <p className="font-medium mb-1">Knees</p>
+              <p className="text-muted-foreground">
+                L Flexion: {modelConfig.leftKnee.flexion}°<br/>
+                R Flexion: {modelConfig.rightKnee.flexion}°
+              </p>
+            </div>
+            <div>
+              <p className="font-medium mb-1">Shoulders</p>
+              <p className="text-muted-foreground">
+                L Flexion: {modelConfig.leftShoulder.flexion}°<br/>
+                R Flexion: {modelConfig.rightShoulder.flexion}°
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

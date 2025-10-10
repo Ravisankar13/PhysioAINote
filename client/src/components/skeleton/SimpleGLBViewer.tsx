@@ -27,7 +27,7 @@ export default function SimpleGLBViewer({ modelConfig, className = "" }: SimpleG
         <Suspense fallback={null}>
           <ambientLight intensity={0.5} />
           <directionalLight position={[10, 10, 5]} intensity={1} />
-          <Model url="/models/skeleton_character.glb" />
+          <Model url="/models/skeleton_rig.glb" />
           <OrbitControls />
         </Suspense>
       </Canvas>

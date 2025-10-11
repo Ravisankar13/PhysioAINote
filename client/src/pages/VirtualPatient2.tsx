@@ -71,10 +71,10 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
 
 // Fallback SVG visualization when WebGL is not available
 function SpineVisualization({ spineConfig }: { spineConfig: SpineConfig }) {
-  // Calculate curve positions based on configuration
-  const cervicalCurve = 50 + (spineConfig.cervicalLordosis + 40) * 0.5;
-  const thoracicCurve = 100 - (spineConfig.thoracicKyphosis - 35) * 0.8;
-  const lumbarCurve = 50 + (spineConfig.lumbarLordosis + 50) * 0.5;
+  // Calculate curve positions based on configuration - increased scale for visible changes
+  const cervicalCurve = 50 + (spineConfig.cervicalLordosis + 40) * 2.0;  // Increased from 0.5 to 2.0
+  const thoracicCurve = 100 - (spineConfig.thoracicKyphosis - 35) * 2.5;  // Increased from 0.8 to 2.5
+  const lumbarCurve = 50 + (spineConfig.lumbarLordosis + 50) * 2.0;  // Increased from 0.5 to 2.0
 
   return (
     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg">

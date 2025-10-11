@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import * as THREE from 'three';
 
 interface SpineConfig {
@@ -37,24 +38,14 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
         const boneName = child.name.toLowerCase();
         
         // Map bone names to spine regions
-        // These are common naming conventions, actual names may vary based on the model
         if (boneName.includes('spine') || boneName.includes('vertebra')) {
-          if (boneName.includes('cervical') || boneName.includes('neck') || boneName.includes('c1') || boneName.includes('c7')) {
+          if (boneName.includes('cervical') || boneName.includes('neck')) {
             bonesRef.current.cervical = child;
-          } else if (boneName.includes('thoracic') || boneName.includes('chest') || boneName.includes('t1') || boneName.includes('t12')) {
+          } else if (boneName.includes('thoracic') || boneName.includes('chest')) {
             bonesRef.current.thoracic = child;
-          } else if (boneName.includes('lumbar') || boneName.includes('lower') || boneName.includes('l1') || boneName.includes('l5')) {
+          } else if (boneName.includes('lumbar') || boneName.includes('lower')) {
             bonesRef.current.lumbar = child;
           }
-        }
-        
-        // Alternative naming convention
-        if (boneName === 'spine03' || boneName === 'spine_03') {
-          bonesRef.current.cervical = child;
-        } else if (boneName === 'spine02' || boneName === 'spine_02') {
-          bonesRef.current.thoracic = child;
-        } else if (boneName === 'spine01' || boneName === 'spine_01' || boneName === 'pelvis') {
-          bonesRef.current.lumbar = child;
         }
       }
     });
@@ -63,22 +54,102 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
   useFrame(() => {
     // Apply rotations to spine bones based on slider values
     if (bonesRef.current.cervical) {
-      // Cervical lordosis - negative values indicate lordotic curve (backward)
       bonesRef.current.cervical.rotation.x = THREE.MathUtils.degToRad(spineConfig.cervicalLordosis);
     }
     
     if (bonesRef.current.thoracic) {
-      // Thoracic kyphosis - positive values indicate kyphotic curve (forward)
       bonesRef.current.thoracic.rotation.x = THREE.MathUtils.degToRad(spineConfig.thoracicKyphosis);
     }
     
     if (bonesRef.current.lumbar) {
-      // Lumbar lordosis - negative values indicate lordotic curve (backward)
       bonesRef.current.lumbar.rotation.x = THREE.MathUtils.degToRad(spineConfig.lumbarLordosis);
     }
   });
 
   return <primitive object={scene} position={[0, -2, 0]} scale={1} />;
+}
+
+// Fallback SVG visualization when WebGL is not available
+function SpineVisualization({ spineConfig }: { spineConfig: SpineConfig }) {
+  // Calculate curve positions based on configuration
+  const cervicalCurve = 50 + (spineConfig.cervicalLordosis + 40) * 0.5;
+  const thoracicCurve = 100 - (spineConfig.thoracicKyphosis - 35) * 0.8;
+  const lumbarCurve = 50 + (spineConfig.lumbarLordosis + 50) * 0.5;
+
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg">
+      <svg
+        viewBox="0 0 300 500"
+        className="w-full h-full max-h-[450px]"
+        style={{ maxWidth: '300px' }}
+      >
+        {/* Background grid for reference */}
+        <defs>
+          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e0e0e0" strokeWidth="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="300" height="500" fill="url(#grid)" />
+        
+        {/* Spine visualization */}
+        <g transform="translate(150, 0)">
+          {/* Head */}
+          <circle cx="0" cy="40" r="25" fill="none" stroke="#4B5563" strokeWidth="2" />
+          
+          {/* Cervical spine with curve */}
+          <path
+            d={`M 0 65 Q ${cervicalCurve - 50} 90 0 120`}
+            fill="none"
+            stroke="#EF4444"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
+          
+          {/* Thoracic spine with curve */}
+          <path
+            d={`M 0 120 Q ${thoracicCurve - 100} 180 0 240`}
+            fill="none"
+            stroke="#F59E0B"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
+          
+          {/* Lumbar spine with curve */}
+          <path
+            d={`M 0 240 Q ${lumbarCurve - 50} 290 0 340`}
+            fill="none"
+            stroke="#10B981"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
+          
+          {/* Pelvis */}
+          <ellipse cx="0" cy="360" rx="40" ry="25" fill="none" stroke="#4B5563" strokeWidth="2" />
+          
+          {/* Ribs (simplified) */}
+          <g stroke="#94A3B8" strokeWidth="1" fill="none">
+            <ellipse cx="0" cy="140" rx="60" ry="15" />
+            <ellipse cx="0" cy="160" rx="65" ry="17" />
+            <ellipse cx="0" cy="180" rx="70" ry="19" />
+            <ellipse cx="0" cy="200" rx="68" ry="18" />
+            <ellipse cx="0" cy="220" rx="60" ry="15" />
+          </g>
+          
+          {/* Labels */}
+          <text x="80" y="95" fontSize="12" fill="#EF4444">Cervical</text>
+          <text x="80" y="180" fontSize="12" fill="#F59E0B">Thoracic</text>
+          <text x="80" y="290" fontSize="12" fill="#10B981">Lumbar</text>
+        </g>
+        
+        {/* Curve indicators */}
+        <g fontSize="10" fill="#6B7280">
+          <text x="10" y="480">
+            C: {spineConfig.cervicalLordosis}° | T: {spineConfig.thoracicKyphosis}° | L: {spineConfig.lumbarLordosis}°
+          </text>
+        </g>
+      </svg>
+    </div>
+  );
 }
 
 export default function VirtualPatient2() {
@@ -90,6 +161,14 @@ export default function VirtualPatient2() {
   };
 
   const [spineConfig, setSpineConfig] = useState<SpineConfig>(defaultSpineConfig);
+  const [isWebGLAvailable, setIsWebGLAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // Check for WebGL availability
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    setIsWebGLAvailable(!!gl);
+  }, []);
 
   const handleSliderChange = (property: keyof SpineConfig, value: number[]) => {
     setSpineConfig(prev => ({
@@ -111,6 +190,15 @@ export default function VirtualPatient2() {
         </p>
       </div>
 
+      {isWebGLAvailable === false && (
+        <Alert className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            3D visualization requires WebGL. Showing simplified spine view with your adjustments.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 3D Model Display - Takes up 2 columns */}
         <Card className="h-[600px] lg:col-span-2">
@@ -118,37 +206,28 @@ export default function VirtualPatient2() {
             <CardTitle>Skeleton Model</CardTitle>
           </CardHeader>
           <CardContent className="h-[calc(100%-80px)]">
-            <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
-              <Canvas 
-                camera={{ position: [3, 0, 8], fov: 45 }}
-                style={{ background: 'transparent' }}
-              >
-                <Suspense fallback={null}>
-                  {/* Lighting setup */}
-                  <ambientLight intensity={0.6} />
-                  <directionalLight 
-                    position={[10, 10, 5]} 
-                    intensity={0.8} 
-                    castShadow 
-                  />
-                  <directionalLight 
-                    position={[-10, 10, -5]} 
-                    intensity={0.4} 
-                  />
-                  
-                  {/* 3D Skeleton Model with spine configuration */}
-                  <SkeletonModel spineConfig={spineConfig} />
-                  
-                  {/* Camera Controls - allows rotation and zoom */}
-                  <OrbitControls 
-                    enablePan={true}
-                    enableZoom={true}
-                    enableRotate={true}
-                    autoRotate={false}
-                  />
-                </Suspense>
-              </Canvas>
-            </div>
+            {isWebGLAvailable === null ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <p className="text-muted-foreground">Loading visualization...</p>
+              </div>
+            ) : isWebGLAvailable ? (
+              <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
+                <Canvas 
+                  camera={{ position: [3, 0, 8], fov: 45 }}
+                  style={{ background: 'transparent' }}
+                >
+                  <Suspense fallback={null}>
+                    <ambientLight intensity={0.6} />
+                    <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
+                    <directionalLight position={[-10, 10, -5]} intensity={0.4} />
+                    <SkeletonModel spineConfig={spineConfig} />
+                    <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} autoRotate={false} />
+                  </Suspense>
+                </Canvas>
+              </div>
+            ) : (
+              <SpineVisualization spineConfig={spineConfig} />
+            )}
           </CardContent>
         </Card>
 
@@ -299,8 +378,8 @@ export default function VirtualPatient2() {
       </div>
 
       <div className="mt-4 text-sm text-muted-foreground">
-        <p>• Use sliders to adjust spine curvatures</p>
-        <p>• Mouse controls: rotate (left-click), zoom (scroll), pan (right-click)</p>
+        <p>• Use sliders to adjust spine curvatures and see the changes in real-time</p>
+        <p>• The visualization shows cervical (red), thoracic (orange), and lumbar (green) curves</p>
         <p>• Clinical reference ranges are provided for each curve</p>
       </div>
     </div>

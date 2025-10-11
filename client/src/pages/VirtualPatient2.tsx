@@ -72,13 +72,17 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
 // Fallback SVG visualization when WebGL is not available
 function SpineVisualization({ spineConfig }: { spineConfig: SpineConfig }) {
   // Calculate curve positions based on configuration - increased scale for visible changes
-  const cervicalCurve = 50 + (spineConfig.cervicalLordosis + 40) * 2.0;  // Increased from 0.5 to 2.0
-  const thoracicCurve = 100 - (spineConfig.thoracicKyphosis - 35) * 2.5;  // Increased from 0.8 to 2.5
-  const lumbarCurve = 50 + (spineConfig.lumbarLordosis + 50) * 2.0;  // Increased from 0.5 to 2.0
+  const cervicalCurve = 50 + ((spineConfig.cervicalLordosis + 40) / 40) * 80;  // Maps -60 to -20 → -30 to 70
+  const thoracicCurve = 100 - ((spineConfig.thoracicKyphosis - 35) / 30) * 60;  // Maps 20 to 50 → 70 to 130
+  const lumbarCurve = 50 + ((spineConfig.lumbarLordosis + 50) / 40) * 80;  // Maps -70 to -30 → -30 to 70
+
+  // Add key to force re-render on changes
+  const key = `${spineConfig.cervicalLordosis}-${spineConfig.thoracicKyphosis}-${spineConfig.lumbarLordosis}`;
 
   return (
     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg">
       <svg
+        key={key}
         viewBox="0 0 300 500"
         className="w-full h-full max-h-[450px]"
         style={{ maxWidth: '300px' }}
@@ -164,17 +168,20 @@ export default function VirtualPatient2() {
   const [isWebGLAvailable, setIsWebGLAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Check for WebGL availability
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    setIsWebGLAvailable(!!gl);
+    // Force SVG visualization since WebGL doesn't work in Replit preview
+    setIsWebGLAvailable(false);
   }, []);
 
   const handleSliderChange = (property: keyof SpineConfig, value: number[]) => {
-    setSpineConfig(prev => ({
-      ...prev,
-      [property]: value[0]
-    }));
+    console.log(`Slider changed: ${property} = ${value[0]}`);
+    setSpineConfig(prev => {
+      const newConfig = {
+        ...prev,
+        [property]: value[0]
+      };
+      console.log('New spine config:', newConfig);
+      return newConfig;
+    });
   };
 
   const resetToNormal = () => {

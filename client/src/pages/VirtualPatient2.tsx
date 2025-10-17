@@ -5,8 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { RotateCcw, Loader2 } from 'lucide-react';
 import * as THREE from 'three';
 
 interface SpineConfig {
@@ -20,141 +19,126 @@ interface SkeletonModelProps {
 }
 
 function SkeletonModel({ spineConfig }: SkeletonModelProps) {
-  const { scene } = useGLTF('/models/skeleton_rig.glb');
+  const { scene } = useGLTF('/models/rigged-skeleton.glb');
   const bonesRef = useRef<{
-    cervical: THREE.Bone | null;
-    thoracic: THREE.Bone | null;
-    lumbar: THREE.Bone | null;
+    cervical: THREE.Bone[];
+    thoracic: THREE.Bone[];
+    lumbar: THREE.Bone[];
+    allBones: THREE.Bone[];
   }>({
-    cervical: null,
-    thoracic: null,
-    lumbar: null
+    cervical: [],
+    thoracic: [],
+    lumbar: [],
+    allBones: []
   });
 
   useEffect(() => {
-    // Find spine bones in the model hierarchy
+    // Debug: Log all bones found in the model
+    const allBones: THREE.Bone[] = [];
+    const spineBonesMap: { [key: string]: THREE.Bone } = {};
+    
     scene.traverse((child) => {
       if (child instanceof THREE.Bone) {
-        const boneName = child.name.toLowerCase();
+        allBones.push(child);
+        console.log('Found bone:', child.name, 'at position:', child.position);
         
-        // Map bone names to spine regions
-        if (boneName.includes('spine') || boneName.includes('vertebra')) {
-          if (boneName.includes('cervical') || boneName.includes('neck')) {
-            bonesRef.current.cervical = child;
-          } else if (boneName.includes('thoracic') || boneName.includes('chest')) {
-            bonesRef.current.thoracic = child;
-          } else if (boneName.includes('lumbar') || boneName.includes('lower')) {
-            bonesRef.current.lumbar = child;
-          }
+        // Store all spine-related bones
+        const boneName = child.name.toLowerCase();
+        if (boneName.includes('spine') || boneName.includes('vertebra') || 
+            boneName.includes('neck') || boneName.includes('back') || 
+            boneName.includes('chest') || boneName.includes('torso')) {
+          spineBonesMap[child.name] = child;
         }
       }
+    });
+    
+    console.log('Total bones found:', allBones.length);
+    console.log('Spine-related bones:', Object.keys(spineBonesMap));
+    
+    // Try different bone naming conventions
+    // Some models use Spine, Spine1, Spine2 or mixamorig:Spine
+    const cervicalBones: THREE.Bone[] = [];
+    const thoracicBones: THREE.Bone[] = [];
+    const lumbarBones: THREE.Bone[] = [];
+    
+    allBones.forEach((bone) => {
+      const name = bone.name.toLowerCase();
+      
+      // Check for neck/cervical bones (C1-C7)
+      if (name.includes('neck') || name.includes('cervical') || 
+          name.includes('head') && name.includes('spine')) {
+        cervicalBones.push(bone);
+      }
+      // Check for chest/thoracic bones (T1-T12)
+      else if (name.includes('spine2') || name.includes('chest') || 
+               name.includes('thoracic') || name.includes('upper_spine')) {
+        thoracicBones.push(bone);
+      }
+      // Check for lower back/lumbar bones (L1-L5)
+      else if (name.includes('spine1') || name.includes('spine') && !name.includes('2') ||
+               name.includes('lumbar') || name.includes('lower_spine') || 
+               name.includes('hips') && name.includes('spine')) {
+        lumbarBones.push(bone);
+      }
+    });
+    
+    bonesRef.current = {
+      cervical: cervicalBones,
+      thoracic: thoracicBones,
+      lumbar: lumbarBones,
+      allBones: allBones
+    };
+    
+    console.log('Mapped spine bones:', {
+      cervical: cervicalBones.map(b => b.name),
+      thoracic: thoracicBones.map(b => b.name),
+      lumbar: lumbarBones.map(b => b.name)
     });
   }, [scene]);
 
   useFrame(() => {
     // Apply rotations to spine bones based on slider values
-    if (bonesRef.current.cervical) {
-      bonesRef.current.cervical.rotation.x = THREE.MathUtils.degToRad(spineConfig.cervicalLordosis);
-    }
+    // Convert degrees to radians and apply incremental rotations
     
-    if (bonesRef.current.thoracic) {
-      bonesRef.current.thoracic.rotation.x = THREE.MathUtils.degToRad(spineConfig.thoracicKyphosis);
-    }
+    // Cervical lordosis (neck curve)
+    bonesRef.current.cervical.forEach((bone, index) => {
+      const rotationFactor = (index + 1) / Math.max(bonesRef.current.cervical.length, 1);
+      bone.rotation.x = THREE.MathUtils.degToRad(spineConfig.cervicalLordosis * rotationFactor * 0.5);
+    });
     
-    if (bonesRef.current.lumbar) {
-      bonesRef.current.lumbar.rotation.x = THREE.MathUtils.degToRad(spineConfig.lumbarLordosis);
+    // Thoracic kyphosis (upper back curve)
+    bonesRef.current.thoracic.forEach((bone, index) => {
+      const rotationFactor = (index + 1) / Math.max(bonesRef.current.thoracic.length, 1);
+      bone.rotation.x = THREE.MathUtils.degToRad(spineConfig.thoracicKyphosis * rotationFactor * 0.5);
+    });
+    
+    // Lumbar lordosis (lower back curve)
+    bonesRef.current.lumbar.forEach((bone, index) => {
+      const rotationFactor = (index + 1) / Math.max(bonesRef.current.lumbar.length, 1);
+      bone.rotation.x = THREE.MathUtils.degToRad(spineConfig.lumbarLordosis * rotationFactor * 0.5);
+    });
+    
+    // If no specific spine bones were found, try to rotate any spine bones generically
+    if (bonesRef.current.cervical.length === 0 && 
+        bonesRef.current.thoracic.length === 0 && 
+        bonesRef.current.lumbar.length === 0) {
+      
+      bonesRef.current.allBones.forEach((bone) => {
+        const name = bone.name.toLowerCase();
+        if (name.includes('spine') || name.includes('neck')) {
+          // Apply a combined rotation based on all three sliders
+          const avgRotation = (spineConfig.cervicalLordosis + 
+                              spineConfig.thoracicKyphosis + 
+                              spineConfig.lumbarLordosis) / 3;
+          bone.rotation.x = THREE.MathUtils.degToRad(avgRotation * 0.3);
+        }
+      });
     }
   });
 
   return <primitive object={scene} position={[0, -2, 0]} scale={1} />;
 }
 
-// Fallback SVG visualization when WebGL is not available
-function SpineVisualization({ spineConfig }: { spineConfig: SpineConfig }) {
-  // Calculate curve positions based on configuration - increased scale for visible changes
-  const cervicalCurve = 50 + ((spineConfig.cervicalLordosis + 40) / 40) * 80;  // Maps -60 to -20 → -30 to 70
-  const thoracicCurve = 100 - ((spineConfig.thoracicKyphosis - 35) / 30) * 60;  // Maps 20 to 50 → 70 to 130
-  const lumbarCurve = 50 + ((spineConfig.lumbarLordosis + 50) / 40) * 80;  // Maps -70 to -30 → -30 to 70
-
-  // Add key to force re-render on changes
-  const key = `${spineConfig.cervicalLordosis}-${spineConfig.thoracicKyphosis}-${spineConfig.lumbarLordosis}`;
-
-  return (
-    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg">
-      <svg
-        key={key}
-        viewBox="0 0 300 500"
-        className="w-full h-full max-h-[450px]"
-        style={{ maxWidth: '300px' }}
-      >
-        {/* Background grid for reference */}
-        <defs>
-          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e0e0e0" strokeWidth="0.5"/>
-          </pattern>
-        </defs>
-        <rect width="300" height="500" fill="url(#grid)" />
-        
-        {/* Spine visualization */}
-        <g transform="translate(150, 0)">
-          {/* Head */}
-          <circle cx="0" cy="40" r="25" fill="none" stroke="#4B5563" strokeWidth="2" />
-          
-          {/* Cervical spine with curve */}
-          <path
-            d={`M 0 65 Q ${cervicalCurve - 50} 90 0 120`}
-            fill="none"
-            stroke="#EF4444"
-            strokeWidth="4"
-            strokeLinecap="round"
-          />
-          
-          {/* Thoracic spine with curve */}
-          <path
-            d={`M 0 120 Q ${thoracicCurve - 100} 180 0 240`}
-            fill="none"
-            stroke="#F59E0B"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
-          
-          {/* Lumbar spine with curve */}
-          <path
-            d={`M 0 240 Q ${lumbarCurve - 50} 290 0 340`}
-            fill="none"
-            stroke="#10B981"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
-          
-          {/* Pelvis */}
-          <ellipse cx="0" cy="360" rx="40" ry="25" fill="none" stroke="#4B5563" strokeWidth="2" />
-          
-          {/* Ribs (simplified) */}
-          <g stroke="#94A3B8" strokeWidth="1" fill="none">
-            <ellipse cx="0" cy="140" rx="60" ry="15" />
-            <ellipse cx="0" cy="160" rx="65" ry="17" />
-            <ellipse cx="0" cy="180" rx="70" ry="19" />
-            <ellipse cx="0" cy="200" rx="68" ry="18" />
-            <ellipse cx="0" cy="220" rx="60" ry="15" />
-          </g>
-          
-          {/* Labels */}
-          <text x="80" y="95" fontSize="12" fill="#EF4444">Cervical</text>
-          <text x="80" y="180" fontSize="12" fill="#F59E0B">Thoracic</text>
-          <text x="80" y="290" fontSize="12" fill="#10B981">Lumbar</text>
-        </g>
-        
-        {/* Curve indicators */}
-        <g fontSize="10" fill="#6B7280">
-          <text x="10" y="480">
-            C: {spineConfig.cervicalLordosis}° | T: {spineConfig.thoracicKyphosis}° | L: {spineConfig.lumbarLordosis}°
-          </text>
-        </g>
-      </svg>
-    </div>
-  );
-}
 
 export default function VirtualPatient2() {
   // Default anatomical values
@@ -165,12 +149,6 @@ export default function VirtualPatient2() {
   };
 
   const [spineConfig, setSpineConfig] = useState<SpineConfig>(defaultSpineConfig);
-  const [isWebGLAvailable, setIsWebGLAvailable] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    // Force SVG visualization since WebGL doesn't work in Replit preview
-    setIsWebGLAvailable(false);
-  }, []);
 
   const handleSliderChange = (property: keyof SpineConfig, value: number[]) => {
     console.log(`Slider changed: ${property} = ${value[0]}`);
@@ -197,44 +175,38 @@ export default function VirtualPatient2() {
         </p>
       </div>
 
-      {isWebGLAvailable === false && (
-        <Alert className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            3D visualization requires WebGL. Showing simplified spine view with your adjustments.
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 3D Model Display - Takes up 2 columns */}
         <Card className="h-[600px] lg:col-span-2">
           <CardHeader>
-            <CardTitle>Skeleton Model</CardTitle>
+            <CardTitle>3D Rigged Skeleton Model</CardTitle>
           </CardHeader>
           <CardContent className="h-[calc(100%-80px)]">
-            {isWebGLAvailable === null ? (
-              <div className="w-full h-full flex items-center justify-center">
-                <p className="text-muted-foreground">Loading visualization...</p>
-              </div>
-            ) : isWebGLAvailable ? (
-              <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
-                <Canvas 
-                  camera={{ position: [3, 0, 8], fov: 45 }}
-                  style={{ background: 'transparent' }}
-                >
-                  <Suspense fallback={null}>
-                    <ambientLight intensity={0.6} />
-                    <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
-                    <directionalLight position={[-10, 10, -5]} intensity={0.4} />
-                    <SkeletonModel spineConfig={spineConfig} />
-                    <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} autoRotate={false} />
-                  </Suspense>
-                </Canvas>
-              </div>
-            ) : (
-              <SpineVisualization spineConfig={spineConfig} />
-            )}
+            <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
+              <Canvas 
+                camera={{ position: [3, 0, 8], fov: 45 }}
+                style={{ background: 'transparent' }}
+              >
+                <Suspense fallback={
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                }>
+                  <ambientLight intensity={0.6} />
+                  <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
+                  <directionalLight position={[-10, 10, -5]} intensity={0.4} />
+                  <SkeletonModel spineConfig={spineConfig} />
+                  <OrbitControls 
+                    enablePan={true} 
+                    enableZoom={true} 
+                    enableRotate={true} 
+                    autoRotate={false}
+                    minDistance={3}
+                    maxDistance={20}
+                  />
+                </Suspense>
+              </Canvas>
+            </div>
           </CardContent>
         </Card>
 

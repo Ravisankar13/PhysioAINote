@@ -19,7 +19,10 @@ interface SkeletonModelProps {
 }
 
 function SkeletonModel({ spineConfig }: SkeletonModelProps) {
-  const { scene } = useGLTF('/models/rigged-skeleton.glb');
+  const modelPath = '/models/rigged-skeleton.glb';
+  console.log('Starting to load model from:', modelPath);
+  
+  const { scene } = useGLTF(modelPath);
   const bonesRef = useRef<{
     cervical: THREE.Bone[];
     thoracic: THREE.Bone[];
@@ -33,6 +36,8 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
   });
 
   useEffect(() => {
+    console.log('SkeletonModel useEffect triggered, scene:', scene);
+    
     // Debug: Log all bones found in the model
     const allBones: THREE.Bone[] = [];
     const spineBonesMap: { [key: string]: THREE.Bone } = {};
@@ -196,22 +201,8 @@ export default function VirtualPatient2() {
   };
 
   const [spineConfig, setSpineConfig] = useState<SpineConfig>(defaultSpineConfig);
-  const [webGLSupported, setWebGLSupported] = useState(true);
-
-  useEffect(() => {
-    // Check for WebGL support
-    try {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (!gl) {
-        setWebGLSupported(false);
-        console.warn('WebGL not supported in this environment');
-      }
-    } catch (e) {
-      setWebGLSupported(false);
-      console.error('WebGL check failed:', e);
-    }
-  }, []);
+  const [modelLoading, setModelLoading] = useState(true);
+  const [modelError, setModelError] = useState<string | null>(null);
 
   const handleSliderChange = (property: keyof SpineConfig, value: number[]) => {
     console.log(`Slider changed: ${property} = ${value[0]}`);
@@ -273,48 +264,29 @@ export default function VirtualPatient2() {
               }
             >
               <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
-                {webGLSupported ? (
-                  <Canvas 
-                    camera={{ position: [3, 0, 8], fov: 45 }}
-                    style={{ background: 'transparent' }}
-                  >
-                    <Suspense fallback={null}>
-                      <ambientLight intensity={0.6} />
-                      <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
-                      <directionalLight position={[-10, 10, -5]} intensity={0.4} />
-                      <SkeletonModel spineConfig={spineConfig} />
-                      <OrbitControls 
-                        enablePan={true} 
-                        enableZoom={true} 
-                        enableRotate={true} 
-                        autoRotate={false}
-                        minDistance={3}
-                        maxDistance={20}
-                      />
-                    </Suspense>
-                  </Canvas>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center p-8">
-                    <div className="text-center">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                        WebGL Not Supported
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-4">
-                        Your environment doesn't support WebGL, which is required for 3D rendering.
-                      </p>
-                      <div className="bg-blue-50 p-4 rounded-lg">
-                        <p className="text-sm text-blue-800">
-                          Current Spine Values:
-                        </p>
-                        <div className="mt-2 space-y-1 font-mono text-xs">
-                          <div>Cervical: {spineConfig.cervicalLordosis}°</div>
-                          <div>Thoracic: {spineConfig.thoracicKyphosis}°</div>
-                          <div>Lumbar: {spineConfig.lumbarLordosis}°</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <Canvas 
+                  camera={{ position: [3, 0, 8], fov: 45 }}
+                  style={{ background: 'transparent' }}
+                  onCreated={({ gl }) => {
+                    console.log('Canvas created successfully');
+                    console.log('WebGL context:', gl);
+                  }}
+                >
+                  <Suspense fallback={null}>
+                    <ambientLight intensity={0.6} />
+                    <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
+                    <directionalLight position={[-10, 10, -5]} intensity={0.4} />
+                    <SkeletonModel spineConfig={spineConfig} />
+                    <OrbitControls 
+                      enablePan={true} 
+                      enableZoom={true} 
+                      enableRotate={true} 
+                      autoRotate={false}
+                      minDistance={3}
+                      maxDistance={20}
+                    />
+                  </Suspense>
+                </Canvas>
               </div>
             </Canvas3DErrorBoundary>
           </CardContent>

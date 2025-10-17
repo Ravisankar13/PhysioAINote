@@ -134,6 +134,7 @@
     "tailwindcss-animate": "^1.0.7",
     "terser": "^5.44.0",
     "three": "^0.161.0",
+    "three-css3drenderer": "^1.0.1",
     "three-fbx-loader": "^1.0.3",
     "three-gltf-loader": "^1.111.0",
     "three-obj-loader": "^1.1.3",

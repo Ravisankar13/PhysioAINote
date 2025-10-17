@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Loader2 } from 'lucide-react';
 import * as THREE from 'three';
+import CSS3DSkeleton from '@/components/3d/CSS3DSkeleton';
 
 interface SpineConfig {
   cervicalLordosis: number;
@@ -236,62 +237,12 @@ export default function VirtualPatient2() {
         {/* 3D Model Display - Takes up 2 columns */}
         <Card className="h-[600px] lg:col-span-2">
           <CardHeader>
-            <CardTitle>3D Rigged Skeleton Model</CardTitle>
+            <CardTitle>3D CSS Skeleton Model (WebGL-Free)</CardTitle>
           </CardHeader>
           <CardContent className="h-[calc(100%-80px)]">
-            <Canvas3DErrorBoundary
-              fallback={
-                <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex flex-col items-center justify-center p-8">
-                  <div className="text-center">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      3D Visualization Unavailable
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                      WebGL is required for 3D skeleton rendering but is not available in this environment.
-                    </p>
-                    <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                      <p className="text-sm text-blue-800">
-                        Current Spine Configuration:
-                      </p>
-                      <div className="mt-2 space-y-1 font-mono text-xs">
-                        <div>Cervical: {spineConfig.cervicalLordosis}°</div>
-                        <div>Thoracic: {spineConfig.thoracicKyphosis}°</div>
-                        <div>Lumbar: {spineConfig.lumbarLordosis}°</div>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Try opening this page in a browser with WebGL support or enable hardware acceleration.
-                    </p>
-                  </div>
-                </div>
-              }
-            >
-              <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
-                <Canvas 
-                  camera={{ position: [3, 0, 8], fov: 45 }}
-                  style={{ background: 'transparent' }}
-                  onCreated={({ gl }) => {
-                    console.log('Canvas created successfully');
-                    console.log('WebGL context:', gl);
-                  }}
-                >
-                  <Suspense fallback={null}>
-                    <ambientLight intensity={0.6} />
-                    <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
-                    <directionalLight position={[-10, 10, -5]} intensity={0.4} />
-                    <SkeletonModel spineConfig={spineConfig} />
-                    <OrbitControls 
-                      enablePan={true} 
-                      enableZoom={true} 
-                      enableRotate={true} 
-                      autoRotate={false}
-                      minDistance={3}
-                      maxDistance={20}
-                    />
-                  </Suspense>
-                </Canvas>
-              </div>
-            </Canvas3DErrorBoundary>
+            <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
+              <CSS3DSkeleton spineConfig={spineConfig} />
+            </div>
           </CardContent>
         </Card>
 

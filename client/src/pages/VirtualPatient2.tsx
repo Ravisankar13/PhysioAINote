@@ -1,4 +1,4 @@
-import { Suspense, useState, useRef, useEffect } from 'react';
+import React, { Suspense, useState, useRef, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -161,6 +161,32 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
 }
 
 
+// Error boundary component for 3D rendering failures
+class Canvas3DErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('3D Canvas Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
 export default function VirtualPatient2() {
   // Default anatomical values
   const defaultSpineConfig: SpineConfig = {
@@ -170,6 +196,22 @@ export default function VirtualPatient2() {
   };
 
   const [spineConfig, setSpineConfig] = useState<SpineConfig>(defaultSpineConfig);
+  const [webGLSupported, setWebGLSupported] = useState(true);
+
+  useEffect(() => {
+    // Check for WebGL support
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (!gl) {
+        setWebGLSupported(false);
+        console.warn('WebGL not supported in this environment');
+      }
+    } catch (e) {
+      setWebGLSupported(false);
+      console.error('WebGL check failed:', e);
+    }
+  }, []);
 
   const handleSliderChange = (property: keyof SpineConfig, value: number[]) => {
     console.log(`Slider changed: ${property} = ${value[0]}`);
@@ -203,31 +245,78 @@ export default function VirtualPatient2() {
             <CardTitle>3D Rigged Skeleton Model</CardTitle>
           </CardHeader>
           <CardContent className="h-[calc(100%-80px)]">
-            <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
-              <Canvas 
-                camera={{ position: [3, 0, 8], fov: 45 }}
-                style={{ background: 'transparent' }}
-              >
-                <Suspense fallback={
-                  <div className="flex items-center justify-center h-full">
-                    <Loader2 className="h-8 w-8 animate-spin" />
+            <Canvas3DErrorBoundary
+              fallback={
+                <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex flex-col items-center justify-center p-8">
+                  <div className="text-center">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      3D Visualization Unavailable
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      WebGL is required for 3D skeleton rendering but is not available in this environment.
+                    </p>
+                    <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                      <p className="text-sm text-blue-800">
+                        Current Spine Configuration:
+                      </p>
+                      <div className="mt-2 space-y-1 font-mono text-xs">
+                        <div>Cervical: {spineConfig.cervicalLordosis}°</div>
+                        <div>Thoracic: {spineConfig.thoracicKyphosis}°</div>
+                        <div>Lumbar: {spineConfig.lumbarLordosis}°</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Try opening this page in a browser with WebGL support or enable hardware acceleration.
+                    </p>
                   </div>
-                }>
-                  <ambientLight intensity={0.6} />
-                  <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
-                  <directionalLight position={[-10, 10, -5]} intensity={0.4} />
-                  <SkeletonModel spineConfig={spineConfig} />
-                  <OrbitControls 
-                    enablePan={true} 
-                    enableZoom={true} 
-                    enableRotate={true} 
-                    autoRotate={false}
-                    minDistance={3}
-                    maxDistance={20}
-                  />
-                </Suspense>
-              </Canvas>
-            </div>
+                </div>
+              }
+            >
+              <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
+                {webGLSupported ? (
+                  <Canvas 
+                    camera={{ position: [3, 0, 8], fov: 45 }}
+                    style={{ background: 'transparent' }}
+                  >
+                    <Suspense fallback={null}>
+                      <ambientLight intensity={0.6} />
+                      <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
+                      <directionalLight position={[-10, 10, -5]} intensity={0.4} />
+                      <SkeletonModel spineConfig={spineConfig} />
+                      <OrbitControls 
+                        enablePan={true} 
+                        enableZoom={true} 
+                        enableRotate={true} 
+                        autoRotate={false}
+                        minDistance={3}
+                        maxDistance={20}
+                      />
+                    </Suspense>
+                  </Canvas>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-8">
+                    <div className="text-center">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        WebGL Not Supported
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Your environment doesn't support WebGL, which is required for 3D rendering.
+                      </p>
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <p className="text-sm text-blue-800">
+                          Current Spine Values:
+                        </p>
+                        <div className="mt-2 space-y-1 font-mono text-xs">
+                          <div>Cervical: {spineConfig.cervicalLordosis}°</div>
+                          <div>Thoracic: {spineConfig.thoracicKyphosis}°</div>
+                          <div>Lumbar: {spineConfig.lumbarLordosis}°</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Canvas3DErrorBoundary>
           </CardContent>
         </Card>
 

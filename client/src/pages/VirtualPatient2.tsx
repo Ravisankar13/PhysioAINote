@@ -98,39 +98,60 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
 
   useFrame(() => {
     // Apply rotations to spine bones based on slider values
-    // Convert degrees to radians and apply incremental rotations
+    // More aggressive rotation for visible effect
     
-    // Cervical lordosis (neck curve)
+    // Cervical lordosis (neck curve) - negative values bend forward
     bonesRef.current.cervical.forEach((bone, index) => {
       const rotationFactor = (index + 1) / Math.max(bonesRef.current.cervical.length, 1);
-      bone.rotation.x = THREE.MathUtils.degToRad(spineConfig.cervicalLordosis * rotationFactor * 0.5);
+      const rotation = THREE.MathUtils.degToRad(spineConfig.cervicalLordosis * rotationFactor);
+      bone.rotation.x = rotation;
+      // Also apply some z rotation for more visible effect
+      bone.rotation.z = rotation * 0.2;
     });
     
-    // Thoracic kyphosis (upper back curve)
+    // Thoracic kyphosis (upper back curve) - positive values bend backward
     bonesRef.current.thoracic.forEach((bone, index) => {
       const rotationFactor = (index + 1) / Math.max(bonesRef.current.thoracic.length, 1);
-      bone.rotation.x = THREE.MathUtils.degToRad(spineConfig.thoracicKyphosis * rotationFactor * 0.5);
+      const rotation = THREE.MathUtils.degToRad(spineConfig.thoracicKyphosis * rotationFactor);
+      bone.rotation.x = rotation;
+      bone.rotation.z = rotation * 0.1;
     });
     
-    // Lumbar lordosis (lower back curve)
+    // Lumbar lordosis (lower back curve) - negative values bend forward
     bonesRef.current.lumbar.forEach((bone, index) => {
       const rotationFactor = (index + 1) / Math.max(bonesRef.current.lumbar.length, 1);
-      bone.rotation.x = THREE.MathUtils.degToRad(spineConfig.lumbarLordosis * rotationFactor * 0.5);
+      const rotation = THREE.MathUtils.degToRad(spineConfig.lumbarLordosis * rotationFactor);
+      bone.rotation.x = rotation;
+      bone.rotation.z = rotation * 0.15;
     });
     
-    // If no specific spine bones were found, try to rotate any spine bones generically
+    // If no specific spine bones were found, apply rotation to all spine-related bones
     if (bonesRef.current.cervical.length === 0 && 
         bonesRef.current.thoracic.length === 0 && 
         bonesRef.current.lumbar.length === 0) {
       
+      let spineIndex = 0;
       bonesRef.current.allBones.forEach((bone) => {
         const name = bone.name.toLowerCase();
-        if (name.includes('spine') || name.includes('neck')) {
-          // Apply a combined rotation based on all three sliders
-          const avgRotation = (spineConfig.cervicalLordosis + 
-                              spineConfig.thoracicKyphosis + 
-                              spineConfig.lumbarLordosis) / 3;
-          bone.rotation.x = THREE.MathUtils.degToRad(avgRotation * 0.3);
+        
+        if (name.includes('spine') || name.includes('neck') || name.includes('chest')) {
+          spineIndex++;
+          
+          // Determine which region based on position in hierarchy
+          let rotation = 0;
+          if (spineIndex <= 2) {
+            // Upper spine/neck - use cervical values
+            rotation = THREE.MathUtils.degToRad(spineConfig.cervicalLordosis * 0.8);
+          } else if (spineIndex <= 5) {
+            // Mid spine - use thoracic values
+            rotation = THREE.MathUtils.degToRad(spineConfig.thoracicKyphosis * 0.8);
+          } else {
+            // Lower spine - use lumbar values
+            rotation = THREE.MathUtils.degToRad(spineConfig.lumbarLordosis * 0.8);
+          }
+          
+          bone.rotation.x = rotation;
+          bone.rotation.z = rotation * 0.2;
         }
       });
     }

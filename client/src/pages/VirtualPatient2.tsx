@@ -192,6 +192,9 @@ class Canvas3DErrorBoundary extends React.Component<
   }
 }
 
+// Preload the model
+useGLTF.preload('/models/rigged-skeleton.glb');
+
 export default function VirtualPatient2() {
   // Default anatomical values
   const defaultSpineConfig: SpineConfig = {

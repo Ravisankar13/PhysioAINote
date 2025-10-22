@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Loader2 } from 'lucide-react';
 import * as THREE from 'three';
-import CSS3DSkeleton from '@/components/3d/CSS3DSkeleton';
 
 interface SpineConfig {
   cervicalLordosis: number;
@@ -167,31 +166,6 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
 }
 
 
-// Error boundary component for 3D rendering failures
-class Canvas3DErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback: React.ReactNode },
-  { hasError: boolean }
-> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('3D Canvas Error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-    return this.props.children;
-  }
-}
 
 // Preload the model
 useGLTF.preload('/models/rigged-skeleton.glb');
@@ -205,8 +179,6 @@ export default function VirtualPatient2() {
   };
 
   const [spineConfig, setSpineConfig] = useState<SpineConfig>(defaultSpineConfig);
-  const [modelLoading, setModelLoading] = useState(true);
-  const [modelError, setModelError] = useState<string | null>(null);
 
   const handleSliderChange = (property: keyof SpineConfig, value: number[]) => {
     console.log(`Slider changed: ${property} = ${value[0]}`);
@@ -237,11 +209,29 @@ export default function VirtualPatient2() {
         {/* 3D Model Display - Takes up 2 columns */}
         <Card className="h-[600px] lg:col-span-2">
           <CardHeader>
-            <CardTitle>3D CSS Skeleton Model (WebGL-Free)</CardTitle>
+            <CardTitle>3D Rigged Skeleton Model</CardTitle>
           </CardHeader>
           <CardContent className="h-[calc(100%-80px)]">
             <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg">
-              <CSS3DSkeleton spineConfig={spineConfig} />
+              <Canvas 
+                camera={{ position: [3, 0, 8], fov: 45 }}
+                style={{ background: 'transparent' }}
+              >
+                <Suspense fallback={null}>
+                  <ambientLight intensity={0.6} />
+                  <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
+                  <directionalLight position={[-10, 10, -5]} intensity={0.4} />
+                  <SkeletonModel spineConfig={spineConfig} />
+                  <OrbitControls 
+                    enablePan={true} 
+                    enableZoom={true} 
+                    enableRotate={true} 
+                    autoRotate={false}
+                    minDistance={3}
+                    maxDistance={20}
+                  />
+                </Suspense>
+              </Canvas>
             </div>
           </CardContent>
         </Card>

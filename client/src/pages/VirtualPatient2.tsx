@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Loader2 } from 'lucide-react';
 import * as THREE from 'three';
-import CSS3DSkeleton from '@/components/3d/CSS3DSkeleton';
 
 interface SpineConfig {
   cervicalLordosis: number;

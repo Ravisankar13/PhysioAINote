@@ -20,9 +20,22 @@ interface SkeletonModelProps {
 
 function SkeletonModel({ spineConfig }: SkeletonModelProps) {
   const modelPath = '/models/rigged-skeleton.glb';
-  console.log('Starting to load model from:', modelPath);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   
-  const { scene } = useGLTF(modelPath);
+  let scene: THREE.Group | null = null;
+  let error: any = null;
+  
+  try {
+    const gltf = useGLTF(modelPath);
+    scene = gltf.scene;
+    console.log('Model loaded successfully:', modelPath);
+  } catch (e) {
+    error = e;
+    console.error('Failed to load model:', e);
+    setModelError(`Failed to load model: ${e}`);
+  }
+  
   const bonesRef = useRef<{
     cervical: THREE.Bone[];
     thoracic: THREE.Bone[];
@@ -36,7 +49,14 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
   });
 
   useEffect(() => {
+    if (!scene) {
+      console.log('No scene loaded yet');
+      setIsLoading(false);
+      return;
+    }
+    
     console.log('SkeletonModel useEffect triggered, scene:', scene);
+    setIsLoading(false);
     
     // Debug: Log all bones found in the model
     const allBones: THREE.Bone[] = [];
@@ -162,7 +182,89 @@ function SkeletonModel({ spineConfig }: SkeletonModelProps) {
     }
   });
 
-  return <primitive object={scene} position={[0, -2, 0]} scale={1} />;
+  // Show error state
+  if (modelError) {
+    return (
+      <mesh>
+        <boxGeometry args={[1, 2, 0.5]} />
+        <meshStandardMaterial color="red" />
+      </mesh>
+    );
+  }
+  
+  // Show loading state
+  if (isLoading) {
+    return (
+      <mesh>
+        <boxGeometry args={[1, 2, 0.5]} />
+        <meshStandardMaterial color="yellow" />
+      </mesh>
+    );
+  }
+  
+  // Show the actual model or a fallback
+  if (scene) {
+    return <primitive object={scene} position={[0, -2, 0]} scale={1} />;
+  }
+  
+  // Fallback skeleton made with basic geometry
+  return (
+    <group>
+      {/* Head */}
+      <mesh position={[0, 1.7, 0]}>
+        <sphereGeometry args={[0.15]} />
+        <meshStandardMaterial color="#f0f0f0" />
+      </mesh>
+      
+      {/* Spine - multiple segments */}
+      {Array.from({ length: 12 }, (_, i) => (
+        <mesh key={`spine-${i}`} position={[0, 1.4 - i * 0.1, 0]}>
+          <cylinderGeometry args={[0.03, 0.03, 0.1]} />
+          <meshStandardMaterial color="#e0e0e0" />
+        </mesh>
+      ))}
+      
+      {/* Ribs */}
+      {Array.from({ length: 6 }, (_, i) => (
+        <group key={`rib-${i}`}>
+          <mesh position={[-0.2 - i * 0.02, 1.2 - i * 0.08, 0]} rotation={[0, 0, -0.3]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.3]} />
+            <meshStandardMaterial color="#d0d0d0" />
+          </mesh>
+          <mesh position={[0.2 + i * 0.02, 1.2 - i * 0.08, 0]} rotation={[0, 0, 0.3]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.3]} />
+            <meshStandardMaterial color="#d0d0d0" />
+          </mesh>
+        </group>
+      ))}
+      
+      {/* Arms */}
+      <mesh position={[-0.4, 1.2, 0]} rotation={[0, 0, 0.5]}>
+        <cylinderGeometry args={[0.04, 0.04, 0.6]} />
+        <meshStandardMaterial color="#e0e0e0" />
+      </mesh>
+      <mesh position={[0.4, 1.2, 0]} rotation={[0, 0, -0.5]}>
+        <cylinderGeometry args={[0.04, 0.04, 0.6]} />
+        <meshStandardMaterial color="#e0e0e0" />
+      </mesh>
+      
+      {/* Pelvis */}
+      <mesh position={[0, 0.2, 0]}>
+        <boxGeometry args={[0.4, 0.1, 0.2]} />
+        <meshStandardMaterial color="#e8e8e8" />
+      </mesh>
+      
+      {/* Legs */}
+      <mesh position={[-0.15, -0.3, 0]}>
+        <cylinderGeometry args={[0.05, 0.05, 0.8]} />
+        <meshStandardMaterial color="#e0e0e0" />
+      </mesh>
+      <mesh position={[0.15, -0.3, 0]}>
+        <cylinderGeometry args={[0.05, 0.05, 0.8]} />
+        <meshStandardMaterial color="#e0e0e0" />
+      </mesh>
+    </group>
+  );
 }
 
 
@@ -216,8 +318,16 @@ export default function VirtualPatient2() {
               <Canvas 
                 camera={{ position: [3, 0, 8], fov: 45 }}
                 style={{ background: 'transparent' }}
+                onCreated={({ gl }) => {
+                  console.log('Canvas created, WebGL context:', gl);
+                }}
               >
-                <Suspense fallback={null}>
+                <Suspense fallback={
+                  <mesh>
+                    <boxGeometry args={[1, 1, 1]} />
+                    <meshBasicMaterial color="blue" />
+                  </mesh>
+                }>
                   <ambientLight intensity={0.6} />
                   <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
                   <directionalLight position={[-10, 10, -5]} intensity={0.4} />

@@ -5,12 +5,17 @@ import { evidenceService, EvidenceSummary, ResearchPaper } from "./evidenceInteg
 import { visualContentService, type VisualContentResult } from "./visualContentService";
 import { Response } from "express";
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY is required for PhysioGPT");
+// Use Replit AI Integrations OpenAI if available, otherwise fall back to standard OPENAI_API_KEY
+const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+
+if (!apiKey) {
+  console.warn("Warning: No OpenAI API key configured for PhysioGPT. AI features may not work.");
 }
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: apiKey,
+  baseURL: baseURL,
 });
 
 interface StreamRequest {

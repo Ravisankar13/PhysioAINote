@@ -5,8 +5,14 @@ import os from "os";
 import { config } from 'dotenv';
 config();
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Use Replit AI Integrations OpenAI if available, otherwise fall back to standard OPENAI_API_KEY
+const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+
+const openai = new OpenAI({ 
+  apiKey: apiKey,
+  baseURL: baseURL
+});
 
 // Helper function to implement sleep/delay
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

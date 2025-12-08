@@ -3,8 +3,18 @@ import { SoapNoteInput } from "@shared/schema";
 import { config } from 'dotenv';
 config();
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Use Replit AI Integrations OpenAI if available, otherwise fall back to standard OPENAI_API_KEY
+const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+
+if (!apiKey) {
+  console.warn("Warning: No OpenAI API key configured. AI features will not work.");
+}
+
+const openai = new OpenAI({ 
+  apiKey: apiKey,
+  baseURL: baseURL
+});
 
 // Export the openai instance for use in other modules
 export { openai };

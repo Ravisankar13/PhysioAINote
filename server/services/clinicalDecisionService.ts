@@ -1,6 +1,5 @@
-import OpenAI from 'openai';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Import shared OpenAI instance configured with Replit AI Integrations
+import { openai } from '../openai';
 
 // Red flag symptoms categorized by urgency level
 const RED_FLAG_PATTERNS = {

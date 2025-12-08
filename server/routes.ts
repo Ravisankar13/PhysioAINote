@@ -434,6 +434,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await capturePaypalOrder(req, res);
   });
 
+  // Generate SOAP notes from browser-generated transcript (Web Speech API)
+  app.post('/api/generate-soap-from-transcript', async (req: Request, res: Response) => {
+    try {
+      const { transcript, patientName } = req.body;
+      
+      if (!transcript || transcript.length < 5) {
+        return res.status(400).json({ error: 'Transcript is required' });
+      }
+
+      console.log('[WebSpeech] Generating SOAP from browser transcript:', transcript.length, 'characters');
+
+      // Use the existing SOAP generation function from openai.ts
+      const { generateSoapNoteFromTranscript } = await import('./openai');
+      
+      const soapNote = await generateSoapNoteFromTranscript({
+        patientInfo: {
+          patientName: patientName || 'Patient'
+        },
+        transcript
+      });
+
+      console.log('[WebSpeech] SOAP generated successfully');
+      
+      res.json({
+        transcription: transcript,
+        soapNote: {
+          subjective: soapNote.subjective || transcript,
+          objective: soapNote.objective || 'Physical examination findings to be documented.',
+          assessment: soapNote.assessment || 'Clinical assessment pending review.',
+          plan: soapNote.plan || 'Treatment plan to be developed based on assessment.',
+          patientName
+        }
+      });
+    } catch (error: any) {
+      console.error('[WebSpeech] Error generating SOAP from transcript:', error);
+      
+      // Return fallback with the transcript preserved
+      const { transcript, patientName } = req.body;
+      res.json({
+        transcription: transcript,
+        soapNote: {
+          subjective: transcript || 'Patient consultation recorded.',
+          objective: 'Physical examination findings to be documented.',
+          assessment: 'Clinical assessment pending review.',
+          plan: 'Treatment plan to be developed based on assessment.',
+          patientName
+        }
+      });
+    }
+  });
+
   // Quick transcription for real-time visual updates
   app.post('/api/transcribe-quick', upload.single('audio'), async (req: Request, res: Response) => {
     try {

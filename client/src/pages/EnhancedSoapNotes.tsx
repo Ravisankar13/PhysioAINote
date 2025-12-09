@@ -371,49 +371,6 @@ export default function EnhancedSoapNotesPage() {
     }
   }, [soapSections]);
 
-  // Real-time document trigger detection for Web Speech API transcription
-  useEffect(() => {
-    // Only check when we have meaningful transcript content and are recording
-    if (!webSpeechTranscript || webSpeechTranscript.length < 10 || !isRecording) {
-      console.log('[DocTrigger] Skipping - transcript:', webSpeechTranscript?.length, 'recording:', isRecording);
-      return;
-    }
-    
-    console.log('[DocTrigger] Checking transcript for document triggers:', webSpeechTranscript);
-    
-    // Document trigger patterns - check the full transcript
-    const lowerText = webSpeechTranscript.toLowerCase();
-    const docPatterns = [
-      { pattern: /doctor['']?s?\s*(report|letter|note)/i, type: 'doctor_report', name: "Doctor's Report" },
-      { pattern: /medical\s*certificate/i, type: 'time_off_work', name: 'Medical Certificate' },
-    ];
-    
-    for (const { pattern, type, name } of docPatterns) {
-      if (pattern.test(lowerText)) {
-        console.log(`[DocTrigger] ✅ DETECTED: ${type} in transcript`);
-        
-        // Only show dialog if not already shown and not already generating
-        if (!showDoctorReportDialog && !generatingDocuments.get(type) && !generatedDocuments.has(type)) {
-          console.log(`[DocTrigger] 🚀 Showing dialog for ${type}`);
-          
-          setPendingDocumentType(type);
-          setPendingDocumentName(name);
-          setDoctorReportDetails(prev => ({
-            ...prev,
-            patientName: newPatientName || `Patient ${currentPatientNumber}`,
-            diagnosis: soapSections.assessment?.split('.')[0] || ''
-          }));
-          setShowDoctorReportDialog(true);
-          
-          toast({
-            title: `${name} Detected`,
-            description: "Please fill in the required patient details to generate the document.",
-          });
-        }
-        return;
-      }
-    }
-  }, [webSpeechTranscript, isRecording, showDoctorReportDialog, generatingDocuments, generatedDocuments]);
 
   const startContinuousRecordingMutation = useMutation({
     mutationFn: async (sessionName?: string) => {
@@ -1031,6 +988,49 @@ export default function EnhancedSoapNotesPage() {
   const [generatedDocuments, setGeneratedDocuments] = useState<Set<string>>(new Set());
   const [generatingDocuments, setGeneratingDocuments] = useState<Map<string, boolean>>(new Map());
   const lastDocumentCheck = useRef<string>('');
+
+  // Real-time document trigger detection for Web Speech API transcription
+  useEffect(() => {
+    // Only check when we have meaningful transcript content and are recording
+    if (!webSpeechTranscript || webSpeechTranscript.length < 10 || !isRecording) {
+      return;
+    }
+    
+    console.log('[DocTrigger] Checking transcript for document triggers:', webSpeechTranscript);
+    
+    // Document trigger patterns - check the full transcript
+    const lowerText = webSpeechTranscript.toLowerCase();
+    const docPatterns = [
+      { pattern: /doctor['']?s?\s*(report|letter|note)/i, type: 'doctor_report', name: "Doctor's Report" },
+      { pattern: /medical\s*certificate/i, type: 'time_off_work', name: 'Medical Certificate' },
+    ];
+    
+    for (const { pattern, type, name } of docPatterns) {
+      if (pattern.test(lowerText)) {
+        console.log(`[DocTrigger] ✅ DETECTED: ${type} in transcript`);
+        
+        // Only show dialog if not already shown and not already generating
+        if (!showDoctorReportDialog && !generatingDocuments.get(type) && !generatedDocuments.has(type)) {
+          console.log(`[DocTrigger] 🚀 Showing dialog for ${type}`);
+          
+          setPendingDocumentType(type);
+          setPendingDocumentName(name);
+          setDoctorReportDetails(prev => ({
+            ...prev,
+            patientName: newPatientName || `Patient ${currentPatientNumber}`,
+            diagnosis: soapSections.assessment?.split('.')[0] || ''
+          }));
+          setShowDoctorReportDialog(true);
+          
+          toast({
+            title: `${name} Detected`,
+            description: "Please fill in the required patient details to generate the document.",
+          });
+        }
+        return;
+      }
+    }
+  }, [webSpeechTranscript, isRecording, showDoctorReportDialog, generatingDocuments, generatedDocuments]);
 
   // Function to detect document generation triggers in transcript
   const detectDocumentTriggers = async (transcript: string, currentSoapSections?: any) => {

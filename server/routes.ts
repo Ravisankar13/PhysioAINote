@@ -41,7 +41,7 @@ import { documentGenerationService } from "./documentGenerationService";
 import { aiMovementGenerator } from "./aiMovementGenerator";
 import { youtubeAnalysisService } from "./youtubeAnalysisService";
 import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
-import { generateAISuggestions, applySuggestionToSoap } from "./services/aiSuggestionsService";
+import { generateAISuggestions, applySuggestionToSoap, generateEnhancedDifferentials, type EnhancedDifferential, type DifferentialAnalysisResult } from "./services/aiSuggestionsService";
 import { ResearchService } from "./services/researchService";
 
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema } from "@shared/schema";
@@ -839,6 +839,31 @@ Be concise and clinically accurate. Extract all relevant clinical information fr
       res.status(500).json({ 
         error: 'Failed to apply suggestion',
         updatedSections: req.body.currentSections 
+      });
+    }
+  });
+
+  // Generate Enhanced Differential Diagnoses with comprehensive clinical reasoning
+  app.post('/api/generate-enhanced-differentials', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { soapSections, bodyRegion, transcript } = req.body;
+      
+      if (!soapSections) {
+        return res.status(400).json({ error: 'SOAP sections are required' });
+      }
+
+      console.log('Generating enhanced differential diagnoses...');
+      const result: DifferentialAnalysisResult = await generateEnhancedDifferentials(soapSections, bodyRegion, transcript);
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error generating enhanced differentials:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate differentials',
+        differentials: [],
+        clinicalReasoning: 'Unable to generate analysis',
+        recommendedNextSteps: [],
+        timestamp: new Date().toISOString()
       });
     }
   });

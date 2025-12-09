@@ -83,6 +83,7 @@ export function EnhancedDifferentialDisplay({
 }: EnhancedDifferentialDisplayProps) {
   const [result, setResult] = useState<DifferentialAnalysisResult | null>(null);
   const [expandedDifferentials, setExpandedDifferentials] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   const generateDifferentialsMutation = useMutation({
     mutationFn: async () => {
@@ -90,6 +91,7 @@ export function EnhancedDifferentialDisplay({
       return response as DifferentialAnalysisResult;
     },
     onSuccess: (data) => {
+      setError(null);
       setResult(data);
       // Auto-expand must_not_miss and first most_likely
       const autoExpand = new Set<string>();
@@ -99,6 +101,10 @@ export function EnhancedDifferentialDisplay({
         }
       });
       setExpandedDifferentials(autoExpand);
+    },
+    onError: (err: Error) => {
+      console.error('Enhanced differentials error:', err);
+      setError('Failed to generate differential analysis. Please try again.');
     }
   });
 
@@ -547,7 +553,26 @@ export function EnhancedDifferentialDisplay({
           </>
         )}
 
-        {!result && !generateDifferentialsMutation.isPending && (
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+            <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-red-500" />
+            <p className="text-sm text-red-700">{error}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-3"
+              onClick={() => {
+                setError(null);
+                generateDifferentialsMutation.mutate();
+              }}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        )}
+
+        {!result && !generateDifferentialsMutation.isPending && !error && (
           <div className="text-center py-8 text-muted-foreground">
             <Brain className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p className="text-sm">

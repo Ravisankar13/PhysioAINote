@@ -12874,6 +12874,97 @@ Respond in JSON format:
   });
 
   // ============================================================================
+  // TREATMENT NOTES ROUTES (Real-time organized clinical notes)
+  // ============================================================================
+
+  // Organize treatment notes with AI in real-time
+  app.post("/api/organize-treatment-notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { rawTranscript, existingNotes, newContent } = req.body;
+
+      if (!newContent || newContent.trim().length === 0) {
+        return res.json({ organizedNotes: existingNotes || '' });
+      }
+
+      // Use OpenAI to organize the notes
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a clinical documentation assistant helping organize treatment notes in real-time. 
+Your task is to take raw spoken clinical notes and organize them into a clean, professional clinical document.
+
+Guidelines:
+- Write in a flowing, cohesive narrative style (NOT with SOAP headers)
+- Use proper clinical terminology where appropriate
+- Group related information together naturally
+- Maintain chronological flow where relevant
+- Include all clinical details mentioned (patient complaints, findings, interventions, outcomes)
+- Format for readability with appropriate paragraph breaks
+- Be concise but complete
+- Do NOT add any information that wasn't in the transcript
+- Do NOT include headers like "Subjective:", "Objective:", etc.
+
+If there are existing notes, seamlessly integrate the new content while maintaining document flow.`
+          },
+          {
+            role: "user",
+            content: existingNotes 
+              ? `Current notes:\n${existingNotes}\n\nNew content to integrate:\n${newContent}\n\nPlease provide the complete updated document.`
+              : `Please organize these clinical notes:\n${rawTranscript}`
+          }
+        ],
+        max_tokens: 2000,
+        temperature: 0.3,
+      });
+
+      const organizedNotes = completion.choices[0]?.message?.content || existingNotes || '';
+      
+      res.json({ organizedNotes });
+    } catch (error: any) {
+      console.error("Error organizing treatment notes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Save treatment notes
+  app.post("/api/save-treatment-notes", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { notes } = req.body;
+
+      if (!notes || notes.trim().length === 0) {
+        return res.status(400).json({ error: 'Notes are required' });
+      }
+
+      // Save to temporary SOAP notes table (reusing existing infrastructure)
+      const savedNote = await storage.createTemporarySoapNote({
+        userId,
+        patientName: 'Treatment Note ' + new Date().toLocaleDateString(),
+        chiefComplaint: notes.substring(0, 200),
+        transcript: notes,
+        status: 'completed',
+        autoSaveData: { notes, type: 'treatment-notes' }
+      });
+
+      res.json({ success: true, id: savedNote.id });
+    } catch (error: any) {
+      console.error("Error saving treatment notes:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
   // CONTINUOUS MULTI-PATIENT RECORDING ROUTES
   // ============================================================================
   

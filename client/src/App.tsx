@@ -79,6 +79,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import NotesClinical from "./pages/NotesClinical";
+import TreatmentNotes from "@/pages/TreatmentNotes";
 
 function Router() {
   return (
@@ -96,6 +97,9 @@ function Router() {
           </Route>
           <Route path="/enhanced-soap-notes">
             <ProtectedRoute component={EnhancedSoapNotes} />
+          </Route>
+          <Route path="/treatment-notes">
+            <ProtectedRoute component={TreatmentNotes} />
           </Route>
           <Route path="/shared-notes" component={SharedNotes} />
           <Route path="/research" component={Research} />

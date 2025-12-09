@@ -371,6 +371,17 @@ export default function EnhancedSoapNotesPage() {
     }
   }, [soapSections]);
 
+  // Real-time document trigger detection for Web Speech API transcription
+  useEffect(() => {
+    // Only check when we have meaningful transcript content and are recording
+    if (!webSpeechTranscript || webSpeechTranscript.length < 20 || !isRecording) {
+      return;
+    }
+    
+    // Check for document triggers in the live transcript
+    detectDocumentTriggers(webSpeechTranscript, soapSections);
+  }, [webSpeechTranscript, isRecording]);
+
   const startContinuousRecordingMutation = useMutation({
     mutationFn: async (sessionName?: string) => {
       const response = await fetch('/api/continuous-recording/start', {

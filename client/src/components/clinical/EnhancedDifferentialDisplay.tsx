@@ -1,0 +1,562 @@
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { 
+  AlertTriangle, 
+  ChevronDown, 
+  ChevronUp, 
+  Brain, 
+  Target, 
+  Shield, 
+  BookOpen, 
+  Stethoscope,
+  ArrowRight,
+  Loader2,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
+  Info,
+  Clipboard,
+  TrendingUp
+} from "lucide-react";
+
+interface EnhancedDifferential {
+  id: string;
+  conditionName: string;
+  tier: 'most_likely' | 'possible' | 'must_not_miss';
+  probabilityScore: number;
+  anatomicalStructure: string;
+  mechanism: string;
+  pathophysiology: string;
+  supportingFindings: string[];
+  contradictingFindings: string[];
+  keyDifferentiatingFeatures: string[];
+  isRedFlag: boolean;
+  redFlagIndicators?: string[];
+  urgentActions?: string[];
+  timeframe?: string;
+  relevantCPRs?: {
+    name: string;
+    result?: string;
+    interpretation: string;
+  }[];
+  evidenceSummary: string;
+  evidenceLevel: 'high' | 'moderate' | 'low' | 'expert_opinion';
+  keyReferences?: string[];
+  guidelineRecommendations?: string;
+  suggestedTests: string[];
+  initialManagement: string;
+  referralIndications?: string[];
+}
+
+interface DifferentialAnalysisResult {
+  differentials: EnhancedDifferential[];
+  clinicalReasoning: string;
+  uncertaintyNote?: string;
+  recommendedNextSteps: string[];
+  timestamp: string;
+}
+
+interface EnhancedDifferentialDisplayProps {
+  soapSections: {
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+  };
+  bodyRegion?: string;
+  transcript?: string;
+  onDifferentialSelect?: (differential: EnhancedDifferential) => void;
+}
+
+export function EnhancedDifferentialDisplay({
+  soapSections,
+  bodyRegion,
+  transcript,
+  onDifferentialSelect
+}: EnhancedDifferentialDisplayProps) {
+  const [result, setResult] = useState<DifferentialAnalysisResult | null>(null);
+  const [expandedDifferentials, setExpandedDifferentials] = useState<Set<string>>(new Set());
+
+  const generateDifferentialsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/generate-enhanced-differentials', { soapSections, bodyRegion, transcript });
+      return response as DifferentialAnalysisResult;
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      // Auto-expand must_not_miss and first most_likely
+      const autoExpand = new Set<string>();
+      data.differentials.forEach((d, idx) => {
+        if (d.tier === 'must_not_miss' || (d.tier === 'most_likely' && idx === 0)) {
+          autoExpand.add(d.id);
+        }
+      });
+      setExpandedDifferentials(autoExpand);
+    }
+  });
+
+  const toggleExpanded = (id: string) => {
+    setExpandedDifferentials(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const getTierConfig = (tier: EnhancedDifferential['tier']) => {
+    switch (tier) {
+      case 'must_not_miss':
+        return {
+          label: 'Must Not Miss',
+          color: 'bg-red-100 text-red-800 border-red-300',
+          icon: AlertTriangle,
+          bgClass: 'bg-red-50 border-red-200'
+        };
+      case 'most_likely':
+        return {
+          label: 'Most Likely',
+          color: 'bg-green-100 text-green-800 border-green-300',
+          icon: Target,
+          bgClass: 'bg-green-50 border-green-200'
+        };
+      case 'possible':
+        return {
+          label: 'Possible',
+          color: 'bg-blue-100 text-blue-800 border-blue-300',
+          icon: Brain,
+          bgClass: 'bg-blue-50 border-blue-200'
+        };
+    }
+  };
+
+  const getEvidenceLevelConfig = (level: EnhancedDifferential['evidenceLevel']) => {
+    switch (level) {
+      case 'high':
+        return { label: 'High', color: 'bg-emerald-100 text-emerald-800', icon: '★★★' };
+      case 'moderate':
+        return { label: 'Moderate', color: 'bg-yellow-100 text-yellow-800', icon: '★★☆' };
+      case 'low':
+        return { label: 'Low', color: 'bg-orange-100 text-orange-800', icon: '★☆☆' };
+      case 'expert_opinion':
+        return { label: 'Expert Opinion', color: 'bg-purple-100 text-purple-800', icon: '☆☆☆' };
+    }
+  };
+
+  const groupedDifferentials = result?.differentials.reduce((acc, diff) => {
+    if (!acc[diff.tier]) acc[diff.tier] = [];
+    acc[diff.tier].push(diff);
+    return acc;
+  }, {} as Record<string, EnhancedDifferential[]>);
+
+  const tierOrder: EnhancedDifferential['tier'][] = ['must_not_miss', 'most_likely', 'possible'];
+
+  return (
+    <Card className="w-full" data-testid="enhanced-differential-card">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Brain className="w-5 h-5 text-purple-600" />
+            Enhanced Differential Diagnosis
+          </CardTitle>
+          <Button
+            onClick={() => generateDifferentialsMutation.mutate()}
+            disabled={generateDifferentialsMutation.isPending}
+            size="sm"
+            data-testid="button-generate-differentials"
+          >
+            {generateDifferentialsMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : result ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </>
+            ) : (
+              <>
+                <Brain className="w-4 h-4 mr-2" />
+                Generate Analysis
+              </>
+            )}
+          </Button>
+        </div>
+        {result && (
+          <p className="text-sm text-muted-foreground mt-1">
+            {result.differentials.length} differentials analyzed • {new Date(result.timestamp).toLocaleTimeString()}
+          </p>
+        )}
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        {generateDifferentialsMutation.isPending && (
+          <div className="flex flex-col items-center justify-center py-8 space-y-3">
+            <div className="relative">
+              <Brain className="w-12 h-12 text-purple-500 animate-pulse" />
+              <Loader2 className="w-6 h-6 text-purple-600 animate-spin absolute -right-1 -bottom-1" />
+            </div>
+            <p className="text-sm text-muted-foreground">Applying clinical reasoning frameworks...</p>
+            <p className="text-xs text-muted-foreground">Analyzing anatomical, pathological, and etiological factors</p>
+          </div>
+        )}
+
+        {result && (
+          <>
+            {/* Clinical Reasoning Summary */}
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <div className="flex items-start gap-2">
+                <Brain className="w-5 h-5 text-purple-600 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-purple-900 mb-1">Clinical Reasoning</h4>
+                  <p className="text-sm text-purple-800">{result.clinicalReasoning}</p>
+                  {result.uncertaintyNote && (
+                    <p className="text-xs text-purple-600 mt-2 italic">
+                      <Info className="w-3 h-3 inline mr-1" />
+                      {result.uncertaintyNote}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Tiered Differentials */}
+            {tierOrder.map(tier => {
+              const differentials = groupedDifferentials?.[tier];
+              if (!differentials?.length) return null;
+              
+              const config = getTierConfig(tier);
+              const TierIcon = config.icon;
+
+              return (
+                <div key={tier} className="space-y-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TierIcon className={`w-4 h-4 ${tier === 'must_not_miss' ? 'text-red-600' : tier === 'most_likely' ? 'text-green-600' : 'text-blue-600'}`} />
+                    <h4 className="font-semibold text-sm">{config.label}</h4>
+                    <Badge variant="outline" className="text-xs">
+                      {differentials.length}
+                    </Badge>
+                  </div>
+
+                  {differentials.map(diff => {
+                    const isExpanded = expandedDifferentials.has(diff.id);
+                    const evidenceConfig = getEvidenceLevelConfig(diff.evidenceLevel);
+
+                    return (
+                      <Collapsible
+                        key={diff.id}
+                        open={isExpanded}
+                        onOpenChange={() => toggleExpanded(diff.id)}
+                      >
+                        <div className={`border rounded-lg overflow-hidden ${config.bgClass}`}>
+                          <CollapsibleTrigger asChild>
+                            <div
+                              className="p-3 cursor-pointer hover:bg-opacity-80 transition-colors"
+                              data-testid={`differential-${diff.id}`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-semibold">{diff.conditionName}</span>
+                                    {diff.isRedFlag && (
+                                      <Badge variant="destructive" className="text-xs">
+                                        <AlertTriangle className="w-3 h-3 mr-1" />
+                                        Red Flag
+                                      </Badge>
+                                    )}
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Badge className={`text-xs ${evidenceConfig.color}`}>
+                                            {evidenceConfig.icon} {evidenceConfig.label}
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p className="max-w-xs text-sm">{diff.evidenceSummary}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </div>
+                                  
+                                  {/* Probability Bar */}
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Progress value={diff.probabilityScore} className="h-2 flex-1" />
+                                    <span className="text-sm font-medium w-12 text-right">
+                                      {diff.probabilityScore}%
+                                    </span>
+                                  </div>
+
+                                  <p className="text-sm text-gray-600">
+                                    <span className="font-medium">Anatomy:</span> {diff.anatomicalStructure}
+                                  </p>
+                                </div>
+                                <div className="ml-2">
+                                  {isExpanded ? (
+                                    <ChevronUp className="w-5 h-5 text-gray-500" />
+                                  ) : (
+                                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </CollapsibleTrigger>
+
+                          <CollapsibleContent>
+                            <div className="border-t px-3 py-3 space-y-4 bg-white">
+                              {/* Mechanism & Pathophysiology */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                  <h5 className="text-xs font-semibold text-gray-500 uppercase mb-1">Mechanism</h5>
+                                  <p className="text-sm">{diff.mechanism}</p>
+                                </div>
+                                <div>
+                                  <h5 className="text-xs font-semibold text-gray-500 uppercase mb-1">Pathophysiology</h5>
+                                  <p className="text-sm">{diff.pathophysiology}</p>
+                                </div>
+                              </div>
+
+                              {/* Supporting vs Contradicting Findings */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                  <h5 className="text-xs font-semibold text-green-600 uppercase mb-1 flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3" />
+                                    Supporting Findings
+                                  </h5>
+                                  <ul className="text-sm space-y-1">
+                                    {diff.supportingFindings.map((f, i) => (
+                                      <li key={i} className="flex items-start gap-1">
+                                        <span className="text-green-500">+</span>
+                                        <span>{f}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                {diff.contradictingFindings.length > 0 && (
+                                  <div>
+                                    <h5 className="text-xs font-semibold text-red-600 uppercase mb-1 flex items-center gap-1">
+                                      <XCircle className="w-3 h-3" />
+                                      Contradicting Findings
+                                    </h5>
+                                    <ul className="text-sm space-y-1">
+                                      {diff.contradictingFindings.map((f, i) => (
+                                        <li key={i} className="flex items-start gap-1">
+                                          <span className="text-red-500">-</span>
+                                          <span>{f}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Key Differentiating Features */}
+                              {diff.keyDifferentiatingFeatures.length > 0 && (
+                                <div>
+                                  <h5 className="text-xs font-semibold text-purple-600 uppercase mb-1 flex items-center gap-1">
+                                    <Target className="w-3 h-3" />
+                                    Key Differentiating Features
+                                  </h5>
+                                  <div className="flex flex-wrap gap-1">
+                                    {diff.keyDifferentiatingFeatures.map((f, i) => (
+                                      <Badge key={i} variant="outline" className="text-xs">
+                                        {f}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Red Flag Section */}
+                              {diff.isRedFlag && diff.redFlagIndicators && diff.redFlagIndicators.length > 0 && (
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                                  <h5 className="text-xs font-semibold text-red-700 uppercase mb-2 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    Red Flag Alert
+                                    {diff.timeframe && (
+                                      <Badge variant="destructive" className="ml-2 text-xs">
+                                        {diff.timeframe}
+                                      </Badge>
+                                    )}
+                                  </h5>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <div>
+                                      <p className="text-xs font-medium text-red-600 mb-1">Indicators:</p>
+                                      <ul className="text-sm space-y-1">
+                                        {diff.redFlagIndicators.map((r, i) => (
+                                          <li key={i} className="text-red-700">• {r}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                    {diff.urgentActions && diff.urgentActions.length > 0 && (
+                                      <div>
+                                        <p className="text-xs font-medium text-red-600 mb-1">Urgent Actions:</p>
+                                        <ul className="text-sm space-y-1">
+                                          {diff.urgentActions.map((a, i) => (
+                                            <li key={i} className="text-red-700 font-medium">→ {a}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Clinical Prediction Rules */}
+                              {diff.relevantCPRs && diff.relevantCPRs.length > 0 && (
+                                <div>
+                                  <h5 className="text-xs font-semibold text-blue-600 uppercase mb-2 flex items-center gap-1">
+                                    <Clipboard className="w-3 h-3" />
+                                    Clinical Prediction Rules
+                                  </h5>
+                                  <div className="space-y-2">
+                                    {diff.relevantCPRs.map((cpr, i) => (
+                                      <div key={i} className="bg-blue-50 border border-blue-200 rounded p-2">
+                                        <div className="flex items-center justify-between mb-1">
+                                          <span className="font-medium text-sm text-blue-800">{cpr.name}</span>
+                                          {cpr.result && (
+                                            <Badge 
+                                              variant="outline" 
+                                              className={`text-xs ${
+                                                cpr.result.toLowerCase().includes('positive') 
+                                                  ? 'border-red-300 text-red-700' 
+                                                  : cpr.result.toLowerCase().includes('negative')
+                                                    ? 'border-green-300 text-green-700'
+                                                    : 'border-gray-300'
+                                              }`}
+                                            >
+                                              {cpr.result}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <p className="text-xs text-blue-700">{cpr.interpretation}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Evidence & Guidelines */}
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <h5 className="text-xs font-semibold text-gray-600 uppercase mb-2 flex items-center gap-1">
+                                  <BookOpen className="w-3 h-3" />
+                                  Evidence Base
+                                </h5>
+                                <p className="text-sm text-gray-700 mb-2">{diff.evidenceSummary}</p>
+                                {diff.guidelineRecommendations && (
+                                  <p className="text-sm text-gray-600 italic">
+                                    <strong>Guidelines:</strong> {diff.guidelineRecommendations}
+                                  </p>
+                                )}
+                                {diff.keyReferences && diff.keyReferences.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-xs text-gray-500">Key References:</p>
+                                    <ul className="text-xs text-gray-600">
+                                      {diff.keyReferences.map((ref, i) => (
+                                        <li key={i}>• {ref}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Suggested Tests & Management */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                  <h5 className="text-xs font-semibold text-gray-500 uppercase mb-1 flex items-center gap-1">
+                                    <Stethoscope className="w-3 h-3" />
+                                    Suggested Tests
+                                  </h5>
+                                  <ul className="text-sm space-y-1">
+                                    {diff.suggestedTests.map((t, i) => (
+                                      <li key={i}>• {t}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                <div>
+                                  <h5 className="text-xs font-semibold text-gray-500 uppercase mb-1 flex items-center gap-1">
+                                    <TrendingUp className="w-3 h-3" />
+                                    Initial Management
+                                  </h5>
+                                  <p className="text-sm">{diff.initialManagement}</p>
+                                  {diff.referralIndications && diff.referralIndications.length > 0 && (
+                                    <div className="mt-2">
+                                      <p className="text-xs text-gray-500">Refer if:</p>
+                                      <ul className="text-xs text-gray-600">
+                                        {diff.referralIndications.map((r, i) => (
+                                          <li key={i}>• {r}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Select Button */}
+                              {onDifferentialSelect && (
+                                <div className="pt-2 border-t">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => onDifferentialSelect(diff)}
+                                    className="w-full"
+                                    data-testid={`button-select-differential-${diff.id}`}
+                                  >
+                                    <ArrowRight className="w-4 h-4 mr-2" />
+                                    Use as Working Diagnosis
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </CollapsibleContent>
+                        </div>
+                      </Collapsible>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+            {/* Recommended Next Steps */}
+            {result.recommendedNextSteps.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-4">
+                <h4 className="font-medium text-amber-900 mb-2 flex items-center gap-2">
+                  <ArrowRight className="w-4 h-4" />
+                  Recommended Next Steps
+                </h4>
+                <ul className="space-y-1">
+                  {result.recommendedNextSteps.map((step, i) => (
+                    <li key={i} className="text-sm text-amber-800 flex items-start gap-2">
+                      <span className="font-bold">{i + 1}.</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+
+        {!result && !generateDifferentialsMutation.isPending && (
+          <div className="text-center py-8 text-muted-foreground">
+            <Brain className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">
+              Click "Generate Analysis" to create comprehensive differential diagnoses with clinical reasoning, 
+              probability weighting, and evidence-based recommendations.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

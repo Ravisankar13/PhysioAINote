@@ -452,8 +452,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('X-Accel-Buffering', 'no');
       res.flushHeaders();
 
+      // Use Replit AI Integrations OpenAI
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({ 
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
+      });
+
       // Create streaming completion
-      const stream = await openai.chat.completions.create({
+      const stream = await replitOpenai.chat.completions.create({
         model: "gpt-4o",
         stream: true,
         messages: [

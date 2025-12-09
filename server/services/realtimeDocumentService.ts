@@ -7,7 +7,12 @@ import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
 import { storage } from '../storage';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Use Replit AI Integrations OpenAI if available
+const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const openai = new OpenAI({ 
+  apiKey,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
+});
 
 interface DocumentGenerationRequest {
   type: 'doctor_report' | 'ahtr' | 'discharge_summary' | 'imaging_referral' | 'insurance' | 'progress_report' | 'specialist_referral' | 'return_to_work' | 'time_off_work';
@@ -38,14 +43,23 @@ interface GeneratedDocument {
   error?: string;
 }
 
-// Document trigger phrases mapping
+// Document trigger phrases mapping - including simpler conversational triggers
 const DOCUMENT_TRIGGERS = {
   'doctor_report': [
     'generate doctor report',
     'create doctor report',
     'doctor report please',
     'need a doctor report',
-    'prepare doctor report'
+    'prepare doctor report',
+    'doctors report',
+    'doctor\'s report',
+    'doctors note',
+    'doctor\'s note',
+    'medical report',
+    'write a doctor report',
+    'i need a doctors report',
+    'can you do a doctors report',
+    'make a doctors report'
   ],
   'ahtr': [
     'generate ahtr',

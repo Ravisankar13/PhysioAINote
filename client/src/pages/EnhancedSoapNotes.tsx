@@ -202,6 +202,19 @@ export default function EnhancedSoapNotesPage() {
   const [differentials, setDifferentials] = useState<string[]>([]);
   const [guidelines, setGuidelines] = useState<string[]>([]);
   
+  // Doctor's Report Dialog state - for auto-triggered document generation
+  const [showDoctorReportDialog, setShowDoctorReportDialog] = useState(false);
+  const [pendingDocumentType, setPendingDocumentType] = useState<string>('');
+  const [pendingDocumentName, setPendingDocumentName] = useState<string>('');
+  const [doctorReportDetails, setDoctorReportDetails] = useState({
+    patientName: '',
+    dateOfBirth: '',
+    referringDoctor: '',
+    dateOfInjury: '',
+    diagnosis: '',
+    additionalNotes: ''
+  });
+  
   // PhysioGPT Chat state
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
@@ -1018,12 +1031,33 @@ export default function EnhancedSoapNotesPage() {
     // Check each trigger pattern
     for (const { pattern, type, name } of documentTriggers) {
       if (pattern.test(lowerNewContent) && !generatedDocuments.has(type) && !generatingDocuments.get(type)) {
-        // Mark as generating to prevent duplicates
-        setGeneratingDocuments(prev => new Map(prev).set(type, true));
-        
         console.log(`🎯 Automatic document trigger detected: ${type}`);
         
-        // Show toast notification
+        // For doctor's report, show dialog to collect required details
+        if (type === 'doctor_report' || type === 'time_off_work' || type === 'progress_report') {
+          setPendingDocumentType(type);
+          setPendingDocumentName(name);
+          
+          // Pre-fill with any extracted patient name from current session
+          setDoctorReportDetails(prev => ({
+            ...prev,
+            patientName: newPatientName || `Patient ${currentPatientNumber}`,
+            diagnosis: soapSections.assessment?.split('.')[0] || ''
+          }));
+          
+          setShowDoctorReportDialog(true);
+          
+          toast({
+            title: `${name} Detected`,
+            description: "Please fill in the required patient details to generate the document.",
+          });
+          
+          return; // Exit early - user will complete via dialog
+        }
+        
+        // For other document types, generate immediately
+        setGeneratingDocuments(prev => new Map(prev).set(type, true));
+        
         toast({
           title: "Document Generation Started",
           description: `Automatically generating ${name} based on conversation`,
@@ -1092,6 +1126,86 @@ export default function EnhancedSoapNotesPage() {
           });
         }
       }
+    }
+  };
+  
+  // Function to generate document after user fills in details
+  const generateDocumentWithDetails = async () => {
+    if (!pendingDocumentType) return;
+    
+    setGeneratingDocuments(prev => new Map(prev).set(pendingDocumentType, true));
+    setShowDoctorReportDialog(false);
+    
+    toast({
+      title: "Document Generation Started",
+      description: `Generating ${pendingDocumentName} with your details...`,
+    });
+    
+    try {
+      const response = await fetch('/api/documents/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          documentType: pendingDocumentType,
+          sessionId: sessionId || `session-${Date.now()}`,
+          soapData: {
+            subjective: soapSections.subjective || '',
+            objective: soapSections.objective || '',
+            assessment: soapSections.assessment || '',
+            plan: soapSections.plan || '',
+          },
+          patientInfo: {
+            name: doctorReportDetails.patientName,
+            dateOfBirth: doctorReportDetails.dateOfBirth,
+            referringDoctor: doctorReportDetails.referringDoctor,
+            dateOfInjury: doctorReportDetails.dateOfInjury,
+            diagnosis: doctorReportDetails.diagnosis,
+            additionalNotes: doctorReportDetails.additionalNotes
+          },
+          transcript: realTimeTranscript,
+          timestamp: new Date().toISOString()
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Document generation response:`, data);
+        
+        setGeneratedDocuments(prev => new Set([...Array.from(prev), pendingDocumentType]));
+        
+        if (data.status === 'ready' && data.wordPath) {
+          toast({
+            title: "Document Ready",
+            description: `${pendingDocumentName} has been generated successfully!`,
+          });
+        }
+        
+        if ((window as any).addDocumentToQueue) {
+          (window as any).addDocumentToQueue(data.documentId, pendingDocumentType, pendingDocumentName);
+        }
+      } else {
+        toast({
+          title: "Document Generation Failed",
+          description: `Could not generate ${pendingDocumentName}. Please try again.`,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error(`Error generating document:`, error);
+      toast({
+        title: "Error",
+        description: "Failed to generate document. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setGeneratingDocuments(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(pendingDocumentType);
+        return newMap;
+      });
+      setPendingDocumentType('');
+      setPendingDocumentName('');
     }
   };
 
@@ -4273,6 +4387,129 @@ Generated by PhysioGPT Enhanced SOAP Notes
 
           </div>
         </div>
+
+        {/* Doctor's Report Details Dialog - Auto-triggered when voice command detected */}
+        <Dialog open={showDoctorReportDialog} onOpenChange={setShowDoctorReportDialog}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-500" />
+                {pendingDocumentName || "Doctor's Report"} Details
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-gray-600">
+                I detected you'd like a {pendingDocumentName?.toLowerCase() || "doctor's report"}. Please fill in the required details below.
+              </p>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Patient Name <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={doctorReportDetails.patientName}
+                    onChange={(e) => setDoctorReportDetails(prev => ({ ...prev, patientName: e.target.value }))}
+                    placeholder="Enter patient's full name"
+                    data-testid="input-patient-name"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Date of Birth
+                  </label>
+                  <Input
+                    type="date"
+                    value={doctorReportDetails.dateOfBirth}
+                    onChange={(e) => setDoctorReportDetails(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                    data-testid="input-dob"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Date of Injury
+                  </label>
+                  <Input
+                    type="date"
+                    value={doctorReportDetails.dateOfInjury}
+                    onChange={(e) => setDoctorReportDetails(prev => ({ ...prev, dateOfInjury: e.target.value }))}
+                    data-testid="input-injury-date"
+                  />
+                </div>
+                
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Referring Doctor
+                  </label>
+                  <Input
+                    value={doctorReportDetails.referringDoctor}
+                    onChange={(e) => setDoctorReportDetails(prev => ({ ...prev, referringDoctor: e.target.value }))}
+                    placeholder="Dr. Smith"
+                    data-testid="input-referring-doctor"
+                  />
+                </div>
+                
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Diagnosis
+                  </label>
+                  <Input
+                    value={doctorReportDetails.diagnosis}
+                    onChange={(e) => setDoctorReportDetails(prev => ({ ...prev, diagnosis: e.target.value }))}
+                    placeholder="Primary diagnosis"
+                    data-testid="input-diagnosis"
+                  />
+                </div>
+                
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Additional Notes
+                  </label>
+                  <textarea
+                    value={doctorReportDetails.additionalNotes}
+                    onChange={(e) => setDoctorReportDetails(prev => ({ ...prev, additionalNotes: e.target.value }))}
+                    placeholder="Any additional information to include..."
+                    className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    data-testid="input-additional-notes"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDoctorReportDialog(false);
+                    setPendingDocumentType('');
+                    setPendingDocumentName('');
+                  }}
+                  data-testid="button-cancel-report"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={generateDocumentWithDetails}
+                  disabled={!doctorReportDetails.patientName || generatingDocuments.get(pendingDocumentType)}
+                  data-testid="button-generate-report"
+                >
+                  {generatingDocuments.get(pendingDocumentType) ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-4 h-4 mr-2" />
+                      Generate {pendingDocumentName || "Report"}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Patient Switch Dialog */}
         <Dialog open={showPatientSwitchDialog} onOpenChange={setShowPatientSwitchDialog}>

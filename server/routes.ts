@@ -434,6 +434,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await capturePaypalOrder(req, res);
   });
 
+  // Streaming SOAP generation endpoint for instant feedback
+  app.post('/api/generate-soap-streaming', async (req: Request, res: Response) => {
+    try {
+      const { transcript, patientName } = req.body;
+      
+      if (!transcript || transcript.length < 5) {
+        return res.status(400).json({ error: 'Transcript is required' });
+      }
+
+      console.log('[Streaming SOAP] Starting generation for:', transcript.length, 'characters');
+
+      // Set up SSE headers for streaming
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+
+      // Create streaming completion
+      const stream = await openai.chat.completions.create({
+        model: "gpt-4o",
+        stream: true,
+        messages: [
+          {
+            role: "system",
+            content: `You are a clinical documentation specialist. Generate SOAP notes from the transcript.
+Output in this EXACT format with clear section markers:
+
+**SUBJECTIVE:**
+[Patient's reported symptoms, history, and concerns from the transcript]
+
+**OBJECTIVE:**
+[Physical examination findings, vital signs, and measurable observations]
+
+**ASSESSMENT:**
+[Clinical diagnosis, differential diagnoses, and clinical reasoning]
+
+**PLAN:**
+[Treatment plan, interventions, follow-up recommendations]
+
+Be concise and clinically accurate. Extract all relevant clinical information from the transcript.`
+          },
+          {
+            role: "user",
+            content: `Patient: ${patientName || 'Patient'}\n\nTranscript:\n${transcript}`
+          }
+        ],
+        max_tokens: 2000,
+        temperature: 0.3,
+      });
+
+      let fullContent = '';
+      
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          fullContent += content;
+          // Send each chunk as an SSE event
+          res.write(`data: ${JSON.stringify({ chunk: content, partial: fullContent })}\n\n`);
+        }
+      }
+
+      // Parse the final content into sections
+      const sections = {
+        subjective: '',
+        objective: '',
+        assessment: '',
+        plan: ''
+      };
+
+      const subjectiveMatch = fullContent.match(/\*\*SUBJECTIVE:\*\*\s*([\s\S]*?)(?=\*\*OBJECTIVE:|$)/i);
+      const objectiveMatch = fullContent.match(/\*\*OBJECTIVE:\*\*\s*([\s\S]*?)(?=\*\*ASSESSMENT:|$)/i);
+      const assessmentMatch = fullContent.match(/\*\*ASSESSMENT:\*\*\s*([\s\S]*?)(?=\*\*PLAN:|$)/i);
+      const planMatch = fullContent.match(/\*\*PLAN:\*\*\s*([\s\S]*?)$/i);
+
+      sections.subjective = subjectiveMatch?.[1]?.trim() || transcript;
+      sections.objective = objectiveMatch?.[1]?.trim() || 'Physical examination findings to be documented.';
+      sections.assessment = assessmentMatch?.[1]?.trim() || 'Clinical assessment pending review.';
+      sections.plan = planMatch?.[1]?.trim() || 'Treatment plan to be developed.';
+
+      // Send final complete message
+      res.write(`data: ${JSON.stringify({ done: true, soapNote: sections })}\n\n`);
+      res.end();
+
+      console.log('[Streaming SOAP] Generation complete');
+    } catch (error: any) {
+      console.error('[Streaming SOAP] Error:', error);
+      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      res.end();
+    }
+  });
+
   // Generate SOAP notes from browser-generated transcript (Web Speech API)
   app.post('/api/generate-soap-from-transcript', async (req: Request, res: Response) => {
     try {

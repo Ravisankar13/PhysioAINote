@@ -1,15 +1,15 @@
-import { useState, useRef, useEffect, Suspense, Component } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { 
   MessageCircle, 
@@ -24,6 +24,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Activity,
   FileText,
   BookOpen,
@@ -32,96 +33,199 @@ import {
   Menu,
   X,
   Target,
-  Calculator,
-  Download
+  Download,
+  Dumbbell,
+  ClipboardCheck,
+  Hand,
+  Footprints,
+  Bone,
+  HeartPulse,
+  ArrowRight,
+  CheckCircle2
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
-import InteractiveSkeleton from "@/components/3d/InteractiveSkeleton";
-import AssessmentTemplates, { type AssessmentTemplate } from "@/components/clinical/AssessmentTemplates";
-import AssessmentForm, { type AssessmentResults } from "@/components/clinical/AssessmentForm";
-import EvidenceBasedProtocols from "@/components/clinical/EvidenceBasedProtocols";
-import EvidenceDisplay from "@/components/clinical/EvidenceDisplay";
-import VirtualPatientSidebar from "@/components/virtualPatient/VirtualPatientSidebar";
-import FormattedResponse from "@/components/clinical/FormattedResponse";
-import SOAPBuilderPanel from "@/components/clinical/SOAPBuilderPanel";
-import ClinicalReferenceLibrary from "@/components/clinical/ClinicalReferenceLibrary";
-import { AITreatmentPlanner } from "@/components/clinical/AITreatmentPlanner";
-import ClinicalToolsPanel from "@/components/clinical/ClinicalToolsPanel";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
-import Skeleton3D from "@/components/clinical/Skeleton3D";
 import { pdfGenerator } from "@/services/pdfGenerator";
 
-// Error Boundary Component
-class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean}> {
-  constructor(props: {children: React.ReactNode}) {
-    super(props);
-    this.state = { hasError: false };
+// Body region data with special tests
+const BODY_REGIONS = {
+  cervical: {
+    name: "Cervical Spine",
+    icon: "🦴",
+    color: "from-blue-500 to-blue-600",
+    specialTests: [
+      { name: "Spurling's Test", purpose: "Cervical radiculopathy", positive: "Reproduction of arm pain" },
+      { name: "Upper Limb Tension Test", purpose: "Neural tension", positive: "Symptom reproduction with sensitizing maneuvers" },
+      { name: "Distraction Test", purpose: "Cervical radiculopathy", positive: "Relief of symptoms" },
+      { name: "Vertebral Artery Test", purpose: "VBI screening", positive: "Dizziness, nystagmus, nausea" },
+      { name: "Sharp-Purser Test", purpose: "Upper cervical instability", positive: "Clunk or patient apprehension" }
+    ],
+    redFlags: ["Severe trauma", "Progressive neurological deficit", "Bladder/bowel dysfunction", "Bilateral arm symptoms"]
+  },
+  thoracic: {
+    name: "Thoracic Spine",
+    icon: "🦴",
+    color: "from-purple-500 to-purple-600",
+    specialTests: [
+      { name: "Slump Test", purpose: "Neural tension", positive: "Symptom reproduction" },
+      { name: "First Rib Mobility", purpose: "T1 rib dysfunction", positive: "Restricted mobility" },
+      { name: "Rib Spring Test", purpose: "Rib hypomobility", positive: "Reduced spring" },
+      { name: "Trunk Rotation", purpose: "Thoracic mobility", positive: "Asymmetry or pain" }
+    ],
+    redFlags: ["Night pain", "Unexplained weight loss", "History of cancer", "Fever"]
+  },
+  lumbar: {
+    name: "Lumbar Spine",
+    icon: "🦴",
+    color: "from-green-500 to-green-600",
+    specialTests: [
+      { name: "Straight Leg Raise", purpose: "Lumbar radiculopathy L4-S1", positive: "Pain 30-70°" },
+      { name: "Slump Test", purpose: "Neural tension", positive: "Symptom reproduction" },
+      { name: "Prone Instability Test", purpose: "Lumbar instability", positive: "Pain relieved with contraction" },
+      { name: "McKenzie Extension", purpose: "Directional preference", positive: "Centralization" },
+      { name: "Femoral Nerve Stretch", purpose: "Upper lumbar radiculopathy", positive: "Anterior thigh pain" }
+    ],
+    redFlags: ["Cauda equina symptoms", "Progressive weakness", "Saddle anesthesia", "Bilateral symptoms"]
+  },
+  shoulder: {
+    name: "Shoulder",
+    icon: "💪",
+    color: "from-teal-500 to-teal-600",
+    specialTests: [
+      { name: "Neer's Test", purpose: "Subacromial impingement", positive: "Pain with passive flexion" },
+      { name: "Hawkins-Kennedy", purpose: "Subacromial impingement", positive: "Pain with internal rotation" },
+      { name: "Empty Can Test", purpose: "Supraspinatus pathology", positive: "Weakness or pain" },
+      { name: "External Rotation Lag Sign", purpose: "Infraspinatus tear", positive: "Inability to maintain ER" },
+      { name: "Apprehension Test", purpose: "Anterior instability", positive: "Apprehension/guarding" },
+      { name: "O'Brien's Test", purpose: "SLAP lesion", positive: "Deep pain reduced with supination" },
+      { name: "Speed's Test", purpose: "Biceps tendinopathy", positive: "Bicipital groove pain" }
+    ],
+    redFlags: ["Severe trauma", "Dislocation", "Sudden weakness", "Night pain waking from sleep"]
+  },
+  elbow: {
+    name: "Elbow",
+    icon: "💪",
+    color: "from-orange-500 to-orange-600",
+    specialTests: [
+      { name: "Cozen's Test", purpose: "Lateral epicondylalgia", positive: "Lateral elbow pain" },
+      { name: "Mill's Test", purpose: "Lateral epicondylalgia", positive: "Lateral elbow pain" },
+      { name: "Reverse Cozen's", purpose: "Medial epicondylalgia", positive: "Medial elbow pain" },
+      { name: "Valgus Stress Test", purpose: "MCL integrity", positive: "Pain or laxity" },
+      { name: "Tinel's Sign (Elbow)", purpose: "Cubital tunnel syndrome", positive: "Tingling into digits 4-5" }
+    ],
+    redFlags: ["Locked elbow", "Severe swelling", "Obvious deformity", "Loss of pulse"]
+  },
+  wrist: {
+    name: "Wrist & Hand",
+    icon: "✋",
+    color: "from-pink-500 to-pink-600",
+    specialTests: [
+      { name: "Phalen's Test", purpose: "Carpal tunnel syndrome", positive: "Paresthesia in median distribution" },
+      { name: "Tinel's Sign (Wrist)", purpose: "Carpal tunnel syndrome", positive: "Tingling into thumb/index/middle" },
+      { name: "Finkelstein's Test", purpose: "De Quervain's tenosynovitis", positive: "Pain over radial styloid" },
+      { name: "Watson's Test", purpose: "Scapholunate instability", positive: "Clunk or pain" },
+      { name: "Grind Test (CMC)", purpose: "CMC joint OA", positive: "Pain with compression/rotation" }
+    ],
+    redFlags: ["Severe trauma", "Open wounds", "Obvious deformity", "Vascular compromise"]
+  },
+  hip: {
+    name: "Hip",
+    icon: "🦵",
+    color: "from-indigo-500 to-indigo-600",
+    specialTests: [
+      { name: "FADIR Test", purpose: "FAI/labral pathology", positive: "Groin pain" },
+      { name: "FABER Test", purpose: "Hip/SIJ pathology", positive: "Groin or SIJ pain" },
+      { name: "Thomas Test", purpose: "Hip flexor tightness", positive: "Thigh rises from table" },
+      { name: "Trendelenburg Test", purpose: "Hip abductor weakness", positive: "Contralateral pelvis drop" },
+      { name: "Ober's Test", purpose: "ITB/TFL tightness", positive: "Leg doesn't adduct past neutral" },
+      { name: "Resisted External Derotation", purpose: "Gluteal tendinopathy", positive: "Lateral hip pain" }
+    ],
+    redFlags: ["Severe trauma", "Unable to weight bear", "Night pain", "Groin pain with systemic symptoms"]
+  },
+  knee: {
+    name: "Knee",
+    icon: "🦵",
+    color: "from-cyan-500 to-cyan-600",
+    specialTests: [
+      { name: "Lachman's Test", purpose: "ACL integrity", positive: "Soft/absent end-feel" },
+      { name: "Anterior Drawer", purpose: "ACL integrity", positive: "Increased translation" },
+      { name: "Posterior Drawer", purpose: "PCL integrity", positive: "Increased posterior translation" },
+      { name: "Valgus Stress Test", purpose: "MCL integrity", positive: "Pain or laxity" },
+      { name: "McMurray's Test", purpose: "Meniscal pathology", positive: "Click or pain" },
+      { name: "Thessaly Test", purpose: "Meniscal pathology", positive: "Joint line pain" },
+      { name: "Patellar Apprehension", purpose: "Patellar instability", positive: "Patient apprehension" }
+    ],
+    redFlags: ["Locked knee", "Severe effusion", "Obvious deformity", "Inability to extend"]
+  },
+  ankle: {
+    name: "Ankle & Foot",
+    icon: "🦶",
+    color: "from-amber-500 to-amber-600",
+    specialTests: [
+      { name: "Anterior Drawer (Ankle)", purpose: "ATFL integrity", positive: "Increased translation" },
+      { name: "Talar Tilt Test", purpose: "CFL integrity", positive: "Increased inversion" },
+      { name: "Squeeze Test", purpose: "Syndesmosis injury", positive: "Distal ankle pain" },
+      { name: "External Rotation Test", purpose: "Syndesmosis injury", positive: "Distal ankle pain" },
+      { name: "Thompson's Test", purpose: "Achilles rupture", positive: "Absent plantar flexion" },
+      { name: "Windlass Test", purpose: "Plantar fasciitis", positive: "Heel pain with toe extension" }
+    ],
+    redFlags: ["Unable to weight bear", "Severe swelling", "Ottawa Ankle Rules positive", "Obvious deformity"]
   }
+};
 
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true };
+// Physio-specific quick prompts
+const PHYSIO_QUICK_ACTIONS = [
+  { 
+    id: "assessment", 
+    label: "Assessment", 
+    icon: ClipboardCheck, 
+    prompt: "What assessment approach and special tests would you recommend for this presentation?",
+    color: "bg-blue-50 text-blue-700 hover:bg-blue-100"
+  },
+  { 
+    id: "differential", 
+    label: "Differentials", 
+    icon: Brain, 
+    prompt: "What are the differential diagnoses to consider and how do I rule them in/out?",
+    color: "bg-purple-50 text-purple-700 hover:bg-purple-100"
+  },
+  { 
+    id: "manual", 
+    label: "Manual Therapy", 
+    icon: Hand, 
+    prompt: "What manual therapy techniques would be appropriate and what's the evidence?",
+    color: "bg-teal-50 text-teal-700 hover:bg-teal-100"
+  },
+  { 
+    id: "exercise", 
+    label: "Exercise Rx", 
+    icon: Dumbbell, 
+    prompt: "Provide a progressive exercise prescription with sets, reps, and dosage guidelines.",
+    color: "bg-green-50 text-green-700 hover:bg-green-100"
+  },
+  { 
+    id: "education", 
+    label: "Patient Education", 
+    icon: BookOpen, 
+    prompt: "What patient education and self-management strategies should I provide?",
+    color: "bg-amber-50 text-amber-700 hover:bg-amber-100"
+  },
+  { 
+    id: "redflags", 
+    label: "Red Flags", 
+    icon: AlertTriangle, 
+    prompt: "Screen for red flags and determine if onward referral is needed.",
+    color: "bg-red-50 text-red-700 hover:bg-red-100"
   }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error('3D Component Error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="h-full bg-gray-50 rounded-lg flex items-center justify-center">
-          <div className="text-center">
-            <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-orange-500" />
-            <p className="text-sm text-gray-600">3D Model Loading Error</p>
-            <p className="text-xs text-gray-500 mt-1">Please try refreshing the page</p>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-interface ChatMessage extends PhysioGptMessage {
-  suggestions?: string[];
-  visualContent?: any[];
-}
-
-interface ResearchPaper {
-  title: string;
-  authors: string[];
-  journal: string;
-  year: number;
-  pmid?: string;
-  doi?: string;
-  abstract: string;
-  studyType: 'RCT' | 'Systematic Review' | 'Meta-Analysis' | 'Cohort' | 'Case Study' | 'Clinical Guideline';
-  evidenceLevel: 'I' | 'II' | 'III' | 'IV' | 'V';
-  gradeRecommendation: 'A' | 'B' | 'C' | 'D';
-  relevanceScore: number;
-}
-
-interface EvidenceSummary {
-  topic: string;
-  primaryRecommendation: string;
-  evidenceGrade: 'A' | 'B' | 'C' | 'D';
-  confidenceLevel: 'High' | 'Moderate' | 'Low' | 'Very Low';
-  supportingStudies: ResearchPaper[];
-  contradictoryEvidence?: string;
-  clinicalConsiderations: string[];
-  lastUpdated: Date;
-}
+];
 
 interface PhysioGptResponse {
   response: string;
   conversationId: number;
   suggestions?: string[];
-  evidenceSummary?: EvidenceSummary;
-  researchPapers?: ResearchPaper[];
   evidenceGrade?: 'A' | 'B' | 'C' | 'D';
   confidenceLevel?: 'High' | 'Moderate' | 'Low' | 'Very Low';
   exerciseImages?: Array<{
@@ -131,6 +235,7 @@ interface PhysioGptResponse {
     tips?: string[];
     category?: string;
   }>;
+  visualContent?: any[];
   clinicalSections?: {
     assessment?: string;
     clinicalReasoning?: string;
@@ -150,56 +255,33 @@ export default function PhysioGPT() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [location] = useLocation();
+  
+  // Core state
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [selectedBodyRegion, setSelectedBodyRegion] = useState<string | null>(null);
-  const [selectedBodyRegionName, setSelectedBodyRegionName] = useState<string | null>(null);
-  const [show3DPanel, setShow3DPanel] = useState(false);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const [activeTab, setActiveTab] = useState("chat");
-  const [patientContext, setPatientContext] = useState<{
-    patientId?: number;
-    patientName?: string;
-    bodyPart?: string;
-  } | null>(null);
-  const [selectedAssessmentTemplate, setSelectedAssessmentTemplate] = useState<any | null>(null);
-  const [assessmentResults, setAssessmentResults] = useState<any | null>(null);
-  const [showVirtualPatients, setShowVirtualPatients] = useState(false);
-  const [selectedVirtualPatient, setSelectedVirtualPatient] = useState<any | null>(null);
-  const [virtualPatientCollapsed, setVirtualPatientCollapsed] = useState(false);
-  const [evidenceData, setEvidenceData] = useState<Map<number, PhysioGptResponse>>(new Map());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showSOAPBuilder, setShowSOAPBuilder] = useState(false);
-  const [soapBuilderCollapsed, setSOAPBuilderCollapsed] = useState(false);
-  const [showReferenceLibrary, setShowReferenceLibrary] = useState(false);
-  const [showTreatmentPlanning, setShowTreatmentPlanning] = useState(false);
-  const [showClinicalTools, setShowClinicalTools] = useState(false);
-  const [show3DSkeleton, setShow3DSkeleton] = useState(false);
-  const [skeletonConfig, setSkeletonConfig] = useState<any>(null);
-  const [clinicalContext, setClinicalContext] = useState<{
-    bodyRegion?: string;
-    conditionType?: 'acute' | 'chronic' | 'post-surgical' | 'sports';
-    patientAge?: 'pediatric' | 'adult' | 'geriatric';
-    activityLevel?: 'sedentary' | 'recreational' | 'competitive' | 'elite';
-    clinicalTags?: string[];
-    professionalMode?: boolean;
-  }>({});
-  const [professionalMode, setProfessionalMode] = useState(false);
-  const [useStreaming, setUseStreaming] = useState(true); // Enable streaming by default
+  
+  // Clinical context
+  const [selectedRegion, setSelectedRegion] = useState<keyof typeof BODY_REGIONS | null>(null);
+  const [showSpecialTests, setShowSpecialTests] = useState(false);
+  
+  // Streaming
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [evidenceData, setEvidenceData] = useState<Map<number, PhysioGptResponse>>(new Map());
+  
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Fetch user conversations
+  // Fetch conversations
   const { data: conversations = [], isLoading: loadingConversations } = useQuery<PhysioGptConversation[]>({
     queryKey: ["/api/physiogpt/conversations"],
     enabled: !!user,
   });
 
-  // Fetch conversation data
+  // Fetch messages
   const { data: conversationData, isLoading: loadingMessages } = useQuery<{
     conversation: PhysioGptConversation;
     messages: PhysioGptMessage[];
@@ -208,136 +290,13 @@ export default function PhysioGPT() {
     enabled: !!selectedConversationId,
   });
 
-  // Extract messages from conversation data
   const messages = conversationData?.messages || [];
 
-  // Load patient context from URL parameters
+  // Auto-scroll
   useEffect(() => {
-    const urlParams = new URLSearchParams(location.split('?')[1] || '');
-    const patientId = urlParams.get('patient');
-    
-    if (patientId) {
-      const fetchPatientData = async () => {
-        try {
-          const response = await apiRequest(`/api/virtual-patients/${patientId}`, "GET");
-          const patientData = response;
-          
-          setPatientContext({
-            patientId: parseInt(patientId),
-            patientName: patientData.patient_name,
-            bodyPart: patientData.body_part,
-          });
-          
-          const contextMessage = `I would like to discuss patient: ${patientData.patient_name}, a ${patientData.age}-year-old ${patientData.gender} with ${patientData.chief_complaint} affecting the ${patientData.body_part}.`;
-          setMessage(contextMessage);
-          
-          setSuggestions([
-            `What assessment tests would you recommend for this ${patientData.body_part} condition?`,
-            `What are the potential differential diagnoses?`,
-            `What treatment approaches would be most effective?`,
-            `What red flags should I screen for?`
-          ]);
-          
-          toast({
-            title: "Patient Context Loaded",
-            description: `Now discussing ${patientData.patient_name}'s case`,
-          });
-        } catch (error) {
-          console.error("Error loading patient context:", error);
-          toast({
-            title: "Error",
-            description: "Failed to load patient context",
-            variant: "destructive",
-          });
-        }
-      };
-      
-      fetchPatientData();
-    }
-  }, [location, toast]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, streamingContent]);
 
-  // Virtual patient selection handler
-  const handleVirtualPatientSelect = (patient: any) => {
-    setSelectedVirtualPatient(patient);
-    
-    setPatientContext({
-      patientId: patient.id,
-      patientName: patient.patientName,
-      bodyPart: patient.bodyPart,
-    });
-
-    handleNewConversation();
-
-    const contextMessage = `Analyze virtual patient case using ${patient.expertFramework} methodology:
-
-Patient: ${patient.patientName}
-Age: ${patient.age} years, Gender: ${patient.gender}
-Body Part: ${patient.bodyPart}
-Condition: ${patient.condition}
-Chief Complaint: ${patient.chiefComplaint}
-
-Presenting Symptoms: ${patient.presentingSymptoms}
-Medical History: ${patient.medicalHistory}
-
-Please provide assessment recommendations following ${patient.expertFramework} approach.`;
-
-    setMessage(contextMessage);
-
-    const frameworkSuggestions = {
-      'jo-gibson': [
-        "What shoulder assessment tests would Jo Gibson recommend?",
-        "How should I apply Jo Gibson's movement system approach?",
-        "What are the key differential diagnoses to consider?",
-        "What treatment principles should guide rehabilitation?"
-      ],
-      'grimaldi': [
-        "What hip assessment approach would Alison Grimaldi recommend?",
-        "How should I evaluate hip and pelvic biomechanics?",
-        "What are the key loading considerations?",
-        "What exercise progression would be most appropriate?"
-      ],
-      'bisset': [
-        "What elbow assessment tests would Leanne Bisset recommend?",
-        "How should I evaluate tendon loading capacity?",
-        "What are the evidence-based treatment options?",
-        "What exercise prescription would be most effective?"
-      ],
-      'clinical-edge': [
-        "What evidence-based assessment approach should I use?",
-        "What are the latest research findings for this condition?",
-        "How should I apply clinical prediction rules?",
-        "What outcome measures would be most appropriate?"
-      ],
-      'physio-network': [
-        "How should I assess pain mechanisms in this case?",
-        "What biopsychosocial factors should I consider?",
-        "What pain education strategies would be appropriate?",
-        "How should I address movement fears and beliefs?"
-      ],
-      'sports-map': [
-        "What sport-specific assessment should I perform?",
-        "How should I evaluate movement patterns?",
-        "What return-to-sport criteria should I use?",
-        "What injury prevention strategies should I implement?"
-      ]
-    };
-
-    setSuggestions(
-      frameworkSuggestions[patient.expertFramework as keyof typeof frameworkSuggestions] || [
-        "What assessment tests would you recommend?",
-        "What are the potential differential diagnoses?",
-        "What treatment approaches would be most effective?",
-        "What outcome measures should I use?"
-      ]
-    );
-
-    toast({
-      title: "Virtual Patient Selected",
-      description: `Analyzing ${patient.patientName} using ${patient.expertFramework} methodology`,
-    });
-  };
-
-  // Send message mutation
   // Streaming message handler
   const sendMessageStreaming = async (messageContent: string) => {
     if (isStreaming) return;
@@ -345,7 +304,6 @@ Please provide assessment recommendations following ${patient.expertFramework} a
     setIsStreaming(true);
     setStreamingContent("");
     
-    // Abort any previous streaming
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -355,43 +313,19 @@ Please provide assessment recommendations following ${patient.expertFramework} a
     try {
       const response = await fetch("/api/physiogpt/chat/stream", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: messageContent,
           conversationId: selectedConversationId,
-          patientContext: patientContext ? {
-            patientId: patientContext.patientId
-          } : selectedBodyRegion ? {
-            bodyRegion: selectedBodyRegion,
-            regionName: selectedBodyRegionName
-          } : undefined,
-          virtualPatient: selectedVirtualPatient ? {
-            id: selectedVirtualPatient.id,
-            patientName: selectedVirtualPatient.patientName,
-            age: selectedVirtualPatient.age,
-            gender: selectedVirtualPatient.gender,
-            bodyPart: selectedVirtualPatient.bodyPart,
-            condition: selectedVirtualPatient.condition,
-            chiefComplaint: selectedVirtualPatient.chiefComplaint,
-            presentingSymptoms: selectedVirtualPatient.presentingSymptoms,
-            medicalHistory: selectedVirtualPatient.medicalHistory,
-            expertFramework: selectedVirtualPatient.expertFramework,
-            complexity: selectedVirtualPatient.complexity
-          } : undefined,
           clinicalContext: {
-            ...clinicalContext,
-            bodyRegion: selectedBodyRegion || clinicalContext.bodyRegion,
-            professionalMode
+            bodyRegion: selectedRegion ? BODY_REGIONS[selectedRegion].name : undefined,
+            professionalMode: true
           }
         }),
         signal: abortControllerRef.current.signal,
       });
       
-      if (!response.ok) {
-        throw new Error("Failed to send message");
-      }
+      if (!response.ok) throw new Error("Failed to send message");
       
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -417,63 +351,46 @@ Please provide assessment recommendations following ${patient.expertFramework} a
                     newConversationId = data.data;
                     setSelectedConversationId(newConversationId);
                     break;
-                    
                   case 'chunk':
                     accumulatedContent += data.data;
                     setStreamingContent(accumulatedContent);
                     break;
-                    
                   case 'evidence':
                     evidenceDataReceived.evidenceSummary = data.data;
                     evidenceDataReceived.evidenceGrade = data.data.evidenceGrade;
                     evidenceDataReceived.confidenceLevel = data.data.confidenceLevel;
                     break;
-                    
                   case 'exercises':
                     evidenceDataReceived.exerciseImages = data.data;
                     break;
-                  
                   case 'visualContent':
                     evidenceDataReceived.visualContent = data.data;
                     break;
-                    
                   case 'suggestions':
                     setSuggestions(data.data || []);
                     break;
-                    
                   case 'clinicalSections':
                     evidenceDataReceived.clinicalSections = data.data;
                     break;
-                    
                   case 'done':
-                    // Update evidence data if received
                     if (Object.keys(evidenceDataReceived).length > 0 && newConversationId) {
-                      setEvidenceData(prev => new Map(prev.set(newConversationId, {
+                      setEvidenceData(prev => new Map(prev.set(newConversationId!, {
                         ...evidenceDataReceived,
-                        conversationId: newConversationId,
+                        conversationId: newConversationId!,
                         response: accumulatedContent
                       })));
                     }
-                    
-                    // Refresh conversations
                     setTimeout(() => {
                       queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
-                      queryClient.invalidateQueries({ 
-                        queryKey: [`/api/physiogpt/conversations/${newConversationId}`] 
-                      });
+                      queryClient.invalidateQueries({ queryKey: [`/api/physiogpt/conversations/${newConversationId}`] });
                     }, 100);
                     break;
-                    
                   case 'error':
-                    toast({
-                      title: "Error",
-                      description: data.data,
-                      variant: "destructive",
-                    });
+                    toast({ title: "Error", description: data.data, variant: "destructive" });
                     break;
                 }
               } catch (e) {
-                console.error("Error parsing SSE data:", e);
+                console.error("Error parsing SSE:", e);
               }
             }
           }
@@ -485,81 +402,43 @@ Please provide assessment recommendations following ${patient.expertFramework} a
       
     } catch (error: any) {
       if (error.name !== 'AbortError') {
-        console.error("Streaming error:", error);
-        toast({
-          title: "Error",
-          description: "Failed to send message. Please try again.",
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: "Failed to send message", variant: "destructive" });
       }
     } finally {
       setIsStreaming(false);
     }
   };
-  
-  // Regular mutation for non-streaming
+
+  // Mutation fallback
   const sendMessageMutation = useMutation({
     mutationFn: async (messageContent: string) => {
       const response = await apiRequest("/api/physiogpt/chat", "POST", {
         message: messageContent,
         conversationId: selectedConversationId,
-        patientContext: patientContext ? {
-          patientId: patientContext.patientId
-        } : selectedBodyRegion ? {
-          bodyRegion: selectedBodyRegion,
-          regionName: selectedBodyRegionName
-        } : undefined,
-        virtualPatient: selectedVirtualPatient ? {
-          id: selectedVirtualPatient.id,
-          patientName: selectedVirtualPatient.patientName,
-          age: selectedVirtualPatient.age,
-          gender: selectedVirtualPatient.gender,
-          bodyPart: selectedVirtualPatient.bodyPart,
-          condition: selectedVirtualPatient.condition,
-          chiefComplaint: selectedVirtualPatient.chiefComplaint,
-          presentingSymptoms: selectedVirtualPatient.presentingSymptoms,
-          medicalHistory: selectedVirtualPatient.medicalHistory,
-          expertFramework: selectedVirtualPatient.expertFramework,
-          complexity: selectedVirtualPatient.complexity
-        } : undefined,
         clinicalContext: {
-          ...clinicalContext,
-          bodyRegion: selectedBodyRegion || clinicalContext.bodyRegion,
-          professionalMode
+          bodyRegion: selectedRegion ? BODY_REGIONS[selectedRegion].name : undefined,
+          professionalMode: true
         }
       });
       return response;
     },
     onSuccess: (data: PhysioGptResponse) => {
-      if (data.evidenceSummary || data.researchPapers || data.evidenceGrade || data.exerciseImages || data.visualContent) {
+      if (data.evidenceGrade || data.exerciseImages || data.visualContent) {
         setEvidenceData(prev => new Map(prev.set(data.conversationId, data)));
       }
-      
       setSelectedConversationId(data.conversationId);
       setSuggestions(data.suggestions || []);
       setMessage("");
-      
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
-        queryClient.invalidateQueries({ 
-          queryKey: [`/api/physiogpt/conversations/${data.conversationId}`] 
-        });
-        queryClient.refetchQueries({ 
-          queryKey: [`/api/physiogpt/conversations/${data.conversationId}`] 
-        });
+        queryClient.invalidateQueries({ queryKey: [`/api/physiogpt/conversations/${data.conversationId}`] });
       }, 100);
     },
     onError: (error: any) => {
-      console.error("Send message error:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send message",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to send message", variant: "destructive" });
     },
   });
 
-  // Delete conversation mutation
   const deleteConversationMutation = useMutation({
     mutationFn: async (conversationId: number) => {
       await apiRequest(`/api/physiogpt/conversations/${conversationId}`, "DELETE");
@@ -569,181 +448,107 @@ Please provide assessment recommendations following ${patient.expertFramework} a
       setSelectedConversationId(null);
       setSuggestions([]);
     },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete conversation",
-        variant: "destructive",
-      });
-    },
   });
 
-  const handleSendMessage = (messageContent?: string) => {
+  const handleSendMessage = useCallback((messageContent?: string) => {
     const content = messageContent || message.trim();
-    if (!content) {
-      return;
-    }
-    
-    if (useStreaming) {
-      sendMessageStreaming(content);
-    } else {
-      sendMessageMutation.mutate(content);
-    }
-  };
+    if (!content) return;
+    sendMessageStreaming(content);
+  }, [message, selectedConversationId, selectedRegion]);
 
   const handleNewConversation = () => {
     setSelectedConversationId(null);
     setSuggestions([]);
     setMessage("");
-    setPatientContext(null);
-    setSelectedBodyRegion(null);
-    setSelectedBodyRegionName(null);
-    setAssessmentResults(null);
-    setSelectedAssessmentTemplate(null);
-    setSelectedVirtualPatient(null);
   };
 
-  const handleSelectConversation = (conversationId: number) => {
-    setSelectedConversationId(conversationId);
-    setAssessmentResults(null);
-    setSelectedAssessmentTemplate(null);
-  };
-
-  const handleDeleteConversation = (conversationId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (confirm("Are you sure you want to delete this conversation?")) {
-      deleteConversationMutation.mutate(conversationId);
-    }
-  };
-
-  const handleBodyPartSelected = (bodyPartId: string, displayName: string) => {
-    setSelectedBodyRegion(bodyPartId);
-    setSelectedBodyRegionName(displayName);
+  const handleRegionSelect = (region: keyof typeof BODY_REGIONS) => {
+    setSelectedRegion(region);
+    setShowSpecialTests(true);
     
+    const regionData = BODY_REGIONS[region];
     setSuggestions([
-      `What are the common causes of ${displayName.toLowerCase()} pain?`,
-      `What assessment tests should I perform for ${displayName.toLowerCase()} issues?`,
-      `What are the red flags for ${displayName.toLowerCase()} conditions?`,
-      `What exercises would you recommend for ${displayName.toLowerCase()} rehabilitation?`
+      `What assessment approach should I use for ${regionData.name.toLowerCase()} pain?`,
+      `What are the common differential diagnoses for ${regionData.name.toLowerCase()}?`,
+      `What are evidence-based exercises for ${regionData.name.toLowerCase()} rehabilitation?`,
+      `What manual therapy techniques are effective for ${regionData.name.toLowerCase()}?`
     ]);
     
     toast({
-      title: "Body Region Selected",
-      description: `Now focused on ${displayName} assessment and treatment`,
+      title: `${regionData.name} Selected`,
+      description: "Special tests and relevant prompts loaded",
     });
   };
-
-  const handleTemplateSelect = (template: AssessmentTemplate) => {
-    setSelectedAssessmentTemplate(template);
-    setActiveTab("assessment");
-  };
-
-  const handleAssessmentComplete = (results: AssessmentResults) => {
-    setAssessmentResults(results);
-    
-    const assessmentMessage = `Based on the assessment results:
-${results.findings.join(', ')}
-
-Please provide:
-1. Likely diagnosis
-2. Recommended treatment plan
-3. Key exercises
-4. Red flags to monitor`;
-
-    setMessage(assessmentMessage);
-    setActiveTab("chat");
-  };
-
-  useEffect(() => {
-    if (shouldAutoScroll && messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, shouldAutoScroll]);
 
   const formatTime = (date: Date | string) => {
     const dateObj = typeof date === 'string' ? new Date(date) : date;
-    return dateObj.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    });
+    return dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
+  const currentRegionData = selectedRegion ? BODY_REGIONS[selectedRegion] : null;
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Collapsible Sidebar */}
-      <div className={`${sidebarCollapsed ? 'w-0' : 'w-80'} transition-all duration-300 ease-in-out overflow-hidden border-r border-teal-100 bg-white/95 backdrop-blur-sm`}>
+    <div className="flex h-[calc(100vh-4rem)] bg-gray-50">
+      {/* Sidebar - Conversations */}
+      <div className={`${sidebarCollapsed ? 'w-0' : 'w-72'} transition-all duration-300 overflow-hidden border-r bg-white`}>
         <div className="p-4 h-full flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
               <div className="p-2 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg">
-                <Brain className="h-5 w-5 text-white" />
+                <Stethoscope className="h-4 w-4 text-white" />
               </div>
-              <h2 className="text-lg font-semibold bg-gradient-to-r from-teal-600 to-teal-700 bg-clip-text text-transparent">
-                AI Assistant
-              </h2>
+              <span className="font-semibold text-gray-800">PhysioGPT</span>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarCollapsed(true)}
-              className="hover:bg-teal-50 text-teal-600"
-            >
+            <Button variant="ghost" size="icon" onClick={() => setSidebarCollapsed(true)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
 
-          <Button 
-            onClick={handleNewConversation}
-            className="w-full mb-4 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white shadow-sm"
-          >
+          <Button onClick={handleNewConversation} className="w-full mb-4 bg-teal-600 hover:bg-teal-700">
             <Plus className="h-4 w-4 mr-2" />
-            New Conversation
+            New Consultation
           </Button>
 
           <ScrollArea className="flex-1">
             <div className="space-y-2">
               {loadingConversations ? (
                 <>
-                  <Skeleton className="h-16 w-full rounded-lg" />
-                  <Skeleton className="h-16 w-full rounded-lg" />
-                  <Skeleton className="h-16 w-full rounded-lg" />
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
                 </>
               ) : conversations.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <MessageCircle className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm">No conversations yet</p>
-                  <p className="text-xs mt-1">Start a new conversation above</p>
+                <div className="text-center py-6 text-gray-500">
+                  <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No consultations yet</p>
                 </div>
               ) : (
                 conversations.map((conv) => (
                   <Card
                     key={conv.id}
-                    className={`cursor-pointer transition-all hover:shadow-md hover:border-teal-200 ${
-                      selectedConversationId === conv.id 
-                        ? 'border-teal-400 bg-gradient-to-br from-teal-50 to-mint-50 shadow-md' 
-                        : 'hover:bg-gray-50'
+                    className={`cursor-pointer transition-all hover:shadow-sm ${
+                      selectedConversationId === conv.id ? 'border-teal-400 bg-teal-50' : 'hover:bg-gray-50'
                     }`}
-                    onClick={() => handleSelectConversation(conv.id)}
+                    onClick={() => setSelectedConversationId(conv.id)}
                   >
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-sm truncate text-gray-800">
-                            {conv.title}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Clock className="h-3 w-3 text-gray-400" />
-                            <span className="text-xs text-gray-500">
-                              {new Date(conv.createdAt).toLocaleDateString()}
-                            </span>
+                          <h3 className="font-medium text-sm truncate">{conv.title}</h3>
+                          <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                            <Clock className="h-3 w-3" />
+                            {new Date(conv.createdAt).toLocaleDateString()}
                           </div>
                         </div>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 hover:bg-red-50 hover:text-red-600"
-                          onClick={(e) => handleDeleteConversation(conv.id, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Delete this conversation?")) {
+                              deleteConversationMutation.mutate(conv.id);
+                            }
+                          }}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -754,248 +559,192 @@ Please provide:
               )}
             </div>
           </ScrollArea>
-
-          {/* Clinical Context Section */}
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg space-y-3">
-            <div className="text-sm font-medium text-gray-700">Clinical Context</div>
-            
-            {/* Body Region Quick Select */}
-            <div className="grid grid-cols-3 gap-1">
-              {['Cervical', 'Thoracic', 'Lumbar', 'Shoulder', 'Hip', 'Knee'].map(region => (
-                <Button
-                  key={region}
-                  variant={clinicalContext.bodyRegion === region ? 'default' : 'outline'}
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => setClinicalContext(prev => ({ ...prev, bodyRegion: region }))}
-                >
-                  {region}
-                </Button>
-              ))}
-            </div>
-            
-            {/* Condition Type */}
-            <div className="flex gap-1">
-              {(['acute', 'chronic', 'post-surgical', 'sports'] as const).map(type => (
-                <Button
-                  key={type}
-                  variant={clinicalContext.conditionType === type ? 'default' : 'outline'}
-                  size="sm"
-                  className="text-xs flex-1"
-                  onClick={() => setClinicalContext(prev => ({ ...prev, conditionType: type }))}
-                >
-                  {type.charAt(0).toUpperCase() + type.slice(1)}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="mt-4 space-y-2">
-            <Button
-              variant="outline"
-              className="w-full justify-start hover:bg-teal-50 hover:border-teal-300"
-              onClick={() => setShowVirtualPatients(!showVirtualPatients)}
-            >
-              <Stethoscope className="h-4 w-4 mr-2 text-teal-600" />
-              Virtual Patients
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start hover:bg-teal-50 hover:border-teal-300"
-              onClick={() => setShow3DPanel(!show3DPanel)}
-            >
-              <Activity className="h-4 w-4 mr-2 text-teal-600" />
-              3D Anatomy
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start hover:bg-teal-50 hover:border-teal-300"
-              onClick={() => setShowClinicalTools(!showClinicalTools)}
-            >
-              <Calculator className="h-4 w-4 mr-2 text-teal-600" />
-              Clinical Tools
-            </Button>
-          </div>
         </div>
       </div>
 
-      {/* Toggle Sidebar Button (when collapsed) */}
+      {/* Toggle sidebar button */}
       {sidebarCollapsed && (
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setSidebarCollapsed(false)}
-          className="absolute left-4 top-20 z-10 bg-white shadow-md hover:bg-teal-50"
+          className="absolute left-2 top-20 z-10 bg-white shadow-md"
         >
-          <Menu className="h-4 w-4 text-teal-600" />
+          <Menu className="h-4 w-4" />
         </Button>
       )}
 
-      {/* Main Chat Area */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-teal-600 via-teal-500 to-mint-500 text-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Brain className="h-6 w-6" />
-              <div>
-                <h1 className="text-xl font-bold">PhysioGPT Assistant</h1>
-                <p className="text-xs opacity-90">Evidence-based clinical support</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {patientContext && (
-                <Badge className="bg-white/20 text-white border-white/30">
-                  Patient: {patientContext.patientName}
+        {/* Region 1: Patient Snapshot / Clinical Context */}
+        <div className="bg-white border-b p-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-medium text-gray-600">Select Body Region</h2>
+              {currentRegionData && (
+                <Badge className={`bg-gradient-to-r ${currentRegionData.color} text-white`}>
+                  {currentRegionData.icon} {currentRegionData.name}
                 </Badge>
               )}
-              {/* Professional Mode Toggle */}
-              <Button
-                variant={professionalMode ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setProfessionalMode(!professionalMode)}
-                className="text-xs"
-              >
-                {professionalMode ? (
-                  <><FileText className="h-3 w-3 mr-1" /> Pro Mode</>  
-                ) : (
-                  <><User className="h-3 w-3 mr-1" /> Clinical</>
-                )}
-              </Button>
-              {/* Streaming Toggle */}
-              <Button
-                variant={useStreaming ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setUseStreaming(!useStreaming)}
-                className="text-xs"
-                title={useStreaming ? "Streaming enabled - responses appear instantly" : "Streaming disabled - wait for complete response"}
-              >
-                {useStreaming ? (
-                  <><Activity className="h-3 w-3 mr-1 animate-pulse" /> Fast</>
-                ) : (
-                  <><Clock className="h-3 w-3 mr-1" /> Standard</>
-                )}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowSOAPBuilder(!showSOAPBuilder)}
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              >
-                <FileText className="h-4 w-4 mr-1" />
-                SOAP Builder
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowReferenceLibrary(!showReferenceLibrary)}
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              >
-                <BookOpen className="h-4 w-4 mr-1" />
-                References
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowTreatmentPlanning(!showTreatmentPlanning)}
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              >
-                <Activity className="h-4 w-4 mr-1" />
-                Treatment Plan
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShow3DSkeleton(!show3DSkeleton)}
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              >
-                <User className="h-4 w-4 mr-1" />
-                3D Patient Model
-              </Button>
             </div>
+            
+            {/* Body Region Grid */}
+            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
+              {(Object.keys(BODY_REGIONS) as Array<keyof typeof BODY_REGIONS>).map((region) => {
+                const data = BODY_REGIONS[region];
+                const isSelected = selectedRegion === region;
+                return (
+                  <Button
+                    key={region}
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    className={`flex flex-col h-auto py-2 px-3 ${isSelected ? `bg-gradient-to-r ${data.color} text-white border-0` : ''}`}
+                    onClick={() => handleRegionSelect(region)}
+                    data-testid={`region-${region}`}
+                  >
+                    <span className="text-lg mb-1">{data.icon}</span>
+                    <span className="text-xs">{data.name.split(' ')[0]}</span>
+                  </Button>
+                );
+              })}
+            </div>
+
+            {/* Special Tests Collapsible */}
+            {currentRegionData && (
+              <Collapsible open={showSpecialTests} onOpenChange={setShowSpecialTests} className="mt-3">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full justify-between text-teal-700 hover:bg-teal-50">
+                    <span className="flex items-center gap-2">
+                      <ClipboardCheck className="h-4 w-4" />
+                      Special Tests for {currentRegionData.name}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${showSpecialTests ? 'rotate-180' : ''}`} />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <div className="bg-gray-50 rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                    {currentRegionData.specialTests.map((test, idx) => (
+                      <div 
+                        key={idx} 
+                        className="flex items-start gap-2 p-2 bg-white rounded border hover:border-teal-300 cursor-pointer transition-colors"
+                        onClick={() => {
+                          const prompt = `How do I perform ${test.name}? What is the sensitivity/specificity and clinical utility for ${test.purpose}?`;
+                          setMessage(prompt);
+                        }}
+                        data-testid={`special-test-${idx}`}
+                      >
+                        <CheckCircle2 className="h-4 w-4 text-teal-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-gray-800">{test.name}</p>
+                          <p className="text-xs text-gray-600">{test.purpose}</p>
+                          <p className="text-xs text-teal-600">+ : {test.positive}</p>
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-gray-400" />
+                      </div>
+                    ))}
+                    
+                    {/* Red Flags */}
+                    <div className="mt-3 p-2 bg-red-50 rounded-lg border border-red-200">
+                      <div className="flex items-center gap-2 mb-1">
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                        <span className="text-sm font-medium text-red-700">Red Flags</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {currentRegionData.redFlags.map((flag, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs border-red-300 text-red-700">
+                            {flag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
           </div>
         </div>
 
-        {/* Messages Area */}
-        <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-          {!selectedConversationId ? (
+        {/* Region 2: AI Dialogue */}
+        <ScrollArea className="flex-1 p-4">
+          {!selectedConversationId && !isStreaming ? (
             <div className="h-full flex items-center justify-center">
-              <div className="text-center max-w-md">
-                <div className="mb-6 relative">
-                  <div className="absolute inset-0 bg-gradient-to-r from-teal-200 to-mint-200 blur-3xl opacity-30"></div>
-                  <Brain className="h-16 w-16 mx-auto text-teal-600 relative" />
+              <div className="text-center max-w-lg">
+                <div className="mb-6">
+                  <div className="w-20 h-20 mx-auto bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <Stethoscope className="h-10 w-10 text-white" />
+                  </div>
                 </div>
-                <h2 className="text-2xl font-bold mb-2 bg-gradient-to-r from-teal-600 to-teal-700 bg-clip-text text-transparent">
-                  Welcome to PhysioGPT
-                </h2>
+                <h2 className="text-2xl font-bold mb-2 text-gray-800">PhysioGPT</h2>
                 <p className="text-gray-600 mb-6">
-                  Your AI-powered physiotherapy assistant. Ask me anything about assessment, treatment, or clinical reasoning.
+                  Your evidence-based physiotherapy clinical assistant. Select a body region above, then ask about assessment, treatment, or clinical reasoning.
                 </p>
+                
+                {/* Quick start prompts */}
                 <div className="grid grid-cols-2 gap-3">
                   <Button
                     variant="outline"
-                    className="justify-start hover:bg-teal-50 hover:border-teal-300"
-                    onClick={() => handleSendMessage("What are the latest evidence-based treatments for lower back pain?")}
+                    className="justify-start text-left h-auto py-3 hover:bg-teal-50 hover:border-teal-300"
+                    onClick={() => handleSendMessage("What's the best approach for assessing acute low back pain?")}
+                    data-testid="quick-prompt-lbp"
                   >
-                    <Lightbulb className="h-4 w-4 mr-2 text-teal-600" />
-                    Back Pain Rx
+                    <Bone className="h-4 w-4 mr-2 text-teal-600 flex-shrink-0" />
+                    <span className="text-sm">Low Back Pain Assessment</span>
                   </Button>
                   <Button
                     variant="outline"
-                    className="justify-start hover:bg-teal-50 hover:border-teal-300"
-                    onClick={() => handleSendMessage("How do I assess shoulder impingement?")}
+                    className="justify-start text-left h-auto py-3 hover:bg-teal-50 hover:border-teal-300"
+                    onClick={() => handleSendMessage("What are the best special tests for rotator cuff pathology?")}
+                    data-testid="quick-prompt-shoulder"
                   >
-                    <FileText className="h-4 w-4 mr-2 text-teal-600" />
-                    Shoulder Tests
+                    <Target className="h-4 w-4 mr-2 text-teal-600 flex-shrink-0" />
+                    <span className="text-sm">Rotator Cuff Assessment</span>
                   </Button>
                   <Button
                     variant="outline"
-                    className="justify-start hover:bg-teal-50 hover:border-teal-300"
-                    onClick={() => handleSendMessage("What are red flags for cervical spine?")}
+                    className="justify-start text-left h-auto py-3 hover:bg-teal-50 hover:border-teal-300"
+                    onClick={() => handleSendMessage("How do I differentiate between hip and lumbar pathology?")}
+                    data-testid="quick-prompt-hip"
                   >
-                    <AlertTriangle className="h-4 w-4 mr-2 text-teal-600" />
-                    Red Flags
+                    <Brain className="h-4 w-4 mr-2 text-teal-600 flex-shrink-0" />
+                    <span className="text-sm">Hip vs Lumbar Differential</span>
                   </Button>
                   <Button
                     variant="outline"
-                    className="justify-start hover:bg-teal-50 hover:border-teal-300"
-                    onClick={() => handleSendMessage("Explain central sensitization")}
+                    className="justify-start text-left h-auto py-3 hover:bg-teal-50 hover:border-teal-300"
+                    onClick={() => handleSendMessage("What's the evidence for manual therapy in neck pain?")}
+                    data-testid="quick-prompt-neck"
                   >
-                    <BookOpen className="h-4 w-4 mr-2 text-teal-600" />
-                    Pain Science
+                    <BookOpen className="h-4 w-4 mr-2 text-teal-600 flex-shrink-0" />
+                    <span className="text-sm">Manual Therapy Evidence</span>
                   </Button>
                 </div>
               </div>
             </div>
           ) : loadingMessages ? (
-            <div className="space-y-4">
+            <div className="space-y-4 max-w-3xl mx-auto">
               <Skeleton className="h-20 w-3/4" />
               <Skeleton className="h-20 w-2/3 ml-auto" />
-              <Skeleton className="h-20 w-3/4" />
             </div>
           ) : (
-            <div className="space-y-4 max-w-4xl mx-auto">
+            <div className="space-y-4 max-w-3xl mx-auto">
               {messages.map((msg, index) => (
                 <div
                   key={msg.id}
-                  className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
+                  className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.role === 'assistant' && (
                     <Avatar className="h-8 w-8 border-2 border-teal-200">
-                      <AvatarFallback className="bg-gradient-to-br from-teal-500 to-teal-600 text-white">
+                      <AvatarFallback className="bg-teal-600 text-white">
                         <Bot className="h-4 w-4" />
                       </AvatarFallback>
                     </Avatar>
                   )}
-                  <div className={`max-w-[70%] ${msg.role === 'user' ? 'order-first' : ''}`}>
-                    <div
-                      className={`rounded-2xl p-4 shadow-sm ${
-                        msg.role === 'user'
-                          ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white'
-                          : 'bg-white border border-gray-200'
-                      }`}
-                    >
+                  <div className={`max-w-[75%] ${msg.role === 'user' ? 'order-first' : ''}`}>
+                    <div className={`rounded-2xl p-4 ${
+                      msg.role === 'user'
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-white border shadow-sm'
+                    }`}>
                       {msg.role === 'assistant' ? (
                         <>
                           <ClinicalResponseDisplay 
@@ -1015,24 +764,8 @@ Please provide:
                                 ? evidenceData.get(selectedConversationId!)?.clinicalSections
                                 : undefined
                             }
-                            contraindications={
-                              evidenceData.has(selectedConversationId!) && index === messages.length - 1
-                                ? evidenceData.get(selectedConversationId!)?.contraindications
-                                : undefined
-                            }
-                            icdCodes={
-                              evidenceData.has(selectedConversationId!) && index === messages.length - 1
-                                ? evidenceData.get(selectedConversationId!)?.icdCodes
-                                : undefined
-                            }
-                            cptCodes={
-                              evidenceData.has(selectedConversationId!) && index === messages.length - 1
-                                ? evidenceData.get(selectedConversationId!)?.cptCodes
-                                : undefined
-                            }
-                            professionalMode={professionalMode}
+                            professionalMode={true}
                           />
-                          {/* Display visual content (AI images, external images, videos) */}
                           {evidenceData.has(selectedConversationId!) && index === messages.length - 1 && 
                            evidenceData.get(selectedConversationId!)?.visualContent && (                            
                             <VisualContentDisplay 
@@ -1040,193 +773,74 @@ Please provide:
                               exerciseImages={evidenceData.get(selectedConversationId!)?.exerciseImages}
                             />
                           )}
-                          {/* Display exercise images if available and no visual content */}
-                          {evidenceData.has(selectedConversationId!) && index === messages.length - 1 && 
-                           !evidenceData.get(selectedConversationId!)?.visualContent &&
-                           evidenceData.get(selectedConversationId!)?.exerciseImages && 
-                           evidenceData.get(selectedConversationId!)!.exerciseImages!.length > 0 && (
-                            <div className="mt-6 space-y-4">
-                              <div className="flex items-center gap-2 mb-4">
-                                <Target className="h-5 w-5 text-teal-600" />
-                                <h3 className="text-lg font-semibold text-gray-800">Exercise Demonstrations</h3>
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {evidenceData.get(selectedConversationId!)!.exerciseImages!.map((exercise, idx) => (
-                                  <Card key={idx} className="overflow-hidden hover:shadow-lg transition-shadow">
-                                    <div className="aspect-video relative bg-gradient-to-br from-gray-50 to-gray-100">
-                                      <img 
-                                        src={exercise.primaryImageUrl} 
-                                        alt={exercise.exerciseName}
-                                        className="w-full h-full object-contain p-2"
-                                        onError={(e) => {
-                                          const target = e.target as HTMLImageElement;
-                                          target.style.display = 'none';
-                                          const parent = target.parentElement;
-                                          if (parent) {
-                                            parent.innerHTML = `
-                                              <div class="flex flex-col items-center justify-center h-full text-gray-400">
-                                                <svg class="h-12 w-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                </svg>
-                                                <span class="text-sm">Image unavailable</span>
-                                              </div>
-                                            `;
-                                          }
-                                        }}
-                                      />
-                                    </div>
-                                    <CardContent className="p-4">
-                                      <h4 className="font-semibold text-gray-800 mb-2">{exercise.exerciseName}</h4>
-                                      {exercise.category && (
-                                        <Badge variant="secondary" className="mb-2">
-                                          {exercise.category}
-                                        </Badge>
-                                      )}
-                                      {exercise.instructions && exercise.instructions.length > 0 && (
-                                        <div className="mt-3">
-                                          <p className="text-sm font-medium text-gray-600 mb-1">Instructions:</p>
-                                          <ul className="text-sm text-gray-600 space-y-1">
-                                            {exercise.instructions.map((instruction, i) => (
-                                              <li key={i} className="flex items-start">
-                                                <span className="text-teal-500 mr-2">•</span>
-                                                <span>{instruction}</span>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                      {exercise.tips && exercise.tips.length > 0 && (
-                                        <div className="mt-3">
-                                          <p className="text-sm font-medium text-gray-600 mb-1">Tips:</p>
-                                          <ul className="text-sm text-gray-500 space-y-1">
-                                            {exercise.tips.map((tip, i) => (
-                                              <li key={i} className="flex items-start">
-                                                <Lightbulb className="h-3 w-3 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
-                                                <span>{tip}</span>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                    </CardContent>
-                                  </Card>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {/* PDF Generation Button */}
-                          <div className="mt-3 flex justify-end">
+                          <div className="mt-2 flex justify-end">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => {
-                                const contentType = msg.content.toLowerCase().includes('exercise') || 
-                                                   msg.content.toLowerCase().includes('phase') ? 'exercise' : 
-                                                   msg.content.toLowerCase().includes('subjective') ||
-                                                   msg.content.toLowerCase().includes('objective') ? 'soap' : 'general';
-                                
                                 pdfGenerator.downloadPDF({
                                   title: `Clinical Response - ${new Date().toLocaleDateString()}`,
                                   content: msg.content,
-                                  type: contentType as any,
-                                  patientName: patientContext?.patientName || selectedVirtualPatient?.patientName,
+                                  type: 'general',
                                   date: new Date().toLocaleDateString(),
-                                  therapistName: 'PhysioGPT User',
-                                  clinicName: 'PhysioGPT Clinical Services'
+                                  therapistName: 'PhysioGPT User'
                                 });
-                                
-                                toast({
-                                  title: "PDF Generated",
-                                  description: "The document has been downloaded to your device.",
-                                });
+                                toast({ title: "PDF Generated" });
                               }}
                               className="text-xs"
+                              data-testid="download-pdf"
                             >
                               <Download className="h-3 w-3 mr-1" />
-                              Download PDF
+                              PDF
                             </Button>
                           </div>
                         </>
                       ) : (
-                        <p className="text-white">
-                          {msg.content}
-                        </p>
+                        <p>{msg.content}</p>
                       )}
-                      <div className={`text-xs mt-2 ${msg.role === 'user' ? 'text-white/70' : 'text-gray-400'}`}>
-                        {formatTime(msg.createdAt)}
-                      </div>
+                    </div>
+                    <div className={`text-xs mt-1 ${msg.role === 'user' ? 'text-right text-gray-500' : 'text-gray-400'}`}>
+                      {formatTime(msg.createdAt)}
                     </div>
                   </div>
                   {msg.role === 'user' && (
-                    <Avatar className="h-8 w-8 border-2 border-teal-200">
-                      <AvatarFallback className="bg-gradient-to-br from-gray-100 to-gray-200">
+                    <Avatar className="h-8 w-8 border-2 border-gray-200">
+                      <AvatarFallback className="bg-gray-100">
                         <User className="h-4 w-4 text-gray-600" />
                       </AvatarFallback>
                     </Avatar>
                   )}
                 </div>
               ))}
-              {/* Show streaming content if streaming */}
+
+              {/* Streaming response */}
               {isStreaming && streamingContent && (
-                <div className="flex gap-3 animate-fadeIn">
+                <div className="flex gap-3">
                   <Avatar className="h-8 w-8 border-2 border-teal-200">
-                    <AvatarFallback className="bg-gradient-to-br from-teal-500 to-teal-600 text-white">
+                    <AvatarFallback className="bg-teal-600 text-white">
                       <Bot className="h-4 w-4" />
                     </AvatarFallback>
                   </Avatar>
-                  <div className="max-w-[70%]">
-                    <div className="rounded-2xl p-4 shadow-sm bg-white border border-gray-200">
-                      <ClinicalResponseDisplay 
-                        content={streamingContent}
-                        professionalMode={professionalMode}
-                      />
-                      {/* PDF Button for streaming content */}
-                      <div className="mt-3 flex justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            const contentType = streamingContent.toLowerCase().includes('exercise') || 
-                                               streamingContent.toLowerCase().includes('phase') ? 'exercise' : 
-                                               streamingContent.toLowerCase().includes('subjective') ||
-                                               streamingContent.toLowerCase().includes('objective') ? 'soap' : 'general';
-                            
-                            pdfGenerator.downloadPDF({
-                              title: `Clinical Response - ${new Date().toLocaleDateString()}`,
-                              content: streamingContent,
-                              type: contentType as any,
-                              patientName: patientContext?.patientName || selectedVirtualPatient?.patientName,
-                              date: new Date().toLocaleDateString(),
-                              therapistName: 'PhysioGPT User',
-                              clinicName: 'PhysioGPT Clinical Services'
-                            });
-                            
-                            toast({
-                              title: "PDF Generated",
-                              description: "The document has been downloaded to your device.",
-                            });
-                          }}
-                          className="text-xs"
-                        >
-                          <Download className="h-3 w-3 mr-1" />
-                          Download PDF
-                        </Button>
-                      </div>
+                  <div className="max-w-[75%]">
+                    <div className="rounded-2xl p-4 bg-white border shadow-sm">
+                      <ClinicalResponseDisplay content={streamingContent} professionalMode={true} />
                     </div>
                   </div>
                 </div>
               )}
+
+              {/* Loading indicator */}
               {(sendMessageMutation.isPending || (isStreaming && !streamingContent)) && (
-                <div className="flex gap-3 animate-pulse">
+                <div className="flex gap-3">
                   <Avatar className="h-8 w-8 border-2 border-teal-200">
-                    <AvatarFallback className="bg-gradient-to-br from-teal-500 to-teal-600 text-white">
+                    <AvatarFallback className="bg-teal-600 text-white">
                       <Bot className="h-4 w-4" />
                     </AvatarFallback>
                   </Avatar>
-                  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                  <div className="bg-white border rounded-2xl p-4 shadow-sm">
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
-                      <span className="text-sm text-gray-500">Thinking...</span>
+                      <span className="text-sm text-gray-500">Analyzing...</span>
                     </div>
                   </div>
                 </div>
@@ -1238,18 +852,19 @@ Please provide:
 
         {/* Suggestions */}
         {suggestions.length > 0 && (
-          <div className="px-4 pb-2">
-            <ScrollArea className="w-full" orientation="horizontal">
-              <div className="flex gap-2 pb-2">
+          <div className="px-4 py-2 border-t bg-white">
+            <ScrollArea className="w-full">
+              <div className="flex gap-2">
                 {suggestions.map((suggestion, index) => (
                   <Button
                     key={index}
                     variant="outline"
                     size="sm"
-                    className="whitespace-nowrap hover:bg-teal-50 hover:border-teal-300 hover:text-teal-700"
+                    className="whitespace-nowrap hover:bg-teal-50 hover:border-teal-300"
                     onClick={() => handleSendMessage(suggestion)}
+                    data-testid={`suggestion-${index}`}
                   >
-                    <Lightbulb className="h-3 w-3 mr-1" />
+                    <Lightbulb className="h-3 w-3 mr-1 text-teal-600" />
                     {suggestion}
                   </Button>
                 ))}
@@ -1258,281 +873,62 @@ Please provide:
           </div>
         )}
 
-        {/* Clinical Quick Actions Bar */}
-        <div className="px-4 py-2 bg-gray-50 border-t flex gap-2 overflow-x-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs whitespace-nowrap"
-            onClick={() => {
-              const soapPrompt = "Generate a SOAP note based on our conversation";
-              setMessage(soapPrompt);
-              handleSendMessage(soapPrompt);
-            }}
-          >
-            <FileText className="h-3 w-3 mr-1" />
-            Generate SOAP
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs whitespace-nowrap"
-            onClick={() => {
-              const reasoningPrompt = "Show the clinical reasoning pathway for this case";
-              setMessage(reasoningPrompt);
-              handleSendMessage(reasoningPrompt);
-            }}
-          >
-            <Brain className="h-3 w-3 mr-1" />
-            Clinical Reasoning
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs whitespace-nowrap"
-            onClick={() => {
-              const evidencePrompt = "What's the evidence level for these recommendations?";
-              setMessage(evidencePrompt);
-              handleSendMessage(evidencePrompt);
-            }}
-          >
-            <BookOpen className="h-3 w-3 mr-1" />
-            Evidence Check
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs whitespace-nowrap"
-            onClick={() => {
-              const redFlagPrompt = "Screen for red flags in this presentation";
-              setMessage(redFlagPrompt);
-              handleSendMessage(redFlagPrompt);
-            }}
-          >
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            Red Flag Screen
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs whitespace-nowrap"
-            onClick={() => {
-              const exercisePrompt = "Generate a phase-based exercise program for this condition";
-              setMessage(exercisePrompt);
-              handleSendMessage(exercisePrompt);
-            }}
-          >
-            <Activity className="h-3 w-3 mr-1" />
-            Exercise Program
-          </Button>
-        </div>
+        {/* Region 3: Quick Actions & Input */}
+        <div className="border-t bg-white">
+          {/* Physio Quick Actions */}
+          <div className="px-4 py-2 border-b bg-gray-50">
+            <div className="max-w-3xl mx-auto flex gap-2 overflow-x-auto">
+              {PHYSIO_QUICK_ACTIONS.map((action) => (
+                <Button
+                  key={action.id}
+                  variant="ghost"
+                  size="sm"
+                  className={`whitespace-nowrap ${action.color}`}
+                  onClick={() => handleSendMessage(action.prompt)}
+                  data-testid={`action-${action.id}`}
+                >
+                  <action.icon className="h-3 w-3 mr-1" />
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          </div>
 
-        {/* Input Area */}
-        <div className="p-4 border-t bg-white/95 backdrop-blur-sm">
-          <div className="max-w-4xl mx-auto">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage();
-              }}
-              className="flex gap-2"
-            >
-              <Input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={
-                  professionalMode
-                    ? "Enter clinical query with ICD/CPT codes, research citations..."
-                    : selectedBodyRegion 
-                    ? `Ask about ${selectedBodyRegionName}...`
-                    : "Ask me anything about physiotherapy..."
-                }
-                disabled={sendMessageMutation.isPending || isStreaming}
-                className="flex-1 border-gray-200 focus:border-teal-400 focus:ring-teal-400"
-              />
-              <Button 
-                type="submit" 
-                disabled={!message.trim() || sendMessageMutation.isPending || isStreaming}
-                className="bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white shadow-sm"
+          {/* Input */}
+          <div className="p-4">
+            <div className="max-w-3xl mx-auto">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                }}
+                className="flex gap-2"
               >
-                {(sendMessageMutation.isPending || isStreaming) ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
-            </form>
+                <Input
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder={
+                    currentRegionData 
+                      ? `Ask about ${currentRegionData.name.toLowerCase()} assessment or treatment...`
+                      : "Ask me about assessment, treatment, or clinical reasoning..."
+                  }
+                  disabled={sendMessageMutation.isPending || isStreaming}
+                  className="flex-1"
+                  data-testid="chat-input"
+                />
+                <Button 
+                  type="submit" 
+                  disabled={!message.trim() || sendMessageMutation.isPending || isStreaming}
+                  className="bg-teal-600 hover:bg-teal-700"
+                  data-testid="send-button"
+                >
+                  {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </form>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Right Panel - Clinical Tools or 3D Anatomy */}
-      {(show3DPanel || showClinicalTools) && (
-        <div className="w-96 border-l bg-white flex flex-col">
-          {show3DPanel && !showClinicalTools && (
-            <>
-              <div className="flex items-center justify-between p-4 border-b">
-                <h3 className="font-semibold">3D Anatomy</h3>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShow3DPanel(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex-1 p-4">
-                <ErrorBoundary>
-                  <Suspense fallback={
-                    <div className="h-96 flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-                    </div>
-                  }>
-                    <InteractiveSkeleton
-                      onBodyPartSelected={handleBodyPartSelected}
-                      selectedBodyPart={selectedBodyRegion}
-                    />
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            </>
-          )}
-          
-          {showClinicalTools && (
-            <>
-              <div className="flex items-center justify-between p-4 border-b">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Calculator className="h-4 w-4 text-teal-600" />
-                  Clinical Tools
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowClinicalTools(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <ClinicalToolsPanel />
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {showVirtualPatients && (
-        <VirtualPatientSidebar
-          onClose={() => setShowVirtualPatients(false)}
-          onSelectPatient={handleVirtualPatientSelect}
-          collapsed={virtualPatientCollapsed}
-          onToggleCollapse={() => setVirtualPatientCollapsed(!virtualPatientCollapsed)}
-        />
-      )}
-      
-      {/* SOAP Builder Panel */}
-      {showSOAPBuilder && (
-        <SOAPBuilderPanel
-          messages={messages}
-          conversationId={selectedConversationId}
-          isCollapsed={soapBuilderCollapsed}
-          onToggleCollapse={() => setSOAPBuilderCollapsed(!soapBuilderCollapsed)}
-          onAnalyze={(content, analysisType) => {
-            // Close the SOAP builder after sending analysis
-            setMessage(content);
-            handleSendMessage(content);
-            
-            // Optionally show a toast for the analysis type
-            toast({
-              title: "SOAP Analysis Started",
-              description: `Running ${analysisType || 'comprehensive'} analysis...`,
-            });
-          }}
-        />
-      )}
-
-      {/* 3D Skeleton Panel */}
-      {show3DSkeleton && (
-        <div className="fixed right-4 top-20 w-[90%] max-w-6xl h-[calc(100vh-6rem)] z-40 animate-slideIn">
-          <Card className="h-full shadow-2xl">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5 text-teal-600" />
-                3D Patient Model Builder
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShow3DSkeleton(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent className="h-[calc(100%-4rem)] p-4">
-              <Skeleton3D 
-                onPatientDataChange={(config) => {
-                  setSkeletonConfig(config);
-                  // Automatically add patient model data to conversation context
-                  if (config) {
-                    const modelSummary = `Patient Model Data:
-- Limb proportions configured
-- Joint angles: Shoulder ${config.jointAngles.shoulderFlexion}°, Hip ${config.jointAngles.hipFlexion}°, Knee ${config.jointAngles.kneeFlexion}°
-- Body proportions set`;
-                    setPatientContext(prev => ({
-                      ...prev,
-                      modelData: modelSummary
-                    }));
-                  }
-                }}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Clinical Reference Library Panel */}
-      {showReferenceLibrary && (
-        <div className="fixed right-4 top-20 w-96 h-[calc(100vh-6rem)] z-40 animate-slideIn">
-          <ClinicalReferenceLibrary
-            onCiteReference={(reference) => {
-              const citation = `According to ${reference.source} (${reference.year}): "${reference.title}" - ${reference.description}`;
-              setMessage(message + '\n\n' + citation);
-              toast({
-                title: "Reference Added",
-                description: "Citation has been added to your message",
-              });
-            }}
-            onOpenReference={(reference) => {
-              if (reference.url) {
-                window.open(reference.url, '_blank');
-              } else {
-                toast({
-                  title: "Reference Details",
-                  description: reference.title,
-                });
-              }
-            }}
-          />
-        </div>
-      )}
-
-      {/* Treatment Planning Assistant Panel */}
-      {showTreatmentPlanning && (
-        <div className="fixed left-4 top-20 right-4 bottom-4 z-40 animate-slideIn">
-          <AITreatmentPlanner />
-        </div>
-      )}
-
-
-
-      {/* Mobile Floating Action Button */}
-      <Button
-        className="fixed bottom-20 right-4 md:hidden rounded-full shadow-lg bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700"
-        size="icon"
-        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
     </div>
   );
 }

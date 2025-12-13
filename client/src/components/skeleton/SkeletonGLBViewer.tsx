@@ -11,7 +11,7 @@ interface SkeletonGLBViewerProps {
 
 function SkeletonModel({ modelConfig }: { modelConfig: any }) {
   const ref = useRef<THREE.Group>(null);
-  const { scene, nodes, materials } = useGLTF('/models/skeleton_character.glb');
+  const { scene, nodes, materials } = useGLTF('/models/rigged-skeleton.glb');
   
   // Apply transformations based on modelConfig
   useEffect(() => {

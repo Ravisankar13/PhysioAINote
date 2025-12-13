@@ -47,14 +47,14 @@ function RiggedSkeleton({ modelConfig }: { modelConfig: ModelConfig }) {
         }
         if (name.includes("spine") && (name.includes("upper") || name.includes("1") || name.includes("thorac"))) {
           child.rotation.x = degToRad(modelConfig.spine.thoracicKyphosis);
-          child.rotation.z = degToRad(modelConfig.spine.scoliosis * 0.5);
+          child.rotation.z = degToRad(modelConfig.spine.scoliosis);
         }
         if (name.includes("spine") && (name.includes("lower") || name.includes("2") || name.includes("lumbar"))) {
           child.rotation.x = degToRad(modelConfig.spine.lumbarLordosis);
           child.rotation.z = degToRad(modelConfig.spine.lateralShift);
         }
-        if (name.includes("spine") && !name.includes("upper") && !name.includes("lower") && !name.includes("1") && !name.includes("2")) {
-          child.rotation.x = degToRad(modelConfig.spine.thoracicKyphosis * 0.5 + modelConfig.spine.lumbarLordosis * 0.5);
+        if (name.includes("spine") && !name.includes("upper") && !name.includes("lower") && !name.includes("1") && !name.includes("2") && !name.includes("thorac") && !name.includes("lumbar")) {
+          child.rotation.x = degToRad(modelConfig.spine.thoracicKyphosis);
         }
         if (name.includes("pelvis") || name.includes("hips")) {
           child.rotation.x = degToRad(modelConfig.pelvis.tilt);

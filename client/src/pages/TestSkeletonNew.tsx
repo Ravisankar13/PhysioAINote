@@ -1,16 +1,13 @@
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Link, Unlink, Copy, ArrowRight, ArrowLeft, AlertCircle } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, useGLTF } from "@react-three/drei";
-import * as THREE from "three";
 
 interface ModelConfig {
   limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
@@ -28,109 +25,138 @@ interface ModelConfig {
   rightElbow: { flexion: number; carryingAngle: number; pronation: number };
 }
 
-function RiggedSkeleton({ modelConfig }: { modelConfig: ModelConfig }) {
-  const { scene } = useGLTF("/models/rigged-skeleton.glb");
-  const groupRef = useRef<THREE.Group>(null);
-
-  useEffect(() => {
-    if (!scene) return;
-    
-    const degToRad = (deg: number) => deg * (Math.PI / 180);
-    
-    scene.traverse((child) => {
-      if (child instanceof THREE.Bone || child.name) {
-        const name = child.name.toLowerCase();
+function InteractiveSVGSkeleton({ modelConfig }: { modelConfig: ModelConfig }) {
+  const spineOffset = modelConfig.spine.thoracicKyphosis * 0.3;
+  const pelvisTilt = modelConfig.pelvis.tilt * 0.5;
+  const leftHipFlex = modelConfig.leftHip.flexion * 0.3;
+  const rightHipFlex = modelConfig.rightHip.flexion * 0.3;
+  const leftKneeFlex = modelConfig.leftKnee.flexion * 0.3;
+  const rightKneeFlex = modelConfig.rightKnee.flexion * 0.3;
+  const leftShoulderFlex = modelConfig.leftShoulder.flexion * 0.2;
+  const rightShoulderFlex = modelConfig.rightShoulder.flexion * 0.2;
+  const leftShoulderAbd = modelConfig.leftShoulder.abduction * 0.15;
+  const rightShoulderAbd = modelConfig.rightShoulder.abduction * 0.15;
+  const leftElbowFlex = modelConfig.leftElbow.flexion * 0.2;
+  const rightElbowFlex = modelConfig.rightElbow.flexion * 0.2;
+  const leftHipAbd = modelConfig.leftHip.abduction * 0.2;
+  const rightHipAbd = modelConfig.rightHip.abduction * 0.2;
+  
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 rounded-lg relative overflow-hidden">
+      <svg viewBox="0 0 200 400" className="w-full h-full max-h-[480px]" style={{ maxWidth: '260px' }}>
+        <defs>
+          <linearGradient id="boneGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#1e40af" />
+            <stop offset="100%" stopColor="#3b82f6" />
+          </linearGradient>
+        </defs>
         
-        if (name.includes("neck") || name.includes("cervical") || name.includes("head")) {
-          child.rotation.x = degToRad(modelConfig.spine.cervicalLordosis);
-          child.rotation.z = degToRad(modelConfig.spine.forwardHead);
-        }
-        if (name.includes("spine") && (name.includes("upper") || name.includes("1") || name.includes("thorac"))) {
-          child.rotation.x = degToRad(modelConfig.spine.thoracicKyphosis);
-          child.rotation.z = degToRad(modelConfig.spine.scoliosis);
-        }
-        if (name.includes("spine") && (name.includes("lower") || name.includes("2") || name.includes("lumbar"))) {
-          child.rotation.x = degToRad(modelConfig.spine.lumbarLordosis);
-          child.rotation.z = degToRad(modelConfig.spine.lateralShift);
-        }
-        if (name.includes("spine") && !name.includes("upper") && !name.includes("lower") && !name.includes("1") && !name.includes("2") && !name.includes("thorac") && !name.includes("lumbar")) {
-          child.rotation.x = degToRad(modelConfig.spine.thoracicKyphosis);
-        }
-        if (name.includes("pelvis") || name.includes("hips")) {
-          child.rotation.x = degToRad(modelConfig.pelvis.tilt);
-          child.rotation.z = degToRad(modelConfig.pelvis.obliquity);
-          child.rotation.y = degToRad(modelConfig.pelvis.rotation);
-        }
-        if ((name.includes("thigh") || name.includes("upleg") || name.includes("hip")) && (name.includes("l") || name.includes("left"))) {
-          child.rotation.x = degToRad(-modelConfig.leftHip.flexion);
-          child.rotation.z = degToRad(-modelConfig.leftHip.abduction);
-          child.rotation.y = degToRad(modelConfig.leftHip.internalRotation);
-        }
-        if ((name.includes("thigh") || name.includes("upleg") || name.includes("hip")) && (name.includes("r") || name.includes("right"))) {
-          child.rotation.x = degToRad(-modelConfig.rightHip.flexion);
-          child.rotation.z = degToRad(modelConfig.rightHip.abduction);
-          child.rotation.y = degToRad(-modelConfig.rightHip.internalRotation);
-        }
-        if ((name.includes("shin") || name.includes("leg") || name.includes("knee") || name.includes("calf")) && (name.includes("l") || name.includes("left")) && !name.includes("upleg") && !name.includes("thigh")) {
-          child.rotation.x = degToRad(modelConfig.leftKnee.flexion);
-          child.rotation.z = degToRad(modelConfig.leftKnee.varus);
-          child.rotation.y = degToRad(modelConfig.leftKnee.tibialTorsion);
-        }
-        if ((name.includes("shin") || name.includes("leg") || name.includes("knee") || name.includes("calf")) && (name.includes("r") || name.includes("right")) && !name.includes("upleg") && !name.includes("thigh")) {
-          child.rotation.x = degToRad(modelConfig.rightKnee.flexion);
-          child.rotation.z = degToRad(-modelConfig.rightKnee.varus);
-          child.rotation.y = degToRad(-modelConfig.rightKnee.tibialTorsion);
-        }
-        if ((name.includes("foot") || name.includes("ankle")) && (name.includes("l") || name.includes("left"))) {
-          child.rotation.x = degToRad(-modelConfig.leftAnkle.dorsiflexion + modelConfig.leftAnkle.plantarflexion);
-          child.rotation.z = degToRad(modelConfig.leftAnkle.inversion - modelConfig.leftAnkle.eversion);
-        }
-        if ((name.includes("foot") || name.includes("ankle")) && (name.includes("r") || name.includes("right"))) {
-          child.rotation.x = degToRad(-modelConfig.rightAnkle.dorsiflexion + modelConfig.rightAnkle.plantarflexion);
-          child.rotation.z = degToRad(-modelConfig.rightAnkle.inversion + modelConfig.rightAnkle.eversion);
-        }
-        if ((name.includes("shoulder") || name.includes("arm") || name.includes("clavicle")) && (name.includes("l") || name.includes("left")) && !name.includes("forearm") && !name.includes("hand")) {
-          child.rotation.x = degToRad(-modelConfig.leftShoulder.flexion);
-          child.rotation.z = degToRad(-modelConfig.leftShoulder.abduction);
-          child.rotation.y = degToRad(modelConfig.leftShoulder.internalRotation);
-        }
-        if ((name.includes("shoulder") || name.includes("arm") || name.includes("clavicle")) && (name.includes("r") || name.includes("right")) && !name.includes("forearm") && !name.includes("hand")) {
-          child.rotation.x = degToRad(-modelConfig.rightShoulder.flexion);
-          child.rotation.z = degToRad(modelConfig.rightShoulder.abduction);
-          child.rotation.y = degToRad(-modelConfig.rightShoulder.internalRotation);
-        }
-        if ((name.includes("forearm") || name.includes("elbow") || name.includes("lowarm")) && (name.includes("l") || name.includes("left"))) {
-          child.rotation.x = degToRad(modelConfig.leftElbow.flexion);
-          child.rotation.y = degToRad(modelConfig.leftElbow.pronation);
-          child.rotation.z = degToRad(modelConfig.leftElbow.carryingAngle - 10);
-        }
-        if ((name.includes("forearm") || name.includes("elbow") || name.includes("lowarm")) && (name.includes("r") || name.includes("right"))) {
-          child.rotation.x = degToRad(modelConfig.rightElbow.flexion);
-          child.rotation.y = degToRad(-modelConfig.rightElbow.pronation);
-          child.rotation.z = degToRad(-(modelConfig.rightElbow.carryingAngle - 10));
-        }
-      }
-    });
-  }, [scene, modelConfig]);
-
-  return (
-    <group ref={groupRef}>
-      <primitive object={scene} scale={2} position={[0, -2, 0]} />
-    </group>
-  );
-}
-
-function SkeletonScene({ modelConfig }: { modelConfig: ModelConfig }) {
-  return (
-    <Canvas camera={{ position: [0, 0, 5], fov: 50 }} style={{ background: "linear-gradient(135deg, #f0f4f8 0%, #e8ecf0 100%)" }}>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 5, 5]} intensity={0.8} />
-      <directionalLight position={[-5, 3, -5]} intensity={0.4} />
-      <Suspense fallback={null}>
-        <RiggedSkeleton modelConfig={modelConfig} />
-      </Suspense>
-      <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
-    </Canvas>
+        <circle cx="100" cy="35" r="16" fill="none" stroke="url(#boneGradient)" strokeWidth="3" />
+        <ellipse cx="100" cy="35" rx="10" ry="12" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1" />
+        
+        <path 
+          d={`M100,51 Q${100 + spineOffset * 0.3},75 ${100 + spineOffset * 0.5},100 Q${100 + spineOffset * 0.3},130 100,160`} 
+          stroke="url(#boneGradient)" strokeWidth="4" fill="none" strokeLinecap="round"
+        />
+        
+        <line x1="65" y1="70" x2="135" y2="70" stroke="url(#boneGradient)" strokeWidth="3" strokeLinecap="round" />
+        
+        <g>
+          <line 
+            x1="65" y1="70" 
+            x2={45 - leftShoulderAbd * 0.4 - leftShoulderFlex * 0.2} 
+            y2={105 + leftShoulderFlex * 0.4 - leftShoulderAbd * 0.2} 
+            stroke="url(#boneGradient)" strokeWidth="2.5" strokeLinecap="round"
+          />
+          <line 
+            x1={45 - leftShoulderAbd * 0.4 - leftShoulderFlex * 0.2} 
+            y1={105 + leftShoulderFlex * 0.4 - leftShoulderAbd * 0.2} 
+            x2={35 - leftShoulderAbd * 0.3 - leftElbowFlex * 0.15} 
+            y2={145 + leftElbowFlex * 0.25 - leftShoulderAbd * 0.15} 
+            stroke="url(#boneGradient)" strokeWidth="2" strokeLinecap="round"
+          />
+          <circle cx={35 - leftShoulderAbd * 0.3 - leftElbowFlex * 0.15} cy={145 + leftElbowFlex * 0.25 - leftShoulderAbd * 0.15} r="3" fill="#fbbf24" />
+        </g>
+        
+        <g>
+          <line 
+            x1="135" y1="70" 
+            x2={155 + rightShoulderAbd * 0.4 + rightShoulderFlex * 0.2} 
+            y2={105 + rightShoulderFlex * 0.4 - rightShoulderAbd * 0.2} 
+            stroke="url(#boneGradient)" strokeWidth="2.5" strokeLinecap="round"
+          />
+          <line 
+            x1={155 + rightShoulderAbd * 0.4 + rightShoulderFlex * 0.2} 
+            y1={105 + rightShoulderFlex * 0.4 - rightShoulderAbd * 0.2} 
+            x2={165 + rightShoulderAbd * 0.3 + rightElbowFlex * 0.15} 
+            y2={145 + rightElbowFlex * 0.25 - rightShoulderAbd * 0.15} 
+            stroke="url(#boneGradient)" strokeWidth="2" strokeLinecap="round"
+          />
+          <circle cx={165 + rightShoulderAbd * 0.3 + rightElbowFlex * 0.15} cy={145 + rightElbowFlex * 0.25 - rightShoulderAbd * 0.15} r="3" fill="#fbbf24" />
+        </g>
+        
+        <path 
+          d={`M${75 - pelvisTilt * 0.15},${165 + pelvisTilt * 0.2} Q100,${175 + Math.abs(pelvisTilt) * 0.1} ${125 + pelvisTilt * 0.15},${165 - pelvisTilt * 0.2}`}
+          stroke="url(#boneGradient)" strokeWidth="4" fill="none" strokeLinecap="round"
+        />
+        
+        <g>
+          <line 
+            x1={82 - leftHipAbd * 0.3} y1="175" 
+            x2={72 - leftHipFlex * 0.15 - leftHipAbd * 0.5} 
+            y2={240 + leftHipFlex * 0.35} 
+            stroke="url(#boneGradient)" strokeWidth="3" strokeLinecap="round"
+          />
+          <line 
+            x1={72 - leftHipFlex * 0.15 - leftHipAbd * 0.5} 
+            y1={240 + leftHipFlex * 0.35} 
+            x2={68 - leftKneeFlex * 0.1 - leftHipAbd * 0.4} 
+            y2={315 + leftKneeFlex * 0.25} 
+            stroke="url(#boneGradient)" strokeWidth="2.5" strokeLinecap="round"
+          />
+          <ellipse 
+            cx={65 - leftHipAbd * 0.35} 
+            cy={330 + leftKneeFlex * 0.2} 
+            rx="8" ry="4" 
+            fill="#dbeafe" stroke="url(#boneGradient)" strokeWidth="1.5"
+          />
+        </g>
+        
+        <g>
+          <line 
+            x1={118 + rightHipAbd * 0.3} y1="175" 
+            x2={128 + rightHipFlex * 0.15 + rightHipAbd * 0.5} 
+            y2={240 + rightHipFlex * 0.35} 
+            stroke="url(#boneGradient)" strokeWidth="3" strokeLinecap="round"
+          />
+          <line 
+            x1={128 + rightHipFlex * 0.15 + rightHipAbd * 0.5} 
+            y1={240 + rightHipFlex * 0.35} 
+            x2={132 + rightKneeFlex * 0.1 + rightHipAbd * 0.4} 
+            y2={315 + rightKneeFlex * 0.25} 
+            stroke="url(#boneGradient)" strokeWidth="2.5" strokeLinecap="round"
+          />
+          <ellipse 
+            cx={135 + rightHipAbd * 0.35} 
+            cy={330 + rightKneeFlex * 0.2} 
+            rx="8" ry="4" 
+            fill="#dbeafe" stroke="url(#boneGradient)" strokeWidth="1.5"
+          />
+        </g>
+        
+        <circle cx="65" cy="70" r="5" fill="#ef4444" stroke="#b91c1c" strokeWidth="1" />
+        <circle cx="135" cy="70" r="5" fill="#ef4444" stroke="#b91c1c" strokeWidth="1" />
+        <circle cx={45 - leftShoulderAbd * 0.4 - leftShoulderFlex * 0.2} cy={105 + leftShoulderFlex * 0.4 - leftShoulderAbd * 0.2} r="4" fill="#f59e0b" stroke="#d97706" strokeWidth="1" />
+        <circle cx={155 + rightShoulderAbd * 0.4 + rightShoulderFlex * 0.2} cy={105 + rightShoulderFlex * 0.4 - rightShoulderAbd * 0.2} r="4" fill="#f59e0b" stroke="#d97706" strokeWidth="1" />
+        <circle cx={82 - leftHipAbd * 0.3} cy="175" r="5" fill="#10b981" stroke="#059669" strokeWidth="1" />
+        <circle cx={118 + rightHipAbd * 0.3} cy="175" r="5" fill="#10b981" stroke="#059669" strokeWidth="1" />
+        <circle cx={72 - leftHipFlex * 0.15 - leftHipAbd * 0.5} cy={240 + leftHipFlex * 0.35} r="4" fill="#3b82f6" stroke="#2563eb" strokeWidth="1" />
+        <circle cx={128 + rightHipFlex * 0.15 + rightHipAbd * 0.5} cy={240 + rightHipFlex * 0.35} r="4" fill="#3b82f6" stroke="#2563eb" strokeWidth="1" />
+      </svg>
+      <div className="absolute bottom-3 left-3 text-xs text-slate-600 bg-white/90 px-3 py-1.5 rounded-md shadow-sm">
+        Interactive Skeleton - Move sliders to adjust
+      </div>
+    </div>
   );
 }
 
@@ -448,17 +474,7 @@ export default function TestSkeletonNew() {
             <CardTitle>Skeleton Visualization</CardTitle>
           </CardHeader>
           <CardContent className="h-[calc(100%-80px)]">
-            {isWebGLAvailable === null ? (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-muted-foreground">Checking visualization capabilities...</p>
-                </div>
-              </div>
-            ) : isWebGLAvailable ? (
-              <SkeletonScene modelConfig={modelConfig} />
-            ) : (
-              <SkeletonVisualization />
-            )}
+            <InteractiveSVGSkeleton modelConfig={modelConfig} />
           </CardContent>
         </Card>
 

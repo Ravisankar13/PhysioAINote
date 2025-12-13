@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import SkeletonGLBViewer from "@/components/skeleton/SkeletonGLBViewer";
 
 interface ModelConfig {
   limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
@@ -474,7 +475,18 @@ export default function TestSkeletonNew() {
             <CardTitle>Skeleton Visualization</CardTitle>
           </CardHeader>
           <CardContent className="h-[calc(100%-80px)]">
-            <InteractiveSVGSkeleton modelConfig={modelConfig} />
+            {isWebGLAvailable === false ? (
+              <InteractiveSVGSkeleton modelConfig={modelConfig} />
+            ) : (
+              <Suspense fallback={
+                <div className="w-full h-full flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <span className="ml-2">Loading 3D model...</span>
+                </div>
+              }>
+                <SkeletonGLBViewer modelConfig={modelConfig} className="w-full h-full" />
+              </Suspense>
+            )}
           </CardContent>
         </Card>
 

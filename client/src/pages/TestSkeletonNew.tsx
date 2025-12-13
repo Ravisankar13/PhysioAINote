@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,131 @@ import { RotateCcw, Link, Unlink, Copy, ArrowRight, ArrowLeft, AlertCircle } fro
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, useGLTF } from "@react-three/drei";
+import * as THREE from "three";
+
+interface ModelConfig {
+  limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
+  spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number };
+  pelvis: { tilt: number; obliquity: number; rotation: number };
+  leftHip: { flexion: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
+  rightHip: { flexion: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
+  leftKnee: { flexion: number; varus: number; tibialTorsion: number; patellaAlta: number };
+  rightKnee: { flexion: number; varus: number; tibialTorsion: number; patellaAlta: number };
+  leftAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
+  rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
+  leftShoulder: { flexion: number; abduction: number; internalRotation: number; protraction: number; elevation: number; winging: number };
+  rightShoulder: { flexion: number; abduction: number; internalRotation: number; protraction: number; elevation: number; winging: number };
+  leftElbow: { flexion: number; carryingAngle: number; pronation: number };
+  rightElbow: { flexion: number; carryingAngle: number; pronation: number };
+}
+
+function RiggedSkeleton({ modelConfig }: { modelConfig: ModelConfig }) {
+  const { scene } = useGLTF("/models/rigged-skeleton.glb");
+  const groupRef = useRef<THREE.Group>(null);
+
+  useEffect(() => {
+    if (!scene) return;
+    
+    const degToRad = (deg: number) => deg * (Math.PI / 180);
+    
+    scene.traverse((child) => {
+      if (child instanceof THREE.Bone || child.name) {
+        const name = child.name.toLowerCase();
+        
+        if (name.includes("neck") || name.includes("cervical") || name.includes("head")) {
+          child.rotation.x = degToRad(modelConfig.spine.cervicalLordosis);
+          child.rotation.z = degToRad(modelConfig.spine.forwardHead);
+        }
+        if (name.includes("spine") && (name.includes("upper") || name.includes("1") || name.includes("thorac"))) {
+          child.rotation.x = degToRad(modelConfig.spine.thoracicKyphosis);
+          child.rotation.z = degToRad(modelConfig.spine.scoliosis * 0.5);
+        }
+        if (name.includes("spine") && (name.includes("lower") || name.includes("2") || name.includes("lumbar"))) {
+          child.rotation.x = degToRad(modelConfig.spine.lumbarLordosis);
+          child.rotation.z = degToRad(modelConfig.spine.lateralShift);
+        }
+        if (name.includes("spine") && !name.includes("upper") && !name.includes("lower") && !name.includes("1") && !name.includes("2")) {
+          child.rotation.x = degToRad(modelConfig.spine.thoracicKyphosis * 0.5 + modelConfig.spine.lumbarLordosis * 0.5);
+        }
+        if (name.includes("pelvis") || name.includes("hips")) {
+          child.rotation.x = degToRad(modelConfig.pelvis.tilt);
+          child.rotation.z = degToRad(modelConfig.pelvis.obliquity);
+          child.rotation.y = degToRad(modelConfig.pelvis.rotation);
+        }
+        if ((name.includes("thigh") || name.includes("upleg") || name.includes("hip")) && (name.includes("l") || name.includes("left"))) {
+          child.rotation.x = degToRad(-modelConfig.leftHip.flexion);
+          child.rotation.z = degToRad(-modelConfig.leftHip.abduction);
+          child.rotation.y = degToRad(modelConfig.leftHip.internalRotation);
+        }
+        if ((name.includes("thigh") || name.includes("upleg") || name.includes("hip")) && (name.includes("r") || name.includes("right"))) {
+          child.rotation.x = degToRad(-modelConfig.rightHip.flexion);
+          child.rotation.z = degToRad(modelConfig.rightHip.abduction);
+          child.rotation.y = degToRad(-modelConfig.rightHip.internalRotation);
+        }
+        if ((name.includes("shin") || name.includes("leg") || name.includes("knee") || name.includes("calf")) && (name.includes("l") || name.includes("left")) && !name.includes("upleg") && !name.includes("thigh")) {
+          child.rotation.x = degToRad(modelConfig.leftKnee.flexion);
+          child.rotation.z = degToRad(modelConfig.leftKnee.varus);
+          child.rotation.y = degToRad(modelConfig.leftKnee.tibialTorsion);
+        }
+        if ((name.includes("shin") || name.includes("leg") || name.includes("knee") || name.includes("calf")) && (name.includes("r") || name.includes("right")) && !name.includes("upleg") && !name.includes("thigh")) {
+          child.rotation.x = degToRad(modelConfig.rightKnee.flexion);
+          child.rotation.z = degToRad(-modelConfig.rightKnee.varus);
+          child.rotation.y = degToRad(-modelConfig.rightKnee.tibialTorsion);
+        }
+        if ((name.includes("foot") || name.includes("ankle")) && (name.includes("l") || name.includes("left"))) {
+          child.rotation.x = degToRad(-modelConfig.leftAnkle.dorsiflexion + modelConfig.leftAnkle.plantarflexion);
+          child.rotation.z = degToRad(modelConfig.leftAnkle.inversion - modelConfig.leftAnkle.eversion);
+        }
+        if ((name.includes("foot") || name.includes("ankle")) && (name.includes("r") || name.includes("right"))) {
+          child.rotation.x = degToRad(-modelConfig.rightAnkle.dorsiflexion + modelConfig.rightAnkle.plantarflexion);
+          child.rotation.z = degToRad(-modelConfig.rightAnkle.inversion + modelConfig.rightAnkle.eversion);
+        }
+        if ((name.includes("shoulder") || name.includes("arm") || name.includes("clavicle")) && (name.includes("l") || name.includes("left")) && !name.includes("forearm") && !name.includes("hand")) {
+          child.rotation.x = degToRad(-modelConfig.leftShoulder.flexion);
+          child.rotation.z = degToRad(-modelConfig.leftShoulder.abduction);
+          child.rotation.y = degToRad(modelConfig.leftShoulder.internalRotation);
+        }
+        if ((name.includes("shoulder") || name.includes("arm") || name.includes("clavicle")) && (name.includes("r") || name.includes("right")) && !name.includes("forearm") && !name.includes("hand")) {
+          child.rotation.x = degToRad(-modelConfig.rightShoulder.flexion);
+          child.rotation.z = degToRad(modelConfig.rightShoulder.abduction);
+          child.rotation.y = degToRad(-modelConfig.rightShoulder.internalRotation);
+        }
+        if ((name.includes("forearm") || name.includes("elbow") || name.includes("lowarm")) && (name.includes("l") || name.includes("left"))) {
+          child.rotation.x = degToRad(modelConfig.leftElbow.flexion);
+          child.rotation.y = degToRad(modelConfig.leftElbow.pronation);
+          child.rotation.z = degToRad(modelConfig.leftElbow.carryingAngle - 10);
+        }
+        if ((name.includes("forearm") || name.includes("elbow") || name.includes("lowarm")) && (name.includes("r") || name.includes("right"))) {
+          child.rotation.x = degToRad(modelConfig.rightElbow.flexion);
+          child.rotation.y = degToRad(-modelConfig.rightElbow.pronation);
+          child.rotation.z = degToRad(-(modelConfig.rightElbow.carryingAngle - 10));
+        }
+      }
+    });
+  }, [scene, modelConfig]);
+
+  return (
+    <group ref={groupRef}>
+      <primitive object={scene} scale={2} position={[0, -2, 0]} />
+    </group>
+  );
+}
+
+function SkeletonScene({ modelConfig }: { modelConfig: ModelConfig }) {
+  return (
+    <Canvas camera={{ position: [0, 0, 5], fov: 50 }} style={{ background: "linear-gradient(135deg, #f0f4f8 0%, #e8ecf0 100%)" }}>
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[5, 5, 5]} intensity={0.8} />
+      <directionalLight position={[-5, 3, -5]} intensity={0.4} />
+      <Suspense fallback={null}>
+        <RiggedSkeleton modelConfig={modelConfig} />
+      </Suspense>
+      <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+    </Canvas>
+  );
+}
 
 export default function TestSkeletonNew() {
   const [isWebGLAvailable, setIsWebGLAvailable] = useState<boolean | null>(null);
@@ -330,14 +455,7 @@ export default function TestSkeletonNew() {
                 </div>
               </div>
             ) : isWebGLAvailable ? (
-              <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg">
-                <div className="text-center p-8">
-                  <h3 className="text-lg font-semibold mb-2">3D Model View</h3>
-                  <p className="text-muted-foreground">
-                    3D visualization would appear here with full WebGL support
-                  </p>
-                </div>
-              </div>
+              <SkeletonScene modelConfig={modelConfig} />
             ) : (
               <SkeletonVisualization />
             )}

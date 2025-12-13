@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, Component, ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,37 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import SkeletonGLBViewer from "@/components/skeleton/SkeletonGLBViewer";
+
+interface GLBErrorBoundaryProps {
+  children: ReactNode;
+  fallback: ReactNode;
+}
+
+interface GLBErrorBoundaryState {
+  hasError: boolean;
+}
+
+class GLBErrorBoundary extends Component<GLBErrorBoundaryProps, GLBErrorBoundaryState> {
+  constructor(props: GLBErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): GLBErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.log('GLB Viewer error caught:', error.message);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
 
 interface ModelConfig {
   limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
@@ -475,18 +506,30 @@ export default function TestSkeletonNew() {
             <CardTitle>Skeleton Visualization</CardTitle>
           </CardHeader>
           <CardContent className="h-[calc(100%-80px)]">
-            {isWebGLAvailable === false ? (
-              <InteractiveSVGSkeleton modelConfig={modelConfig} />
-            ) : (
+            <GLBErrorBoundary
+              fallback={
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100 rounded-lg p-4">
+                  <AlertCircle className="h-12 w-12 text-amber-600 mb-4" />
+                  <h3 className="text-lg font-semibold text-amber-800 mb-2">3D Viewer Unavailable</h3>
+                  <p className="text-sm text-amber-700 text-center mb-4">
+                    WebGL is required to display the GLB skeleton model. 
+                    The 3D viewer will work when you deploy this app or view it in a browser with WebGL support.
+                  </p>
+                  <p className="text-xs text-amber-600">
+                    GLB Model: /models/skeleton_character.glb
+                  </p>
+                </div>
+              }
+            >
               <Suspense fallback={
                 <div className="w-full h-full flex items-center justify-center">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <span className="ml-2">Loading 3D model...</span>
+                  <span className="ml-2">Loading GLB model...</span>
                 </div>
               }>
                 <SkeletonGLBViewer modelConfig={modelConfig} className="w-full h-full" />
               </Suspense>
-            )}
+            </GLBErrorBoundary>
           </CardContent>
         </Card>
 

@@ -298,12 +298,19 @@ ANALYSIS FOCUS:
     }
 
     const clinicalReasoningFramework = `
-CLINICAL REASONING FRAMEWORK:
+CLINICAL REASONING FRAMEWORK (Always explain your reasoning):
 1. Pattern Recognition: Identify common clinical patterns and presentations
 2. Hypothesis Generation: Form differential diagnoses based on subjective and objective findings
 3. Hypothesis Testing: Suggest specific tests to confirm/refute hypotheses
 4. Clinical Decision Making: Apply evidence-based reasoning to treatment selection
 5. Reassessment Criteria: Define clear markers for progress and modification needs
+
+CLINICAL REASONING TRANSPARENCY (ALWAYS INCLUDE):
+When making recommendations, ALWAYS explain the "WHY" using these frameworks:
+- Tissue Healing Timelines: Reference approximate healing phases (inflammation 0-7 days, proliferation 7-21 days, remodeling 21+ days) and how this guides intervention
+- Load vs Capacity Model: Explain how the intervention addresses the balance between tissue load and tissue capacity
+- Biopsychosocial Factors: Consider and mention relevant psychological (fear-avoidance, catastrophizing, self-efficacy) and social factors (work demands, support system, goals)
+- Mechanism of Action: Explain HOW the intervention works (e.g., "eccentric loading promotes collagen remodeling" not just "do eccentric exercises")
 
 RED FLAG SCREENING PROTOCOL:
 - Always screen for serious pathology indicators
@@ -317,12 +324,28 @@ OUTCOME MEASURES INTEGRATION:
 - Recommend reassessment timeframes
 - Track functional and patient-reported outcomes
 
-EXERCISE PRESCRIPTION PRINCIPLES:
-- Tissue-specific loading parameters (tendon: heavy slow resistance, muscle: progressive overload)
-- Phase-based progression (protection → mobility → strengthening → return to function)
-- Include dosage: sets, reps, tempo, rest, frequency, intensity (%1RM or RPE)
-- Contraindications and modifications for common comorbidities
-- Home exercise program with minimal equipment options
+EXERCISE PRESCRIPTION FORMAT (ALWAYS USE THIS STRUCTURE):
+When prescribing exercises, ALWAYS include:
+1. Exercise Name + Starting Position
+2. Dosage: Sets × Reps @ Tempo (e.g., 3×10 @ 3-1-2 where 3=eccentric, 1=pause, 2=concentric)
+3. Load Guidance: RPE (Rate of Perceived Exertion 1-10) or % 1RM where appropriate
+4. Frequency: Sessions per week
+5. Rest: Between sets and between sessions
+6. Progression Criteria: Specific, measurable criteria for advancing (e.g., "Progress when 3×10 achieved at RPE 6 or less for 2 consecutive sessions")
+7. Regression Options: What to do if too difficult
+
+Example format:
+**Eccentric Heel Drops (Alfredson Protocol)**
+- Position: Standing on edge of step, affected leg only
+- Dosage: 3×15 @ 3-0-1 tempo (3 sec lowering)
+- Load: Bodyweight initially, progress with weighted vest/backpack
+- RPE: Should be 5-7/10 discomfort during exercise (acceptable)
+- Frequency: 2×/day, 7 days/week
+- Rest: 60-90 seconds between sets
+- Progression: Add 5kg when pain <3/10 during exercise for 1 week
+- Regression: Bilateral heel drops if unable to complete unilateral
+
+Loading Progressions: Isometric → Isotonic → Eccentric → Plyometric → Sport-specific
 `;
 
     const specialTestsReference = `

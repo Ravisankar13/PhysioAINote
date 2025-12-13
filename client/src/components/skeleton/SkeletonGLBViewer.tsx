@@ -1,5 +1,5 @@
-import { useRef, Suspense, useEffect, useState, Component, ReactNode } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useRef, Suspense, useEffect, useState, useMemo } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { AlertCircle, Loader2 } from 'lucide-react';
@@ -10,53 +10,19 @@ interface SkeletonGLBViewerProps {
   showControls?: boolean;
 }
 
-interface ErrorBoundaryProps {
-  children: ReactNode;
-  onError?: (error: Error) => void;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-class ThreeErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error) {
-    console.error('Three.js Error:', error);
-    this.props.onError?.(error);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return null;
-    }
-    return this.props.children;
-  }
-}
-
-function SkeletonModel({ modelConfig, onError }: { modelConfig: any; onError: (msg: string) => void }) {
+function SkeletonModel({ modelConfig }: { modelConfig: any }) {
   const ref = useRef<THREE.Group>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { scene } = useGLTF('/models/rigged-skeleton.glb');
   
-  let gltf;
-  try {
-    gltf = useGLTF('/models/rigged-skeleton.glb');
-  } catch (err) {
-    console.error('useGLTF error:', err);
-    onError(`Failed to load model: ${err}`);
-    return null;
-  }
-
-  const clonedScene = gltf.scene.clone(true);
+  const clonedScene = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.material = (child.material as THREE.Material).clone();
+      }
+    });
+    return clone;
+  }, [scene]);
   
   useFrame(() => {
     if (ref.current) {
@@ -77,40 +43,17 @@ function SkeletonModel({ modelConfig, onError }: { modelConfig: any; onError: (m
   );
 }
 
-function SceneContent({ modelConfig, onError }: { modelConfig: any; onError: (msg: string) => void }) {
-  const { gl } = useThree();
-  
-  useEffect(() => {
-    console.log('WebGL Renderer info:', {
-      renderer: gl.info.render,
-      memory: gl.info.memory,
-      programs: gl.info.programs?.length
-    });
-  }, [gl]);
-
-  return (
-    <>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 5, 5]} intensity={0.8} />
-      <directionalLight position={[-5, -5, -5]} intensity={0.3} />
-      <ThreeErrorBoundary onError={(e) => onError(e.message)}>
-        <SkeletonModel modelConfig={modelConfig} onError={onError} />
-      </ThreeErrorBoundary>
-    </>
-  );
-}
-
 useGLTF.preload('/models/rigged-skeleton.glb');
 
 export default function SkeletonGLBViewer({ modelConfig, className = "", showControls = true }: SkeletonGLBViewerProps) {
-  const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
+  const [status, setStatus] = useState<'checking' | 'ready' | 'error'>('checking');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
-    const checkWebGL = async () => {
+    const checkSupport = async () => {
       try {
         const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
         
         if (!gl) {
           setErrorMessage('WebGL is not supported in this browser');
@@ -120,42 +63,27 @@ export default function SkeletonGLBViewer({ modelConfig, className = "", showCon
 
         const response = await fetch('/models/rigged-skeleton.glb', { method: 'HEAD' });
         if (!response.ok) {
-          setErrorMessage(`GLB file not accessible: HTTP ${response.status}`);
+          setErrorMessage(`Model file not accessible: HTTP ${response.status}`);
           setStatus('error');
           return;
         }
 
-        console.log('WebGL and GLB file check passed');
-        setStatus('loading');
-        
-        setTimeout(() => {
-          if (status === 'loading') {
-            setStatus('ready');
-          }
-        }, 500);
-        
+        setStatus('ready');
       } catch (err) {
-        console.error('Initialization error:', err);
         setErrorMessage(`Initialization failed: ${err}`);
         setStatus('error');
       }
     };
 
-    checkWebGL();
+    checkSupport();
   }, []);
-
-  const handleError = (msg: string) => {
-    console.error('3D Viewer error:', msg);
-    setErrorMessage(msg);
-    setStatus('error');
-  };
 
   if (status === 'checking') {
     return (
       <div className={`w-full h-full flex items-center justify-center bg-slate-50 ${className}`}>
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Checking WebGL support...</span>
+          <span>Initializing 3D viewer...</span>
         </div>
       </div>
     );
@@ -178,22 +106,18 @@ export default function SkeletonGLBViewer({ modelConfig, className = "", showCon
         gl={{ 
           antialias: true, 
           alpha: true, 
-          preserveDrawingBuffer: true,
           powerPreference: 'default',
           failIfMajorPerformanceCaveat: false
         }}
         onCreated={({ gl }) => {
           gl.setClearColor(0xf0f0f0, 1);
-          console.log('Canvas created successfully');
-          setStatus('ready');
-        }}
-        onError={(e) => {
-          console.error('Canvas error:', e);
-          handleError('Canvas rendering failed');
         }}
       >
         <Suspense fallback={null}>
-          <SceneContent modelConfig={modelConfig} onError={handleError} />
+          <ambientLight intensity={0.6} />
+          <directionalLight position={[5, 5, 5]} intensity={0.8} />
+          <directionalLight position={[-5, -5, -5]} intensity={0.3} />
+          <SkeletonModel modelConfig={modelConfig} />
           {showControls && (
             <OrbitControls 
               enableZoom={true} 

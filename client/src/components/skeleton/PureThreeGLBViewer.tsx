@@ -245,23 +245,7 @@ export default function PureThreeGLBViewer({
     );
   }
 
-  if (status === 'loading') {
-    return (
-      <div className={`w-full h-full flex flex-col items-center justify-center bg-slate-900 rounded-lg ${className}`}>
-        <Loader2 className="h-8 w-8 animate-spin text-green-400 mb-3" />
-        <span className="text-green-400 mb-2">Loading 3D Model...</span>
-        {loadProgress > 0 && (
-          <div className="w-48 bg-slate-700 rounded-full h-2">
-            <div 
-              className="bg-green-500 h-2 rounded-full transition-all"
-              style={{ width: `${loadProgress}%` }}
-            />
-          </div>
-        )}
-      </div>
-    );
-  }
-
+  
   if (status === 'error') {
     return (
       <div className={`w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 ${className}`}>
@@ -290,10 +274,25 @@ export default function PureThreeGLBViewer({
   }
 
   return (
-    <div 
-      ref={containerRef} 
-      className={`w-full h-full bg-slate-900 rounded-lg ${className}`}
-      style={{ minHeight: '400px' }}
-    />
+    <div className={`w-full h-full relative bg-slate-900 rounded-lg ${className}`} style={{ minHeight: '400px' }}>
+      <div 
+        ref={containerRef} 
+        className="w-full h-full"
+      />
+      {status === 'loading' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 rounded-lg z-10">
+          <Loader2 className="h-8 w-8 animate-spin text-green-400 mb-3" />
+          <span className="text-green-400 mb-2">Loading 3D Model...</span>
+          {loadProgress > 0 && (
+            <div className="w-48 bg-slate-700 rounded-full h-2">
+              <div 
+                className="bg-green-500 h-2 rounded-full transition-all"
+                style={{ width: `${loadProgress}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

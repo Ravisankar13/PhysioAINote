@@ -8,7 +8,7 @@ import { RotateCcw, Copy, AlertCircle, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import SkeletonGLBViewer from "@/components/skeleton/SkeletonGLBViewer";
+import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 
 interface GLBErrorBoundaryProps {
   children: ReactNode;
@@ -527,7 +527,7 @@ export default function TestSkeletonNew() {
                   <span className="ml-2">Loading GLB model...</span>
                 </div>
               }>
-                <SkeletonGLBViewer modelConfig={modelConfig} className="w-full h-full" />
+                <PureThreeGLBViewer modelConfig={modelConfig} className="w-full h-full" />
               </Suspense>
             </GLBErrorBoundary>
           </CardContent>

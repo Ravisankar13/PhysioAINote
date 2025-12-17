@@ -248,18 +248,6 @@ export default function PureThreeGLBViewer({
     setLoadProgress(0);
   };
 
-  if (status === 'checking') {
-    return (
-      <div className={`w-full h-full flex items-center justify-center bg-slate-900 rounded-lg ${className}`}>
-        <div className="flex items-center gap-2 text-green-400">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Checking WebGL support...</span>
-        </div>
-      </div>
-    );
-  }
-
-  
   if (status === 'error') {
     return (
       <div className={`w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6 ${className}`}>
@@ -293,10 +281,12 @@ export default function PureThreeGLBViewer({
         ref={containerRef} 
         className="w-full h-full"
       />
-      {status === 'loading' && (
+      {(status === 'checking' || status === 'loading') && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 rounded-lg z-10">
           <Loader2 className="h-8 w-8 animate-spin text-green-400 mb-3" />
-          <span className="text-green-400 mb-2">Loading 3D Model...</span>
+          <span className="text-green-400 mb-2">
+            {status === 'checking' ? 'Initializing 3D...' : 'Loading 3D Model...'}
+          </span>
           {loadProgress > 0 && (
             <div className="w-48 bg-slate-700 rounded-full h-2">
               <div 

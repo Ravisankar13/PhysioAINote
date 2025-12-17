@@ -527,7 +527,7 @@ export default function TestSkeletonNew() {
                   <span className="ml-2">Loading GLB model...</span>
                 </div>
               }>
-                <PureThreeGLBViewer modelConfig={modelConfig} className="w-full h-full" />
+                <PureThreeGLBViewer modelPath="/models/skeleton_character.glb" modelConfig={modelConfig} className="w-full h-full" />
               </Suspense>
             </GLBErrorBoundary>
           </CardContent>

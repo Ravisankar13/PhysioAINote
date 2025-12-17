@@ -30,7 +30,7 @@ interface ModelConfig {
   leftElbow?: JointConfig;
   rightElbow?: JointConfig;
   pelvis?: { tilt?: number; obliquity?: number; rotation?: number };
-  spine?: { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number };
+  spine?: { cervicalLordosis?: number; thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number };
   [key: string]: JointConfig | { tilt?: number; obliquity?: number; rotation?: number } | { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number } | undefined;
 }
 
@@ -66,6 +66,31 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'pelvis.tilt': [{ boneName: 'Pelvis_Main', axis: 'x', scale: 1 }],
   'pelvis.obliquity': [{ boneName: 'Pelvis_Main', axis: 'z', scale: 1 }],
   'pelvis.rotation': [{ boneName: 'Pelvis_Main', axis: 'y', scale: 1 }],
+  'spine.cervicalLordosis': [
+    { boneName: 'spine17', axis: 'x', scale: 0.25 },
+    { boneName: 'spine18', axis: 'x', scale: 0.25 },
+    { boneName: 'spine19', axis: 'x', scale: 0.25 },
+    { boneName: 'spine20', axis: 'x', scale: 0.25 },
+  ],
+  'spine.thoracicKyphosis': [
+    { boneName: 'spine8', axis: 'x', scale: 0.1 },
+    { boneName: 'spine9', axis: 'x', scale: 0.1 },
+    { boneName: 'spine10', axis: 'x', scale: 0.1 },
+    { boneName: 'spine11', axis: 'x', scale: 0.1 },
+    { boneName: 'spine12', axis: 'x', scale: 0.1 },
+    { boneName: 'spine13', axis: 'x', scale: 0.1 },
+    { boneName: 'spine14', axis: 'x', scale: 0.1 },
+    { boneName: 'spine15', axis: 'x', scale: 0.1 },
+    { boneName: 'spine16', axis: 'x', scale: 0.1 },
+  ],
+  'spine.lumbarLordosis': [
+    { boneName: 'spine2', axis: 'x', scale: 0.2 },
+    { boneName: 'spine3', axis: 'x', scale: 0.2 },
+    { boneName: 'spine4', axis: 'x', scale: 0.2 },
+    { boneName: 'spine5', axis: 'x', scale: 0.2 },
+    { boneName: 'spine6', axis: 'x', scale: 0.2 },
+    { boneName: 'spine7', axis: 'x', scale: 0.2 },
+  ],
 };
 
 export default function PureThreeGLBViewer({ 

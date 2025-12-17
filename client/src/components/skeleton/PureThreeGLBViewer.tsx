@@ -5,11 +5,68 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { AlertCircle, Loader2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+interface JointConfig {
+  flexion?: number;
+  abduction?: number;
+  internalRotation?: number;
+  pronation?: number;
+  carryingAngle?: number;
+  dorsiflexion?: number;
+  plantarflexion?: number;
+  inversion?: number;
+  eversion?: number;
+  [key: string]: number | undefined;
+}
+
+interface ModelConfig {
+  leftHip?: JointConfig;
+  rightHip?: JointConfig;
+  leftKnee?: JointConfig;
+  rightKnee?: JointConfig;
+  leftAnkle?: JointConfig;
+  rightAnkle?: JointConfig;
+  leftShoulder?: JointConfig;
+  rightShoulder?: JointConfig;
+  leftElbow?: JointConfig;
+  rightElbow?: JointConfig;
+  pelvis?: { tilt?: number; obliquity?: number; rotation?: number };
+  spine?: { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number };
+  [key: string]: JointConfig | { tilt?: number; obliquity?: number; rotation?: number } | { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number } | undefined;
+}
+
 interface PureThreeGLBViewerProps {
   modelPath?: string;
-  modelConfig?: any;
+  modelConfig?: ModelConfig;
   className?: string;
 }
+
+const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number }[] } = {
+  'leftHip.flexion': [{ boneName: 'Femer_Root_L', axis: 'x', scale: 1 }],
+  'leftHip.abduction': [{ boneName: 'Femer_Root_L', axis: 'z', scale: -1 }],
+  'leftHip.internalRotation': [{ boneName: 'Femer_Root_L', axis: 'y', scale: 1 }],
+  'rightHip.flexion': [{ boneName: 'Femer_Root_R', axis: 'x', scale: 1 }],
+  'rightHip.abduction': [{ boneName: 'Femer_Root_R', axis: 'z', scale: 1 }],
+  'rightHip.internalRotation': [{ boneName: 'Femer_Root_R', axis: 'y', scale: -1 }],
+  'leftKnee.flexion': [{ boneName: 'fibula_tibia_L', axis: 'x', scale: -1 }],
+  'rightKnee.flexion': [{ boneName: 'fibula_tibia_R', axis: 'x', scale: -1 }],
+  'leftAnkle.dorsiflexion': [{ boneName: 'foot_L', axis: 'x', scale: -1 }],
+  'leftAnkle.plantarflexion': [{ boneName: 'foot_L', axis: 'x', scale: 1 }],
+  'rightAnkle.dorsiflexion': [{ boneName: 'foot_R', axis: 'x', scale: -1 }],
+  'rightAnkle.plantarflexion': [{ boneName: 'foot_R', axis: 'x', scale: 1 }],
+  'leftShoulder.flexion': [{ boneName: 'Humerus_Root_L', axis: 'x', scale: -1 }],
+  'leftShoulder.abduction': [{ boneName: 'Humerus_Root_L', axis: 'z', scale: 1 }],
+  'leftShoulder.internalRotation': [{ boneName: 'Humerus_Root_L', axis: 'y', scale: 1 }],
+  'rightShoulder.flexion': [{ boneName: 'Humerus_Root_R', axis: 'x', scale: -1 }],
+  'rightShoulder.abduction': [{ boneName: 'Humerus_Root_R', axis: 'z', scale: -1 }],
+  'rightShoulder.internalRotation': [{ boneName: 'Humerus_Root_R', axis: 'y', scale: -1 }],
+  'leftElbow.flexion': [{ boneName: 'Redius_Alna_L', axis: 'x', scale: -1 }],
+  'leftElbow.pronation': [{ boneName: 'Redius_Alna_L', axis: 'y', scale: 1 }],
+  'rightElbow.flexion': [{ boneName: 'Redius_Alna_R', axis: 'x', scale: -1 }],
+  'rightElbow.pronation': [{ boneName: 'Redius_Alna_R', axis: 'y', scale: -1 }],
+  'pelvis.tilt': [{ boneName: 'Pelvis_Main', axis: 'x', scale: 1 }],
+  'pelvis.obliquity': [{ boneName: 'Pelvis_Main', axis: 'z', scale: 1 }],
+  'pelvis.rotation': [{ boneName: 'Pelvis_Main', axis: 'y', scale: 1 }],
+};
 
 export default function PureThreeGLBViewer({ 
   modelPath = '/models/rigged-skeleton.glb',
@@ -20,6 +77,8 @@ export default function PureThreeGLBViewer({
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
   const [errorMessage, setErrorMessage] = useState('');
   const [loadProgress, setLoadProgress] = useState(0);
+  const bonesRef = useRef<{ [name: string]: THREE.Object3D }>({});
+  const initialRotationsRef = useRef<{ [name: string]: THREE.Euler }>({});
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -114,16 +173,7 @@ export default function PureThreeGLBViewer({
         const gridHelper = new THREE.GridHelper(10, 10, 0x333366, 0x222244);
         scene.add(gridHelper);
 
-        const testCube = new THREE.Mesh(
-          new THREE.BoxGeometry(0.5, 0.5, 0.5),
-          new THREE.MeshStandardMaterial({ color: 0x00ff00 })
-        );
-        testCube.position.set(2, 0.25, 0);
-        scene.add(testCube);
-        console.log('Test cube added to scene');
-
         renderer.render(scene, camera);
-        console.log('Initial render complete, canvas size:', renderer.domElement.width, 'x', renderer.domElement.height);
 
         sceneRef.current = {
           scene,
@@ -177,21 +227,21 @@ export default function PureThreeGLBViewer({
               }
             });
             
-            console.log('=== ALL OBJECTS IN MODEL ===');
-            objectTypes.forEach(t => console.log(t));
             console.log('=== AVAILABLE BONES IN MODEL ===');
             console.log('Total bones found:', boneNames.length);
             boneNames.forEach((name, i) => {
               const bone = bones[name];
               console.log(`${i + 1}. ${name} (parent: ${bone.parent?.name || 'none'})`);
+              initialRotationsRef.current[name] = bone.rotation.clone();
             });
             console.log('=================================');
+            
+            bonesRef.current = bones;
             
             scene.add(model);
             
             if (sceneRef.current) {
               sceneRef.current.model = model;
-              (sceneRef.current as any).bones = bones;
             }
             
             console.log('GLB model loaded successfully:', modelPath);
@@ -267,6 +317,44 @@ export default function PureThreeGLBViewer({
       }
     };
   }, [modelPath]);
+
+  useEffect(() => {
+    if (status !== 'ready' || !modelConfig) return;
+    
+    const bones = bonesRef.current;
+    const initialRotations = initialRotationsRef.current;
+    
+    if (Object.keys(bones).length === 0) return;
+    
+    Object.entries(BONE_MAPPING).forEach(([configKey, mappings]) => {
+      const [jointName, propertyName] = configKey.split('.');
+      const jointConfig = modelConfig[jointName];
+      
+      if (!jointConfig) return;
+      
+      const value = (jointConfig as any)[propertyName];
+      if (value === undefined) return;
+      
+      const angleInRadians = (value * Math.PI) / 180;
+      
+      mappings.forEach(({ boneName, axis, scale }) => {
+        const bone = bones[boneName];
+        const initialRotation = initialRotations[boneName];
+        
+        if (!bone || !initialRotation) return;
+        
+        const adjustedAngle = angleInRadians * scale;
+        
+        if (axis === 'x') {
+          bone.rotation.x = initialRotation.x + adjustedAngle;
+        } else if (axis === 'y') {
+          bone.rotation.y = initialRotation.y + adjustedAngle;
+        } else if (axis === 'z') {
+          bone.rotation.z = initialRotation.z + adjustedAngle;
+        }
+      });
+    });
+  }, [modelConfig, status]);
 
   const handleRetry = () => {
     setStatus('checking');

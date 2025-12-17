@@ -52,7 +52,8 @@ export default function PureThreeGLBViewer({
   }, []);
 
   useEffect(() => {
-    if (status !== 'loading' || !containerRef.current) return;
+    if (!containerRef.current) return;
+    if (sceneRef.current) return;
 
     const container = containerRef.current;
     let animationId: number;
@@ -239,7 +240,7 @@ export default function PureThreeGLBViewer({
         sceneRef.current = null;
       }
     };
-  }, [status, modelPath]);
+  }, [modelPath]);
 
   const handleRetry = () => {
     setStatus('checking');

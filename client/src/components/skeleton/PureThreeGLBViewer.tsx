@@ -155,17 +155,43 @@ export default function PureThreeGLBViewer({
             model.position.y = -box.min.y * scale;
             model.position.z = -center.z * scale;
             
+            const bones: { [name: string]: THREE.Object3D } = {};
+            const boneNames: string[] = [];
+            const objectTypes: string[] = [];
+            
             model.traverse((child) => {
+              objectTypes.push(`${child.name}: ${child.type}`);
               if (child instanceof THREE.Mesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
               }
+              if (child instanceof THREE.Bone) {
+                bones[child.name] = child;
+                boneNames.push(child.name);
+              }
+              if ((child as any).isBone) {
+                if (!bones[child.name]) {
+                  bones[child.name] = child;
+                  boneNames.push(child.name);
+                }
+              }
             });
+            
+            console.log('=== ALL OBJECTS IN MODEL ===');
+            objectTypes.forEach(t => console.log(t));
+            console.log('=== AVAILABLE BONES IN MODEL ===');
+            console.log('Total bones found:', boneNames.length);
+            boneNames.forEach((name, i) => {
+              const bone = bones[name];
+              console.log(`${i + 1}. ${name} (parent: ${bone.parent?.name || 'none'})`);
+            });
+            console.log('=================================');
             
             scene.add(model);
             
             if (sceneRef.current) {
               sceneRef.current.model = model;
+              (sceneRef.current as any).bones = bones;
             }
             
             console.log('GLB model loaded successfully:', modelPath);
@@ -190,8 +216,8 @@ export default function PureThreeGLBViewer({
           
           animationId = requestAnimationFrame(animate);
           
-          if (sceneRef.current.model) {
-            sceneRef.current.model.rotation.y += 0.003;
+          {
+            // Stop auto-rotation to allow manual control
           }
           
           sceneRef.current.controls.update();

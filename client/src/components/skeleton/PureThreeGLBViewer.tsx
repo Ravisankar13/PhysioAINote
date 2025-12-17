@@ -113,6 +113,17 @@ export default function PureThreeGLBViewer({
         const gridHelper = new THREE.GridHelper(10, 10, 0x333366, 0x222244);
         scene.add(gridHelper);
 
+        const testCube = new THREE.Mesh(
+          new THREE.BoxGeometry(0.5, 0.5, 0.5),
+          new THREE.MeshStandardMaterial({ color: 0x00ff00 })
+        );
+        testCube.position.set(2, 0.25, 0);
+        scene.add(testCube);
+        console.log('Test cube added to scene');
+
+        renderer.render(scene, camera);
+        console.log('Initial render complete, canvas size:', renderer.domElement.width, 'x', renderer.domElement.height);
+
         sceneRef.current = {
           scene,
           camera,

@@ -273,21 +273,12 @@ export default function PureThreeGLBViewer({
               const skull = skullMesh as THREE.Object3D;
               const spine20 = bones['spine20'];
               
-              // Store world position before re-parenting
-              const worldPos = new THREE.Vector3();
-              skull.getWorldPosition(worldPos);
-              
-              // Re-parent skull to spine20
-              spine20.add(skull);
-              
-              // Restore relative position
-              const spine20WorldPos = new THREE.Vector3();
-              spine20.getWorldPosition(spine20WorldPos);
-              skull.position.set(0, 0.15, 0); // Position skull slightly above spine20
+              // Use attach() which preserves world transform while changing parent
+              spine20.attach(skull);
               
               bones['skull'] = skull;
               initialRotationsRef.current['skull'] = skull.rotation.clone();
-              console.log('Skull re-parented to spine20');
+              console.log('Skull attached to spine20 (world transform preserved)');
             }
             
             console.log('=== AVAILABLE BONES IN MODEL ===');

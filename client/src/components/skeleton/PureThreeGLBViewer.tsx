@@ -67,10 +67,12 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'pelvis.obliquity': [{ boneName: 'Pelvis_Main', axis: 'z', scale: 1 }],
   'pelvis.rotation': [{ boneName: 'Pelvis_Main', axis: 'y', scale: 1 }],
   'spine.cervicalLordosis': [
-    { boneName: 'spine17', axis: 'x', scale: 0.25 },
-    { boneName: 'spine18', axis: 'x', scale: 0.25 },
-    { boneName: 'spine19', axis: 'x', scale: 0.25 },
-    { boneName: 'spine20', axis: 'x', scale: 0.25 },
+    { boneName: 'spine17', axis: 'x', scale: 0.2 },
+    { boneName: 'spine18', axis: 'x', scale: 0.2 },
+    { boneName: 'spine19', axis: 'x', scale: 0.2 },
+    { boneName: 'spine20', axis: 'x', scale: 0.2 },
+    { boneName: 'Rib_Cage', axis: 'x', scale: 0.15 },
+    { boneName: 'Rib_cage_End', axis: 'x', scale: 0.15 },
   ],
   'spine.thoracicKyphosis': [
     { boneName: 'spine8', axis: 'x', scale: 0.1 },
@@ -268,17 +270,14 @@ export default function PureThreeGLBViewer({
               }
             });
             
-            // If skull mesh found, re-parent it to spine20 so it follows the spine
-            if (skullMesh !== null && bones['spine20']) {
-              const skull = skullMesh as THREE.Object3D;
-              const spine20 = bones['spine20'];
-              
-              // Use attach() which preserves world transform while changing parent
-              spine20.attach(skull);
-              
-              bones['skull'] = skull;
-              initialRotationsRef.current['skull'] = skull.rotation.clone();
-              console.log('Skull attached to spine20 (world transform preserved)');
+            // Analyze skull mesh skeleton to find the controlling bone
+            if (skullMesh !== null) {
+              const skull = skullMesh as THREE.SkinnedMesh;
+              console.log('=== SKULL MESH ANALYSIS ===');
+              console.log('Is SkinnedMesh:', skull instanceof THREE.SkinnedMesh);
+              if (skull instanceof THREE.SkinnedMesh && skull.skeleton) {
+                console.log('Skull skeleton bones:', skull.skeleton.bones.map(b => b.name));
+              }
             }
             
             console.log('=== AVAILABLE BONES IN MODEL ===');

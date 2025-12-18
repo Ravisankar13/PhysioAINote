@@ -67,10 +67,11 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'pelvis.obliquity': [{ boneName: 'Pelvis_Main', axis: 'z', scale: 1 }],
   'pelvis.rotation': [{ boneName: 'Pelvis_Main', axis: 'y', scale: 1 }],
   'spine.cervicalLordosis': [
-    { boneName: 'spine17', axis: 'x', scale: 0.25 },
-    { boneName: 'spine18', axis: 'x', scale: 0.25 },
-    { boneName: 'spine19', axis: 'x', scale: 0.25 },
-    { boneName: 'spine20', axis: 'x', scale: 0.25 },
+    { boneName: 'spine17', axis: 'x', scale: 0.2 },
+    { boneName: 'spine18', axis: 'x', scale: 0.2 },
+    { boneName: 'spine19', axis: 'x', scale: 0.2 },
+    { boneName: 'spine20', axis: 'x', scale: 0.2 },
+    { boneName: 'skull', axis: 'x', scale: 0.2 },
   ],
   'spine.thoracicKyphosis': [
     { boneName: 'spine8', axis: 'x', scale: 0.1 },
@@ -234,11 +235,19 @@ export default function PureThreeGLBViewer({
             const boneNames: string[] = [];
             const objectTypes: string[] = [];
             
+            let skullMesh: THREE.Object3D | null = null;
+            
             model.traverse((child) => {
               objectTypes.push(`${child.name}: ${child.type}`);
               if (child instanceof THREE.Mesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
+                // Find skull mesh by name pattern
+                const lowerName = child.name.toLowerCase();
+                if (lowerName.includes('skull') || lowerName.includes('head') || lowerName.includes('cranium')) {
+                  skullMesh = child;
+                  console.log('Found skull mesh:', child.name);
+                }
               }
               if (child instanceof THREE.Bone) {
                 bones[child.name] = child;
@@ -251,6 +260,20 @@ export default function PureThreeGLBViewer({
                 }
               }
             });
+            
+            // Log all meshes for debugging
+            console.log('=== ALL MESHES IN MODEL ===');
+            model.traverse((child) => {
+              if (child instanceof THREE.Mesh) {
+                console.log(`Mesh: ${child.name}, parent: ${child.parent?.name || 'none'}`);
+              }
+            });
+            
+            // If skull mesh found, store reference and link to spine20
+            if (skullMesh !== null) {
+              bones['skull'] = skullMesh as THREE.Object3D;
+              initialRotationsRef.current['skull'] = (skullMesh as THREE.Object3D).rotation.clone();
+            }
             
             console.log('=== AVAILABLE BONES IN MODEL ===');
             console.log('Total bones found:', boneNames.length);

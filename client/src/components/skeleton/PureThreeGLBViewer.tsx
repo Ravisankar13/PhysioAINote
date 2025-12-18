@@ -317,9 +317,23 @@ export default function PureThreeGLBViewer({
               const rootBone = bones['Root'];
               const spine20 = bones['spine20'];
               
-              // Use attach to preserve world transform while changing parent
-              spine20.attach(rootBone);
+              // Store original world position of Root
+              const originalWorldPos = new THREE.Vector3();
+              rootBone.getWorldPosition(originalWorldPos);
+              
+              // Get spine20 world position
+              const spine20WorldPos = new THREE.Vector3();
+              spine20.getWorldPosition(spine20WorldPos);
+              
+              // Add Root as child of spine20
+              spine20.add(rootBone);
+              
+              // Position Root at the top of spine20 (along local Y axis)
+              rootBone.position.set(0, 0, 0);
+              rootBone.rotation.set(0, 0, 0);
+              
               console.log('Root bone re-parented to spine20 - skull now follows spine chain');
+              console.log('Root local position:', rootBone.position);
             }
             
             bonesRef.current = bones;

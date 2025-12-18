@@ -563,7 +563,7 @@ export default function TestSkeletonNew() {
                         value={[modelConfig.spine.cervicalLordosis]}
                         onValueChange={(value) => handleSliderChange('spine', 'cervicalLordosis', value)}
                         min={-60}
-                        max={-20}
+                        max={20}
                         step={1}
                         className="mt-2"
                       />
@@ -573,7 +573,7 @@ export default function TestSkeletonNew() {
                       <Slider
                         value={[modelConfig.spine.thoracicKyphosis]}
                         onValueChange={(value) => handleSliderChange('spine', 'thoracicKyphosis', value)}
-                        min={20}
+                        min={-20}
                         max={50}
                         step={1}
                         className="mt-2"
@@ -585,7 +585,7 @@ export default function TestSkeletonNew() {
                         value={[modelConfig.spine.lumbarLordosis]}
                         onValueChange={(value) => handleSliderChange('spine', 'lumbarLordosis', value)}
                         min={-70}
-                        max={-30}
+                        max={20}
                         step={1}
                         className="mt-2"
                       />

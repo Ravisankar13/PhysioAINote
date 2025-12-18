@@ -71,8 +71,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine18', axis: 'x', scale: 0.2 },
     { boneName: 'spine19', axis: 'x', scale: 0.2 },
     { boneName: 'spine20', axis: 'x', scale: 0.2 },
-    { boneName: 'Rib_Cage', axis: 'x', scale: 0.15 },
-    { boneName: 'Rib_cage_End', axis: 'x', scale: 0.15 },
+    { boneName: 'Root', axis: 'x', scale: 0.2 },
   ],
   'spine.thoracicKyphosis': [
     { boneName: 'spine8', axis: 'x', scale: 0.1 },
@@ -277,6 +276,30 @@ export default function PureThreeGLBViewer({
               console.log('Is SkinnedMesh:', skull instanceof THREE.SkinnedMesh);
               if (skull instanceof THREE.SkinnedMesh && skull.skeleton) {
                 console.log('Skull skeleton bones:', skull.skeleton.bones.map(b => b.name));
+                
+                // Analyze bone weights to find which bones actually affect the skull
+                const geometry = skull.geometry;
+                if (geometry.attributes.skinIndex && geometry.attributes.skinWeight) {
+                  const skinIndices = geometry.attributes.skinIndex;
+                  const skinWeights = geometry.attributes.skinWeight;
+                  const usedBoneIndices = new Set<number>();
+                  
+                  // Sample first 100 vertices to find active bones
+                  const sampleCount = Math.min(100, skinIndices.count);
+                  for (let i = 0; i < sampleCount; i++) {
+                    for (let j = 0; j < 4; j++) {
+                      const weight = skinWeights.getComponent(i, j);
+                      if (weight > 0.01) {
+                        usedBoneIndices.add(skinIndices.getComponent(i, j));
+                      }
+                    }
+                  }
+                  
+                  const usedBoneNames = Array.from(usedBoneIndices).map(idx => skull.skeleton.bones[idx]?.name || `unknown-${idx}`);
+                  console.log('=== BONES THAT CONTROL SKULL VERTICES ===');
+                  console.log('Active bone indices:', Array.from(usedBoneIndices));
+                  console.log('Active bone names:', usedBoneNames);
+                }
               }
             }
             

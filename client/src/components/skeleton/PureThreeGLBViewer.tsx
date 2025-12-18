@@ -71,7 +71,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine18', axis: 'x', scale: 0.2 },
     { boneName: 'spine19', axis: 'x', scale: 0.2 },
     { boneName: 'spine20', axis: 'x', scale: 0.2 },
-    { boneName: 'Root', axis: 'x', scale: 0.2 },
+    { boneName: 'Root', axis: 'x', scale: 0.8 },
   ],
   'spine.thoracicKyphosis': [
     { boneName: 'spine8', axis: 'x', scale: 0.1 },

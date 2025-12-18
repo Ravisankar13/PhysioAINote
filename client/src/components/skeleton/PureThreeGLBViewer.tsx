@@ -313,27 +313,42 @@ export default function PureThreeGLBViewer({
             console.log('=================================');
             
             // Re-parent Root bone to spine20 so skull follows the entire spine chain
+            // The skull mesh vertices are weighted to Root bone, so moving Root moves the skull
             if (bones['Root'] && bones['spine20']) {
               const rootBone = bones['Root'];
               const spine20 = bones['spine20'];
               
-              // Store original world position of Root
-              const originalWorldPos = new THREE.Vector3();
-              rootBone.getWorldPosition(originalWorldPos);
+              // Get the world position of Root before re-parenting
+              const rootWorldPos = new THREE.Vector3();
+              rootBone.getWorldPosition(rootWorldPos);
               
-              // Get spine20 world position
+              // Get world position of spine20
               const spine20WorldPos = new THREE.Vector3();
               spine20.getWorldPosition(spine20WorldPos);
               
-              // Add Root as child of spine20
+              // Calculate offset in world space
+              const offset = rootWorldPos.clone().sub(spine20WorldPos);
+              
+              // Remove from current parent and add to spine20
+              if (rootBone.parent) {
+                rootBone.parent.remove(rootBone);
+              }
               spine20.add(rootBone);
               
-              // Position Root at the top of spine20 (along local Y axis)
-              rootBone.position.set(0, 0, 0);
-              rootBone.rotation.set(0, 0, 0);
+              // Convert world offset to local space of spine20
+              const spine20WorldQuat = new THREE.Quaternion();
+              spine20.getWorldQuaternion(spine20WorldQuat);
+              const inverseQuat = spine20WorldQuat.clone().invert();
+              offset.applyQuaternion(inverseQuat);
+              
+              // Set local position to maintain world position
+              rootBone.position.copy(offset);
+              
+              // Store the new initial rotation after re-parenting
+              initialRotationsRef.current['Root'] = rootBone.rotation.clone();
               
               console.log('Root bone re-parented to spine20 - skull now follows spine chain');
-              console.log('Root local position:', rootBone.position);
+              console.log('Root local offset:', offset);
             }
             
             bonesRef.current = bones;

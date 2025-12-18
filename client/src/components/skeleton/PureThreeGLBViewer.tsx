@@ -71,7 +71,6 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine18', axis: 'x', scale: 0.2 },
     { boneName: 'spine19', axis: 'x', scale: 0.2 },
     { boneName: 'spine20', axis: 'x', scale: 0.2 },
-    { boneName: 'Root', axis: 'x', scale: 0.8 },
   ],
   'spine.thoracicKyphosis': [
     { boneName: 'spine8', axis: 'x', scale: 0.1 },
@@ -83,7 +82,6 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine14', axis: 'x', scale: 0.1 },
     { boneName: 'spine15', axis: 'x', scale: 0.1 },
     { boneName: 'spine16', axis: 'x', scale: 0.1 },
-    { boneName: 'Root', axis: 'x', scale: 0.9 },
   ],
   'spine.lumbarLordosis': [
     { boneName: 'spine2', axis: 'x', scale: 0.2 },
@@ -92,7 +90,6 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine5', axis: 'x', scale: 0.2 },
     { boneName: 'spine6', axis: 'x', scale: 0.2 },
     { boneName: 'spine7', axis: 'x', scale: 0.2 },
-    { boneName: 'Root', axis: 'x', scale: 1.2 },
   ],
 };
 
@@ -348,8 +345,27 @@ export default function PureThreeGLBViewer({
           
           animationId = requestAnimationFrame(animate);
           
-          {
-            // Stop auto-rotation to allow manual control
+          // Sync Root bone to spine20's world rotation so skull follows spine chain
+          const currentBones = bonesRef.current;
+          const rootBone = currentBones['Root'];
+          const spine20 = currentBones['spine20'];
+          if (rootBone && spine20) {
+            // Get spine20's world quaternion
+            const spine20WorldQuat = new THREE.Quaternion();
+            spine20.getWorldQuaternion(spine20WorldQuat);
+            
+            // Get Root's parent (Armature) world quaternion
+            const parentWorldQuat = new THREE.Quaternion();
+            if (rootBone.parent) {
+              rootBone.parent.getWorldQuaternion(parentWorldQuat);
+            }
+            
+            // Convert spine20's world rotation to Root's local space
+            const parentInverse = parentWorldQuat.clone().invert();
+            const localQuat = parentInverse.multiply(spine20WorldQuat);
+            
+            // Apply to Root
+            rootBone.quaternion.copy(localQuat);
           }
           
           sceneRef.current.controls.update();

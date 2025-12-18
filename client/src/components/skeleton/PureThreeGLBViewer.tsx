@@ -408,6 +408,18 @@ export default function PureThreeGLBViewer({
     
     if (Object.keys(bones).length === 0) return;
     
+    // First, collect all rotation contributions per bone per axis
+    const boneRotations: { [boneName: string]: { x: number; y: number; z: number } } = {};
+    
+    // Initialize all bones to their initial rotation
+    Object.keys(bones).forEach(boneName => {
+      const initial = initialRotations[boneName];
+      if (initial) {
+        boneRotations[boneName] = { x: initial.x, y: initial.y, z: initial.z };
+      }
+    });
+    
+    // Accumulate rotations from all sliders
     Object.entries(BONE_MAPPING).forEach(([configKey, mappings]) => {
       const [jointName, propertyName] = configKey.split('.');
       const jointConfig = modelConfig[jointName];
@@ -420,21 +432,28 @@ export default function PureThreeGLBViewer({
       const angleInRadians = (value * Math.PI) / 180;
       
       mappings.forEach(({ boneName, axis, scale }) => {
-        const bone = bones[boneName];
-        const initialRotation = initialRotations[boneName];
-        
-        if (!bone || !initialRotation) return;
+        if (!boneRotations[boneName]) return;
         
         const adjustedAngle = angleInRadians * scale;
         
         if (axis === 'x') {
-          bone.rotation.x = initialRotation.x + adjustedAngle;
+          boneRotations[boneName].x += adjustedAngle;
         } else if (axis === 'y') {
-          bone.rotation.y = initialRotation.y + adjustedAngle;
+          boneRotations[boneName].y += adjustedAngle;
         } else if (axis === 'z') {
-          bone.rotation.z = initialRotation.z + adjustedAngle;
+          boneRotations[boneName].z += adjustedAngle;
         }
       });
+    });
+    
+    // Apply accumulated rotations to bones
+    Object.entries(boneRotations).forEach(([boneName, rotation]) => {
+      const bone = bones[boneName];
+      if (bone) {
+        bone.rotation.x = rotation.x;
+        bone.rotation.y = rotation.y;
+        bone.rotation.z = rotation.z;
+      }
     });
   }, [modelConfig, status]);
 

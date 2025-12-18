@@ -312,6 +312,16 @@ export default function PureThreeGLBViewer({
             });
             console.log('=================================');
             
+            // Re-parent Root bone to spine20 so skull follows the entire spine chain
+            if (bones['Root'] && bones['spine20']) {
+              const rootBone = bones['Root'];
+              const spine20 = bones['spine20'];
+              
+              // Use attach to preserve world transform while changing parent
+              spine20.attach(rootBone);
+              console.log('Root bone re-parented to spine20 - skull now follows spine chain');
+            }
+            
             bonesRef.current = bones;
             
             scene.add(model);

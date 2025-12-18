@@ -311,9 +311,26 @@ export default function PureThreeGLBViewer({
             });
             console.log('=================================');
             
-            // Don't re-parent Root - SkinnedMesh uses bone matrices differently
-            // We'll sync Root rotation to spine20 in the animation loop instead
-            console.log('Root bone will follow spine20 rotation via animation sync');
+            // Store initial offset between Root and spine20 for animation sync
+            if (bones['Root'] && bones['spine20']) {
+              const rootBone = bones['Root'] as THREE.Bone;
+              const spine20 = bones['spine20'] as THREE.Bone;
+              
+              // Get initial world positions
+              const rootWorldPos = new THREE.Vector3();
+              const spine20WorldPos = new THREE.Vector3();
+              rootBone.getWorldPosition(rootWorldPos);
+              spine20.getWorldPosition(spine20WorldPos);
+              
+              // Store offset in world space
+              const offset = rootWorldPos.clone().sub(spine20WorldPos);
+              (rootBone as any).initialOffset = offset;
+              
+              // Store initial local rotation
+              (rootBone as any).initialRotation = rootBone.rotation.clone();
+              
+              console.log('Stored Root initial offset from spine20:', offset);
+            }
             
             bonesRef.current = bones;
             
@@ -345,26 +362,43 @@ export default function PureThreeGLBViewer({
           
           animationId = requestAnimationFrame(animate);
           
-          // Sync Root bone to spine20's world rotation so skull follows spine chain
+          // Sync Root bone to follow spine20's movement
           const currentBones = bonesRef.current;
-          const rootBone = currentBones['Root'];
-          const spine20 = currentBones['spine20'];
-          if (rootBone && spine20) {
-            // Get spine20's world quaternion
+          const rootBone = currentBones['Root'] as THREE.Bone;
+          const spine20 = currentBones['spine20'] as THREE.Bone;
+          if (rootBone && spine20 && (rootBone as any).initialOffset) {
+            // Get spine20's current world transform
+            const spine20WorldPos = new THREE.Vector3();
             const spine20WorldQuat = new THREE.Quaternion();
+            spine20.getWorldPosition(spine20WorldPos);
             spine20.getWorldQuaternion(spine20WorldQuat);
             
-            // Get Root's parent (Armature) world quaternion
+            // Get stored initial offset
+            const initialOffset = (rootBone as any).initialOffset as THREE.Vector3;
+            
+            // Rotate the offset by spine20's current world rotation
+            const rotatedOffset = initialOffset.clone().applyQuaternion(spine20WorldQuat);
+            
+            // Calculate new world position for Root
+            const newWorldPos = spine20WorldPos.clone().add(rotatedOffset);
+            
+            // Convert to local position (relative to Root's parent)
+            if (rootBone.parent) {
+              const parentWorldMatrix = new THREE.Matrix4();
+              rootBone.parent.updateWorldMatrix(true, false);
+              parentWorldMatrix.copy(rootBone.parent.matrixWorld).invert();
+              newWorldPos.applyMatrix4(parentWorldMatrix);
+            }
+            
+            rootBone.position.copy(newWorldPos);
+            
+            // Also sync rotation
             const parentWorldQuat = new THREE.Quaternion();
             if (rootBone.parent) {
               rootBone.parent.getWorldQuaternion(parentWorldQuat);
             }
-            
-            // Convert spine20's world rotation to Root's local space
             const parentInverse = parentWorldQuat.clone().invert();
             const localQuat = parentInverse.multiply(spine20WorldQuat);
-            
-            // Apply to Root
             rootBone.quaternion.copy(localQuat);
           }
           

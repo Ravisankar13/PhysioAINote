@@ -67,11 +67,10 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'pelvis.obliquity': [{ boneName: 'Pelvis_Main', axis: 'z', scale: 1 }],
   'pelvis.rotation': [{ boneName: 'Pelvis_Main', axis: 'y', scale: 1 }],
   'spine.cervicalLordosis': [
-    { boneName: 'spine17', axis: 'x', scale: 0.2 },
-    { boneName: 'spine18', axis: 'x', scale: 0.2 },
-    { boneName: 'spine19', axis: 'x', scale: 0.2 },
-    { boneName: 'spine20', axis: 'x', scale: 0.2 },
-    { boneName: 'skull', axis: 'x', scale: 0.2 },
+    { boneName: 'spine17', axis: 'x', scale: 0.25 },
+    { boneName: 'spine18', axis: 'x', scale: 0.25 },
+    { boneName: 'spine19', axis: 'x', scale: 0.25 },
+    { boneName: 'spine20', axis: 'x', scale: 0.25 },
   ],
   'spine.thoracicKyphosis': [
     { boneName: 'spine8', axis: 'x', scale: 0.1 },
@@ -269,10 +268,26 @@ export default function PureThreeGLBViewer({
               }
             });
             
-            // If skull mesh found, store reference and link to spine20
-            if (skullMesh !== null) {
-              bones['skull'] = skullMesh as THREE.Object3D;
-              initialRotationsRef.current['skull'] = (skullMesh as THREE.Object3D).rotation.clone();
+            // If skull mesh found, re-parent it to spine20 so it follows the spine
+            if (skullMesh !== null && bones['spine20']) {
+              const skull = skullMesh as THREE.Object3D;
+              const spine20 = bones['spine20'];
+              
+              // Store world position before re-parenting
+              const worldPos = new THREE.Vector3();
+              skull.getWorldPosition(worldPos);
+              
+              // Re-parent skull to spine20
+              spine20.add(skull);
+              
+              // Restore relative position
+              const spine20WorldPos = new THREE.Vector3();
+              spine20.getWorldPosition(spine20WorldPos);
+              skull.position.set(0, 0.15, 0); // Position skull slightly above spine20
+              
+              bones['skull'] = skull;
+              initialRotationsRef.current['skull'] = skull.rotation.clone();
+              console.log('Skull re-parented to spine20');
             }
             
             console.log('=== AVAILABLE BONES IN MODEL ===');

@@ -155,8 +155,8 @@ export default function PureThreeGLBViewer({
         scene.background = new THREE.Color(0x1a1a2e);
 
         const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-        camera.position.set(0, -0.5, 8);
-        camera.lookAt(0, 3.5, 0);
+        camera.position.set(0, 1.5, 8);
+        camera.lookAt(0, 2, 0);
         console.log('THREE.js camera initialized');
 
         const renderer = new THREE.WebGLRenderer({ 
@@ -199,6 +199,7 @@ export default function PureThreeGLBViewer({
         controls.update();
 
         const gridHelper = new THREE.GridHelper(10, 10, 0x333366, 0x222244);
+        gridHelper.position.y = -1;
         scene.add(gridHelper);
 
         renderer.render(scene, camera);
@@ -355,6 +356,7 @@ export default function PureThreeGLBViewer({
             
             bonesRef.current = bones;
             
+            model.position.y = -1;
             scene.add(model);
             
             if (sceneRef.current) {

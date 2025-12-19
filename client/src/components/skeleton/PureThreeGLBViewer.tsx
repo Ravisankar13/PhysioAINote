@@ -311,25 +311,34 @@ export default function PureThreeGLBViewer({
             });
             console.log('=================================');
             
-            // Store initial offset between Root and spine20 for animation sync
+            // Store bind matrices for spine20 and Root for deformation sync
             if (bones['Root'] && bones['spine20']) {
               const rootBone = bones['Root'] as THREE.Bone;
               const spine20 = bones['spine20'] as THREE.Bone;
+              const ribCage = bones['Rib_Cage'] as THREE.Bone;
               
-              // Get initial world positions
-              const rootWorldPos = new THREE.Vector3();
-              const spine20WorldPos = new THREE.Vector3();
-              rootBone.getWorldPosition(rootWorldPos);
-              spine20.getWorldPosition(spine20WorldPos);
+              // Update matrices to get bind pose
+              rootBone.updateMatrixWorld(true);
+              spine20.updateMatrixWorld(true);
               
-              // Store offset in world space
-              const offset = rootWorldPos.clone().sub(spine20WorldPos);
-              (rootBone as any).initialOffset = offset;
+              // Store bind matrices (the initial/rest pose matrices)
+              (spine20 as any).bindMatrix = spine20.matrixWorld.clone();
+              (spine20 as any).bindMatrixInverse = spine20.matrixWorld.clone().invert();
+              (rootBone as any).bindMatrix = rootBone.matrix.clone();
+              (rootBone as any).bindLocalMatrix = rootBone.matrix.clone();
               
-              // Store initial local rotation
-              (rootBone as any).initialRotation = rootBone.rotation.clone();
+              if (ribCage) {
+                ribCage.updateMatrixWorld(true);
+                (ribCage as any).bindMatrix = ribCage.matrix.clone();
+              }
               
-              console.log('Stored Root initial offset from spine20:', offset);
+              // Store parent's bind matrix inverse
+              if (rootBone.parent) {
+                rootBone.parent.updateMatrixWorld(true);
+                (rootBone as any).parentBindMatrixInverse = rootBone.parent.matrixWorld.clone().invert();
+              }
+              
+              console.log('Stored bind matrices for Root and spine20');
             }
             
             bonesRef.current = bones;
@@ -362,44 +371,56 @@ export default function PureThreeGLBViewer({
           
           animationId = requestAnimationFrame(animate);
           
-          // Sync Root bone to follow spine20's movement
+          // Sync Root bone using bind-pose-relative deformation from spine20
           const currentBones = bonesRef.current;
           const rootBone = currentBones['Root'] as THREE.Bone;
           const spine20 = currentBones['spine20'] as THREE.Bone;
-          if (rootBone && spine20 && (rootBone as any).initialOffset) {
-            // Get spine20's current world transform
-            const spine20WorldPos = new THREE.Vector3();
-            const spine20WorldQuat = new THREE.Quaternion();
-            spine20.getWorldPosition(spine20WorldPos);
-            spine20.getWorldQuaternion(spine20WorldQuat);
+          const ribCage = currentBones['Rib_Cage'] as THREE.Bone;
+          
+          if (rootBone && spine20 && (spine20 as any).bindMatrixInverse) {
+            // Compute spine20's deformation delta: current * inverse(bind)
+            spine20.updateMatrixWorld(true);
+            const deltaMatrix = new THREE.Matrix4();
+            deltaMatrix.copy(spine20.matrixWorld).multiply((spine20 as any).bindMatrixInverse);
             
-            // Get stored initial offset
-            const initialOffset = (rootBone as any).initialOffset as THREE.Vector3;
-            
-            // Rotate the offset by spine20's current world rotation
-            const rotatedOffset = initialOffset.clone().applyQuaternion(spine20WorldQuat);
-            
-            // Calculate new world position for Root
-            const newWorldPos = spine20WorldPos.clone().add(rotatedOffset);
-            
-            // Convert to local position (relative to Root's parent)
-            if (rootBone.parent) {
-              const parentWorldMatrix = new THREE.Matrix4();
-              rootBone.parent.updateWorldMatrix(true, false);
-              parentWorldMatrix.copy(rootBone.parent.matrixWorld).invert();
-              newWorldPos.applyMatrix4(parentWorldMatrix);
+            // Apply delta to Root's bind matrix
+            // newRootMatrix = parentBindInverse * deltaMatrix * rootBind
+            const rootBindMatrix = (rootBone as any).bindLocalMatrix as THREE.Matrix4;
+            if (rootBindMatrix) {
+              const newMatrix = new THREE.Matrix4();
+              
+              // Get delta rotation only (not position)
+              const deltaQuat = new THREE.Quaternion();
+              deltaMatrix.decompose(new THREE.Vector3(), deltaQuat, new THREE.Vector3());
+              
+              // Apply delta rotation to Root's bind matrix
+              const deltaRotMatrix = new THREE.Matrix4().makeRotationFromQuaternion(deltaQuat);
+              newMatrix.copy(rootBindMatrix).premultiply(deltaRotMatrix);
+              
+              // Decompose and apply
+              const pos = new THREE.Vector3();
+              const quat = new THREE.Quaternion();
+              const scale = new THREE.Vector3();
+              newMatrix.decompose(pos, quat, scale);
+              
+              // Keep original position, only apply rotation
+              rootBone.quaternion.copy(quat);
             }
             
-            rootBone.position.copy(newWorldPos);
-            
-            // Also sync rotation
-            const parentWorldQuat = new THREE.Quaternion();
-            if (rootBone.parent) {
-              rootBone.parent.getWorldQuaternion(parentWorldQuat);
+            // Also sync Rib_Cage (shoulders)
+            if (ribCage && (ribCage as any).bindMatrix) {
+              const ribBindMatrix = (ribCage as any).bindMatrix as THREE.Matrix4;
+              const deltaQuat = new THREE.Quaternion();
+              deltaMatrix.decompose(new THREE.Vector3(), deltaQuat, new THREE.Vector3());
+              
+              const deltaRotMatrix = new THREE.Matrix4().makeRotationFromQuaternion(deltaQuat);
+              const newRibMatrix = new THREE.Matrix4();
+              newRibMatrix.copy(ribBindMatrix).premultiply(deltaRotMatrix);
+              
+              const quat = new THREE.Quaternion();
+              newRibMatrix.decompose(new THREE.Vector3(), quat, new THREE.Vector3());
+              ribCage.quaternion.copy(quat);
             }
-            const parentInverse = parentWorldQuat.clone().invert();
-            const localQuat = parentInverse.multiply(spine20WorldQuat);
-            rootBone.quaternion.copy(localQuat);
           }
           
           sceneRef.current.controls.update();

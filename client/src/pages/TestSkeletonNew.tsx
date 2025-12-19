@@ -657,7 +657,7 @@ export default function TestSkeletonNew() {
                         </Button>
                       </div>
                       <div>
-                        <Label className="text-xs">Flexion ({modelConfig.leftHip.flexion}°) - Forward</Label>
+                        <Label className="text-xs">Flexion ({modelConfig.leftHip.flexion}°)</Label>
                         <Slider
                           value={[modelConfig.leftHip.flexion]}
                           onValueChange={(value) => {
@@ -673,7 +673,7 @@ export default function TestSkeletonNew() {
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">Extension ({modelConfig.leftHip.extension}°) - Backward</Label>
+                        <Label className="text-xs">Extension ({modelConfig.leftHip.extension}°)</Label>
                         <Slider
                           value={[modelConfig.leftHip.extension]}
                           onValueChange={(value) => {
@@ -683,7 +683,7 @@ export default function TestSkeletonNew() {
                             }
                           }}
                           min={0}
-                          max={30}
+                          max={120}
                           step={1}
                           className="mt-1"
                         />
@@ -703,7 +703,7 @@ export default function TestSkeletonNew() {
                         </Button>
                       </div>
                       <div>
-                        <Label className="text-xs">Flexion ({modelConfig.rightHip.flexion}°) - Forward</Label>
+                        <Label className="text-xs">Flexion ({modelConfig.rightHip.flexion}°)</Label>
                         <Slider
                           value={[modelConfig.rightHip.flexion]}
                           onValueChange={(value) => {
@@ -719,7 +719,7 @@ export default function TestSkeletonNew() {
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">Extension ({modelConfig.rightHip.extension}°) - Backward</Label>
+                        <Label className="text-xs">Extension ({modelConfig.rightHip.extension}°)</Label>
                         <Slider
                           value={[modelConfig.rightHip.extension]}
                           onValueChange={(value) => {
@@ -729,7 +729,7 @@ export default function TestSkeletonNew() {
                             }
                           }}
                           min={0}
-                          max={30}
+                          max={120}
                           step={1}
                           className="mt-1"
                         />

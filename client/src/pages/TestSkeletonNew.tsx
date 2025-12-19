@@ -45,8 +45,8 @@ interface ModelConfig {
   limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
   spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number };
   pelvis: { tilt: number; obliquity: number; rotation: number };
-  leftHip: { flexion: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
-  rightHip: { flexion: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
+  leftHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
+  rightHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
   leftKnee: { flexion: number; varus: number; tibialTorsion: number; patellaAlta: number };
   rightKnee: { flexion: number; varus: number; tibialTorsion: number; patellaAlta: number };
   leftAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
@@ -226,6 +226,7 @@ export default function TestSkeletonNew() {
     },
     leftHip: {
       flexion: 0,
+      extension: 0,
       abduction: 0,
       internalRotation: 0,
       anteversion: 15,
@@ -233,6 +234,7 @@ export default function TestSkeletonNew() {
     },
     rightHip: {
       flexion: 0,
+      extension: 0,
       abduction: 0,
       internalRotation: 0,
       anteversion: 15,
@@ -333,6 +335,7 @@ export default function TestSkeletonNew() {
       },
       leftHip: {
         flexion: 0,
+        extension: 0,
         abduction: 0,
         internalRotation: 0,
         anteversion: 15,
@@ -340,6 +343,7 @@ export default function TestSkeletonNew() {
       },
       rightHip: {
         flexion: 0,
+        extension: 0,
         abduction: 0,
         internalRotation: 0,
         anteversion: 15,
@@ -653,7 +657,7 @@ export default function TestSkeletonNew() {
                         </Button>
                       </div>
                       <div>
-                        <Label className="text-xs">Flexion ({modelConfig.leftHip.flexion}°)</Label>
+                        <Label className="text-xs">Flexion ({modelConfig.leftHip.flexion}°) - Forward</Label>
                         <Slider
                           value={[modelConfig.leftHip.flexion]}
                           onValueChange={(value) => {
@@ -662,8 +666,24 @@ export default function TestSkeletonNew() {
                               handleSliderChange('rightHip', 'flexion', value);
                             }
                           }}
-                          min={-30}
+                          min={0}
                           max={120}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Extension ({modelConfig.leftHip.extension}°) - Backward</Label>
+                        <Slider
+                          value={[modelConfig.leftHip.extension]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftHip', 'extension', value);
+                            if (linkedSides.hips) {
+                              handleSliderChange('rightHip', 'extension', value);
+                            }
+                          }}
+                          min={0}
+                          max={30}
                           step={1}
                           className="mt-1"
                         />
@@ -683,7 +703,7 @@ export default function TestSkeletonNew() {
                         </Button>
                       </div>
                       <div>
-                        <Label className="text-xs">Flexion ({modelConfig.rightHip.flexion}°)</Label>
+                        <Label className="text-xs">Flexion ({modelConfig.rightHip.flexion}°) - Forward</Label>
                         <Slider
                           value={[modelConfig.rightHip.flexion]}
                           onValueChange={(value) => {
@@ -692,8 +712,24 @@ export default function TestSkeletonNew() {
                               handleSliderChange('leftHip', 'flexion', value);
                             }
                           }}
-                          min={-30}
+                          min={0}
                           max={120}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Extension ({modelConfig.rightHip.extension}°) - Backward</Label>
+                        <Slider
+                          value={[modelConfig.rightHip.extension]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightHip', 'extension', value);
+                            if (linkedSides.hips) {
+                              handleSliderChange('leftHip', 'extension', value);
+                            }
+                          }}
+                          min={0}
+                          max={30}
                           step={1}
                           className="mt-1"
                         />

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 
 interface JointConfig {
   flexion?: number;
+  extension?: number;
   abduction?: number;
   internalRotation?: number;
   pronation?: number;
@@ -42,9 +43,11 @@ interface PureThreeGLBViewerProps {
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number }[] } = {
   'leftHip.flexion': [{ boneName: 'Femer_Root_L', axis: 'x', scale: 1 }],
+  'leftHip.extension': [{ boneName: 'Femer_Root_L', axis: 'x', scale: -1 }],
   'leftHip.abduction': [{ boneName: 'Femer_Root_L', axis: 'z', scale: -1 }],
   'leftHip.internalRotation': [{ boneName: 'Femer_Root_L', axis: 'y', scale: 1 }],
   'rightHip.flexion': [{ boneName: 'Femer_Root_R', axis: 'x', scale: 1 }],
+  'rightHip.extension': [{ boneName: 'Femer_Root_R', axis: 'x', scale: -1 }],
   'rightHip.abduction': [{ boneName: 'Femer_Root_R', axis: 'z', scale: 1 }],
   'rightHip.internalRotation': [{ boneName: 'Femer_Root_R', axis: 'y', scale: -1 }],
   'leftKnee.flexion': [{ boneName: 'fibula_tibia_L', axis: 'x', scale: 1 }],

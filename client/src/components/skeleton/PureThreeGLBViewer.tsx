@@ -155,8 +155,8 @@ export default function PureThreeGLBViewer({
         scene.background = new THREE.Color(0x1a1a2e);
 
         const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-        camera.position.set(0, 3.5, 8);
-        camera.lookAt(0, 3, 0);
+        camera.position.set(0, 2.5, 8);
+        camera.lookAt(0, 2.5, 0);
         console.log('THREE.js camera initialized');
 
         const renderer = new THREE.WebGLRenderer({ 

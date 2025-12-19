@@ -199,7 +199,7 @@ export default function PureThreeGLBViewer({
         controls.update();
 
         const gridHelper = new THREE.GridHelper(10, 10, 0x333366, 0x222244);
-        gridHelper.position.y = -1;
+        gridHelper.position.set(-0.3, -1.2, 0);
         scene.add(gridHelper);
 
         renderer.render(scene, camera);
@@ -356,7 +356,7 @@ export default function PureThreeGLBViewer({
             
             bonesRef.current = bones;
             
-            model.position.y = -1;
+            model.position.set(-0.3, -1.2, 0);
             scene.add(model);
             
             if (sceneRef.current) {

@@ -320,6 +320,7 @@ export default function PureThreeGLBViewer({
             if (bones['Root'] && bones['spine20']) {
               const rootBone = bones['Root'] as THREE.Bone;
               const spine20 = bones['spine20'] as THREE.Bone;
+              const spine16 = bones['spine16'] as THREE.Bone;
               const ribCage = bones['Rib_Cage'] as THREE.Bone;
               const armature = rootBone.parent; // Armature
               
@@ -327,6 +328,7 @@ export default function PureThreeGLBViewer({
               if (armature) armature.updateMatrixWorld(true);
               rootBone.updateMatrixWorld(true);
               spine20.updateMatrixWorld(true);
+              if (spine16) spine16.updateMatrixWorld(true);
               
               // Compute headOffset = spine20BindInverse * rootBindWorld
               // This is the fixed spatial relationship between spine20 and Root
@@ -340,18 +342,21 @@ export default function PureThreeGLBViewer({
                 (rootBone as any).armatureBindInverse = armature.matrixWorld.clone().invert();
               }
               
-              // Same for Rib_Cage (shoulders)
-              if (ribCage) {
+              // Rib_Cage (shoulders) should follow spine16 (thoracic top), not spine20 (neck)
+              // This ensures arms stay connected when thoracic/lumbar spine moves
+              if (ribCage && spine16) {
                 ribCage.updateMatrixWorld(true);
-                const ribOffset = spine20BindInverse.clone().multiply(ribCage.matrixWorld);
-                (ribCage as any).headOffset = ribOffset;
+                const spine16BindInverse = spine16.matrixWorld.clone().invert();
+                const ribOffset = spine16BindInverse.clone().multiply(ribCage.matrixWorld);
+                (ribCage as any).ribOffset = ribOffset;
+                (ribCage as any).spine16Ref = spine16;
                 (ribCage as any).armature = armature;
                 if (armature) {
                   (ribCage as any).armatureBindInverse = armature.matrixWorld.clone().invert();
                 }
               }
               
-              console.log('Stored headOffset for Root and Rib_Cage relative to spine20');
+              console.log('Stored headOffset for Root (relative to spine20) and Rib_Cage (relative to spine16)');
             }
             
             bonesRef.current = bones;
@@ -385,9 +390,9 @@ export default function PureThreeGLBViewer({
           
           animationId = requestAnimationFrame(animate);
           
-          // Sync Root and Rib_Cage to follow spine20 using cached headOffset
-          // Formula: rootMatrixWorld = spine20.matrixWorld * headOffset
-          // Then convert to local: rootMatrix = armature.matrixWorld.inverse() * rootMatrixWorld
+          // Sync Root to follow spine20, and Rib_Cage to follow spine16
+          // Formula: boneMatrixWorld = referenceSpine.matrixWorld * offset
+          // Then convert to local: boneMatrix = armature.matrixWorld.inverse() * boneMatrixWorld
           const currentBones = bonesRef.current;
           const rootBone = currentBones['Root'] as THREE.Bone;
           const spine20 = currentBones['spine20'] as THREE.Bone;
@@ -422,11 +427,14 @@ export default function PureThreeGLBViewer({
               rootBone.matrixWorldNeedsUpdate = true;
             }
             
-            // Same for Rib_Cage (shoulders)
-            if (ribCage && (ribCage as any).headOffset) {
-              const ribOffset = (ribCage as any).headOffset as THREE.Matrix4;
+            // Rib_Cage follows spine16 (not spine20) to keep arms connected during thoracic/lumbar movement
+            if (ribCage && (ribCage as any).ribOffset && (ribCage as any).spine16Ref) {
+              const spine16 = (ribCage as any).spine16Ref as THREE.Bone;
+              spine16.updateMatrixWorld(true);
+              
+              const ribOffset = (ribCage as any).ribOffset as THREE.Matrix4;
               const newRibWorldMatrix = new THREE.Matrix4();
-              newRibWorldMatrix.copy(spine20.matrixWorld).multiply(ribOffset);
+              newRibWorldMatrix.copy(spine16.matrixWorld).multiply(ribOffset);
               
               const ribArmature = (ribCage as any).armature as THREE.Object3D;
               if (ribArmature) {

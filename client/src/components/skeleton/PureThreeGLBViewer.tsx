@@ -83,12 +83,18 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'leftShoulder.abduction': [{ boneName: 'Humerus_Root_L', axis: 'z', scale: -1 }],
   'leftShoulder.internalRotation': [{ boneName: 'Humerus_Root_L', axis: 'y', scale: 1 }],
   'leftShoulder.retroversion': [{ boneName: 'Humerus_L', axis: 'y', scale: 1 }], // Humeral head retroversion
-  'leftShoulder.elevation': [{ boneName: 'Rib_Cage', axis: 'z', scale: 0.3 }], // Shoulder/scapular elevation
+  'leftShoulder.elevation': [
+    { boneName: 'Rib_Cage', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
+    { boneName: 'Humerus_Root_L', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
+  ],
   'rightShoulder.flexion': [{ boneName: 'Humerus_Root_R', axis: 'x', scale: -1 }],
   'rightShoulder.abduction': [{ boneName: 'Humerus_Root_R', axis: 'z', scale: 1 }],
   'rightShoulder.internalRotation': [{ boneName: 'Humerus_Root_R', axis: 'y', scale: -1 }],
   'rightShoulder.retroversion': [{ boneName: 'Humerus_R', axis: 'y', scale: -1 }], // Humeral head retroversion
-  'rightShoulder.elevation': [{ boneName: 'Rib_Cage', axis: 'z', scale: -0.3 }], // Shoulder/scapular elevation
+  'rightShoulder.elevation': [
+    { boneName: 'Rib_Cage', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
+    { boneName: 'Humerus_Root_R', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
+  ],
   
   // === ELBOW ===
   'leftElbow.flexion': [{ boneName: 'Redius_Alna_L', axis: 'x', scale: -1 }],

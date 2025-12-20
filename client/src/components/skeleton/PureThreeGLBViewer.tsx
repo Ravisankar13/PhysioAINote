@@ -166,6 +166,7 @@ export default function PureThreeGLBViewer({
   const [loadProgress, setLoadProgress] = useState(0);
   const bonesRef = useRef<{ [name: string]: THREE.Object3D }>({});
   const initialRotationsRef = useRef<{ [name: string]: THREE.Euler }>({});
+  const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -562,6 +563,12 @@ export default function PureThreeGLBViewer({
                 newHumerusLLocal.decompose(pos, quat, scale);
                 
                 humerusL.position.copy(pos);
+                // Apply slider rotation on top of base quaternion
+                const sliderRot = sliderRotationsRef.current['Humerus_Root_L'];
+                if (sliderRot) {
+                  const sliderQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z));
+                  quat.multiply(sliderQuat);
+                }
                 humerusL.quaternion.copy(quat);
                 humerusL.scale.copy(scale);
                 humerusL.matrixWorldNeedsUpdate = true;
@@ -587,6 +594,12 @@ export default function PureThreeGLBViewer({
                 newHumerusRLocal.decompose(pos, quat, scale);
                 
                 humerusR.position.copy(pos);
+                // Apply slider rotation on top of base quaternion
+                const sliderRot = sliderRotationsRef.current['Humerus_Root_R'];
+                if (sliderRot) {
+                  const sliderQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z));
+                  quat.multiply(sliderQuat);
+                }
                 humerusR.quaternion.copy(quat);
                 humerusR.scale.copy(scale);
                 humerusR.matrixWorldNeedsUpdate = true;
@@ -661,6 +674,15 @@ export default function PureThreeGLBViewer({
       }
     });
     
+    // Bones that are handled by animation loop (need slider rotations stored separately)
+    const animationLoopBones = new Set(['Humerus_Root_L', 'Humerus_Root_R']);
+    
+    // Track slider-only rotations (relative to initial) for animation loop bones
+    const sliderOnlyRotations: { [boneName: string]: { x: number; y: number; z: number } } = {};
+    animationLoopBones.forEach(boneName => {
+      sliderOnlyRotations[boneName] = { x: 0, y: 0, z: 0 };
+    });
+    
     // Accumulate rotations from all sliders
     Object.entries(BONE_MAPPING).forEach(([configKey, mappings]) => {
       const [jointName, propertyName] = configKey.split('.');
@@ -674,22 +696,37 @@ export default function PureThreeGLBViewer({
       const angleInRadians = (value * Math.PI) / 180;
       
       mappings.forEach(({ boneName, axis, scale }) => {
-        if (!boneRotations[boneName]) return;
-        
         const adjustedAngle = angleInRadians * scale;
         
-        if (axis === 'x') {
-          boneRotations[boneName].x += adjustedAngle;
-        } else if (axis === 'y') {
-          boneRotations[boneName].y += adjustedAngle;
-        } else if (axis === 'z') {
-          boneRotations[boneName].z += adjustedAngle;
+        // For animation loop bones, store slider rotations separately
+        if (animationLoopBones.has(boneName)) {
+          if (axis === 'x') {
+            sliderOnlyRotations[boneName].x += adjustedAngle;
+          } else if (axis === 'y') {
+            sliderOnlyRotations[boneName].y += adjustedAngle;
+          } else if (axis === 'z') {
+            sliderOnlyRotations[boneName].z += adjustedAngle;
+          }
+        } else {
+          // For regular bones, accumulate to boneRotations
+          if (!boneRotations[boneName]) return;
+          if (axis === 'x') {
+            boneRotations[boneName].x += adjustedAngle;
+          } else if (axis === 'y') {
+            boneRotations[boneName].y += adjustedAngle;
+          } else if (axis === 'z') {
+            boneRotations[boneName].z += adjustedAngle;
+          }
         }
       });
     });
     
-    // Apply accumulated rotations to bones
+    // Store slider rotations for animation loop to use
+    sliderRotationsRef.current = sliderOnlyRotations;
+    
+    // Apply accumulated rotations to bones (skip animation loop bones)
     Object.entries(boneRotations).forEach(([boneName, rotation]) => {
+      if (animationLoopBones.has(boneName)) return; // Animation loop handles these
       const bone = bones[boneName];
       if (bone) {
         bone.rotation.x = rotation.x;

@@ -244,12 +244,16 @@ export default function TestSkeletonNew() {
       flexion: 0,
       varus: 0,
       tibialTorsion: 0,
+      recurvatum: 0,
+      tibialSlope: 0,
       patellaAlta: 0,
     },
     rightKnee: {
       flexion: 0,
       varus: 0,
       tibialTorsion: 0,
+      recurvatum: 0,
+      tibialSlope: 0,
       patellaAlta: 0,
     },
     leftAnkle: {
@@ -270,27 +274,37 @@ export default function TestSkeletonNew() {
       flexion: 0,
       abduction: 0,
       internalRotation: 0,
-      protraction: 0,
+      retroversion: 0,
       elevation: 0,
+      protraction: 0,
       winging: 0,
     },
     rightShoulder: {
       flexion: 0,
       abduction: 0,
       internalRotation: 0,
-      protraction: 0,
+      retroversion: 0,
       elevation: 0,
+      protraction: 0,
       winging: 0,
     },
     leftElbow: {
       flexion: 0,
-      carryingAngle: 10,
+      carryingAngle: 0,
       pronation: 0,
     },
     rightElbow: {
       flexion: 0,
-      carryingAngle: 10,
+      carryingAngle: 0,
       pronation: 0,
+    },
+    leftWrist: {
+      deviation: 0,
+      flexion: 0,
+    },
+    rightWrist: {
+      deviation: 0,
+      flexion: 0,
     },
   });
 
@@ -338,27 +352,31 @@ export default function TestSkeletonNew() {
         extension: 0,
         abduction: 0,
         internalRotation: 0,
-        anteversion: 15,
-        neckShaftAngle: 130,
+        anteversion: 0,
+        neckShaftAngle: 0,
       },
       rightHip: {
         flexion: 0,
         extension: 0,
         abduction: 0,
         internalRotation: 0,
-        anteversion: 15,
-        neckShaftAngle: 130,
+        anteversion: 0,
+        neckShaftAngle: 0,
       },
       leftKnee: {
         flexion: 0,
         varus: 0,
         tibialTorsion: 0,
+        recurvatum: 0,
+        tibialSlope: 0,
         patellaAlta: 0,
       },
       rightKnee: {
         flexion: 0,
         varus: 0,
         tibialTorsion: 0,
+        recurvatum: 0,
+        tibialSlope: 0,
         patellaAlta: 0,
       },
       leftAnkle: {
@@ -379,27 +397,37 @@ export default function TestSkeletonNew() {
         flexion: 0,
         abduction: 0,
         internalRotation: 0,
-        protraction: 0,
+        retroversion: 0,
         elevation: 0,
+        protraction: 0,
         winging: 0,
       },
       rightShoulder: {
         flexion: 0,
         abduction: 0,
         internalRotation: 0,
-        protraction: 0,
+        retroversion: 0,
         elevation: 0,
+        protraction: 0,
         winging: 0,
       },
       leftElbow: {
         flexion: 0,
-        carryingAngle: 10,
+        carryingAngle: 0,
         pronation: 0,
       },
       rightElbow: {
         flexion: 0,
-        carryingAngle: 10,
+        carryingAngle: 0,
         pronation: 0,
+      },
+      leftWrist: {
+        deviation: 0,
+        flexion: 0,
+      },
+      rightWrist: {
+        deviation: 0,
+        flexion: 0,
       },
     });
     setLinkedSides({
@@ -879,6 +907,38 @@ export default function TestSkeletonNew() {
                           className="mt-1"
                         />
                       </div>
+                      <div>
+                        <Label className="text-xs">Recurvatum ({modelConfig.leftKnee.recurvatum}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftKnee.recurvatum]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftKnee', 'recurvatum', value);
+                            if (linkedSides.knees) {
+                              handleSliderChange('rightKnee', 'recurvatum', value);
+                            }
+                          }}
+                          min={0}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Tibial Slope ({modelConfig.leftKnee.tibialSlope}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftKnee.tibialSlope]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftKnee', 'tibialSlope', value);
+                            if (linkedSides.knees) {
+                              handleSliderChange('rightKnee', 'tibialSlope', value);
+                            }
+                          }}
+                          min={0}
+                          max={20}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -927,6 +987,38 @@ export default function TestSkeletonNew() {
                           }}
                           min={-30}
                           max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Recurvatum ({modelConfig.rightKnee.recurvatum}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightKnee.recurvatum]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightKnee', 'recurvatum', value);
+                            if (linkedSides.knees) {
+                              handleSliderChange('leftKnee', 'recurvatum', value);
+                            }
+                          }}
+                          min={0}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Tibial Slope ({modelConfig.rightKnee.tibialSlope}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightKnee.tibialSlope]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightKnee', 'tibialSlope', value);
+                            if (linkedSides.knees) {
+                              handleSliderChange('leftKnee', 'tibialSlope', value);
+                            }
+                          }}
+                          min={0}
+                          max={20}
                           step={1}
                           className="mt-1"
                         />
@@ -988,6 +1080,38 @@ export default function TestSkeletonNew() {
                           className="mt-1"
                         />
                       </div>
+                      <div>
+                        <Label className="text-xs">Retroversion ({modelConfig.leftShoulder.retroversion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftShoulder.retroversion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftShoulder', 'retroversion', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightShoulder', 'retroversion', value);
+                            }
+                          }}
+                          min={-30}
+                          max={60}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Elevation ({modelConfig.leftShoulder.elevation}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftShoulder.elevation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftShoulder', 'elevation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightShoulder', 'elevation', value);
+                            }
+                          }}
+                          min={-20}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -1020,6 +1144,38 @@ export default function TestSkeletonNew() {
                           }}
                           min={0}
                           max={180}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Retroversion ({modelConfig.rightShoulder.retroversion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightShoulder.retroversion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightShoulder', 'retroversion', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftShoulder', 'retroversion', value);
+                            }
+                          }}
+                          min={-30}
+                          max={60}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Elevation ({modelConfig.rightShoulder.elevation}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightShoulder.elevation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightShoulder', 'elevation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftShoulder', 'elevation', value);
+                            }
+                          }}
+                          min={-20}
+                          max={30}
                           step={1}
                           className="mt-1"
                         />
@@ -1110,6 +1266,65 @@ export default function TestSkeletonNew() {
                           }}
                           min={-15}
                           max={25}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <h3 className="font-semibold">Wrist Joints</h3>
+
+                  {/* Wrist Controls */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Left Wrist</Label>
+                      <div>
+                        <Label className="text-xs">Deviation ({modelConfig.leftWrist.deviation}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftWrist.deviation]}
+                          onValueChange={(value) => handleSliderChange('leftWrist', 'deviation', value)}
+                          min={-30}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.leftWrist.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftWrist.flexion]}
+                          onValueChange={(value) => handleSliderChange('leftWrist', 'flexion', value)}
+                          min={-80}
+                          max={80}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Right Wrist</Label>
+                      <div>
+                        <Label className="text-xs">Deviation ({modelConfig.rightWrist.deviation}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightWrist.deviation]}
+                          onValueChange={(value) => handleSliderChange('rightWrist', 'deviation', value)}
+                          min={-30}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Flexion ({modelConfig.rightWrist.flexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightWrist.flexion]}
+                          onValueChange={(value) => handleSliderChange('rightWrist', 'flexion', value)}
+                          min={-80}
+                          max={80}
                           step={1}
                           className="mt-1"
                         />

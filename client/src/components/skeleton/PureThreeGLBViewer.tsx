@@ -60,9 +60,13 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'leftKnee.flexion': [{ boneName: 'fibula_tibia_L', axis: 'x', scale: 1 }],
   'leftKnee.varus': [{ boneName: 'fibula_tibia_L', axis: 'z', scale: 1 }], // Genu varum (+) / valgum (-)
   'leftKnee.tibialTorsion': [{ boneName: 'fibula_tibia_L', axis: 'y', scale: 1 }], // External/internal tibial rotation
+  'leftKnee.recurvatum': [{ boneName: 'fibula_tibia_L', axis: 'x', scale: -0.5 }], // Knee hyperextension
+  'leftKnee.tibialSlope': [{ boneName: 'fibula_tibia_L', axis: 'x', scale: 0.3 }], // Posterior tibial slope
   'rightKnee.flexion': [{ boneName: 'fibula_tibia_R', axis: 'x', scale: 1 }],
   'rightKnee.varus': [{ boneName: 'fibula_tibia_R', axis: 'z', scale: -1 }], // Genu varum (+) / valgum (-)
   'rightKnee.tibialTorsion': [{ boneName: 'fibula_tibia_R', axis: 'y', scale: -1 }], // External/internal tibial rotation
+  'rightKnee.recurvatum': [{ boneName: 'fibula_tibia_R', axis: 'x', scale: -0.5 }], // Knee hyperextension
+  'rightKnee.tibialSlope': [{ boneName: 'fibula_tibia_R', axis: 'x', scale: 0.3 }], // Posterior tibial slope
   
   // === ANKLE & FOOT ===
   'leftAnkle.dorsiflexion': [{ boneName: 'foot_L', axis: 'x', scale: -1 }],
@@ -78,9 +82,13 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'leftShoulder.flexion': [{ boneName: 'Humerus_Root_L', axis: 'x', scale: -1 }],
   'leftShoulder.abduction': [{ boneName: 'Humerus_Root_L', axis: 'z', scale: -1 }],
   'leftShoulder.internalRotation': [{ boneName: 'Humerus_Root_L', axis: 'y', scale: 1 }],
+  'leftShoulder.retroversion': [{ boneName: 'Humerus_L', axis: 'y', scale: 1 }], // Humeral head retroversion
+  'leftShoulder.elevation': [{ boneName: 'Rib_Cage', axis: 'z', scale: 0.3 }], // Shoulder/scapular elevation
   'rightShoulder.flexion': [{ boneName: 'Humerus_Root_R', axis: 'x', scale: -1 }],
   'rightShoulder.abduction': [{ boneName: 'Humerus_Root_R', axis: 'z', scale: 1 }],
   'rightShoulder.internalRotation': [{ boneName: 'Humerus_Root_R', axis: 'y', scale: -1 }],
+  'rightShoulder.retroversion': [{ boneName: 'Humerus_R', axis: 'y', scale: -1 }], // Humeral head retroversion
+  'rightShoulder.elevation': [{ boneName: 'Rib_Cage', axis: 'z', scale: -0.3 }], // Shoulder/scapular elevation
   
   // === ELBOW ===
   'leftElbow.flexion': [{ boneName: 'Redius_Alna_L', axis: 'x', scale: -1 }],
@@ -89,6 +97,12 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightElbow.flexion': [{ boneName: 'Redius_Alna_R', axis: 'x', scale: -1 }],
   'rightElbow.pronation': [{ boneName: 'Redius_Alna_R', axis: 'y', scale: -1 }],
   'rightElbow.carryingAngle': [{ boneName: 'Redius_Alna_R', axis: 'z', scale: 1 }], // Cubitus valgus/varus
+  
+  // === WRIST ===
+  'leftWrist.deviation': [{ boneName: 'Hand_L', axis: 'z', scale: 1 }], // Ulnar (+) / Radial (-) deviation
+  'leftWrist.flexion': [{ boneName: 'Hand_L', axis: 'x', scale: 1 }], // Flexion (+) / Extension (-)
+  'rightWrist.deviation': [{ boneName: 'Hand_R', axis: 'z', scale: -1 }], // Ulnar (+) / Radial (-) deviation
+  'rightWrist.flexion': [{ boneName: 'Hand_R', axis: 'x', scale: 1 }], // Flexion (+) / Extension (-)
   
   // === PELVIS ===
   'pelvis.tilt': [{ boneName: 'Pelvis_Main', axis: 'x', scale: 1 }],

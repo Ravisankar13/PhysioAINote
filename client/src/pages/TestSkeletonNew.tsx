@@ -47,14 +47,16 @@ interface ModelConfig {
   pelvis: { tilt: number; obliquity: number; rotation: number };
   leftHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
   rightHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
-  leftKnee: { flexion: number; varus: number; tibialTorsion: number; patellaAlta: number };
-  rightKnee: { flexion: number; varus: number; tibialTorsion: number; patellaAlta: number };
+  leftKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
+  rightKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
   leftAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
   rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
-  leftShoulder: { flexion: number; abduction: number; internalRotation: number; protraction: number; elevation: number; winging: number };
-  rightShoulder: { flexion: number; abduction: number; internalRotation: number; protraction: number; elevation: number; winging: number };
+  leftShoulder: { flexion: number; abduction: number; internalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number };
+  rightShoulder: { flexion: number; abduction: number; internalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number };
   leftElbow: { flexion: number; carryingAngle: number; pronation: number };
   rightElbow: { flexion: number; carryingAngle: number; pronation: number };
+  leftWrist: { deviation: number; flexion: number };
+  rightWrist: { deviation: number; flexion: number };
 }
 
 function InteractiveSVGSkeleton({ modelConfig }: { modelConfig: ModelConfig }) {

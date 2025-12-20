@@ -42,33 +42,60 @@ interface PureThreeGLBViewerProps {
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number }[] } = {
+  // === HIP / FEMUR ===
   'leftHip.flexion': [{ boneName: 'Femer_Root_L', axis: 'x', scale: -1 }],
   'leftHip.extension': [{ boneName: 'Femer_Root_L', axis: 'x', scale: 1 }],
   'leftHip.abduction': [{ boneName: 'Femer_Root_L', axis: 'z', scale: -1 }],
   'leftHip.internalRotation': [{ boneName: 'Femer_Root_L', axis: 'y', scale: 1 }],
+  'leftHip.anteversion': [{ boneName: 'Femer_L', axis: 'y', scale: 1 }], // Femoral anteversion/retroversion
+  'leftHip.neckShaftAngle': [{ boneName: 'Femer_Root_L', axis: 'z', scale: 0.5 }], // Coxa vara/valga
   'rightHip.flexion': [{ boneName: 'Femer_Root_R', axis: 'x', scale: -1 }],
   'rightHip.extension': [{ boneName: 'Femer_Root_R', axis: 'x', scale: 1 }],
   'rightHip.abduction': [{ boneName: 'Femer_Root_R', axis: 'z', scale: 1 }],
   'rightHip.internalRotation': [{ boneName: 'Femer_Root_R', axis: 'y', scale: -1 }],
+  'rightHip.anteversion': [{ boneName: 'Femer_R', axis: 'y', scale: -1 }], // Femoral anteversion/retroversion
+  'rightHip.neckShaftAngle': [{ boneName: 'Femer_Root_R', axis: 'z', scale: -0.5 }], // Coxa vara/valga
+  
+  // === KNEE / TIBIA ===
   'leftKnee.flexion': [{ boneName: 'fibula_tibia_L', axis: 'x', scale: 1 }],
+  'leftKnee.varus': [{ boneName: 'fibula_tibia_L', axis: 'z', scale: 1 }], // Genu varum (+) / valgum (-)
+  'leftKnee.tibialTorsion': [{ boneName: 'fibula_tibia_L', axis: 'y', scale: 1 }], // External/internal tibial rotation
   'rightKnee.flexion': [{ boneName: 'fibula_tibia_R', axis: 'x', scale: 1 }],
+  'rightKnee.varus': [{ boneName: 'fibula_tibia_R', axis: 'z', scale: -1 }], // Genu varum (+) / valgum (-)
+  'rightKnee.tibialTorsion': [{ boneName: 'fibula_tibia_R', axis: 'y', scale: -1 }], // External/internal tibial rotation
+  
+  // === ANKLE & FOOT ===
   'leftAnkle.dorsiflexion': [{ boneName: 'foot_L', axis: 'x', scale: -1 }],
   'leftAnkle.plantarflexion': [{ boneName: 'foot_L', axis: 'x', scale: 1 }],
+  'leftAnkle.inversion': [{ boneName: 'foot_L', axis: 'z', scale: 1 }],
+  'leftAnkle.eversion': [{ boneName: 'foot_L', axis: 'z', scale: -1 }],
   'rightAnkle.dorsiflexion': [{ boneName: 'foot_R', axis: 'x', scale: -1 }],
   'rightAnkle.plantarflexion': [{ boneName: 'foot_R', axis: 'x', scale: 1 }],
+  'rightAnkle.inversion': [{ boneName: 'foot_R', axis: 'z', scale: -1 }],
+  'rightAnkle.eversion': [{ boneName: 'foot_R', axis: 'z', scale: 1 }],
+  
+  // === SHOULDER ===
   'leftShoulder.flexion': [{ boneName: 'Humerus_Root_L', axis: 'x', scale: -1 }],
   'leftShoulder.abduction': [{ boneName: 'Humerus_Root_L', axis: 'z', scale: -1 }],
   'leftShoulder.internalRotation': [{ boneName: 'Humerus_Root_L', axis: 'y', scale: 1 }],
   'rightShoulder.flexion': [{ boneName: 'Humerus_Root_R', axis: 'x', scale: -1 }],
   'rightShoulder.abduction': [{ boneName: 'Humerus_Root_R', axis: 'z', scale: 1 }],
   'rightShoulder.internalRotation': [{ boneName: 'Humerus_Root_R', axis: 'y', scale: -1 }],
+  
+  // === ELBOW ===
   'leftElbow.flexion': [{ boneName: 'Redius_Alna_L', axis: 'x', scale: -1 }],
   'leftElbow.pronation': [{ boneName: 'Redius_Alna_L', axis: 'y', scale: 1 }],
+  'leftElbow.carryingAngle': [{ boneName: 'Redius_Alna_L', axis: 'z', scale: -1 }], // Cubitus valgus/varus
   'rightElbow.flexion': [{ boneName: 'Redius_Alna_R', axis: 'x', scale: -1 }],
   'rightElbow.pronation': [{ boneName: 'Redius_Alna_R', axis: 'y', scale: -1 }],
+  'rightElbow.carryingAngle': [{ boneName: 'Redius_Alna_R', axis: 'z', scale: 1 }], // Cubitus valgus/varus
+  
+  // === PELVIS ===
   'pelvis.tilt': [{ boneName: 'Pelvis_Main', axis: 'x', scale: 1 }],
   'pelvis.obliquity': [{ boneName: 'Pelvis_Main', axis: 'z', scale: 1 }],
   'pelvis.rotation': [{ boneName: 'Pelvis_Main', axis: 'y', scale: 1 }],
+  
+  // === SPINE ===
   'spine.cervicalLordosis': [
     { boneName: 'spine17', axis: 'x', scale: 0.2 },
     { boneName: 'spine18', axis: 'x', scale: 0.2 },
@@ -93,6 +120,18 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine5', axis: 'x', scale: 0.2 },
     { boneName: 'spine6', axis: 'x', scale: 0.2 },
     { boneName: 'spine7', axis: 'x', scale: 0.2 },
+  ],
+  'spine.scoliosis': [
+    { boneName: 'spine4', axis: 'z', scale: 0.1 },
+    { boneName: 'spine5', axis: 'z', scale: 0.15 },
+    { boneName: 'spine6', axis: 'z', scale: 0.2 },
+    { boneName: 'spine7', axis: 'z', scale: 0.15 },
+    { boneName: 'spine8', axis: 'z', scale: 0.1 },
+    { boneName: 'spine10', axis: 'z', scale: -0.1 },
+    { boneName: 'spine11', axis: 'z', scale: -0.15 },
+    { boneName: 'spine12', axis: 'z', scale: -0.2 },
+    { boneName: 'spine13', axis: 'z', scale: -0.15 },
+    { boneName: 'spine14', axis: 'z', scale: -0.1 },
   ],
 };
 

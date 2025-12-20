@@ -356,7 +356,32 @@ export default function PureThreeGLBViewer({
                 }
               }
               
-              console.log('Stored headOffset for Root (relative to spine20) and Rib_Cage (relative to spine16)');
+              // Cache offsets for Humerus bones relative to Rib_Cage so arms follow shoulders
+              const humerusL = bones['Humerus_Root_L'] as THREE.Bone;
+              const humerusR = bones['Humerus_Root_R'] as THREE.Bone;
+              
+              if (ribCage) {
+                ribCage.updateMatrixWorld(true);
+                const ribCageBindInverse = ribCage.matrixWorld.clone().invert();
+                
+                if (humerusL) {
+                  humerusL.updateMatrixWorld(true);
+                  const humerusLOffset = ribCageBindInverse.clone().multiply(humerusL.matrixWorld);
+                  (humerusL as any).ribCageOffset = humerusLOffset;
+                  (humerusL as any).ribCageRef = ribCage;
+                  (humerusL as any).armature = armature;
+                }
+                
+                if (humerusR) {
+                  humerusR.updateMatrixWorld(true);
+                  const humerusROffset = ribCageBindInverse.clone().multiply(humerusR.matrixWorld);
+                  (humerusR as any).ribCageOffset = humerusROffset;
+                  (humerusR as any).ribCageRef = ribCage;
+                  (humerusR as any).armature = armature;
+                }
+              }
+              
+              console.log('Stored headOffset for Root (relative to spine20), Rib_Cage (relative to spine16), and Humerus bones (relative to Rib_Cage)');
             }
             
             bonesRef.current = bones;
@@ -451,6 +476,61 @@ export default function PureThreeGLBViewer({
                 ribCage.quaternion.copy(quat);
                 ribCage.scale.copy(scale);
                 ribCage.matrixWorldNeedsUpdate = true;
+                ribCage.updateMatrixWorld(true);
+              }
+            }
+            
+            // Sync Humerus bones to follow Rib_Cage so arms stay connected to shoulders
+            const humerusL = currentBones['Humerus_Root_L'] as THREE.Bone;
+            const humerusR = currentBones['Humerus_Root_R'] as THREE.Bone;
+            
+            if (humerusL && (humerusL as any).ribCageOffset && ribCage) {
+              ribCage.updateMatrixWorld(true);
+              
+              const humerusLOffset = (humerusL as any).ribCageOffset as THREE.Matrix4;
+              const newHumerusLWorld = new THREE.Matrix4();
+              newHumerusLWorld.copy(ribCage.matrixWorld).multiply(humerusLOffset);
+              
+              const humerusArmature = (humerusL as any).armature as THREE.Object3D;
+              if (humerusArmature) {
+                const armatureInverse = new THREE.Matrix4().copy(humerusArmature.matrixWorld).invert();
+                const newHumerusLLocal = new THREE.Matrix4();
+                newHumerusLLocal.copy(armatureInverse).multiply(newHumerusLWorld);
+                
+                const pos = new THREE.Vector3();
+                const quat = new THREE.Quaternion();
+                const scale = new THREE.Vector3();
+                newHumerusLLocal.decompose(pos, quat, scale);
+                
+                humerusL.position.copy(pos);
+                humerusL.quaternion.copy(quat);
+                humerusL.scale.copy(scale);
+                humerusL.matrixWorldNeedsUpdate = true;
+              }
+            }
+            
+            if (humerusR && (humerusR as any).ribCageOffset && ribCage) {
+              ribCage.updateMatrixWorld(true);
+              
+              const humerusROffset = (humerusR as any).ribCageOffset as THREE.Matrix4;
+              const newHumerusRWorld = new THREE.Matrix4();
+              newHumerusRWorld.copy(ribCage.matrixWorld).multiply(humerusROffset);
+              
+              const humerusArmature = (humerusR as any).armature as THREE.Object3D;
+              if (humerusArmature) {
+                const armatureInverse = new THREE.Matrix4().copy(humerusArmature.matrixWorld).invert();
+                const newHumerusRLocal = new THREE.Matrix4();
+                newHumerusRLocal.copy(armatureInverse).multiply(newHumerusRWorld);
+                
+                const pos = new THREE.Vector3();
+                const quat = new THREE.Quaternion();
+                const scale = new THREE.Vector3();
+                newHumerusRLocal.decompose(pos, quat, scale);
+                
+                humerusR.position.copy(pos);
+                humerusR.quaternion.copy(quat);
+                humerusR.scale.copy(scale);
+                humerusR.matrixWorldNeedsUpdate = true;
               }
             }
           }

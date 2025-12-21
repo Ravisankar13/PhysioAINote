@@ -134,6 +134,19 @@ export default function RiggedAnatomicalSkeleton({
     const width = mount.clientWidth;
     const height = mount.clientHeight;
 
+    // Check WebGL support first
+    try {
+      const testCanvas = document.createElement('canvas');
+      const gl = testCanvas.getContext('webgl2') || testCanvas.getContext('webgl');
+      if (!gl) {
+        setError('WebGL is not supported in this environment. Please use a browser with WebGL support or view the deployed app.');
+        return;
+      }
+    } catch (e) {
+      setError('WebGL check failed. Please use a browser with WebGL support.');
+      return;
+    }
+
     // Create scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a1a);
@@ -144,12 +157,20 @@ export default function RiggedAnatomicalSkeleton({
     camera.position.set(0, 1.5, 3);
     camera.lookAt(0, 1, 0);
 
-    // Create renderer
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true,
-      alpha: false,
-      powerPreference: "high-performance"
-    });
+    // Create renderer with error handling
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ 
+        antialias: true,
+        alpha: false,
+        powerPreference: "default",
+        failIfMajorPerformanceCaveat: false
+      });
+    } catch (e) {
+      setError('Failed to create WebGL renderer. Please use a browser with WebGL support or view the deployed app.');
+      return;
+    }
+    
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;

@@ -51,8 +51,8 @@ interface ModelConfig {
   rightKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
   leftAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
   rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
-  leftShoulder: { flexion: number; abduction: number; internalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number };
-  rightShoulder: { flexion: number; abduction: number; internalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number };
+  leftShoulder: { flexion: number; abduction: number; internalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
+  rightShoulder: { flexion: number; abduction: number; internalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
   leftElbow: { flexion: number; carryingAngle: number; pronation: number };
   rightElbow: { flexion: number; carryingAngle: number; pronation: number };
   leftWrist: { deviation: number; flexion: number };
@@ -405,6 +405,7 @@ export default function TestSkeletonNew() {
         elevation: 0,
         protraction: 0,
         winging: 0,
+        clavicleLength: 0,
       },
       rightShoulder: {
         flexion: 0,
@@ -414,6 +415,7 @@ export default function TestSkeletonNew() {
         elevation: 0,
         protraction: 0,
         winging: 0,
+        clavicleLength: 0,
       },
       leftElbow: {
         flexion: 0,
@@ -1116,6 +1118,22 @@ export default function TestSkeletonNew() {
                           className="mt-1"
                         />
                       </div>
+                      <div>
+                        <Label className="text-xs">Clavicle Length ({modelConfig.leftShoulder.clavicleLength}mm)</Label>
+                        <Slider
+                          value={[modelConfig.leftShoulder.clavicleLength]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftShoulder', 'clavicleLength', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightShoulder', 'clavicleLength', value);
+                            }
+                          }}
+                          min={-15}
+                          max={15}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -1180,6 +1198,22 @@ export default function TestSkeletonNew() {
                           }}
                           min={-20}
                           max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Clavicle Length ({modelConfig.rightShoulder.clavicleLength}mm)</Label>
+                        <Slider
+                          value={[modelConfig.rightShoulder.clavicleLength]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightShoulder', 'clavicleLength', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftShoulder', 'clavicleLength', value);
+                            }
+                          }}
+                          min={-15}
+                          max={15}
                           step={1}
                           className="mt-1"
                         />

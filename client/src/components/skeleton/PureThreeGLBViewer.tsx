@@ -48,13 +48,13 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'leftHip.extension': [{ boneName: 'Femer_Root_L', axis: 'x', scale: 1 }],
   'leftHip.abduction': [{ boneName: 'Femer_Root_L', axis: 'z', scale: -1 }],
   'leftHip.internalRotation': [{ boneName: 'Femer_Root_L', axis: 'y', scale: 1 }],
-  'leftHip.anteversion': [{ boneName: 'Femer_L', axis: 'y', scale: 1 }], // Femoral anteversion/retroversion
+  'leftHip.anteversion': [{ boneName: 'Femer_Root_L', axis: 'y', scale: 1 }], // Femoral anteversion - causes internal rotation
   'leftHip.neckShaftAngle': [{ boneName: 'Femer_Root_L', axis: 'z', scale: 0.5 }], // Coxa vara/valga
   'rightHip.flexion': [{ boneName: 'Femer_Root_R', axis: 'x', scale: -1 }],
   'rightHip.extension': [{ boneName: 'Femer_Root_R', axis: 'x', scale: 1 }],
   'rightHip.abduction': [{ boneName: 'Femer_Root_R', axis: 'z', scale: 1 }],
   'rightHip.internalRotation': [{ boneName: 'Femer_Root_R', axis: 'y', scale: -1 }],
-  'rightHip.anteversion': [{ boneName: 'Femer_R', axis: 'y', scale: -1 }], // Femoral anteversion/retroversion
+  'rightHip.anteversion': [{ boneName: 'Femer_Root_R', axis: 'y', scale: -1 }], // Femoral anteversion - causes internal rotation
   'rightHip.neckShaftAngle': [{ boneName: 'Femer_Root_R', axis: 'z', scale: -0.5 }], // Coxa vara/valga
   
   // === KNEE / TIBIA ===

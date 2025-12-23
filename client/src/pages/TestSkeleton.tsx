@@ -1,14 +1,54 @@
-import { useState } from "react";
-import RiggedAnatomicalSkeleton from "@/components/3d/RiggedAnatomicalSkeleton";
+import { useState, useEffect, Component, Suspense, lazy } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Link, Unlink, Copy, ArrowRight, ArrowLeft } from "lucide-react";
+import { RotateCcw, Link, Unlink, Copy, ArrowRight, ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+const RiggedAnatomicalSkeleton = lazy(() => import("@/components/3d/RiggedAnatomicalSkeleton"));
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class SkeletonErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
 
 export default function TestSkeleton() {
+  const [webglAvailable, setWebglAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      setWebglAvailable(!!gl);
+    } catch {
+      setWebglAvailable(false);
+    }
+  }, []);
   const [linkedSides, setLinkedSides] = useState({
     hips: false,
     knees: false,
@@ -438,20 +478,63 @@ export default function TestSkeleton() {
           </CardHeader>
           <CardContent>
             <div className="w-full h-[700px] bg-gray-100 rounded-lg overflow-hidden">
-              <RiggedAnatomicalSkeleton 
-                patientData={{
-                  anthropometrics: {
-                    height: 170,
-                    weight: 70,
-                  },
-                  jointRestrictions: {},
-                  painAreas: [],
-                  movementPatterns: null
-                }}
-                modelConfig={modelConfig}
-                className="w-full h-full"
-                showControls={false}
-              />
+              {webglAvailable === null ? (
+                <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                  <Loader2 className="h-8 w-8 animate-spin text-green-400" />
+                  <span className="ml-2 text-green-400">Checking WebGL support...</span>
+                </div>
+              ) : webglAvailable === false ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100 p-6">
+                  <AlertCircle className="h-12 w-12 text-amber-600 mb-4" />
+                  <h3 className="text-lg font-semibold text-amber-800 mb-2">3D Viewer Unavailable</h3>
+                  <p className="text-sm text-amber-700 text-center mb-4 max-w-md">
+                    WebGL is required to display the 3D skeleton model. The Replit preview environment 
+                    may have limited WebGL support.
+                  </p>
+                  <Alert className="max-w-md">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>How to view the 3D model</AlertTitle>
+                    <AlertDescription>
+                      Open this app in a new browser tab or deploy it to see the full 3D visualization. 
+                      The control sliders on the right are still functional.
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              ) : (
+                <SkeletonErrorBoundary
+                  fallback={
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-red-50 to-orange-100 p-6">
+                      <AlertCircle className="h-12 w-12 text-red-600 mb-4" />
+                      <h3 className="text-lg font-semibold text-red-800 mb-2">3D Viewer Error</h3>
+                      <p className="text-sm text-red-700 text-center">
+                        The 3D viewer encountered an error. Please try opening in a new browser tab.
+                      </p>
+                    </div>
+                  }
+                >
+                  <Suspense fallback={
+                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                      <Loader2 className="h-8 w-8 animate-spin text-green-400" />
+                      <span className="ml-2 text-green-400">Loading 3D Model...</span>
+                    </div>
+                  }>
+                    <RiggedAnatomicalSkeleton 
+                      patientData={{
+                        anthropometrics: {
+                          height: 170,
+                          weight: 70,
+                        },
+                        jointRestrictions: {},
+                        painAreas: [],
+                        movementPatterns: null
+                      }}
+                      modelConfig={modelConfig}
+                      className="w-full h-full"
+                      showControls={false}
+                    />
+                  </Suspense>
+                </SkeletonErrorBoundary>
+              )}
             </div>
           </CardContent>
         </Card>

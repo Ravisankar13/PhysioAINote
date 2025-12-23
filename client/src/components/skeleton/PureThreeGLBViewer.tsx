@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { AlertCircle, Loader2, RotateCcw } from 'lucide-react';
+import { AlertCircle, Loader2, RotateCcw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface JointConfig {
@@ -775,15 +775,26 @@ export default function PureThreeGLBViewer({
             Try opening in a new browser tab or deploy the app for full 3D support.
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleRetry}
-          className="border-green-500 text-green-400 hover:bg-green-500/20"
-        >
-          <RotateCcw className="h-4 w-4 mr-2" />
-          Retry
-        </Button>
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRetry}
+            className="border-green-500 text-green-400 hover:bg-green-500/20"
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => window.open(window.location.href, '_blank')}
+            className="border-blue-500 text-blue-400 hover:bg-blue-500/20"
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Open in New Tab
+          </Button>
+        </div>
       </div>
     );
   }

@@ -4,7 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2 } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -525,6 +525,26 @@ export default function TestSkeletonNew() {
           Adjust anatomical parameters to create custom skeletal configurations for clinical assessment
         </p>
       </div>
+
+      {/* Replit Preview Banner */}
+      <Alert className="mb-4 border-blue-500/50 bg-blue-500/10">
+        <ExternalLink className="h-4 w-4 text-blue-400" />
+        <AlertTitle className="text-blue-300">3D Preview Best Experience</AlertTitle>
+        <AlertDescription className="flex items-center justify-between">
+          <span className="text-blue-200">
+            For the best 3D visualization experience, open this page in a new browser tab.
+          </span>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.open(window.location.href, '_blank')}
+            className="ml-4 border-blue-500 text-blue-400 hover:bg-blue-500/20"
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Open in New Tab
+          </Button>
+        </AlertDescription>
+      </Alert>
 
       {isWebGLAvailable === false && (
         <Alert className="mb-6">

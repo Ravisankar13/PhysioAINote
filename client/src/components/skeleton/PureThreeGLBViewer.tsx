@@ -203,7 +203,6 @@ export default function PureThreeGLBViewer({
   const initialRotationsRef = useRef<{ [name: string]: THREE.Euler }>({});
   const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
-  const neckCounterRotationRef = useRef<{ y: number; z: number }>({ y: 0, z: 0 });
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -512,13 +511,45 @@ export default function PureThreeGLBViewer({
           
           animationId = requestAnimationFrame(animate);
           
-          // Rib_Cage follows spine16 to keep arms connected during thoracic/lumbar movement
-          // NOTE: Root bone is NOT synced to spine20 to prevent neck rotations from affecting shoulders
+          // Sync Root to follow spine20, and Rib_Cage to follow spine16
+          // Formula: boneMatrixWorld = referenceSpine.matrixWorld * offset
+          // Then convert to local: boneMatrix = armature.matrixWorld.inverse() * boneMatrixWorld
           const currentBones = bonesRef.current;
+          const rootBone = currentBones['Root'] as THREE.Bone;
+          const spine20 = currentBones['spine20'] as THREE.Bone;
           const ribCage = currentBones['Rib_Cage'] as THREE.Bone;
           
-          // Rib_Cage follows spine16 (not spine20) to keep arms connected during thoracic/lumbar movement
-          if (ribCage && (ribCage as any).ribOffset && (ribCage as any).spine16Ref) {
+          if (rootBone && spine20 && (rootBone as any).headOffset) {
+            // Update spine20's world matrix after slider rotations
+            spine20.updateMatrixWorld(true);
+            
+            // Compute new world matrix for Root: spine20.matrixWorld * headOffset
+            const headOffset = (rootBone as any).headOffset as THREE.Matrix4;
+            const newRootWorldMatrix = new THREE.Matrix4();
+            newRootWorldMatrix.copy(spine20.matrixWorld).multiply(headOffset);
+            
+            // Convert to local space (relative to Armature)
+            const armature = (rootBone as any).armature as THREE.Object3D;
+            if (armature) {
+              armature.updateMatrixWorld(true);
+              const armatureInverse = new THREE.Matrix4().copy(armature.matrixWorld).invert();
+              const newRootLocalMatrix = new THREE.Matrix4();
+              newRootLocalMatrix.copy(armatureInverse).multiply(newRootWorldMatrix);
+              
+              // Decompose and apply to rootBone
+              const pos = new THREE.Vector3();
+              const quat = new THREE.Quaternion();
+              const scale = new THREE.Vector3();
+              newRootLocalMatrix.decompose(pos, quat, scale);
+              
+              rootBone.position.copy(pos);
+              rootBone.quaternion.copy(quat);
+              rootBone.scale.copy(scale);
+              rootBone.matrixWorldNeedsUpdate = true;
+            }
+            
+            // Rib_Cage follows spine16 (not spine20) to keep arms connected during thoracic/lumbar movement
+            if (ribCage && (ribCage as any).ribOffset && (ribCage as any).spine16Ref) {
               const spine16 = (ribCage as any).spine16Ref as THREE.Bone;
               spine16.updateMatrixWorld(true);
               
@@ -538,24 +569,6 @@ export default function PureThreeGLBViewer({
                 newRibLocalMatrix.decompose(pos, quat, scale);
                 
                 ribCage.position.copy(pos);
-                // Apply counter-rotation to cancel neck rotation/lateral flexion effect on shoulders
-                // neckCounterRotationRef already contains negative angles for the inverse rotation
-                const neckCounter = neckCounterRotationRef.current;
-                if (neckCounter.y !== 0 || neckCounter.z !== 0) {
-                  // Build inverse rotation: Rz(-β) * Ry(-α) - reverse order to invert compound rotation
-                  // neckCounter.y and neckCounter.z are already negative (stored as inverses)
-                  const invLateralQuat = new THREE.Quaternion().setFromAxisAngle(
-                    new THREE.Vector3(0, 0, 1), neckCounter.z  // Z-axis inverse (already negative)
-                  );
-                  const invRotQuat = new THREE.Quaternion().setFromAxisAngle(
-                    new THREE.Vector3(0, 1, 0), neckCounter.y  // Y-axis inverse (already negative)
-                  );
-                  // Compose inverse: Z first, then Y (reverse order of original application)
-                  const counterQuat = new THREE.Quaternion();
-                  counterQuat.copy(invLateralQuat).multiply(invRotQuat);
-                  // Pre-multiply to cancel inherited rotation
-                  quat.premultiply(counterQuat);
-                }
                 ribCage.quaternion.copy(quat);
                 ribCage.scale.copy(scale);
                 ribCage.matrixWorldNeedsUpdate = true;
@@ -632,6 +645,7 @@ export default function PureThreeGLBViewer({
                 humerusR.matrixWorldNeedsUpdate = true;
               }
             }
+          }
           
           sceneRef.current.controls.update();
           sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
@@ -761,19 +775,6 @@ export default function PureThreeGLBViewer({
     clavicleOffsetsRef.current = {
       left: leftClavicle * mmToSceneUnit,
       right: rightClavicle * mmToSceneUnit
-    };
-    
-    // Calculate cumulative neck rotation for counter-rotation of Rib_Cage
-    // This keeps the shoulders stable when the neck rotates
-    const neckRotation = (modelConfig.neck as any)?.rotation || 0;
-    const neckLateralFlexion = (modelConfig.neck as any)?.lateralFlexion || 0;
-    // Sum of scales for neck.rotation: 0.2 + 0.25 + 0.3 + 0.25 = 1.0
-    // Sum of scales for neck.lateralFlexion: 0.2 + 0.25 + 0.3 + 0.25 = 1.0
-    const neckRotationTotal = neckRotation * (Math.PI / 180) * 1.0;
-    const neckLateralTotal = neckLateralFlexion * (Math.PI / 180) * 1.0;
-    neckCounterRotationRef.current = {
-      y: -neckRotationTotal,  // Counter-rotate Y axis
-      z: -neckLateralTotal    // Counter-rotate Z axis
     };
     
     // Apply accumulated rotations to bones (skip animation loop bones)

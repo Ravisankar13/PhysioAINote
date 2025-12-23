@@ -280,6 +280,7 @@ export default function TestSkeletonNew() {
       elevation: 0,
       protraction: 0,
       winging: 0,
+      clavicleLength: 0,
     },
     rightShoulder: {
       flexion: 0,
@@ -289,6 +290,7 @@ export default function TestSkeletonNew() {
       elevation: 0,
       protraction: 0,
       winging: 0,
+      clavicleLength: 0,
     },
     leftElbow: {
       flexion: 0,

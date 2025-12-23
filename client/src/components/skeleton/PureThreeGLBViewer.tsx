@@ -16,6 +16,7 @@ interface JointConfig {
   plantarflexion?: number;
   inversion?: number;
   eversion?: number;
+  clavicleLength?: number;
   [key: string]: number | undefined;
 }
 

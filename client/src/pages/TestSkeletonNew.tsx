@@ -541,33 +541,47 @@ export default function TestSkeletonNew() {
         </p>
       </div>
 
-      {/* Replit Preview Banner */}
-      <Alert className="mb-4 border-blue-500/50 bg-blue-500/10">
-        <ExternalLink className="h-4 w-4 text-blue-400" />
-        <AlertTitle className="text-blue-300">3D Preview Best Experience</AlertTitle>
-        <AlertDescription className="flex items-center justify-between">
-          <span className="text-blue-200">
-            For the best 3D visualization experience, open this page in a new browser tab.
-          </span>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => window.open(window.location.href, '_blank')}
-            className="ml-4 border-blue-500 text-blue-400 hover:bg-blue-500/20"
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Open in New Tab
-          </Button>
-        </AlertDescription>
-      </Alert>
-
-      {isWebGLAvailable === false && (
-        <Alert className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Limited Visualization</AlertTitle>
-          <AlertDescription>
-            3D visualization requires WebGL which is not available in this environment. 
-            Showing simplified skeleton view. The configuration controls are still fully functional.
+      {/* WebGL Not Available - Prominent Call to Action */}
+      {isWebGLAvailable === false ? (
+        <div className="mb-6 p-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl shadow-lg">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="text-white text-center md:text-left">
+              <h2 className="text-xl font-bold mb-2 flex items-center gap-2 justify-center md:justify-start">
+                <AlertCircle className="h-6 w-6" />
+                3D Viewer Requires New Tab
+              </h2>
+              <p className="text-blue-100">
+                The Replit preview doesn't support 3D graphics. Click below to open the full interactive skeleton viewer.
+              </p>
+            </div>
+            <Button 
+              size="lg"
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="bg-white text-blue-600 hover:bg-blue-50 font-semibold px-8 py-3 shadow-md"
+            >
+              <ExternalLink className="h-5 w-5 mr-2" />
+              Open 3D Viewer
+            </Button>
+          </div>
+        </div>
+      ) : (
+        /* Standard hint banner when WebGL works */
+        <Alert className="mb-4 border-blue-500/50 bg-blue-500/10">
+          <ExternalLink className="h-4 w-4 text-blue-400" />
+          <AlertTitle className="text-blue-300">Tip: Best in New Tab</AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span className="text-blue-200">
+              For smoother 3D performance, consider opening in a new tab.
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="ml-4 border-blue-500 text-blue-400 hover:bg-blue-500/20"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open in New Tab
+            </Button>
           </AlertDescription>
         </Alert>
       )}
@@ -581,16 +595,24 @@ export default function TestSkeletonNew() {
           <CardContent className="h-[calc(100%-80px)]">
             <GLBErrorBoundary
               fallback={
-                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100 rounded-lg p-4">
-                  <AlertCircle className="h-12 w-12 text-amber-600 mb-4" />
-                  <h3 className="text-lg font-semibold text-amber-800 mb-2">3D Viewer Unavailable</h3>
-                  <p className="text-sm text-amber-700 text-center mb-4">
-                    WebGL is required to display the GLB skeleton model. 
-                    The 3D viewer will work when you deploy this app or view it in a browser with WebGL support.
-                  </p>
-                  <p className="text-xs text-amber-600">
-                    GLB Model: /models/skeleton_character.glb
-                  </p>
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6">
+                  <div className="text-center">
+                    <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-blue-500/20 flex items-center justify-center">
+                      <ExternalLink className="h-12 w-12 text-blue-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-white mb-2">Open in New Tab for 3D</h3>
+                    <p className="text-sm text-slate-400 mb-6 max-w-xs">
+                      The 3D skeleton viewer needs to run in a full browser window.
+                    </p>
+                    <Button 
+                      size="lg"
+                      onClick={() => window.open(window.location.href, '_blank')}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                    >
+                      <ExternalLink className="h-5 w-5 mr-2" />
+                      Open 3D Viewer
+                    </Button>
+                  </div>
                 </div>
               }
             >

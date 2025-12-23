@@ -168,6 +168,7 @@ export default function PureThreeGLBViewer({
   const bonesRef = useRef<{ [name: string]: THREE.Object3D }>({});
   const initialRotationsRef = useRef<{ [name: string]: THREE.Euler }>({});
   const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
+  const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -563,6 +564,8 @@ export default function PureThreeGLBViewer({
                 const scale = new THREE.Vector3();
                 newHumerusLLocal.decompose(pos, quat, scale);
                 
+                // Apply clavicle length offset (negative X = laterally outward for left side)
+                pos.x -= clavicleOffsetsRef.current.left;
                 humerusL.position.copy(pos);
                 // Apply slider rotation on top of base quaternion
                 const sliderRot = sliderRotationsRef.current['Humerus_Root_L'];
@@ -594,6 +597,8 @@ export default function PureThreeGLBViewer({
                 const scale = new THREE.Vector3();
                 newHumerusRLocal.decompose(pos, quat, scale);
                 
+                // Apply clavicle length offset (positive X = laterally outward for right side)
+                pos.x += clavicleOffsetsRef.current.right;
                 humerusR.position.copy(pos);
                 // Apply slider rotation on top of base quaternion
                 const sliderRot = sliderRotationsRef.current['Humerus_Root_R'];
@@ -724,6 +729,19 @@ export default function PureThreeGLBViewer({
     
     // Store slider rotations for animation loop to use
     sliderRotationsRef.current = sliderOnlyRotations;
+    
+    // Extract and store clavicle length offsets (in mm, convert to scene units)
+    // Positive value = longer clavicle = shoulder moves laterally outward
+    const leftClavicle = (modelConfig.leftShoulder as any)?.clavicleLength || 0;
+    const rightClavicle = (modelConfig.rightShoulder as any)?.clavicleLength || 0;
+    // Convert mm to scene units (model scale is ~2/maxDim, typical skeleton height ~1.8m)
+    // Scene unit conversion factor: 1mm ≈ 0.001 in real world, but model is scaled
+    // Use a reasonable multiplier for visible effect (0.002 per mm seems good for this scale)
+    const mmToSceneUnit = 0.002;
+    clavicleOffsetsRef.current = {
+      left: leftClavicle * mmToSceneUnit,
+      right: rightClavicle * mmToSceneUnit
+    };
     
     // Apply accumulated rotations to bones (skip animation loop bones)
     Object.entries(boneRotations).forEach(([boneName, rotation]) => {

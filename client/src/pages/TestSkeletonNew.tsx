@@ -44,6 +44,7 @@ class GLBErrorBoundary extends Component<GLBErrorBoundaryProps, GLBErrorBoundary
 interface ModelConfig {
   limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
   spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number };
+  neck: { flexion: number; extension: number; rotation: number; lateralFlexion: number; forwardHead: number };
   pelvis: { tilt: number; obliquity: number; rotation: number };
   leftHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
   rightHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
@@ -221,6 +222,13 @@ export default function TestSkeletonNew() {
       forwardHead: 0,
       lateralShift: 0,
     },
+    neck: {
+      flexion: 0,
+      extension: 0,
+      rotation: 0,
+      lateralFlexion: 0,
+      forwardHead: 0,
+    },
     pelvis: {
       tilt: 0,
       obliquity: 0,
@@ -345,6 +353,13 @@ export default function TestSkeletonNew() {
         scoliosis: 0,
         forwardHead: 0,
         lateralShift: 0,
+      },
+      neck: {
+        flexion: 0,
+        extension: 0,
+        rotation: 0,
+        lateralFlexion: 0,
+        forwardHead: 0,
       },
       pelvis: {
         tilt: 0,
@@ -654,6 +669,67 @@ export default function TestSkeletonNew() {
                         value={[modelConfig.spine.scoliosis]}
                         onValueChange={(value) => handleSliderChange('spine', 'scoliosis', value)}
                         min={-45}
+                        max={45}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <h3 className="font-semibold">Head & Neck</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Neck Flexion ({modelConfig.neck.flexion}°)</Label>
+                      <Slider
+                        value={[modelConfig.neck.flexion]}
+                        onValueChange={(value) => handleSliderChange('neck', 'flexion', value)}
+                        min={0}
+                        max={60}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Neck Extension ({modelConfig.neck.extension}°)</Label>
+                      <Slider
+                        value={[modelConfig.neck.extension]}
+                        onValueChange={(value) => handleSliderChange('neck', 'extension', value)}
+                        min={0}
+                        max={75}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Neck Rotation ({modelConfig.neck.rotation}°)</Label>
+                      <Slider
+                        value={[modelConfig.neck.rotation]}
+                        onValueChange={(value) => handleSliderChange('neck', 'rotation', value)}
+                        min={-80}
+                        max={80}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Lateral Flexion ({modelConfig.neck.lateralFlexion}°)</Label>
+                      <Slider
+                        value={[modelConfig.neck.lateralFlexion]}
+                        onValueChange={(value) => handleSliderChange('neck', 'lateralFlexion', value)}
+                        min={-45}
+                        max={45}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Forward Head Posture ({modelConfig.neck.forwardHead}°)</Label>
+                      <Slider
+                        value={[modelConfig.neck.forwardHead]}
+                        onValueChange={(value) => handleSliderChange('neck', 'forwardHead', value)}
+                        min={0}
                         max={45}
                         step={1}
                         className="mt-2"

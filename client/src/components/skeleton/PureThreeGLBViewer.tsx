@@ -33,7 +33,8 @@ interface ModelConfig {
   rightElbow?: JointConfig;
   pelvis?: { tilt?: number; obliquity?: number; rotation?: number };
   spine?: { cervicalLordosis?: number; thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number };
-  [key: string]: JointConfig | { tilt?: number; obliquity?: number; rotation?: number } | { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number } | undefined;
+  neck?: { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number };
+  [key: string]: JointConfig | { tilt?: number; obliquity?: number; rotation?: number } | { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number } | { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number } | undefined;
 }
 
 interface PureThreeGLBViewerProps {
@@ -153,6 +154,39 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine12', axis: 'z', scale: -0.2 },
     { boneName: 'spine13', axis: 'z', scale: -0.15 },
     { boneName: 'spine14', axis: 'z', scale: -0.1 },
+  ],
+
+  // === HEAD & NECK (Cervical Spine) ===
+  'neck.flexion': [
+    { boneName: 'spine17', axis: 'x', scale: -0.25 },
+    { boneName: 'spine18', axis: 'x', scale: -0.25 },
+    { boneName: 'spine19', axis: 'x', scale: -0.25 },
+    { boneName: 'spine20', axis: 'x', scale: -0.25 },
+  ],
+  'neck.extension': [
+    { boneName: 'spine17', axis: 'x', scale: 0.25 },
+    { boneName: 'spine18', axis: 'x', scale: 0.25 },
+    { boneName: 'spine19', axis: 'x', scale: 0.25 },
+    { boneName: 'spine20', axis: 'x', scale: 0.25 },
+  ],
+  'neck.rotation': [
+    { boneName: 'spine17', axis: 'y', scale: 0.2 },
+    { boneName: 'spine18', axis: 'y', scale: 0.25 },
+    { boneName: 'spine19', axis: 'y', scale: 0.3 },
+    { boneName: 'spine20', axis: 'y', scale: 0.25 },
+  ],
+  'neck.lateralFlexion': [
+    { boneName: 'spine17', axis: 'z', scale: 0.2 },
+    { boneName: 'spine18', axis: 'z', scale: 0.25 },
+    { boneName: 'spine19', axis: 'z', scale: 0.3 },
+    { boneName: 'spine20', axis: 'z', scale: 0.25 },
+  ],
+  'neck.forwardHead': [
+    { boneName: 'spine16', axis: 'x', scale: 0.15 },
+    { boneName: 'spine17', axis: 'x', scale: -0.2 },
+    { boneName: 'spine18', axis: 'x', scale: -0.25 },
+    { boneName: 'spine19', axis: 'x', scale: -0.2 },
+    { boneName: 'spine20', axis: 'x', scale: -0.15 },
   ],
 };
 

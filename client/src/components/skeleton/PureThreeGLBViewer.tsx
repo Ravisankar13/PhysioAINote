@@ -81,16 +81,19 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightAnkle.eversion': [{ boneName: 'foot_R', axis: 'z', scale: 1 }],
   
   // === SHOULDER ===
-  'leftShoulder.flexion': [{ boneName: 'Humerus_Root_L', axis: 'x', scale: -1 }],
-  'leftShoulder.abduction': [{ boneName: 'Humerus_Root_L', axis: 'z', scale: -1 }],
+  // In T-pose, arms point laterally. Flexion rotates arm forward (sagittal plane).
+  // For left arm pointing left (-X), flexion uses Y-axis rotation
+  'leftShoulder.flexion': [{ boneName: 'Humerus_Root_L', axis: 'y', scale: 1 }], // Forward flexion - Y rotation brings arm forward
+  'leftShoulder.abduction': [{ boneName: 'Humerus_Root_L', axis: 'z', scale: -1 }], // Abduction - Z rotation for lateral elevation
   'leftShoulder.internalRotation': [{ boneName: 'Humerus_Root_L', axis: 'y', scale: 1 }],
   'leftShoulder.retroversion': [{ boneName: 'Humerus_L', axis: 'y', scale: 1 }], // Humeral head retroversion
   'leftShoulder.elevation': [
     { boneName: 'Rib_Cage', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
     { boneName: 'Humerus_Root_L', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
   ],
-  'rightShoulder.flexion': [{ boneName: 'Humerus_Root_R', axis: 'x', scale: -1 }],
-  'rightShoulder.abduction': [{ boneName: 'Humerus_Root_R', axis: 'z', scale: 1 }],
+  // For right arm pointing right (+X), flexion uses Y-axis rotation (opposite sign)
+  'rightShoulder.flexion': [{ boneName: 'Humerus_Root_R', axis: 'y', scale: -1 }], // Forward flexion - Y rotation brings arm forward
+  'rightShoulder.abduction': [{ boneName: 'Humerus_Root_R', axis: 'z', scale: 1 }], // Abduction - Z rotation for lateral elevation
   'rightShoulder.internalRotation': [{ boneName: 'Humerus_Root_R', axis: 'y', scale: -1 }],
   'rightShoulder.retroversion': [{ boneName: 'Humerus_R', axis: 'y', scale: -1 }], // Humeral head retroversion
   'rightShoulder.elevation': [
@@ -466,6 +469,16 @@ export default function PureThreeGLBViewer({
                   (humerusL as any).ribCageOffset = humerusLOffset;
                   (humerusL as any).ribCageRef = ribCage;
                   (humerusL as any).armature = armature;
+                  
+                  // Debug: Log humerus bone local axes to determine correct flexion/abduction axes
+                  const xAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(humerusL.quaternion);
+                  const yAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(humerusL.quaternion);
+                  const zAxis = new THREE.Vector3(0, 0, 1).applyQuaternion(humerusL.quaternion);
+                  console.log('=== LEFT HUMERUS BONE ORIENTATION ===');
+                  console.log('Local X-axis (world coords):', xAxis.x.toFixed(3), xAxis.y.toFixed(3), xAxis.z.toFixed(3));
+                  console.log('Local Y-axis (world coords):', yAxis.x.toFixed(3), yAxis.y.toFixed(3), yAxis.z.toFixed(3));
+                  console.log('Local Z-axis (world coords):', zAxis.x.toFixed(3), zAxis.y.toFixed(3), zAxis.z.toFixed(3));
+                  console.log('Initial rotation (Euler):', humerusL.rotation.x.toFixed(3), humerusL.rotation.y.toFixed(3), humerusL.rotation.z.toFixed(3));
                 }
                 
                 if (humerusR) {
@@ -474,6 +487,16 @@ export default function PureThreeGLBViewer({
                   (humerusR as any).ribCageOffset = humerusROffset;
                   (humerusR as any).ribCageRef = ribCage;
                   (humerusR as any).armature = armature;
+                  
+                  // Debug: Log humerus bone local axes to determine correct flexion/abduction axes
+                  const xAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(humerusR.quaternion);
+                  const yAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(humerusR.quaternion);
+                  const zAxis = new THREE.Vector3(0, 0, 1).applyQuaternion(humerusR.quaternion);
+                  console.log('=== RIGHT HUMERUS BONE ORIENTATION ===');
+                  console.log('Local X-axis (world coords):', xAxis.x.toFixed(3), xAxis.y.toFixed(3), xAxis.z.toFixed(3));
+                  console.log('Local Y-axis (world coords):', yAxis.x.toFixed(3), yAxis.y.toFixed(3), yAxis.z.toFixed(3));
+                  console.log('Local Z-axis (world coords):', zAxis.x.toFixed(3), zAxis.y.toFixed(3), zAxis.z.toFixed(3));
+                  console.log('Initial rotation (Euler):', humerusR.rotation.x.toFixed(3), humerusR.rotation.y.toFixed(3), humerusR.rotation.z.toFixed(3));
                 }
               }
               

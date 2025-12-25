@@ -4,13 +4,14 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PureThreeGLBViewer, { AnimationState } from "@/components/skeleton/PureThreeGLBViewer";
 import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
+import BiomechanicsPanel from "@/components/skeleton/BiomechanicsPanel";
 
 interface GLBErrorBoundaryProps {
   children: ReactNode;
@@ -1900,6 +1901,26 @@ export default function TestSkeletonNew() {
             </Tabs>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Biomechanical Analysis Panel */}
+      <div className="mt-6">
+        <BiomechanicsPanel 
+          modelConfig={{
+            pelvis: modelConfig.pelvis,
+            spine: modelConfig.spine,
+            leftHip: modelConfig.leftHip,
+            rightHip: modelConfig.rightHip,
+            leftKnee: modelConfig.leftKnee,
+            rightKnee: modelConfig.rightKnee,
+            leftAnkle: modelConfig.leftAnkle,
+            rightAnkle: modelConfig.rightAnkle,
+            leftShoulder: modelConfig.leftShoulder,
+            rightShoulder: modelConfig.rightShoulder,
+            leftElbow: modelConfig.leftElbow,
+            rightElbow: modelConfig.rightElbow,
+          }}
+        />
       </div>
 
       {/* Configuration Summary */}

@@ -4657,3 +4657,406 @@ export type InsertSessionRecommendation = z.infer<typeof insertSessionRecommenda
 
 // Export all movement analysis schema tables
 export * from './movementAnalysisSchema';
+
+// ============================================
+// BIOMECHANICAL ASSESSMENT & CLINICAL ANALYSIS
+// ============================================
+
+// Risk level enum for injury assessments
+export const riskLevelEnum = pgEnum("risk_level", [
+  "minimal",
+  "low", 
+  "moderate",
+  "high",
+  "critical",
+]);
+
+// Biomechanical Assessments - stores force/load calculations for each patient assessment
+export const biomechanicalAssessments = pgTable("biomechanical_assessments", {
+  id: serial("id").primaryKey(),
+  virtualPatientConfigId: integer("virtual_patient_config_id")
+    .references(() => virtualPatientConfigs.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  
+  // Patient anthropometrics for calculations
+  anthropometrics: json("anthropometrics").$type<{
+    heightCm: number;
+    weightKg: number;
+    segmentMasses: {
+      head: number;
+      trunk: number;
+      upperArmL: number;
+      upperArmR: number;
+      forearmL: number;
+      forearmR: number;
+      handL: number;
+      handR: number;
+      thighL: number;
+      thighR: number;
+      shankL: number;
+      shankR: number;
+      footL: number;
+      footR: number;
+    };
+    segmentLengths: {
+      trunk: number;
+      upperArm: number;
+      forearm: number;
+      thigh: number;
+      shank: number;
+    };
+  }>(),
+  
+  // Posture configuration at time of assessment
+  postureSnapshot: json("posture_snapshot").$type<{
+    pelvisTilt: number;
+    pelvisObliquity: number;
+    pelvisRotation: number;
+    spineFlexion: number;
+    spineLateralFlexion: number;
+    spineRotation: number;
+    leftHip: { flexion: number; abduction: number; rotation: number };
+    rightHip: { flexion: number; abduction: number; rotation: number };
+    leftKnee: { flexion: number; varus: number };
+    rightKnee: { flexion: number; varus: number };
+    leftAnkle: { dorsiflexion: number; inversion: number };
+    rightAnkle: { dorsiflexion: number; inversion: number };
+    leftShoulder: { flexion: number; abduction: number; rotation: number };
+    rightShoulder: { flexion: number; abduction: number; rotation: number };
+    leftElbow: { flexion: number; pronation: number };
+    rightElbow: { flexion: number; pronation: number };
+  }>(),
+  
+  // Calculated joint forces (Newtons)
+  jointForces: json("joint_forces").$type<{
+    lumbarSpine: { compression: number; shear: number; moment: number };
+    thoracicSpine: { compression: number; shear: number; moment: number };
+    cervicalSpine: { compression: number; shear: number; moment: number };
+    leftHip: { compression: number; shear: number; moment: number };
+    rightHip: { compression: number; shear: number; moment: number };
+    leftKnee: { compression: number; shear: number; moment: number; patellofemoral: number };
+    rightKnee: { compression: number; shear: number; moment: number; patellofemoral: number };
+    leftAnkle: { compression: number; shear: number; moment: number };
+    rightAnkle: { compression: number; shear: number; moment: number };
+    leftShoulder: { compression: number; shear: number; moment: number };
+    rightShoulder: { compression: number; shear: number; moment: number };
+  }>(),
+  
+  // Ground reaction forces
+  groundReactionForces: json("ground_reaction_forces").$type<{
+    leftFoot: { vertical: number; anteriorPosterior: number; medialLateral: number };
+    rightFoot: { vertical: number; anteriorPosterior: number; medialLateral: number };
+    centerOfPressure: { x: number; y: number };
+    weightDistribution: { left: number; right: number };
+  }>(),
+  
+  // Muscle force estimates (0-100% of max voluntary contraction)
+  muscleActivation: json("muscle_activation").$type<{
+    // Core muscles
+    rectusAbdominis: number;
+    obliques: number;
+    transverseAbdominis: number;
+    erectorSpinae: number;
+    multifidus: number;
+    quadratusLumborum: { left: number; right: number };
+    
+    // Hip muscles
+    gluteusMaximus: { left: number; right: number };
+    gluteusMedius: { left: number; right: number };
+    iliopsoas: { left: number; right: number };
+    hipAdductors: { left: number; right: number };
+    tensorFasciaeLatae: { left: number; right: number };
+    piriformis: { left: number; right: number };
+    
+    // Knee muscles
+    quadriceps: { left: number; right: number };
+    hamstrings: { left: number; right: number };
+    gastrocnemius: { left: number; right: number };
+    popliteus: { left: number; right: number };
+    
+    // Ankle muscles
+    tibialisAnterior: { left: number; right: number };
+    soleus: { left: number; right: number };
+    peroneals: { left: number; right: number };
+    tibialisPosterior: { left: number; right: number };
+    
+    // Shoulder muscles
+    rotatorcuff: { left: number; right: number };
+    deltoid: { left: number; right: number };
+    trapezius: { upper: number; middle: number; lower: number };
+    serratusAnterior: { left: number; right: number };
+    pectoralisMajor: { left: number; right: number };
+    latissimusDorsi: { left: number; right: number };
+  }>(),
+  
+  // Load asymmetry analysis
+  asymmetryAnalysis: json("asymmetry_analysis").$type<{
+    hipLoadAsymmetry: number; // percentage difference
+    kneeLoadAsymmetry: number;
+    ankleLoadAsymmetry: number;
+    shoulderLoadAsymmetry: number;
+    muscleActivationAsymmetry: {
+      gluteMax: number;
+      gluteMed: number;
+      quadriceps: number;
+      hamstrings: number;
+    };
+    weightDistributionAsymmetry: number;
+  }>(),
+  
+  // Movement quality metrics
+  movementQuality: json("movement_quality").$type<{
+    overallScore: number; // 0-100
+    stabilityScore: number;
+    mobilityScore: number;
+    controlScore: number;
+    compensationPatterns: string[];
+    movementFaults: string[];
+  }>(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Injury Risk Scores - calculated risk for specific injuries based on biomechanics
+export const injuryRiskScores = pgTable("injury_risk_scores", {
+  id: serial("id").primaryKey(),
+  biomechanicalAssessmentId: integer("biomechanical_assessment_id")
+    .notNull()
+    .references(() => biomechanicalAssessments.id, { onDelete: "cascade" }),
+  
+  // Overall risk summary
+  overallRiskLevel: riskLevelEnum("overall_risk_level").notNull(),
+  overallRiskScore: integer("overall_risk_score").notNull(), // 0-100
+  
+  // Joint-specific injury risks
+  jointRisks: json("joint_risks").$type<{
+    lumbarSpine: {
+      discHerniation: { risk: number; level: string; factors: string[] };
+      facetJointDysfunction: { risk: number; level: string; factors: string[] };
+      spondylolisthesis: { risk: number; level: string; factors: string[] };
+      muscleStrain: { risk: number; level: string; factors: string[] };
+    };
+    hip: {
+      labralTear: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      femoralAcetabularImpingement: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      hipFlexorStrain: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      greaterTrochanterBursitis: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+    };
+    knee: {
+      aclInjury: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      patellofemoralSyndrome: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      meniscusTear: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      itBandSyndrome: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      patellarTendinopathy: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+    };
+    ankle: {
+      lateralAnkleSprain: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      achillesTendinopathy: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      plantarFasciitis: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      tibialStressFracture: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+    };
+    shoulder: {
+      rotatorCuffTear: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      impingementSyndrome: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      instability: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+      bicepsTendinopathy: { left: { risk: number; level: string }; right: { risk: number; level: string }; factors: string[] };
+    };
+  }>(),
+  
+  // Threshold warnings (exceeds safe limits)
+  thresholdWarnings: json("threshold_warnings").$type<{
+    jointWarnings: Array<{
+      joint: string;
+      metric: string;
+      currentValue: number;
+      threshold: number;
+      severity: string;
+      recommendation: string;
+    }>;
+    muscleWarnings: Array<{
+      muscle: string;
+      issue: string;
+      severity: string;
+      recommendation: string;
+    }>;
+    postureWarnings: Array<{
+      deviation: string;
+      severity: string;
+      relatedRisks: string[];
+    }>;
+  }>(),
+  
+  // Contributing factors identified
+  riskFactors: json("risk_factors").$type<{
+    biomechanical: string[];
+    postural: string[];
+    muscular: string[];
+    historical: string[];
+  }>(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Treatment Strategies - AI-generated treatment plans
+export const treatmentStrategies = pgTable("treatment_strategies", {
+  id: serial("id").primaryKey(),
+  injuryRiskScoreId: integer("injury_risk_score_id")
+    .references(() => injuryRiskScores.id, { onDelete: "cascade" }),
+  virtualPatientConfigId: integer("virtual_patient_config_id")
+    .references(() => virtualPatientConfigs.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  
+  // Assessment summary from AI
+  clinicalSummary: text("clinical_summary"),
+  primaryProblems: json("primary_problems").$type<Array<{
+    problem: string;
+    severity: string;
+    priority: number;
+    relatedFindings: string[];
+  }>>(),
+  
+  // Treatment goals
+  treatmentGoals: json("treatment_goals").$type<{
+    shortTerm: Array<{ goal: string; timeframe: string; metrics: string[] }>;
+    longTerm: Array<{ goal: string; timeframe: string; metrics: string[] }>;
+  }>(),
+  
+  // Recommended interventions
+  interventions: json("interventions").$type<{
+    manualTherapy: Array<{
+      technique: string;
+      target: string;
+      frequency: string;
+      rationale: string;
+    }>;
+    therapeuticExercises: Array<{
+      exercise: string;
+      sets: number;
+      reps: number;
+      frequency: string;
+      progression: string;
+      rationale: string;
+      contraindications: string[];
+    }>;
+    neuromuscularReeducation: Array<{
+      activity: string;
+      focus: string;
+      progression: string;
+    }>;
+    patientEducation: Array<{
+      topic: string;
+      keyPoints: string[];
+    }>;
+    modalitiesIfNeeded: Array<{
+      modality: string;
+      parameters: string;
+      rationale: string;
+    }>;
+  }>(),
+  
+  // Load management recommendations
+  loadManagement: json("load_management").$type<{
+    currentLoadCapacity: string;
+    recommendedLoadReduction: number; // percentage
+    activityModifications: string[];
+    returnToActivityCriteria: string[];
+    progressionTimeline: Array<{
+      phase: string;
+      duration: string;
+      activities: string[];
+      restrictions: string[];
+    }>;
+  }>(),
+  
+  // Precautions and contraindications
+  precautions: json("precautions").$type<{
+    redFlags: string[];
+    contraindications: string[];
+    watchFor: string[];
+  }>(),
+  
+  // Expected outcomes
+  prognosis: json("prognosis").$type<{
+    expectedRecoveryTime: string;
+    prognosticFactors: { positive: string[]; negative: string[] };
+    expectedOutcome: string;
+  }>(),
+  
+  // AI reasoning/evidence
+  aiReasoning: text("ai_reasoning"),
+  evidenceBase: json("evidence_base").$type<Array<{
+    claim: string;
+    evidence: string;
+    strength: string;
+  }>>(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Insert schemas for biomechanical assessments
+export const insertBiomechanicalAssessmentSchema = createInsertSchema(biomechanicalAssessments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInjuryRiskScoreSchema = createInsertSchema(injuryRiskScores).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTreatmentStrategySchema = createInsertSchema(treatmentStrategies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types for biomechanical assessments
+export type BiomechanicalAssessment = typeof biomechanicalAssessments.$inferSelect;
+export type InsertBiomechanicalAssessment = z.infer<typeof insertBiomechanicalAssessmentSchema>;
+export type InjuryRiskScore = typeof injuryRiskScores.$inferSelect;
+export type InsertInjuryRiskScore = z.infer<typeof insertInjuryRiskScoreSchema>;
+export type TreatmentStrategy = typeof treatmentStrategies.$inferSelect;
+export type InsertTreatmentStrategy = z.infer<typeof insertTreatmentStrategySchema>;
+
+// Relations for biomechanical assessments
+export const biomechanicalAssessmentRelations = relations(biomechanicalAssessments, ({ one, many }) => ({
+  virtualPatientConfig: one(virtualPatientConfigs, {
+    fields: [biomechanicalAssessments.virtualPatientConfigId],
+    references: [virtualPatientConfigs.id],
+  }),
+  user: one(users, {
+    fields: [biomechanicalAssessments.userId],
+    references: [users.id],
+  }),
+  injuryRiskScores: many(injuryRiskScores),
+}));
+
+export const injuryRiskScoreRelations = relations(injuryRiskScores, ({ one, many }) => ({
+  biomechanicalAssessment: one(biomechanicalAssessments, {
+    fields: [injuryRiskScores.biomechanicalAssessmentId],
+    references: [biomechanicalAssessments.id],
+  }),
+  treatmentStrategies: many(treatmentStrategies),
+}));
+
+export const treatmentStrategyRelations = relations(treatmentStrategies, ({ one }) => ({
+  injuryRiskScore: one(injuryRiskScores, {
+    fields: [treatmentStrategies.injuryRiskScoreId],
+    references: [injuryRiskScores.id],
+  }),
+  virtualPatientConfig: one(virtualPatientConfigs, {
+    fields: [treatmentStrategies.virtualPatientConfigId],
+    references: [virtualPatientConfigs.id],
+  }),
+  user: one(users, {
+    fields: [treatmentStrategies.userId],
+    references: [users.id],
+  }),
+}));

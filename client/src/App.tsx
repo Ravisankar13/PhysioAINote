@@ -72,6 +72,7 @@ import TestSkeleton from "@/pages/TestSkeleton";
 import TestSkeletonNew from "@/pages/TestSkeletonNew";
 import TestSkeletonNewSimple from "@/pages/TestSkeletonNewSimple";
 import TestSkeletonScapula from "@/pages/TestSkeletonScapula";
+import PatientAssessmentDashboard from "@/pages/PatientAssessmentDashboard";
 import Education from "@/pages/Education";
 import CourseContent from "@/pages/CourseContent";
 import Header from "@/components/layout/Header";
@@ -132,6 +133,7 @@ function Router() {
           <Route path="/test-skeleton-new" component={TestSkeletonNew} />
           <Route path="/test-skeleton-simple" component={TestSkeletonNewSimple} />
           <Route path="/test-skeleton-scapula" component={TestSkeletonScapula} />
+          <Route path="/patient-assessment" component={PatientAssessmentDashboard} />
           <Route path="/virtual-patients-debug">
             <ProtectedRoute component={VirtualPatientsSimple} />
           </Route>

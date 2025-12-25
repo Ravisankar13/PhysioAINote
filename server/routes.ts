@@ -16359,6 +16359,142 @@ If there are existing notes, seamlessly integrate the new content while maintain
     }
   });
 
+  // ==========================================
+  // BIOMECHANICS AI CLINICAL ASSESSMENT ROUTES
+  // ==========================================
+
+  // Zod schema for biomechanics input validation
+  const biomechanicsInputSchema = z.object({
+    patientInfo: z.object({
+      name: z.string().optional(),
+      age: z.number().optional(),
+      gender: z.string().optional(),
+      chiefComplaint: z.string().optional()
+    }).optional(),
+    anthropometrics: z.object({
+      heightCm: z.number().min(50).max(250),
+      weightKg: z.number().min(10).max(300)
+    }),
+    jointForces: z.object({
+      lumbarSpine: z.object({
+        compression: z.number(),
+        shear: z.number(),
+        moment: z.number()
+      }),
+      leftHip: z.object({ compression: z.number() }),
+      rightHip: z.object({ compression: z.number() }),
+      leftKnee: z.object({ compression: z.number(), patellofemoral: z.number() }),
+      rightKnee: z.object({ compression: z.number(), patellofemoral: z.number() })
+    }),
+    muscleActivation: z.object({
+      erectorSpinae: z.number(),
+      gluteusMaximus: z.object({ left: z.number(), right: z.number() }),
+      gluteusMedius: z.object({ left: z.number(), right: z.number() }),
+      quadriceps: z.object({ left: z.number(), right: z.number() }),
+      hamstrings: z.object({ left: z.number(), right: z.number() })
+    }),
+    asymmetryAnalysis: z.object({
+      hipLoadAsymmetry: z.number(),
+      kneeLoadAsymmetry: z.number(),
+      weightDistributionAsymmetry: z.number(),
+      muscleActivationAsymmetry: z.object({
+        gluteMax: z.number(),
+        gluteMed: z.number(),
+        quadriceps: z.number(),
+        hamstrings: z.number()
+      })
+    }),
+    movementQuality: z.object({
+      overallScore: z.number(),
+      stabilityScore: z.number(),
+      mobilityScore: z.number(),
+      controlScore: z.number(),
+      compensationPatterns: z.array(z.string()),
+      movementFaults: z.array(z.string())
+    }),
+    injuryRisks: z.object({
+      overallRiskLevel: z.string(),
+      overallRiskScore: z.number(),
+      highRiskAreas: z.array(z.object({
+        area: z.string(),
+        risk: z.number(),
+        factors: z.array(z.string())
+      }))
+    }),
+    posture: z.object({
+      pelvisTilt: z.number(),
+      pelvisObliquity: z.number(),
+      spineFlexion: z.number(),
+      spineLateralFlexion: z.number()
+    })
+  });
+
+  // Generate full clinical assessment from biomechanics data
+  app.post("/api/biomechanics/clinical-assessment", async (req: Request, res: Response) => {
+    try {
+      const { generateClinicalAssessment } = await import('./biomechanicsAIService');
+      
+      const parseResult = biomechanicsInputSchema.safeParse(req.body);
+      
+      if (!parseResult.success) {
+        console.error('Validation error:', parseResult.error.format());
+        return res.status(400).json({ 
+          error: 'Invalid biomechanics input data',
+          details: parseResult.error.format()
+        });
+      }
+      
+      const biomechanicsInput = parseResult.data;
+      
+      console.log('Generating clinical assessment from biomechanics data...');
+      const treatmentStrategy = await generateClinicalAssessment(biomechanicsInput);
+      
+      res.json({
+        success: true,
+        treatmentStrategy,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('Error generating clinical assessment:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate clinical assessment',
+        message: error.message 
+      });
+    }
+  });
+
+  // Generate quick clinical summary
+  app.post("/api/biomechanics/quick-summary", async (req: Request, res: Response) => {
+    try {
+      const { generateQuickSummary } = await import('./biomechanicsAIService');
+      
+      const parseResult = biomechanicsInputSchema.safeParse(req.body);
+      
+      if (!parseResult.success) {
+        return res.status(400).json({ 
+          error: 'Invalid biomechanics input data',
+          details: parseResult.error.format()
+        });
+      }
+      
+      const biomechanicsInput = parseResult.data;
+      
+      const summary = await generateQuickSummary(biomechanicsInput);
+      
+      res.json({
+        success: true,
+        summary,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('Error generating quick summary:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate summary',
+        message: error.message 
+      });
+    }
+  });
+
   // Health check endpoint for Cloud Run
   app.get("/health", (req: Request, res: Response) => {
     res.json({

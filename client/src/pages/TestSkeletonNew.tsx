@@ -10,8 +10,10 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PureThreeGLBViewer, { AnimationState } from "@/components/skeleton/PureThreeGLBViewer";
+import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
 import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
 import BiomechanicsPanel from "@/components/skeleton/BiomechanicsPanel";
+import { Grid2X2, Maximize } from "lucide-react";
 import { BiomechanicsVisualizationData } from "@/lib/forceVisualization";
 import { calculateFullBiomechanics } from "@/lib/biomechanicsEngine";
 
@@ -223,6 +225,8 @@ export default function TestSkeletonNew() {
     showStressColors: false,
     showMuscleGlow: false,
   });
+  
+  const [multiViewMode, setMultiViewMode] = useState(false);
 
   const [patientAnthropometrics] = useState({
     heightCm: 175,
@@ -727,96 +731,123 @@ export default function TestSkeletonNew() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Panel - Visualization */}
-        <Card className="h-[600px]">
+        <Card className={multiViewMode ? "col-span-2" : ""} style={{ height: multiViewMode ? 'auto' : '600px' }}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle>Skeleton Visualization</CardTitle>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <Switch
-                    id="force-arrows"
-                    checked={forceVisualization.showForceArrows}
-                    onCheckedChange={(checked) => 
-                      setForceVisualization(prev => ({ ...prev, showForceArrows: checked }))
-                    }
-                    data-testid="switch-force-arrows"
-                  />
-                  <Label htmlFor="force-arrows" className="text-xs flex items-center gap-1 cursor-pointer">
-                    <ArrowDown className="h-3 w-3" />
-                    Forces
-                  </Label>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Switch
-                    id="stress-colors"
-                    checked={forceVisualization.showStressColors}
-                    onCheckedChange={(checked) => 
-                      setForceVisualization(prev => ({ ...prev, showStressColors: checked }))
-                    }
-                    data-testid="switch-stress-colors"
-                  />
-                  <Label htmlFor="stress-colors" className="text-xs flex items-center gap-1 cursor-pointer">
-                    <Target className="h-3 w-3" />
-                    Stress
-                  </Label>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Switch
-                    id="muscle-glow"
-                    checked={forceVisualization.showMuscleGlow}
-                    onCheckedChange={(checked) => 
-                      setForceVisualization(prev => ({ ...prev, showMuscleGlow: checked }))
-                    }
-                    data-testid="switch-muscle-glow"
-                  />
-                  <Label htmlFor="muscle-glow" className="text-xs flex items-center gap-1 cursor-pointer">
-                    <Zap className="h-3 w-3" />
-                    Muscles
-                  </Label>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="h-[calc(100%-80px)]">
-            <GLBErrorBoundary
-              fallback={
-                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6">
-                  <div className="text-center">
-                    <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-blue-500/20 flex items-center justify-center">
-                      <ExternalLink className="h-12 w-12 text-blue-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-white mb-2">Open in New Tab for 3D</h3>
-                    <p className="text-sm text-slate-400 mb-6 max-w-xs">
-                      The 3D skeleton viewer needs to run in a full browser window.
-                    </p>
-                    <Button 
-                      size="lg"
-                      onClick={() => window.open(window.location.href, '_blank')}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
-                    >
-                      <ExternalLink className="h-5 w-5 mr-2" />
-                      Open 3D Viewer
-                    </Button>
+              <CardTitle className="flex items-center gap-2">
+                Skeleton Visualization
+                <Button
+                  variant={multiViewMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setMultiViewMode(!multiViewMode)}
+                  className={multiViewMode ? "bg-green-600 hover:bg-green-700" : ""}
+                  data-testid="toggle-multi-view"
+                >
+                  {multiViewMode ? (
+                    <><Maximize className="h-4 w-4 mr-1" /> Single View</>
+                  ) : (
+                    <><Grid2X2 className="h-4 w-4 mr-1" /> Multi-View</>
+                  )}
+                </Button>
+              </CardTitle>
+              {!multiViewMode && (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      id="force-arrows"
+                      checked={forceVisualization.showForceArrows}
+                      onCheckedChange={(checked) => 
+                        setForceVisualization(prev => ({ ...prev, showForceArrows: checked }))
+                      }
+                      data-testid="switch-force-arrows"
+                    />
+                    <Label htmlFor="force-arrows" className="text-xs flex items-center gap-1 cursor-pointer">
+                      <ArrowDown className="h-3 w-3" />
+                      Forces
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      id="stress-colors"
+                      checked={forceVisualization.showStressColors}
+                      onCheckedChange={(checked) => 
+                        setForceVisualization(prev => ({ ...prev, showStressColors: checked }))
+                      }
+                      data-testid="switch-stress-colors"
+                    />
+                    <Label htmlFor="stress-colors" className="text-xs flex items-center gap-1 cursor-pointer">
+                      <Target className="h-3 w-3" />
+                      Stress
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      id="muscle-glow"
+                      checked={forceVisualization.showMuscleGlow}
+                      onCheckedChange={(checked) => 
+                        setForceVisualization(prev => ({ ...prev, showMuscleGlow: checked }))
+                      }
+                      data-testid="switch-muscle-glow"
+                    />
+                    <Label htmlFor="muscle-glow" className="text-xs flex items-center gap-1 cursor-pointer">
+                      <Zap className="h-3 w-3" />
+                      Muscles
+                    </Label>
                   </div>
                 </div>
-              }
-            >
-              <Suspense fallback={
-                <div className="w-full h-full flex items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <span className="ml-2">Loading GLB model...</span>
-                </div>
-              }>
-                <PureThreeGLBViewer 
-                  modelPath="/models/skeleton_character.glb" 
-                  modelConfig={modelConfig} 
-                  className="w-full h-full"
-                  animationState={animationState}
-                  onAnimationFrame={handleAnimationFrame}
-                  biomechanicsData={biomechanicsData}
-                />
-              </Suspense>
-            </GLBErrorBoundary>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className={multiViewMode ? "" : "h-[calc(100%-80px)]"}>
+            {multiViewMode ? (
+              <MultiViewSkeletonLayout
+                modelPath="/models/skeleton_character.glb"
+                modelConfig={modelConfig}
+                animationState={animationState}
+                onAnimationFrame={handleAnimationFrame}
+                biomechanicsData={biomechanicsData}
+              />
+            ) : (
+              <GLBErrorBoundary
+                fallback={
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-6">
+                    <div className="text-center">
+                      <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-blue-500/20 flex items-center justify-center">
+                        <ExternalLink className="h-12 w-12 text-blue-400" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-white mb-2">Open in New Tab for 3D</h3>
+                      <p className="text-sm text-slate-400 mb-6 max-w-xs">
+                        The 3D skeleton viewer needs to run in a full browser window.
+                      </p>
+                      <Button 
+                        size="lg"
+                        onClick={() => window.open(window.location.href, '_blank')}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                      >
+                        <ExternalLink className="h-5 w-5 mr-2" />
+                        Open 3D Viewer
+                      </Button>
+                    </div>
+                  </div>
+                }
+              >
+                <Suspense fallback={
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="ml-2">Loading GLB model...</span>
+                  </div>
+                }>
+                  <PureThreeGLBViewer 
+                    modelPath="/models/skeleton_character.glb" 
+                    modelConfig={modelConfig} 
+                    className="w-full h-full"
+                    animationState={animationState}
+                    onAnimationFrame={handleAnimationFrame}
+                    biomechanicsData={biomechanicsData}
+                  />
+                </Suspense>
+              </GLBErrorBoundary>
+            )}
           </CardContent>
         </Card>
 

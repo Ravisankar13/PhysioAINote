@@ -47,6 +47,24 @@ export interface AnimationState {
   speed: number;
 }
 
+export type CameraAngle = 'front' | 'back' | 'left' | 'right' | 'top' | 'perspective' | 'custom';
+
+export interface CameraAngleConfig {
+  position: { x: number; y: number; z: number };
+  lookAt: { x: number; y: number; z: number };
+  label: string;
+}
+
+export const CAMERA_PRESETS: Record<CameraAngle, CameraAngleConfig> = {
+  front: { position: { x: 0, y: 1.5, z: 8 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Front View' },
+  back: { position: { x: 0, y: 1.5, z: -8 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Back View' },
+  left: { position: { x: -8, y: 1.5, z: 0 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Left Side' },
+  right: { position: { x: 8, y: 1.5, z: 0 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Right Side' },
+  top: { position: { x: 0, y: 10, z: 0.1 }, lookAt: { x: 0, y: 0, z: 0 }, label: 'Top View' },
+  perspective: { position: { x: 5, y: 3, z: 5 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: '3/4 View' },
+  custom: { position: { x: 0, y: 1.5, z: 8 }, lookAt: { x: 0, y: 2, z: 0 }, label: 'Custom' },
+};
+
 interface PureThreeGLBViewerProps {
   modelPath?: string;
   modelConfig?: ModelConfig;
@@ -55,6 +73,9 @@ interface PureThreeGLBViewerProps {
   onAnimationFrame?: (jointValues: { [key: string]: { [prop: string]: number } }) => void;
   jointLimits?: JointLimits;
   biomechanicsData?: BiomechanicsVisualizationData;
+  cameraAngle?: CameraAngle;
+  disableControls?: boolean;
+  showLabel?: boolean;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -248,7 +269,10 @@ export default function PureThreeGLBViewer({
   animationState,
   onAnimationFrame,
   jointLimits,
-  biomechanicsData
+  biomechanicsData,
+  cameraAngle = 'custom',
+  disableControls = false,
+  showLabel = false
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -309,9 +333,10 @@ export default function PureThreeGLBViewer({
         scene.background = new THREE.Color(0x1a1a2e);
 
         const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-        camera.position.set(0, 1.5, 8);
-        camera.lookAt(0, 2, 0);
-        console.log('THREE.js camera initialized');
+        const preset = CAMERA_PRESETS[cameraAngle];
+        camera.position.set(preset.position.x, preset.position.y, preset.position.z);
+        camera.lookAt(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+        console.log('THREE.js camera initialized with angle:', cameraAngle);
 
         const renderer = new THREE.WebGLRenderer({ 
           antialias: true,
@@ -349,7 +374,14 @@ export default function PureThreeGLBViewer({
         controls.dampingFactor = 0.05;
         controls.minDistance = 1;
         controls.maxDistance = 20;
-        controls.target.set(0, 1, 0);
+        controls.target.set(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+        controls.enabled = !disableControls;
+        if (disableControls) {
+          controls.enableRotate = false;
+          controls.enableZoom = false;
+          controls.enablePan = false;
+          renderer.domElement.style.pointerEvents = 'none';
+        }
         controls.update();
 
         const gridHelper = new THREE.GridHelper(10, 10, 0x333366, 0x222244);
@@ -775,6 +807,37 @@ export default function PureThreeGLBViewer({
       }
     };
   }, [modelPath]);
+
+  // Update camera and controls when cameraAngle or disableControls props change
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    
+    const { camera, controls, renderer } = sceneRef.current;
+    const preset = CAMERA_PRESETS[cameraAngle];
+    
+    // Update camera position and look-at target
+    camera.position.set(preset.position.x, preset.position.y, preset.position.z);
+    camera.lookAt(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+    
+    // Update controls target and enabled state
+    controls.target.set(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+    controls.enabled = !disableControls;
+    
+    // Fully lock the view when controls are disabled - block all pointer events on canvas
+    if (disableControls) {
+      controls.enableRotate = false;
+      controls.enableZoom = false;
+      controls.enablePan = false;
+      renderer.domElement.style.pointerEvents = 'none';
+    } else {
+      controls.enableRotate = true;
+      controls.enableZoom = true;
+      controls.enablePan = true;
+      renderer.domElement.style.pointerEvents = 'auto';
+    }
+    
+    controls.update();
+  }, [cameraAngle, disableControls]);
 
   useEffect(() => {
     if (status !== 'ready' || !modelConfig) return;
@@ -1251,6 +1314,16 @@ export default function PureThreeGLBViewer({
               />
             </div>
           )}
+        </div>
+      )}
+      
+      {/* View label */}
+      {showLabel && (
+        <div 
+          className="absolute top-2 left-2 z-10 px-2 py-1 bg-slate-800/90 rounded text-xs font-medium text-slate-300"
+          data-testid={`view-label-${cameraAngle}`}
+        >
+          {CAMERA_PRESETS[cameraAngle].label}
         </div>
       )}
       

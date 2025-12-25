@@ -48,6 +48,101 @@ export function interpolateKeyframes(keyframes: JointKeyframe[], time: number): 
   return keyframes[keyframes.length - 1].value;
 }
 
+export interface JointLimits {
+  [joint: string]: {
+    [property: string]: { min: number; max: number };
+  };
+}
+
+export const DEFAULT_JOINT_LIMITS: JointLimits = {
+  leftHip: {
+    flexion: { min: -30, max: 140 },
+    extension: { min: 0, max: 30 },
+    abduction: { min: -30, max: 45 },
+    internalRotation: { min: -45, max: 45 },
+  },
+  rightHip: {
+    flexion: { min: -30, max: 140 },
+    extension: { min: 0, max: 30 },
+    abduction: { min: -30, max: 45 },
+    internalRotation: { min: -45, max: 45 },
+  },
+  leftKnee: {
+    flexion: { min: 0, max: 140 },
+    varus: { min: -20, max: 20 },
+  },
+  rightKnee: {
+    flexion: { min: 0, max: 140 },
+    varus: { min: -20, max: 20 },
+  },
+  leftAnkle: {
+    dorsiflexion: { min: 0, max: 30 },
+    plantarflexion: { min: 0, max: 50 },
+    inversion: { min: 0, max: 35 },
+    eversion: { min: 0, max: 25 },
+  },
+  rightAnkle: {
+    dorsiflexion: { min: 0, max: 30 },
+    plantarflexion: { min: 0, max: 50 },
+    inversion: { min: 0, max: 35 },
+    eversion: { min: 0, max: 25 },
+  },
+  leftShoulder: {
+    flexion: { min: -60, max: 180 },
+    abduction: { min: 0, max: 180 },
+    internalRotation: { min: -90, max: 90 },
+    externalRotation: { min: 0, max: 90 },
+  },
+  rightShoulder: {
+    flexion: { min: -60, max: 180 },
+    abduction: { min: 0, max: 180 },
+    internalRotation: { min: -90, max: 90 },
+    externalRotation: { min: 0, max: 90 },
+  },
+  leftElbow: {
+    flexion: { min: 0, max: 150 },
+    pronation: { min: -90, max: 90 },
+  },
+  rightElbow: {
+    flexion: { min: 0, max: 150 },
+    pronation: { min: -90, max: 90 },
+  },
+  pelvis: {
+    tilt: { min: -30, max: 30 },
+    obliquity: { min: -20, max: 20 },
+    rotation: { min: -45, max: 45 },
+  },
+  neck: {
+    flexion: { min: 0, max: 60 },
+    extension: { min: 0, max: 75 },
+    rotation: { min: -80, max: 80 },
+    lateralFlexion: { min: -45, max: 45 },
+  },
+  spine: {
+    lumbarLordosis: { min: -70, max: 20 },
+    thoracicKyphosis: { min: -20, max: 50 },
+    thoracicRotation: { min: -45, max: 45 },
+    lumbarRotation: { min: -30, max: 30 },
+  },
+};
+
+export function applyJointConstraints(
+  value: number, 
+  joint: string, 
+  property: string, 
+  customLimits?: JointLimits
+): number {
+  const limits = customLimits || DEFAULT_JOINT_LIMITS;
+  const jointLimits = limits[joint];
+  
+  if (!jointLimits) return value;
+  
+  const propLimits = jointLimits[property];
+  if (!propLimits) return value;
+  
+  return Math.max(propLimits.min, Math.min(propLimits.max, value));
+}
+
 export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'squat',

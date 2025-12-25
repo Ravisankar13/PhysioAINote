@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { AlertCircle, Loader2, RotateCcw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getMovementById, interpolateKeyframes } from '@/lib/movementSequences';
+import { getMovementById, interpolateKeyframes, applyJointConstraints, JointLimits } from '@/lib/movementSequences';
 
 interface JointConfig {
   flexion?: number;
@@ -51,6 +51,7 @@ interface PureThreeGLBViewerProps {
   className?: string;
   animationState?: AnimationState;
   onAnimationFrame?: (jointValues: { [key: string]: { [prop: string]: number } }) => void;
+  jointLimits?: JointLimits;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number }[] } = {
@@ -241,7 +242,8 @@ export default function PureThreeGLBViewer({
   modelConfig,
   className = '',
   animationState,
-  onAnimationFrame
+  onAnimationFrame,
+  jointLimits
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -885,7 +887,9 @@ export default function PureThreeGLBViewer({
       const jointValues: { [key: string]: { [prop: string]: number } } = {};
       
       movement.joints.forEach(timeline => {
-        const value = interpolateKeyframes(timeline.keyframes, normalizedTime);
+        let value = interpolateKeyframes(timeline.keyframes, normalizedTime);
+        
+        value = applyJointConstraints(value, timeline.joint, timeline.property, jointLimits);
         
         if (!jointValues[timeline.joint]) {
           jointValues[timeline.joint] = {};
@@ -909,7 +913,7 @@ export default function PureThreeGLBViewer({
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame]);
+  }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame, jointLimits]);
 
   const handleRetry = () => {
     setStatus('checking');

@@ -217,8 +217,436 @@ export const LUMBAR_SPINE_PROFILE: RegionClinicalProfile = {
   },
 };
 
+export const CERVICAL_SPINE_PROFILE: RegionClinicalProfile = {
+  regionId: 'cervical_spine',
+  displayName: 'Cervical Spine (C1-C7)',
+  anatomyStructures: [
+    { id: 'c1_atlas', name: 'C1 Atlas', type: 'bone', description: 'Ring-shaped vertebra supporting skull', clinicalRelevance: 'No vertebral body or spinous process, 50% of cervical rotation' },
+    { id: 'c2_axis', name: 'C2 Axis', type: 'bone', description: 'Has odontoid process (dens)', clinicalRelevance: 'Pivot point for head rotation, dens fracture risk' },
+    { id: 'c3_vertebra', name: 'C3 Vertebral Body', type: 'bone', description: 'Third cervical vertebra', clinicalRelevance: 'Phrenic nerve origin (C3-C5)' },
+    { id: 'c4_vertebra', name: 'C4 Vertebral Body', type: 'bone', description: 'Fourth cervical vertebra', clinicalRelevance: 'Phrenic nerve contribution' },
+    { id: 'c5_vertebra', name: 'C5 Vertebral Body', type: 'bone', description: 'Fifth cervical vertebra', clinicalRelevance: 'Most common level for disc herniation' },
+    { id: 'c6_vertebra', name: 'C6 Vertebral Body', type: 'bone', description: 'Sixth cervical vertebra', clinicalRelevance: 'Carotid tubercle landmark' },
+    { id: 'c7_vertebra', name: 'C7 Vertebral Body', type: 'bone', description: 'Vertebra prominens', clinicalRelevance: 'Long spinous process, palpable landmark' },
+    { id: 'c2_c3_disc', name: 'C2-C3 Disc', type: 'disc', description: 'First true cervical disc', clinicalRelevance: 'Rare site for herniation' },
+    { id: 'c3_c4_disc', name: 'C3-C4 Disc', type: 'disc', description: 'Intervertebral disc C3-C4', clinicalRelevance: 'Less common herniation site' },
+    { id: 'c4_c5_disc', name: 'C4-C5 Disc', type: 'disc', description: 'Intervertebral disc C4-C5', clinicalRelevance: 'Common degenerative level' },
+    { id: 'c5_c6_disc', name: 'C5-C6 Disc', type: 'disc', description: 'Intervertebral disc C5-C6', clinicalRelevance: 'Most common cervical herniation (60%)' },
+    { id: 'c6_c7_disc', name: 'C6-C7 Disc', type: 'disc', description: 'Intervertebral disc C6-C7', clinicalRelevance: 'Second most common herniation (25%)' },
+    { id: 'atlantoaxial_joint', name: 'Atlantoaxial Joint (C1-C2)', type: 'joint', description: 'Pivot joint for rotation', clinicalRelevance: 'Rheumatoid arthritis instability risk' },
+    { id: 'facet_c5_c6_l', name: 'C5-C6 Facet Joint (Left)', type: 'joint', description: 'Zygapophyseal joint', clinicalRelevance: 'Common source of neck pain' },
+    { id: 'facet_c5_c6_r', name: 'C5-C6 Facet Joint (Right)', type: 'joint', description: 'Zygapophyseal joint', clinicalRelevance: 'Common source of neck pain' },
+    { id: 'uncovertebral_c5_c6', name: 'Uncovertebral Joint (C5-C6)', type: 'joint', description: 'Joints of Luschka', clinicalRelevance: 'Osteophytes cause foraminal stenosis' },
+    { id: 'alar_ligament', name: 'Alar Ligaments', type: 'ligament', description: 'Connect dens to occipital condyles', clinicalRelevance: 'Limits rotation, whiplash injury' },
+    { id: 'transverse_ligament', name: 'Transverse Ligament of Atlas', type: 'ligament', description: 'Holds dens against C1', clinicalRelevance: 'Rupture causes atlantoaxial instability' },
+    { id: 'nuchal_ligament', name: 'Nuchal Ligament', type: 'ligament', description: 'Midline ligament to occiput', clinicalRelevance: 'Limits flexion, support for extensors' },
+    { id: 'vertebral_artery_l', name: 'Vertebral Artery (Left)', type: 'other', description: 'Passes through transverse foramina', clinicalRelevance: 'VBI risk with rotation/extension' },
+    { id: 'vertebral_artery_r', name: 'Vertebral Artery (Right)', type: 'other', description: 'Passes through transverse foramina', clinicalRelevance: 'VBI risk with rotation/extension' },
+    { id: 'c5_nerve_root', name: 'C5 Nerve Root', type: 'nerve', description: 'Exits above C5', clinicalRelevance: 'Deltoid weakness, biceps reflex' },
+    { id: 'c6_nerve_root', name: 'C6 Nerve Root', type: 'nerve', description: 'Exits above C6', clinicalRelevance: 'Brachioradialis reflex, thumb numbness' },
+    { id: 'c7_nerve_root', name: 'C7 Nerve Root', type: 'nerve', description: 'Exits above C7', clinicalRelevance: 'Triceps reflex, middle finger numbness' },
+    { id: 'c8_nerve_root', name: 'C8 Nerve Root', type: 'nerve', description: 'Exits below C7', clinicalRelevance: 'Grip weakness, small finger numbness' },
+    { id: 'spinal_cord_cervical', name: 'Cervical Spinal Cord', type: 'nerve', description: 'Cervical enlargement C4-T1', clinicalRelevance: 'Myelopathy signs if compressed' },
+    { id: 'deep_neck_flexors', name: 'Deep Cervical Flexors', type: 'muscle', description: 'Longus colli, longus capitis', clinicalRelevance: 'Weakness in chronic neck pain' },
+    { id: 'suboccipitals', name: 'Suboccipital Muscles', type: 'muscle', description: 'Rectus capitis, obliquus capitis', clinicalRelevance: 'Cervicogenic headache source' },
+    { id: 'scm', name: 'Sternocleidomastoid', type: 'muscle', description: 'Rotates and flexes neck', clinicalRelevance: 'Trigger points, torticollis' },
+    { id: 'upper_trapezius', name: 'Upper Trapezius', type: 'muscle', description: 'Elevates scapula, extends neck', clinicalRelevance: 'Common tension/trigger point site' },
+  ],
+  sliderInfluences: {
+    cervicalFlexion: [
+      { slider: 'c5_c6_disc', coefficient: 1.4, direction: 'increase' },
+      { slider: 'c6_c7_disc', coefficient: 1.2, direction: 'increase' },
+      { slider: 'nuchal_ligament', coefficient: 1.5, direction: 'increase' },
+    ],
+    cervicalExtension: [
+      { slider: 'facet_c5_c6', coefficient: 2.0, direction: 'increase' },
+      { slider: 'vertebral_artery', coefficient: 1.3, direction: 'increase' },
+      { slider: 'spinal_cord_cervical', coefficient: 1.5, direction: 'increase' },
+    ],
+    cervicalRotation: [
+      { slider: 'atlantoaxial_joint', coefficient: 1.8, direction: 'increase' },
+      { slider: 'vertebral_artery', coefficient: 1.5, direction: 'increase' },
+      { slider: 'alar_ligament', coefficient: 1.2, direction: 'increase' },
+    ],
+  },
+  conditions: [
+    {
+      id: 'cervical_radiculopathy',
+      name: 'Cervical Radiculopathy',
+      description: 'Nerve root compression causing arm symptoms',
+      icd10Code: 'M54.12',
+      riskFactors: ['Disc herniation', 'Foraminal stenosis', 'Osteophytes', 'Forward head posture'],
+      symptoms: ['Arm pain in dermatomal pattern', 'Numbness/tingling', 'Weakness', 'Reflex changes'],
+      mechanismOfInjury: 'Disc herniation or osteophyte compression of nerve root',
+      thresholds: [
+        { metric: 'discCompression_C5C6', safeMax: 800, warningThreshold: 1200, criticalThreshold: 1800 },
+        { metric: 'foraminalNarrowing', safeMax: 15, warningThreshold: 30, criticalThreshold: 50 },
+      ],
+    },
+    {
+      id: 'cervical_disc_herniation',
+      name: 'Cervical Disc Herniation',
+      description: 'Nucleus pulposus extrusion in cervical spine',
+      icd10Code: 'M50.20',
+      riskFactors: ['Flexion loading', 'Trauma', 'Degenerative changes', 'Poor posture'],
+      symptoms: ['Neck pain', 'Arm pain', 'Numbness', 'Weakness in specific myotome'],
+      mechanismOfInjury: 'Flexion or flexion-rotation causing annular tear',
+      thresholds: [
+        { metric: 'discCompression_C5C6', safeMax: 1000, warningThreshold: 1500, criticalThreshold: 2000 },
+        { metric: 'cervicalFlexion', safeMax: 35, warningThreshold: 50, criticalThreshold: 65 },
+      ],
+    },
+    {
+      id: 'whiplash',
+      name: 'Whiplash-Associated Disorder',
+      description: 'Acceleration-deceleration injury to neck',
+      icd10Code: 'S13.4',
+      riskFactors: ['Rear-end collision', 'Sports trauma', 'Falls', 'Poor headrest position'],
+      symptoms: ['Neck pain', 'Headache', 'Dizziness', 'Cognitive symptoms', 'Arm symptoms'],
+      mechanismOfInjury: 'Rapid flexion-extension causing soft tissue and ligament injury',
+      thresholds: [
+        { metric: 'ligamentStress', safeMax: 300, warningThreshold: 500, criticalThreshold: 800 },
+        { metric: 'velocityChange', safeMax: 10, warningThreshold: 20, criticalThreshold: 35 },
+      ],
+    },
+    {
+      id: 'cervical_spondylosis',
+      name: 'Cervical Spondylosis',
+      description: 'Degenerative changes in cervical spine',
+      icd10Code: 'M47.812',
+      riskFactors: ['Age', 'Occupation', 'Previous injury', 'Genetics'],
+      symptoms: ['Neck stiffness', 'Pain with movement', 'Crepitus', 'Reduced ROM'],
+      mechanismOfInjury: 'Cumulative wear and tear on discs and joints',
+      thresholds: [
+        { metric: 'discDegeneration', safeMax: 20, warningThreshold: 40, criticalThreshold: 70 },
+        { metric: 'facetLoading', safeMax: 400, warningThreshold: 700, criticalThreshold: 1000 },
+      ],
+    },
+    {
+      id: 'cervical_facet_syndrome',
+      name: 'Cervical Facet Syndrome',
+      description: 'Zygapophyseal joint dysfunction',
+      icd10Code: 'M47.811',
+      riskFactors: ['Extension postures', 'Whiplash history', 'Degenerative changes', 'Poor posture'],
+      symptoms: ['Unilateral neck pain', 'Pain with extension/rotation', 'Referred pain to shoulder/scapula'],
+      mechanismOfInjury: 'Compression of facet joints during extension and rotation',
+      thresholds: [
+        { metric: 'facetLoading_C5C6', safeMax: 400, warningThreshold: 700, criticalThreshold: 1000 },
+        { metric: 'cervicalExtension', safeMax: 40, warningThreshold: 55, criticalThreshold: 70 },
+      ],
+    },
+    {
+      id: 'cervicogenic_headache',
+      name: 'Cervicogenic Headache',
+      description: 'Headache originating from cervical structures',
+      icd10Code: 'G44.841',
+      riskFactors: ['Upper cervical dysfunction', 'Suboccipital tension', 'Forward head posture', 'Trauma'],
+      symptoms: ['Unilateral headache', 'Neck pain', 'Reduced cervical ROM', 'Triggered by neck movement'],
+      mechanismOfInjury: 'Referred pain from C1-C3 structures to head',
+      thresholds: [
+        { metric: 'upperCervicalStress', safeMax: 300, warningThreshold: 500, criticalThreshold: 800 },
+        { metric: 'suboccipitalTension', safeMax: 30, warningThreshold: 50, criticalThreshold: 75 },
+      ],
+    },
+  ],
+  physiologicalParameters: {
+    normalROM: { min: -70, max: 80 },
+    loadTolerance: { safe: 1200, warning: 1800, critical: 2500 },
+    muscleGroups: ['Deep Cervical Flexors', 'Suboccipitals', 'Scalenes', 'SCM', 'Upper Trapezius', 'Levator Scapulae'],
+  },
+};
+
+export const THORACIC_SPINE_PROFILE: RegionClinicalProfile = {
+  regionId: 'thoracic_spine',
+  displayName: 'Thoracic Spine & Ribs (T1-T12)',
+  anatomyStructures: [
+    { id: 't1_vertebra', name: 'T1 Vertebral Body', type: 'bone', description: 'First thoracic vertebra', clinicalRelevance: 'Cervicothoracic junction, rib 1 articulation' },
+    { id: 't2_vertebra', name: 'T2 Vertebral Body', type: 'bone', description: 'Second thoracic vertebra', clinicalRelevance: 'Upper thoracic, smaller rib articulation' },
+    { id: 't3_vertebra', name: 'T3 Vertebral Body', type: 'bone', description: 'Third thoracic vertebra', clinicalRelevance: 'Upper thoracic kyphosis' },
+    { id: 't4_vertebra', name: 'T4 Vertebral Body', type: 'bone', description: 'Fourth thoracic vertebra', clinicalRelevance: 'Sternal angle level' },
+    { id: 't5_vertebra', name: 'T5 Vertebral Body', type: 'bone', description: 'Fifth thoracic vertebra', clinicalRelevance: 'Mid-thoracic region' },
+    { id: 't6_vertebra', name: 'T6 Vertebral Body', type: 'bone', description: 'Sixth thoracic vertebra', clinicalRelevance: 'Apex of thoracic kyphosis' },
+    { id: 't7_vertebra', name: 'T7 Vertebral Body', type: 'bone', description: 'Seventh thoracic vertebra', clinicalRelevance: 'Mid-thoracic, xiphoid level' },
+    { id: 't8_vertebra', name: 'T8 Vertebral Body', type: 'bone', description: 'Eighth thoracic vertebra', clinicalRelevance: 'Lower mid-thoracic' },
+    { id: 't9_vertebra', name: 'T9 Vertebral Body', type: 'bone', description: 'Ninth thoracic vertebra', clinicalRelevance: 'Transitional zone begins' },
+    { id: 't10_vertebra', name: 'T10 Vertebral Body', type: 'bone', description: 'Tenth thoracic vertebra', clinicalRelevance: 'Single costal facet (rib 10)' },
+    { id: 't11_vertebra', name: 'T11 Vertebral Body', type: 'bone', description: 'Eleventh thoracic vertebra', clinicalRelevance: 'Floating rib articulation' },
+    { id: 't12_vertebra', name: 'T12 Vertebral Body', type: 'bone', description: 'Twelfth thoracic vertebra', clinicalRelevance: 'Thoracolumbar junction, lumbar-like facets' },
+    { id: 't5_t6_disc', name: 'T5-T6 Disc', type: 'disc', description: 'Intervertebral disc T5-T6', clinicalRelevance: 'Rare herniation but severe if occurs' },
+    { id: 't6_t7_disc', name: 'T6-T7 Disc', type: 'disc', description: 'Intervertebral disc T6-T7', clinicalRelevance: 'Mid-thoracic disc' },
+    { id: 't11_t12_disc', name: 'T11-T12 Disc', type: 'disc', description: 'Intervertebral disc T11-T12', clinicalRelevance: 'More mobile, higher herniation risk' },
+    { id: 't12_l1_disc', name: 'T12-L1 Disc', type: 'disc', description: 'Thoracolumbar junction disc', clinicalRelevance: 'Transitional disc, herniation risk' },
+    { id: 'costovertebral_r5_l', name: 'Rib 5 Costovertebral Joint (Left)', type: 'joint', description: 'Rib head articulation with vertebra', clinicalRelevance: 'Dysfunction causes posterior rib pain' },
+    { id: 'costovertebral_r5_r', name: 'Rib 5 Costovertebral Joint (Right)', type: 'joint', description: 'Rib head articulation with vertebra', clinicalRelevance: 'Dysfunction causes posterior rib pain' },
+    { id: 'costotransverse_r5_l', name: 'Rib 5 Costotransverse Joint (Left)', type: 'joint', description: 'Rib tubercle articulation', clinicalRelevance: 'Limits rib mobility' },
+    { id: 'costotransverse_r5_r', name: 'Rib 5 Costotransverse Joint (Right)', type: 'joint', description: 'Rib tubercle articulation', clinicalRelevance: 'Limits rib mobility' },
+    { id: 'rib_1', name: 'First Rib', type: 'bone', description: 'Short, flat rib', clinicalRelevance: 'Thoracic outlet syndrome involvement' },
+    { id: 'rib_5_l', name: 'Rib 5 (Left)', type: 'bone', description: 'True rib, sternal attachment', clinicalRelevance: 'Typical rib structure' },
+    { id: 'rib_5_r', name: 'Rib 5 (Right)', type: 'bone', description: 'True rib, sternal attachment', clinicalRelevance: 'Typical rib structure' },
+    { id: 'rib_11_l', name: 'Rib 11 (Left)', type: 'bone', description: 'Floating rib', clinicalRelevance: 'No sternal attachment, more mobile' },
+    { id: 'rib_11_r', name: 'Rib 11 (Right)', type: 'bone', description: 'Floating rib', clinicalRelevance: 'No sternal attachment, more mobile' },
+    { id: 'rib_12_l', name: 'Rib 12 (Left)', type: 'bone', description: 'Floating rib', clinicalRelevance: 'Shortest rib, no sternal attachment' },
+    { id: 'rib_12_r', name: 'Rib 12 (Right)', type: 'bone', description: 'Floating rib', clinicalRelevance: 'Shortest rib, no sternal attachment' },
+    { id: 'sternum', name: 'Sternum', type: 'bone', description: 'Manubrium, body, xiphoid', clinicalRelevance: 'Costochondral junction site' },
+    { id: 'costochondral_5_l', name: 'Costochondral Junction 5 (Left)', type: 'joint', description: 'Rib cartilage junction', clinicalRelevance: 'Costochondritis site' },
+    { id: 'costochondral_5_r', name: 'Costochondral Junction 5 (Right)', type: 'joint', description: 'Rib cartilage junction', clinicalRelevance: 'Costochondritis site' },
+    { id: 'intercostal_nerve_t5_l', name: 'T5 Intercostal Nerve (Left)', type: 'nerve', description: 'Runs along rib 5 inferior border', clinicalRelevance: 'Intercostal neuralgia' },
+    { id: 'intercostal_nerve_t5_r', name: 'T5 Intercostal Nerve (Right)', type: 'nerve', description: 'Runs along rib 5 inferior border', clinicalRelevance: 'Intercostal neuralgia' },
+    { id: 'thoracic_spinal_cord', name: 'Thoracic Spinal Cord', type: 'nerve', description: 'T1-T12 cord segments', clinicalRelevance: 'Myelopathy rare but serious' },
+    { id: 'intercostal_muscles', name: 'Intercostal Muscles', type: 'muscle', description: 'External and internal intercostals', clinicalRelevance: 'Breathing mechanics, strain injury' },
+    { id: 'erector_spinae_thoracic', name: 'Thoracic Erector Spinae', type: 'muscle', description: 'Iliocostalis, longissimus thoracis', clinicalRelevance: 'Postural support, fatigue pain' },
+    { id: 'rhomboids', name: 'Rhomboid Muscles', type: 'muscle', description: 'Major and minor, scapular retractors', clinicalRelevance: 'Scapular dysfunction, trigger points' },
+  ],
+  sliderInfluences: {
+    thoracicFlexion: [
+      { slider: 't6_t7_disc', coefficient: 1.2, direction: 'increase' },
+      { slider: 't11_t12_disc', coefficient: 1.4, direction: 'increase' },
+      { slider: 'costovertebral', coefficient: 0.8, direction: 'increase' },
+    ],
+    thoracicExtension: [
+      { slider: 'facet_thoracic', coefficient: 1.5, direction: 'increase' },
+      { slider: 'costotransverse', coefficient: 1.3, direction: 'increase' },
+    ],
+    thoracicRotation: [
+      { slider: 'costovertebral', coefficient: 1.5, direction: 'increase' },
+      { slider: 'costotransverse', coefficient: 1.4, direction: 'increase' },
+      { slider: 't6_t7_disc', coefficient: 0.8, direction: 'increase' },
+    ],
+  },
+  conditions: [
+    {
+      id: 'scheuermann_disease',
+      name: "Scheuermann's Disease",
+      description: 'Juvenile kyphosis with vertebral wedging',
+      icd10Code: 'M42.00',
+      riskFactors: ['Adolescent growth spurt', 'Genetics', 'Mechanical loading', 'Poor posture'],
+      symptoms: ['Thoracic kyphosis', 'Back pain', 'Fatigue', 'Cosmetic concerns'],
+      mechanismOfInjury: 'Vertebral endplate irregularities during growth',
+      thresholds: [
+        { metric: 'kyphosisAngle', safeMax: 45, warningThreshold: 55, criticalThreshold: 70 },
+        { metric: 'vertebralWedging', safeMax: 5, warningThreshold: 8, criticalThreshold: 12 },
+      ],
+    },
+    {
+      id: 'thoracic_outlet_syndrome',
+      name: 'Thoracic Outlet Syndrome',
+      description: 'Compression of neurovascular structures at thoracic outlet',
+      icd10Code: 'G54.0',
+      riskFactors: ['Cervical rib', 'Poor posture', 'Trauma', 'Repetitive overhead activity'],
+      symptoms: ['Arm pain/numbness', 'Weakness', 'Vascular symptoms', 'Cold hand'],
+      mechanismOfInjury: 'Compression between clavicle, first rib, and scalenes',
+      thresholds: [
+        { metric: 'firstRibElevation', safeMax: 10, warningThreshold: 20, criticalThreshold: 35 },
+        { metric: 'scaleneTension', safeMax: 30, warningThreshold: 50, criticalThreshold: 75 },
+      ],
+    },
+    {
+      id: 'rib_dysfunction',
+      name: 'Rib Dysfunction/Subluxation',
+      description: 'Costovertebral or costotransverse joint dysfunction',
+      icd10Code: 'M99.08',
+      riskFactors: ['Rotation activities', 'Coughing/sneezing', 'Trauma', 'Poor posture'],
+      symptoms: ['Localized back pain', 'Pain with breathing', 'Referred chest pain', 'Muscle spasm'],
+      mechanismOfInjury: 'Joint strain from rotation or forceful inspiration',
+      thresholds: [
+        { metric: 'costovertebralStress', safeMax: 200, warningThreshold: 400, criticalThreshold: 600 },
+        { metric: 'thoracicRotation', safeMax: 25, warningThreshold: 40, criticalThreshold: 55 },
+      ],
+    },
+    {
+      id: 'thoracic_disc_herniation',
+      name: 'Thoracic Disc Herniation',
+      description: 'Disc protrusion in thoracic spine',
+      icd10Code: 'M51.14',
+      riskFactors: ['Trauma', 'Degenerative changes', 'Heavy lifting', 'Previous disc disease'],
+      symptoms: ['Band-like pain', 'Myelopathy signs', 'Sensory changes', 'Lower limb weakness'],
+      mechanismOfInjury: 'Usually degenerative, occasionally traumatic',
+      thresholds: [
+        { metric: 'discCompression_thoracic', safeMax: 600, warningThreshold: 1000, criticalThreshold: 1500 },
+        { metric: 'discShear_thoracic', safeMax: 150, warningThreshold: 300, criticalThreshold: 500 },
+      ],
+    },
+    {
+      id: 'intercostal_neuralgia',
+      name: 'Intercostal Neuralgia',
+      description: 'Pain along intercostal nerve distribution',
+      icd10Code: 'G58.0',
+      riskFactors: ['Rib dysfunction', 'Herpes zoster', 'Surgery', 'Trauma'],
+      symptoms: ['Sharp/burning rib pain', 'Worse with movement/breathing', 'Dermatomal distribution'],
+      mechanismOfInjury: 'Nerve irritation from mechanical or inflammatory cause',
+      thresholds: [
+        { metric: 'intercostalCompression', safeMax: 100, warningThreshold: 200, criticalThreshold: 350 },
+        { metric: 'ribMotionRestriction', safeMax: 20, warningThreshold: 40, criticalThreshold: 60 },
+      ],
+    },
+    {
+      id: 'costochondritis',
+      name: 'Costochondritis',
+      description: 'Inflammation of costochondral junctions',
+      icd10Code: 'M94.0',
+      riskFactors: ['Repetitive strain', 'Coughing', 'Trauma', 'Infection'],
+      symptoms: ['Anterior chest pain', 'Tenderness at junction', 'Pain with movement', 'Sharp/aching'],
+      mechanismOfInjury: 'Inflammation from repetitive stress or strain',
+      thresholds: [
+        { metric: 'costochondralStress', safeMax: 150, warningThreshold: 300, criticalThreshold: 500 },
+        { metric: 'ribExpansionForce', safeMax: 100, warningThreshold: 200, criticalThreshold: 350 },
+      ],
+    },
+  ],
+  physiologicalParameters: {
+    normalROM: { min: -25, max: 35 },
+    loadTolerance: { safe: 2000, warning: 3000, critical: 4500 },
+    muscleGroups: ['Erector Spinae', 'Intercostals', 'Rhomboids', 'Middle/Lower Trapezius', 'Serratus Anterior'],
+  },
+};
+
+export const PELVIS_PROFILE: RegionClinicalProfile = {
+  regionId: 'pelvis',
+  displayName: 'Pelvis & Sacrum',
+  anatomyStructures: [
+    { id: 'sacrum', name: 'Sacrum', type: 'bone', description: 'Fused S1-S5 vertebrae', clinicalRelevance: 'Base of spine, SI joint articulation' },
+    { id: 'coccyx', name: 'Coccyx', type: 'bone', description: 'Tailbone, 3-5 fused segments', clinicalRelevance: 'Coccydynia if traumatized' },
+    { id: 'ilium_l', name: 'Left Ilium', type: 'bone', description: 'Upper pelvic bone', clinicalRelevance: 'ASIS/PSIS landmarks, iliac crest' },
+    { id: 'ilium_r', name: 'Right Ilium', type: 'bone', description: 'Upper pelvic bone', clinicalRelevance: 'ASIS/PSIS landmarks, iliac crest' },
+    { id: 'ischium_l', name: 'Left Ischium', type: 'bone', description: 'Lower posterior pelvic bone', clinicalRelevance: 'Ischial tuberosity (sit bone)' },
+    { id: 'ischium_r', name: 'Right Ischium', type: 'bone', description: 'Lower posterior pelvic bone', clinicalRelevance: 'Ischial tuberosity (sit bone)' },
+    { id: 'pubis_l', name: 'Left Pubis', type: 'bone', description: 'Anterior pelvic bone', clinicalRelevance: 'Pubic symphysis articulation' },
+    { id: 'pubis_r', name: 'Right Pubis', type: 'bone', description: 'Anterior pelvic bone', clinicalRelevance: 'Pubic symphysis articulation' },
+    { id: 'acetabulum_l', name: 'Left Acetabulum', type: 'bone', description: 'Hip socket', clinicalRelevance: 'Hip joint articulation' },
+    { id: 'acetabulum_r', name: 'Right Acetabulum', type: 'bone', description: 'Hip socket', clinicalRelevance: 'Hip joint articulation' },
+    { id: 'si_joint_l', name: 'Left SI Joint', type: 'joint', description: 'Sacroiliac joint', clinicalRelevance: 'Common source of low back/buttock pain' },
+    { id: 'si_joint_r', name: 'Right SI Joint', type: 'joint', description: 'Sacroiliac joint', clinicalRelevance: 'Common source of low back/buttock pain' },
+    { id: 'pubic_symphysis', name: 'Pubic Symphysis', type: 'joint', description: 'Anterior pelvic joint', clinicalRelevance: 'Osteitis pubis, pregnancy changes' },
+    { id: 'lumbosacral_joint', name: 'Lumbosacral Joint (L5-S1)', type: 'joint', description: 'Transitional segment', clinicalRelevance: 'High stress region, disc herniation' },
+    { id: 'sacrotuberous_lig_l', name: 'Left Sacrotuberous Ligament', type: 'ligament', description: 'Sacrum to ischial tuberosity', clinicalRelevance: 'SI joint stability, hamstring attachment' },
+    { id: 'sacrotuberous_lig_r', name: 'Right Sacrotuberous Ligament', type: 'ligament', description: 'Sacrum to ischial tuberosity', clinicalRelevance: 'SI joint stability, hamstring attachment' },
+    { id: 'sacrospinous_lig_l', name: 'Left Sacrospinous Ligament', type: 'ligament', description: 'Sacrum to ischial spine', clinicalRelevance: 'Divides greater/lesser sciatic foramen' },
+    { id: 'sacrospinous_lig_r', name: 'Right Sacrospinous Ligament', type: 'ligament', description: 'Sacrum to ischial spine', clinicalRelevance: 'Divides greater/lesser sciatic foramen' },
+    { id: 'iliolumbar_lig_l', name: 'Left Iliolumbar Ligament', type: 'ligament', description: 'L4-L5 to iliac crest', clinicalRelevance: 'Limits L5 movement, often strained' },
+    { id: 'iliolumbar_lig_r', name: 'Right Iliolumbar Ligament', type: 'ligament', description: 'L4-L5 to iliac crest', clinicalRelevance: 'Limits L5 movement, often strained' },
+    { id: 'anterior_si_lig', name: 'Anterior SI Ligaments', type: 'ligament', description: 'Thin anterior capsule', clinicalRelevance: 'Weaker than posterior, less support' },
+    { id: 'posterior_si_lig', name: 'Posterior SI Ligaments', type: 'ligament', description: 'Strong posterior support', clinicalRelevance: 'Primary SI stabilizers' },
+    { id: 'sciatic_nerve', name: 'Sciatic Nerve', type: 'nerve', description: 'L4-S3, largest nerve', clinicalRelevance: 'Sciatica, piriformis syndrome' },
+    { id: 'pudendal_nerve', name: 'Pudendal Nerve', type: 'nerve', description: 'S2-S4 perineal sensation', clinicalRelevance: 'Pudendal neuralgia' },
+    { id: 'superior_gluteal_nerve', name: 'Superior Gluteal Nerve', type: 'nerve', description: 'L4-S1, gluteus medius/minimus', clinicalRelevance: 'Trendelenburg gait if damaged' },
+    { id: 'sacral_plexus', name: 'Sacral Plexus', type: 'nerve', description: 'L4-S3 nerve roots', clinicalRelevance: 'Source of lower limb innervation' },
+    { id: 'piriformis_l', name: 'Left Piriformis', type: 'muscle', description: 'External rotator, sciatic nerve relation', clinicalRelevance: 'Piriformis syndrome, sciatica mimic' },
+    { id: 'piriformis_r', name: 'Right Piriformis', type: 'muscle', description: 'External rotator, sciatic nerve relation', clinicalRelevance: 'Piriformis syndrome, sciatica mimic' },
+    { id: 'gluteus_maximus_l', name: 'Left Gluteus Maximus', type: 'muscle', description: 'Hip extensor', clinicalRelevance: 'Gait, stair climbing, SI stability' },
+    { id: 'gluteus_maximus_r', name: 'Right Gluteus Maximus', type: 'muscle', description: 'Hip extensor', clinicalRelevance: 'Gait, stair climbing, SI stability' },
+    { id: 'gluteus_medius_l', name: 'Left Gluteus Medius', type: 'muscle', description: 'Hip abductor', clinicalRelevance: 'Pelvic stability, Trendelenburg' },
+    { id: 'gluteus_medius_r', name: 'Right Gluteus Medius', type: 'muscle', description: 'Hip abductor', clinicalRelevance: 'Pelvic stability, Trendelenburg' },
+    { id: 'pelvic_floor', name: 'Pelvic Floor Muscles', type: 'muscle', description: 'Levator ani, coccygeus', clinicalRelevance: 'Continence, pelvic support, pain syndromes' },
+    { id: 'psoas_major_l', name: 'Left Psoas Major', type: 'muscle', description: 'Hip flexor, spine stabilizer', clinicalRelevance: 'Tightness affects posture, psoas syndrome' },
+    { id: 'psoas_major_r', name: 'Right Psoas Major', type: 'muscle', description: 'Hip flexor, spine stabilizer', clinicalRelevance: 'Tightness affects posture, psoas syndrome' },
+  ],
+  sliderInfluences: {
+    pelvisTilt: [
+      { slider: 'si_joint', coefficient: 1.5, direction: 'increase' },
+      { slider: 'lumbosacral_joint', coefficient: 1.8, direction: 'increase' },
+      { slider: 'pubic_symphysis', coefficient: 0.8, direction: 'increase' },
+    ],
+    pelvicObliquity: [
+      { slider: 'si_joint', coefficient: 2.0, direction: 'increase' },
+      { slider: 'pubic_symphysis', coefficient: 1.5, direction: 'increase' },
+    ],
+    pelvicRotation: [
+      { slider: 'si_joint', coefficient: 1.3, direction: 'increase' },
+      { slider: 'sacrotuberous_lig', coefficient: 1.0, direction: 'increase' },
+    ],
+  },
+  conditions: [
+    {
+      id: 'si_joint_dysfunction',
+      name: 'SI Joint Dysfunction',
+      description: 'Sacroiliac joint pain and hypomobility/hypermobility',
+      icd10Code: 'M53.3',
+      riskFactors: ['Pregnancy', 'Leg length discrepancy', 'Trauma', 'Repetitive stress', 'Hypermobility'],
+      symptoms: ['Unilateral buttock pain', 'Pain with sit-to-stand', 'Groin pain', 'Worse with prolonged positions'],
+      mechanismOfInjury: 'Abnormal loading or movement of SI joint',
+      thresholds: [
+        { metric: 'siJointShear', safeMax: 400, warningThreshold: 700, criticalThreshold: 1000 },
+        { metric: 'pelvicObliquity', safeMax: 5, warningThreshold: 10, criticalThreshold: 18 },
+      ],
+    },
+    {
+      id: 'piriformis_syndrome',
+      name: 'Piriformis Syndrome',
+      description: 'Sciatic nerve entrapment by piriformis muscle',
+      icd10Code: 'G57.00',
+      riskFactors: ['Sitting occupation', 'Hip external rotation', 'Trauma', 'Anatomic variation'],
+      symptoms: ['Buttock pain', 'Sciatica-like symptoms', 'Pain with sitting', 'Pain with hip rotation'],
+      mechanismOfInjury: 'Piriformis spasm or hypertrophy compressing sciatic nerve',
+      thresholds: [
+        { metric: 'piriformisTension', safeMax: 40, warningThreshold: 60, criticalThreshold: 85 },
+        { metric: 'hipExternalRotation', safeMax: 45, warningThreshold: 55, criticalThreshold: 70 },
+      ],
+    },
+    {
+      id: 'sacroiliitis',
+      name: 'Sacroiliitis',
+      description: 'Inflammation of sacroiliac joint',
+      icd10Code: 'M46.1',
+      riskFactors: ['Ankylosing spondylitis', 'Inflammatory arthritis', 'Infection', 'Pregnancy'],
+      symptoms: ['Low back/buttock pain', 'Morning stiffness', 'Pain with rest', 'Improved with activity'],
+      mechanismOfInjury: 'Inflammatory process affecting SI joint',
+      thresholds: [
+        { metric: 'inflammatoryMarkers', safeMax: 20, warningThreshold: 40, criticalThreshold: 70 },
+        { metric: 'morningStiffnessDuration', safeMax: 15, warningThreshold: 30, criticalThreshold: 60 },
+      ],
+    },
+    {
+      id: 'pubic_symphysis_dysfunction',
+      name: 'Pubic Symphysis Dysfunction',
+      description: 'Pain and instability at pubic symphysis',
+      icd10Code: 'M99.05',
+      riskFactors: ['Pregnancy', 'Childbirth', 'Sports with kicking/pivoting', 'Hypermobility'],
+      symptoms: ['Anterior pelvic pain', 'Pain with walking/stairs', 'Clicking sensation', 'Groin pain'],
+      mechanismOfInjury: 'Shearing forces at pubic symphysis',
+      thresholds: [
+        { metric: 'symphysisShear', safeMax: 200, warningThreshold: 400, criticalThreshold: 650 },
+        { metric: 'symphysisWidening', safeMax: 10, warningThreshold: 15, criticalThreshold: 25 },
+      ],
+    },
+    {
+      id: 'pelvic_obliquity',
+      name: 'Pelvic Obliquity/Asymmetry',
+      description: 'Uneven pelvic alignment in frontal plane',
+      icd10Code: 'M99.05',
+      riskFactors: ['Leg length discrepancy', 'Scoliosis', 'Hip dysfunction', 'Muscle imbalance'],
+      symptoms: ['Uneven gait', 'One-sided pain', 'Compensatory postures', 'Hip/back pain'],
+      mechanismOfInjury: 'Asymmetric loading due to structural or functional causes',
+      thresholds: [
+        { metric: 'pelvicObliquityAngle', safeMax: 3, warningThreshold: 6, criticalThreshold: 12 },
+        { metric: 'legLengthDiff', safeMax: 5, warningThreshold: 10, criticalThreshold: 20 },
+      ],
+    },
+    {
+      id: 'coccydynia',
+      name: 'Coccydynia',
+      description: 'Tailbone pain',
+      icd10Code: 'M53.3',
+      riskFactors: ['Fall on buttocks', 'Prolonged sitting', 'Childbirth', 'Hypermobility'],
+      symptoms: ['Tailbone pain', 'Worse with sitting', 'Pain with sit-to-stand', 'Local tenderness'],
+      mechanismOfInjury: 'Direct trauma or repetitive microtrauma to coccyx',
+      thresholds: [
+        { metric: 'coccyxPressure', safeMax: 100, warningThreshold: 200, criticalThreshold: 350 },
+        { metric: 'sittingDuration', safeMax: 60, warningThreshold: 120, criticalThreshold: 240 },
+      ],
+    },
+  ],
+  physiologicalParameters: {
+    normalROM: { min: -15, max: 15 },
+    loadTolerance: { safe: 2500, warning: 3500, critical: 5000 },
+    muscleGroups: ['Gluteus Maximus', 'Gluteus Medius/Minimus', 'Piriformis', 'Pelvic Floor', 'Psoas', 'Quadratus Lumborum'],
+  },
+};
+
 export const REGION_PROFILES: Partial<Record<AnatomicalRegion, RegionClinicalProfile>> = {
   lumbar_spine: LUMBAR_SPINE_PROFILE,
+  cervical_spine: CERVICAL_SPINE_PROFILE,
+  thoracic_spine: THORACIC_SPINE_PROFILE,
+  pelvis: PELVIS_PROFILE,
 };
 
 export interface StructureLoadAnalysis {
@@ -569,6 +997,496 @@ export function calculateConditionProbabilities(
   ];
 }
 
+export function calculateCervicalStructureLoads(
+  neckFlexion: number,
+  neckRotation: number,
+  neckLateralFlexion: number,
+  forwardHead: number,
+  bodyWeightKg: number = 70
+): StructureLoadAnalysis[] {
+  const headWeight = bodyWeightKg * 0.08 * 9.81;
+  const flexionRad = (neckFlexion * Math.PI) / 180;
+  const rotationRad = (neckRotation * Math.PI) / 180;
+  
+  const isExtension = neckFlexion < 0;
+  const extensionMagnitude = isExtension ? Math.abs(neckFlexion) : 0;
+  const flexionMagnitude = !isExtension ? neckFlexion : 0;
+  
+  const forwardHeadMultiplier = 1 + (forwardHead / 10) * 0.5;
+  const discCompressionMultiplier = (1 + Math.sin(flexionRad) * 1.5) * forwardHeadMultiplier;
+  const facetLoadMultiplier = isExtension ? 1 + (extensionMagnitude / 20) * 2.0 : 0.2;
+  
+  const c5c6DiscCompression = headWeight * discCompressionMultiplier * 1.2;
+  const c6c7DiscCompression = headWeight * discCompressionMultiplier * 1.1;
+  const facetC5C6Load = headWeight * facetLoadMultiplier * 0.3;
+  const upperCervicalStress = headWeight * (Math.abs(rotationRad) * 0.8 + extensionMagnitude / 30);
+  const ligamentStress = headWeight * (flexionMagnitude / 40 + Math.abs(rotationRad) * 0.5);
+  
+  const getStatus = (value: number, safe: number, warning: number, critical: number): 'safe' | 'caution' | 'warning' | 'critical' => {
+    if (value < safe) return 'safe';
+    if (value < warning) return 'caution';
+    if (value < critical) return 'warning';
+    return 'critical';
+  };
+  
+  return [
+    {
+      structureId: 'c5_c6_disc',
+      structureName: 'C5-C6 Disc',
+      loadType: 'compression',
+      currentLoad: Math.round(c5c6DiscCompression),
+      safeThreshold: 800,
+      warningThreshold: 1200,
+      criticalThreshold: 1800,
+      percentOfCritical: Math.round((c5c6DiscCompression / 1800) * 100),
+      status: getStatus(c5c6DiscCompression, 800, 1200, 1800),
+    },
+    {
+      structureId: 'c6_c7_disc',
+      structureName: 'C6-C7 Disc',
+      loadType: 'compression',
+      currentLoad: Math.round(c6c7DiscCompression),
+      safeThreshold: 750,
+      warningThreshold: 1100,
+      criticalThreshold: 1600,
+      percentOfCritical: Math.round((c6c7DiscCompression / 1600) * 100),
+      status: getStatus(c6c7DiscCompression, 750, 1100, 1600),
+    },
+    {
+      structureId: 'facet_c5_c6',
+      structureName: 'C5-C6 Facet Joints',
+      loadType: 'compression',
+      currentLoad: Math.round(facetC5C6Load),
+      safeThreshold: 400,
+      warningThreshold: 700,
+      criticalThreshold: 1000,
+      percentOfCritical: Math.round((facetC5C6Load / 1000) * 100),
+      status: getStatus(facetC5C6Load, 400, 700, 1000),
+    },
+    {
+      structureId: 'upper_cervical',
+      structureName: 'Upper Cervical (C0-C2)',
+      loadType: 'shear',
+      currentLoad: Math.round(upperCervicalStress),
+      safeThreshold: 300,
+      warningThreshold: 500,
+      criticalThreshold: 800,
+      percentOfCritical: Math.round((upperCervicalStress / 800) * 100),
+      status: getStatus(upperCervicalStress, 300, 500, 800),
+    },
+    {
+      structureId: 'ligament_stress',
+      structureName: 'Cervical Ligaments',
+      loadType: 'tension',
+      currentLoad: Math.round(ligamentStress),
+      safeThreshold: 200,
+      warningThreshold: 400,
+      criticalThreshold: 650,
+      percentOfCritical: Math.round((ligamentStress / 650) * 100),
+      status: getStatus(ligamentStress, 200, 400, 650),
+    },
+  ];
+}
+
+export function calculateCervicalConditions(
+  structureLoads: StructureLoadAnalysis[],
+  neckFlexion: number,
+  neckRotation: number,
+  forwardHead: number
+): ConditionProbability[] {
+  const getLoadByStructure = (id: string) => structureLoads.find(s => s.structureId === id);
+  const isExtension = neckFlexion < 0;
+  const extensionMagnitude = isExtension ? Math.abs(neckFlexion) : 0;
+  const flexionMagnitude = !isExtension ? neckFlexion : 0;
+  
+  const c5c6Disc = getLoadByStructure('c5_c6_disc');
+  const facetC5C6 = getLoadByStructure('facet_c5_c6');
+  const upperCervical = getLoadByStructure('upper_cervical');
+  
+  const getRiskLevel = (prob: number): 'minimal' | 'low' | 'moderate' | 'high' | 'critical' => {
+    if (prob < 15) return 'minimal';
+    if (prob < 30) return 'low';
+    if (prob < 50) return 'moderate';
+    if (prob < 75) return 'high';
+    return 'critical';
+  };
+  
+  let discHerniationProb = 5;
+  const discFactors: string[] = [];
+  const discProtective: string[] = [];
+  if (c5c6Disc && c5c6Disc.percentOfCritical > 40) {
+    discHerniationProb += c5c6Disc.percentOfCritical * 0.4;
+    discFactors.push(`High C5-C6 disc compression (${c5c6Disc.currentLoad}N)`);
+  }
+  if (flexionMagnitude > 40) {
+    discHerniationProb += (flexionMagnitude - 40) * 1.2;
+    discFactors.push(`Excessive flexion (${Math.round(flexionMagnitude)}°)`);
+  }
+  if (forwardHead > 15) {
+    discHerniationProb += (forwardHead - 15) * 0.8;
+    discFactors.push(`Forward head posture (${Math.round(forwardHead)}mm)`);
+  }
+  if (flexionMagnitude < 30 && forwardHead < 10) {
+    discProtective.push('Neutral cervical position');
+  }
+  
+  let facetProb = 5;
+  const facetFactors: string[] = [];
+  const facetProtective: string[] = [];
+  if (facetC5C6 && facetC5C6.percentOfCritical > 40) {
+    facetProb += facetC5C6.percentOfCritical * 0.5;
+    facetFactors.push(`High facet loading (${facetC5C6.currentLoad}N)`);
+  }
+  if (extensionMagnitude > 35) {
+    facetProb += (extensionMagnitude - 35) * 1.5;
+    facetFactors.push(`Extension loading (${Math.round(extensionMagnitude)}°)`);
+  }
+  if (Math.abs(neckRotation) > 50) {
+    facetProb += (Math.abs(neckRotation) - 50) * 0.6;
+    facetFactors.push(`Rotation stress (${Math.round(Math.abs(neckRotation))}°)`);
+  }
+  if (extensionMagnitude < 25 && Math.abs(neckRotation) < 40) {
+    facetProtective.push('Within normal ROM');
+  }
+  
+  let headacheProb = 5;
+  const headacheFactors: string[] = [];
+  const headacheProtective: string[] = [];
+  if (upperCervical && upperCervical.percentOfCritical > 40) {
+    headacheProb += upperCervical.percentOfCritical * 0.6;
+    headacheFactors.push(`Upper cervical stress (${upperCervical.currentLoad}N)`);
+  }
+  if (forwardHead > 20) {
+    headacheProb += (forwardHead - 20) * 1.0;
+    headacheFactors.push(`Forward head posture (${Math.round(forwardHead)}mm)`);
+  }
+  if (forwardHead < 15) {
+    headacheProtective.push('Neutral head position');
+  }
+  
+  let radiculopathyProb = 3;
+  const radicFactors: string[] = [];
+  const radicProtective: string[] = [];
+  if (c5c6Disc && c5c6Disc.percentOfCritical > 50) {
+    radiculopathyProb += c5c6Disc.percentOfCritical * 0.5;
+    radicFactors.push(`High disc compression (${c5c6Disc.currentLoad}N)`);
+  }
+  if (extensionMagnitude > 40 && Math.abs(neckRotation) > 40) {
+    radiculopathyProb += 15;
+    radicFactors.push('Combined extension + rotation (Spurling mechanism)');
+  }
+  if (extensionMagnitude < 30) {
+    radicProtective.push('Minimal foraminal narrowing');
+  }
+  
+  return [
+    { conditionId: 'cervical_disc', conditionName: 'Cervical Disc Herniation', probability: Math.min(95, Math.round(discHerniationProb)), riskLevel: getRiskLevel(discHerniationProb), contributingFactors: discFactors, protectiveFactors: discProtective },
+    { conditionId: 'cervical_facet', conditionName: 'Cervical Facet Syndrome', probability: Math.min(95, Math.round(facetProb)), riskLevel: getRiskLevel(facetProb), contributingFactors: facetFactors, protectiveFactors: facetProtective },
+    { conditionId: 'cervicogenic_headache', conditionName: 'Cervicogenic Headache', probability: Math.min(95, Math.round(headacheProb)), riskLevel: getRiskLevel(headacheProb), contributingFactors: headacheFactors, protectiveFactors: headacheProtective },
+    { conditionId: 'cervical_radiculopathy', conditionName: 'Cervical Radiculopathy', probability: Math.min(95, Math.round(radiculopathyProb)), riskLevel: getRiskLevel(radiculopathyProb), contributingFactors: radicFactors, protectiveFactors: radicProtective },
+  ];
+}
+
+export function calculateThoracicStructureLoads(
+  thoracicKyphosis: number,
+  thoracicRotation: number,
+  ribExpansion: number,
+  bodyWeightKg: number = 70
+): StructureLoadAnalysis[] {
+  const baseCompression = bodyWeightKg * 9.81 * 0.4;
+  const kyphosisRad = (thoracicKyphosis * Math.PI) / 180;
+  const rotationRad = (thoracicRotation * Math.PI) / 180;
+  
+  const discCompressionMultiplier = 1 + Math.abs(kyphosisRad - 0.6) * 0.8;
+  const costovertebralStress = baseCompression * Math.abs(rotationRad) * 0.3 + ribExpansion * 5;
+  
+  const t6t7DiscCompression = baseCompression * discCompressionMultiplier * 0.9;
+  const t11t12DiscCompression = baseCompression * discCompressionMultiplier * 1.1;
+  const ribJointStress = costovertebralStress;
+  
+  const getStatus = (value: number, safe: number, warning: number, critical: number): 'safe' | 'caution' | 'warning' | 'critical' => {
+    if (value < safe) return 'safe';
+    if (value < warning) return 'caution';
+    if (value < critical) return 'warning';
+    return 'critical';
+  };
+  
+  return [
+    {
+      structureId: 't6_t7_disc',
+      structureName: 'T6-T7 Disc',
+      loadType: 'compression',
+      currentLoad: Math.round(t6t7DiscCompression),
+      safeThreshold: 600,
+      warningThreshold: 1000,
+      criticalThreshold: 1500,
+      percentOfCritical: Math.round((t6t7DiscCompression / 1500) * 100),
+      status: getStatus(t6t7DiscCompression, 600, 1000, 1500),
+    },
+    {
+      structureId: 't11_t12_disc',
+      structureName: 'T11-T12 Disc',
+      loadType: 'compression',
+      currentLoad: Math.round(t11t12DiscCompression),
+      safeThreshold: 800,
+      warningThreshold: 1200,
+      criticalThreshold: 1800,
+      percentOfCritical: Math.round((t11t12DiscCompression / 1800) * 100),
+      status: getStatus(t11t12DiscCompression, 800, 1200, 1800),
+    },
+    {
+      structureId: 'costovertebral',
+      structureName: 'Costovertebral Joints',
+      loadType: 'shear',
+      currentLoad: Math.round(ribJointStress),
+      safeThreshold: 200,
+      warningThreshold: 400,
+      criticalThreshold: 600,
+      percentOfCritical: Math.round((ribJointStress / 600) * 100),
+      status: getStatus(ribJointStress, 200, 400, 600),
+    },
+    {
+      structureId: 'costochondral',
+      structureName: 'Costochondral Junctions',
+      loadType: 'tension',
+      currentLoad: Math.round(ribExpansion * 8),
+      safeThreshold: 150,
+      warningThreshold: 300,
+      criticalThreshold: 500,
+      percentOfCritical: Math.round((ribExpansion * 8 / 500) * 100),
+      status: getStatus(ribExpansion * 8, 150, 300, 500),
+    },
+  ];
+}
+
+export function calculateThoracicConditions(
+  structureLoads: StructureLoadAnalysis[],
+  thoracicKyphosis: number,
+  thoracicRotation: number
+): ConditionProbability[] {
+  const getLoadByStructure = (id: string) => structureLoads.find(s => s.structureId === id);
+  const costovertebral = getLoadByStructure('costovertebral');
+  const t11t12Disc = getLoadByStructure('t11_t12_disc');
+  const costochondral = getLoadByStructure('costochondral');
+  
+  const getRiskLevel = (prob: number): 'minimal' | 'low' | 'moderate' | 'high' | 'critical' => {
+    if (prob < 15) return 'minimal';
+    if (prob < 30) return 'low';
+    if (prob < 50) return 'moderate';
+    if (prob < 75) return 'high';
+    return 'critical';
+  };
+  
+  let ribDysfunctionProb = 5;
+  const ribFactors: string[] = [];
+  const ribProtective: string[] = [];
+  if (costovertebral && costovertebral.percentOfCritical > 40) {
+    ribDysfunctionProb += costovertebral.percentOfCritical * 0.5;
+    ribFactors.push(`Elevated costovertebral stress (${costovertebral.currentLoad}N)`);
+  }
+  if (Math.abs(thoracicRotation) > 25) {
+    ribDysfunctionProb += (Math.abs(thoracicRotation) - 25) * 1.0;
+    ribFactors.push(`Rotational loading (${Math.round(Math.abs(thoracicRotation))}°)`);
+  }
+  if (Math.abs(thoracicRotation) < 20) {
+    ribProtective.push('Within normal rotation ROM');
+  }
+  
+  let kyphosisProb = 5;
+  const kyphFactors: string[] = [];
+  const kyphProtective: string[] = [];
+  if (thoracicKyphosis > 50) {
+    kyphosisProb += (thoracicKyphosis - 50) * 2.0;
+    kyphFactors.push(`Hyperkyphosis (${Math.round(thoracicKyphosis)}°)`);
+  }
+  if (thoracicKyphosis >= 30 && thoracicKyphosis <= 45) {
+    kyphProtective.push('Normal kyphosis range');
+  }
+  
+  let costochondritisProb = 3;
+  const costoFactors: string[] = [];
+  const costoProtective: string[] = [];
+  if (costochondral && costochondral.percentOfCritical > 40) {
+    costochondritisProb += costochondral.percentOfCritical * 0.4;
+    costoFactors.push(`Costochondral junction stress (${costochondral.currentLoad}N)`);
+  }
+  if (costochondral && costochondral.percentOfCritical < 30) {
+    costoProtective.push('Low junction stress');
+  }
+  
+  let discProb = 3;
+  const discFactors: string[] = [];
+  const discProtective: string[] = [];
+  if (t11t12Disc && t11t12Disc.percentOfCritical > 50) {
+    discProb += t11t12Disc.percentOfCritical * 0.4;
+    discFactors.push(`High T11-T12 disc loading (${t11t12Disc.currentLoad}N)`);
+  }
+  if (t11t12Disc && t11t12Disc.percentOfCritical < 40) {
+    discProtective.push('Normal disc loading');
+  }
+  
+  return [
+    { conditionId: 'rib_dysfunction', conditionName: 'Rib Dysfunction', probability: Math.min(95, Math.round(ribDysfunctionProb)), riskLevel: getRiskLevel(ribDysfunctionProb), contributingFactors: ribFactors, protectiveFactors: ribProtective },
+    { conditionId: 'hyperkyphosis', conditionName: 'Hyperkyphosis/Scheuermann\'s', probability: Math.min(95, Math.round(kyphosisProb)), riskLevel: getRiskLevel(kyphosisProb), contributingFactors: kyphFactors, protectiveFactors: kyphProtective },
+    { conditionId: 'costochondritis', conditionName: 'Costochondritis', probability: Math.min(95, Math.round(costochondritisProb)), riskLevel: getRiskLevel(costochondritisProb), contributingFactors: costoFactors, protectiveFactors: costoProtective },
+    { conditionId: 'thoracic_disc', conditionName: 'Thoracic Disc Herniation', probability: Math.min(95, Math.round(discProb)), riskLevel: getRiskLevel(discProb), contributingFactors: discFactors, protectiveFactors: discProtective },
+  ];
+}
+
+export function calculatePelvicStructureLoads(
+  pelvisTilt: number,
+  pelvicObliquity: number,
+  pelvicRotation: number,
+  hipFlexion: number,
+  bodyWeightKg: number = 70
+): StructureLoadAnalysis[] {
+  const baseLoad = bodyWeightKg * 9.81 * 0.5;
+  const tiltRad = (pelvisTilt * Math.PI) / 180;
+  const obliquityRad = (pelvicObliquity * Math.PI) / 180;
+  
+  const siJointShear = baseLoad * (Math.abs(tiltRad) * 0.3 + Math.abs(obliquityRad) * 0.5);
+  const pubicStress = baseLoad * Math.abs(obliquityRad) * 0.4;
+  const piriformisLoad = 30 + hipFlexion * 0.8 + Math.abs(pelvicRotation) * 0.5;
+  const lumbosacralStress = baseLoad * (1 + Math.abs(tiltRad) * 1.5);
+  
+  const getStatus = (value: number, safe: number, warning: number, critical: number): 'safe' | 'caution' | 'warning' | 'critical' => {
+    if (value < safe) return 'safe';
+    if (value < warning) return 'caution';
+    if (value < critical) return 'warning';
+    return 'critical';
+  };
+  
+  return [
+    {
+      structureId: 'si_joint',
+      structureName: 'SI Joints',
+      loadType: 'shear',
+      currentLoad: Math.round(siJointShear),
+      safeThreshold: 400,
+      warningThreshold: 700,
+      criticalThreshold: 1000,
+      percentOfCritical: Math.round((siJointShear / 1000) * 100),
+      status: getStatus(siJointShear, 400, 700, 1000),
+    },
+    {
+      structureId: 'pubic_symphysis',
+      structureName: 'Pubic Symphysis',
+      loadType: 'shear',
+      currentLoad: Math.round(pubicStress),
+      safeThreshold: 200,
+      warningThreshold: 400,
+      criticalThreshold: 650,
+      percentOfCritical: Math.round((pubicStress / 650) * 100),
+      status: getStatus(pubicStress, 200, 400, 650),
+    },
+    {
+      structureId: 'piriformis',
+      structureName: 'Piriformis Muscle',
+      loadType: 'tension',
+      currentLoad: Math.round(piriformisLoad),
+      safeThreshold: 40,
+      warningThreshold: 60,
+      criticalThreshold: 85,
+      percentOfCritical: Math.round((piriformisLoad / 85) * 100),
+      status: getStatus(piriformisLoad, 40, 60, 85),
+    },
+    {
+      structureId: 'lumbosacral',
+      structureName: 'Lumbosacral Junction',
+      loadType: 'compression',
+      currentLoad: Math.round(lumbosacralStress),
+      safeThreshold: 500,
+      warningThreshold: 800,
+      criticalThreshold: 1200,
+      percentOfCritical: Math.round((lumbosacralStress / 1200) * 100),
+      status: getStatus(lumbosacralStress, 500, 800, 1200),
+    },
+  ];
+}
+
+export function calculatePelvicConditions(
+  structureLoads: StructureLoadAnalysis[],
+  pelvisTilt: number,
+  pelvicObliquity: number,
+  hipFlexion: number
+): ConditionProbability[] {
+  const getLoadByStructure = (id: string) => structureLoads.find(s => s.structureId === id);
+  const siJoint = getLoadByStructure('si_joint');
+  const pubic = getLoadByStructure('pubic_symphysis');
+  const piriformis = getLoadByStructure('piriformis');
+  
+  const getRiskLevel = (prob: number): 'minimal' | 'low' | 'moderate' | 'high' | 'critical' => {
+    if (prob < 15) return 'minimal';
+    if (prob < 30) return 'low';
+    if (prob < 50) return 'moderate';
+    if (prob < 75) return 'high';
+    return 'critical';
+  };
+  
+  let siDysfunctionProb = 5;
+  const siFactors: string[] = [];
+  const siProtective: string[] = [];
+  if (siJoint && siJoint.percentOfCritical > 40) {
+    siDysfunctionProb += siJoint.percentOfCritical * 0.5;
+    siFactors.push(`Elevated SI joint shear (${siJoint.currentLoad}N)`);
+  }
+  if (Math.abs(pelvicObliquity) > 5) {
+    siDysfunctionProb += Math.abs(pelvicObliquity) * 2.0;
+    siFactors.push(`Pelvic obliquity (${Math.round(Math.abs(pelvicObliquity))}°)`);
+  }
+  if (Math.abs(pelvicObliquity) < 3 && Math.abs(pelvisTilt) < 10) {
+    siProtective.push('Neutral pelvic alignment');
+  }
+  
+  let piriformisProb = 5;
+  const piriFactors: string[] = [];
+  const piriProtective: string[] = [];
+  if (piriformis && piriformis.percentOfCritical > 50) {
+    piriformisProb += piriformis.percentOfCritical * 0.6;
+    piriFactors.push(`High piriformis tension (${piriformis.currentLoad}%)`);
+  }
+  if (hipFlexion > 60) {
+    piriformisProb += (hipFlexion - 60) * 0.8;
+    piriFactors.push(`Prolonged hip flexion (${Math.round(hipFlexion)}°)`);
+  }
+  if (hipFlexion < 45) {
+    piriProtective.push('Moderate hip flexion');
+  }
+  
+  let pubicProb = 3;
+  const pubicFactors: string[] = [];
+  const pubicProtective: string[] = [];
+  if (pubic && pubic.percentOfCritical > 40) {
+    pubicProb += pubic.percentOfCritical * 0.4;
+    pubicFactors.push(`Pubic symphysis shear (${pubic.currentLoad}N)`);
+  }
+  if (Math.abs(pelvicObliquity) > 8) {
+    pubicProb += (Math.abs(pelvicObliquity) - 8) * 1.5;
+    pubicFactors.push(`Pelvic asymmetry (${Math.round(Math.abs(pelvicObliquity))}°)`);
+  }
+  if (Math.abs(pelvicObliquity) < 5) {
+    pubicProtective.push('Symmetric pelvis');
+  }
+  
+  let obliquityProb = 5;
+  const obliqFactors: string[] = [];
+  const obliqProtective: string[] = [];
+  if (Math.abs(pelvicObliquity) > 5) {
+    obliquityProb += Math.abs(pelvicObliquity) * 3.0;
+    obliqFactors.push(`Pelvic obliquity (${Math.round(Math.abs(pelvicObliquity))}°)`);
+  }
+  if (Math.abs(pelvicObliquity) < 3) {
+    obliqProtective.push('Level pelvis');
+  }
+  
+  return [
+    { conditionId: 'si_dysfunction', conditionName: 'SI Joint Dysfunction', probability: Math.min(95, Math.round(siDysfunctionProb)), riskLevel: getRiskLevel(siDysfunctionProb), contributingFactors: siFactors, protectiveFactors: siProtective },
+    { conditionId: 'piriformis_syndrome', conditionName: 'Piriformis Syndrome', probability: Math.min(95, Math.round(piriformisProb)), riskLevel: getRiskLevel(piriformisProb), contributingFactors: piriFactors, protectiveFactors: piriProtective },
+    { conditionId: 'pubic_dysfunction', conditionName: 'Pubic Symphysis Dysfunction', probability: Math.min(95, Math.round(pubicProb)), riskLevel: getRiskLevel(pubicProb), contributingFactors: pubicFactors, protectiveFactors: pubicProtective },
+    { conditionId: 'pelvic_obliquity', conditionName: 'Pelvic Obliquity', probability: Math.min(95, Math.round(obliquityProb)), riskLevel: getRiskLevel(obliquityProb), contributingFactors: obliqFactors, protectiveFactors: obliqProtective },
+  ];
+}
+
 export function analyzeRegion(
   regionId: AnatomicalRegion,
   spineFlexion: number,
@@ -577,24 +1495,36 @@ export function analyzeRegion(
   pelvisTilt: number,
   bodyWeightKg: number = 70
 ): RegionAnalysisResult | null {
-  if (regionId !== 'lumbar_spine') {
-    return null;
+  let structureLoads: StructureLoadAnalysis[] = [];
+  let conditionProbabilities: ConditionProbability[] = [];
+  let regionName = '';
+  
+  switch (regionId) {
+    case 'lumbar_spine':
+      structureLoads = calculateLumbarStructureLoads(spineFlexion, spineRotation, spineLateralFlexion, pelvisTilt, bodyWeightKg);
+      conditionProbabilities = calculateConditionProbabilities(structureLoads, spineFlexion, spineRotation, pelvisTilt);
+      regionName = 'Lumbar spine';
+      break;
+    case 'cervical_spine':
+      structureLoads = calculateCervicalStructureLoads(spineFlexion, spineRotation, spineLateralFlexion, 0, bodyWeightKg);
+      conditionProbabilities = calculateCervicalConditions(structureLoads, spineFlexion, spineRotation, 0);
+      regionName = 'Cervical spine';
+      break;
+    case 'thoracic_spine':
+      structureLoads = calculateThoracicStructureLoads(35 + spineFlexion * 0.3, spineRotation, 10, bodyWeightKg);
+      conditionProbabilities = calculateThoracicConditions(structureLoads, 35 + spineFlexion * 0.3, spineRotation);
+      regionName = 'Thoracic spine';
+      break;
+    case 'pelvis':
+      structureLoads = calculatePelvicStructureLoads(pelvisTilt, spineLateralFlexion * 0.5, spineRotation * 0.3, 30, bodyWeightKg);
+      conditionProbabilities = calculatePelvicConditions(structureLoads, pelvisTilt, spineLateralFlexion * 0.5, 30);
+      regionName = 'Pelvis';
+      break;
+    default:
+      return null;
   }
   
-  const structureLoads = calculateLumbarStructureLoads(
-    spineFlexion,
-    spineRotation,
-    spineLateralFlexion,
-    pelvisTilt,
-    bodyWeightKg
-  );
-  
-  const conditionProbabilities = calculateConditionProbabilities(
-    structureLoads,
-    spineFlexion,
-    spineRotation,
-    pelvisTilt
-  );
+  if (structureLoads.length === 0) return null;
   
   const maxProbability = Math.max(...conditionProbabilities.map(c => c.probability));
   const avgLoadPercent = structureLoads.reduce((sum, l) => sum + l.percentOfCritical, 0) / structureLoads.length;
@@ -605,7 +1535,7 @@ export function analyzeRegion(
   
   let clinicalSummary = '';
   if (overallRiskScore < 20) {
-    clinicalSummary = 'Low overall risk. Lumbar spine in relatively neutral, well-supported position.';
+    clinicalSummary = `Low overall risk. ${regionName} in relatively neutral, well-supported position.`;
   } else if (overallRiskScore < 40) {
     clinicalSummary = `Mild risk factors present. Primary concern: ${highestRiskCondition.conditionName} (${highestRiskCondition.probability}%).`;
   } else if (overallRiskScore < 60) {

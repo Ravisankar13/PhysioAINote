@@ -43,7 +43,7 @@ class GLBErrorBoundary extends Component<GLBErrorBoundaryProps, GLBErrorBoundary
 
 interface ModelConfig {
   limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
-  spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number };
+  spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number; cervicalRotation: number; cervicalLateralFlexion: number; thoracicRotation: number; lumbarRotation: number };
   neck: { flexion: number; extension: number; rotation: number; lateralFlexion: number; forwardHead: number };
   pelvis: { tilt: number; obliquity: number; rotation: number };
   leftHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
@@ -221,6 +221,10 @@ export default function TestSkeletonNew() {
       scoliosis: 0,
       forwardHead: 0,
       lateralShift: 0,
+      cervicalRotation: 0,
+      cervicalLateralFlexion: 0,
+      thoracicRotation: 0,
+      lumbarRotation: 0,
     },
     neck: {
       flexion: 0,
@@ -355,6 +359,10 @@ export default function TestSkeletonNew() {
         scoliosis: 0,
         forwardHead: 0,
         lateralShift: 0,
+        cervicalRotation: 0,
+        cervicalLateralFlexion: 0,
+        thoracicRotation: 0,
+        lumbarRotation: 0,
       },
       neck: {
         flexion: 0,
@@ -696,6 +704,56 @@ export default function TestSkeletonNew() {
                         onValueChange={(value) => handleSliderChange('spine', 'scoliosis', value)}
                         min={-45}
                         max={45}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <h3 className="font-semibold">Spinal Rotation</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Cervical Rotation ({modelConfig.spine.cervicalRotation}°)</Label>
+                      <Slider
+                        value={[modelConfig.spine.cervicalRotation]}
+                        onValueChange={(value) => handleSliderChange('spine', 'cervicalRotation', value)}
+                        min={-80}
+                        max={80}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Cervical Lateral Flexion ({modelConfig.spine.cervicalLateralFlexion}°)</Label>
+                      <Slider
+                        value={[modelConfig.spine.cervicalLateralFlexion]}
+                        onValueChange={(value) => handleSliderChange('spine', 'cervicalLateralFlexion', value)}
+                        min={-45}
+                        max={45}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Thoracic Rotation ({modelConfig.spine.thoracicRotation}°)</Label>
+                      <Slider
+                        value={[modelConfig.spine.thoracicRotation]}
+                        onValueChange={(value) => handleSliderChange('spine', 'thoracicRotation', value)}
+                        min={-45}
+                        max={45}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label>Lumbar Rotation ({modelConfig.spine.lumbarRotation}°)</Label>
+                      <Slider
+                        value={[modelConfig.spine.lumbarRotation]}
+                        onValueChange={(value) => handleSliderChange('spine', 'lumbarRotation', value)}
+                        min={-30}
+                        max={30}
                         step={1}
                         className="mt-2"
                       />

@@ -160,6 +160,37 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine13', axis: 'z', scale: -0.15 },
     { boneName: 'spine14', axis: 'z', scale: -0.1 },
   ],
+  'spine.cervicalRotation': [
+    { boneName: 'spine17', axis: 'y', scale: 0.2 },
+    { boneName: 'spine18', axis: 'y', scale: 0.25 },
+    { boneName: 'spine19', axis: 'y', scale: 0.3 },
+    { boneName: 'spine20', axis: 'y', scale: 0.25 },
+  ],
+  'spine.cervicalLateralFlexion': [
+    { boneName: 'spine17', axis: 'z', scale: 0.2 },
+    { boneName: 'spine18', axis: 'z', scale: 0.25 },
+    { boneName: 'spine19', axis: 'z', scale: 0.3 },
+    { boneName: 'spine20', axis: 'z', scale: 0.25 },
+  ],
+  'spine.thoracicRotation': [
+    { boneName: 'spine8', axis: 'y', scale: 0.08 },
+    { boneName: 'spine9', axis: 'y', scale: 0.08 },
+    { boneName: 'spine10', axis: 'y', scale: 0.08 },
+    { boneName: 'spine11', axis: 'y', scale: 0.08 },
+    { boneName: 'spine12', axis: 'y', scale: 0.08 },
+    { boneName: 'spine13', axis: 'y', scale: 0.08 },
+    { boneName: 'spine14', axis: 'y', scale: 0.08 },
+    { boneName: 'spine15', axis: 'y', scale: 0.08 },
+    { boneName: 'spine16', axis: 'y', scale: 0.08 },
+  ],
+  'spine.lumbarRotation': [
+    { boneName: 'spine2', axis: 'y', scale: 0.1 },
+    { boneName: 'spine3', axis: 'y', scale: 0.1 },
+    { boneName: 'spine4', axis: 'y', scale: 0.1 },
+    { boneName: 'spine5', axis: 'y', scale: 0.1 },
+    { boneName: 'spine6', axis: 'y', scale: 0.1 },
+    { boneName: 'spine7', axis: 'y', scale: 0.1 },
+  ],
 
   // === HEAD & NECK (Cervical Spine) ===
   'neck.flexion': [

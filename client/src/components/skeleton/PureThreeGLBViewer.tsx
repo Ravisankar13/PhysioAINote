@@ -6,6 +6,7 @@ import { AlertCircle, Loader2, RotateCcw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getMovementById, interpolateKeyframes, applyJointConstraints, JointLimits } from '@/lib/movementSequences';
 import { initializeLegIK, applySquatIK, LegIKState } from '@/lib/legIKSolver';
+import { ForceVisualizationManager, BiomechanicsVisualizationData } from '@/lib/forceVisualization';
 
 interface JointConfig {
   flexion?: number;
@@ -53,6 +54,7 @@ interface PureThreeGLBViewerProps {
   animationState?: AnimationState;
   onAnimationFrame?: (jointValues: { [key: string]: { [prop: string]: number } }) => void;
   jointLimits?: JointLimits;
+  biomechanicsData?: BiomechanicsVisualizationData;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -245,7 +247,8 @@ export default function PureThreeGLBViewer({
   className = '',
   animationState,
   onAnimationFrame,
-  jointLimits
+  jointLimits,
+  biomechanicsData
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -256,6 +259,7 @@ export default function PureThreeGLBViewer({
   const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const legIKStateRef = useRef<LegIKState | null>(null);
+  const forceVisualizationRef = useRef<ForceVisualizationManager | null>(null);
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -1108,6 +1112,42 @@ export default function PureThreeGLBViewer({
       }
     };
   }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame, jointLimits]);
+
+  // Force visualization effect
+  useEffect(() => {
+    if (status !== 'ready' || !sceneRef.current || Object.keys(bonesRef.current).length === 0) {
+      return;
+    }
+
+    // Initialize force visualization manager if not already
+    if (!forceVisualizationRef.current) {
+      forceVisualizationRef.current = new ForceVisualizationManager(
+        sceneRef.current.scene,
+        bonesRef.current
+      );
+    }
+
+    // Update visualization if biomechanics data is provided
+    if (biomechanicsData) {
+      forceVisualizationRef.current.updateVisualization(biomechanicsData);
+    } else {
+      forceVisualizationRef.current.clearVisualization();
+    }
+
+    return () => {
+      // Clear visualization when component updates
+    };
+  }, [biomechanicsData, status]);
+
+  // Cleanup force visualization on unmount
+  useEffect(() => {
+    return () => {
+      if (forceVisualizationRef.current) {
+        forceVisualizationRef.current.dispose();
+        forceVisualizationRef.current = null;
+      }
+    };
+  }, []);
 
   const handleRetry = () => {
     setStatus('checking');

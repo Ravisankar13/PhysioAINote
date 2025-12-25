@@ -1,10 +1,10 @@
-import { useState, useEffect, Suspense, Component, ReactNode, useCallback } from "react";
+import { useState, useEffect, Suspense, Component, ReactNode, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import PureThreeGLBViewer, { AnimationState } from "@/components/skeleton/PureThreeGLBViewer";
 import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
 import BiomechanicsPanel from "@/components/skeleton/BiomechanicsPanel";
+import { BiomechanicsVisualizationData } from "@/lib/forceVisualization";
+import { calculateFullBiomechanics } from "@/lib/biomechanicsEngine";
 
 interface GLBErrorBoundaryProps {
   children: ReactNode;
@@ -216,6 +218,17 @@ export default function TestSkeletonNew() {
     speed: 1,
   });
 
+  const [forceVisualization, setForceVisualization] = useState({
+    showForceArrows: false,
+    showStressColors: false,
+    showMuscleGlow: false,
+  });
+
+  const [patientAnthropometrics] = useState({
+    heightCm: 175,
+    weightKg: 75,
+  });
+
   const handleAnimationFrame = useCallback((jointValues: { [key: string]: { [prop: string]: number } }) => {
     setModelConfig((prev) => {
       const newConfig = { ...prev };
@@ -374,6 +387,87 @@ export default function TestSkeletonNew() {
       },
     }));
   };
+
+  // Compute biomechanics data for force visualization
+  const biomechanicsData = useMemo((): BiomechanicsVisualizationData | undefined => {
+    const { showForceArrows, showStressColors, showMuscleGlow } = forceVisualization;
+    
+    // Only compute if at least one visualization is enabled
+    if (!showForceArrows && !showStressColors && !showMuscleGlow) {
+      return undefined;
+    }
+
+    // Compute biomechanics based on current posture
+    const biomechanics = calculateFullBiomechanics(
+      patientAnthropometrics.heightCm,
+      patientAnthropometrics.weightKg,
+      {
+        pelvis: {
+          tilt: modelConfig.pelvis.tilt,
+          obliquity: modelConfig.pelvis.obliquity,
+          rotation: modelConfig.pelvis.rotation,
+          drop: modelConfig.pelvis.drop,
+        },
+        spine: {
+          thoracicKyphosis: modelConfig.spine.thoracicKyphosis,
+          lumbarLordosis: modelConfig.spine.lumbarLordosis,
+          scoliosis: modelConfig.spine.scoliosis,
+        },
+        leftHip: {
+          flexion: modelConfig.leftHip.flexion,
+          abduction: modelConfig.leftHip.abduction,
+          internalRotation: modelConfig.leftHip.internalRotation,
+        },
+        rightHip: {
+          flexion: modelConfig.rightHip.flexion,
+          abduction: modelConfig.rightHip.abduction,
+          internalRotation: modelConfig.rightHip.internalRotation,
+        },
+        leftKnee: {
+          flexion: modelConfig.leftKnee.flexion,
+          varus: modelConfig.leftKnee.varus,
+        },
+        rightKnee: {
+          flexion: modelConfig.rightKnee.flexion,
+          varus: modelConfig.rightKnee.varus,
+        },
+        leftAnkle: {
+          dorsiflexion: modelConfig.leftAnkle.dorsiflexion,
+          inversion: modelConfig.leftAnkle.inversion,
+        },
+        rightAnkle: {
+          dorsiflexion: modelConfig.rightAnkle.dorsiflexion,
+          inversion: modelConfig.rightAnkle.inversion,
+        },
+        leftShoulder: {
+          flexion: modelConfig.leftShoulder.flexion,
+          abduction: modelConfig.leftShoulder.abduction,
+          internalRotation: modelConfig.leftShoulder.internalRotation,
+        },
+        rightShoulder: {
+          flexion: modelConfig.rightShoulder.flexion,
+          abduction: modelConfig.rightShoulder.abduction,
+          internalRotation: modelConfig.rightShoulder.internalRotation,
+        },
+        leftElbow: {
+          flexion: modelConfig.leftElbow.flexion,
+          pronation: modelConfig.leftElbow.pronation,
+        },
+        rightElbow: {
+          flexion: modelConfig.rightElbow.flexion,
+          pronation: modelConfig.rightElbow.pronation,
+        },
+      }
+    );
+
+    return {
+      jointForces: biomechanics.jointForces,
+      muscleActivation: biomechanics.muscleActivation,
+      showForceArrows,
+      showStressColors,
+      showMuscleGlow,
+    };
+  }, [modelConfig, forceVisualization, patientAnthropometrics]);
 
   const resetAll = () => {
     setModelConfig({
@@ -634,8 +728,54 @@ export default function TestSkeletonNew() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Panel - Visualization */}
         <Card className="h-[600px]">
-          <CardHeader>
-            <CardTitle>Skeleton Visualization</CardTitle>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle>Skeleton Visualization</CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <Switch
+                    id="force-arrows"
+                    checked={forceVisualization.showForceArrows}
+                    onCheckedChange={(checked) => 
+                      setForceVisualization(prev => ({ ...prev, showForceArrows: checked }))
+                    }
+                    data-testid="switch-force-arrows"
+                  />
+                  <Label htmlFor="force-arrows" className="text-xs flex items-center gap-1 cursor-pointer">
+                    <ArrowDown className="h-3 w-3" />
+                    Forces
+                  </Label>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Switch
+                    id="stress-colors"
+                    checked={forceVisualization.showStressColors}
+                    onCheckedChange={(checked) => 
+                      setForceVisualization(prev => ({ ...prev, showStressColors: checked }))
+                    }
+                    data-testid="switch-stress-colors"
+                  />
+                  <Label htmlFor="stress-colors" className="text-xs flex items-center gap-1 cursor-pointer">
+                    <Target className="h-3 w-3" />
+                    Stress
+                  </Label>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Switch
+                    id="muscle-glow"
+                    checked={forceVisualization.showMuscleGlow}
+                    onCheckedChange={(checked) => 
+                      setForceVisualization(prev => ({ ...prev, showMuscleGlow: checked }))
+                    }
+                    data-testid="switch-muscle-glow"
+                  />
+                  <Label htmlFor="muscle-glow" className="text-xs flex items-center gap-1 cursor-pointer">
+                    <Zap className="h-3 w-3" />
+                    Muscles
+                  </Label>
+                </div>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="h-[calc(100%-80px)]">
             <GLBErrorBoundary
@@ -673,6 +813,7 @@ export default function TestSkeletonNew() {
                   className="w-full h-full"
                   animationState={animationState}
                   onAnimationFrame={handleAnimationFrame}
+                  biomechanicsData={biomechanicsData}
                 />
               </Suspense>
             </GLBErrorBoundary>

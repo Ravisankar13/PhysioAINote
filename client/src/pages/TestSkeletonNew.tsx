@@ -9,9 +9,10 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import PureThreeGLBViewer, { AnimationState } from "@/components/skeleton/PureThreeGLBViewer";
+import PureThreeGLBViewer, { AnimationState, AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
 import PatientClonePanel from "@/components/skeleton/PatientClonePanel";
+import RegionZoomControls from "@/components/skeleton/RegionZoomControls";
 import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
 import BiomechanicsPanel from "@/components/skeleton/BiomechanicsPanel";
 import { Grid2X2, Maximize } from "lucide-react";
@@ -230,6 +231,7 @@ export default function TestSkeletonNew() {
   
   const [multiViewMode, setMultiViewMode] = useState(false);
   const [showPatientClonePanel, setShowPatientClonePanel] = useState(false);
+  const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
 
   const [patientAnthropometrics, setPatientAnthropometrics] = useState({
     heightCm: 175,
@@ -778,6 +780,12 @@ export default function TestSkeletonNew() {
                   <User className="h-4 w-4 mr-1" />
                   Clone Patient
                 </Button>
+                {!multiViewMode && (
+                  <RegionZoomControls
+                    currentRegion={zoomToRegion}
+                    onRegionChange={setZoomToRegion}
+                  />
+                )}
               </CardTitle>
               {!multiViewMode && (
                 <div className="flex items-center gap-3">
@@ -873,6 +881,7 @@ export default function TestSkeletonNew() {
                     animationState={animationState}
                     onAnimationFrame={handleAnimationFrame}
                     biomechanicsData={biomechanicsData}
+                    zoomToRegion={zoomToRegion}
                   />
                 </Suspense>
               </GLBErrorBoundary>

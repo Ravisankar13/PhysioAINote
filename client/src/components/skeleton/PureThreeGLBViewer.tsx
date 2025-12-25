@@ -65,6 +65,139 @@ export const CAMERA_PRESETS: Record<CameraAngle, CameraAngleConfig> = {
   custom: { position: { x: 0, y: 1.5, z: 8 }, lookAt: { x: 0, y: 2, z: 0 }, label: 'Custom' },
 };
 
+export type AnatomicalRegion = 
+  | 'full_body' 
+  | 'lumbar_spine' 
+  | 'thoracic_spine' 
+  | 'cervical_spine' 
+  | 'left_shoulder' 
+  | 'right_shoulder' 
+  | 'left_hip' 
+  | 'right_hip' 
+  | 'left_knee' 
+  | 'right_knee' 
+  | 'left_ankle' 
+  | 'right_ankle'
+  | 'pelvis'
+  | 'left_elbow'
+  | 'right_elbow';
+
+export interface AnatomicalRegionConfig {
+  position: { x: number; y: number; z: number };
+  lookAt: { x: number; y: number; z: number };
+  label: string;
+  icon: string;
+  description: string;
+}
+
+export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegionConfig> = {
+  full_body: { 
+    position: { x: 0, y: 1.5, z: 5 }, 
+    lookAt: { x: 0, y: 1.2, z: 0 }, 
+    label: 'Full Body',
+    icon: '🦴',
+    description: 'Complete skeleton view'
+  },
+  lumbar_spine: { 
+    position: { x: 0.8, y: 0.8, z: 1.5 }, 
+    lookAt: { x: 0, y: 0.8, z: 0 }, 
+    label: 'Lumbar Spine',
+    icon: '🔻',
+    description: 'L1-L5 vertebrae, lower back'
+  },
+  thoracic_spine: { 
+    position: { x: 0.8, y: 1.4, z: 1.5 }, 
+    lookAt: { x: 0, y: 1.4, z: 0 }, 
+    label: 'Thoracic Spine',
+    icon: '🔷',
+    description: 'T1-T12 vertebrae, mid back'
+  },
+  cervical_spine: { 
+    position: { x: 0.6, y: 2.0, z: 1.2 }, 
+    lookAt: { x: 0, y: 2.0, z: 0 }, 
+    label: 'Cervical Spine',
+    icon: '🔹',
+    description: 'C1-C7 vertebrae, neck'
+  },
+  left_shoulder: { 
+    position: { x: -1.5, y: 1.8, z: 1.8 }, 
+    lookAt: { x: -0.5, y: 1.65, z: 0 }, 
+    label: 'Left Shoulder',
+    icon: '⬅️',
+    description: 'Glenohumeral joint, rotator cuff'
+  },
+  right_shoulder: { 
+    position: { x: 1.5, y: 1.8, z: 1.8 }, 
+    lookAt: { x: 0.5, y: 1.65, z: 0 }, 
+    label: 'Right Shoulder',
+    icon: '➡️',
+    description: 'Glenohumeral joint, rotator cuff'
+  },
+  left_hip: { 
+    position: { x: -1.2, y: 0.5, z: 1.8 }, 
+    lookAt: { x: -0.25, y: 0.5, z: 0 }, 
+    label: 'Left Hip',
+    icon: '⬅️',
+    description: 'Acetabulofemoral joint'
+  },
+  right_hip: { 
+    position: { x: 1.2, y: 0.5, z: 1.8 }, 
+    lookAt: { x: 0.25, y: 0.5, z: 0 }, 
+    label: 'Right Hip',
+    icon: '➡️',
+    description: 'Acetabulofemoral joint'
+  },
+  pelvis: { 
+    position: { x: 0, y: 0.5, z: 2.0 }, 
+    lookAt: { x: 0, y: 0.5, z: 0 }, 
+    label: 'Pelvis',
+    icon: '🔲',
+    description: 'SI joints, pubic symphysis'
+  },
+  left_knee: { 
+    position: { x: -0.8, y: 0.0, z: 1.5 }, 
+    lookAt: { x: -0.15, y: 0.0, z: 0 }, 
+    label: 'Left Knee',
+    icon: '⬅️',
+    description: 'Tibiofemoral, patellofemoral joints'
+  },
+  right_knee: { 
+    position: { x: 0.8, y: 0.0, z: 1.5 }, 
+    lookAt: { x: 0.15, y: 0.0, z: 0 }, 
+    label: 'Right Knee',
+    icon: '➡️',
+    description: 'Tibiofemoral, patellofemoral joints'
+  },
+  left_ankle: { 
+    position: { x: -0.6, y: -0.5, z: 1.2 }, 
+    lookAt: { x: -0.15, y: -0.5, z: 0 }, 
+    label: 'Left Ankle',
+    icon: '⬅️',
+    description: 'Talocrural, subtalar joints'
+  },
+  right_ankle: { 
+    position: { x: 0.6, y: -0.5, z: 1.2 }, 
+    lookAt: { x: 0.15, y: -0.5, z: 0 }, 
+    label: 'Right Ankle',
+    icon: '➡️',
+    description: 'Talocrural, subtalar joints'
+  },
+  left_elbow: { 
+    position: { x: -1.8, y: 1.3, z: 1.2 }, 
+    lookAt: { x: -0.8, y: 1.3, z: 0 }, 
+    label: 'Left Elbow',
+    icon: '⬅️',
+    description: 'Humeroulnar, radioulnar joints'
+  },
+  right_elbow: { 
+    position: { x: 1.8, y: 1.3, z: 1.2 }, 
+    lookAt: { x: 0.8, y: 1.3, z: 0 }, 
+    label: 'Right Elbow',
+    icon: '➡️',
+    description: 'Humeroulnar, radioulnar joints'
+  },
+};
+
 interface PureThreeGLBViewerProps {
   modelPath?: string;
   modelConfig?: ModelConfig;
@@ -76,6 +209,7 @@ interface PureThreeGLBViewerProps {
   cameraAngle?: CameraAngle;
   disableControls?: boolean;
   showLabel?: boolean;
+  zoomToRegion?: AnatomicalRegion | null;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -272,7 +406,8 @@ export default function PureThreeGLBViewer({
   biomechanicsData,
   cameraAngle = 'custom',
   disableControls = false,
-  showLabel = false
+  showLabel = false,
+  zoomToRegion = null
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -315,6 +450,48 @@ export default function PureThreeGLBViewer({
     if (!checkWebGL()) return;
     setStatus('loading');
   }, []);
+
+  useEffect(() => {
+    if (!zoomToRegion || !sceneRef.current) return;
+    
+    const { camera, controls } = sceneRef.current;
+    const regionConfig = ANATOMICAL_REGION_PRESETS[zoomToRegion];
+    if (!regionConfig) return;
+
+    const startPosition = camera.position.clone();
+    const endPosition = new THREE.Vector3(
+      regionConfig.position.x,
+      regionConfig.position.y,
+      regionConfig.position.z
+    );
+    
+    const startTarget = controls.target.clone();
+    const endTarget = new THREE.Vector3(
+      regionConfig.lookAt.x,
+      regionConfig.lookAt.y,
+      regionConfig.lookAt.z
+    );
+
+    const duration = 800;
+    const startTime = Date.now();
+
+    const animateZoom = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      
+      camera.position.lerpVectors(startPosition, endPosition, easeProgress);
+      controls.target.lerpVectors(startTarget, endTarget, easeProgress);
+      controls.update();
+
+      if (progress < 1) {
+        requestAnimationFrame(animateZoom);
+      }
+    };
+
+    animateZoom();
+  }, [zoomToRegion]);
 
   useEffect(() => {
     if (!containerRef.current) return;

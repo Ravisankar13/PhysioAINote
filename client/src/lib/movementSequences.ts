@@ -111,6 +111,7 @@ export const DEFAULT_JOINT_LIMITS: JointLimits = {
     tilt: { min: -30, max: 30 },
     obliquity: { min: -20, max: 20 },
     rotation: { min: -45, max: 45 },
+    drop: { min: 0, max: 100 }, // Vertical drop for closed-chain movements (squat depth)
   },
   neck: {
     flexion: { min: 0, max: 60 },
@@ -147,16 +148,19 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'squat',
     name: 'Squat',
-    description: 'Full bodyweight squat with proper form',
+    description: 'Bodyweight squat with forward kinematics - demonstrates joint movements',
     duration: 3000,
     loop: true,
     joints: [
+      // Hip flexion - main driver of squat depth
+      // Using FK: hip flexion rotates thigh down, knee flexion rotates shin back
+      // Together they create the squat position
       {
         joint: 'leftHip',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 100 },
+          { time: 0.5, value: 80 },
           { time: 1, value: 0 },
         ],
       },
@@ -165,16 +169,17 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 100 },
+          { time: 0.5, value: 80 },
           { time: 1, value: 0 },
         ],
       },
+      // Knee flexion - compensates hip flexion to create squat appearance
       {
         joint: 'leftKnee',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 120 },
+          { time: 0.5, value: 100 },
           { time: 1, value: 0 },
         ],
       },
@@ -183,16 +188,17 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 120 },
+          { time: 0.5, value: 100 },
           { time: 1, value: 0 },
         ],
       },
+      // Ankle dorsiflexion - shin moves forward over foot
       {
         joint: 'leftAnkle',
         property: 'dorsiflexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 25 },
+          { time: 0.5, value: 30 },
           { time: 1, value: 0 },
         ],
       },
@@ -201,25 +207,46 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'dorsiflexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 25 },
+          { time: 0.5, value: 30 },
           { time: 1, value: 0 },
         ],
       },
+      // Trunk forward lean for balance - pelvis anterior tilt
       {
         joint: 'pelvis',
         property: 'tilt',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: -15 },
+          { time: 0.5, value: 20 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Spine forward flexion for trunk lean
+      {
+        joint: 'spine',
+        property: 'thoracicKyphosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.5, value: 30 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Arm counterbalance - arms reach forward
+      {
+        joint: 'leftShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.5, value: 80 },
           { time: 1, value: 0 },
         ],
       },
       {
-        joint: 'spine',
-        property: 'lumbarLordosis',
+        joint: 'rightShoulder',
+        property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: -20 },
+          { time: 0.5, value: 80 },
           { time: 1, value: 0 },
         ],
       },

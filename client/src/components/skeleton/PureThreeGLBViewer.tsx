@@ -54,7 +54,7 @@ interface PureThreeGLBViewerProps {
   jointLimits?: JointLimits;
 }
 
-const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number }[] } = {
+const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
   // === HIP / FEMUR ===
   'leftHip.flexion': [{ boneName: 'Femer_Root_L', axis: 'x', scale: -1 }],
   'leftHip.extension': [{ boneName: 'Femer_Root_L', axis: 'x', scale: 1 }],
@@ -132,6 +132,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'pelvis.tilt': [{ boneName: 'Pelvis_Main', axis: 'x', scale: 1 }],
   'pelvis.obliquity': [{ boneName: 'Pelvis_Main', axis: 'z', scale: 1 }],
   'pelvis.rotation': [{ boneName: 'Pelvis_Main', axis: 'y', scale: 1 }],
+  'pelvis.drop': [{ boneName: 'Pelvis_Main', axis: 'y', scale: -0.01, isPosition: true }], // Vertical translation for closed-chain movements
   
   // === SPINE ===
   'spine.cervicalLordosis': [
@@ -775,12 +776,20 @@ export default function PureThreeGLBViewer({
     
     // First, collect all rotation contributions per bone per axis
     const boneRotations: { [boneName: string]: { x: number; y: number; z: number } } = {};
+    const bonePositions: { [boneName: string]: { x: number; y: number; z: number } } = {};
     
     // Initialize all bones to their initial rotation
     Object.keys(bones).forEach(boneName => {
       const initial = initialRotations[boneName];
       if (initial) {
         boneRotations[boneName] = { x: initial.x, y: initial.y, z: initial.z };
+      }
+      // Store initial positions for position-based transforms
+      const bone = bones[boneName];
+      if (bone) {
+        if (!bonePositions[boneName]) {
+          bonePositions[boneName] = { x: 0, y: 0, z: 0 }; // Store offsets from initial
+        }
       }
     });
     
@@ -805,27 +814,43 @@ export default function PureThreeGLBViewer({
       
       const angleInRadians = (value * Math.PI) / 180;
       
-      mappings.forEach(({ boneName, axis, scale }) => {
-        const adjustedAngle = angleInRadians * scale;
-        
-        // For animation loop bones, store slider rotations separately
-        if (animationLoopBones.has(boneName)) {
+      mappings.forEach(({ boneName, axis, scale, isPosition }) => {
+        if (isPosition) {
+          // Handle position-based transformations (e.g., pelvis drop)
+          const positionOffset = value * scale;
+          if (!bonePositions[boneName]) {
+            bonePositions[boneName] = { x: 0, y: 0, z: 0 };
+          }
           if (axis === 'x') {
-            sliderOnlyRotations[boneName].x += adjustedAngle;
+            bonePositions[boneName].x += positionOffset;
           } else if (axis === 'y') {
-            sliderOnlyRotations[boneName].y += adjustedAngle;
+            bonePositions[boneName].y += positionOffset;
           } else if (axis === 'z') {
-            sliderOnlyRotations[boneName].z += adjustedAngle;
+            bonePositions[boneName].z += positionOffset;
           }
         } else {
-          // For regular bones, accumulate to boneRotations
-          if (!boneRotations[boneName]) return;
-          if (axis === 'x') {
-            boneRotations[boneName].x += adjustedAngle;
-          } else if (axis === 'y') {
-            boneRotations[boneName].y += adjustedAngle;
-          } else if (axis === 'z') {
-            boneRotations[boneName].z += adjustedAngle;
+          // Handle rotation-based transformations
+          const adjustedAngle = angleInRadians * scale;
+          
+          // For animation loop bones, store slider rotations separately
+          if (animationLoopBones.has(boneName)) {
+            if (axis === 'x') {
+              sliderOnlyRotations[boneName].x += adjustedAngle;
+            } else if (axis === 'y') {
+              sliderOnlyRotations[boneName].y += adjustedAngle;
+            } else if (axis === 'z') {
+              sliderOnlyRotations[boneName].z += adjustedAngle;
+            }
+          } else {
+            // For regular bones, accumulate to boneRotations
+            if (!boneRotations[boneName]) return;
+            if (axis === 'x') {
+              boneRotations[boneName].x += adjustedAngle;
+            } else if (axis === 'y') {
+              boneRotations[boneName].y += adjustedAngle;
+            } else if (axis === 'z') {
+              boneRotations[boneName].z += adjustedAngle;
+            }
           }
         }
       });
@@ -857,6 +882,34 @@ export default function PureThreeGLBViewer({
         bone.rotation.z = rotation.z;
       }
     });
+    
+    // Apply position offsets to bones (for closed-chain movements like squat)
+    // Track which bones have position mappings so we can always apply them (even when returning to 0)
+    const bonesWithPositionMappings = new Set<string>();
+    Object.entries(BONE_MAPPING).forEach(([, mappings]) => {
+      mappings.forEach(({ boneName, isPosition }) => {
+        if (isPosition) {
+          bonesWithPositionMappings.add(boneName);
+        }
+      });
+    });
+    
+    bonesWithPositionMappings.forEach((boneName) => {
+      const bone = bones[boneName];
+      if (bone) {
+        // Store initial position on first access
+        if (!(bone as any).initialPosition) {
+          (bone as any).initialPosition = bone.position.clone();
+        }
+        const initialPos = (bone as any).initialPosition as THREE.Vector3;
+        const posOffset = bonePositions[boneName] || { x: 0, y: 0, z: 0 };
+        
+        // Always apply position (even when 0, to reset to initial position)
+        bone.position.x = initialPos.x + posOffset.x;
+        bone.position.y = initialPos.y + posOffset.y;
+        bone.position.z = initialPos.z + posOffset.z;
+      }
+    });
   }, [modelConfig, status]);
 
   useEffect(() => {
@@ -865,6 +918,9 @@ export default function PureThreeGLBViewer({
     
     const movement = getMovementById(animationState.currentMovement);
     if (!movement) return;
+    
+    const bones = bonesRef.current;
+    const initialRotations = initialRotationsRef.current;
     
     let animationFrameId: number;
     let lastTime = performance.now();
@@ -895,6 +951,93 @@ export default function PureThreeGLBViewer({
           jointValues[timeline.joint] = {};
         }
         jointValues[timeline.joint][timeline.property] = value;
+      });
+      
+      // Directly apply animation values to bones for immediate response
+      // This bypasses React state updates for smoother animation
+      const animBoneRotations: { [boneName: string]: { x: number; y: number; z: number } } = {};
+      const animBonePositions: { [boneName: string]: { x: number; y: number; z: number } } = {};
+      
+      // Initialize rotations from initial state
+      Object.keys(bones).forEach(boneName => {
+        const initial = initialRotations[boneName];
+        if (initial) {
+          animBoneRotations[boneName] = { x: initial.x, y: initial.y, z: initial.z };
+        }
+      });
+      
+      // Apply animation values through bone mappings
+      Object.entries(jointValues).forEach(([joint, props]) => {
+        Object.entries(props).forEach(([property, value]) => {
+          const configKey = `${joint}.${property}`;
+          const mappings = BONE_MAPPING[configKey];
+          
+          if (!mappings) return;
+          
+          const angleInRadians = (value * Math.PI) / 180;
+          
+          mappings.forEach(({ boneName, axis, scale, isPosition }) => {
+            if (isPosition) {
+              // Handle position-based transformations
+              const positionOffset = value * scale;
+              if (!animBonePositions[boneName]) {
+                animBonePositions[boneName] = { x: 0, y: 0, z: 0 };
+              }
+              if (axis === 'x') animBonePositions[boneName].x += positionOffset;
+              else if (axis === 'y') animBonePositions[boneName].y += positionOffset;
+              else if (axis === 'z') animBonePositions[boneName].z += positionOffset;
+            } else {
+              // Handle rotation-based transformations
+              const adjustedAngle = angleInRadians * scale;
+              if (!animBoneRotations[boneName]) {
+                const initial = initialRotations[boneName];
+                animBoneRotations[boneName] = initial ? { ...initial } : { x: 0, y: 0, z: 0 };
+              }
+              if (axis === 'x') animBoneRotations[boneName].x += adjustedAngle;
+              else if (axis === 'y') animBoneRotations[boneName].y += adjustedAngle;
+              else if (axis === 'z') animBoneRotations[boneName].z += adjustedAngle;
+            }
+          });
+        });
+      });
+      
+      // Apply rotations to bones
+      Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
+        const bone = bones[boneName];
+        if (bone) {
+          bone.rotation.x = rotation.x;
+          bone.rotation.y = rotation.y;
+          bone.rotation.z = rotation.z;
+        }
+      });
+      
+      // Apply positions to bones
+      Object.entries(animBonePositions).forEach(([boneName, posOffset]) => {
+        const bone = bones[boneName];
+        if (bone) {
+          if (!(bone as any).initialPosition) {
+            (bone as any).initialPosition = bone.position.clone();
+          }
+          const initialPos = (bone as any).initialPosition as THREE.Vector3;
+          bone.position.x = initialPos.x + posOffset.x;
+          bone.position.y = initialPos.y + posOffset.y;
+          bone.position.z = initialPos.z + posOffset.z;
+        }
+      });
+      
+      // Also reset positions for bones with position mappings when animation resets to 0
+      Object.entries(BONE_MAPPING).forEach(([, mappings]) => {
+        mappings.forEach(({ boneName, isPosition }) => {
+          if (isPosition && !animBonePositions[boneName]) {
+            const bone = bones[boneName];
+            if (bone && (bone as any).initialPosition) {
+              const initialPos = (bone as any).initialPosition as THREE.Vector3;
+              bone.position.x = initialPos.x;
+              bone.position.y = initialPos.y;
+              bone.position.z = initialPos.z;
+            }
+          }
+        });
       });
       
       if (onAnimationFrame) {

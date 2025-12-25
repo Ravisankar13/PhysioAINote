@@ -47,7 +47,7 @@ interface ModelConfig {
   limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
   spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number; cervicalRotation: number; cervicalLateralFlexion: number; thoracicRotation: number; lumbarRotation: number };
   neck: { flexion: number; extension: number; rotation: number; lateralFlexion: number; forwardHead: number };
-  pelvis: { tilt: number; obliquity: number; rotation: number };
+  pelvis: { tilt: number; obliquity: number; rotation: number; drop: number };
   leftHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
   rightHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
   leftKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
@@ -267,6 +267,7 @@ export default function TestSkeletonNew() {
       tilt: 0,
       obliquity: 0,
       rotation: 0,
+      drop: 0,
     },
     leftHip: {
       flexion: 0,
@@ -405,6 +406,7 @@ export default function TestSkeletonNew() {
         tilt: 0,
         obliquity: 0,
         rotation: 0,
+        drop: 0,
       },
       leftHip: {
         flexion: 0,

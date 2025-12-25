@@ -8,8 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Camera, Upload, FileText, Play, Pause, Save, User, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Camera, Upload, FileText, Play, Pause, Save, User, Loader2, CheckCircle, AlertCircle, FolderOpen, Trash2 } from 'lucide-react';
 import { PatientCloneComposer, CapturedJointAngles, ClinicalModifiers, ModelConfig, PatientCloneState, CLINICAL_CONDITION_MAPPINGS } from '@/lib/patientCloneComposer';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+import type { PatientClone } from '@shared/schema';
 
 interface PatientClonePanelProps {
   onPatientCloneUpdate: (cloneState: PatientCloneState) => void;
@@ -39,6 +44,92 @@ export default function PatientClonePanel({
   const [cloneName, setCloneName] = useState('');
   const [captureStatus, setCaptureStatus] = useState<'idle' | 'initializing' | 'active' | 'captured' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
+
+  const { data: savedClones = [], isLoading: clonesLoading } = useQuery<PatientClone[]>({
+    queryKey: ['/api/patient-clones'],
+  });
+
+  const saveCloneMutation = useMutation({
+    mutationFn: async (cloneData: any) => {
+      const response = await apiRequest('POST', '/api/patient-clones', cloneData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/patient-clones'] });
+      toast({ title: 'Clone saved successfully', description: 'Your patient clone has been saved.' });
+      setIsSaving(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to save clone', description: error.message, variant: 'destructive' });
+      setIsSaving(false);
+    },
+  });
+
+  const deleteCloneMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest('DELETE', `/api/patient-clones/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/patient-clones'] });
+      toast({ title: 'Clone deleted', description: 'The patient clone has been removed.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to delete clone', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const savePatientClone = useCallback(() => {
+    if (!cloneName.trim()) {
+      toast({ title: 'Name required', description: 'Please enter a name for the clone.', variant: 'destructive' });
+      return;
+    }
+
+    setIsSaving(true);
+    const fullModifiers: ClinicalModifiers | undefined = clinicalModifiers.primaryCondition ? {
+      primaryCondition: clinicalModifiers.primaryCondition || 'General',
+      bodyRegion: clinicalModifiers.bodyRegion || 'general',
+      severity: clinicalModifiers.severity || 'moderate',
+      chronicity: clinicalModifiers.chronicity || 'chronic',
+      movementLimitations: clinicalModifiers.movementLimitations || [],
+      compensatoryPatterns: clinicalModifiers.compensatoryPatterns || [],
+      painBehavior: clinicalModifiers.painBehavior || 'activity_related',
+    } : undefined;
+
+    const cloneState = PatientCloneComposer.composePatientClone(
+      capturedAngles || undefined,
+      fullModifiers,
+      currentModelConfig,
+      patientHeight,
+      patientWeight
+    );
+
+    saveCloneMutation.mutate({
+      cloneName: cloneName.trim(),
+      description: selectedCondition ? `${selectedCondition} patient clone` : 'Patient clone',
+      sourceType: capturedAngles ? 'movement_capture' : fullModifiers ? 'soap_note' : 'manual',
+      modelConfig: cloneState.modelConfig,
+      clinicalModifiers: fullModifiers || null,
+      capturedMovementData: capturedAngles || null,
+      biomechanicsData: cloneState.biomechanicsData || null,
+    });
+  }, [cloneName, clinicalModifiers, capturedAngles, currentModelConfig, patientHeight, patientWeight, selectedCondition, saveCloneMutation, toast]);
+
+  const loadSavedClone = useCallback((clone: PatientClone) => {
+    if (clone.modelConfig) {
+      const capturedData = clone.capturedMovementData as any;
+      const cloneState: PatientCloneState = {
+        modelConfig: clone.modelConfig as ModelConfig,
+        biomechanicsData: clone.biomechanicsData as any,
+        clinicalModifiers: clone.clinicalModifiers as ClinicalModifiers | undefined,
+        capturedAngles: capturedData?.capturedAngles || capturedData,
+      };
+      onPatientCloneUpdate(cloneState);
+      setCloneName(clone.cloneName);
+      toast({ title: 'Clone loaded', description: `Loaded "${clone.cloneName}" successfully.` });
+    }
+  }, [onPatientCloneUpdate, toast]);
 
   const startCapture = useCallback(async () => {
     try {
@@ -147,8 +238,12 @@ export default function PatientClonePanel({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Tabs defaultValue="capture" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="saved" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="saved" className="text-xs" data-testid="tab-saved">
+              <FolderOpen className="h-3 w-3 mr-1" />
+              Saved
+            </TabsTrigger>
             <TabsTrigger value="capture" className="text-xs" data-testid="tab-capture">
               <Camera className="h-3 w-3 mr-1" />
               Capture
@@ -162,6 +257,73 @@ export default function PatientClonePanel({
               Apply
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="saved" className="space-y-3 mt-3">
+            <div className="text-sm text-slate-400 mb-2">
+              Load a previously saved patient clone
+            </div>
+            
+            {clonesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+              </div>
+            ) : savedClones.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No saved clones yet</p>
+                <p className="text-xs mt-1">Create a clone using the other tabs</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[300px]">
+                <div className="space-y-2">
+                  {savedClones.map((clone) => (
+                    <div
+                      key={clone.id}
+                      className="bg-slate-900 p-3 rounded-lg border border-slate-700 hover:border-blue-500/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm text-slate-200 truncate">
+                            {clone.cloneName}
+                          </div>
+                          {clone.description && (
+                            <div className="text-xs text-slate-400 mt-1 truncate">
+                              {clone.description}
+                            </div>
+                          )}
+                          <div className="flex gap-2 mt-2">
+                            <Badge variant="outline" className="text-xs">
+                              {clone.sourceType}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            onClick={() => loadSavedClone(clone)}
+                            data-testid={`btn-load-clone-${clone.id}`}
+                          >
+                            <Upload className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
+                            onClick={() => deleteCloneMutation.mutate(clone.id)}
+                            data-testid={`btn-delete-clone-${clone.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </TabsContent>
 
           <TabsContent value="capture" className="space-y-3 mt-3">
             <div className="text-sm text-slate-400 mb-2">
@@ -403,14 +565,30 @@ export default function PatientClonePanel({
                 </div>
               </div>
 
-              <Button
-                onClick={applyPatientClone}
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                data-testid="btn-apply-clone"
-              >
-                <User className="h-4 w-4 mr-2" />
-                Apply Patient Clone to Skeleton
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={applyPatientClone}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  data-testid="btn-apply-clone"
+                >
+                  <User className="h-4 w-4 mr-2" />
+                  Apply to Skeleton
+                </Button>
+                <Button
+                  onClick={savePatientClone}
+                  variant="outline"
+                  className="flex-1"
+                  disabled={isSaving || !cloneName.trim()}
+                  data-testid="btn-save-clone"
+                >
+                  {isSaving ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Save Clone
+                </Button>
+              </div>
             </div>
           </TabsContent>
         </Tabs>

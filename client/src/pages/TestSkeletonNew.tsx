@@ -1,14 +1,16 @@
-import { useState, useEffect, Suspense, Component, ReactNode } from "react";
+import { useState, useEffect, Suspense, Component, ReactNode, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import PureThreeGLBViewer, { AnimationState } from "@/components/skeleton/PureThreeGLBViewer";
+import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
 
 interface GLBErrorBoundaryProps {
   children: ReactNode;
@@ -205,6 +207,34 @@ export default function TestSkeletonNew() {
     shoulders: false,
     elbows: false,
   });
+
+  const [animationState, setAnimationState] = useState<AnimationState>({
+    isPlaying: false,
+    currentMovement: null,
+    progress: 0,
+    speed: 1,
+  });
+
+  const handleAnimationFrame = useCallback((jointValues: { [key: string]: { [prop: string]: number } }) => {
+    setModelConfig((prev) => {
+      const newConfig = { ...prev };
+      
+      Object.entries(jointValues).forEach(([joint, props]) => {
+        if (joint in newConfig) {
+          const jointConfig = newConfig[joint as keyof typeof newConfig];
+          if (typeof jointConfig === 'object' && jointConfig !== null) {
+            Object.entries(props).forEach(([prop, value]) => {
+              if (prop in jointConfig) {
+                (jointConfig as any)[prop] = value;
+              }
+            });
+          }
+        }
+      });
+      
+      return newConfig;
+    });
+  }, []);
 
   const [modelConfig, setModelConfig] = useState({
     limbScales: {
@@ -634,7 +664,13 @@ export default function TestSkeletonNew() {
                   <span className="ml-2">Loading GLB model...</span>
                 </div>
               }>
-                <PureThreeGLBViewer modelPath="/models/skeleton_character.glb" modelConfig={modelConfig} className="w-full h-full" />
+                <PureThreeGLBViewer 
+                  modelPath="/models/skeleton_character.glb" 
+                  modelConfig={modelConfig} 
+                  className="w-full h-full"
+                  animationState={animationState}
+                  onAnimationFrame={handleAnimationFrame}
+                />
               </Suspense>
             </GLBErrorBoundary>
           </CardContent>
@@ -652,6 +688,96 @@ export default function TestSkeletonNew() {
             </div>
           </CardHeader>
           <CardContent className="overflow-y-auto h-[calc(100%-80px)]">
+            {/* Movement Animation Controller */}
+            <div className="mb-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-lg border border-purple-500/20">
+              <h3 className="font-semibold mb-3 text-purple-300 flex items-center gap-2">
+                <Play className="h-4 w-4" />
+                Movement Animation
+              </h3>
+              <div className="space-y-3">
+                <div className="flex gap-2 items-center">
+                  <Select
+                    value={animationState.currentMovement || ''}
+                    onValueChange={(value) => {
+                      setAnimationState(prev => ({
+                        ...prev,
+                        currentMovement: value || null,
+                        progress: 0,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="flex-1" data-testid="select-movement">
+                      <SelectValue placeholder="Select movement..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MOVEMENT_SEQUENCES.map((seq) => (
+                        <SelectItem key={seq.id} value={seq.id}>
+                          {seq.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  <Button
+                    variant={animationState.isPlaying ? "destructive" : "default"}
+                    size="sm"
+                    onClick={() => {
+                      if (!animationState.currentMovement) return;
+                      setAnimationState(prev => ({
+                        ...prev,
+                        isPlaying: !prev.isPlaying,
+                      }));
+                    }}
+                    disabled={!animationState.currentMovement}
+                    data-testid="button-play-pause"
+                  >
+                    {animationState.isPlaying ? (
+                      <><Pause className="h-4 w-4 mr-1" /> Pause</>
+                    ) : (
+                      <><Play className="h-4 w-4 mr-1" /> Play</>
+                    )}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAnimationState(prev => ({
+                        ...prev,
+                        isPlaying: false,
+                        progress: 0,
+                      }));
+                      resetAll();
+                    }}
+                    data-testid="button-reset-animation"
+                  >
+                    <SkipBack className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                <div>
+                  <Label className="text-sm text-muted-foreground">Speed: {animationState.speed}x</Label>
+                  <Slider
+                    value={[animationState.speed]}
+                    onValueChange={(value) => setAnimationState(prev => ({ ...prev, speed: value[0] }))}
+                    min={0.25}
+                    max={2}
+                    step={0.25}
+                    className="mt-1"
+                    data-testid="slider-animation-speed"
+                  />
+                </div>
+                
+                {animationState.currentMovement && (
+                  <p className="text-xs text-muted-foreground">
+                    {MOVEMENT_SEQUENCES.find(s => s.id === animationState.currentMovement)?.description}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <Separator className="my-4" />
+
             <Tabs defaultValue="spine" className="w-full">
               <TabsList className="grid grid-cols-3 w-full">
                 <TabsTrigger value="spine">Spine & Pelvis</TabsTrigger>

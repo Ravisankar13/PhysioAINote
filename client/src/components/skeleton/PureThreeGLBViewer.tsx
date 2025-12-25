@@ -1,9 +1,10 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { AlertCircle, Loader2, RotateCcw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getMovementById, interpolateKeyframes } from '@/lib/movementSequences';
 
 interface JointConfig {
   flexion?: number;
@@ -37,10 +38,19 @@ interface ModelConfig {
   [key: string]: JointConfig | { tilt?: number; obliquity?: number; rotation?: number } | { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number } | { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number } | undefined;
 }
 
+export interface AnimationState {
+  isPlaying: boolean;
+  currentMovement: string | null;
+  progress: number;
+  speed: number;
+}
+
 interface PureThreeGLBViewerProps {
   modelPath?: string;
   modelConfig?: ModelConfig;
   className?: string;
+  animationState?: AnimationState;
+  onAnimationFrame?: (jointValues: { [key: string]: { [prop: string]: number } }) => void;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number }[] } = {
@@ -229,7 +239,9 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
 export default function PureThreeGLBViewer({ 
   modelPath = '/models/rigged-skeleton.glb',
   modelConfig,
-  className = '' 
+  className = '',
+  animationState,
+  onAnimationFrame
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -844,6 +856,60 @@ export default function PureThreeGLBViewer({
       }
     });
   }, [modelConfig, status]);
+
+  useEffect(() => {
+    if (!animationState || !animationState.isPlaying || !animationState.currentMovement) return;
+    if (status !== 'ready') return;
+    
+    const movement = getMovementById(animationState.currentMovement);
+    if (!movement) return;
+    
+    let animationFrameId: number;
+    let lastTime = performance.now();
+    let accumulatedTime = animationState.progress * movement.duration;
+    
+    const animate = (currentTime: number) => {
+      const deltaTime = (currentTime - lastTime) * animationState.speed;
+      lastTime = currentTime;
+      accumulatedTime += deltaTime;
+      
+      let normalizedTime = accumulatedTime / movement.duration;
+      
+      if (movement.loop) {
+        normalizedTime = normalizedTime % 1;
+        if (normalizedTime < 0) normalizedTime = 1 + normalizedTime;
+      } else {
+        normalizedTime = Math.min(1, Math.max(0, normalizedTime));
+      }
+      
+      const jointValues: { [key: string]: { [prop: string]: number } } = {};
+      
+      movement.joints.forEach(timeline => {
+        const value = interpolateKeyframes(timeline.keyframes, normalizedTime);
+        
+        if (!jointValues[timeline.joint]) {
+          jointValues[timeline.joint] = {};
+        }
+        jointValues[timeline.joint][timeline.property] = value;
+      });
+      
+      if (onAnimationFrame) {
+        onAnimationFrame(jointValues);
+      }
+      
+      if (animationState.isPlaying) {
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+    
+    animationFrameId = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame]);
 
   const handleRetry = () => {
     setStatus('checking');

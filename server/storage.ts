@@ -161,6 +161,9 @@ import {
   discussionUpvoteTracking,
   type DiscussionUpvote,
   type InsertDiscussionUpvote,
+  patientClones,
+  type PatientClone,
+  type InsertPatientClone,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -734,6 +737,13 @@ export interface IStorage {
   createQuizAttempt(attempt: InsertQuizAttempt): Promise<QuizAttempt>;
   getQuizAttempts(userId: number, courseId: number, moduleId: number, sectionIndex: number): Promise<QuizAttempt[]>;
   getQuestionAttempts(userId: number, courseId: number, moduleId: number, sectionIndex: number, questionId: string): Promise<QuizAttempt[]>;
+  
+  // Patient Clone Operations
+  createPatientClone(clone: InsertPatientClone): Promise<PatientClone>;
+  getPatientClone(id: number): Promise<PatientClone | undefined>;
+  getUserPatientClones(userId: number): Promise<PatientClone[]>;
+  updatePatientClone(id: number, data: Partial<InsertPatientClone>): Promise<PatientClone>;
+  deletePatientClone(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4752,6 +4762,42 @@ export class DatabaseStorage implements IStorage {
         eq(quizAttempts.questionId, questionId)
       ))
       .orderBy(quizAttempts.createdAt);
+  }
+
+  // Patient Clone Operations
+  async createPatientClone(clone: InsertPatientClone): Promise<PatientClone> {
+    const result = await db.insert(patientClones).values(clone).returning();
+    return result[0];
+  }
+
+  async getPatientClone(id: number): Promise<PatientClone | undefined> {
+    const result = await db
+      .select()
+      .from(patientClones)
+      .where(eq(patientClones.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getUserPatientClones(userId: number): Promise<PatientClone[]> {
+    return await db
+      .select()
+      .from(patientClones)
+      .where(eq(patientClones.userId, userId))
+      .orderBy(desc(patientClones.createdAt));
+  }
+
+  async updatePatientClone(id: number, data: Partial<InsertPatientClone>): Promise<PatientClone> {
+    const result = await db
+      .update(patientClones)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(patientClones.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deletePatientClone(id: number): Promise<void> {
+    await db.delete(patientClones).where(eq(patientClones.id, id));
   }
 }
 

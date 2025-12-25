@@ -14,6 +14,10 @@ export interface IKResult {
   success: boolean;
 }
 
+// Bone names for the 44-bone skeleton_character.glb model
+// Femer_L/R = thigh bones (child of Femer_Root_L/R)
+// fibula_tibia_L/R = shin/knee bones
+// The hip rotation is done at Femer_Root, but we need to rotate Femer for proper thigh movement
 export const LEG_IK_CONFIG = {
   left: {
     hipBoneName: 'Femer_Root_L',
@@ -124,10 +128,11 @@ export function applyLegIK(
   legLengths: { thighLength: number; shinLength: number }
 ): void {
   const hipBone = bones[config.hipBoneName];
+  const thighBone = bones[config.thighBoneName];
   const shinBone = bones[config.shinBoneName];
 
-  if (!hipBone || !shinBone) {
-    console.warn('IK: Missing hip or shin bone');
+  if (!hipBone || !thighBone || !shinBone) {
+    console.warn('IK: Missing hip, thigh or shin bone');
     return;
   }
 
@@ -150,13 +155,14 @@ export function applyLegIK(
     return;
   }
 
-  const hipInitial = initialRotations[config.hipBoneName];
+  // Apply rotation to the THIGH bone (Femer_L/R), not the hip root pivot
+  const thighInitial = initialRotations[config.thighBoneName];
   const shinInitial = initialRotations[config.shinBoneName];
 
-  if (hipInitial) {
-    hipBone.rotation.x = hipInitial.x + ikResult.hipAngle;
-    hipBone.rotation.y = hipInitial.y;
-    hipBone.rotation.z = hipInitial.z;
+  if (thighInitial) {
+    thighBone.rotation.x = thighInitial.x + ikResult.hipAngle;
+    thighBone.rotation.y = thighInitial.y;
+    thighBone.rotation.z = thighInitial.z;
   }
 
   if (shinInitial) {

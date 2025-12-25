@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { ExternalLink, AlertCircle, Loader2 } from "lucide-react";
 
 interface ScapulaSkeletonViewerProps {
   modelPath: string;
@@ -24,6 +25,10 @@ export default function ScapulaSkeletonViewer({
   const bonesRef = useRef<Map<string, THREE.Bone>>(new Map());
   const initialRotationsRef = useRef<Map<string, THREE.Euler>>(new Map());
   const animationIdRef = useRef<number>(0);
+  
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [webglSupported, setWebglSupported] = useState(true);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -31,6 +36,23 @@ export default function ScapulaSkeletonViewer({
     const container = containerRef.current;
     const width = container.clientWidth;
     const height = container.clientHeight;
+
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) {
+      setWebglSupported(false);
+      setIsLoading(false);
+      return;
+    }
+
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+    } catch (e) {
+      setWebglSupported(false);
+      setIsLoading(false);
+      return;
+    }
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
@@ -40,7 +62,6 @@ export default function ScapulaSkeletonViewer({
     camera.position.set(0, 1.5, 3);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
@@ -103,6 +124,7 @@ export default function ScapulaSkeletonViewer({
 
         bones.sort();
         onBonesLoaded(bones);
+        setIsLoading(false);
 
         console.log("=== BONE HIERARCHY ===");
         console.log(`Model: ${modelPath}`);
@@ -119,8 +141,10 @@ export default function ScapulaSkeletonViewer({
       (progress) => {
         console.log(`Loading: ${(progress.loaded / progress.total * 100).toFixed(1)}%`);
       },
-      (error) => {
-        console.error("Error loading model:", error);
+      (err) => {
+        console.error("Error loading model:", err);
+        setError(`Failed to load model: ${modelPath}`);
+        setIsLoading(false);
       }
     );
 
@@ -144,8 +168,12 @@ export default function ScapulaSkeletonViewer({
     return () => {
       window.removeEventListener("resize", handleResize);
       cancelAnimationFrame(animationIdRef.current);
-      renderer.dispose();
-      container.removeChild(renderer.domElement);
+      if (renderer) {
+        renderer.dispose();
+        if (container.contains(renderer.domElement)) {
+          container.removeChild(renderer.domElement);
+        }
+      }
     };
   }, [modelPath, onBonesLoaded]);
 
@@ -186,5 +214,46 @@ export default function ScapulaSkeletonViewer({
     });
   }, [selectedBone]);
 
-  return <div ref={containerRef} className="w-full h-full" />;
+  if (!webglSupported) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white p-8">
+        <AlertCircle className="w-16 h-16 text-amber-500 mb-4" />
+        <h3 className="text-xl font-bold mb-2">WebGL Not Available</h3>
+        <p className="text-slate-400 text-center mb-4">
+          The Replit preview doesn't support WebGL. Please open this page in a new browser tab.
+        </p>
+        <a
+          href={window.location.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <ExternalLink className="w-5 h-5" />
+          Open in New Tab
+        </a>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white p-8">
+        <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+        <h3 className="text-xl font-bold mb-2">Error Loading Model</h3>
+        <p className="text-slate-400 text-center">{error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
+          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+          <span className="ml-2 text-white">Loading model...</span>
+        </div>
+      )}
+      <div ref={containerRef} className="w-full h-full" />
+    </div>
+  );
 }

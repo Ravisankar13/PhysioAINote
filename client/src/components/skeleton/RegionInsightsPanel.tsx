@@ -31,6 +31,8 @@ interface RegionInsightsPanelProps {
   spineRotation: number;
   spineLateralFlexion: number;
   pelvisTilt: number;
+  pelvisObliquity?: number;
+  pelvisRotation?: number;
   bodyWeightKg?: number;
   className?: string;
 }
@@ -257,6 +259,8 @@ export function RegionInsightsPanel({
   spineRotation,
   spineLateralFlexion,
   pelvisTilt,
+  pelvisObliquity = 0,
+  pelvisRotation = 0,
   bodyWeightKg = 70,
   className = '',
 }: RegionInsightsPanelProps) {
@@ -272,13 +276,15 @@ export function RegionInsightsPanel({
         spineRotation,
         spineLateralFlexion,
         pelvisTilt,
+        pelvisObliquity,
+        pelvisRotation,
         bodyWeightKg
       );
       setAnalysis(result);
     } else {
       setAnalysis(null);
     }
-  }, [selectedRegion, spineFlexion, spineRotation, spineLateralFlexion, pelvisTilt, bodyWeightKg, profile]);
+  }, [selectedRegion, spineFlexion, spineRotation, spineLateralFlexion, pelvisTilt, pelvisObliquity, pelvisRotation, bodyWeightKg, profile]);
 
   if (!selectedRegion || selectedRegion === 'full_body') {
     return (

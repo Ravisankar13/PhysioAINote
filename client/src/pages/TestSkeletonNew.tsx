@@ -903,10 +903,23 @@ export default function TestSkeletonNew() {
         {zoomToRegion && zoomToRegion !== 'full_body' && (
           <RegionInsightsPanel
             selectedRegion={zoomToRegion}
-            spineFlexion={-modelConfig.spine.lumbarLordosis}
-            spineRotation={modelConfig.spine.lumbarRotation}
-            spineLateralFlexion={modelConfig.spine.scoliosis}
+            spineFlexion={
+              zoomToRegion === 'cervical_spine' ? -modelConfig.spine.cervicalLordosis :
+              zoomToRegion === 'thoracic_spine' ? modelConfig.spine.thoracicKyphosis :
+              -modelConfig.spine.lumbarLordosis
+            }
+            spineRotation={
+              zoomToRegion === 'cervical_spine' ? modelConfig.spine.cervicalRotation :
+              zoomToRegion === 'thoracic_spine' ? modelConfig.spine.thoracicRotation :
+              modelConfig.spine.lumbarRotation
+            }
+            spineLateralFlexion={
+              zoomToRegion === 'cervical_spine' ? modelConfig.spine.cervicalLateralFlexion :
+              modelConfig.spine.scoliosis
+            }
             pelvisTilt={modelConfig.pelvis.tilt}
+            pelvisObliquity={modelConfig.pelvis.obliquity}
+            pelvisRotation={modelConfig.pelvis.rotation}
             bodyWeightKg={70}
             className="col-span-2 lg:col-span-1"
           />

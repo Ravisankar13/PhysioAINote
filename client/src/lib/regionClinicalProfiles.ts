@@ -1493,6 +1493,8 @@ export function analyzeRegion(
   spineRotation: number,
   spineLateralFlexion: number,
   pelvisTilt: number,
+  pelvisObliquity: number = 0,
+  pelvisRotation: number = 0,
   bodyWeightKg: number = 70
 ): RegionAnalysisResult | null {
   let structureLoads: StructureLoadAnalysis[] = [];
@@ -1511,13 +1513,13 @@ export function analyzeRegion(
       regionName = 'Cervical spine';
       break;
     case 'thoracic_spine':
-      structureLoads = calculateThoracicStructureLoads(35 + spineFlexion * 0.3, spineRotation, 10, bodyWeightKg);
-      conditionProbabilities = calculateThoracicConditions(structureLoads, 35 + spineFlexion * 0.3, spineRotation);
+      structureLoads = calculateThoracicStructureLoads(spineFlexion, spineRotation, spineLateralFlexion, bodyWeightKg);
+      conditionProbabilities = calculateThoracicConditions(structureLoads, spineFlexion, spineRotation);
       regionName = 'Thoracic spine';
       break;
     case 'pelvis':
-      structureLoads = calculatePelvicStructureLoads(pelvisTilt, spineLateralFlexion * 0.5, spineRotation * 0.3, 30, bodyWeightKg);
-      conditionProbabilities = calculatePelvicConditions(structureLoads, pelvisTilt, spineLateralFlexion * 0.5, 30);
+      structureLoads = calculatePelvicStructureLoads(pelvisTilt, pelvisObliquity, pelvisRotation, 30, bodyWeightKg);
+      conditionProbabilities = calculatePelvicConditions(structureLoads, pelvisTilt, pelvisObliquity, 30);
       regionName = 'Pelvis';
       break;
     default:

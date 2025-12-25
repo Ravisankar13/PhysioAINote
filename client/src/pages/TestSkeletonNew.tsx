@@ -13,6 +13,7 @@ import PureThreeGLBViewer, { AnimationState, AnatomicalRegion } from "@/componen
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
 import PatientClonePanel from "@/components/skeleton/PatientClonePanel";
 import RegionZoomControls from "@/components/skeleton/RegionZoomControls";
+import { RegionInsightsPanel } from "@/components/skeleton/RegionInsightsPanel";
 import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
 import BiomechanicsPanel from "@/components/skeleton/BiomechanicsPanel";
 import { Grid2X2, Maximize } from "lucide-react";
@@ -894,6 +895,19 @@ export default function TestSkeletonNew() {
           <PatientClonePanel
             onPatientCloneUpdate={handlePatientCloneUpdate}
             currentModelConfig={modelConfig}
+            className="col-span-2 lg:col-span-1"
+          />
+        )}
+
+        {/* Region Insights Panel - Shows when a region is zoomed */}
+        {zoomToRegion && zoomToRegion !== 'full_body' && (
+          <RegionInsightsPanel
+            selectedRegion={zoomToRegion}
+            spineFlexion={modelConfig.spine.lumbarLordosis}
+            spineRotation={modelConfig.spine.lumbarRotation}
+            spineLateralFlexion={modelConfig.spine.scoliosis}
+            pelvisTilt={modelConfig.pelvis.tilt}
+            bodyWeightKg={70}
             className="col-span-2 lg:col-span-1"
           />
         )}

@@ -4,18 +4,20 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PureThreeGLBViewer, { AnimationState } from "@/components/skeleton/PureThreeGLBViewer";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
+import PatientClonePanel from "@/components/skeleton/PatientClonePanel";
 import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
 import BiomechanicsPanel from "@/components/skeleton/BiomechanicsPanel";
 import { Grid2X2, Maximize } from "lucide-react";
 import { BiomechanicsVisualizationData } from "@/lib/forceVisualization";
 import { calculateFullBiomechanics } from "@/lib/biomechanicsEngine";
+import { PatientCloneState } from "@/lib/patientCloneComposer";
 
 interface GLBErrorBoundaryProps {
   children: ReactNode;
@@ -227,11 +229,28 @@ export default function TestSkeletonNew() {
   });
   
   const [multiViewMode, setMultiViewMode] = useState(false);
+  const [showPatientClonePanel, setShowPatientClonePanel] = useState(false);
 
-  const [patientAnthropometrics] = useState({
+  const [patientAnthropometrics, setPatientAnthropometrics] = useState({
     heightCm: 175,
     weightKg: 75,
   });
+
+  const handlePatientCloneUpdate = useCallback((cloneState: PatientCloneState) => {
+    setModelConfig(cloneState.modelConfig);
+    if (cloneState.biomechanicsData && cloneState.biomechanicsData.anthropometrics) {
+      setPatientAnthropometrics({
+        heightCm: cloneState.biomechanicsData.anthropometrics.heightCm,
+        weightKg: cloneState.biomechanicsData.anthropometrics.weightKg,
+      });
+    }
+    console.log('Patient clone applied:', {
+      hasModelConfig: !!cloneState.modelConfig,
+      hasBiomechanics: !!cloneState.biomechanicsData,
+      hasClinicalModifiers: !!cloneState.clinicalModifiers,
+      hasCapturedAngles: !!cloneState.capturedAngles,
+    });
+  }, []);
 
   const handleAnimationFrame = useCallback((jointValues: { [key: string]: { [prop: string]: number } }) => {
     setModelConfig((prev) => {
@@ -749,6 +768,16 @@ export default function TestSkeletonNew() {
                     <><Grid2X2 className="h-4 w-4 mr-1" /> Multi-View</>
                   )}
                 </Button>
+                <Button
+                  variant={showPatientClonePanel ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowPatientClonePanel(!showPatientClonePanel)}
+                  className={showPatientClonePanel ? "bg-blue-600 hover:bg-blue-700" : ""}
+                  data-testid="toggle-patient-clone"
+                >
+                  <User className="h-4 w-4 mr-1" />
+                  Clone Patient
+                </Button>
               </CardTitle>
               {!multiViewMode && (
                 <div className="flex items-center gap-3">
@@ -850,6 +879,15 @@ export default function TestSkeletonNew() {
             )}
           </CardContent>
         </Card>
+
+        {/* Patient Clone Panel - Conditionally Shown */}
+        {showPatientClonePanel && (
+          <PatientClonePanel
+            onPatientCloneUpdate={handlePatientCloneUpdate}
+            currentModelConfig={modelConfig}
+            className="col-span-2 lg:col-span-1"
+          />
+        )}
 
         {/* Right Panel - Controls */}
         <Card className="h-[600px] overflow-hidden">

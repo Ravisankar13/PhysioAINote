@@ -5060,3 +5060,117 @@ export const treatmentStrategyRelations = relations(treatmentStrategies, ({ one 
     references: [users.id],
   }),
 }));
+
+// Patient Clone - Real patient virtualization from SOAP notes or movement capture
+export const patientClones = pgTable("patient_clones", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  
+  // Clone identification (privacy-preserving)
+  cloneName: text("clone_name").notNull(),
+  description: text("description"),
+  
+  // Source of clone data
+  sourceType: text("source_type").notNull(), // 'soap_note', 'movement_capture', 'manual', 'hybrid'
+  soapNoteId: integer("soap_note_id"),
+  
+  // 3D Model Configuration (same structure as virtualPatientConfigs.modelConfig)
+  modelConfig: json("model_config").$type<{
+    limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
+    spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number; cervicalRotation: number; cervicalLateralFlexion: number; thoracicRotation: number; lumbarRotation: number };
+    neck: { flexion: number; extension: number; rotation: number; lateralFlexion: number; forwardHead: number };
+    pelvis: { tilt: number; obliquity: number; rotation: number; drop: number };
+    leftHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
+    rightHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
+    leftKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
+    rightKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
+    leftAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
+    rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
+    leftShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
+    rightShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
+    leftElbow: { flexion: number; carryingAngle: number; pronation: number };
+    rightElbow: { flexion: number; carryingAngle: number; pronation: number };
+    leftWrist: { deviation: number; flexion: number };
+    rightWrist: { deviation: number; flexion: number };
+  }>(),
+  
+  // Clinical modifiers extracted from SOAP (de-identified)
+  clinicalModifiers: json("clinical_modifiers").$type<{
+    primaryCondition: string;
+    bodyRegion: string;
+    severity: 'mild' | 'moderate' | 'severe';
+    chronicity: 'acute' | 'subacute' | 'chronic';
+    movementLimitations: string[];
+    compensatoryPatterns: string[];
+    painBehavior: 'constant' | 'intermittent' | 'activity_related';
+  }>(),
+  
+  // Captured movement data (from webcam/video analysis)
+  capturedMovementData: json("captured_movement_data").$type<{
+    captureTimestamp: string;
+    capturedAngles: {
+      hipFlexion: { left: number; right: number };
+      hipAbduction: { left: number; right: number };
+      kneeFlexion: { left: number; right: number };
+      shoulderFlexion: { left: number; right: number };
+      shoulderAbduction: { left: number; right: number };
+      elbowFlexion: { left: number; right: number };
+      trunkFlexion: number;
+      trunkLateralFlexion: number;
+    };
+    posturalDeviations: string[];
+    gaitMetrics: {
+      cadence: number;
+      stepLength: { left: number; right: number };
+      asymmetryScore: number;
+    };
+    movementQualityScore: number;
+  }>(),
+  
+  // Biomechanics data for force visualization
+  biomechanicsData: json("biomechanics_data").$type<{
+    jointForces: {
+      lumbarCompression: number;
+      lumbarShear: number;
+      leftHipCompression: number;
+      rightHipCompression: number;
+      leftKneeCompression: number;
+      rightKneeCompression: number;
+    };
+    muscleActivations: {
+      erectorSpinae: number;
+      gluteMaximus: { left: number; right: number };
+      quadriceps: { left: number; right: number };
+      hamstrings: { left: number; right: number };
+    };
+    riskFactors: string[];
+  }>(),
+  
+  // Animation frames for playback
+  animationFrames: json("animation_frames").$type<Array<{
+    timestamp: number;
+    jointAngles: Record<string, Record<string, number>>;
+  }>>(),
+  
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPatientCloneSchema = createInsertSchema(patientClones).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPatientClone = z.infer<typeof insertPatientCloneSchema>;
+export type PatientClone = typeof patientClones.$inferSelect;
+
+export const patientCloneRelations = relations(patientClones, ({ one }) => ({
+  user: one(users, {
+    fields: [patientClones.userId],
+    references: [users.id],
+  }),
+}));

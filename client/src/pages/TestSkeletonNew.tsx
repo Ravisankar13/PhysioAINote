@@ -903,7 +903,7 @@ export default function TestSkeletonNew() {
         {zoomToRegion && zoomToRegion !== 'full_body' && (
           <RegionInsightsPanel
             selectedRegion={zoomToRegion}
-            spineFlexion={modelConfig.spine.lumbarLordosis}
+            spineFlexion={-modelConfig.spine.lumbarLordosis}
             spineRotation={modelConfig.spine.lumbarRotation}
             spineLateralFlexion={modelConfig.spine.scoliosis}
             pelvisTilt={modelConfig.pelvis.tilt}

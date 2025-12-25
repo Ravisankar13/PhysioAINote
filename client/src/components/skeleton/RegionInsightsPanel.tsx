@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import type { AnatomicalRegion } from './PureThreeGLBViewer';
 import { 
-  LUMBAR_SPINE_PROFILE,
+  REGION_PROFILES,
   analyzeRegion,
   type RegionAnalysisResult,
   type StructureLoadAnalysis,
@@ -262,8 +262,10 @@ export function RegionInsightsPanel({
 }: RegionInsightsPanelProps) {
   const [analysis, setAnalysis] = useState<RegionAnalysisResult | null>(null);
 
+  const profile = selectedRegion ? REGION_PROFILES[selectedRegion] : null;
+
   useEffect(() => {
-    if (selectedRegion === 'lumbar_spine') {
+    if (selectedRegion && profile) {
       const result = analyzeRegion(
         selectedRegion,
         spineFlexion,
@@ -276,7 +278,7 @@ export function RegionInsightsPanel({
     } else {
       setAnalysis(null);
     }
-  }, [selectedRegion, spineFlexion, spineRotation, spineLateralFlexion, pelvisTilt, bodyWeightKg]);
+  }, [selectedRegion, spineFlexion, spineRotation, spineLateralFlexion, pelvisTilt, bodyWeightKg, profile]);
 
   if (!selectedRegion || selectedRegion === 'full_body') {
     return (
@@ -290,7 +292,7 @@ export function RegionInsightsPanel({
     );
   }
 
-  if (!analysis && selectedRegion !== 'lumbar_spine') {
+  if (!profile) {
     return (
       <Card className={className}>
         <CardHeader className="pb-2">
@@ -300,13 +302,11 @@ export function RegionInsightsPanel({
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
           <p>Clinical analysis for this region coming soon.</p>
-          <p className="mt-2">Currently supported: Lumbar Spine</p>
+          <p className="mt-2">Currently supported: Lumbar Spine, Cervical Spine, Thoracic Spine, Pelvis</p>
         </CardContent>
       </Card>
     );
   }
-
-  const profile = LUMBAR_SPINE_PROFILE;
 
   return (
     <Card className={className} data-testid="region-insights-panel">

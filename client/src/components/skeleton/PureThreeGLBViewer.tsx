@@ -6,7 +6,7 @@ import { AlertCircle, Loader2, RotateCcw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getMovementById, interpolateKeyframes, applyJointConstraints, JointLimits } from '@/lib/movementSequences';
 import { initializeLegIK, applySquatIK, LegIKState } from '@/lib/legIKSolver';
-import { ForceVisualizationManager, BiomechanicsVisualizationData } from '@/lib/forceVisualization';
+import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } from '@/lib/forceVisualization';
 
 interface JointConfig {
   flexion?: number;
@@ -254,6 +254,7 @@ export default function PureThreeGLBViewer({
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
   const [errorMessage, setErrorMessage] = useState('');
   const [loadProgress, setLoadProgress] = useState(0);
+  const [hoverData, setHoverData] = useState<HoverData | null>(null);
   const bonesRef = useRef<{ [name: string]: THREE.Object3D }>({});
   const initialRotationsRef = useRef<{ [name: string]: THREE.Euler }>({});
   const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
@@ -1127,6 +1128,9 @@ export default function PureThreeGLBViewer({
       );
     }
 
+    // Set camera for raycasting
+    forceVisualizationRef.current.setCamera(sceneRef.current.camera);
+
     // Update visualization if biomechanics data is provided
     if (biomechanicsData) {
       forceVisualizationRef.current.updateVisualization(biomechanicsData);
@@ -1138,6 +1142,27 @@ export default function PureThreeGLBViewer({
       // Clear visualization when component updates
     };
   }, [biomechanicsData, status]);
+
+  // Mouse move handler for hover tooltips
+  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!forceVisualizationRef.current || !containerRef.current || !biomechanicsData) {
+      setHoverData(null);
+      return;
+    }
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+
+    const hover = forceVisualizationRef.current.checkHover(mouse, rect);
+    setHoverData(hover);
+  }, [biomechanicsData]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoverData(null);
+  }, []);
 
   // Cleanup force visualization on unmount
   useEffect(() => {
@@ -1193,8 +1218,21 @@ export default function PureThreeGLBViewer({
     );
   }
 
+  const getStatusColor = (status: 'safe' | 'warning' | 'critical') => {
+    switch (status) {
+      case 'safe': return 'bg-green-500 text-green-50';
+      case 'warning': return 'bg-yellow-500 text-yellow-50';
+      case 'critical': return 'bg-red-500 text-red-50';
+    }
+  };
+
   return (
-    <div className={`w-full h-full relative bg-slate-900 rounded-lg ${className}`} style={{ minHeight: '400px' }}>
+    <div 
+      className={`w-full h-full relative bg-slate-900 rounded-lg ${className}`} 
+      style={{ minHeight: '400px' }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
       <div 
         ref={containerRef} 
         className="w-full h-full"
@@ -1213,6 +1251,27 @@ export default function PureThreeGLBViewer({
               />
             </div>
           )}
+        </div>
+      )}
+      
+      {/* Force value tooltip */}
+      {hoverData && (
+        <div 
+          className="absolute pointer-events-none z-20"
+          style={{ 
+            left: hoverData.position.x + 10, 
+            top: hoverData.position.y - 40,
+            transform: 'translateX(-50%)'
+          }}
+          data-testid="force-tooltip"
+        >
+          <div className={`px-3 py-2 rounded-lg shadow-lg text-sm font-medium ${getStatusColor(hoverData.status)}`}>
+            <div className="font-semibold">{hoverData.label}</div>
+            <div className="text-lg font-bold">
+              {hoverData.value.toFixed(0)} {hoverData.unit}
+            </div>
+            <div className="text-xs opacity-80 capitalize">{hoverData.status}</div>
+          </div>
         </div>
       )}
     </div>

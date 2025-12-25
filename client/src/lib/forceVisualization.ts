@@ -63,13 +63,24 @@ export function getStressLevel(value: number, thresholds: { safe: number; warnin
   return 'critical';
 }
 
+export interface HoverData {
+  label: string;
+  value: number;
+  unit: string;
+  status: 'safe' | 'warning' | 'critical';
+  position: { x: number; y: number };
+}
+
 export class ForceVisualizationManager {
   private scene: THREE.Scene;
+  private camera: THREE.Camera | null = null;
   private forceArrows: Map<string, THREE.ArrowHelper> = new Map();
   private stressIndicators: Map<string, THREE.Mesh> = new Map();
   private muscleGlows: Map<string, THREE.Mesh> = new Map();
   private forceLabels: Map<string, THREE.Sprite> = new Map();
   private bones: { [name: string]: THREE.Object3D };
+  private raycaster: THREE.Raycaster = new THREE.Raycaster();
+  private forceMetadata: Map<THREE.Object3D, { label: string; value: number; unit: string; threshold: { safe: number; warning: number; critical: number } }> = new Map();
   
   private jointPositions: { [key: string]: { boneNames: string[]; offset: THREE.Vector3 } } = {
     lumbarSpine: { boneNames: ['spine4', 'spine5'], offset: new THREE.Vector3(0, 0, 0.3) },
@@ -82,6 +93,56 @@ export class ForceVisualizationManager {
   constructor(scene: THREE.Scene, bones: { [name: string]: THREE.Object3D }) {
     this.scene = scene;
     this.bones = bones;
+  }
+
+  setCamera(camera: THREE.Camera): void {
+    this.camera = camera;
+  }
+
+  checkHover(mouse: THREE.Vector2, containerRect: DOMRect): HoverData | null {
+    if (!this.camera) return null;
+
+    this.raycaster.setFromCamera(mouse, this.camera);
+    
+    const allObjects: THREE.Object3D[] = [];
+    this.forceArrows.forEach((arrow) => {
+      arrow.traverse((child) => {
+        if (child instanceof THREE.Mesh) allObjects.push(child);
+      });
+    });
+    this.stressIndicators.forEach((indicator) => allObjects.push(indicator));
+    this.muscleGlows.forEach((glow) => allObjects.push(glow));
+    
+    const intersects = this.raycaster.intersectObjects(allObjects, true);
+    
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      let obj = hit.object;
+      
+      while (obj && !this.forceMetadata.has(obj)) {
+        obj = obj.parent as THREE.Object3D;
+      }
+      
+      if (obj && this.forceMetadata.has(obj)) {
+        const meta = this.forceMetadata.get(obj)!;
+        const worldPos = new THREE.Vector3();
+        obj.getWorldPosition(worldPos);
+        
+        const screenPos = worldPos.project(this.camera);
+        const x = ((screenPos.x + 1) / 2) * containerRect.width;
+        const y = ((-screenPos.y + 1) / 2) * containerRect.height;
+        
+        return {
+          label: meta.label,
+          value: meta.value,
+          unit: meta.unit,
+          status: getStressLevel(meta.value, meta.threshold),
+          position: { x, y }
+        };
+      }
+    }
+    
+    return null;
   }
 
   private createArrowHelper(origin: THREE.Vector3, direction: THREE.Vector3, length: number, color: THREE.Color): THREE.ArrowHelper {
@@ -169,6 +230,12 @@ export class ForceVisualizationManager {
       );
       this.scene.add(compressionArrow);
       this.forceArrows.set('lumbar_compression', compressionArrow);
+      this.forceMetadata.set(compressionArrow, {
+        label: 'Lumbar Compression',
+        value: compressionForce,
+        unit: 'N',
+        threshold: CLINICAL_THRESHOLDS.lumbarCompression
+      });
 
       if (Math.abs(shearForce) > 50) {
         const shearLength = Math.min(0.8, Math.abs(shearForce) / 500);
@@ -181,6 +248,12 @@ export class ForceVisualizationManager {
         );
         this.scene.add(shearArrow);
         this.forceArrows.set('lumbar_shear', shearArrow);
+        this.forceMetadata.set(shearArrow, {
+          label: 'Lumbar Shear',
+          value: Math.abs(shearForce),
+          unit: 'N',
+          threshold: CLINICAL_THRESHOLDS.lumbarShear
+        });
       }
     }
 
@@ -207,6 +280,19 @@ export class ForceVisualizationManager {
         );
         this.scene.add(arrow);
         this.forceArrows.set(`${config.key}_compression`, arrow);
+        
+        const labelMap: { [key: string]: string } = {
+          leftHip: 'Left Hip Compression',
+          rightHip: 'Right Hip Compression',
+          leftKnee: 'Left Knee Compression',
+          rightKnee: 'Right Knee Compression'
+        };
+        this.forceMetadata.set(arrow, {
+          label: labelMap[config.key] || `${config.key} Compression`,
+          value: compression,
+          unit: 'N',
+          threshold: config.threshold
+        });
       }
     }
   }
@@ -220,6 +306,14 @@ export class ForceVisualizationManager {
       { key: 'rightKnee', force: forces.rightKnee.compression, threshold: CLINICAL_THRESHOLDS.kneeCompression },
     ];
 
+    const labelMap: { [key: string]: string } = {
+      lumbarSpine: 'Lumbar Spine',
+      leftHip: 'Left Hip',
+      rightHip: 'Right Hip',
+      leftKnee: 'Left Knee',
+      rightKnee: 'Right Knee'
+    };
+
     for (const joint of joints) {
       const pos = this.getJointWorldPosition(joint.key);
       if (pos) {
@@ -230,6 +324,12 @@ export class ForceVisualizationManager {
         const indicator = this.createStressIndicator(pos, color, size);
         this.scene.add(indicator);
         this.stressIndicators.set(joint.key, indicator);
+        this.forceMetadata.set(indicator, {
+          label: `${labelMap[joint.key] || joint.key} Stress`,
+          value: joint.force,
+          unit: 'N',
+          threshold: joint.threshold
+        });
       }
     }
 
@@ -243,6 +343,12 @@ export class ForceVisualizationManager {
       );
       this.scene.add(pfIndicator);
       this.stressIndicators.set('leftKnee_pf', pfIndicator);
+      this.forceMetadata.set(pfIndicator, {
+        label: 'Left Patellofemoral',
+        value: forces.leftKnee.patellofemoral,
+        unit: 'N',
+        threshold: CLINICAL_THRESHOLDS.patellofemoral
+      });
     }
 
     const rightKneePos = this.getJointWorldPosition('rightKnee');
@@ -255,6 +361,12 @@ export class ForceVisualizationManager {
       );
       this.scene.add(pfIndicator);
       this.stressIndicators.set('rightKnee_pf', pfIndicator);
+      this.forceMetadata.set(pfIndicator, {
+        label: 'Right Patellofemoral',
+        value: forces.rightKnee.patellofemoral,
+        unit: 'N',
+        threshold: CLINICAL_THRESHOLDS.patellofemoral
+      });
     }
   }
 
@@ -316,12 +428,14 @@ export class ForceVisualizationManager {
   clearVisualization(): void {
     this.forceArrows.forEach((arrow) => {
       this.scene.remove(arrow);
+      this.forceMetadata.delete(arrow);
       arrow.dispose();
     });
     this.forceArrows.clear();
 
     this.stressIndicators.forEach((indicator) => {
       this.scene.remove(indicator);
+      this.forceMetadata.delete(indicator);
       indicator.geometry.dispose();
       (indicator.material as THREE.Material).dispose();
     });
@@ -341,6 +455,8 @@ export class ForceVisualizationManager {
       }
     });
     this.forceLabels.clear();
+    
+    this.forceMetadata.clear();
   }
 
   dispose(): void {

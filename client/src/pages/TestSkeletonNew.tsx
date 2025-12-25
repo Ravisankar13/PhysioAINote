@@ -52,8 +52,8 @@ interface ModelConfig {
   rightKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
   leftAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
   rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
-  leftShoulder: { flexion: number; abduction: number; internalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
-  rightShoulder: { flexion: number; abduction: number; internalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
+  leftShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
+  rightShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
   leftElbow: { flexion: number; carryingAngle: number; pronation: number };
   rightElbow: { flexion: number; carryingAngle: number; pronation: number };
   leftWrist: { deviation: number; flexion: number };
@@ -284,6 +284,7 @@ export default function TestSkeletonNew() {
       flexion: 0,
       abduction: 0,
       internalRotation: 0,
+      externalRotation: 0,
       retroversion: 0,
       elevation: 0,
       protraction: 0,
@@ -294,6 +295,7 @@ export default function TestSkeletonNew() {
       flexion: 0,
       abduction: 0,
       internalRotation: 0,
+      externalRotation: 0,
       retroversion: 0,
       elevation: 0,
       protraction: 0,
@@ -416,6 +418,7 @@ export default function TestSkeletonNew() {
         flexion: 0,
         abduction: 0,
         internalRotation: 0,
+        externalRotation: 0,
         retroversion: 0,
         elevation: 0,
         protraction: 0,
@@ -426,6 +429,7 @@ export default function TestSkeletonNew() {
         flexion: 0,
         abduction: 0,
         internalRotation: 0,
+        externalRotation: 0,
         retroversion: 0,
         elevation: 0,
         protraction: 0,
@@ -1205,6 +1209,38 @@ export default function TestSkeletonNew() {
                         />
                       </div>
                       <div>
+                        <Label className="text-xs">Internal Rotation ({modelConfig.leftShoulder.internalRotation}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftShoulder.internalRotation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftShoulder', 'internalRotation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightShoulder', 'internalRotation', value);
+                            }
+                          }}
+                          min={0}
+                          max={90}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">External Rotation ({modelConfig.leftShoulder.externalRotation}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftShoulder.externalRotation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftShoulder', 'externalRotation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightShoulder', 'externalRotation', value);
+                            }
+                          }}
+                          min={0}
+                          max={90}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
                         <Label className="text-xs">Retroversion ({modelConfig.leftShoulder.retroversion}°)</Label>
                         <Slider
                           value={[modelConfig.leftShoulder.retroversion]}
@@ -1284,6 +1320,38 @@ export default function TestSkeletonNew() {
                           }}
                           min={0}
                           max={180}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Internal Rotation ({modelConfig.rightShoulder.internalRotation}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightShoulder.internalRotation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightShoulder', 'internalRotation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftShoulder', 'internalRotation', value);
+                            }
+                          }}
+                          min={0}
+                          max={90}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">External Rotation ({modelConfig.rightShoulder.externalRotation}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightShoulder.externalRotation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightShoulder', 'externalRotation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftShoulder', 'externalRotation', value);
+                            }
+                          }}
+                          min={0}
+                          max={90}
                           step={1}
                           className="mt-1"
                         />

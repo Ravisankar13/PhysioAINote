@@ -29,6 +29,7 @@ const DEFAULT_VIEWS: ViewConfig[] = [
   { angle: 'left', enabled: true },
   { angle: 'back', enabled: true },
   { angle: 'right', enabled: true },
+  { angle: 'top', enabled: false },
 ];
 
 export default function MultiViewSkeletonLayout({
@@ -56,16 +57,20 @@ export default function MultiViewSkeletonLayout({
     if (viewCount === 1) return 'grid-cols-1';
     if (viewCount === 2) return 'grid-cols-2';
     if (viewCount === 3) return 'grid-cols-3';
-    return 'grid-cols-2 grid-rows-2';
+    if (viewCount === 4) return 'grid-cols-2 grid-rows-2';
+    if (viewCount === 5) return 'grid-cols-3';
+    return 'grid-cols-3';
   };
 
   const getViewHeight = () => {
     if (isExpanded) {
       if (viewCount <= 2) return '600px';
-      return '400px';
+      if (viewCount <= 4) return '400px';
+      return '350px';
     }
     if (viewCount <= 2) return '400px';
-    return '300px';
+    if (viewCount <= 4) return '300px';
+    return '280px';
   };
 
   return (

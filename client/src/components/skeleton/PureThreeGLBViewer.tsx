@@ -60,7 +60,7 @@ export const CAMERA_PRESETS: Record<CameraAngle, CameraAngleConfig> = {
   back: { position: { x: 0, y: 1.5, z: -8 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Back View' },
   left: { position: { x: -8, y: 1.5, z: 0 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Left Side' },
   right: { position: { x: 8, y: 1.5, z: 0 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Right Side' },
-  top: { position: { x: 0, y: 10, z: 0.1 }, lookAt: { x: 0, y: 0, z: 0 }, label: 'Top View' },
+  top: { position: { x: 0, y: 10, z: 0.1 }, lookAt: { x: 0, y: 1.2, z: 0 }, label: 'Top View (Transverse)' },
   perspective: { position: { x: 5, y: 3, z: 5 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: '3/4 View' },
   custom: { position: { x: 0, y: 1.5, z: 8 }, lookAt: { x: 0, y: 2, z: 0 }, label: 'Custom' },
 };

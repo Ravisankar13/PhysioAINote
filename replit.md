@@ -9,6 +9,14 @@ PhysioGPT is an advanced AI-powered physiotherapy platform designed to provide c
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (Dec 25, 2025)
+- **Multi-View Skeleton Visualization**: Simultaneous display of skeleton from multiple angles for comprehensive clinical assessment:
+  - 4 Fixed Camera Presets: Front, Left Side, Right Side, Back views with precise camera positioning and lookAt targets
+  - MultiViewSkeletonLayout Component: Grid display with synchronized skeleton viewers sharing same modelConfig, animationState, and biomechanicsData
+  - View Toggle Controls: Individual switches to enable/disable each view angle, expand/collapse button for full-width mode
+  - Camera Angle Props: PureThreeGLBViewer now accepts cameraAngle and disableControls props for fixed-angle views
+  - Pointer-Events Locking: Fully blocks mouse/touch interactions on fixed-angle views using CSS pointer-events
+  - Integration: Multi-View toggle button in TestSkeletonNew page, spans 2 columns when active
+- **Key Files**: client/src/components/skeleton/MultiViewSkeletonLayout.tsx (multi-view component), client/src/components/skeleton/PureThreeGLBViewer.tsx (camera presets), client/src/pages/TestSkeletonNew.tsx (integration)
 - **3D Force Visualization System**: Real-time biomechanical overlays on GLB skeleton using pure THREE.js:
   - Force Vector Arrows: THREE.ArrowHelper showing compression/shear direction and magnitude at lumbar spine, hips, and knees with clinical threshold-based coloring
   - Joint Stress Indicators: Spherical overlays at joints with green/yellow/red color coding based on NIOSH limits (3400N safe, 6400N critical for lumbar) and clinical thresholds
@@ -16,7 +24,6 @@ Preferred communication style: Simple, everyday language.
   - Interactive Hover Labels: Raycasting-based tooltips displaying exact force values in Newtons with status badges (safe/warning/critical)
   - UI Toggle Controls: Three switches (Forces, Stress, Muscles) in skeleton viewer header for controlling visualization layers
   - ForceVisualizationManager Class: Manages THREE.js objects with proper memory cleanup, stores force metadata for tooltips, handles raycasting
-- **Key Files**: client/src/lib/forceVisualization.ts (visualization manager), client/src/components/skeleton/PureThreeGLBViewer.tsx (hover integration), client/src/pages/TestSkeletonNew.tsx (UI toggles)
 - **Biomechanical Clinical Assessment System**: Complete patient digital twin system with:
   - Biomechanics Calculation Engine: Joint forces (lumbar compression/shear, hip/knee compression, patellofemoral loading), muscle activation estimates (erector spinae, glutes, quads, hamstrings), ground reaction forces with weight distribution analysis
   - Injury Risk Scoring: FMS-style movement quality scores (stability, mobility, control), load asymmetry detection with clinical thresholds (NIOSH limits, patellofemoral safe limits), comprehensive risk factor identification

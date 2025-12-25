@@ -1154,6 +1154,160 @@ export default function TestSkeletonNew() {
                     </div>
                   </div>
                 </div>
+
+                {/* Ankle Controls */}
+                <div className="space-y-4 mt-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold">Ankle Joints</h3>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={linkedSides.ankles}
+                        onCheckedChange={(checked) => 
+                          setLinkedSides(prev => ({ ...prev, ankles: checked }))
+                        }
+                      />
+                      <Label className="text-sm">Link Sides</Label>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Left Ankle</Label>
+                      <div>
+                        <Label className="text-xs">Dorsiflexion ({modelConfig.leftAnkle.dorsiflexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftAnkle.dorsiflexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftAnkle', 'dorsiflexion', value);
+                            if (linkedSides.ankles) {
+                              handleSliderChange('rightAnkle', 'dorsiflexion', value);
+                            }
+                          }}
+                          min={0}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Plantarflexion ({modelConfig.leftAnkle.plantarflexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftAnkle.plantarflexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftAnkle', 'plantarflexion', value);
+                            if (linkedSides.ankles) {
+                              handleSliderChange('rightAnkle', 'plantarflexion', value);
+                            }
+                          }}
+                          min={0}
+                          max={50}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Inversion ({modelConfig.leftAnkle.inversion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftAnkle.inversion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftAnkle', 'inversion', value);
+                            if (linkedSides.ankles) {
+                              handleSliderChange('rightAnkle', 'inversion', value);
+                            }
+                          }}
+                          min={0}
+                          max={35}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Eversion ({modelConfig.leftAnkle.eversion}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftAnkle.eversion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftAnkle', 'eversion', value);
+                            if (linkedSides.ankles) {
+                              handleSliderChange('rightAnkle', 'eversion', value);
+                            }
+                          }}
+                          min={0}
+                          max={20}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Right Ankle</Label>
+                      <div>
+                        <Label className="text-xs">Dorsiflexion ({modelConfig.rightAnkle.dorsiflexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightAnkle.dorsiflexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightAnkle', 'dorsiflexion', value);
+                            if (linkedSides.ankles) {
+                              handleSliderChange('leftAnkle', 'dorsiflexion', value);
+                            }
+                          }}
+                          min={0}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Plantarflexion ({modelConfig.rightAnkle.plantarflexion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightAnkle.plantarflexion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightAnkle', 'plantarflexion', value);
+                            if (linkedSides.ankles) {
+                              handleSliderChange('leftAnkle', 'plantarflexion', value);
+                            }
+                          }}
+                          min={0}
+                          max={50}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Inversion ({modelConfig.rightAnkle.inversion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightAnkle.inversion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightAnkle', 'inversion', value);
+                            if (linkedSides.ankles) {
+                              handleSliderChange('leftAnkle', 'inversion', value);
+                            }
+                          }}
+                          min={0}
+                          max={35}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Eversion ({modelConfig.rightAnkle.eversion}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightAnkle.eversion]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightAnkle', 'eversion', value);
+                            if (linkedSides.ankles) {
+                              handleSliderChange('leftAnkle', 'eversion', value);
+                            }
+                          }}
+                          min={0}
+                          max={20}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </TabsContent>
 
               {/* Upper Body Tab */}

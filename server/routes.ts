@@ -4202,6 +4202,134 @@ Base your analysis on established postural assessment principles and correlate f
     }
   });
 
+  // Patient Clone Routes
+  
+  // Get all patient clones for user
+  app.get("/api/patient-clones", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const clones = await storage.getUserPatientClones(userId);
+      res.json(clones);
+    } catch (error) {
+      console.error("Error fetching patient clones:", error);
+      res.status(500).json({ error: 'Failed to fetch patient clones' });
+    }
+  });
+
+  // Get single patient clone
+  app.get("/api/patient-clones/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const cloneId = parseInt(req.params.id);
+      if (isNaN(cloneId)) {
+        return res.status(400).json({ error: 'Invalid clone ID' });
+      }
+
+      const clone = await storage.getPatientClone(cloneId);
+      if (!clone) {
+        return res.status(404).json({ error: 'Patient clone not found' });
+      }
+
+      if (clone.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      res.json(clone);
+    } catch (error) {
+      console.error("Error fetching patient clone:", error);
+      res.status(500).json({ error: 'Failed to fetch patient clone' });
+    }
+  });
+
+  // Create patient clone
+  app.post("/api/patient-clones", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const cloneData = {
+        ...req.body,
+        userId,
+      };
+
+      const clone = await storage.createPatientClone(cloneData);
+      res.json(clone);
+    } catch (error) {
+      console.error("Error creating patient clone:", error);
+      res.status(500).json({ error: 'Failed to create patient clone' });
+    }
+  });
+
+  // Update patient clone
+  app.put("/api/patient-clones/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const cloneId = parseInt(req.params.id);
+      if (isNaN(cloneId)) {
+        return res.status(400).json({ error: 'Invalid clone ID' });
+      }
+
+      const clone = await storage.getPatientClone(cloneId);
+      if (!clone) {
+        return res.status(404).json({ error: 'Patient clone not found' });
+      }
+
+      if (clone.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const updatedClone = await storage.updatePatientClone(cloneId, req.body);
+      res.json(updatedClone);
+    } catch (error) {
+      console.error("Error updating patient clone:", error);
+      res.status(500).json({ error: 'Failed to update patient clone' });
+    }
+  });
+
+  // Delete patient clone
+  app.delete("/api/patient-clones/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const cloneId = parseInt(req.params.id);
+      if (isNaN(cloneId)) {
+        return res.status(400).json({ error: 'Invalid clone ID' });
+      }
+
+      const clone = await storage.getPatientClone(cloneId);
+      if (!clone) {
+        return res.status(404).json({ error: 'Patient clone not found' });
+      }
+
+      if (clone.userId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      await storage.deletePatientClone(cloneId);
+      res.json({ success: true, message: 'Patient clone deleted successfully' });
+    } catch (error) {
+      console.error("Error deleting patient clone:", error);
+      res.status(500).json({ error: 'Failed to delete patient clone' });
+    }
+  });
+
   // Movement Analysis AI Routes (Phase 2 & Phase 5)
   
   // Analyze captured movement with AI

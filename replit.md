@@ -9,15 +9,21 @@ PhysioGPT is an advanced AI-powered physiotherapy platform designed to provide c
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (Dec 25, 2025)
+- **3D Force Visualization System**: Real-time biomechanical overlays on GLB skeleton using pure THREE.js:
+  - Force Vector Arrows: THREE.ArrowHelper showing compression/shear direction and magnitude at lumbar spine, hips, and knees with clinical threshold-based coloring
+  - Joint Stress Indicators: Spherical overlays at joints with green/yellow/red color coding based on NIOSH limits (3400N safe, 6400N critical for lumbar) and clinical thresholds
+  - Muscle Activation Glow: Intensity-based spherical glows showing active muscle groups (erector spinae, glutes, quads, hamstrings) with blue-to-red color gradient
+  - Interactive Hover Labels: Raycasting-based tooltips displaying exact force values in Newtons with status badges (safe/warning/critical)
+  - UI Toggle Controls: Three switches (Forces, Stress, Muscles) in skeleton viewer header for controlling visualization layers
+  - ForceVisualizationManager Class: Manages THREE.js objects with proper memory cleanup, stores force metadata for tooltips, handles raycasting
+- **Key Files**: client/src/lib/forceVisualization.ts (visualization manager), client/src/components/skeleton/PureThreeGLBViewer.tsx (hover integration), client/src/pages/TestSkeletonNew.tsx (UI toggles)
 - **Biomechanical Clinical Assessment System**: Complete patient digital twin system with:
   - Biomechanics Calculation Engine: Joint forces (lumbar compression/shear, hip/knee compression, patellofemoral loading), muscle activation estimates (erector spinae, glutes, quads, hamstrings), ground reaction forces with weight distribution analysis
   - Injury Risk Scoring: FMS-style movement quality scores (stability, mobility, control), load asymmetry detection with clinical thresholds (NIOSH limits, patellofemoral safe limits), comprehensive risk factor identification
-  - Force Visualization: Color-coded overlays for joint stress levels on 3D skeleton with interactive force vector arrows
   - AI Clinical Assessment: OpenAI-powered treatment strategy generation with evidence-based recommendations including exercises with sets/reps/frequency, manual therapy techniques, precautions, and prognosis
   - Patient Assessment Dashboard: Comprehensive view at /patient-assessment combining all metrics, risk factors, movement quality analysis, and AI treatment planning
   - BiomechanicsPanel Component: 5-tab interface (Forces, Muscles, Risks, Quality, AI Plan) integrated into TestSkeletonNew page
 - **Database Schema Extensions**: Added biomechanicalAssessments, injuryRiskScores, and treatmentStrategies tables linked to virtualPatientConfigs for persistent assessment storage
-- **Key Files**: client/src/lib/biomechanicsEngine.ts, client/src/lib/injuryRiskEngine.ts, client/src/components/skeleton/BiomechanicsPanel.tsx, server/biomechanicsAIService.ts, client/src/pages/PatientAssessmentDashboard.tsx
 
 ## Recent Changes (Jan 31, 2025)
 - **Navigation Bar Update**: Removed "Competitions" and "Smart Assessment" buttons from main navigation. Added "Body Scanner", "Movement Analysis", and "Virtual Patients" buttons for direct access to core clinical features. Maintained "Research" button. New navigation order: PhysioGPT → Body Scanner → Movement Analysis → Virtual Patients → Enhanced SOAP → Research.

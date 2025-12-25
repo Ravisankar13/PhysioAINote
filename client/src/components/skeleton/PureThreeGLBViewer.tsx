@@ -198,6 +198,24 @@ export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegio
   },
 };
 
+export const REGION_BONE_MAPPING: Record<AnatomicalRegion, string[]> = {
+  full_body: [],
+  lumbar_spine: ['spine2', 'spine3', 'spine4', 'spine5', 'spine6', 'spine7', 'Pelvis_Main'],
+  thoracic_spine: ['spine8', 'spine9', 'spine10', 'spine11', 'spine12', 'spine13', 'spine14', 'spine15', 'spine16', 'Rib_Cage'],
+  cervical_spine: ['spine17', 'spine18', 'spine19', 'spine20', 'Head'],
+  left_shoulder: ['Humerus_Root_L', 'Humerus_L', 'Clavicle_L', 'Scapula_L'],
+  right_shoulder: ['Humerus_Root_R', 'Humerus_R', 'Clavicle_R', 'Scapula_R'],
+  left_hip: ['Femer_Root_L', 'Femer_L', 'Pelvis_Main'],
+  right_hip: ['Femer_Root_R', 'Femer_R', 'Pelvis_Main'],
+  pelvis: ['Pelvis_Main', 'Femer_Root_L', 'Femer_Root_R', 'spine2', 'spine3'],
+  left_knee: ['Femer_L', 'fibula_tibia_L', 'patella_L'],
+  right_knee: ['Femer_R', 'fibula_tibia_R', 'patella_R'],
+  left_ankle: ['fibula_tibia_L', 'foot_L'],
+  right_ankle: ['fibula_tibia_R', 'foot_R'],
+  left_elbow: ['Humerus_L', 'Redius_Alna_L'],
+  right_elbow: ['Humerus_R', 'Redius_Alna_R'],
+};
+
 interface PureThreeGLBViewerProps {
   modelPath?: string;
   modelConfig?: ModelConfig;
@@ -420,6 +438,7 @@ export default function PureThreeGLBViewer({
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const legIKStateRef = useRef<LegIKState | null>(null);
   const forceVisualizationRef = useRef<ForceVisualizationManager | null>(null);
+  const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -452,11 +471,52 @@ export default function PureThreeGLBViewer({
   }, []);
 
   useEffect(() => {
-    if (!zoomToRegion || !sceneRef.current) return;
+    if (!sceneRef.current) return;
     
-    const { camera, controls } = sceneRef.current;
+    const { camera, controls, model } = sceneRef.current;
+    
+    if (!zoomToRegion || zoomToRegion === 'full_body') {
+      if (model) {
+        model.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((mat) => {
+              if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial || mat instanceof THREE.MeshBasicMaterial) {
+                mat.opacity = 1;
+                mat.transparent = false;
+              }
+            });
+          }
+        });
+      }
+      
+      if (zoomToRegion === 'full_body') {
+        const regionConfig = ANATOMICAL_REGION_PRESETS.full_body;
+        const startPosition = camera.position.clone();
+        const endPosition = new THREE.Vector3(regionConfig.position.x, regionConfig.position.y, regionConfig.position.z);
+        const startTarget = controls.target.clone();
+        const endTarget = new THREE.Vector3(regionConfig.lookAt.x, regionConfig.lookAt.y, regionConfig.lookAt.z);
+        const duration = 800;
+        const startTime = Date.now();
+
+        const animateReset = () => {
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const easeProgress = 1 - Math.pow(1 - progress, 3);
+          camera.position.lerpVectors(startPosition, endPosition, easeProgress);
+          controls.target.lerpVectors(startTarget, endTarget, easeProgress);
+          controls.update();
+          if (progress < 1) requestAnimationFrame(animateReset);
+        };
+        animateReset();
+      }
+      return;
+    }
+    
     const regionConfig = ANATOMICAL_REGION_PRESETS[zoomToRegion];
     if (!regionConfig) return;
+
+    const focusedBones = REGION_BONE_MAPPING[zoomToRegion] || [];
 
     const startPosition = camera.position.clone();
     const endPosition = new THREE.Vector3(
@@ -484,6 +544,29 @@ export default function PureThreeGLBViewer({
       camera.position.lerpVectors(startPosition, endPosition, easeProgress);
       controls.target.lerpVectors(startTarget, endTarget, easeProgress);
       controls.update();
+
+      if (model && focusedBones.length > 0) {
+        model.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material) {
+            const boneName = child.name || child.parent?.name || '';
+            const isFocused = focusedBones.some(fb => 
+              boneName.toLowerCase().includes(fb.toLowerCase()) || 
+              (child.parent && child.parent.name.toLowerCase().includes(fb.toLowerCase()))
+            );
+            
+            const targetOpacity = isFocused ? 1 : 0.15 + (1 - easeProgress) * 0.85;
+            
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((mat) => {
+              if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial || mat instanceof THREE.MeshBasicMaterial) {
+                mat.transparent = true;
+                mat.opacity = isFocused ? 1 : targetOpacity;
+                mat.depthWrite = mat.opacity > 0.5;
+              }
+            });
+          }
+        });
+      }
 
       if (progress < 1) {
         requestAnimationFrame(animateZoom);

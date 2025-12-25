@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { AlertCircle, Loader2, RotateCcw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getMovementById, interpolateKeyframes, applyJointConstraints, JointLimits } from '@/lib/movementSequences';
+import { initializeLegIK, applySquatIK, LegIKState } from '@/lib/legIKSolver';
 
 interface JointConfig {
   flexion?: number;
@@ -254,6 +255,7 @@ export default function PureThreeGLBViewer({
   const initialRotationsRef = useRef<{ [name: string]: THREE.Euler }>({});
   const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
+  const legIKStateRef = useRef<LegIKState | null>(null);
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -552,6 +554,9 @@ export default function PureThreeGLBViewer({
             }
             
             bonesRef.current = bones;
+            
+            // Initialize leg IK solver after bones are loaded
+            legIKStateRef.current = initializeLegIK(bones as { [name: string]: THREE.Bone });
             
             model.position.set(-0.15, -1.2, 0);
             scene.add(model);
@@ -1001,44 +1006,90 @@ export default function PureThreeGLBViewer({
         });
       });
       
-      // Apply rotations to bones
-      Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
-        const bone = bones[boneName];
-        if (bone) {
-          bone.rotation.x = rotation.x;
-          bone.rotation.y = rotation.y;
-          bone.rotation.z = rotation.z;
-        }
-      });
+      // Check if this is a closed-chain movement (squat) that needs IK
+      const pelvisDropValue = jointValues['pelvis']?.['drop'] || 0;
+      const isClosedChainMovement = pelvisDropValue > 0 && legIKStateRef.current?.initialized;
       
-      // Apply positions to bones
-      Object.entries(animBonePositions).forEach(([boneName, posOffset]) => {
-        const bone = bones[boneName];
-        if (bone) {
-          if (!(bone as any).initialPosition) {
-            (bone as any).initialPosition = bone.position.clone();
+      if (isClosedChainMovement && legIKStateRef.current) {
+        // CLOSED-CHAIN: Use IK to keep feet planted while pelvis drops
+        // First apply pelvis position (body lowers)
+        const pelvisBone = bones['Pelvis_Main'] as THREE.Bone;
+        if (pelvisBone) {
+          if (!(pelvisBone as any).initialPosition) {
+            (pelvisBone as any).initialPosition = pelvisBone.position.clone();
           }
-          const initialPos = (bone as any).initialPosition as THREE.Vector3;
-          bone.position.x = initialPos.x + posOffset.x;
-          bone.position.y = initialPos.y + posOffset.y;
-          bone.position.z = initialPos.z + posOffset.z;
+          const initialPos = (pelvisBone as any).initialPosition as THREE.Vector3;
+          const dropAmount = pelvisDropValue * 0.01; // Convert degrees-like value to units
+          pelvisBone.position.y = initialPos.y - dropAmount;
+          pelvisBone.updateMatrixWorld(true);
         }
-      });
-      
-      // Also reset positions for bones with position mappings when animation resets to 0
-      Object.entries(BONE_MAPPING).forEach(([, mappings]) => {
-        mappings.forEach(({ boneName, isPosition }) => {
-          if (isPosition && !animBonePositions[boneName]) {
-            const bone = bones[boneName];
-            if (bone && (bone as any).initialPosition) {
-              const initialPos = (bone as any).initialPosition as THREE.Vector3;
-              bone.position.x = initialPos.x;
-              bone.position.y = initialPos.y;
-              bone.position.z = initialPos.z;
-            }
+        
+        // Apply IK to calculate leg angles that keep feet planted
+        const ikInitialRotations: { [name: string]: { x: number; y: number; z: number } } = {};
+        Object.entries(initialRotations).forEach(([name, euler]) => {
+          ikInitialRotations[name] = { x: euler.x, y: euler.y, z: euler.z };
+        });
+        
+        applySquatIK(
+          bones as { [name: string]: THREE.Bone },
+          ikInitialRotations,
+          legIKStateRef.current
+        );
+        
+        // Apply non-leg rotations (spine, shoulders, etc.) from FK animation
+        Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
+          // Skip leg bones - they're controlled by IK
+          if (boneName.includes('Femer') || boneName.includes('fibula') || boneName.includes('foot')) {
+            return;
+          }
+          const bone = bones[boneName];
+          if (bone) {
+            bone.rotation.x = rotation.x;
+            bone.rotation.y = rotation.y;
+            bone.rotation.z = rotation.z;
           }
         });
-      });
+      } else {
+        // OPEN-CHAIN: Standard FK animation (walking, lunges, etc.)
+        // Apply rotations to bones
+        Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
+          const bone = bones[boneName];
+          if (bone) {
+            bone.rotation.x = rotation.x;
+            bone.rotation.y = rotation.y;
+            bone.rotation.z = rotation.z;
+          }
+        });
+        
+        // Apply positions to bones
+        Object.entries(animBonePositions).forEach(([boneName, posOffset]) => {
+          const bone = bones[boneName];
+          if (bone) {
+            if (!(bone as any).initialPosition) {
+              (bone as any).initialPosition = bone.position.clone();
+            }
+            const initialPos = (bone as any).initialPosition as THREE.Vector3;
+            bone.position.x = initialPos.x + posOffset.x;
+            bone.position.y = initialPos.y + posOffset.y;
+            bone.position.z = initialPos.z + posOffset.z;
+          }
+        });
+        
+        // Also reset positions for bones with position mappings when animation resets to 0
+        Object.entries(BONE_MAPPING).forEach(([, mappings]) => {
+          mappings.forEach(({ boneName, isPosition }) => {
+            if (isPosition && !animBonePositions[boneName]) {
+              const bone = bones[boneName];
+              if (bone && (bone as any).initialPosition) {
+                const initialPos = (bone as any).initialPosition as THREE.Vector3;
+                bone.position.x = initialPos.x;
+                bone.position.y = initialPos.y;
+                bone.position.z = initialPos.z;
+              }
+            }
+          });
+        });
+      }
       
       if (onAnimationFrame) {
         onAnimationFrame(jointValues);

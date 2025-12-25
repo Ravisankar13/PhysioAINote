@@ -148,86 +148,38 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'squat',
     name: 'Squat',
-    description: 'Bodyweight squat with forward kinematics - demonstrates joint movements',
+    description: 'Closed-chain squat with IK - feet stay planted while body lowers',
     duration: 3000,
     loop: true,
     joints: [
-      // Hip flexion - main driver of squat depth
-      // Using FK: hip flexion rotates thigh down, knee flexion rotates shin back
-      // Together they create the squat position
+      // Pelvis drop - PRIMARY driver for closed-chain squat
+      // IK solver calculates hip/knee angles to keep feet planted
       {
-        joint: 'leftHip',
-        property: 'flexion',
+        joint: 'pelvis',
+        property: 'drop',
         keyframes: [
           { time: 0, value: 0 },
           { time: 0.5, value: 80 },
           { time: 1, value: 0 },
         ],
       },
-      {
-        joint: 'rightHip',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.5, value: 80 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Knee flexion - compensates hip flexion to create squat appearance
-      {
-        joint: 'leftKnee',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.5, value: 100 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'rightKnee',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.5, value: 100 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Ankle dorsiflexion - shin moves forward over foot
-      {
-        joint: 'leftAnkle',
-        property: 'dorsiflexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.5, value: 30 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'rightAnkle',
-        property: 'dorsiflexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.5, value: 30 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Trunk forward lean for balance - pelvis anterior tilt
+      // Pelvis anterior tilt for trunk lean
       {
         joint: 'pelvis',
         property: 'tilt',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 20 },
+          { time: 0.5, value: 15 },
           { time: 1, value: 0 },
         ],
       },
-      // Spine forward flexion for trunk lean
+      // Spine forward flexion for trunk lean / balance
       {
         joint: 'spine',
         property: 'thoracicKyphosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 30 },
+          { time: 0.5, value: 25 },
           { time: 1, value: 0 },
         ],
       },
@@ -237,7 +189,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 80 },
+          { time: 0.5, value: 90 },
           { time: 1, value: 0 },
         ],
       },
@@ -246,7 +198,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 80 },
+          { time: 0.5, value: 90 },
           { time: 1, value: 0 },
         ],
       },

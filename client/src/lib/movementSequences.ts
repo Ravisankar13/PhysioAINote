@@ -108,7 +108,7 @@ export const DEFAULT_JOINT_LIMITS: JointLimits = {
     pronation: { min: -90, max: 90 },
   },
   pelvis: {
-    tilt: { min: -30, max: 30 },
+    tilt: { min: -90, max: 90 },
     obliquity: { min: -20, max: 20 },
     rotation: { min: -45, max: 45 },
     drop: { min: 0, max: 100 }, // Vertical drop for closed-chain movements (squat depth)
@@ -120,8 +120,8 @@ export const DEFAULT_JOINT_LIMITS: JointLimits = {
     lateralFlexion: { min: -45, max: 45 },
   },
   spine: {
-    lumbarLordosis: { min: -70, max: 20 },
-    thoracicKyphosis: { min: -20, max: 50 },
+    lumbarLordosis: { min: -70, max: 90 },
+    thoracicKyphosis: { min: -50, max: 50 },
     thoracicRotation: { min: -45, max: 45 },
     lumbarRotation: { min: -30, max: 30 },
   },
@@ -689,14 +689,14 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 1, value: 0 },
         ],
       },
-      // Thoracic spine maximal flexion (negative = forward)
+      // Thoracic spine maximal flexion (positive = increased kyphosis/forward)
       {
         joint: 'spine',
         property: 'thoracicKyphosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: -50 },
-          { time: 0.6, value: -50 },
+          { time: 0.4, value: 50 },
+          { time: 0.6, value: 50 },
           { time: 1, value: 0 },
         ],
       },

@@ -15,6 +15,7 @@ import PatientClonePanel from "@/components/skeleton/PatientClonePanel";
 import RegionZoomControls from "@/components/skeleton/RegionZoomControls";
 import { RegionInsightsPanel } from "@/components/skeleton/RegionInsightsPanel";
 import { JointConstraintsCard } from "@/components/skeleton/JointConstraintsCard";
+import { DiagnosticAssessmentPanel } from "@/components/skeleton/DiagnosticAssessmentPanel";
 import { JointConstraint, calculateCompensations } from "@/lib/jointConstraints";
 import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
 import BiomechanicsPanel from "@/components/skeleton/BiomechanicsPanel";
@@ -935,11 +936,18 @@ export default function TestSkeletonNew() {
 
         {/* Joint Constraints Panel - Conditionally Shown */}
         {showConstraintsPanel && (
-          <JointConstraintsCard
-            constraints={jointConstraints}
-            onConstraintsChange={setJointConstraints}
-            className="col-span-2 lg:col-span-1"
-          />
+          <>
+            <JointConstraintsCard
+              constraints={jointConstraints}
+              onConstraintsChange={setJointConstraints}
+              className="col-span-2 lg:col-span-1"
+            />
+            <DiagnosticAssessmentPanel
+              constraints={jointConstraints}
+              compensationResult={compensationResult}
+              className="col-span-2 lg:col-span-1"
+            />
+          </>
         )}
 
         {/* Region Insights Panel - Shows when a region is zoomed */}

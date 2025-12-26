@@ -8094,6 +8094,86 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
   
+  // Movement Pattern Diagnosis Endpoint
+  app.post('/api/diagnose-movement-pattern', async (req, res) => {
+    try {
+      const { constraints, compensationPatterns, overloadedStructures, clinicalWarnings } = req.body;
+      
+      if (!constraints || constraints.length === 0) {
+        return res.status(400).json({ error: 'At least one constraint is required for diagnosis' });
+      }
+      
+      const constraintsSummary = constraints.map((c: any) => 
+        `${c.joint.replace(/_/g, ' ')}: ${c.movement.replace(/_/g, ' ')} limited to ${c.maxROM}° (normal: ${c.normalROM}°), reason: ${c.reason}${c.painLevel ? `, pain level: ${c.painLevel}/10` : ''}`
+      ).join('\n');
+      
+      const compensationSummary = compensationPatterns?.length > 0 
+        ? compensationPatterns.map((p: any) => 
+            `${p.sourceJoint} ${p.sourceMovement} → compensated by ${p.compensatingJoint} ${p.compensatingMovement} (${Math.round(p.compensationRatio * 100)}% load transfer)`
+          ).join('\n')
+        : 'No compensation patterns detected';
+      
+      const prompt = `You are an expert physiotherapist performing a clinical movement analysis. Based on the following joint restrictions and movement patterns, provide a comprehensive diagnostic assessment.
+
+JOINT RESTRICTIONS:
+${constraintsSummary}
+
+COMPENSATION PATTERNS:
+${compensationSummary}
+
+OVERLOADED STRUCTURES:
+${overloadedStructures?.join(', ') || 'None identified'}
+
+CLINICAL WARNINGS:
+${clinicalWarnings?.join(', ') || 'None'}
+
+Provide your assessment in the following JSON format:
+{
+  "diagnoses": [
+    {
+      "name": "Primary diagnosis name",
+      "confidence": "high|moderate|low",
+      "icd10Code": "ICD-10 code if applicable",
+      "reasoning": "Brief explanation of why this diagnosis fits the movement pattern"
+    }
+  ],
+  "clinicalReasoning": "Detailed explanation of your clinical reasoning process connecting the movement restrictions to the diagnoses",
+  "recommendedTests": [
+    {
+      "name": "Test name",
+      "purpose": "What this test evaluates",
+      "expectedFinding": "What finding would support or refute the diagnosis"
+    }
+  ],
+  "redFlags": ["List any red flags that require immediate attention or referral"],
+  "differentialConsiderations": ["Other conditions to consider or rule out"]
+}
+
+Provide 2-4 differential diagnoses ranked by likelihood. Focus on musculoskeletal conditions that explain the movement restrictions. Include specific clinical tests that would help differentiate between diagnoses.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are an expert physiotherapist specializing in movement analysis and musculoskeletal diagnosis. Always respond with valid JSON." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+      });
+      
+      const content = response.choices[0].message.content;
+      if (!content) {
+        throw new Error('No response from AI');
+      }
+      
+      const result = JSON.parse(content);
+      res.json(result);
+    } catch (error) {
+      console.error('Error diagnosing movement pattern:', error);
+      res.status(500).json({ error: 'Failed to analyze movement pattern' });
+    }
+  });
+  
   // Clinical Decision Support Endpoints
   
   // Detect red flags in transcript

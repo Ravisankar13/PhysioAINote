@@ -4,7 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User, Lock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,6 +14,8 @@ import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayo
 import PatientClonePanel from "@/components/skeleton/PatientClonePanel";
 import RegionZoomControls from "@/components/skeleton/RegionZoomControls";
 import { RegionInsightsPanel } from "@/components/skeleton/RegionInsightsPanel";
+import { JointConstraintsCard } from "@/components/skeleton/JointConstraintsCard";
+import { JointConstraint, calculateCompensations } from "@/lib/jointConstraints";
 import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
 import BiomechanicsPanel from "@/components/skeleton/BiomechanicsPanel";
 import { Grid2X2, Maximize } from "lucide-react";
@@ -232,7 +234,14 @@ export default function TestSkeletonNew() {
   
   const [multiViewMode, setMultiViewMode] = useState(false);
   const [showPatientClonePanel, setShowPatientClonePanel] = useState(false);
+  const [showConstraintsPanel, setShowConstraintsPanel] = useState(false);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
+  const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
+  
+  const compensationResult = useMemo(() => 
+    calculateCompensations(jointConstraints), 
+    [jointConstraints]
+  );
 
   const [patientAnthropometrics, setPatientAnthropometrics] = useState({
     heightCm: 175,
@@ -781,6 +790,21 @@ export default function TestSkeletonNew() {
                   <User className="h-4 w-4 mr-1" />
                   Clone Patient
                 </Button>
+                <Button
+                  variant={showConstraintsPanel ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowConstraintsPanel(!showConstraintsPanel)}
+                  className={showConstraintsPanel ? "bg-orange-600 hover:bg-orange-700" : ""}
+                  data-testid="toggle-constraints"
+                >
+                  <Lock className="h-4 w-4 mr-1" />
+                  Constraints
+                  {jointConstraints.length > 0 && (
+                    <span className="ml-1 bg-orange-500 text-white text-xs rounded-full px-1.5">
+                      {jointConstraints.length}
+                    </span>
+                  )}
+                </Button>
                 {!multiViewMode && (
                   <RegionZoomControls
                     currentRegion={zoomToRegion}
@@ -895,6 +919,15 @@ export default function TestSkeletonNew() {
           <PatientClonePanel
             onPatientCloneUpdate={handlePatientCloneUpdate}
             currentModelConfig={modelConfig}
+            className="col-span-2 lg:col-span-1"
+          />
+        )}
+
+        {/* Joint Constraints Panel - Conditionally Shown */}
+        {showConstraintsPanel && (
+          <JointConstraintsCard
+            constraints={jointConstraints}
+            onConstraintsChange={setJointConstraints}
             className="col-span-2 lg:col-span-1"
           />
         )}

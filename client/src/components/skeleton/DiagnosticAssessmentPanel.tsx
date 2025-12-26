@@ -47,22 +47,15 @@ export function DiagnosticAssessmentPanel({
         compensationPatterns: compensationResult.patterns 
       });
       
-      const response = await apiRequest("POST", "/api/diagnose-movement-pattern", {
+      const result = await apiRequest("/api/diagnose-movement-pattern", "POST", {
         constraints: activeConstraints,
         compensationPatterns: compensationResult.patterns,
         overloadedStructures: compensationResult.overloadedStructures,
         clinicalWarnings: compensationResult.clinicalWarnings,
       });
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Diagnosis API error:", response.status, errorText);
-        throw new Error(errorText || "Failed to analyze movement pattern");
-      }
-      
-      const data = await response.json();
-      console.log("Diagnosis result:", data);
-      return data;
+      console.log("Diagnosis result:", result);
+      return result;
     },
     onSuccess: (data) => {
       setDiagnosticResult(data);

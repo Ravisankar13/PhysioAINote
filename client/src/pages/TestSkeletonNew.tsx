@@ -1,14 +1,18 @@
 import { useState, useEffect, Suspense, Component, ReactNode, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User, Lock } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User, Lock, FileText } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import PureThreeGLBViewer, { AnimationState, AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
 import PatientClonePanel from "@/components/skeleton/PatientClonePanel";
@@ -210,7 +214,14 @@ function InteractiveSVGSkeleton({ modelConfig }: { modelConfig: ModelConfig }) {
 }
 
 export default function TestSkeletonNew() {
+  const { toast } = useToast();
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
+  const presentationId = searchParams.get('presentationId');
+  
   const [isWebGLAvailable, setIsWebGLAvailable] = useState<boolean | null>(null);
+  const [loadedPresentationId, setLoadedPresentationId] = useState<number | null>(null);
+  const [presentationSummary, setPresentationSummary] = useState<string | null>(null);
   
   const [linkedSides, setLinkedSides] = useState({
     hips: false,
@@ -243,6 +254,60 @@ export default function TestSkeletonNew() {
     calculateCompensations(jointConstraints), 
     [jointConstraints]
   );
+
+  // Fetch patient presentation data when presentationId is in URL
+  useEffect(() => {
+    const fetchPresentation = async () => {
+      if (!presentationId || loadedPresentationId === parseInt(presentationId)) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/patient-presentations/${presentationId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch presentation');
+        }
+        
+        const presentation = await response.json();
+        console.log('Loaded patient presentation:', presentation);
+        
+        // Apply joint constraints from presentation
+        if (presentation.jointConstraints && Array.isArray(presentation.jointConstraints)) {
+          const constraints: JointConstraint[] = presentation.jointConstraints.map((c: any, index: number) => ({
+            id: `presentation-${presentationId}-${index}`,
+            joint: c.joint,
+            movement: c.movement,
+            maxROM: c.maxROM,
+            normalROM: c.normalROM,
+            reason: c.reason,
+            painLevel: c.painLevel || 0,
+            isActive: c.isActive !== false,
+          }));
+          
+          setJointConstraints(constraints);
+          setShowConstraintsPanel(true);
+        }
+        
+        setLoadedPresentationId(parseInt(presentationId));
+        setPresentationSummary(presentation.clinicalSummary || null);
+        
+        toast({
+          title: "Patient Loaded",
+          description: `Loaded ${presentation.jointConstraints?.length || 0} movement restrictions from SOAP note`,
+          duration: 4000,
+        });
+      } catch (error) {
+        console.error('Error loading presentation:', error);
+        toast({
+          title: "Load Failed",
+          description: "Could not load patient data from SOAP note",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    fetchPresentation();
+  }, [presentationId, loadedPresentationId, toast]);
 
   const [patientAnthropometrics, setPatientAnthropometrics] = useState({
     heightCm: 175,
@@ -757,6 +822,22 @@ export default function TestSkeletonNew() {
               <ExternalLink className="h-4 w-4 mr-2" />
               Open in New Tab
             </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Patient Presentation Banner - Shows when loaded from SOAP note */}
+      {loadedPresentationId && presentationSummary && (
+        <Alert className="mb-4 border-teal-500/50 bg-teal-500/10">
+          <FileText className="h-4 w-4 text-teal-400" />
+          <AlertTitle className="text-teal-300 flex items-center gap-2">
+            Patient Data Loaded from SOAP Note
+            <Badge variant="outline" className="border-teal-500 text-teal-400">
+              {jointConstraints.length} Restrictions
+            </Badge>
+          </AlertTitle>
+          <AlertDescription className="text-teal-200 mt-1">
+            {presentationSummary}
           </AlertDescription>
         </Alert>
       )}

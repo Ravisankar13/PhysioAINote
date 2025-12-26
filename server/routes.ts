@@ -8334,8 +8334,33 @@ Important:
     }
   });
   
-  // Get patient presentation by SOAP note ID
-  app.get('/api/patient-presentation/:soapNoteId', async (req, res) => {
+  // Get patient presentation by presentation ID (primary key)
+  app.get('/api/patient-presentations/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid presentation ID' });
+      }
+      
+      const presentation = await db.select()
+        .from(patientPresentations)
+        .where(eq(patientPresentations.id, id))
+        .limit(1);
+      
+      if (!presentation || presentation.length === 0) {
+        return res.status(404).json({ error: 'Patient presentation not found' });
+      }
+      
+      res.json(presentation[0]);
+    } catch (error) {
+      console.error('Error fetching patient presentation:', error);
+      res.status(500).json({ error: 'Failed to fetch patient presentation' });
+    }
+  });
+  
+  // Get patient presentation by SOAP note ID (lookup by linked SOAP note)
+  app.get('/api/patient-presentation/soap/:soapNoteId', async (req, res) => {
     try {
       const soapNoteId = parseInt(req.params.soapNoteId);
       

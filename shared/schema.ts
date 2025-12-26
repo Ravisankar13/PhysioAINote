@@ -5174,3 +5174,80 @@ export const patientCloneRelations = relations(patientClones, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// Patient Presentation - Links SOAP notes to skeleton visualization with extracted movement restrictions
+export const patientPresentations = pgTable("patient_presentations", {
+  id: serial("id").primaryKey(),
+  soapNoteId: integer("soap_note_id")
+    .notNull()
+    .references(() => soapNotes.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  
+  // De-identified clinical summary (no PHI)
+  clinicalSummary: text("clinical_summary"),
+  
+  // Extracted joint constraints for skeleton visualization
+  jointConstraints: json("joint_constraints").$type<Array<{
+    joint: string;
+    movement: string;
+    maxROM: number;
+    normalROM: number;
+    reason: string;
+    painLevel: number;
+    isActive: boolean;
+  }>>(),
+  
+  // Affected body regions for visual highlighting
+  affectedRegions: json("affected_regions").$type<Array<{
+    region: string;
+    severity: 'mild' | 'moderate' | 'severe';
+    description: string;
+  }>>(),
+  
+  // Compensation patterns detected from clinical findings
+  compensationPatterns: json("compensation_patterns").$type<Array<{
+    sourceJoint: string;
+    sourceMovement: string;
+    compensatingJoint: string;
+    compensatingMovement: string;
+    clinicalNote: string;
+  }>>(),
+  
+  // Positive clinical tests that inform movement restrictions
+  positiveTests: json("positive_tests").$type<Array<{
+    testName: string;
+    finding: string;
+    implication: string;
+  }>>(),
+  
+  // AI extraction metadata
+  extractionConfidence: integer("extraction_confidence"), // 0-100
+  extractedAt: timestamp("extracted_at").defaultNow().notNull(),
+  
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPatientPresentationSchema = createInsertSchema(patientPresentations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  extractedAt: true,
+});
+
+export type InsertPatientPresentation = z.infer<typeof insertPatientPresentationSchema>;
+export type PatientPresentation = typeof patientPresentations.$inferSelect;
+
+export const patientPresentationRelations = relations(patientPresentations, ({ one }) => ({
+  soapNote: one(soapNotes, {
+    fields: [patientPresentations.soapNoteId],
+    references: [soapNotes.id],
+  }),
+  user: one(users, {
+    fields: [patientPresentations.userId],
+    references: [users.id],
+  }),
+}));

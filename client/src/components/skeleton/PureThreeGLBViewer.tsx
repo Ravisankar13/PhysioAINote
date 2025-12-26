@@ -228,10 +228,65 @@ export interface AnimationConstraint {
   normalROM: number;
 }
 
+// Convert snake_case joint names (constraint system) to camelCase (animation system)
+// Animation uses: leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, leftShoulder, rightShoulder, pelvis, spine
+const snakeToCamelJoint = (snake: string): string => {
+  const mappings: Record<string, string> = {
+    'left_hip': 'leftHip',
+    'right_hip': 'rightHip',
+    'left_knee': 'leftKnee',
+    'right_knee': 'rightKnee',
+    'left_ankle': 'leftAnkle',
+    'right_ankle': 'rightAnkle',
+    'left_shoulder': 'leftShoulder',
+    'right_shoulder': 'rightShoulder',
+    'lumbar_spine': 'spine',
+    'thoracic_spine': 'spine',
+    'cervical_spine': 'spine',
+    'pelvis': 'pelvis',
+  };
+  return mappings[snake] || snake;
+};
+
+// Convert constraint system movement names to animation property names
+// Animation uses: flexion, extension, abduction, internalRotation, tilt, obliquity, rotation, thoracicKyphosis, lumbarLordosis, thoracicRotation, cervicalLordosis
+const snakeToCamelMovement = (joint: string, movement: string): string => {
+  // Spine-specific mappings - animation uses different property names for spinal movements
+  if (joint === 'lumbar_spine') {
+    if (movement === 'flexion' || movement === 'extension') return 'lumbarLordosis';
+    if (movement === 'rotation') return 'thoracicRotation'; // Lumbar doesn't rotate much, maps to thoracic
+    if (movement === 'lateral_flexion') return 'scoliosis';
+  }
+  if (joint === 'thoracic_spine') {
+    if (movement === 'flexion' || movement === 'extension') return 'thoracicKyphosis';
+    if (movement === 'rotation') return 'thoracicRotation';
+    if (movement === 'lateral_flexion') return 'scoliosis';
+  }
+  if (joint === 'cervical_spine') {
+    if (movement === 'flexion' || movement === 'extension') return 'cervicalLordosis';
+    if (movement === 'rotation') return 'cervicalLordosis'; // Maps to lordosis/flexion change
+    if (movement === 'lateral_flexion') return 'scoliosis';
+  }
+  // Pelvis-specific mappings
+  if (joint === 'pelvis') {
+    if (movement === 'anterior_tilt' || movement === 'posterior_tilt') return 'tilt';
+    if (movement === 'obliquity') return 'obliquity';
+    if (movement === 'rotation') return 'rotation';
+  }
+  // General movement mappings (hip, knee, ankle, shoulder)
+  const movementMappings: Record<string, string> = {
+    'internal_rotation': 'internalRotation',
+    'external_rotation': 'externalRotation',
+    'lateral_flexion': 'lateralFlexion',
+  };
+  return movementMappings[movement] || movement;
+};
+
 // Animation compensation mapping - when a joint is constrained, adjacent joints compensate
-// Maps joint:movement to compensating joints and their movement ratios
+// Keys use snake_case (matching constraint system), values use BONE_MAPPING keys (camelCase.property)
+// This bridges the constraint system (snake_case) to the animation system (camelCase)
 const ANIMATION_COMPENSATION_MAPPING: Record<string, Array<{ targetJoint: string; targetMovement: string; ratio: number }>> = {
-  // Lumbar spine restrictions
+  // Lumbar spine restrictions - targets use BONE_MAPPING format (pelvis.tilt, leftHip.flexion)
   'lumbar_spine:flexion': [
     { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: 0.4 },
     { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: 0.3 },
@@ -243,70 +298,53 @@ const ANIMATION_COMPENSATION_MAPPING: Record<string, Array<{ targetJoint: string
     { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: -0.25 },
   ],
   'lumbar_spine:rotation': [
-    { targetJoint: 'thoracic_spine', targetMovement: 'rotation', ratio: 0.5 },
-    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: 0.3 },
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: 0.5 },
   ],
   // Hip restrictions
   'left_hip:flexion': [
-    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.4 },
-    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.3 },
-    { targetJoint: 'leftKnee', targetMovement: 'flexion', ratio: 0.2 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: 0.4 },
+    { targetJoint: 'leftKnee', targetMovement: 'flexion', ratio: 0.3 },
   ],
   'right_hip:flexion': [
-    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.4 },
-    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.3 },
-    { targetJoint: 'rightKnee', targetMovement: 'flexion', ratio: 0.2 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: 0.4 },
+    { targetJoint: 'rightKnee', targetMovement: 'flexion', ratio: 0.3 },
   ],
   'left_hip:internal_rotation': [
-    { targetJoint: 'lumbar_spine', targetMovement: 'rotation', ratio: 0.35 },
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: 0.35 },
     { targetJoint: 'leftKnee', targetMovement: 'varus', ratio: 0.25 },
   ],
   'right_hip:internal_rotation': [
-    { targetJoint: 'lumbar_spine', targetMovement: 'rotation', ratio: 0.35 },
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: 0.35 },
     { targetJoint: 'rightKnee', targetMovement: 'varus', ratio: 0.25 },
   ],
   // Knee restrictions
   'left_knee:flexion': [
     { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: 0.4 },
     { targetJoint: 'leftAnkle', targetMovement: 'dorsiflexion', ratio: 0.3 },
-    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.2 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: 0.2 },
   ],
   'right_knee:flexion': [
     { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: 0.4 },
     { targetJoint: 'rightAnkle', targetMovement: 'dorsiflexion', ratio: 0.3 },
-    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.2 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: 0.2 },
   ],
   // Ankle restrictions
   'left_ankle:dorsiflexion': [
     { targetJoint: 'leftKnee', targetMovement: 'flexion', ratio: 0.35 },
     { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: 0.3 },
-    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.2 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: 0.2 },
   ],
   'right_ankle:dorsiflexion': [
     { targetJoint: 'rightKnee', targetMovement: 'flexion', ratio: 0.35 },
     { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: 0.3 },
-    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.2 },
-  ],
-  // Cervical restrictions
-  'cervical_spine:rotation': [
-    { targetJoint: 'thoracic_spine', targetMovement: 'rotation', ratio: 0.6 },
-  ],
-  'cervical_spine:flexion': [
-    { targetJoint: 'thoracic_spine', targetMovement: 'flexion', ratio: 0.4 },
-  ],
-  // Thoracic restrictions
-  'thoracic_spine:rotation': [
-    { targetJoint: 'cervical_spine', targetMovement: 'rotation', ratio: 0.3 },
-    { targetJoint: 'lumbar_spine', targetMovement: 'rotation', ratio: 0.4 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: 0.2 },
   ],
   // Shoulder restrictions
   'left_shoulder:flexion': [
-    { targetJoint: 'thoracic_spine', targetMovement: 'extension', ratio: 0.4 },
-    { targetJoint: 'lumbar_spine', targetMovement: 'extension', ratio: 0.3 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.3 },
   ],
   'right_shoulder:flexion': [
-    { targetJoint: 'thoracic_spine', targetMovement: 'extension', ratio: 0.4 },
-    { targetJoint: 'lumbar_spine', targetMovement: 'extension', ratio: 0.3 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.3 },
   ],
 };
 
@@ -1471,30 +1509,40 @@ export default function PureThreeGLBViewer({
         value = applyJointConstraints(value, timeline.joint, timeline.property, jointLimits);
         
         // Apply animation constraints (from joint restrictions)
+        // Constraints use snake_case (left_hip, flexion) while animation uses camelCase (leftHip.flexion)
         if (animationConstraints && animationConstraints.length > 0) {
-          const constraint = animationConstraints.find(
-            c => c.joint === timeline.joint && c.movement === timeline.property
-          );
+          // Find constraint that matches this timeline by converting constraint names to animation names
+          const constraint = animationConstraints.find(c => {
+            const camelJoint = snakeToCamelJoint(c.joint);
+            const camelMovement = snakeToCamelMovement(c.joint, c.movement);
+            return camelJoint === timeline.joint && camelMovement === timeline.property;
+          });
           
           if (constraint) {
-            const constrainedValue = Math.min(Math.abs(value), constraint.maxROM);
-            const blockedAmount = Math.abs(value) - constrainedValue;
+            // Calculate constrained value - handle both positive and negative values
+            const absValue = Math.abs(value);
+            const constrainedValue = Math.min(absValue, constraint.maxROM);
+            const blockedAmount = absValue - constrainedValue;
             
-            // Clamp the value to constraint limit
+            // Preserve the original sign when clamping
             value = value >= 0 ? constrainedValue : -constrainedValue;
             
             // If movement was blocked, calculate compensation for adjacent joints
             if (blockedAmount > 0) {
-              // Get compensation patterns from COMPENSATION_MAPPING
+              // Get compensation patterns using snake_case key (matches constraint system)
               const compensationPatterns = ANIMATION_COMPENSATION_MAPPING[`${constraint.joint}:${constraint.movement}`];
               if (compensationPatterns) {
                 compensationPatterns.forEach(({ targetJoint, targetMovement, ratio }) => {
-                  if (!compensationValues[targetJoint]) {
-                    compensationValues[targetJoint] = {};
+                  // Check if target bone mapping exists before adding compensation
+                  const configKey = `${targetJoint}.${targetMovement}`;
+                  if (BONE_MAPPING[configKey]) {
+                    if (!compensationValues[targetJoint]) {
+                      compensationValues[targetJoint] = {};
+                    }
+                    const compensationAmount = blockedAmount * ratio;
+                    compensationValues[targetJoint][targetMovement] = 
+                      (compensationValues[targetJoint][targetMovement] || 0) + compensationAmount;
                   }
-                  const compensationAmount = blockedAmount * ratio;
-                  compensationValues[targetJoint][targetMovement] = 
-                    (compensationValues[targetJoint][targetMovement] || 0) + compensationAmount;
                 });
               }
             }

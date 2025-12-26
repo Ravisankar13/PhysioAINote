@@ -88,13 +88,13 @@ export const DEFAULT_JOINT_LIMITS: JointLimits = {
     eversion: { min: 0, max: 25 },
   },
   leftShoulder: {
-    flexion: { min: -60, max: 180 },
+    flexion: { min: -180, max: 180 },
     abduction: { min: 0, max: 180 },
     internalRotation: { min: -90, max: 90 },
     externalRotation: { min: 0, max: 90 },
   },
   rightShoulder: {
-    flexion: { min: -60, max: 180 },
+    flexion: { min: -180, max: 180 },
     abduction: { min: 0, max: 180 },
     internalRotation: { min: -90, max: 90 },
     externalRotation: { min: 0, max: 90 },

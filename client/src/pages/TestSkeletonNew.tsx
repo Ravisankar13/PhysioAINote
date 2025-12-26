@@ -993,6 +993,7 @@ export default function TestSkeletonNew() {
             pelvisRotation={modelConfig.pelvis.rotation}
             bodyWeightKg={70}
             className="col-span-2 lg:col-span-1"
+            compensationPatterns={compensationResult.patterns}
           />
         )}
 

@@ -25,6 +25,13 @@ import {
   type AnatomyStructure
 } from '@/lib/regionClinicalProfiles';
 
+interface CompensationPattern {
+  compensatingJoint: string;
+  additionalLoad: number;
+  compensatingMovement: string;
+  clinicalNote: string;
+}
+
 interface RegionInsightsPanelProps {
   selectedRegion: AnatomicalRegion | null;
   spineFlexion: number;
@@ -35,6 +42,7 @@ interface RegionInsightsPanelProps {
   pelvisRotation?: number;
   bodyWeightKg?: number;
   className?: string;
+  compensationPatterns?: CompensationPattern[];
 }
 
 const STATUS_COLORS = {
@@ -113,7 +121,7 @@ function AnatomyTab({ structures }: { structures: AnatomyStructure[] }) {
   );
 }
 
-function LoadsTab({ loads }: { loads: StructureLoadAnalysis[] }) {
+function LoadsTab({ loads, compensations = [] }: { loads: StructureLoadAnalysis[]; compensations?: CompensationPattern[] }) {
   const sortedLoads = useMemo(() => {
     return [...loads].sort((a, b) => b.percentOfCritical - a.percentOfCritical);
   }, [loads]);
@@ -121,6 +129,36 @@ function LoadsTab({ loads }: { loads: StructureLoadAnalysis[] }) {
   return (
     <ScrollArea className="h-[400px] pr-4">
       <div className="space-y-3">
+        {/* Show compensation warning if any compensations exist */}
+        {compensations.length > 0 && (
+          <div className="p-3 rounded-lg border border-yellow-500/50 bg-yellow-500/10" data-testid="compensation-warning">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-yellow-600" />
+              <span className="font-medium text-sm text-yellow-700">Compensation Active</span>
+            </div>
+            <div className="space-y-2">
+              {compensations.map((comp, idx) => (
+                <div key={idx} className="text-xs text-muted-foreground flex items-center justify-between">
+                  <span className="capitalize">{comp.compensatingJoint.replace(/_/g, ' ')}: {comp.compensatingMovement?.replace(/_/g, ' ')}</span>
+                  <Badge 
+                    variant="outline" 
+                    className={
+                      comp.additionalLoad > 25 ? 'border-red-500 text-red-600' :
+                      comp.additionalLoad > 15 ? 'border-orange-500 text-orange-600' :
+                      'border-yellow-500 text-yellow-600'
+                    }
+                  >
+                    +{comp.additionalLoad}% load
+                  </Badge>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2 italic">
+              These areas are working harder due to movement restrictions elsewhere
+            </p>
+          </div>
+        )}
+        
         {sortedLoads.map(load => (
           <div 
             key={load.structureId} 
@@ -263,6 +301,7 @@ export function RegionInsightsPanel({
   pelvisRotation = 0,
   bodyWeightKg = 70,
   className = '',
+  compensationPatterns = [],
 }: RegionInsightsPanelProps) {
   const [analysis, setAnalysis] = useState<RegionAnalysisResult | null>(null);
 
@@ -365,7 +404,7 @@ export function RegionInsightsPanel({
           
           <TabsContent value="loads">
             {analysis ? (
-              <LoadsTab loads={analysis.structureLoads} />
+              <LoadsTab loads={analysis.structureLoads} compensations={compensationPatterns} />
             ) : (
               <p className="text-sm text-muted-foreground">No load data available</p>
             )}

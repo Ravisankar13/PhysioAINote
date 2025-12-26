@@ -216,6 +216,11 @@ export const REGION_MESH_MAPPING: Record<AnatomicalRegion, string[]> = {
   right_elbow: ['BONES_ARMR002', 'BONES_ARMR1'],
 };
 
+export interface CompensatingJointInfo {
+  joint: string;
+  loadIncrease: number;
+}
+
 interface PureThreeGLBViewerProps {
   modelPath?: string;
   modelConfig?: ModelConfig;
@@ -228,6 +233,7 @@ interface PureThreeGLBViewerProps {
   disableControls?: boolean;
   showLabel?: boolean;
   zoomToRegion?: AnatomicalRegion | null;
+  compensatingJoints?: CompensatingJointInfo[];
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -425,7 +431,8 @@ export default function PureThreeGLBViewer({
   cameraAngle = 'custom',
   disableControls = false,
   showLabel = false,
-  zoomToRegion = null
+  zoomToRegion = null,
+  compensatingJoints = []
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1095,6 +1102,88 @@ export default function PureThreeGLBViewer({
     
     controls.update();
   }, [cameraAngle, disableControls]);
+
+  // Compensation highlighting effect - color joints that are compensating for restrictions
+  useEffect(() => {
+    if (!sceneRef.current || status !== 'ready') return;
+    if (!compensatingJoints || compensatingJoints.length === 0) {
+      // Reset all materials to original when no compensations
+      if (originalMaterialsRef.current.size > 0) {
+        sceneRef.current.model?.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const originalMat = originalMaterialsRef.current.get(child);
+            if (originalMat) {
+              child.material = originalMat;
+            }
+          }
+        });
+      }
+      return;
+    }
+
+    // Map joint types to mesh names for compensation highlighting
+    const JOINT_TO_MESH: Record<string, string[]> = {
+      'lumbar_spine': ['BONES_SPINE1'],
+      'thoracic_spine': ['BONES_SPINE1', 'BONES_RIBCAGE1'],
+      'cervical_spine': ['BONES_HEAD1'],
+      'pelvis': ['BONES_PELVIS1'],
+      'left_hip': ['BONES_LEGL1'],
+      'right_hip': ['BONES_LEGR1'],
+      'left_knee': ['BONES_LEGL002'],
+      'right_knee': ['BONES_LEGR002'],
+      'left_ankle': ['BONES_LEGL002'],
+      'right_ankle': ['BONES_LEGR002'],
+      'left_shoulder': ['BONES_ARML1'],
+      'right_shoulder': ['BONES_ARMR1'],
+    };
+
+    // Collect all meshes that should be highlighted
+    const meshesToHighlight = new Map<string, number>(); // meshName -> max load increase
+    compensatingJoints.forEach(({ joint, loadIncrease }) => {
+      const meshNames = JOINT_TO_MESH[joint] || [];
+      meshNames.forEach(meshName => {
+        const current = meshesToHighlight.get(meshName) || 0;
+        meshesToHighlight.set(meshName, Math.max(current, loadIncrease));
+      });
+    });
+
+    // Apply yellow/orange/red emissive glow to compensating meshes
+    sceneRef.current.model?.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const meshName = child.name || '';
+        const loadIncrease = meshesToHighlight.get(meshName);
+        
+        if (loadIncrease !== undefined) {
+          // Store original material if not already stored
+          if (!originalMaterialsRef.current.has(child)) {
+            originalMaterialsRef.current.set(child, child.material);
+          }
+          
+          // Create emissive material based on load increase
+          const intensity = Math.min(loadIncrease / 40, 1); // Normalize 0-40% to 0-1
+          const color = intensity > 0.6 
+            ? new THREE.Color(0xff4400) // Red-orange for high load
+            : intensity > 0.3 
+              ? new THREE.Color(0xff8800) // Orange for medium load
+              : new THREE.Color(0xffcc00); // Yellow for low load
+          
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((mat) => {
+            if (mat instanceof THREE.MeshStandardMaterial) {
+              mat.emissive = color;
+              mat.emissiveIntensity = 0.3 + intensity * 0.4;
+            }
+          });
+        } else {
+          // Reset non-compensating meshes to original
+          const originalMat = originalMaterialsRef.current.get(child);
+          if (originalMat) {
+            child.material = originalMat;
+          }
+        }
+      }
+    });
+  }, [compensatingJoints, status]);
 
   useEffect(() => {
     if (status !== 'ready' || !modelConfig) return;

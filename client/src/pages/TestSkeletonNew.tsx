@@ -907,6 +907,10 @@ export default function TestSkeletonNew() {
                     onAnimationFrame={handleAnimationFrame}
                     biomechanicsData={biomechanicsData}
                     zoomToRegion={zoomToRegion}
+                    compensatingJoints={compensationResult.patterns.map(p => ({
+                      joint: p.compensatingJoint,
+                      loadIncrease: p.additionalLoad
+                    }))}
                   />
                 </Suspense>
               </GLBErrorBoundary>

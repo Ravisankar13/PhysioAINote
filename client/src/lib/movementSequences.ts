@@ -678,36 +678,36 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     duration: 4000,
     loop: true,
     joints: [
-      // Lumbar spine maximal flexion
+      // Lumbar spine maximal flexion (positive = forward)
       {
         joint: 'spine',
         property: 'lumbarLordosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: -70 },
-          { time: 0.6, value: -70 },
+          { time: 0.4, value: 70 },
+          { time: 0.6, value: 70 },
           { time: 1, value: 0 },
         ],
       },
-      // Thoracic spine maximal flexion
+      // Thoracic spine maximal flexion (negative = forward)
       {
         joint: 'spine',
         property: 'thoracicKyphosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 50 },
-          { time: 0.6, value: 50 },
+          { time: 0.4, value: -50 },
+          { time: 0.6, value: -50 },
           { time: 1, value: 0 },
         ],
       },
-      // Pelvis maximal anterior tilt
+      // Pelvis maximal anterior tilt (negative = forward)
       {
         joint: 'pelvis',
         property: 'tilt',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 90 },
-          { time: 0.6, value: 90 },
+          { time: 0.4, value: -90 },
+          { time: 0.6, value: -90 },
           { time: 1, value: 0 },
         ],
       },

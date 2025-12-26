@@ -41,16 +41,34 @@ export function DiagnosticAssessmentPanel({
 
   const diagnoseMutation = useMutation({
     mutationFn: async () => {
+      const activeConstraints = constraints.filter(c => c.isActive);
+      console.log("Sending diagnosis request with:", { 
+        constraints: activeConstraints,
+        compensationPatterns: compensationResult.patterns 
+      });
+      
       const response = await apiRequest("POST", "/api/diagnose-movement-pattern", {
-        constraints: constraints.filter(c => c.isActive),
+        constraints: activeConstraints,
         compensationPatterns: compensationResult.patterns,
         overloadedStructures: compensationResult.overloadedStructures,
         clinicalWarnings: compensationResult.clinicalWarnings,
       });
-      return response.json();
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Diagnosis API error:", response.status, errorText);
+        throw new Error(errorText || "Failed to analyze movement pattern");
+      }
+      
+      const data = await response.json();
+      console.log("Diagnosis result:", data);
+      return data;
     },
     onSuccess: (data) => {
       setDiagnosticResult(data);
+    },
+    onError: (error) => {
+      console.error("Diagnosis mutation error:", error);
     },
   });
 

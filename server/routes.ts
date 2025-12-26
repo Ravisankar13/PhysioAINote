@@ -8096,10 +8096,13 @@ Respond with only a number between 1-100 representing the relevance score.`;
   
   // Movement Pattern Diagnosis Endpoint
   app.post('/api/diagnose-movement-pattern', async (req, res) => {
+    console.log('[API] Received diagnose-movement-pattern request');
     try {
       const { constraints, compensationPatterns, overloadedStructures, clinicalWarnings } = req.body;
+      console.log('[API] Constraints received:', constraints?.length || 0);
       
       if (!constraints || constraints.length === 0) {
+        console.log('[API] No constraints provided, returning 400');
         return res.status(400).json({ error: 'At least one constraint is required for diagnosis' });
       }
       
@@ -8151,7 +8154,13 @@ Provide your assessment in the following JSON format:
 
 Provide 2-4 differential diagnoses ranked by likelihood. Focus on musculoskeletal conditions that explain the movement restrictions. Include specific clinical tests that would help differentiate between diagnoses.`;
 
-      const response = await openai.chat.completions.create({
+      const replitOpenAI = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+      
+      console.log('[API] Making OpenAI request for diagnosis...');
+      const response = await replitOpenAI.chat.completions.create({
         model: "gpt-4o",
         messages: [
           { role: "system", content: "You are an expert physiotherapist specializing in movement analysis and musculoskeletal diagnosis. Always respond with valid JSON." },
@@ -8162,6 +8171,7 @@ Provide 2-4 differential diagnoses ranked by likelihood. Focus on musculoskeleta
       });
       
       const content = response.choices[0].message.content;
+      console.log('[API] Received diagnosis response');
       if (!content) {
         throw new Error('No response from AI');
       }

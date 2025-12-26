@@ -574,6 +574,7 @@ export default function PureThreeGLBViewer({
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const legIKStateRef = useRef<LegIKState | null>(null);
   const forceVisualizationRef = useRef<ForceVisualizationManager | null>(null);
+  const animationConstraintsRef = useRef<AnimationConstraint[]>([]);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const sceneRef = useRef<{
     scene: THREE.Scene;
@@ -1460,6 +1461,11 @@ export default function PureThreeGLBViewer({
     });
   }, [modelConfig, status]);
 
+  // Sync animation constraints to ref (avoids restarting animation when constraints change)
+  useEffect(() => {
+    animationConstraintsRef.current = animationConstraints || [];
+  }, [animationConstraints]);
+
   useEffect(() => {
     if (!animationState || !animationState.isPlaying || !animationState.currentMovement) return;
     if (status !== 'ready') return;
@@ -1510,9 +1516,11 @@ export default function PureThreeGLBViewer({
         
         // Apply animation constraints (from joint restrictions)
         // Constraints use snake_case (left_hip, flexion) while animation uses camelCase (leftHip.flexion)
-        if (animationConstraints && animationConstraints.length > 0) {
+        // Use ref to avoid restarting animation when constraints change
+        const currentConstraints = animationConstraintsRef.current;
+        if (currentConstraints && currentConstraints.length > 0) {
           // Find constraint that matches this timeline by converting constraint names to animation names
-          const constraint = animationConstraints.find(c => {
+          const constraint = currentConstraints.find(c => {
             const camelJoint = snakeToCamelJoint(c.joint);
             const camelMovement = snakeToCamelMovement(c.joint, c.movement);
             return camelJoint === timeline.joint && camelMovement === timeline.property;
@@ -1714,7 +1722,7 @@ export default function PureThreeGLBViewer({
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame, jointLimits, animationConstraints]);
+  }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame, jointLimits]);
 
   // Force visualization effect
   useEffect(() => {

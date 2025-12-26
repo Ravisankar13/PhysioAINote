@@ -906,19 +906,53 @@ export default function TestSkeletonNew() {
             spineFlexion={
               zoomToRegion === 'cervical_spine' ? -modelConfig.spine.cervicalLordosis :
               zoomToRegion === 'thoracic_spine' ? modelConfig.spine.thoracicKyphosis :
+              zoomToRegion === 'left_hip' ? modelConfig.leftHip.flexion :
+              zoomToRegion === 'right_hip' ? modelConfig.rightHip.flexion :
+              zoomToRegion === 'left_knee' ? modelConfig.leftKnee.flexion :
+              zoomToRegion === 'right_knee' ? modelConfig.rightKnee.flexion :
+              zoomToRegion === 'left_ankle' ? modelConfig.leftAnkle.dorsiflexion :
+              zoomToRegion === 'right_ankle' ? modelConfig.rightAnkle.dorsiflexion :
               -modelConfig.spine.lumbarLordosis
             }
             spineRotation={
               zoomToRegion === 'cervical_spine' ? modelConfig.spine.cervicalRotation :
               zoomToRegion === 'thoracic_spine' ? modelConfig.spine.thoracicRotation :
+              zoomToRegion === 'left_hip' ? modelConfig.leftHip.internalRotation :
+              zoomToRegion === 'right_hip' ? modelConfig.rightHip.internalRotation :
+              zoomToRegion === 'left_knee' ? modelConfig.leftKnee.varus :
+              zoomToRegion === 'right_knee' ? modelConfig.rightKnee.varus :
+              zoomToRegion === 'left_ankle' ? modelConfig.leftAnkle.inversion :
+              zoomToRegion === 'right_ankle' ? modelConfig.rightAnkle.inversion :
               modelConfig.spine.lumbarRotation
             }
             spineLateralFlexion={
               zoomToRegion === 'cervical_spine' ? modelConfig.spine.cervicalLateralFlexion :
+              zoomToRegion === 'left_hip' ? modelConfig.leftHip.abduction :
+              zoomToRegion === 'right_hip' ? modelConfig.rightHip.abduction :
+              zoomToRegion === 'left_knee' ? modelConfig.leftKnee.tibialTorsion :
+              zoomToRegion === 'right_knee' ? modelConfig.rightKnee.tibialTorsion :
+              zoomToRegion === 'left_ankle' ? modelConfig.leftAnkle.eversion :
+              zoomToRegion === 'right_ankle' ? modelConfig.rightAnkle.eversion :
               modelConfig.spine.scoliosis
             }
-            pelvisTilt={modelConfig.pelvis.tilt}
-            pelvisObliquity={modelConfig.pelvis.obliquity}
+            pelvisTilt={
+              zoomToRegion === 'left_hip' ? modelConfig.leftHip.anteversion :
+              zoomToRegion === 'right_hip' ? modelConfig.rightHip.anteversion :
+              zoomToRegion === 'left_knee' ? modelConfig.leftKnee.recurvatum :
+              zoomToRegion === 'right_knee' ? modelConfig.rightKnee.recurvatum :
+              zoomToRegion === 'left_ankle' ? modelConfig.leftAnkle.plantarflexion :
+              zoomToRegion === 'right_ankle' ? modelConfig.rightAnkle.plantarflexion :
+              modelConfig.pelvis.tilt
+            }
+            pelvisObliquity={
+              zoomToRegion === 'left_hip' ? modelConfig.leftHip.neckShaftAngle :
+              zoomToRegion === 'right_hip' ? modelConfig.rightHip.neckShaftAngle :
+              zoomToRegion === 'left_knee' ? modelConfig.leftKnee.tibialSlope :
+              zoomToRegion === 'right_knee' ? modelConfig.rightKnee.tibialSlope :
+              zoomToRegion === 'left_ankle' ? modelConfig.leftAnkle.archHeight :
+              zoomToRegion === 'right_ankle' ? modelConfig.rightAnkle.archHeight :
+              modelConfig.pelvis.obliquity
+            }
             pelvisRotation={modelConfig.pelvis.rotation}
             bodyWeightKg={70}
             className="col-span-2 lg:col-span-1"

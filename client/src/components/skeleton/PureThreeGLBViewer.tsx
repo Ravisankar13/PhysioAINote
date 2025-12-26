@@ -221,6 +221,95 @@ export interface CompensatingJointInfo {
   loadIncrease: number;
 }
 
+export interface AnimationConstraint {
+  joint: string;
+  movement: string;
+  maxROM: number;
+  normalROM: number;
+}
+
+// Animation compensation mapping - when a joint is constrained, adjacent joints compensate
+// Maps joint:movement to compensating joints and their movement ratios
+const ANIMATION_COMPENSATION_MAPPING: Record<string, Array<{ targetJoint: string; targetMovement: string; ratio: number }>> = {
+  // Lumbar spine restrictions
+  'lumbar_spine:flexion': [
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: 0.4 },
+    { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: 0.3 },
+    { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: 0.3 },
+  ],
+  'lumbar_spine:extension': [
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.35 },
+    { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: -0.25 },
+    { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: -0.25 },
+  ],
+  'lumbar_spine:rotation': [
+    { targetJoint: 'thoracic_spine', targetMovement: 'rotation', ratio: 0.5 },
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: 0.3 },
+  ],
+  // Hip restrictions
+  'left_hip:flexion': [
+    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.4 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.3 },
+    { targetJoint: 'leftKnee', targetMovement: 'flexion', ratio: 0.2 },
+  ],
+  'right_hip:flexion': [
+    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.4 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.3 },
+    { targetJoint: 'rightKnee', targetMovement: 'flexion', ratio: 0.2 },
+  ],
+  'left_hip:internal_rotation': [
+    { targetJoint: 'lumbar_spine', targetMovement: 'rotation', ratio: 0.35 },
+    { targetJoint: 'leftKnee', targetMovement: 'varus', ratio: 0.25 },
+  ],
+  'right_hip:internal_rotation': [
+    { targetJoint: 'lumbar_spine', targetMovement: 'rotation', ratio: 0.35 },
+    { targetJoint: 'rightKnee', targetMovement: 'varus', ratio: 0.25 },
+  ],
+  // Knee restrictions
+  'left_knee:flexion': [
+    { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: 0.4 },
+    { targetJoint: 'leftAnkle', targetMovement: 'dorsiflexion', ratio: 0.3 },
+    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.2 },
+  ],
+  'right_knee:flexion': [
+    { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: 0.4 },
+    { targetJoint: 'rightAnkle', targetMovement: 'dorsiflexion', ratio: 0.3 },
+    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.2 },
+  ],
+  // Ankle restrictions
+  'left_ankle:dorsiflexion': [
+    { targetJoint: 'leftKnee', targetMovement: 'flexion', ratio: 0.35 },
+    { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: 0.3 },
+    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.2 },
+  ],
+  'right_ankle:dorsiflexion': [
+    { targetJoint: 'rightKnee', targetMovement: 'flexion', ratio: 0.35 },
+    { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: 0.3 },
+    { targetJoint: 'lumbar_spine', targetMovement: 'flexion', ratio: 0.2 },
+  ],
+  // Cervical restrictions
+  'cervical_spine:rotation': [
+    { targetJoint: 'thoracic_spine', targetMovement: 'rotation', ratio: 0.6 },
+  ],
+  'cervical_spine:flexion': [
+    { targetJoint: 'thoracic_spine', targetMovement: 'flexion', ratio: 0.4 },
+  ],
+  // Thoracic restrictions
+  'thoracic_spine:rotation': [
+    { targetJoint: 'cervical_spine', targetMovement: 'rotation', ratio: 0.3 },
+    { targetJoint: 'lumbar_spine', targetMovement: 'rotation', ratio: 0.4 },
+  ],
+  // Shoulder restrictions
+  'left_shoulder:flexion': [
+    { targetJoint: 'thoracic_spine', targetMovement: 'extension', ratio: 0.4 },
+    { targetJoint: 'lumbar_spine', targetMovement: 'extension', ratio: 0.3 },
+  ],
+  'right_shoulder:flexion': [
+    { targetJoint: 'thoracic_spine', targetMovement: 'extension', ratio: 0.4 },
+    { targetJoint: 'lumbar_spine', targetMovement: 'extension', ratio: 0.3 },
+  ],
+};
+
 interface PureThreeGLBViewerProps {
   modelPath?: string;
   modelConfig?: ModelConfig;
@@ -234,6 +323,7 @@ interface PureThreeGLBViewerProps {
   showLabel?: boolean;
   zoomToRegion?: AnatomicalRegion | null;
   compensatingJoints?: CompensatingJointInfo[];
+  animationConstraints?: AnimationConstraint[];
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -432,7 +522,8 @@ export default function PureThreeGLBViewer({
   disableControls = false,
   showLabel = false,
   zoomToRegion = null,
-  compensatingJoints = []
+  compensatingJoints = [],
+  animationConstraints = []
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1360,16 +1451,70 @@ export default function PureThreeGLBViewer({
       }
       
       const jointValues: { [key: string]: { [prop: string]: number } } = {};
+      const compensationValues: { [key: string]: { [prop: string]: number } } = {};
       
+      // First pass: Calculate unconstrained values and detect constraints
+      const unconstrainedValues: { [key: string]: { [prop: string]: number } } = {};
       movement.joints.forEach(timeline => {
-        let value = interpolateKeyframes(timeline.keyframes, normalizedTime);
+        const value = interpolateKeyframes(timeline.keyframes, normalizedTime);
+        if (!unconstrainedValues[timeline.joint]) {
+          unconstrainedValues[timeline.joint] = {};
+        }
+        unconstrainedValues[timeline.joint][timeline.property] = value;
+      });
+      
+      // Second pass: Apply constraints and calculate compensation
+      movement.joints.forEach(timeline => {
+        let value = unconstrainedValues[timeline.joint][timeline.property];
         
+        // Apply existing jointLimits
         value = applyJointConstraints(value, timeline.joint, timeline.property, jointLimits);
+        
+        // Apply animation constraints (from joint restrictions)
+        if (animationConstraints && animationConstraints.length > 0) {
+          const constraint = animationConstraints.find(
+            c => c.joint === timeline.joint && c.movement === timeline.property
+          );
+          
+          if (constraint) {
+            const constrainedValue = Math.min(Math.abs(value), constraint.maxROM);
+            const blockedAmount = Math.abs(value) - constrainedValue;
+            
+            // Clamp the value to constraint limit
+            value = value >= 0 ? constrainedValue : -constrainedValue;
+            
+            // If movement was blocked, calculate compensation for adjacent joints
+            if (blockedAmount > 0) {
+              // Get compensation patterns from COMPENSATION_MAPPING
+              const compensationPatterns = ANIMATION_COMPENSATION_MAPPING[`${constraint.joint}:${constraint.movement}`];
+              if (compensationPatterns) {
+                compensationPatterns.forEach(({ targetJoint, targetMovement, ratio }) => {
+                  if (!compensationValues[targetJoint]) {
+                    compensationValues[targetJoint] = {};
+                  }
+                  const compensationAmount = blockedAmount * ratio;
+                  compensationValues[targetJoint][targetMovement] = 
+                    (compensationValues[targetJoint][targetMovement] || 0) + compensationAmount;
+                });
+              }
+            }
+          }
+        }
         
         if (!jointValues[timeline.joint]) {
           jointValues[timeline.joint] = {};
         }
         jointValues[timeline.joint][timeline.property] = value;
+      });
+      
+      // Merge compensation values into joint values
+      Object.entries(compensationValues).forEach(([joint, props]) => {
+        if (!jointValues[joint]) {
+          jointValues[joint] = {};
+        }
+        Object.entries(props).forEach(([prop, additionalValue]) => {
+          jointValues[joint][prop] = (jointValues[joint][prop] || 0) + additionalValue;
+        });
       });
       
       // Directly apply animation values to bones for immediate response
@@ -1521,7 +1666,7 @@ export default function PureThreeGLBViewer({
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame, jointLimits]);
+  }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame, jointLimits, animationConstraints]);
 
   // Force visualization effect
   useEffect(() => {

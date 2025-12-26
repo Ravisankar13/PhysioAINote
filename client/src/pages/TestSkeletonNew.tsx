@@ -911,6 +911,12 @@ export default function TestSkeletonNew() {
                       joint: p.compensatingJoint,
                       loadIncrease: p.additionalLoad
                     }))}
+                    animationConstraints={jointConstraints.filter(c => c.isActive).map(c => ({
+                      joint: c.joint,
+                      movement: c.movement,
+                      maxROM: c.maxROM,
+                      normalROM: c.normalROM
+                    }))}
                   />
                 </Suspense>
               </GLBErrorBoundary>

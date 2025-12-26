@@ -671,6 +671,238 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
       },
     ],
   },
+  {
+    id: 'forwardBend',
+    name: 'Forward Bend',
+    description: 'Standing forward flexion - trunk flexion with hip hinge',
+    duration: 4000,
+    loop: true,
+    joints: [
+      // Lumbar spine flattens/reverses lordosis during forward flexion
+      {
+        joint: 'spine',
+        property: 'lumbarLordosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: -50 },
+          { time: 0.6, value: -50 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Thoracic spine increases kyphosis during flexion
+      {
+        joint: 'spine',
+        property: 'thoracicKyphosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 35 },
+          { time: 0.6, value: 35 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Pelvis tilts anteriorly as trunk bends forward
+      {
+        joint: 'pelvis',
+        property: 'tilt',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 25 },
+          { time: 0.6, value: 25 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Hip flexion - hip hinge component
+      {
+        joint: 'leftHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 70 },
+          { time: 0.6, value: 70 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 70 },
+          { time: 0.6, value: 70 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Slight knee flexion for comfort
+      {
+        joint: 'leftKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 10 },
+          { time: 0.6, value: 10 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 10 },
+          { time: 0.6, value: 10 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Arms hang down toward floor
+      {
+        joint: 'leftShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 160 },
+          { time: 0.6, value: 160 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 160 },
+          { time: 0.6, value: 160 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Neck extension to look forward during bend
+      {
+        joint: 'neck',
+        property: 'extension',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 20 },
+          { time: 0.6, value: 20 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'backwardBend',
+    name: 'Backward Bend',
+    description: 'Standing trunk extension - lumbar and thoracic extension',
+    duration: 4000,
+    loop: true,
+    joints: [
+      // Lumbar spine increases lordosis (extension)
+      {
+        joint: 'spine',
+        property: 'lumbarLordosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 15 },
+          { time: 0.6, value: 15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Thoracic spine extends (reduces kyphosis)
+      {
+        joint: 'spine',
+        property: 'thoracicKyphosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: -15 },
+          { time: 0.6, value: -15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Pelvis tilts posteriorly slightly
+      {
+        joint: 'pelvis',
+        property: 'tilt',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: -10 },
+          { time: 0.6, value: -10 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Hip extension supports backward lean
+      {
+        joint: 'leftHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: -15 },
+          { time: 0.6, value: -15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: -15 },
+          { time: 0.6, value: -15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Knees slightly bent for stability
+      {
+        joint: 'leftKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 15 },
+          { time: 0.6, value: 15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 15 },
+          { time: 0.6, value: 15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Arms reach back for counterbalance
+      {
+        joint: 'leftShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: -40 },
+          { time: 0.6, value: -40 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: -40 },
+          { time: 0.6, value: -40 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Neck flexes to maintain gaze forward
+      {
+        joint: 'neck',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 25 },
+          { time: 0.6, value: 25 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
 ];
 
 export function getMovementById(id: string): MovementSequence | undefined {

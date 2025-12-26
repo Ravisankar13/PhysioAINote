@@ -44,7 +44,7 @@ import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 import { generateAISuggestions, applySuggestionToSoap, generateEnhancedDifferentials, type EnhancedDifferential, type DifferentialAnalysisResult } from "./services/aiSuggestionsService";
 import { ResearchService } from "./services/researchService";
 
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -8181,6 +8181,181 @@ Provide 2-4 differential diagnoses ranked by likelihood. Focus on musculoskeleta
     } catch (error) {
       console.error('Error diagnosing movement pattern:', error);
       res.status(500).json({ error: 'Failed to analyze movement pattern' });
+    }
+  });
+  
+  // Extract movement restrictions from SOAP note for skeleton visualization
+  app.post('/api/extract-patient-presentation', async (req, res) => {
+    console.log('[API] Received extract-patient-presentation request');
+    try {
+      const { soapNoteId } = req.body;
+      
+      if (!soapNoteId) {
+        return res.status(400).json({ error: 'SOAP note ID is required' });
+      }
+      
+      // Fetch the SOAP note
+      const soapNote = await db.select().from(soapNotes).where(eq(soapNotes.id, soapNoteId)).limit(1);
+      
+      if (!soapNote || soapNote.length === 0) {
+        return res.status(404).json({ error: 'SOAP note not found' });
+      }
+      
+      const note = soapNote[0];
+      const clinicalText = `
+SUBJECTIVE: ${note.subjective || 'Not provided'}
+
+OBJECTIVE: ${note.objective || 'Not provided'}
+
+ASSESSMENT: ${note.assessment || 'Not provided'}
+
+PLAN: ${note.plan || 'Not provided'}
+      `.trim();
+      
+      const prompt = `You are an expert physiotherapist analyzing a clinical SOAP note to extract movement restrictions and clinical findings for a 3D skeleton visualization system. Extract ONLY de-identified biomechanical and movement-related information.
+
+SOAP NOTE:
+${clinicalText}
+
+Extract movement restrictions, affected body regions, and clinical findings in the following JSON format:
+{
+  "clinicalSummary": "Brief de-identified summary of the movement dysfunction (no patient names, ages, dates)",
+  "jointConstraints": [
+    {
+      "joint": "left_shoulder|right_shoulder|left_hip|right_hip|left_knee|right_knee|left_ankle|right_ankle|cervical_spine|thoracic_spine|lumbar_spine|left_elbow|right_elbow|left_wrist|right_wrist",
+      "movement": "flexion|extension|abduction|adduction|internal_rotation|external_rotation|lateral_flexion_left|lateral_flexion_right|rotation_left|rotation_right",
+      "maxROM": <number in degrees - the limited range>,
+      "normalROM": <number in degrees - normal expected range>,
+      "reason": "pain|stiffness|weakness|instability|guarding|muscle_tightness",
+      "painLevel": <0-10>,
+      "isActive": true
+    }
+  ],
+  "affectedRegions": [
+    {
+      "region": "shoulder|neck|back|hip|knee|ankle|elbow|wrist",
+      "severity": "mild|moderate|severe",
+      "description": "Brief description of the dysfunction"
+    }
+  ],
+  "compensationPatterns": [
+    {
+      "sourceJoint": "joint name",
+      "sourceMovement": "movement type",
+      "compensatingJoint": "joint name that compensates",
+      "compensatingMovement": "compensatory movement",
+      "clinicalNote": "Brief note about the compensation pattern"
+    }
+  ],
+  "positiveTests": [
+    {
+      "testName": "Name of clinical test",
+      "finding": "What was found",
+      "implication": "What this means for movement"
+    }
+  ],
+  "extractionConfidence": <0-100 confidence in extraction accuracy>
+}
+
+Important:
+- Only include joints and movements explicitly mentioned or strongly implied in the note
+- Use standard joint names from the provided list
+- Estimate ROM values based on clinical descriptions (e.g., "severely limited" = ~50% of normal)
+- If ROM is not specified, make reasonable clinical estimates based on the condition
+- Include compensation patterns if the note mentions altered movement strategies
+- Extract positive clinical tests that inform movement restrictions
+- Return empty arrays if no relevant information is found for that category`;
+
+      const replitOpenAI = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+      
+      console.log('[API] Making OpenAI request for presentation extraction...');
+      const response = await replitOpenAI.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are an expert physiotherapist extracting movement restrictions from clinical notes for a 3D visualization system. Always respond with valid JSON. Focus only on de-identified biomechanical data." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+      });
+      
+      const content = response.choices[0].message.content;
+      console.log('[API] Received presentation extraction response');
+      
+      if (!content) {
+        throw new Error('No response from AI');
+      }
+      
+      const extractedData = JSON.parse(content);
+      
+      // Check if presentation already exists
+      const existing = await db.select().from(patientPresentations).where(eq(patientPresentations.soapNoteId, soapNoteId)).limit(1);
+      
+      let presentation;
+      if (existing && existing.length > 0) {
+        // Update existing
+        const updated = await db.update(patientPresentations)
+          .set({
+            clinicalSummary: extractedData.clinicalSummary,
+            jointConstraints: extractedData.jointConstraints,
+            affectedRegions: extractedData.affectedRegions,
+            compensationPatterns: extractedData.compensationPatterns,
+            positiveTests: extractedData.positiveTests,
+            extractionConfidence: extractedData.extractionConfidence,
+            updatedAt: new Date(),
+          })
+          .where(eq(patientPresentations.id, existing[0].id))
+          .returning();
+        presentation = updated[0];
+      } else {
+        // Create new
+        const created = await db.insert(patientPresentations)
+          .values({
+            soapNoteId: soapNoteId,
+            userId: note.userId,
+            clinicalSummary: extractedData.clinicalSummary,
+            jointConstraints: extractedData.jointConstraints,
+            affectedRegions: extractedData.affectedRegions,
+            compensationPatterns: extractedData.compensationPatterns,
+            positiveTests: extractedData.positiveTests,
+            extractionConfidence: extractedData.extractionConfidence,
+          })
+          .returning();
+        presentation = created[0];
+      }
+      
+      res.json(presentation);
+    } catch (error) {
+      console.error('Error extracting patient presentation:', error);
+      res.status(500).json({ error: 'Failed to extract patient presentation' });
+    }
+  });
+  
+  // Get patient presentation by SOAP note ID
+  app.get('/api/patient-presentation/:soapNoteId', async (req, res) => {
+    try {
+      const soapNoteId = parseInt(req.params.soapNoteId);
+      
+      if (isNaN(soapNoteId)) {
+        return res.status(400).json({ error: 'Invalid SOAP note ID' });
+      }
+      
+      const presentation = await db.select()
+        .from(patientPresentations)
+        .where(eq(patientPresentations.soapNoteId, soapNoteId))
+        .limit(1);
+      
+      if (!presentation || presentation.length === 0) {
+        return res.status(404).json({ error: 'Patient presentation not found' });
+      }
+      
+      res.json(presentation[0]);
+    } catch (error) {
+      console.error('Error fetching patient presentation:', error);
+      res.status(500).json({ error: 'Failed to fetch patient presentation' });
     }
   });
   

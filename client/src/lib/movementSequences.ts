@@ -678,47 +678,47 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     duration: 4000,
     loop: true,
     joints: [
-      // Lumbar spine flattens/reverses lordosis during forward flexion
+      // Lumbar spine flattens during forward flexion (positive = flexion/flattening)
       {
         joint: 'spine',
         property: 'lumbarLordosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: -50 },
-          { time: 0.6, value: -50 },
+          { time: 0.4, value: 50 },
+          { time: 0.6, value: 50 },
           { time: 1, value: 0 },
         ],
       },
-      // Thoracic spine increases kyphosis during flexion
+      // Thoracic spine flexes forward (negative = forward flexion)
       {
         joint: 'spine',
         property: 'thoracicKyphosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 40 },
-          { time: 0.6, value: 40 },
+          { time: 0.4, value: -40 },
+          { time: 0.6, value: -40 },
           { time: 1, value: 0 },
         ],
       },
-      // Pelvis tilts anteriorly as trunk bends forward
+      // Pelvis tilts anteriorly (negative = anterior tilt/forward)
       {
         joint: 'pelvis',
         property: 'tilt',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 30 },
-          { time: 0.6, value: 30 },
+          { time: 0.4, value: -30 },
+          { time: 0.6, value: -30 },
           { time: 1, value: 0 },
         ],
       },
-      // Neck extension to look forward during bend
+      // Neck flexes to look down during forward bend
       {
         joint: 'neck',
-        property: 'extension',
+        property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 25 },
-          { time: 0.6, value: 25 },
+          { time: 0.4, value: 30 },
+          { time: 0.6, value: 30 },
           { time: 1, value: 0 },
         ],
       },

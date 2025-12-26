@@ -674,14 +674,25 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'forwardBend',
     name: 'Forward Bend',
-    description: 'Standing trunk flexion - spine and pelvis only, feet stay planted',
+    description: 'Deep standing trunk flexion - hands touch floor',
     duration: 4000,
     loop: true,
     joints: [
-      // Lumbar spine flattens during forward flexion (positive = flexion/flattening)
+      // Lumbar spine maximal flexion
       {
         joint: 'spine',
         property: 'lumbarLordosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: -70 },
+          { time: 0.6, value: -70 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Thoracic spine maximal flexion
+      {
+        joint: 'spine',
+        property: 'thoracicKyphosis',
         keyframes: [
           { time: 0, value: 0 },
           { time: 0.4, value: 50 },
@@ -689,36 +700,25 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 1, value: 0 },
         ],
       },
-      // Thoracic spine flexes forward (negative = forward flexion)
-      {
-        joint: 'spine',
-        property: 'thoracicKyphosis',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: -40 },
-          { time: 0.6, value: -40 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Pelvis tilts anteriorly (negative = anterior tilt/forward)
+      // Pelvis maximal anterior tilt
       {
         joint: 'pelvis',
         property: 'tilt',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: -30 },
-          { time: 0.6, value: -30 },
+          { time: 0.4, value: 90 },
+          { time: 0.6, value: 90 },
           { time: 1, value: 0 },
         ],
       },
-      // Neck flexes to look down during forward bend
+      // Neck flexes to look down
       {
         joint: 'neck',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 30 },
-          { time: 0.6, value: 30 },
+          { time: 0.4, value: 45 },
+          { time: 0.6, value: 45 },
           { time: 1, value: 0 },
         ],
       },

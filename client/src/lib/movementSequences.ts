@@ -815,25 +815,25 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     duration: 3000,
     loop: true,
     joints: [
-      // Left shoulder flexion (arm raises forward and up)
+      // Left shoulder flexion (negative = forward and up)
       {
         joint: 'leftShoulder',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 180 },
-          { time: 0.6, value: 180 },
+          { time: 0.4, value: -180 },
+          { time: 0.6, value: -180 },
           { time: 1, value: 0 },
         ],
       },
-      // Right shoulder flexion
+      // Right shoulder flexion (negative = forward and up)
       {
         joint: 'rightShoulder',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 180 },
-          { time: 0.6, value: 180 },
+          { time: 0.4, value: -180 },
+          { time: 0.6, value: -180 },
           { time: 1, value: 0 },
         ],
       },

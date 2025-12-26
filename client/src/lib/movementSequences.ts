@@ -777,6 +777,68 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
       },
     ],
   },
+  {
+    id: 'calfRaises',
+    name: 'Calf Raises',
+    description: 'Bilateral heel raises through ankle plantarflexion',
+    duration: 2000,
+    loop: true,
+    joints: [
+      // Left ankle plantarflexion (heels lift)
+      {
+        joint: 'leftAnkle',
+        property: 'plantarflexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 40 },
+          { time: 0.6, value: 40 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Right ankle plantarflexion
+      {
+        joint: 'rightAnkle',
+        property: 'plantarflexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 40 },
+          { time: 0.6, value: 40 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'armElevations',
+    name: 'Arm Elevations',
+    description: 'Bilateral arms raising overhead through shoulder flexion',
+    duration: 3000,
+    loop: true,
+    joints: [
+      // Left shoulder flexion (arm raises forward and up)
+      {
+        joint: 'leftShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 180 },
+          { time: 0.6, value: 180 },
+          { time: 1, value: 0 },
+        ],
+      },
+      // Right shoulder flexion
+      {
+        joint: 'rightShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 180 },
+          { time: 0.6, value: 180 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
 ];
 
 export function getMovementById(id: string): MovementSequence | undefined {

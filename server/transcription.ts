@@ -2,18 +2,13 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import FormData from "form-data";
 import { config } from 'dotenv';
 config();
 
 // For Whisper transcription, we MUST use the direct OpenAI API key
 // Replit AI Integrations do NOT support the /audio/transcriptions endpoint
 const directOpenAIKey = process.env.OPENAI_API_KEY;
-
-// Create a dedicated client for Whisper using direct OpenAI (no custom base URL)
-const whisperClient = directOpenAIKey ? new OpenAI({ 
-  apiKey: directOpenAIKey,
-  // Use default OpenAI base URL for Whisper support
-}) : null;
 
 // For chat completions, prefer Replit AI Integrations if available
 const chatApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
@@ -26,6 +21,66 @@ const openai = new OpenAI({
 
 // Helper function to implement sleep/delay
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Use form-data package for Node.js multipart uploads to Whisper API
+async function callWhisperAPI(filePath: string): Promise<string> {
+  if (!directOpenAIKey) {
+    throw new Error('OPENAI_API_KEY not found');
+  }
+
+  const fileName = path.basename(filePath);
+  
+  // Create FormData using the form-data package (Node.js compatible)
+  const formData = new FormData();
+  formData.append('file', fs.createReadStream(filePath), {
+    filename: fileName,
+    contentType: 'audio/webm',
+  });
+  formData.append('model', 'whisper-1');
+  formData.append('language', 'en');
+  formData.append('response_format', 'json');
+
+  console.log('Calling OpenAI Whisper API via form-data...');
+  
+  // Use form-data's submit method which handles multipart properly
+  return new Promise((resolve, reject) => {
+    formData.submit({
+      host: 'api.openai.com',
+      path: '/v1/audio/transcriptions',
+      protocol: 'https:',
+      headers: {
+        'Authorization': `Bearer ${directOpenAIKey}`,
+      },
+    }, (err, res) => {
+      if (err) {
+        console.error('Whisper API request error:', err);
+        reject(new Error(`Whisper API request failed: ${err.message}`));
+        return;
+      }
+      
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          console.error('Whisper API error response:', res.statusCode, data);
+          reject(new Error(`Whisper API error: ${res.statusCode} - ${data}`));
+          return;
+        }
+        
+        try {
+          const result = JSON.parse(data);
+          console.log('Whisper transcription successful');
+          resolve(result.text || '');
+        } catch (parseError) {
+          reject(new Error(`Failed to parse Whisper response: ${data}`));
+        }
+      });
+      res.on('error', (error) => {
+        reject(new Error(`Response error: ${error.message}`));
+      });
+    });
+  });
+}
 
 // Improved audio transcription with retries and optimization
 export async function transcribeAudio(filePath: string): Promise<string> {
@@ -48,21 +103,13 @@ export async function transcribeAudio(filePath: string): Promise<string> {
     
     console.log(`Original audio file size: ${stats.size} bytes`);
     
-    // Verify we have a Whisper client with direct OpenAI API key
-    if (!whisperClient) {
+    // Verify we have OpenAI API key for Whisper
+    if (!directOpenAIKey) {
       console.error('No direct OpenAI API key available for Whisper transcription');
       throw new Error('OPENAI_API_KEY not found. Whisper transcription requires a direct OpenAI API key.');
     }
     
-    console.log('Using direct OpenAI Whisper API for transcription');
-    
-    // If file is large (>5MB), try to optimize it
-    if (stats.size > 5 * 1024 * 1024) {
-      console.log("Audio file is large, optimizing before sending to OpenAI");
-      // Use a dummy value since we don't actually optimize in this mock implementation
-      // In a real implementation, you would use ffmpeg to compress the audio
-      console.log("Audio optimization would happen here in production");
-    }
+    console.log('Using direct OpenAI Whisper API via native fetch');
     
     // Set up retry parameters
     const maxRetries = 3;
@@ -73,54 +120,21 @@ export async function transcribeAudio(filePath: string): Promise<string> {
     while (retryCount < maxRetries) {
       try {
         const fileToUse = tempOptimizedFile || filePath;
-        const audioReadStream = fs.createReadStream(fileToUse);
-        
-        // Setup timeout promise - increased for longer recordings
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(new Error('OpenAI API request timed out after 90 seconds'));
-          }, 90000); // 90 second timeout for better reliability
-          
-          // Clean up timeout if the API call completes
-          audioReadStream.on('close', () => clearTimeout(timeoutId));
-        });
-        
-        // Verify whisper client is available
-        if (!whisperClient) {
-          throw new Error('Whisper client not initialized - OPENAI_API_KEY missing');
-        }
 
-        // Call OpenAI Whisper API directly (bypassing Replit AI Integrations)
-        console.log(`Calling direct OpenAI Whisper API (attempt ${retryCount + 1} of ${maxRetries})...`);
+        console.log(`Calling OpenAI Whisper API (attempt ${retryCount + 1} of ${maxRetries})...`);
         
-        const transcriptionPromise = whisperClient.audio.transcriptions.create({
-          file: audioReadStream,
-          model: "whisper-1",
-          language: "en",
-          response_format: "json",
-          // Add more parameters to reduce processing requirements
-          temperature: 0,
-          // Set a small prompt to hint at format
-          prompt: "This is a clinical recording."
-        });
-        
-        // Race between the API call and the timeout
-        const transcription = await Promise.race([
-          transcriptionPromise,
-          timeoutPromise
-        ]) as any;
+        // Use native fetch approach - more reliable on Replit
+        const transcriptionText = await callWhisperAPI(fileToUse);
         
         console.log("Transcription successful");
-        return transcription.text || '';
+        return transcriptionText;
       } catch (apiError: any) {
         lastError = apiError;
-        console.error(`OpenAI API error (attempt ${retryCount + 1}):`, apiError);
+        console.error(`Whisper API error (attempt ${retryCount + 1}):`, apiError.message || apiError);
         
-        // Handle specific OpenAI API errors that shouldn't be retried
-        if (apiError.status === 401) {
+        // Handle specific errors that shouldn't be retried
+        if (apiError.message?.includes('401') || apiError.message?.includes('invalid')) {
           throw new Error('OpenAI API key is invalid or expired');
-        } else if (apiError.message?.includes('audio file format')) {
-          throw new Error('Audio file format not supported by OpenAI. Please use WAV, MP3, or MP4 format.');
         }
         
         // For connection errors, retry with backoff
@@ -131,13 +145,6 @@ export async function transcribeAudio(filePath: string): Promise<string> {
           const backoffTime = Math.pow(2, retryCount - 1) * 1000;
           console.log(`Retrying in ${backoffTime}ms...`);
           await sleep(backoffTime);
-          
-          // If this is the last retry attempt and we haven't tried with a smaller chunk yet
-          if (retryCount === maxRetries - 1 && stats.size > 1 * 1024 * 1024) {
-            console.log("Trying with a smaller audio sample as a last resort");
-            // In a real implementation, you could use ffmpeg to take just the first 30 seconds
-            // But here we're just indicating what would happen
-          }
         }
       }
     }

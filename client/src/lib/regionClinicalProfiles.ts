@@ -1929,6 +1929,646 @@ export function calculatePelvicConditions(
   ];
 }
 
+export function calculateHipStructureLoads(
+  hipFlexion: number,
+  hipAbduction: number,
+  hipInternalRotation: number,
+  hipAnteversion: number,
+  neckShaftAngle: number,
+  bodyWeightKg: number = 70
+): StructureLoadAnalysis[] {
+  const baseLoad = bodyWeightKg * 9.81;
+  const flexionRad = (hipFlexion * Math.PI) / 180;
+  const abductionRad = (hipAbduction * Math.PI) / 180;
+  const rotationRad = (hipInternalRotation * Math.PI) / 180;
+  
+  const femoralHeadCompression = baseLoad * (2.5 + Math.abs(Math.sin(flexionRad)) * 1.5 + Math.abs(abductionRad) * 0.8);
+  const acetabularLoad = femoralHeadCompression * (1 + Math.abs(rotationRad) * 0.3);
+  const labrumShear = baseLoad * (Math.abs(rotationRad) * 0.4 + Math.sin(flexionRad) * Math.abs(rotationRad) * 0.6);
+  const iliofemoralTension = baseLoad * (0.3 + Math.max(0, -hipFlexion / 30) * 0.5 + hipAnteversion / 100);
+  const hipCapsuleStress = baseLoad * (0.2 + Math.abs(rotationRad) * 0.5 + Math.abs(abductionRad) * 0.3);
+  
+  const getStatus = (value: number, safe: number, warning: number, critical: number): 'safe' | 'caution' | 'warning' | 'critical' => {
+    if (value < safe) return 'safe';
+    if (value < warning) return 'caution';
+    if (value < critical) return 'warning';
+    return 'critical';
+  };
+  
+  return [
+    {
+      structureId: 'femoral_head',
+      structureName: 'Femoral Head',
+      loadType: 'compression',
+      currentLoad: Math.round(femoralHeadCompression),
+      safeThreshold: 2500,
+      warningThreshold: 4000,
+      criticalThreshold: 6000,
+      percentOfCritical: Math.round((femoralHeadCompression / 6000) * 100),
+      status: getStatus(femoralHeadCompression, 2500, 4000, 6000),
+    },
+    {
+      structureId: 'acetabulum',
+      structureName: 'Acetabular Loading',
+      loadType: 'compression',
+      currentLoad: Math.round(acetabularLoad),
+      safeThreshold: 2800,
+      warningThreshold: 4500,
+      criticalThreshold: 6500,
+      percentOfCritical: Math.round((acetabularLoad / 6500) * 100),
+      status: getStatus(acetabularLoad, 2800, 4500, 6500),
+    },
+    {
+      structureId: 'labrum',
+      structureName: 'Labrum Shear Stress',
+      loadType: 'shear',
+      currentLoad: Math.round(labrumShear),
+      safeThreshold: 300,
+      warningThreshold: 500,
+      criticalThreshold: 800,
+      percentOfCritical: Math.round((labrumShear / 800) * 100),
+      status: getStatus(labrumShear, 300, 500, 800),
+    },
+    {
+      structureId: 'iliofemoral_ligament',
+      structureName: 'Iliofemoral Ligament',
+      loadType: 'tension',
+      currentLoad: Math.round(iliofemoralTension),
+      safeThreshold: 400,
+      warningThreshold: 700,
+      criticalThreshold: 1000,
+      percentOfCritical: Math.round((iliofemoralTension / 1000) * 100),
+      status: getStatus(iliofemoralTension, 400, 700, 1000),
+    },
+    {
+      structureId: 'hip_capsule',
+      structureName: 'Hip Capsule Stress',
+      loadType: 'tension',
+      currentLoad: Math.round(hipCapsuleStress),
+      safeThreshold: 350,
+      warningThreshold: 600,
+      criticalThreshold: 900,
+      percentOfCritical: Math.round((hipCapsuleStress / 900) * 100),
+      status: getStatus(hipCapsuleStress, 350, 600, 900),
+    },
+  ];
+}
+
+export function calculateHipConditions(
+  structureLoads: StructureLoadAnalysis[],
+  hipFlexion: number,
+  hipInternalRotation: number,
+  hipAnteversion: number
+): ConditionProbability[] {
+  const getLoadByStructure = (id: string) => structureLoads.find(s => s.structureId === id);
+  const femoralHead = getLoadByStructure('femoral_head');
+  const labrum = getLoadByStructure('labrum');
+  const acetabulum = getLoadByStructure('acetabulum');
+  
+  const getRiskLevel = (prob: number): 'minimal' | 'low' | 'moderate' | 'high' | 'critical' => {
+    if (prob < 15) return 'minimal';
+    if (prob < 30) return 'low';
+    if (prob < 50) return 'moderate';
+    if (prob < 75) return 'high';
+    return 'critical';
+  };
+  
+  let faiProb = 5;
+  const faiFactors: string[] = [];
+  const faiProtective: string[] = [];
+  if (hipFlexion > 90 && Math.abs(hipInternalRotation) > 20) {
+    faiProb += 25;
+    faiFactors.push('Flexion + internal rotation impingement mechanism');
+  }
+  if (hipFlexion > 100) {
+    faiProb += (hipFlexion - 100) * 1.5;
+    faiFactors.push(`Deep hip flexion (${Math.round(hipFlexion)}°)`);
+  }
+  if (Math.abs(hipInternalRotation) > 30) {
+    faiProb += (Math.abs(hipInternalRotation) - 30) * 1.0;
+    faiFactors.push(`Excessive internal rotation (${Math.round(Math.abs(hipInternalRotation))}°)`);
+  }
+  if (hipFlexion < 80 && Math.abs(hipInternalRotation) < 20) {
+    faiProtective.push('Within safe ROM');
+  }
+  
+  let labralProb = 5;
+  const labralFactors: string[] = [];
+  const labralProtective: string[] = [];
+  if (labrum && labrum.percentOfCritical > 40) {
+    labralProb += labrum.percentOfCritical * 0.5;
+    labralFactors.push(`Elevated labrum shear stress (${labrum.currentLoad}N)`);
+  }
+  if (Math.abs(hipInternalRotation) > 25) {
+    labralProb += (Math.abs(hipInternalRotation) - 25) * 0.8;
+    labralFactors.push(`Rotational loading (${Math.round(Math.abs(hipInternalRotation))}°)`);
+  }
+  if (labrum && labrum.percentOfCritical < 30) {
+    labralProtective.push('Low labrum stress');
+  }
+  
+  let hipOaProb = 3;
+  const oaFactors: string[] = [];
+  const oaProtective: string[] = [];
+  if (femoralHead && femoralHead.percentOfCritical > 50) {
+    hipOaProb += femoralHead.percentOfCritical * 0.4;
+    oaFactors.push(`High femoral head loading (${femoralHead.currentLoad}N)`);
+  }
+  if (acetabulum && acetabulum.percentOfCritical > 50) {
+    hipOaProb += acetabulum.percentOfCritical * 0.3;
+    oaFactors.push(`Elevated acetabular stress (${acetabulum.currentLoad}N)`);
+  }
+  if (femoralHead && femoralHead.percentOfCritical < 40) {
+    oaProtective.push('Normal joint loading');
+  }
+  
+  let gtpsProb = 5;
+  const gtpsFactors: string[] = [];
+  const gtpsProtective: string[] = [];
+  if (hipFlexion > 60) {
+    gtpsProb += (hipFlexion - 60) * 0.5;
+    gtpsFactors.push(`Prolonged hip flexion (${Math.round(hipFlexion)}°)`);
+  }
+  if (hipAnteversion > 15) {
+    gtpsProb += (hipAnteversion - 15) * 0.8;
+    gtpsFactors.push(`Femoral anteversion (${Math.round(hipAnteversion)}°)`);
+  }
+  if (hipFlexion < 50) {
+    gtpsProtective.push('Moderate hip position');
+  }
+  
+  let snappingProb = 3;
+  const snappingFactors: string[] = [];
+  const snappingProtective: string[] = [];
+  if (hipFlexion > 70 && Math.abs(hipInternalRotation) > 15) {
+    snappingProb += 12;
+    snappingFactors.push('Flexion + rotation mechanism');
+  }
+  if (hipFlexion < 60) {
+    snappingProtective.push('Limited provocative positioning');
+  }
+  
+  let piriformisProb = 5;
+  const piriFactors: string[] = [];
+  const piriProtective: string[] = [];
+  if (hipFlexion > 60 && Math.abs(hipInternalRotation) > 20) {
+    piriformisProb += 15;
+    piriFactors.push('Hip flexion + internal rotation stretches piriformis');
+  }
+  if (hipFlexion > 80) {
+    piriformisProb += (hipFlexion - 80) * 0.6;
+    piriFactors.push(`Prolonged sitting posture (${Math.round(hipFlexion)}°)`);
+  }
+  if (hipFlexion < 50) {
+    piriProtective.push('Neutral hip position');
+  }
+  
+  return [
+    { conditionId: 'fai', conditionName: 'Femoroacetabular Impingement', probability: Math.min(95, Math.round(faiProb)), riskLevel: getRiskLevel(faiProb), contributingFactors: faiFactors, protectiveFactors: faiProtective },
+    { conditionId: 'labral_tear', conditionName: 'Labral Tear', probability: Math.min(95, Math.round(labralProb)), riskLevel: getRiskLevel(labralProb), contributingFactors: labralFactors, protectiveFactors: labralProtective },
+    { conditionId: 'hip_oa', conditionName: 'Hip Osteoarthritis', probability: Math.min(95, Math.round(hipOaProb)), riskLevel: getRiskLevel(hipOaProb), contributingFactors: oaFactors, protectiveFactors: oaProtective },
+    { conditionId: 'gtps', conditionName: 'Greater Trochanteric Pain Syndrome', probability: Math.min(95, Math.round(gtpsProb)), riskLevel: getRiskLevel(gtpsProb), contributingFactors: gtpsFactors, protectiveFactors: gtpsProtective },
+    { conditionId: 'snapping_hip', conditionName: 'Snapping Hip Syndrome', probability: Math.min(95, Math.round(snappingProb)), riskLevel: getRiskLevel(snappingProb), contributingFactors: snappingFactors, protectiveFactors: snappingProtective },
+    { conditionId: 'piriformis', conditionName: 'Piriformis Syndrome', probability: Math.min(95, Math.round(piriformisProb)), riskLevel: getRiskLevel(piriformisProb), contributingFactors: piriFactors, protectiveFactors: piriProtective },
+  ];
+}
+
+export function calculateKneeStructureLoads(
+  kneeFlexion: number,
+  kneeVarus: number,
+  tibialTorsion: number,
+  recurvatum: number,
+  tibialSlope: number,
+  bodyWeightKg: number = 70
+): StructureLoadAnalysis[] {
+  const baseLoad = bodyWeightKg * 9.81;
+  const flexionRad = (kneeFlexion * Math.PI) / 180;
+  const varusRad = (kneeVarus * Math.PI) / 180;
+  
+  const patellofemoralCompression = baseLoad * (0.5 + Math.pow(Math.sin(flexionRad), 2) * 4);
+  const aclTension = baseLoad * (0.2 + Math.max(0, -recurvatum / 20) * 0.5 + (tibialSlope / 30) * 0.4);
+  const pclTension = baseLoad * (0.1 + Math.sin(flexionRad) * 0.8);
+  const meniscusCompression = baseLoad * (1.0 + Math.abs(varusRad) * 1.5 + Math.sin(flexionRad) * 0.8);
+  const collateralStress = baseLoad * Math.abs(varusRad) * 1.2;
+  const patellarTendonLoad = baseLoad * (0.3 + Math.sin(flexionRad) * 1.5);
+  
+  const getStatus = (value: number, safe: number, warning: number, critical: number): 'safe' | 'caution' | 'warning' | 'critical' => {
+    if (value < safe) return 'safe';
+    if (value < warning) return 'caution';
+    if (value < critical) return 'warning';
+    return 'critical';
+  };
+  
+  return [
+    {
+      structureId: 'patellofemoral',
+      structureName: 'Patellofemoral Joint',
+      loadType: 'compression',
+      currentLoad: Math.round(patellofemoralCompression),
+      safeThreshold: 2000,
+      warningThreshold: 3500,
+      criticalThreshold: 5000,
+      percentOfCritical: Math.round((patellofemoralCompression / 5000) * 100),
+      status: getStatus(patellofemoralCompression, 2000, 3500, 5000),
+    },
+    {
+      structureId: 'acl',
+      structureName: 'Anterior Cruciate Ligament',
+      loadType: 'tension',
+      currentLoad: Math.round(aclTension),
+      safeThreshold: 500,
+      warningThreshold: 1000,
+      criticalThreshold: 1700,
+      percentOfCritical: Math.round((aclTension / 1700) * 100),
+      status: getStatus(aclTension, 500, 1000, 1700),
+    },
+    {
+      structureId: 'pcl',
+      structureName: 'Posterior Cruciate Ligament',
+      loadType: 'tension',
+      currentLoad: Math.round(pclTension),
+      safeThreshold: 400,
+      warningThreshold: 800,
+      criticalThreshold: 1400,
+      percentOfCritical: Math.round((pclTension / 1400) * 100),
+      status: getStatus(pclTension, 400, 800, 1400),
+    },
+    {
+      structureId: 'meniscus',
+      structureName: 'Meniscus',
+      loadType: 'compression',
+      currentLoad: Math.round(meniscusCompression),
+      safeThreshold: 1200,
+      warningThreshold: 2000,
+      criticalThreshold: 3000,
+      percentOfCritical: Math.round((meniscusCompression / 3000) * 100),
+      status: getStatus(meniscusCompression, 1200, 2000, 3000),
+    },
+    {
+      structureId: 'collateral_ligaments',
+      structureName: 'Collateral Ligaments (MCL/LCL)',
+      loadType: 'tension',
+      currentLoad: Math.round(collateralStress),
+      safeThreshold: 300,
+      warningThreshold: 600,
+      criticalThreshold: 1000,
+      percentOfCritical: Math.round((collateralStress / 1000) * 100),
+      status: getStatus(collateralStress, 300, 600, 1000),
+    },
+    {
+      structureId: 'patellar_tendon',
+      structureName: 'Patellar Tendon',
+      loadType: 'tension',
+      currentLoad: Math.round(patellarTendonLoad),
+      safeThreshold: 1000,
+      warningThreshold: 2000,
+      criticalThreshold: 3500,
+      percentOfCritical: Math.round((patellarTendonLoad / 3500) * 100),
+      status: getStatus(patellarTendonLoad, 1000, 2000, 3500),
+    },
+  ];
+}
+
+export function calculateKneeConditions(
+  structureLoads: StructureLoadAnalysis[],
+  kneeFlexion: number,
+  kneeVarus: number,
+  tibialSlope: number
+): ConditionProbability[] {
+  const getLoadByStructure = (id: string) => structureLoads.find(s => s.structureId === id);
+  const acl = getLoadByStructure('acl');
+  const meniscus = getLoadByStructure('meniscus');
+  const patellofemoral = getLoadByStructure('patellofemoral');
+  const patellarTendon = getLoadByStructure('patellar_tendon');
+  const collateral = getLoadByStructure('collateral_ligaments');
+  
+  const getRiskLevel = (prob: number): 'minimal' | 'low' | 'moderate' | 'high' | 'critical' => {
+    if (prob < 15) return 'minimal';
+    if (prob < 30) return 'low';
+    if (prob < 50) return 'moderate';
+    if (prob < 75) return 'high';
+    return 'critical';
+  };
+  
+  let aclProb = 3;
+  const aclFactors: string[] = [];
+  const aclProtective: string[] = [];
+  if (acl && acl.percentOfCritical > 50) {
+    aclProb += acl.percentOfCritical * 0.5;
+    aclFactors.push(`High ACL tension (${acl.currentLoad}N)`);
+  }
+  if (tibialSlope > 12) {
+    aclProb += (tibialSlope - 12) * 2.0;
+    aclFactors.push(`Increased tibial slope (${Math.round(tibialSlope)}°)`);
+  }
+  if (Math.abs(kneeVarus) > 10) {
+    aclProb += Math.abs(kneeVarus) * 0.8;
+    aclFactors.push(`Varus/valgus malalignment (${Math.round(Math.abs(kneeVarus))}°)`);
+  }
+  if (acl && acl.percentOfCritical < 40) {
+    aclProtective.push('Normal ACL loading');
+  }
+  
+  let meniscusProb = 5;
+  const meniscusFactors: string[] = [];
+  const meniscusProtective: string[] = [];
+  if (meniscus && meniscus.percentOfCritical > 50) {
+    meniscusProb += meniscus.percentOfCritical * 0.5;
+    meniscusFactors.push(`High meniscus compression (${meniscus.currentLoad}N)`);
+  }
+  if (kneeFlexion > 90) {
+    meniscusProb += (kneeFlexion - 90) * 0.5;
+    meniscusFactors.push(`Deep knee flexion (${Math.round(kneeFlexion)}°)`);
+  }
+  if (Math.abs(kneeVarus) > 8) {
+    meniscusProb += Math.abs(kneeVarus) * 1.0;
+    meniscusFactors.push(`Compartment loading (${Math.round(Math.abs(kneeVarus))}° varus/valgus)`);
+  }
+  if (meniscus && meniscus.percentOfCritical < 40) {
+    meniscusProtective.push('Normal meniscal loading');
+  }
+  
+  let pfProb = 5;
+  const pfFactors: string[] = [];
+  const pfProtective: string[] = [];
+  if (patellofemoral && patellofemoral.percentOfCritical > 40) {
+    pfProb += patellofemoral.percentOfCritical * 0.5;
+    pfFactors.push(`Elevated patellofemoral compression (${patellofemoral.currentLoad}N)`);
+  }
+  if (kneeFlexion > 60) {
+    pfProb += (kneeFlexion - 60) * 0.6;
+    pfFactors.push(`Increased flexion angle (${Math.round(kneeFlexion)}°)`);
+  }
+  if (patellofemoral && patellofemoral.percentOfCritical < 35) {
+    pfProtective.push('Low patellofemoral stress');
+  }
+  
+  let itbProb = 3;
+  const itbFactors: string[] = [];
+  const itbProtective: string[] = [];
+  if (kneeFlexion > 20 && kneeFlexion < 45) {
+    itbProb += 10;
+    itbFactors.push('Impingement zone (20-45° flexion)');
+  }
+  if (Math.abs(kneeVarus) > 5) {
+    itbProb += Math.abs(kneeVarus) * 1.5;
+    itbFactors.push(`Varus knee alignment (${Math.round(Math.abs(kneeVarus))}°)`);
+  }
+  if (kneeFlexion < 20 || kneeFlexion > 50) {
+    itbProtective.push('Outside impingement zone');
+  }
+  
+  let patellarTendinoProb = 3;
+  const ptFactors: string[] = [];
+  const ptProtective: string[] = [];
+  if (patellarTendon && patellarTendon.percentOfCritical > 50) {
+    patellarTendinoProb += patellarTendon.percentOfCritical * 0.5;
+    ptFactors.push(`High patellar tendon load (${patellarTendon.currentLoad}N)`);
+  }
+  if (kneeFlexion > 70) {
+    patellarTendinoProb += (kneeFlexion - 70) * 0.4;
+    ptFactors.push(`Increased tendon loading with flexion (${Math.round(kneeFlexion)}°)`);
+  }
+  if (patellarTendon && patellarTendon.percentOfCritical < 40) {
+    ptProtective.push('Normal tendon loading');
+  }
+  
+  let kneeOaProb = 3;
+  const oaFactors: string[] = [];
+  const oaProtective: string[] = [];
+  if (meniscus && meniscus.percentOfCritical > 50) {
+    kneeOaProb += meniscus.percentOfCritical * 0.3;
+    oaFactors.push(`Increased compartment loading (${meniscus.currentLoad}N)`);
+  }
+  if (Math.abs(kneeVarus) > 10) {
+    kneeOaProb += Math.abs(kneeVarus) * 1.5;
+    oaFactors.push(`Malalignment stress (${Math.round(Math.abs(kneeVarus))}°)`);
+  }
+  if (Math.abs(kneeVarus) < 5) {
+    oaProtective.push('Normal alignment');
+  }
+  
+  return [
+    { conditionId: 'acl_injury', conditionName: 'ACL Injury Risk', probability: Math.min(95, Math.round(aclProb)), riskLevel: getRiskLevel(aclProb), contributingFactors: aclFactors, protectiveFactors: aclProtective },
+    { conditionId: 'meniscus_tear', conditionName: 'Meniscus Tear Risk', probability: Math.min(95, Math.round(meniscusProb)), riskLevel: getRiskLevel(meniscusProb), contributingFactors: meniscusFactors, protectiveFactors: meniscusProtective },
+    { conditionId: 'pfps', conditionName: 'Patellofemoral Pain Syndrome', probability: Math.min(95, Math.round(pfProb)), riskLevel: getRiskLevel(pfProb), contributingFactors: pfFactors, protectiveFactors: pfProtective },
+    { conditionId: 'itb_syndrome', conditionName: 'IT Band Syndrome', probability: Math.min(95, Math.round(itbProb)), riskLevel: getRiskLevel(itbProb), contributingFactors: itbFactors, protectiveFactors: itbProtective },
+    { conditionId: 'patellar_tendinopathy', conditionName: 'Patellar Tendinopathy', probability: Math.min(95, Math.round(patellarTendinoProb)), riskLevel: getRiskLevel(patellarTendinoProb), contributingFactors: ptFactors, protectiveFactors: ptProtective },
+    { conditionId: 'knee_oa', conditionName: 'Knee Osteoarthritis', probability: Math.min(95, Math.round(kneeOaProb)), riskLevel: getRiskLevel(kneeOaProb), contributingFactors: oaFactors, protectiveFactors: oaProtective },
+  ];
+}
+
+export function calculateAnkleStructureLoads(
+  dorsiflexion: number,
+  plantarflexion: number,
+  inversion: number,
+  eversion: number,
+  archHeight: number,
+  bodyWeightKg: number = 70
+): StructureLoadAnalysis[] {
+  const baseLoad = bodyWeightKg * 9.81;
+  const inversionRad = (inversion * Math.PI) / 180;
+  const eversionRad = (eversion * Math.PI) / 180;
+  const pfRad = (plantarflexion * Math.PI) / 180;
+  const dfRad = (dorsiflexion * Math.PI) / 180;
+  
+  const atflTension = baseLoad * (0.1 + Math.abs(inversionRad) * 0.8 + Math.sin(pfRad) * Math.abs(inversionRad) * 0.5);
+  const deltoidStress = baseLoad * (0.1 + Math.abs(eversionRad) * 0.7);
+  const achillesLoad = baseLoad * (1.5 + Math.sin(dfRad) * 1.0);
+  const plantarFasciaTension = baseLoad * (0.3 + Math.abs(30 - archHeight) / 20 * 0.5);
+  const tibiotalarCompression = baseLoad * (1.8 + Math.abs(dfRad) * 0.8 + Math.abs(pfRad) * 0.5);
+  
+  const getStatus = (value: number, safe: number, warning: number, critical: number): 'safe' | 'caution' | 'warning' | 'critical' => {
+    if (value < safe) return 'safe';
+    if (value < warning) return 'caution';
+    if (value < critical) return 'warning';
+    return 'critical';
+  };
+  
+  return [
+    {
+      structureId: 'atfl',
+      structureName: 'Anterior Talofibular Ligament',
+      loadType: 'tension',
+      currentLoad: Math.round(atflTension),
+      safeThreshold: 300,
+      warningThreshold: 500,
+      criticalThreshold: 800,
+      percentOfCritical: Math.round((atflTension / 800) * 100),
+      status: getStatus(atflTension, 300, 500, 800),
+    },
+    {
+      structureId: 'deltoid',
+      structureName: 'Deltoid Ligament',
+      loadType: 'tension',
+      currentLoad: Math.round(deltoidStress),
+      safeThreshold: 400,
+      warningThreshold: 700,
+      criticalThreshold: 1000,
+      percentOfCritical: Math.round((deltoidStress / 1000) * 100),
+      status: getStatus(deltoidStress, 400, 700, 1000),
+    },
+    {
+      structureId: 'achilles',
+      structureName: 'Achilles Tendon',
+      loadType: 'tension',
+      currentLoad: Math.round(achillesLoad),
+      safeThreshold: 3000,
+      warningThreshold: 5000,
+      criticalThreshold: 7500,
+      percentOfCritical: Math.round((achillesLoad / 7500) * 100),
+      status: getStatus(achillesLoad, 3000, 5000, 7500),
+    },
+    {
+      structureId: 'plantar_fascia',
+      structureName: 'Plantar Fascia',
+      loadType: 'tension',
+      currentLoad: Math.round(plantarFasciaTension),
+      safeThreshold: 400,
+      warningThreshold: 700,
+      criticalThreshold: 1000,
+      percentOfCritical: Math.round((plantarFasciaTension / 1000) * 100),
+      status: getStatus(plantarFasciaTension, 400, 700, 1000),
+    },
+    {
+      structureId: 'tibiotalar',
+      structureName: 'Tibiotalar Joint',
+      loadType: 'compression',
+      currentLoad: Math.round(tibiotalarCompression),
+      safeThreshold: 2500,
+      warningThreshold: 4000,
+      criticalThreshold: 6000,
+      percentOfCritical: Math.round((tibiotalarCompression / 6000) * 100),
+      status: getStatus(tibiotalarCompression, 2500, 4000, 6000),
+    },
+  ];
+}
+
+export function calculateAnkleConditions(
+  structureLoads: StructureLoadAnalysis[],
+  inversion: number,
+  plantarflexion: number,
+  archHeight: number
+): ConditionProbability[] {
+  const getLoadByStructure = (id: string) => structureLoads.find(s => s.structureId === id);
+  const atfl = getLoadByStructure('atfl');
+  const achilles = getLoadByStructure('achilles');
+  const plantarFascia = getLoadByStructure('plantar_fascia');
+  const tibiotalar = getLoadByStructure('tibiotalar');
+  const deltoid = getLoadByStructure('deltoid');
+  
+  const getRiskLevel = (prob: number): 'minimal' | 'low' | 'moderate' | 'high' | 'critical' => {
+    if (prob < 15) return 'minimal';
+    if (prob < 30) return 'low';
+    if (prob < 50) return 'moderate';
+    if (prob < 75) return 'high';
+    return 'critical';
+  };
+  
+  let lateralSprainProb = 5;
+  const lateralFactors: string[] = [];
+  const lateralProtective: string[] = [];
+  if (atfl && atfl.percentOfCritical > 40) {
+    lateralSprainProb += atfl.percentOfCritical * 0.6;
+    lateralFactors.push(`High ATFL tension (${atfl.currentLoad}N)`);
+  }
+  if (Math.abs(inversion) > 20) {
+    lateralSprainProb += (Math.abs(inversion) - 20) * 1.5;
+    lateralFactors.push(`Excessive inversion (${Math.round(Math.abs(inversion))}°)`);
+  }
+  if (plantarflexion > 20 && Math.abs(inversion) > 15) {
+    lateralSprainProb += 15;
+    lateralFactors.push('Plantarflexion + inversion mechanism');
+  }
+  if (Math.abs(inversion) < 15) {
+    lateralProtective.push('Neutral ankle position');
+  }
+  
+  let highAnkleProb = 3;
+  const highFactors: string[] = [];
+  const highProtective: string[] = [];
+  if (deltoid && deltoid.percentOfCritical > 50) {
+    highAnkleProb += deltoid.percentOfCritical * 0.4;
+    highFactors.push(`Syndesmotic stress (${deltoid.currentLoad}N)`);
+  }
+  if (plantarflexion < 0 && Math.abs(plantarflexion) > 15) {
+    highAnkleProb += (Math.abs(plantarflexion) - 15) * 1.0;
+    highFactors.push(`Forced dorsiflexion (${Math.round(Math.abs(plantarflexion))}°)`);
+  }
+  if (deltoid && deltoid.percentOfCritical < 40) {
+    highProtective.push('Normal syndesmotic loading');
+  }
+  
+  let achillesProb = 5;
+  const achillesFactors: string[] = [];
+  const achillesProtective: string[] = [];
+  if (achilles && achilles.percentOfCritical > 50) {
+    achillesProb += achilles.percentOfCritical * 0.5;
+    achillesFactors.push(`High Achilles load (${achilles.currentLoad}N)`);
+  }
+  if (plantarflexion < 0 && Math.abs(plantarflexion) > 20) {
+    achillesProb += (Math.abs(plantarflexion) - 20) * 0.8;
+    achillesFactors.push(`Loaded dorsiflexion position (${Math.round(Math.abs(plantarflexion))}°)`);
+  }
+  if (achilles && achilles.percentOfCritical < 40) {
+    achillesProtective.push('Normal tendon loading');
+  }
+  
+  let pfProb = 5;
+  const pfFactors: string[] = [];
+  const pfProtective: string[] = [];
+  if (plantarFascia && plantarFascia.percentOfCritical > 40) {
+    pfProb += plantarFascia.percentOfCritical * 0.5;
+    pfFactors.push(`Elevated plantar fascia tension (${plantarFascia.currentLoad}N)`);
+  }
+  if (archHeight < 20 || archHeight > 40) {
+    pfProb += Math.abs(30 - archHeight) * 0.8;
+    pfFactors.push(`Abnormal arch height (${Math.round(archHeight)}mm)`);
+  }
+  if (archHeight >= 25 && archHeight <= 35) {
+    pfProtective.push('Normal arch height');
+  }
+  
+  let pttdProb = 3;
+  const pttdFactors: string[] = [];
+  const pttdProtective: string[] = [];
+  if (archHeight < 22) {
+    pttdProb += (22 - archHeight) * 2.0;
+    pttdFactors.push(`Low arch/flat foot (${Math.round(archHeight)}mm)`);
+  }
+  if (deltoid && deltoid.percentOfCritical > 40) {
+    pttdProb += deltoid.percentOfCritical * 0.3;
+    pttdFactors.push(`Medial overload (${deltoid.currentLoad}N)`);
+  }
+  if (archHeight >= 25) {
+    pttdProtective.push('Normal arch support');
+  }
+  
+  let ankleOaProb = 3;
+  const oaFactors: string[] = [];
+  const oaProtective: string[] = [];
+  if (tibiotalar && tibiotalar.percentOfCritical > 50) {
+    ankleOaProb += tibiotalar.percentOfCritical * 0.4;
+    oaFactors.push(`High tibiotalar compression (${tibiotalar.currentLoad}N)`);
+  }
+  if (Math.abs(inversion) > 25) {
+    ankleOaProb += (Math.abs(inversion) - 25) * 0.8;
+    oaFactors.push(`Recurrent instability pattern (${Math.round(Math.abs(inversion))}°)`);
+  }
+  if (tibiotalar && tibiotalar.percentOfCritical < 40) {
+    oaProtective.push('Normal joint loading');
+  }
+  
+  return [
+    { conditionId: 'lateral_sprain', conditionName: 'Lateral Ankle Sprain Risk', probability: Math.min(95, Math.round(lateralSprainProb)), riskLevel: getRiskLevel(lateralSprainProb), contributingFactors: lateralFactors, protectiveFactors: lateralProtective },
+    { conditionId: 'high_ankle_sprain', conditionName: 'High Ankle Sprain Risk', probability: Math.min(95, Math.round(highAnkleProb)), riskLevel: getRiskLevel(highAnkleProb), contributingFactors: highFactors, protectiveFactors: highProtective },
+    { conditionId: 'achilles_tendinopathy', conditionName: 'Achilles Tendinopathy', probability: Math.min(95, Math.round(achillesProb)), riskLevel: getRiskLevel(achillesProb), contributingFactors: achillesFactors, protectiveFactors: achillesProtective },
+    { conditionId: 'plantar_fasciitis', conditionName: 'Plantar Fasciitis', probability: Math.min(95, Math.round(pfProb)), riskLevel: getRiskLevel(pfProb), contributingFactors: pfFactors, protectiveFactors: pfProtective },
+    { conditionId: 'pttd', conditionName: 'Posterior Tibial Tendon Dysfunction', probability: Math.min(95, Math.round(pttdProb)), riskLevel: getRiskLevel(pttdProb), contributingFactors: pttdFactors, protectiveFactors: pttdProtective },
+    { conditionId: 'ankle_oa', conditionName: 'Ankle Osteoarthritis', probability: Math.min(95, Math.round(ankleOaProb)), riskLevel: getRiskLevel(ankleOaProb), contributingFactors: oaFactors, protectiveFactors: oaProtective },
+  ];
+}
+
 export function analyzeRegion(
   regionId: AnatomicalRegion,
   spineFlexion: number,
@@ -1963,6 +2603,24 @@ export function analyzeRegion(
       structureLoads = calculatePelvicStructureLoads(pelvisTilt, pelvisObliquity, pelvisRotation, 30, bodyWeightKg);
       conditionProbabilities = calculatePelvicConditions(structureLoads, pelvisTilt, pelvisObliquity, 30);
       regionName = 'Pelvis';
+      break;
+    case 'left_hip':
+    case 'right_hip':
+      structureLoads = calculateHipStructureLoads(spineFlexion, spineLateralFlexion, spineRotation, pelvisTilt, pelvisObliquity, bodyWeightKg);
+      conditionProbabilities = calculateHipConditions(structureLoads, spineFlexion, spineRotation, pelvisTilt);
+      regionName = regionId === 'left_hip' ? 'Left hip' : 'Right hip';
+      break;
+    case 'left_knee':
+    case 'right_knee':
+      structureLoads = calculateKneeStructureLoads(spineFlexion, spineRotation, spineLateralFlexion, pelvisTilt, pelvisObliquity, bodyWeightKg);
+      conditionProbabilities = calculateKneeConditions(structureLoads, spineFlexion, spineRotation, pelvisObliquity);
+      regionName = regionId === 'left_knee' ? 'Left knee' : 'Right knee';
+      break;
+    case 'left_ankle':
+    case 'right_ankle':
+      structureLoads = calculateAnkleStructureLoads(spineFlexion, pelvisTilt, spineRotation, spineLateralFlexion, pelvisObliquity, bodyWeightKg);
+      conditionProbabilities = calculateAnkleConditions(structureLoads, spineRotation, pelvisTilt, pelvisObliquity);
+      regionName = regionId === 'left_ankle' ? 'Left ankle' : 'Right ankle';
       break;
     default:
       return null;

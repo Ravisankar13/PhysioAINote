@@ -1528,8 +1528,11 @@ export default function PureThreeGLBViewer({
           
           if (constraint) {
             // Calculate constrained value - handle both positive and negative values
+            // Safeguard: Only apply constraint if maxROM is meaningful (> 5 degrees)
+            // This prevents complete freezing when maxROM = 0
             const absValue = Math.abs(value);
-            const constrainedValue = Math.min(absValue, constraint.maxROM);
+            const effectiveMaxROM = Math.max(constraint.maxROM, 5); // Minimum 5 degrees to prevent freezing
+            const constrainedValue = Math.min(absValue, effectiveMaxROM);
             const blockedAmount = absValue - constrainedValue;
             
             // Preserve the original sign when clamping

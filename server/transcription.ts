@@ -5,13 +5,23 @@ import os from "os";
 import { config } from 'dotenv';
 config();
 
-// Use Replit AI Integrations OpenAI if available, otherwise fall back to standard OPENAI_API_KEY
-const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+// For Whisper transcription, we MUST use the direct OpenAI API key
+// Replit AI Integrations do NOT support the /audio/transcriptions endpoint
+const directOpenAIKey = process.env.OPENAI_API_KEY;
+
+// Create a dedicated client for Whisper using direct OpenAI (no custom base URL)
+const whisperClient = directOpenAIKey ? new OpenAI({ 
+  apiKey: directOpenAIKey,
+  // Use default OpenAI base URL for Whisper support
+}) : null;
+
+// For chat completions, prefer Replit AI Integrations if available
+const chatApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const chatBaseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
 
 const openai = new OpenAI({ 
-  apiKey: apiKey,
-  baseURL: baseURL
+  apiKey: chatApiKey,
+  baseURL: chatBaseURL
 });
 
 // Helper function to implement sleep/delay
@@ -38,10 +48,13 @@ export async function transcribeAudio(filePath: string): Promise<string> {
     
     console.log(`Original audio file size: ${stats.size} bytes`);
     
-    // Verify API key exists
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OpenAI API key not found in environment variables');
+    // Verify we have a Whisper client with direct OpenAI API key
+    if (!whisperClient) {
+      console.error('No direct OpenAI API key available for Whisper transcription');
+      throw new Error('OPENAI_API_KEY not found. Whisper transcription requires a direct OpenAI API key.');
     }
+    
+    console.log('Using direct OpenAI Whisper API for transcription');
     
     // If file is large (>5MB), try to optimize it
     if (stats.size > 5 * 1024 * 1024) {
@@ -72,15 +85,15 @@ export async function transcribeAudio(filePath: string): Promise<string> {
           audioReadStream.on('close', () => clearTimeout(timeoutId));
         });
         
-        // Verify OpenAI key is still valid
-        if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.trim() === '') {
-          throw new Error('OpenAI API key is missing or empty');
+        // Verify whisper client is available
+        if (!whisperClient) {
+          throw new Error('Whisper client not initialized - OPENAI_API_KEY missing');
         }
 
-        // Call OpenAI Whisper API with timeout and additional headers
-        console.log(`Calling OpenAI Whisper API (attempt ${retryCount + 1} of ${maxRetries})...`);
+        // Call OpenAI Whisper API directly (bypassing Replit AI Integrations)
+        console.log(`Calling direct OpenAI Whisper API (attempt ${retryCount + 1} of ${maxRetries})...`);
         
-        const transcriptionPromise = openai.audio.transcriptions.create({
+        const transcriptionPromise = whisperClient.audio.transcriptions.create({
           file: audioReadStream,
           model: "whisper-1",
           language: "en",

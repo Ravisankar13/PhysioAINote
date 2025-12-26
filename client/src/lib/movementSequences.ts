@@ -727,103 +727,40 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'backwardBend',
     name: 'Backward Bend',
-    description: 'Standing trunk extension - lumbar and thoracic extension',
+    description: 'Standing trunk extension - spine only, feet stay planted',
     duration: 4000,
     loop: true,
     joints: [
-      // Lumbar spine increases lordosis (extension)
+      // Lumbar spine extension (negative = increased lordosis/backward)
       {
         joint: 'spine',
         property: 'lumbarLordosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 15 },
-          { time: 0.6, value: 15 },
+          { time: 0.4, value: -50 },
+          { time: 0.6, value: -50 },
           { time: 1, value: 0 },
         ],
       },
-      // Thoracic spine extends (reduces kyphosis)
+      // Thoracic spine extension (negative = reduced kyphosis/backward)
       {
         joint: 'spine',
         property: 'thoracicKyphosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: -15 },
-          { time: 0.6, value: -15 },
+          { time: 0.4, value: -40 },
+          { time: 0.6, value: -40 },
           { time: 1, value: 0 },
         ],
       },
-      // Pelvis tilts posteriorly slightly
+      // Pelvis tilts posteriorly (positive = backward)
       {
         joint: 'pelvis',
         property: 'tilt',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: -10 },
-          { time: 0.6, value: -10 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Hip extension supports backward lean
-      {
-        joint: 'leftHip',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: -15 },
-          { time: 0.6, value: -15 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'rightHip',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: -15 },
-          { time: 0.6, value: -15 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Knees slightly bent for stability
-      {
-        joint: 'leftKnee',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 15 },
-          { time: 0.6, value: 15 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'rightKnee',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 15 },
-          { time: 0.6, value: 15 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Arms reach back for counterbalance
-      {
-        joint: 'leftShoulder',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: -40 },
-          { time: 0.6, value: -40 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'rightShoulder',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: -40 },
-          { time: 0.6, value: -40 },
+          { time: 0.4, value: 45 },
+          { time: 0.6, value: 45 },
           { time: 1, value: 0 },
         ],
       },

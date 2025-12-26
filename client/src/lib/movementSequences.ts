@@ -674,7 +674,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'forwardBend',
     name: 'Forward Bend',
-    description: 'Standing forward flexion - trunk flexion with hip hinge',
+    description: 'Standing trunk flexion - spine and pelvis only, feet stay planted',
     duration: 4000,
     loop: true,
     joints: [
@@ -695,8 +695,8 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'thoracicKyphosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 35 },
-          { time: 0.6, value: 35 },
+          { time: 0.4, value: 40 },
+          { time: 0.6, value: 40 },
           { time: 1, value: 0 },
         ],
       },
@@ -706,71 +706,8 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'tilt',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 25 },
-          { time: 0.6, value: 25 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Hip flexion - hip hinge component
-      {
-        joint: 'leftHip',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 70 },
-          { time: 0.6, value: 70 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'rightHip',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 70 },
-          { time: 0.6, value: 70 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Slight knee flexion for comfort
-      {
-        joint: 'leftKnee',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 10 },
-          { time: 0.6, value: 10 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'rightKnee',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 10 },
-          { time: 0.6, value: 10 },
-          { time: 1, value: 0 },
-        ],
-      },
-      // Arms hang down toward floor
-      {
-        joint: 'leftShoulder',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 160 },
-          { time: 0.6, value: 160 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'rightShoulder',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 160 },
-          { time: 0.6, value: 160 },
+          { time: 0.4, value: 30 },
+          { time: 0.6, value: 30 },
           { time: 1, value: 0 },
         ],
       },
@@ -780,8 +717,8 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'extension',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 20 },
-          { time: 0.6, value: 20 },
+          { time: 0.4, value: 25 },
+          { time: 0.6, value: 25 },
           { time: 1, value: 0 },
         ],
       },

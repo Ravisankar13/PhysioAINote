@@ -44,7 +44,7 @@ import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 import { generateAISuggestions, applySuggestionToSoap, generateEnhancedDifferentials, type EnhancedDifferential, type DifferentialAnalysisResult } from "./services/aiSuggestionsService";
 import { ResearchService } from "./services/researchService";
 
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -8194,14 +8194,29 @@ Provide 2-4 differential diagnoses ranked by likelihood. Focus on musculoskeleta
         return res.status(400).json({ error: 'SOAP note ID is required' });
       }
       
-      // Fetch the SOAP note
+      // First try to fetch from regular SOAP notes table
+      let note: any = null;
+      let isTemporary = false;
+      
       const soapNote = await db.select().from(soapNotes).where(eq(soapNotes.id, soapNoteId)).limit(1);
       
-      if (!soapNote || soapNote.length === 0) {
-        return res.status(404).json({ error: 'SOAP note not found' });
+      if (soapNote && soapNote.length > 0) {
+        note = soapNote[0];
+      } else {
+        // If not found, check temporary SOAP notes table
+        console.log('[API] SOAP note not found in main table, checking temporary notes...');
+        const tempNote = await db.select().from(temporarySoapNotes).where(eq(temporarySoapNotes.id, soapNoteId)).limit(1);
+        
+        if (tempNote && tempNote.length > 0) {
+          note = tempNote[0];
+          isTemporary = true;
+          console.log('[API] Found temporary SOAP note:', soapNoteId);
+        }
       }
       
-      const note = soapNote[0];
+      if (!note) {
+        return res.status(404).json({ error: 'SOAP note not found in either regular or temporary tables' });
+      }
       const clinicalText = `
 SUBJECTIVE: ${note.subjective || 'Not provided'}
 

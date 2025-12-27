@@ -268,17 +268,14 @@ export default function TestSkeletonNew() {
   // Save skeleton mutation
   const saveMutation = useMutation({
     mutationFn: async (data: { name: string; description?: string }) => {
-      const response = await apiRequest('/api/saved-skeletons', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: data.name,
-          description: data.description,
-          jointConstraints,
-          modelConfig,
-          affectedRegions: null,
-          clinicalSummary: presentationSummary,
-          patientPresentationId: loadedPresentationId,
-        }),
+      const response = await apiRequest('/api/saved-skeletons', 'POST', {
+        name: data.name,
+        description: data.description,
+        jointConstraints,
+        modelConfig,
+        affectedRegions: null,
+        clinicalSummary: presentationSummary,
+        patientPresentationId: loadedPresentationId,
       });
       return response;
     },
@@ -304,7 +301,7 @@ export default function TestSkeletonNew() {
   // Delete skeleton mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest(`/api/saved-skeletons/${id}`, { method: 'DELETE' });
+      await apiRequest(`/api/saved-skeletons/${id}`, 'DELETE');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/saved-skeletons'] });

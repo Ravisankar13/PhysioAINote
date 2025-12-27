@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { eq, sql, ilike } from "drizzle-orm";
+import { eq, sql, ilike, desc, and } from "drizzle-orm";
 import { storage } from "./storage";
 import { db } from "./db";
 import { generateSoapNote } from "./openai";
@@ -44,7 +44,7 @@ import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 import { generateAISuggestions, applySuggestionToSoap, generateEnhancedDifferentials, type EnhancedDifferential, type DifferentialAnalysisResult } from "./services/aiSuggestionsService";
 import { ResearchService } from "./services/researchService";
 
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes, savedSkeletonConfigurations } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -8417,6 +8417,189 @@ Important:
     } catch (error) {
       console.error('Error fetching patient presentation:', error);
       res.status(500).json({ error: 'Failed to fetch patient presentation' });
+    }
+  });
+  
+  // Saved Skeleton Configurations Endpoints
+  
+  // List all saved skeleton configurations for the current user
+  app.get('/api/saved-skeletons', async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      
+      const userId = (req.user as any).id;
+      const configurations = await db.select()
+        .from(savedSkeletonConfigurations)
+        .where(eq(savedSkeletonConfigurations.userId, userId))
+        .orderBy(desc(savedSkeletonConfigurations.updatedAt));
+      
+      res.json(configurations);
+    } catch (error) {
+      console.error('Error fetching saved skeletons:', error);
+      res.status(500).json({ error: 'Failed to fetch saved skeletons' });
+    }
+  });
+  
+  // Get a specific saved skeleton configuration
+  app.get('/api/saved-skeletons/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      
+      const id = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid configuration ID' });
+      }
+      
+      const config = await db.select()
+        .from(savedSkeletonConfigurations)
+        .where(and(
+          eq(savedSkeletonConfigurations.id, id),
+          eq(savedSkeletonConfigurations.userId, userId)
+        ))
+        .limit(1);
+      
+      if (!config || config.length === 0) {
+        return res.status(404).json({ error: 'Saved skeleton configuration not found' });
+      }
+      
+      res.json(config[0]);
+    } catch (error) {
+      console.error('Error fetching saved skeleton:', error);
+      res.status(500).json({ error: 'Failed to fetch saved skeleton' });
+    }
+  });
+  
+  // Save a new skeleton configuration
+  app.post('/api/saved-skeletons', async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      
+      const userId = (req.user as any).id;
+      const { 
+        name, 
+        description, 
+        jointConstraints, 
+        modelConfig, 
+        biomechanicsData, 
+        affectedRegions,
+        clinicalSummary,
+        patientPresentationId 
+      } = req.body;
+      
+      if (!name || name.trim() === '') {
+        return res.status(400).json({ error: 'Name is required' });
+      }
+      
+      const created = await db.insert(savedSkeletonConfigurations)
+        .values({
+          userId,
+          name: name.trim(),
+          description: description || null,
+          jointConstraints: jointConstraints || null,
+          modelConfig: modelConfig || null,
+          biomechanicsData: biomechanicsData || null,
+          affectedRegions: affectedRegions || null,
+          clinicalSummary: clinicalSummary || null,
+          patientPresentationId: patientPresentationId || null,
+        })
+        .returning();
+      
+      res.json(created[0]);
+    } catch (error) {
+      console.error('Error saving skeleton configuration:', error);
+      res.status(500).json({ error: 'Failed to save skeleton configuration' });
+    }
+  });
+  
+  // Update a saved skeleton configuration
+  app.put('/api/saved-skeletons/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      
+      const id = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid configuration ID' });
+      }
+      
+      const { 
+        name, 
+        description, 
+        jointConstraints, 
+        modelConfig, 
+        biomechanicsData, 
+        affectedRegions,
+        clinicalSummary 
+      } = req.body;
+      
+      const updated = await db.update(savedSkeletonConfigurations)
+        .set({
+          name: name?.trim() || undefined,
+          description: description !== undefined ? description : undefined,
+          jointConstraints: jointConstraints !== undefined ? jointConstraints : undefined,
+          modelConfig: modelConfig !== undefined ? modelConfig : undefined,
+          biomechanicsData: biomechanicsData !== undefined ? biomechanicsData : undefined,
+          affectedRegions: affectedRegions !== undefined ? affectedRegions : undefined,
+          clinicalSummary: clinicalSummary !== undefined ? clinicalSummary : undefined,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(savedSkeletonConfigurations.id, id),
+          eq(savedSkeletonConfigurations.userId, userId)
+        ))
+        .returning();
+      
+      if (!updated || updated.length === 0) {
+        return res.status(404).json({ error: 'Saved skeleton configuration not found' });
+      }
+      
+      res.json(updated[0]);
+    } catch (error) {
+      console.error('Error updating skeleton configuration:', error);
+      res.status(500).json({ error: 'Failed to update skeleton configuration' });
+    }
+  });
+  
+  // Delete a saved skeleton configuration
+  app.delete('/api/saved-skeletons/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      
+      const id = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid configuration ID' });
+      }
+      
+      const deleted = await db.delete(savedSkeletonConfigurations)
+        .where(and(
+          eq(savedSkeletonConfigurations.id, id),
+          eq(savedSkeletonConfigurations.userId, userId)
+        ))
+        .returning();
+      
+      if (!deleted || deleted.length === 0) {
+        return res.status(404).json({ error: 'Saved skeleton configuration not found' });
+      }
+      
+      res.json({ success: true, deleted: deleted[0] });
+    } catch (error) {
+      console.error('Error deleting skeleton configuration:', error);
+      res.status(500).json({ error: 'Failed to delete skeleton configuration' });
     }
   });
   

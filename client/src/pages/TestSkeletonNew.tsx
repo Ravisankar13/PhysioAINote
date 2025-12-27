@@ -1,17 +1,20 @@
 import { useState, useEffect, Suspense, Component, ReactNode, useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User, Lock, FileText } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User, Lock, FileText, Save, FolderOpen, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import PureThreeGLBViewer, { AnimationState, AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
@@ -249,6 +252,110 @@ export default function TestSkeletonNew() {
   const [showConstraintsPanel, setShowConstraintsPanel] = useState(false);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
+  
+  // Save/Load skeleton state
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveDescription, setSaveDescription] = useState("");
+  const queryClient = useQueryClient();
+  
+  // Fetch saved skeletons
+  const { data: savedSkeletons = [], isLoading: isLoadingSavedSkeletons } = useQuery<any[]>({
+    queryKey: ['/api/saved-skeletons'],
+  });
+  
+  // Save skeleton mutation
+  const saveMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string }) => {
+      const response = await apiRequest('/api/saved-skeletons', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: data.name,
+          description: data.description,
+          jointConstraints,
+          modelConfig,
+          affectedRegions: null,
+          clinicalSummary: presentationSummary,
+          patientPresentationId: loadedPresentationId,
+        }),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/saved-skeletons'] });
+      setSaveDialogOpen(false);
+      setSaveName("");
+      setSaveDescription("");
+      toast({
+        title: "Skeleton Saved",
+        description: "Your skeleton configuration has been saved successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Save Failed",
+        description: error.message || "Could not save skeleton configuration",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Delete skeleton mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest(`/api/saved-skeletons/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/saved-skeletons'] });
+      toast({
+        title: "Deleted",
+        description: "Saved skeleton configuration has been deleted.",
+      });
+    },
+  });
+  
+  // Load saved skeleton
+  const loadSavedSkeleton = useCallback(async (id: number) => {
+    try {
+      const response = await fetch(`/api/saved-skeletons/${id}`);
+      if (!response.ok) throw new Error('Failed to load skeleton');
+      
+      const saved = await response.json();
+      
+      if (saved.jointConstraints) {
+        setJointConstraints(saved.jointConstraints.map((c: any, index: number) => ({
+          ...c,
+          id: `saved-${id}-${index}`,
+        })));
+        setShowConstraintsPanel(true);
+      }
+      
+      if (saved.modelConfig) {
+        setModelConfig((prev: any) => ({ ...prev, ...saved.modelConfig }));
+      }
+      
+      if (saved.clinicalSummary) {
+        setPresentationSummary(saved.clinicalSummary);
+      }
+      
+      if (saved.patientPresentationId) {
+        setLoadedPresentationId(saved.patientPresentationId);
+      }
+      
+      setLoadDialogOpen(false);
+      toast({
+        title: "Skeleton Loaded",
+        description: `Loaded "${saved.name}" configuration`,
+      });
+    } catch (error) {
+      toast({
+        title: "Load Failed",
+        description: "Could not load saved skeleton",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
   
   const compensationResult = useMemo(() => 
     calculateCompensations(jointConstraints), 
@@ -775,10 +882,154 @@ export default function TestSkeletonNew() {
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Skeleton Configuration Tool</h1>
-        <p className="text-muted-foreground">
-          Adjust anatomical parameters to create custom skeletal configurations for clinical assessment
-        </p>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Skeleton Configuration Tool</h1>
+            <p className="text-muted-foreground">
+              Adjust anatomical parameters to create custom skeletal configurations for clinical assessment
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Save Skeleton Button */}
+            <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2" data-testid="btn-save-skeleton">
+                  <Save className="h-4 w-4" />
+                  Save
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Save Skeleton Configuration</DialogTitle>
+                  <DialogDescription>
+                    Save the current skeleton state for future use. Give it a descriptive name.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="save-name">Name</Label>
+                    <Input
+                      id="save-name"
+                      placeholder="e.g., Frozen Shoulder Case"
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      data-testid="input-save-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="save-description">Description (optional)</Label>
+                    <Input
+                      id="save-description"
+                      placeholder="Brief description..."
+                      value={saveDescription}
+                      onChange={(e) => setSaveDescription(e.target.value)}
+                      data-testid="input-save-description"
+                    />
+                  </div>
+                  {loadedPresentationId && (
+                    <p className="text-sm text-muted-foreground">
+                      This will be linked to the current patient presentation.
+                    </p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => saveMutation.mutate({ name: saveName, description: saveDescription })}
+                    disabled={!saveName.trim() || saveMutation.isPending}
+                    data-testid="btn-confirm-save"
+                  >
+                    {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Save Configuration
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Load Skeleton Button */}
+            <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2" data-testid="btn-load-skeleton">
+                  <FolderOpen className="h-4 w-4" />
+                  Load
+                  {savedSkeletons.length > 0 && (
+                    <Badge variant="secondary" className="ml-1">{savedSkeletons.length}</Badge>
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Load Saved Skeleton</DialogTitle>
+                  <DialogDescription>
+                    Select a previously saved skeleton configuration to load.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 max-h-[400px] overflow-y-auto">
+                  {isLoadingSavedSkeletons ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : savedSkeletons.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <FolderOpen className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                      <p>No saved skeletons yet.</p>
+                      <p className="text-sm">Save your first configuration using the Save button.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {savedSkeletons.map((skeleton: any) => (
+                        <div 
+                          key={skeleton.id} 
+                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{skeleton.name}</p>
+                            {skeleton.description && (
+                              <p className="text-sm text-muted-foreground truncate">{skeleton.description}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              {skeleton.patientPresentationId && (
+                                <Badge variant="outline" className="text-xs">Linked to Patient</Badge>
+                              )}
+                              {skeleton.jointConstraints?.length > 0 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {skeleton.jointConstraints.length} constraints
+                                </Badge>
+                              )}
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(skeleton.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 ml-2">
+                            <Button
+                              size="sm"
+                              onClick={() => loadSavedSkeleton(skeleton.id)}
+                              data-testid={`btn-load-${skeleton.id}`}
+                            >
+                              Load
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deleteMutation.mutate(skeleton.id)}
+                              className="text-destructive hover:text-destructive"
+                              data-testid={`btn-delete-${skeleton.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
       </div>
 
       {/* WebGL Not Available - Prominent Call to Action */}

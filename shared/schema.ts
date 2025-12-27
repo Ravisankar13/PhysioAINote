@@ -5256,3 +5256,78 @@ export const patientPresentationRelations = relations(patientPresentations, ({ o
     references: [users.id],
   }),
 }));
+
+// Saved Skeleton Configurations - User-saved skeleton states for future use
+export const savedSkeletonConfigurations = pgTable("saved_skeleton_configurations", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  
+  // Optional link to patient presentation (if created from extracted data)
+  patientPresentationId: integer("patient_presentation_id")
+    .references(() => patientPresentations.id, { onDelete: "set null" }),
+  
+  // User-provided name for this configuration
+  name: text("name").notNull(),
+  description: text("description"),
+  
+  // Complete skeleton state
+  jointConstraints: json("joint_constraints").$type<Array<{
+    joint: string;
+    movement: string;
+    maxROM: number;
+    normalROM: number;
+    reason: string;
+    painLevel: number;
+    isActive: boolean;
+  }>>(),
+  
+  modelConfig: json("model_config").$type<{
+    limbScales?: Record<string, number>;
+    shoulderPathology?: string;
+    spinalPathology?: string;
+    lowerLimbPathology?: string;
+    modelType?: string;
+  }>(),
+  
+  biomechanicsData: json("biomechanics_data").$type<{
+    jointForces?: Record<string, any>;
+    muscleActivation?: Record<string, number>;
+    injuryRisk?: Record<string, any>;
+  }>(),
+  
+  // Affected regions for quick reference
+  affectedRegions: json("affected_regions").$type<Array<{
+    region: string;
+    severity: 'mild' | 'moderate' | 'severe';
+    description: string;
+  }>>(),
+  
+  // Clinical summary if extracted from SOAP
+  clinicalSummary: text("clinical_summary"),
+  
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSavedSkeletonConfigurationSchema = createInsertSchema(savedSkeletonConfigurations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSavedSkeletonConfiguration = z.infer<typeof insertSavedSkeletonConfigurationSchema>;
+export type SavedSkeletonConfiguration = typeof savedSkeletonConfigurations.$inferSelect;
+
+export const savedSkeletonConfigurationRelations = relations(savedSkeletonConfigurations, ({ one }) => ({
+  user: one(users, {
+    fields: [savedSkeletonConfigurations.userId],
+    references: [users.id],
+  }),
+  patientPresentation: one(patientPresentations, {
+    fields: [savedSkeletonConfigurations.patientPresentationId],
+    references: [patientPresentations.id],
+  }),
+}));

@@ -411,8 +411,8 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         }
       }
       
-      // Limit to first 3 exercises to avoid API quota
-      const exercisesToFetch = Array.from(foundExercises).slice(0, 3);
+      // Limit to first 5 exercises
+      const exercisesToFetch = Array.from(foundExercises).slice(0, 5);
       
       if (exercisesToFetch.length === 0) {
         return [];
@@ -420,12 +420,57 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       
       console.log("Fetching images for exercises:", exercisesToFetch);
       
-      // Use Google Custom Search for exercise images
-      const { searchExerciseImages } = await import('./googleImageSearch');
+      // Try Rehab My Patient API first
+      const RMP_API_KEY = process.env.RMP_API_KEY;
+      const RMP_API_BASE = 'https://www.rehabmypatient.com/apiV2';
       
-      // Fetch in parallel
+      // Fetch in parallel - try RMP first, fallback to Google
       const fetchPromises = exercisesToFetch.map(async (exerciseName) => {
         try {
+          // Try Rehab My Patient API first
+          if (RMP_API_KEY) {
+            try {
+              const params = new URLSearchParams({ search: exerciseName });
+              const rmpResponse = await fetch(`${RMP_API_BASE}/exercises?${params.toString()}`, {
+                headers: {
+                  'RMP-API-KEY': RMP_API_KEY,
+                  'Accept': 'application/json',
+                  'User-Agent': 'PhysioGPT (support@physiogpt.com)'
+                }
+              });
+              
+              if (rmpResponse.ok) {
+                const rmpData = await rmpResponse.json();
+                const exercises = rmpData.exercises || rmpData.data || [];
+                
+                if (exercises.length > 0) {
+                  const exercise = exercises[0];
+                  const imageUrl = exercise.image_url || exercise.imageUrl || exercise.thumbnail || exercise.image;
+                  
+                  if (imageUrl) {
+                    console.log(`Found RMP exercise for "${exerciseName}":`, exercise.name || exercise.title);
+                    return {
+                      exerciseName: exerciseName,
+                      primaryImageUrl: imageUrl,
+                      thumbnailUrl: imageUrl,
+                      instructions: exercise.instructions ? 
+                        (Array.isArray(exercise.instructions) ? exercise.instructions : [exercise.instructions]) :
+                        [`Perform ${exerciseName} with proper form and control`],
+                      tips: exercise.tips || ['Focus on quality over quantity', 'Maintain proper breathing'],
+                      category: exercise.category || 'Rehab My Patient',
+                      source: 'Rehab My Patient',
+                      videoUrl: exercise.video_url || exercise.videoUrl
+                    };
+                  }
+                }
+              }
+            } catch (rmpError) {
+              console.log(`RMP API error for ${exerciseName}, falling back to Google:`, rmpError);
+            }
+          }
+          
+          // Fallback to Google Custom Search
+          const { searchExerciseImages } = await import('./googleImageSearch');
           const searchResult = await searchExerciseImages(exerciseName, 1);
           
           if (searchResult.images && searchResult.images.length > 0) {
@@ -436,7 +481,8 @@ Keep responses concise, practical, and directly applicable to clinical practice.
               thumbnailUrl: image.thumbnailUrl,
               instructions: [`Perform ${exerciseName} with proper form and control`],
               tips: ['Focus on quality over quantity', 'Maintain proper breathing'],
-              category: 'physiotherapy'
+              category: 'physiotherapy',
+              source: 'Web Search'
             };
           }
         } catch (error) {

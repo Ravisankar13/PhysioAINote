@@ -33,6 +33,8 @@ interface VisualContentDisplayProps {
     instructions?: string[];
     tips?: string[];
     category?: string;
+    source?: string;
+    videoUrl?: string;
   }>;
 }
 
@@ -140,12 +142,22 @@ export default function VisualContentDisplay({ visualContent, exerciseImages }: 
                     alt={exercise.exerciseName}
                     className="w-full h-48 object-cover cursor-pointer"
                     onClick={() => setSelectedImage(exercise.primaryImageUrl)}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23e5e7eb" width="100" height="100"/><text x="50" y="55" text-anchor="middle" fill="%239ca3af" font-size="10">No Image</text></svg>';
+                    }}
                   />
-                  {exercise.category && (
-                    <Badge className="absolute top-2 right-2">
-                      {exercise.category}
-                    </Badge>
-                  )}
+                  <div className="absolute top-2 right-2 flex gap-1">
+                    {exercise.source === 'Rehab My Patient' && (
+                      <Badge className="bg-teal-600">
+                        RMP
+                      </Badge>
+                    )}
+                    {exercise.category && (
+                      <Badge variant="secondary">
+                        {exercise.category}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <CardContent className="p-3">
                   <h4 className="font-semibold text-sm mb-2">{exercise.exerciseName}</h4>
@@ -164,6 +176,17 @@ export default function VisualContentDisplay({ visualContent, exerciseImages }: 
                       <p className="font-medium">Tip:</p>
                       <p className="line-clamp-2">{exercise.tips[0]}</p>
                     </div>
+                  )}
+                  {exercise.videoUrl && (
+                    <a 
+                      href={exercise.videoUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-teal-600 hover:underline mt-2 inline-flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Watch Video
+                    </a>
                   )}
                 </CardContent>
               </Card>

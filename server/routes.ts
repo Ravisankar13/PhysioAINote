@@ -8603,6 +8603,190 @@ Important:
     }
   });
   
+  // ============================================
+  // Rehab My Patient API Integration
+  // ============================================
+  
+  const RMP_API_BASE = 'https://www.rehabmypatient.com/apiV2';
+  const RMP_API_KEY = process.env.RMP_API_KEY;
+  
+  // Helper function to make RMP API requests
+  async function rmpApiRequest(endpoint: string, options: RequestInit = {}) {
+    if (!RMP_API_KEY) {
+      throw new Error('RMP_API_KEY not configured');
+    }
+    
+    const response = await fetch(`${RMP_API_BASE}${endpoint}`, {
+      ...options,
+      headers: {
+        'RMP-API-KEY': RMP_API_KEY,
+        'Accept': 'application/json',
+        'User-Agent': 'PhysioGPT (support@physiogpt.com)',
+        ...options.headers,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`RMP API error ${response.status}: ${errorText}`);
+    }
+    
+    return response.json();
+  }
+  
+  // Search exercises in Rehab My Patient library
+  app.get('/api/rmp/exercises/search', ensureAuthenticated, async (req, res) => {
+    try {
+      const { query, bodyPart, category, page = 1 } = req.query;
+      
+      if (!RMP_API_KEY) {
+        return res.status(503).json({ error: 'Rehab My Patient integration not configured' });
+      }
+      
+      // Build search endpoint with query params
+      let endpoint = '/exercises?';
+      const params = new URLSearchParams();
+      if (query) params.append('search', String(query));
+      if (bodyPart) params.append('body_part', String(bodyPart));
+      if (category) params.append('category', String(category));
+      params.append('page', String(page));
+      
+      const data = await rmpApiRequest(`/exercises?${params.toString()}`);
+      
+      // Transform response to include image URLs
+      const exercises = (data.exercises || data.data || []).map((exercise: any) => ({
+        id: exercise.id,
+        name: exercise.name || exercise.title,
+        description: exercise.description,
+        bodyPart: exercise.body_part || exercise.bodyPart,
+        category: exercise.category,
+        imageUrl: exercise.image_url || exercise.imageUrl || exercise.thumbnail,
+        videoUrl: exercise.video_url || exercise.videoUrl,
+        instructions: exercise.instructions || exercise.steps,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        duration: exercise.duration,
+      }));
+      
+      res.json({
+        exercises,
+        totalItems: data.total_items || data.total || exercises.length,
+        page: Number(page),
+        hasMore: data.links?.next != null,
+      });
+    } catch (error: any) {
+      console.error('Error searching RMP exercises:', error);
+      res.status(500).json({ error: error.message || 'Failed to search exercises' });
+    }
+  });
+  
+  // Get specific exercise details from RMP
+  app.get('/api/rmp/exercises/:id', ensureAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      if (!RMP_API_KEY) {
+        return res.status(503).json({ error: 'Rehab My Patient integration not configured' });
+      }
+      
+      const exercise = await rmpApiRequest(`/exercises/${id}`);
+      
+      res.json({
+        id: exercise.id,
+        name: exercise.name || exercise.title,
+        description: exercise.description,
+        bodyPart: exercise.body_part || exercise.bodyPart,
+        category: exercise.category,
+        imageUrl: exercise.image_url || exercise.imageUrl || exercise.thumbnail,
+        videoUrl: exercise.video_url || exercise.videoUrl,
+        instructions: exercise.instructions || exercise.steps,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        duration: exercise.duration,
+        difficulty: exercise.difficulty,
+        equipment: exercise.equipment,
+      });
+    } catch (error: any) {
+      console.error('Error fetching RMP exercise:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch exercise' });
+    }
+  });
+  
+  // Get exercise images for a list of exercise names (for PhysioGPT integration)
+  app.post('/api/rmp/exercises/batch-images', ensureAuthenticated, async (req, res) => {
+    try {
+      const { exerciseNames } = req.body;
+      
+      if (!exerciseNames || !Array.isArray(exerciseNames)) {
+        return res.status(400).json({ error: 'exerciseNames array required' });
+      }
+      
+      if (!RMP_API_KEY) {
+        return res.status(503).json({ error: 'Rehab My Patient integration not configured' });
+      }
+      
+      // Search for each exercise and get its image
+      const results = await Promise.all(
+        exerciseNames.slice(0, 10).map(async (name: string) => {
+          try {
+            const params = new URLSearchParams({ search: name });
+            const data = await rmpApiRequest(`/exercises?${params.toString()}`);
+            const exercises = data.exercises || data.data || [];
+            
+            if (exercises.length > 0) {
+              const exercise = exercises[0];
+              return {
+                exerciseName: name,
+                found: true,
+                id: exercise.id,
+                matchedName: exercise.name || exercise.title,
+                imageUrl: exercise.image_url || exercise.imageUrl || exercise.thumbnail,
+                videoUrl: exercise.video_url || exercise.videoUrl,
+                description: exercise.description,
+              };
+            }
+            return { exerciseName: name, found: false };
+          } catch (err) {
+            return { exerciseName: name, found: false, error: 'Search failed' };
+          }
+        })
+      );
+      
+      res.json({ results });
+    } catch (error: any) {
+      console.error('Error batch fetching RMP exercises:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch exercise images' });
+    }
+  });
+  
+  // Check RMP API connection status
+  app.get('/api/rmp/status', ensureAuthenticated, async (req, res) => {
+    try {
+      if (!RMP_API_KEY) {
+        return res.json({ 
+          connected: false, 
+          error: 'API key not configured',
+          configured: false 
+        });
+      }
+      
+      // Try a simple API call to verify connection
+      const data = await rmpApiRequest('/exercises?page=1');
+      
+      res.json({ 
+        connected: true, 
+        configured: true,
+        exerciseCount: data.total_items || data.total || 'Unknown'
+      });
+    } catch (error: any) {
+      res.json({ 
+        connected: false, 
+        configured: true,
+        error: error.message 
+      });
+    }
+  });
+  
   // Clinical Decision Support Endpoints
   
   // Detect red flags in transcript

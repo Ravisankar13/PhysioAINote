@@ -1096,57 +1096,11 @@ export default function TestSkeletonNew() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Panel - Visualization */}
         <Card className={multiViewMode ? "col-span-2" : ""} style={{ height: multiViewMode ? 'auto' : '600px' }}>
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 space-y-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                Skeleton Visualization
-                <Button
-                  variant={multiViewMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setMultiViewMode(!multiViewMode)}
-                  className={multiViewMode ? "bg-green-600 hover:bg-green-700" : ""}
-                  data-testid="toggle-multi-view"
-                >
-                  {multiViewMode ? (
-                    <><Maximize className="h-4 w-4 mr-1" /> Single View</>
-                  ) : (
-                    <><Grid2X2 className="h-4 w-4 mr-1" /> Multi-View</>
-                  )}
-                </Button>
-                <Button
-                  variant={showPatientClonePanel ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setShowPatientClonePanel(!showPatientClonePanel)}
-                  className={showPatientClonePanel ? "bg-blue-600 hover:bg-blue-700" : ""}
-                  data-testid="toggle-patient-clone"
-                >
-                  <User className="h-4 w-4 mr-1" />
-                  Clone Patient
-                </Button>
-                <Button
-                  variant={showConstraintsPanel ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setShowConstraintsPanel(!showConstraintsPanel)}
-                  className={showConstraintsPanel ? "bg-orange-600 hover:bg-orange-700" : ""}
-                  data-testid="toggle-constraints"
-                >
-                  <Lock className="h-4 w-4 mr-1" />
-                  Constraints
-                  {jointConstraints.length > 0 && (
-                    <span className="ml-1 bg-orange-500 text-white text-xs rounded-full px-1.5">
-                      {jointConstraints.length}
-                    </span>
-                  )}
-                </Button>
-                {!multiViewMode && (
-                  <RegionZoomControls
-                    currentRegion={zoomToRegion}
-                    onRegionChange={setZoomToRegion}
-                  />
-                )}
-              </CardTitle>
+              <CardTitle>Skeleton Visualization</CardTitle>
               {!multiViewMode && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-shrink-0">
                   <div className="flex items-center gap-1.5">
                     <Switch
                       id="force-arrows"
@@ -1190,6 +1144,52 @@ export default function TestSkeletonNew() {
                     </Label>
                   </div>
                 </div>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant={multiViewMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => setMultiViewMode(!multiViewMode)}
+                className={multiViewMode ? "bg-green-600 hover:bg-green-700" : ""}
+                data-testid="toggle-multi-view"
+              >
+                {multiViewMode ? (
+                  <><Maximize className="h-4 w-4 mr-1" /> Single View</>
+                ) : (
+                  <><Grid2X2 className="h-4 w-4 mr-1" /> Multi-View</>
+                )}
+              </Button>
+              <Button
+                variant={showPatientClonePanel ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowPatientClonePanel(!showPatientClonePanel)}
+                className={showPatientClonePanel ? "bg-blue-600 hover:bg-blue-700" : ""}
+                data-testid="toggle-patient-clone"
+              >
+                <User className="h-4 w-4 mr-1" />
+                Clone Patient
+              </Button>
+              <Button
+                variant={showConstraintsPanel ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowConstraintsPanel(!showConstraintsPanel)}
+                className={showConstraintsPanel ? "bg-orange-600 hover:bg-orange-700" : ""}
+                data-testid="toggle-constraints"
+              >
+                <Lock className="h-4 w-4 mr-1" />
+                Constraints
+                {jointConstraints.length > 0 && (
+                  <span className="ml-1 bg-orange-500 text-white text-xs rounded-full px-1.5">
+                    {jointConstraints.length}
+                  </span>
+                )}
+              </Button>
+              {!multiViewMode && (
+                <RegionZoomControls
+                  currentRegion={zoomToRegion}
+                  onRegionChange={setZoomToRegion}
+                />
               )}
             </div>
           </CardHeader>

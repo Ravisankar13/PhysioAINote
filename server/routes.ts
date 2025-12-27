@@ -8386,7 +8386,7 @@ Important:
     }
   });
   
-  // Get patient presentation by SOAP note ID (lookup by linked SOAP note)
+  // Get patient presentation by SOAP note ID (lookup by linked SOAP note - checks both permanent and temporary)
   app.get('/api/patient-presentation/soap/:soapNoteId', async (req, res) => {
     try {
       const soapNoteId = parseInt(req.params.soapNoteId);
@@ -8395,10 +8395,19 @@ Important:
         return res.status(400).json({ error: 'Invalid SOAP note ID' });
       }
       
-      const presentation = await db.select()
+      // First try to find by permanent SOAP note ID
+      let presentation = await db.select()
         .from(patientPresentations)
         .where(eq(patientPresentations.soapNoteId, soapNoteId))
         .limit(1);
+      
+      // If not found, try temporary SOAP note ID
+      if (!presentation || presentation.length === 0) {
+        presentation = await db.select()
+          .from(patientPresentations)
+          .where(eq(patientPresentations.temporarySoapNoteId, soapNoteId))
+          .limit(1);
+      }
       
       if (!presentation || presentation.length === 0) {
         return res.status(404).json({ error: 'Patient presentation not found' });

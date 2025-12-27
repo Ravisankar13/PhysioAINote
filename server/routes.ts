@@ -8306,8 +8306,13 @@ Important:
       
       const extractedData = JSON.parse(content);
       
-      // Check if presentation already exists
-      const existing = await db.select().from(patientPresentations).where(eq(patientPresentations.soapNoteId, soapNoteId)).limit(1);
+      // Check if presentation already exists (check both regular and temporary soap note IDs)
+      let existing;
+      if (isTemporary) {
+        existing = await db.select().from(patientPresentations).where(eq(patientPresentations.temporarySoapNoteId, soapNoteId)).limit(1);
+      } else {
+        existing = await db.select().from(patientPresentations).where(eq(patientPresentations.soapNoteId, soapNoteId)).limit(1);
+      }
       
       let presentation;
       if (existing && existing.length > 0) {
@@ -8326,18 +8331,25 @@ Important:
           .returning();
         presentation = updated[0];
       } else {
-        // Create new
+        // Create new - use appropriate column based on note type
+        const insertValues: any = {
+          userId: note.userId,
+          clinicalSummary: extractedData.clinicalSummary,
+          jointConstraints: extractedData.jointConstraints,
+          affectedRegions: extractedData.affectedRegions,
+          compensationPatterns: extractedData.compensationPatterns,
+          positiveTests: extractedData.positiveTests,
+          extractionConfidence: extractedData.extractionConfidence,
+        };
+        
+        if (isTemporary) {
+          insertValues.temporarySoapNoteId = soapNoteId;
+        } else {
+          insertValues.soapNoteId = soapNoteId;
+        }
+        
         const created = await db.insert(patientPresentations)
-          .values({
-            soapNoteId: soapNoteId,
-            userId: note.userId,
-            clinicalSummary: extractedData.clinicalSummary,
-            jointConstraints: extractedData.jointConstraints,
-            affectedRegions: extractedData.affectedRegions,
-            compensationPatterns: extractedData.compensationPatterns,
-            positiveTests: extractedData.positiveTests,
-            extractionConfidence: extractedData.extractionConfidence,
-          })
+          .values(insertValues)
           .returning();
         presentation = created[0];
       }

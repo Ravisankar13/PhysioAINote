@@ -5179,8 +5179,9 @@ export const patientCloneRelations = relations(patientClones, ({ one }) => ({
 export const patientPresentations = pgTable("patient_presentations", {
   id: serial("id").primaryKey(),
   soapNoteId: integer("soap_note_id")
-    .notNull()
     .references(() => soapNotes.id, { onDelete: "cascade" }),
+  temporarySoapNoteId: integer("temporary_soap_note_id")
+    .references(() => temporarySoapNotes.id, { onDelete: "cascade" }),
   userId: integer("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -5245,6 +5246,10 @@ export const patientPresentationRelations = relations(patientPresentations, ({ o
   soapNote: one(soapNotes, {
     fields: [patientPresentations.soapNoteId],
     references: [soapNotes.id],
+  }),
+  temporarySoapNote: one(temporarySoapNotes, {
+    fields: [patientPresentations.temporarySoapNoteId],
+    references: [temporarySoapNotes.id],
   }),
   user: one(users, {
     fields: [patientPresentations.userId],

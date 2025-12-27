@@ -340,53 +340,9 @@ Keep responses concise, practical, and directly applicable to clinical practice.
   }
   
   private async fetchVisualContentAsync(userMessage: string, aiResponse: string): Promise<VisualContentResult[]> {
-    try {
-      const visualContent: VisualContentResult[] = [];
-      
-      // Extract exercise names or topics from both messages
-      let extractedExercises = visualContentService.extractExerciseNames(userMessage);
-      
-      // If no specific exercises found in user message, try AI response
-      if (extractedExercises.length === 0 && aiResponse) {
-        extractedExercises = visualContentService.extractExerciseNames(aiResponse);
-      }
-      
-      // Generate visual content for each exercise/topic
-      for (const exercise of extractedExercises) {
-        try {
-          const content = await visualContentService.getVisualContent(exercise, {
-            includeAI: true,
-            includeExternal: true,
-            includeVideos: true,
-            maxResults: 3
-          });
-          visualContent.push(...content);
-        } catch (error) {
-          console.error(`Error getting visual content for ${exercise}:`, error);
-        }
-      }
-      
-      // If no specific exercises found, try general query
-      if (visualContent.length === 0) {
-        try {
-          const generalQuery = userMessage.replace(/show|image|picture|video|demonstrate/gi, '').trim();
-          const content = await visualContentService.getVisualContent(generalQuery, {
-            includeAI: true,
-            includeExternal: true,
-            includeVideos: true,
-            maxResults: 5
-          });
-          visualContent.push(...content);
-        } catch (error) {
-          console.error("Error getting general visual content:", error);
-        }
-      }
-      
-      return visualContent;
-    } catch (error) {
-      console.error("Error in fetchVisualContentAsync:", error);
-      return [];
-    }
+    // Visual content fetching disabled - using only RMP exercise images for speed
+    // This eliminates slow DALL-E and external API calls
+    return [];
   }
   
   private async fetchExerciseImagesAsync(response: string): Promise<any[]> {
@@ -424,69 +380,50 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       const RMP_API_KEY = process.env.RMP_API_KEY;
       const RMP_API_BASE = 'https://www.rehabmypatient.com/apiV2';
       
-      // Fetch in parallel - try RMP first, fallback to Google
+      // Use only Rehab My Patient API for speed (no Google fallback)
+      if (!RMP_API_KEY) {
+        console.log("RMP_API_KEY not configured, skipping exercise image fetch");
+        return [];
+      }
+      
       const fetchPromises = exercisesToFetch.map(async (exerciseName) => {
         try {
-          // Try Rehab My Patient API first
-          if (RMP_API_KEY) {
-            try {
-              const params = new URLSearchParams({ search: exerciseName });
-              const rmpResponse = await fetch(`${RMP_API_BASE}/exercises?${params.toString()}`, {
-                headers: {
-                  'RMP-API-KEY': RMP_API_KEY,
-                  'Accept': 'application/json',
-                  'User-Agent': 'PhysioGPT (support@physiogpt.com)'
-                }
-              });
+          const params = new URLSearchParams({ search: exerciseName });
+          const rmpResponse = await fetch(`${RMP_API_BASE}/exercises?${params.toString()}`, {
+            headers: {
+              'RMP-API-KEY': RMP_API_KEY,
+              'Accept': 'application/json',
+              'User-Agent': 'PhysioGPT (support@physiogpt.com)'
+            }
+          });
+          
+          if (rmpResponse.ok) {
+            const rmpData = await rmpResponse.json();
+            const exercises = rmpData.exercises || rmpData.data || [];
+            
+            if (exercises.length > 0) {
+              const exercise = exercises[0];
+              const imageUrl = exercise.image_url || exercise.imageUrl || exercise.thumbnail || exercise.image;
               
-              if (rmpResponse.ok) {
-                const rmpData = await rmpResponse.json();
-                const exercises = rmpData.exercises || rmpData.data || [];
-                
-                if (exercises.length > 0) {
-                  const exercise = exercises[0];
-                  const imageUrl = exercise.image_url || exercise.imageUrl || exercise.thumbnail || exercise.image;
-                  
-                  if (imageUrl) {
-                    console.log(`Found RMP exercise for "${exerciseName}":`, exercise.name || exercise.title);
-                    return {
-                      exerciseName: exerciseName,
-                      primaryImageUrl: imageUrl,
-                      thumbnailUrl: imageUrl,
-                      instructions: exercise.instructions ? 
-                        (Array.isArray(exercise.instructions) ? exercise.instructions : [exercise.instructions]) :
-                        [`Perform ${exerciseName} with proper form and control`],
-                      tips: exercise.tips || ['Focus on quality over quantity', 'Maintain proper breathing'],
-                      category: exercise.category || 'Rehab My Patient',
-                      source: 'Rehab My Patient',
-                      videoUrl: exercise.video_url || exercise.videoUrl
-                    };
-                  }
-                }
+              if (imageUrl) {
+                console.log(`Found RMP exercise for "${exerciseName}":`, exercise.name || exercise.title);
+                return {
+                  exerciseName: exerciseName,
+                  primaryImageUrl: imageUrl,
+                  thumbnailUrl: imageUrl,
+                  instructions: exercise.instructions ? 
+                    (Array.isArray(exercise.instructions) ? exercise.instructions : [exercise.instructions]) :
+                    [`Perform ${exerciseName} with proper form and control`],
+                  tips: exercise.tips || ['Focus on quality over quantity', 'Maintain proper breathing'],
+                  category: exercise.category || 'Rehab My Patient',
+                  source: 'Rehab My Patient',
+                  videoUrl: exercise.video_url || exercise.videoUrl
+                };
               }
-            } catch (rmpError) {
-              console.log(`RMP API error for ${exerciseName}, falling back to Google:`, rmpError);
             }
           }
-          
-          // Fallback to Google Custom Search
-          const { searchExerciseImages } = await import('./googleImageSearch');
-          const searchResult = await searchExerciseImages(exerciseName, 1);
-          
-          if (searchResult.images && searchResult.images.length > 0) {
-            const image = searchResult.images[0];
-            return {
-              exerciseName: exerciseName,
-              primaryImageUrl: image.url,
-              thumbnailUrl: image.thumbnailUrl,
-              instructions: [`Perform ${exerciseName} with proper form and control`],
-              tips: ['Focus on quality over quantity', 'Maintain proper breathing'],
-              category: 'physiotherapy',
-              source: 'Web Search'
-            };
-          }
         } catch (error) {
-          console.error(`Error fetching image for ${exerciseName}:`, error);
+          console.error(`Error fetching RMP image for ${exerciseName}:`, error);
         }
         return null;
       });

@@ -218,14 +218,7 @@ class VisualContentService {
     const isExerciseQuery = /exercise|stretch|movement|position|technique/i.test(query);
     
     if (isExerciseQuery) {
-      // For exercises, prioritize AI generation and videos
-      if (includeAI) {
-        promises.push(
-          this.generateExerciseImage(query, 'Show proper form and technique')
-            .then(result => result && results.push(result))
-        );
-      }
-      
+      // For exercises, prioritize videos and external images (DALL-E disabled due to billing limits)
       if (includeVideos) {
         promises.push(
           this.searchYouTubeVideos(query, 2)
@@ -235,23 +228,16 @@ class VisualContentService {
       
       if (includeExternal) {
         promises.push(
-          this.searchExternalImages(query, 2)
-            .then(images => results.push(...images))
-        );
-      }
-    } else {
-      // For non-exercise queries, prioritize external images
-      if (includeExternal) {
-        promises.push(
           this.searchExternalImages(query, 3)
             .then(images => results.push(...images))
         );
       }
-      
-      if (includeAI && results.length < maxResults) {
+    } else {
+      // For non-exercise queries, use external images only (DALL-E disabled)
+      if (includeExternal) {
         promises.push(
-          this.generateExerciseImage(query, 'Medical illustration')
-            .then(result => result && results.push(result))
+          this.searchExternalImages(query, 3)
+            .then(images => results.push(...images))
         );
       }
     }

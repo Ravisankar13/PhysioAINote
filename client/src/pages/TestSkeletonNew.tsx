@@ -26,7 +26,7 @@ import { DiagnosticAssessmentPanel } from "@/components/skeleton/DiagnosticAsses
 import { JointConstraint, calculateCompensations } from "@/lib/jointConstraints";
 import { MOVEMENT_SEQUENCES } from "@/lib/movementSequences";
 import BiomechanicsPanel from "@/components/skeleton/BiomechanicsPanel";
-import { Grid2X2, Maximize } from "lucide-react";
+import { Grid2X2, Maximize, Layers } from "lucide-react";
 import { BiomechanicsVisualizationData } from "@/lib/forceVisualization";
 import { calculateFullBiomechanics } from "@/lib/biomechanicsEngine";
 import { PatientCloneState } from "@/lib/patientCloneComposer";
@@ -257,6 +257,12 @@ export default function TestSkeletonNew() {
     lateral: true,
     other: true,
     showLabels: false,
+  });
+
+  const [muscleLayerVisibility, setMuscleLayerVisibility] = useState({
+    enabled: false,
+    layers: { muscular_system: true } as { [key: string]: boolean },
+    opacity: 0.85,
   });
   
   const [multiViewMode, setMultiViewMode] = useState(false);
@@ -1167,7 +1173,39 @@ export default function TestSkeletonNew() {
                       Muscles
                     </Label>
                   </div>
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      id="muscle-layer"
+                      checked={muscleLayerVisibility.enabled}
+                      onCheckedChange={(checked) => 
+                        setMuscleLayerVisibility(prev => ({ ...prev, enabled: checked }))
+                      }
+                      data-testid="switch-muscle-layer"
+                    />
+                    <Label htmlFor="muscle-layer" className="text-xs flex items-center gap-1 cursor-pointer">
+                      <Layers className="h-3 w-3" />
+                      3D Muscle
+                    </Label>
+                  </div>
                 </div>
+                {muscleLayerVisibility.enabled && (
+                  <div className="flex flex-wrap items-center gap-3 mt-1 p-2 bg-slate-700/50 rounded-lg">
+                    <span className="text-xs text-slate-400 font-medium">Opacity:</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={muscleLayerVisibility.opacity * 100}
+                      onChange={(e) => setMuscleLayerVisibility(prev => ({ 
+                        ...prev, 
+                        opacity: Number(e.target.value) / 100 
+                      }))}
+                      className="w-24 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer"
+                      data-testid="slider-muscle-opacity"
+                    />
+                    <span className="text-xs text-slate-300">{Math.round(muscleLayerVisibility.opacity * 100)}%</span>
+                  </div>
+                )}
                 {muscleVisibility.enabled && (
                   <div className="flex flex-wrap items-center gap-3 mt-1 p-2 bg-slate-700/50 rounded-lg">
                     <span className="text-xs text-slate-400 font-medium">Groups:</span>
@@ -1340,6 +1378,7 @@ export default function TestSkeletonNew() {
                     onAnimationFrame={handleAnimationFrame}
                     biomechanicsData={biomechanicsData}
                     muscleVisibility={muscleVisibility}
+                    muscleLayerVisibility={muscleLayerVisibility}
                     zoomToRegion={zoomToRegion}
                     compensatingJoints={compensationResult.patterns.map(p => ({
                       joint: p.compensatingJoint,

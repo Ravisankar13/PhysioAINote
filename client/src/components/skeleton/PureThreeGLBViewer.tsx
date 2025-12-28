@@ -8,6 +8,7 @@ import { getMovementById, interpolateKeyframes, applyJointConstraints, JointLimi
 import { initializeLegIK, applySquatIK, LegIKState } from '@/lib/legIKSolver';
 import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } from '@/lib/forceVisualization';
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
+import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
 
 interface JointConfig {
   flexion?: number;
@@ -361,6 +362,12 @@ export interface MuscleVisibilityConfig {
   showLabels: boolean;
 }
 
+export interface MuscleLayerVisibility {
+  enabled: boolean;
+  layers: { [layerId: string]: boolean };
+  opacity: number;
+}
+
 interface PureThreeGLBViewerProps {
   modelPath?: string;
   modelConfig?: ModelConfig;
@@ -371,6 +378,8 @@ interface PureThreeGLBViewerProps {
   biomechanicsData?: BiomechanicsVisualizationData;
   muscleActivation?: MuscleActivationLevels;
   muscleVisibility?: MuscleVisibilityConfig;
+  muscleLayerVisibility?: MuscleLayerVisibility;
+  muscleLayerConfigs?: MuscleLayerConfig[];
   cameraAngle?: CameraAngle;
   disableControls?: boolean;
   showLabel?: boolean;
@@ -573,6 +582,8 @@ export default function PureThreeGLBViewer({
   biomechanicsData,
   muscleActivation,
   muscleVisibility,
+  muscleLayerVisibility,
+  muscleLayerConfigs,
   cameraAngle = 'custom',
   disableControls = false,
   showLabel = false,
@@ -592,6 +603,7 @@ export default function PureThreeGLBViewer({
   const legIKStateRef = useRef<LegIKState | null>(null);
   const forceVisualizationRef = useRef<ForceVisualizationManager | null>(null);
   const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
+  const muscleLayerManagerRef = useRef<MuscleLayerManager | null>(null);
   const animationConstraintsRef = useRef<AnimationConstraint[]>([]);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const sceneRef = useRef<{
@@ -1821,6 +1833,61 @@ export default function PureThreeGLBViewer({
     };
   }, [muscleVisibility, muscleActivation, status]);
 
+  // Muscle layer (GLB model) effect
+  useEffect(() => {
+    if (status !== 'ready' || !sceneRef.current) {
+      return;
+    }
+
+    // Initialize muscle layer manager if not already
+    if (!muscleLayerManagerRef.current) {
+      muscleLayerManagerRef.current = new MuscleLayerManager(
+        sceneRef.current.scene,
+        muscleLayerConfigs
+      );
+      muscleLayerManagerRef.current.initialize().then(() => {
+        if (muscleLayerVisibility?.enabled) {
+          muscleLayerManagerRef.current?.loadAllLayers();
+        }
+      });
+    }
+
+    // Update visibility for each layer
+    if (muscleLayerManagerRef.current) {
+      const layers = muscleLayerManagerRef.current.getAllLayers();
+      
+      if (muscleLayerVisibility?.enabled) {
+        // Load any layers that need loading
+        layers.forEach(layer => {
+          if (!layer.loaded) {
+            muscleLayerManagerRef.current?.loadLayer(layer.id);
+          }
+        });
+        
+        // Update visibility and opacity for each layer
+        Object.entries(muscleLayerVisibility.layers || {}).forEach(([layerId, visible]) => {
+          muscleLayerManagerRef.current?.setLayerVisible(layerId, visible);
+        });
+        
+        // Update opacity
+        if (muscleLayerVisibility.opacity !== undefined) {
+          layers.forEach(layer => {
+            muscleLayerManagerRef.current?.setLayerOpacity(layer.id, muscleLayerVisibility.opacity);
+          });
+        }
+      } else {
+        // Hide all layers when disabled
+        layers.forEach(layer => {
+          muscleLayerManagerRef.current?.setLayerVisible(layer.id, false);
+        });
+      }
+    }
+
+    return () => {
+      // Cleanup handled in unmount effect
+    };
+  }, [muscleLayerVisibility, muscleLayerConfigs, status]);
+
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (!forceVisualizationRef.current || !containerRef.current || !biomechanicsData) {
@@ -1852,6 +1919,10 @@ export default function PureThreeGLBViewer({
       if (muscleVisualizationRef.current) {
         muscleVisualizationRef.current.dispose();
         muscleVisualizationRef.current = null;
+      }
+      if (muscleLayerManagerRef.current) {
+        muscleLayerManagerRef.current.dispose();
+        muscleLayerManagerRef.current = null;
       }
     };
   }, []);

@@ -252,6 +252,9 @@ export default function TestSkeletonNew() {
     quadriceps: true,
     hamstrings: true,
     adductors: true,
+    calf: true,
+    shin: true,
+    lateral: true,
     other: true,
     showLabels: false,
   });
@@ -1106,6 +1109,7 @@ export default function TestSkeletonNew() {
             <div className="flex items-center justify-between">
               <CardTitle>Skeleton Visualization</CardTitle>
               {!multiViewMode && (
+                <>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <div className="flex items-center gap-1.5">
                     <Switch
@@ -1160,10 +1164,86 @@ export default function TestSkeletonNew() {
                     />
                     <Label htmlFor="muscle-anatomy" className="text-xs flex items-center gap-1 cursor-pointer">
                       <Activity className="h-3 w-3" />
-                      Anatomy
+                      Muscles
                     </Label>
                   </div>
                 </div>
+                {muscleVisibility.enabled && (
+                  <div className="flex flex-wrap items-center gap-3 mt-1 p-2 bg-slate-700/50 rounded-lg">
+                    <span className="text-xs text-slate-400 font-medium">Groups:</span>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={muscleVisibility.quadriceps}
+                        onChange={(e) => setMuscleVisibility(prev => ({ ...prev, quadriceps: e.target.checked }))}
+                        className="w-3 h-3 rounded"
+                        data-testid="checkbox-quadriceps"
+                      />
+                      <span className="text-xs text-red-400">Quads</span>
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={muscleVisibility.hamstrings}
+                        onChange={(e) => setMuscleVisibility(prev => ({ ...prev, hamstrings: e.target.checked }))}
+                        className="w-3 h-3 rounded"
+                        data-testid="checkbox-hamstrings"
+                      />
+                      <span className="text-xs text-blue-400">Hams</span>
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={muscleVisibility.adductors}
+                        onChange={(e) => setMuscleVisibility(prev => ({ ...prev, adductors: e.target.checked }))}
+                        className="w-3 h-3 rounded"
+                        data-testid="checkbox-adductors"
+                      />
+                      <span className="text-xs text-green-400">Adductors</span>
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={muscleVisibility.calf}
+                        onChange={(e) => setMuscleVisibility(prev => ({ ...prev, calf: e.target.checked }))}
+                        className="w-3 h-3 rounded"
+                        data-testid="checkbox-calf"
+                      />
+                      <span className="text-xs text-purple-400">Calf</span>
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={muscleVisibility.shin}
+                        onChange={(e) => setMuscleVisibility(prev => ({ ...prev, shin: e.target.checked }))}
+                        className="w-3 h-3 rounded"
+                        data-testid="checkbox-shin"
+                      />
+                      <span className="text-xs text-teal-400">Shin</span>
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={muscleVisibility.lateral}
+                        onChange={(e) => setMuscleVisibility(prev => ({ ...prev, lateral: e.target.checked }))}
+                        className="w-3 h-3 rounded"
+                        data-testid="checkbox-lateral"
+                      />
+                      <span className="text-xs text-orange-400">Lateral</span>
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={muscleVisibility.other}
+                        onChange={(e) => setMuscleVisibility(prev => ({ ...prev, other: e.target.checked }))}
+                        className="w-3 h-3 rounded"
+                        data-testid="checkbox-other"
+                      />
+                      <span className="text-xs text-yellow-400">Other</span>
+                    </label>
+                  </div>
+                )}
+                </>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">

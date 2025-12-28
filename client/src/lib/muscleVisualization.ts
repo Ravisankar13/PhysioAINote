@@ -18,9 +18,9 @@ export interface MuscleDefinition {
   bellyWidth?: number;
   tendonWidth?: number;
   color: THREE.Color;
-  group: 'quadriceps' | 'hamstrings' | 'adductors' | 'other';
-  role?: 'flexor' | 'extensor' | 'adductor' | 'abductor';
-  jointActions?: { joint: string; action: 'flexion' | 'extension' | 'adduction' | 'abduction' }[];
+  group: 'quadriceps' | 'hamstrings' | 'adductors' | 'calf' | 'shin' | 'lateral' | 'other';
+  role?: 'flexor' | 'extensor' | 'adductor' | 'abductor' | 'plantarflexor' | 'dorsiflexor' | 'evertor' | 'invertor';
+  jointActions?: { joint: string; action: 'flexion' | 'extension' | 'adduction' | 'abduction' | 'plantarflexion' | 'dorsiflexion' | 'eversion' | 'inversion' }[];
 }
 
 export interface MuscleActivationLevels {
@@ -35,6 +35,15 @@ export interface MuscleActivationLevels {
   adductorLongus?: { left: number; right: number };
   sartorius?: { left: number; right: number };
   tensorFasciaeLatae?: { left: number; right: number };
+  gastrocnemiusMedial?: { left: number; right: number };
+  gastrocnemiusLateral?: { left: number; right: number };
+  soleus?: { left: number; right: number };
+  plantaris?: { left: number; right: number };
+  tibialisAnterior?: { left: number; right: number };
+  extensorDigitorumLongus?: { left: number; right: number };
+  extensorHallucisLongus?: { left: number; right: number };
+  peroneusLongus?: { left: number; right: number };
+  peroneusBrevis?: { left: number; right: number };
 }
 
 interface MuscleState {
@@ -284,8 +293,203 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
   }
 ];
 
-function createRightSideMuscles(): MuscleDefinition[] {
-  return UPPER_LEG_MUSCLES_LEFT.map(muscle => ({
+const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
+  // Posterior compartment (calf)
+  {
+    name: 'gastrocnemiusMedial_L',
+    displayName: 'Gastrocnemius Medial (L)',
+    origin: {
+      bone: 'Femer_L',
+      offset: new THREE.Vector3(-0.04, -0.35, -0.08),
+      landmark: 'Medial Femoral Condyle'
+    },
+    insertion: {
+      bone: 'foot_L',
+      offset: new THREE.Vector3(0, 0.15, -0.06),
+      landmark: 'Calcaneus (via Achilles)'
+    },
+    bellyPosition: 0.4,
+    bellyWidth: 0.055,
+    tendonWidth: 0.02,
+    color: new THREE.Color(0x8844aa),
+    group: 'calf',
+    role: 'plantarflexor',
+    jointActions: [{ joint: 'ankle', action: 'plantarflexion' }, { joint: 'knee', action: 'flexion' }]
+  },
+  {
+    name: 'gastrocnemiusLateral_L',
+    displayName: 'Gastrocnemius Lateral (L)',
+    origin: {
+      bone: 'Femer_L',
+      offset: new THREE.Vector3(0.04, -0.35, -0.08),
+      landmark: 'Lateral Femoral Condyle'
+    },
+    insertion: {
+      bone: 'foot_L',
+      offset: new THREE.Vector3(0, 0.15, -0.06),
+      landmark: 'Calcaneus (via Achilles)'
+    },
+    bellyPosition: 0.4,
+    bellyWidth: 0.05,
+    tendonWidth: 0.02,
+    color: new THREE.Color(0x9955bb),
+    group: 'calf',
+    role: 'plantarflexor',
+    jointActions: [{ joint: 'ankle', action: 'plantarflexion' }, { joint: 'knee', action: 'flexion' }]
+  },
+  {
+    name: 'soleus_L',
+    displayName: 'Soleus (L)',
+    origin: {
+      bone: 'fibula_tibia_L',
+      offset: new THREE.Vector3(0, -0.05, -0.06),
+      landmark: 'Posterior Tibia/Fibula'
+    },
+    insertion: {
+      bone: 'foot_L',
+      offset: new THREE.Vector3(0, 0.12, -0.05),
+      landmark: 'Calcaneus (via Achilles)'
+    },
+    bellyPosition: 0.5,
+    bellyWidth: 0.06,
+    tendonWidth: 0.025,
+    color: new THREE.Color(0xaa66cc),
+    group: 'calf',
+    role: 'plantarflexor',
+    jointActions: [{ joint: 'ankle', action: 'plantarflexion' }]
+  },
+  {
+    name: 'plantaris_L',
+    displayName: 'Plantaris (L)',
+    origin: {
+      bone: 'Femer_L',
+      offset: new THREE.Vector3(0.02, -0.32, -0.06),
+      landmark: 'Lateral Supracondylar Line'
+    },
+    insertion: {
+      bone: 'foot_L',
+      offset: new THREE.Vector3(0.01, 0.14, -0.04),
+      landmark: 'Calcaneus (medial)'
+    },
+    bellyPosition: 0.25,
+    bellyWidth: 0.02,
+    tendonWidth: 0.008,
+    color: new THREE.Color(0xbb77dd),
+    group: 'calf',
+    role: 'plantarflexor',
+    jointActions: [{ joint: 'ankle', action: 'plantarflexion' }]
+  },
+  // Anterior compartment (shin)
+  {
+    name: 'tibialisAnterior_L',
+    displayName: 'Tibialis Anterior (L)',
+    origin: {
+      bone: 'fibula_tibia_L',
+      offset: new THREE.Vector3(0.02, 0, 0.08),
+      landmark: 'Lateral Tibial Condyle'
+    },
+    insertion: {
+      bone: 'foot_L',
+      offset: new THREE.Vector3(-0.02, 0.05, 0.08),
+      landmark: 'Medial Cuneiform/1st Metatarsal'
+    },
+    bellyPosition: 0.4,
+    bellyWidth: 0.04,
+    tendonWidth: 0.015,
+    color: new THREE.Color(0x44aa88),
+    group: 'shin',
+    role: 'dorsiflexor',
+    jointActions: [{ joint: 'ankle', action: 'dorsiflexion' }, { joint: 'foot', action: 'inversion' }]
+  },
+  {
+    name: 'extensorDigitorumLongus_L',
+    displayName: 'Extensor Digitorum Longus (L)',
+    origin: {
+      bone: 'fibula_tibia_L',
+      offset: new THREE.Vector3(0.05, -0.02, 0.06),
+      landmark: 'Lateral Tibial Condyle/Fibula'
+    },
+    insertion: {
+      bone: 'foot_L',
+      offset: new THREE.Vector3(0.03, -0.02, 0.1),
+      landmark: 'Distal Phalanges 2-5'
+    },
+    bellyPosition: 0.45,
+    bellyWidth: 0.035,
+    tendonWidth: 0.012,
+    color: new THREE.Color(0x55bb99),
+    group: 'shin',
+    role: 'dorsiflexor',
+    jointActions: [{ joint: 'ankle', action: 'dorsiflexion' }]
+  },
+  {
+    name: 'extensorHallucisLongus_L',
+    displayName: 'Extensor Hallucis Longus (L)',
+    origin: {
+      bone: 'fibula_tibia_L',
+      offset: new THREE.Vector3(0.03, -0.15, 0.07),
+      landmark: 'Middle Fibula'
+    },
+    insertion: {
+      bone: 'foot_L',
+      offset: new THREE.Vector3(-0.01, -0.03, 0.09),
+      landmark: 'Distal Phalanx of Hallux'
+    },
+    bellyPosition: 0.5,
+    bellyWidth: 0.025,
+    tendonWidth: 0.01,
+    color: new THREE.Color(0x66ccaa),
+    group: 'shin',
+    role: 'dorsiflexor',
+    jointActions: [{ joint: 'ankle', action: 'dorsiflexion' }]
+  },
+  // Lateral compartment
+  {
+    name: 'peroneusLongus_L',
+    displayName: 'Peroneus Longus (L)',
+    origin: {
+      bone: 'fibula_tibia_L',
+      offset: new THREE.Vector3(0.08, -0.03, 0.02),
+      landmark: 'Fibular Head/Upper Fibula'
+    },
+    insertion: {
+      bone: 'foot_L',
+      offset: new THREE.Vector3(-0.03, 0, 0.02),
+      landmark: '1st Metatarsal Base (plantar)'
+    },
+    bellyPosition: 0.45,
+    bellyWidth: 0.035,
+    tendonWidth: 0.012,
+    color: new THREE.Color(0xdd8844),
+    group: 'lateral',
+    role: 'evertor',
+    jointActions: [{ joint: 'foot', action: 'eversion' }, { joint: 'ankle', action: 'plantarflexion' }]
+  },
+  {
+    name: 'peroneusBrevis_L',
+    displayName: 'Peroneus Brevis (L)',
+    origin: {
+      bone: 'fibula_tibia_L',
+      offset: new THREE.Vector3(0.07, -0.2, 0.02),
+      landmark: 'Lower Fibula'
+    },
+    insertion: {
+      bone: 'foot_L',
+      offset: new THREE.Vector3(0.05, 0.02, 0.04),
+      landmark: '5th Metatarsal Base'
+    },
+    bellyPosition: 0.5,
+    bellyWidth: 0.03,
+    tendonWidth: 0.01,
+    color: new THREE.Color(0xee9955),
+    group: 'lateral',
+    role: 'evertor',
+    jointActions: [{ joint: 'foot', action: 'eversion' }]
+  }
+];
+
+function createRightSideMuscles(muscles: MuscleDefinition[]): MuscleDefinition[] {
+  return muscles.map(muscle => ({
     ...muscle,
     name: muscle.name.replace('_L', '_R'),
     displayName: muscle.displayName.replace('(L)', '(R)'),
@@ -316,7 +520,17 @@ function createRightSideMuscles(): MuscleDefinition[] {
 
 export const UPPER_LEG_MUSCLES: MuscleDefinition[] = [
   ...UPPER_LEG_MUSCLES_LEFT,
-  ...createRightSideMuscles()
+  ...createRightSideMuscles(UPPER_LEG_MUSCLES_LEFT)
+];
+
+export const LOWER_LEG_MUSCLES: MuscleDefinition[] = [
+  ...LOWER_LEG_MUSCLES_LEFT,
+  ...createRightSideMuscles(LOWER_LEG_MUSCLES_LEFT)
+];
+
+export const ALL_LEG_MUSCLES: MuscleDefinition[] = [
+  ...UPPER_LEG_MUSCLES,
+  ...LOWER_LEG_MUSCLES
 ];
 
 const STRETCH_COLOR = new THREE.Color(0x4488ff);
@@ -330,7 +544,7 @@ export class MuscleVisualizationManager {
   private muscleStates: Map<string, MuscleState> = new Map();
   private muscleLabels: Map<string, THREE.Sprite> = new Map();
   private showLabels: boolean = false;
-  private visibleGroups = { quadriceps: true, hamstrings: true, adductors: true, other: true };
+  private visibleGroups = { quadriceps: true, hamstrings: true, adductors: true, calf: true, shin: true, lateral: true, other: true };
   private isInitialized: boolean = false;
   private tubularSegments = 24;
   private radialSegments = 8;
@@ -541,13 +755,13 @@ export class MuscleVisualizationManager {
 
   initializeMuscles(
     activationLevels: MuscleActivationLevels = {},
-    visibleGroups: { quadriceps: boolean; hamstrings: boolean; adductors: boolean; other: boolean } = 
-      { quadriceps: true, hamstrings: true, adductors: true, other: true }
+    visibleGroups: { quadriceps: boolean; hamstrings: boolean; adductors: boolean; calf: boolean; shin: boolean; lateral: boolean; other: boolean } = 
+      { quadriceps: true, hamstrings: true, adductors: true, calf: true, shin: true, lateral: true, other: true }
   ): void {
     this.clearMuscles();
     this.visibleGroups = visibleGroups;
     
-    for (const muscle of UPPER_LEG_MUSCLES) {
+    for (const muscle of ALL_LEG_MUSCLES) {
       if (!visibleGroups[muscle.group]) continue;
       
       const originWorld = this.getAttachmentWorldPosition(muscle.origin);
@@ -668,8 +882,8 @@ export class MuscleVisualizationManager {
 
   updateMuscles(
     activationLevels: MuscleActivationLevels = {},
-    visibleGroups: { quadriceps: boolean; hamstrings: boolean; adductors: boolean; other: boolean } = 
-      { quadriceps: true, hamstrings: true, adductors: true, other: true }
+    visibleGroups: { quadriceps: boolean; hamstrings: boolean; adductors: boolean; calf: boolean; shin: boolean; lateral: boolean; other: boolean } = 
+      { quadriceps: true, hamstrings: true, adductors: true, calf: true, shin: true, lateral: true, other: true }
   ): void {
     const groupsChanged = JSON.stringify(this.visibleGroups) !== JSON.stringify(visibleGroups);
     
@@ -697,7 +911,16 @@ export class MuscleVisualizationManager {
       'adductorMagnus': 'adductorMagnus',
       'adductorLongus': 'adductorLongus',
       'sartorius': 'sartorius',
-      'tensorFasciaeLatae': 'tensorFasciaeLatae'
+      'tensorFasciaeLatae': 'tensorFasciaeLatae',
+      'gastrocnemiusMedial': 'gastrocnemiusMedial',
+      'gastrocnemiusLateral': 'gastrocnemiusLateral',
+      'soleus': 'soleus',
+      'plantaris': 'plantaris',
+      'tibialisAnterior': 'tibialisAnterior',
+      'extensorDigitorumLongus': 'extensorDigitorumLongus',
+      'extensorHallucisLongus': 'extensorHallucisLongus',
+      'peroneusLongus': 'peroneusLongus',
+      'peroneusBrevis': 'peroneusBrevis'
     };
     
     const key = levelMap[baseName];

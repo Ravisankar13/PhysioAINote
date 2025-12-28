@@ -354,6 +354,9 @@ export interface MuscleVisibilityConfig {
   quadriceps: boolean;
   hamstrings: boolean;
   adductors: boolean;
+  calf: boolean;
+  shin: boolean;
+  lateral: boolean;
   other: boolean;
   showLabels: boolean;
 }
@@ -1800,10 +1803,13 @@ export default function PureThreeGLBViewer({
       muscleVisualizationRef.current.updateMuscles(
         muscleActivation || {},
         {
-          quadriceps: muscleVisibility.quadriceps,
-          hamstrings: muscleVisibility.hamstrings,
-          adductors: muscleVisibility.adductors,
-          other: muscleVisibility.other
+          quadriceps: muscleVisibility.quadriceps ?? true,
+          hamstrings: muscleVisibility.hamstrings ?? true,
+          adductors: muscleVisibility.adductors ?? true,
+          calf: muscleVisibility.calf ?? true,
+          shin: muscleVisibility.shin ?? true,
+          lateral: muscleVisibility.lateral ?? true,
+          other: muscleVisibility.other ?? true
         }
       );
     } else {

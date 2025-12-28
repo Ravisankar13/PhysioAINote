@@ -299,8 +299,8 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'gastrocnemiusMedial_L',
     displayName: 'Gastrocnemius Medial (L)',
     origin: {
-      bone: 'Femer_L',
-      offset: new THREE.Vector3(-0.04, -0.35, -0.08),
+      bone: 'fibula_tibia_L',
+      offset: new THREE.Vector3(-0.03, 0.18, -0.04),
       landmark: 'Medial Femoral Condyle'
     },
     insertion: {
@@ -320,8 +320,8 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'gastrocnemiusLateral_L',
     displayName: 'Gastrocnemius Lateral (L)',
     origin: {
-      bone: 'Femer_L',
-      offset: new THREE.Vector3(0.04, -0.35, -0.08),
+      bone: 'fibula_tibia_L',
+      offset: new THREE.Vector3(0.04, 0.18, -0.04),
       landmark: 'Lateral Femoral Condyle'
     },
     insertion: {
@@ -342,7 +342,7 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     displayName: 'Soleus (L)',
     origin: {
       bone: 'fibula_tibia_L',
-      offset: new THREE.Vector3(0, -0.05, -0.06),
+      offset: new THREE.Vector3(0, 0.1, -0.05),
       landmark: 'Posterior Tibia/Fibula'
     },
     insertion: {
@@ -362,8 +362,8 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'plantaris_L',
     displayName: 'Plantaris (L)',
     origin: {
-      bone: 'Femer_L',
-      offset: new THREE.Vector3(0.02, -0.32, -0.06),
+      bone: 'fibula_tibia_L',
+      offset: new THREE.Vector3(0.03, 0.2, -0.03),
       landmark: 'Lateral Supracondylar Line'
     },
     insertion: {

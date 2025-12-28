@@ -56,12 +56,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     displayName: 'Rectus Femoris (L)',
     origin: {
       bone: 'Pelvis_Main',
-      offset: new THREE.Vector3(0.12, 0.05, 0.12),
+      offset: new THREE.Vector3(0.12, 0.05, 0.18),
       landmark: 'AIIS'
     },
     insertion: {
       bone: 'fibula_tibia_L',
-      offset: new THREE.Vector3(0, 0.08, 0.08),
+      offset: new THREE.Vector3(0, 0.08, 0.15),
       landmark: 'Patella/Quadriceps Tendon'
     },
     bellyPosition: 0.45,
@@ -77,12 +77,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     displayName: 'Vastus Lateralis (L)',
     origin: {
       bone: 'Femer_Root_L',
-      offset: new THREE.Vector3(0.08, -0.1, -0.02),
+      offset: new THREE.Vector3(0.1, -0.1, 0.08),
       landmark: 'Greater Trochanter/Linea Aspera'
     },
     insertion: {
       bone: 'fibula_tibia_L',
-      offset: new THREE.Vector3(0.05, 0.06, 0.06),
+      offset: new THREE.Vector3(0.06, 0.06, 0.12),
       landmark: 'Patella (lateral)'
     },
     bellyPosition: 0.5,
@@ -98,12 +98,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     displayName: 'Vastus Medialis (L)',
     origin: {
       bone: 'Femer_L',
-      offset: new THREE.Vector3(-0.06, 0.3, -0.02),
+      offset: new THREE.Vector3(-0.08, 0.3, 0.08),
       landmark: 'Linea Aspera (medial)'
     },
     insertion: {
       bone: 'fibula_tibia_L',
-      offset: new THREE.Vector3(-0.04, 0.06, 0.06),
+      offset: new THREE.Vector3(-0.05, 0.06, 0.12),
       landmark: 'Patella (medial)'
     },
     bellyPosition: 0.6,
@@ -119,12 +119,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     displayName: 'Vastus Intermedius (L)',
     origin: {
       bone: 'Femer_L',
-      offset: new THREE.Vector3(0, 0.4, 0.04),
+      offset: new THREE.Vector3(0, 0.4, 0.1),
       landmark: 'Anterior Femur'
     },
     insertion: {
       bone: 'fibula_tibia_L',
-      offset: new THREE.Vector3(0, 0.07, 0.07),
+      offset: new THREE.Vector3(0, 0.07, 0.13),
       landmark: 'Patella (deep)'
     },
     bellyPosition: 0.5,

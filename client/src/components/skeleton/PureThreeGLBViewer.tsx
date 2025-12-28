@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { getMovementById, interpolateKeyframes, applyJointConstraints, JointLimits } from '@/lib/movementSequences';
 import { initializeLegIK, applySquatIK, LegIKState } from '@/lib/legIKSolver';
 import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } from '@/lib/forceVisualization';
+import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 
 interface JointConfig {
   flexion?: number;
@@ -348,6 +349,15 @@ const ANIMATION_COMPENSATION_MAPPING: Record<string, Array<{ targetJoint: string
   ],
 };
 
+export interface MuscleVisibilityConfig {
+  enabled: boolean;
+  quadriceps: boolean;
+  hamstrings: boolean;
+  adductors: boolean;
+  other: boolean;
+  showLabels: boolean;
+}
+
 interface PureThreeGLBViewerProps {
   modelPath?: string;
   modelConfig?: ModelConfig;
@@ -356,6 +366,8 @@ interface PureThreeGLBViewerProps {
   onAnimationFrame?: (jointValues: { [key: string]: { [prop: string]: number } }) => void;
   jointLimits?: JointLimits;
   biomechanicsData?: BiomechanicsVisualizationData;
+  muscleActivation?: MuscleActivationLevels;
+  muscleVisibility?: MuscleVisibilityConfig;
   cameraAngle?: CameraAngle;
   disableControls?: boolean;
   showLabel?: boolean;
@@ -556,6 +568,8 @@ export default function PureThreeGLBViewer({
   onAnimationFrame,
   jointLimits,
   biomechanicsData,
+  muscleActivation,
+  muscleVisibility,
   cameraAngle = 'custom',
   disableControls = false,
   showLabel = false,
@@ -574,6 +588,7 @@ export default function PureThreeGLBViewer({
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const legIKStateRef = useRef<LegIKState | null>(null);
   const forceVisualizationRef = useRef<ForceVisualizationManager | null>(null);
+  const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
   const animationConstraintsRef = useRef<AnimationConstraint[]>([]);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const sceneRef = useRef<{
@@ -1756,6 +1771,41 @@ export default function PureThreeGLBViewer({
     };
   }, [biomechanicsData, status]);
 
+  // Muscle visualization effect
+  useEffect(() => {
+    if (status !== 'ready' || !sceneRef.current || Object.keys(bonesRef.current).length === 0) {
+      return;
+    }
+
+    // Initialize muscle visualization manager if not already
+    if (!muscleVisualizationRef.current) {
+      muscleVisualizationRef.current = new MuscleVisualizationManager(
+        sceneRef.current.scene,
+        bonesRef.current
+      );
+    }
+
+    // Update muscle visualization based on visibility config
+    if (muscleVisibility?.enabled) {
+      muscleVisualizationRef.current.setShowLabels(muscleVisibility.showLabels || false);
+      muscleVisualizationRef.current.updateMuscles(
+        muscleActivation || {},
+        {
+          quadriceps: muscleVisibility.quadriceps,
+          hamstrings: muscleVisibility.hamstrings,
+          adductors: muscleVisibility.adductors,
+          other: muscleVisibility.other
+        }
+      );
+    } else {
+      muscleVisualizationRef.current.clearMuscles();
+    }
+
+    return () => {
+      // Clear visualization when component updates
+    };
+  }, [muscleVisibility, muscleActivation, status]);
+
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (!forceVisualizationRef.current || !containerRef.current || !biomechanicsData) {
@@ -1777,12 +1827,16 @@ export default function PureThreeGLBViewer({
     setHoverData(null);
   }, []);
 
-  // Cleanup force visualization on unmount
+  // Cleanup force and muscle visualization on unmount
   useEffect(() => {
     return () => {
       if (forceVisualizationRef.current) {
         forceVisualizationRef.current.dispose();
         forceVisualizationRef.current = null;
+      }
+      if (muscleVisualizationRef.current) {
+        muscleVisualizationRef.current.dispose();
+        muscleVisualizationRef.current = null;
       }
     };
   }, []);

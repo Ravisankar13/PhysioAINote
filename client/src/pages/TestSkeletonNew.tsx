@@ -246,6 +246,15 @@ export default function TestSkeletonNew() {
     showStressColors: false,
     showMuscleGlow: false,
   });
+
+  const [muscleVisibility, setMuscleVisibility] = useState({
+    enabled: false,
+    quadriceps: true,
+    hamstrings: true,
+    adductors: true,
+    other: true,
+    showLabels: false,
+  });
   
   const [multiViewMode, setMultiViewMode] = useState(false);
   const [showPatientClonePanel, setShowPatientClonePanel] = useState(false);
@@ -1137,7 +1146,21 @@ export default function TestSkeletonNew() {
                     />
                     <Label htmlFor="muscle-glow" className="text-xs flex items-center gap-1 cursor-pointer">
                       <Zap className="h-3 w-3" />
-                      Muscles
+                      Glow
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      id="muscle-anatomy"
+                      checked={muscleVisibility.enabled}
+                      onCheckedChange={(checked) => 
+                        setMuscleVisibility(prev => ({ ...prev, enabled: checked }))
+                      }
+                      data-testid="switch-muscle-anatomy"
+                    />
+                    <Label htmlFor="muscle-anatomy" className="text-xs flex items-center gap-1 cursor-pointer">
+                      <Activity className="h-3 w-3" />
+                      Anatomy
                     </Label>
                   </div>
                 </div>
@@ -1236,6 +1259,7 @@ export default function TestSkeletonNew() {
                     animationState={animationState}
                     onAnimationFrame={handleAnimationFrame}
                     biomechanicsData={biomechanicsData}
+                    muscleVisibility={muscleVisibility}
                     zoomToRegion={zoomToRegion}
                     compensatingJoints={compensationResult.patterns.map(p => ({
                       joint: p.compensatingJoint,

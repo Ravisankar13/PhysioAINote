@@ -1169,6 +1169,15 @@ export default function PureThreeGLBViewer({
             }
           }
           
+          // Update muscle visualization to follow skeleton movement
+          if (muscleVisualizationRef.current) {
+            const now = performance.now();
+            const lastTime = (muscleVisualizationRef.current as any).lastFrameTime || now;
+            const delta = Math.min((now - lastTime) / 1000, 0.1); // Cap at 100ms to prevent large jumps
+            (muscleVisualizationRef.current as any).lastFrameTime = now;
+            muscleVisualizationRef.current.updateFrame(delta);
+          }
+          
           sceneRef.current.controls.update();
           sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
         };

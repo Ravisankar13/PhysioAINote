@@ -19,6 +19,8 @@ export interface MuscleDefinition {
   tendonWidth?: number;
   color: THREE.Color;
   group: 'quadriceps' | 'hamstrings' | 'adductors' | 'other';
+  role?: 'flexor' | 'extensor' | 'adductor' | 'abductor';
+  jointActions?: { joint: string; action: 'flexion' | 'extension' | 'adduction' | 'abduction' }[];
 }
 
 export interface MuscleActivationLevels {
@@ -33,6 +35,19 @@ export interface MuscleActivationLevels {
   adductorLongus?: { left: number; right: number };
   sartorius?: { left: number; right: number };
   tensorFasciaeLatae?: { left: number; right: number };
+}
+
+interface MuscleState {
+  mesh: THREE.Mesh;
+  definition: MuscleDefinition;
+  restLength: number;
+  currentLength: number;
+  previousLength: number;
+  stretchRatio: number;
+  velocity: number;
+  isContracting: boolean;
+  isStretching: boolean;
+  activationLevel: number;
 }
 
 const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
@@ -53,7 +68,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.055,
     tendonWidth: 0.018,
     color: new THREE.Color(0xcc4444),
-    group: 'quadriceps'
+    group: 'quadriceps',
+    role: 'extensor',
+    jointActions: [{ joint: 'knee', action: 'extension' }, { joint: 'hip', action: 'flexion' }]
   },
   {
     name: 'vastusLateralis_L',
@@ -72,7 +89,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.065,
     tendonWidth: 0.015,
     color: new THREE.Color(0xdd5555),
-    group: 'quadriceps'
+    group: 'quadriceps',
+    role: 'extensor',
+    jointActions: [{ joint: 'knee', action: 'extension' }]
   },
   {
     name: 'vastusMedialis_L',
@@ -91,7 +110,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.05,
     tendonWidth: 0.015,
     color: new THREE.Color(0xee6666),
-    group: 'quadriceps'
+    group: 'quadriceps',
+    role: 'extensor',
+    jointActions: [{ joint: 'knee', action: 'extension' }]
   },
   {
     name: 'vastusIntermedius_L',
@@ -110,7 +131,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.045,
     tendonWidth: 0.012,
     color: new THREE.Color(0xff7777),
-    group: 'quadriceps'
+    group: 'quadriceps',
+    role: 'extensor',
+    jointActions: [{ joint: 'knee', action: 'extension' }]
   },
   {
     name: 'bicepsFemoris_L',
@@ -129,7 +152,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.055,
     tendonWidth: 0.018,
     color: new THREE.Color(0x4477cc),
-    group: 'hamstrings'
+    group: 'hamstrings',
+    role: 'flexor',
+    jointActions: [{ joint: 'knee', action: 'flexion' }, { joint: 'hip', action: 'extension' }]
   },
   {
     name: 'semimembranosus_L',
@@ -148,7 +173,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.05,
     tendonWidth: 0.016,
     color: new THREE.Color(0x5588dd),
-    group: 'hamstrings'
+    group: 'hamstrings',
+    role: 'flexor',
+    jointActions: [{ joint: 'knee', action: 'flexion' }, { joint: 'hip', action: 'extension' }]
   },
   {
     name: 'semitendinosus_L',
@@ -167,7 +194,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.04,
     tendonWidth: 0.012,
     color: new THREE.Color(0x6699ee),
-    group: 'hamstrings'
+    group: 'hamstrings',
+    role: 'flexor',
+    jointActions: [{ joint: 'knee', action: 'flexion' }, { joint: 'hip', action: 'extension' }]
   },
   {
     name: 'adductorMagnus_L',
@@ -186,7 +215,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.07,
     tendonWidth: 0.02,
     color: new THREE.Color(0x44aa77),
-    group: 'adductors'
+    group: 'adductors',
+    role: 'adductor',
+    jointActions: [{ joint: 'hip', action: 'adduction' }]
   },
   {
     name: 'adductorLongus_L',
@@ -205,7 +236,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.045,
     tendonWidth: 0.015,
     color: new THREE.Color(0x55bb88),
-    group: 'adductors'
+    group: 'adductors',
+    role: 'adductor',
+    jointActions: [{ joint: 'hip', action: 'adduction' }]
   },
   {
     name: 'sartorius_L',
@@ -224,7 +257,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.025,
     tendonWidth: 0.01,
     color: new THREE.Color(0xcc88cc),
-    group: 'other'
+    group: 'other',
+    role: 'flexor',
+    jointActions: [{ joint: 'hip', action: 'flexion' }, { joint: 'knee', action: 'flexion' }]
   },
   {
     name: 'tensorFasciaeLatae_L',
@@ -243,7 +278,9 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     bellyWidth: 0.04,
     tendonWidth: 0.015,
     color: new THREE.Color(0xddaa44),
-    group: 'other'
+    group: 'other',
+    role: 'abductor',
+    jointActions: [{ joint: 'hip', action: 'abduction' }]
   }
 ];
 
@@ -282,12 +319,21 @@ export const UPPER_LEG_MUSCLES: MuscleDefinition[] = [
   ...createRightSideMuscles()
 ];
 
+const STRETCH_COLOR = new THREE.Color(0x4488ff);
+const CONTRACT_COLOR = new THREE.Color(0xff4444);
+const NEUTRAL_ALPHA = 0.7;
+const ACTIVE_ALPHA = 0.9;
+
 export class MuscleVisualizationManager {
   private scene: THREE.Scene;
   private bones: { [name: string]: THREE.Object3D };
-  private muscleMeshes: Map<string, THREE.Mesh> = new Map();
+  private muscleStates: Map<string, MuscleState> = new Map();
   private muscleLabels: Map<string, THREE.Sprite> = new Map();
   private showLabels: boolean = false;
+  private visibleGroups = { quadriceps: true, hamstrings: true, adductors: true, other: true };
+  private isInitialized: boolean = false;
+  private tubularSegments = 24;
+  private radialSegments = 8;
 
   constructor(scene: THREE.Scene, bones: { [name: string]: THREE.Object3D }) {
     this.scene = scene;
@@ -302,7 +348,29 @@ export class MuscleVisualizationManager {
     return worldPos;
   }
 
-  private fusiformRadiusFunction(t: number, bellyPosition: number, bellyRadius: number, tendonRadius: number): number {
+  private getBoneWorldMatrix(boneName: string): THREE.Matrix4 | null {
+    const bone = this.bones[boneName];
+    if (!bone) return null;
+    bone.updateWorldMatrix(true, false);
+    return bone.matrixWorld.clone();
+  }
+
+  private getAttachmentWorldPosition(attachment: { bone: string; offset: THREE.Vector3 }): THREE.Vector3 | null {
+    const boneMatrix = this.getBoneWorldMatrix(attachment.bone);
+    if (!boneMatrix) return null;
+    
+    const worldPos = attachment.offset.clone();
+    worldPos.applyMatrix4(boneMatrix);
+    return worldPos;
+  }
+
+  private fusiformRadiusFunction(
+    t: number, 
+    bellyPosition: number, 
+    bellyRadius: number, 
+    tendonRadius: number,
+    stretchFactor: number = 1
+  ): number {
     let normalizedDist: number;
     if (t <= bellyPosition) {
       normalizedDist = bellyPosition > 0 ? (bellyPosition - t) / bellyPosition : 0;
@@ -312,26 +380,26 @@ export class MuscleVisualizationManager {
     }
     normalizedDist = Math.min(1, Math.max(0, normalizedDist));
     const smoothFactor = Math.pow(Math.cos(normalizedDist * Math.PI / 2), 1.5);
-    return tendonRadius + (bellyRadius - tendonRadius) * smoothFactor;
+    
+    const adjustedBellyRadius = bellyRadius / Math.sqrt(stretchFactor);
+    return tendonRadius + (adjustedBellyRadius - tendonRadius) * smoothFactor;
   }
 
-  private createFusiformMuscleGeometry(
+  private updateMuscleGeometry(
+    geometry: THREE.BufferGeometry,
     origin: THREE.Vector3,
     insertion: THREE.Vector3,
     controlPoints: THREE.Vector3[] | undefined,
-    bellyPosition: number = 0.5,
-    bellyWidth: number = 0.05,
-    tendonWidth: number = 0.015,
-    activation: number = 0.5
-  ): THREE.BufferGeometry {
-    const activationMultiplier = 1 + activation * 0.3;
-    const actualBellyWidth = bellyWidth * activationMultiplier;
-    
+    bellyPosition: number,
+    bellyWidth: number,
+    tendonWidth: number,
+    stretchFactor: number
+  ): void {
     let curvePoints: THREE.Vector3[];
     if (controlPoints && controlPoints.length > 0) {
       curvePoints = [origin, ...controlPoints, insertion];
     } else {
-      const mid = new THREE.Vector3().lerpVectors(origin, insertion, 0.5);
+      const mid = new THREE.Vector3().lerpVectors(origin, insertion, bellyPosition);
       const direction = new THREE.Vector3().subVectors(insertion, origin).normalize();
       const perpendicular = new THREE.Vector3();
       if (Math.abs(direction.y) < 0.9) {
@@ -339,32 +407,28 @@ export class MuscleVisualizationManager {
       } else {
         perpendicular.crossVectors(direction, new THREE.Vector3(1, 0, 0)).normalize();
       }
-      const offset = perpendicular.multiplyScalar(actualBellyWidth * 0.3);
-      mid.add(offset);
+      const bulgeAmount = bellyWidth * 0.4 / Math.sqrt(stretchFactor);
+      mid.add(perpendicular.multiplyScalar(bulgeAmount));
       curvePoints = [origin, mid, insertion];
     }
     
     const curve = new THREE.CatmullRomCurve3(curvePoints);
-    const tubularSegments = 32;
-    const radialSegments = 12;
+    const frames = curve.computeFrenetFrames(this.tubularSegments, false);
     
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
+    const positionAttribute = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const normalAttribute = geometry.getAttribute('normal') as THREE.BufferAttribute;
     
-    const frames = curve.computeFrenetFrames(tubularSegments, false);
-    
-    for (let i = 0; i <= tubularSegments; i++) {
-      const t = i / tubularSegments;
+    let vertexIndex = 0;
+    for (let i = 0; i <= this.tubularSegments; i++) {
+      const t = i / this.tubularSegments;
       const point = curve.getPointAt(t);
-      const radius = this.fusiformRadiusFunction(t, bellyPosition, actualBellyWidth, tendonWidth);
+      const radius = this.fusiformRadiusFunction(t, bellyPosition, bellyWidth, tendonWidth, stretchFactor);
       
       const N = frames.normals[i];
       const B = frames.binormals[i];
       
-      for (let j = 0; j <= radialSegments; j++) {
-        const theta = (j / radialSegments) * Math.PI * 2;
+      for (let j = 0; j <= this.radialSegments; j++) {
+        const theta = (j / this.radialSegments) * Math.PI * 2;
         const sin = Math.sin(theta);
         const cos = Math.cos(theta);
         
@@ -372,23 +436,44 @@ export class MuscleVisualizationManager {
         const ny = cos * N.y + sin * B.y;
         const nz = cos * N.z + sin * B.z;
         
-        positions.push(
+        positionAttribute.setXYZ(
+          vertexIndex,
           point.x + radius * nx,
           point.y + radius * ny,
           point.z + radius * nz
         );
         
-        normals.push(nx, ny, nz);
-        uvs.push(t, j / radialSegments);
+        normalAttribute.setXYZ(vertexIndex, nx, ny, nz);
+        vertexIndex++;
       }
     }
     
-    for (let i = 0; i < tubularSegments; i++) {
-      for (let j = 0; j < radialSegments; j++) {
-        const a = i * (radialSegments + 1) + j;
-        const b = (i + 1) * (radialSegments + 1) + j;
-        const c = (i + 1) * (radialSegments + 1) + (j + 1);
-        const d = i * (radialSegments + 1) + (j + 1);
+    positionAttribute.needsUpdate = true;
+    normalAttribute.needsUpdate = true;
+    geometry.computeBoundingSphere();
+  }
+
+  private createInitialGeometry(): THREE.BufferGeometry {
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    
+    for (let i = 0; i <= this.tubularSegments; i++) {
+      const t = i / this.tubularSegments;
+      for (let j = 0; j <= this.radialSegments; j++) {
+        positions.push(0, t, 0);
+        normals.push(1, 0, 0);
+        uvs.push(t, j / this.radialSegments);
+      }
+    }
+    
+    for (let i = 0; i < this.tubularSegments; i++) {
+      for (let j = 0; j < this.radialSegments; j++) {
+        const a = i * (this.radialSegments + 1) + j;
+        const b = (i + 1) * (this.radialSegments + 1) + j;
+        const c = (i + 1) * (this.radialSegments + 1) + (j + 1);
+        const d = i * (this.radialSegments + 1) + (j + 1);
         
         indices.push(a, b, d);
         indices.push(b, c, d);
@@ -402,44 +487,6 @@ export class MuscleVisualizationManager {
     geometry.setIndex(indices);
     
     return geometry;
-  }
-
-  private createAnatomicalMuscle(
-    muscle: MuscleDefinition,
-    origin: THREE.Vector3,
-    insertion: THREE.Vector3,
-    activation: number = 0.5
-  ): THREE.Mesh {
-    const geometry = this.createFusiformMuscleGeometry(
-      origin,
-      insertion,
-      muscle.controlPoints,
-      muscle.bellyPosition || 0.5,
-      muscle.bellyWidth || 0.05,
-      muscle.tendonWidth || 0.015,
-      activation
-    );
-    
-    const activationIntensity = Math.min(1, activation);
-    const finalColor = muscle.color.clone();
-    if (activationIntensity > 0.5) {
-      finalColor.lerp(new THREE.Color(0xff3333), (activationIntensity - 0.5) * 0.5);
-    }
-    
-    const material = new THREE.MeshPhongMaterial({
-      color: finalColor,
-      transparent: true,
-      opacity: 0.75 + activation * 0.2,
-      shininess: 60,
-      side: THREE.DoubleSide,
-      flatShading: false
-    });
-    
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    
-    return mesh;
   }
 
   private createMuscleLabel(name: string, position: THREE.Vector3): THREE.Sprite {
@@ -474,38 +521,86 @@ export class MuscleVisualizationManager {
     return sprite;
   }
 
-  updateMuscles(
+  private getMuscleColor(state: MuscleState): THREE.Color {
+    const baseColor = state.definition.color.clone();
+    
+    if (state.isStretching && state.stretchRatio > 1.05) {
+      const stretchIntensity = Math.min(1, (state.stretchRatio - 1) * 3);
+      baseColor.lerp(STRETCH_COLOR, stretchIntensity * 0.6);
+    } else if (state.isContracting || state.stretchRatio < 0.95) {
+      const contractIntensity = Math.min(1, (1 - state.stretchRatio) * 4 + Math.abs(state.velocity) * 2);
+      baseColor.lerp(CONTRACT_COLOR, contractIntensity * 0.6);
+    }
+    
+    if (state.activationLevel > 0.5) {
+      baseColor.lerp(CONTRACT_COLOR, (state.activationLevel - 0.5) * 0.4);
+    }
+    
+    return baseColor;
+  }
+
+  initializeMuscles(
     activationLevels: MuscleActivationLevels = {},
     visibleGroups: { quadriceps: boolean; hamstrings: boolean; adductors: boolean; other: boolean } = 
       { quadriceps: true, hamstrings: true, adductors: true, other: true }
   ): void {
     this.clearMuscles();
+    this.visibleGroups = visibleGroups;
     
     for (const muscle of UPPER_LEG_MUSCLES) {
       if (!visibleGroups[muscle.group]) continue;
       
-      const originBonePos = this.getBoneWorldPosition(muscle.origin.bone);
-      const insertionBonePos = this.getBoneWorldPosition(muscle.insertion.bone);
+      const originWorld = this.getAttachmentWorldPosition(muscle.origin);
+      const insertionWorld = this.getAttachmentWorldPosition(muscle.insertion);
       
-      if (!originBonePos || !insertionBonePos) {
-        console.warn(`Could not find bones for muscle ${muscle.name}: origin=${muscle.origin.bone}, insertion=${muscle.insertion.bone}`);
+      if (!originWorld || !insertionWorld) {
+        console.warn(`Could not find bones for muscle ${muscle.name}`);
         continue;
       }
       
-      const originWorld = originBonePos.clone().add(muscle.origin.offset);
-      const insertionWorld = insertionBonePos.clone().add(muscle.insertion.offset);
-      
+      const restLength = originWorld.distanceTo(insertionWorld);
       const activation = this.getActivationLevel(muscle.name, activationLevels);
       
-      const muscleMesh = this.createAnatomicalMuscle(
-        muscle,
+      const geometry = this.createInitialGeometry();
+      this.updateMuscleGeometry(
+        geometry,
         originWorld,
         insertionWorld,
-        activation
+        muscle.controlPoints,
+        muscle.bellyPosition || 0.5,
+        muscle.bellyWidth || 0.05,
+        muscle.tendonWidth || 0.015,
+        1.0
       );
       
-      this.scene.add(muscleMesh);
-      this.muscleMeshes.set(muscle.name, muscleMesh);
+      const material = new THREE.MeshPhongMaterial({
+        color: muscle.color,
+        transparent: true,
+        opacity: NEUTRAL_ALPHA,
+        shininess: 60,
+        side: THREE.DoubleSide,
+        flatShading: false
+      });
+      
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.scene.add(mesh);
+      
+      const state: MuscleState = {
+        mesh,
+        definition: muscle,
+        restLength,
+        currentLength: restLength,
+        previousLength: restLength,
+        stretchRatio: 1,
+        velocity: 0,
+        isContracting: false,
+        isStretching: false,
+        activationLevel: activation
+      };
+      
+      this.muscleStates.set(muscle.name, state);
       
       if (this.showLabels) {
         const bellyPos = muscle.bellyPosition || 0.5;
@@ -516,6 +611,74 @@ export class MuscleVisualizationManager {
         this.scene.add(label);
         this.muscleLabels.set(muscle.name, label);
       }
+    }
+    
+    this.isInitialized = true;
+  }
+
+  updateFrame(deltaTime: number = 0.016): void {
+    if (!this.isInitialized) return;
+    
+    this.muscleStates.forEach((state, name) => {
+      const muscle = state.definition;
+      
+      const originWorld = this.getAttachmentWorldPosition(muscle.origin);
+      const insertionWorld = this.getAttachmentWorldPosition(muscle.insertion);
+      
+      if (!originWorld || !insertionWorld) return;
+      
+      state.previousLength = state.currentLength;
+      state.currentLength = originWorld.distanceTo(insertionWorld);
+      state.stretchRatio = state.currentLength / state.restLength;
+      
+      const lengthChange = state.currentLength - state.previousLength;
+      state.velocity = deltaTime > 0 ? lengthChange / deltaTime : 0;
+      
+      state.isStretching = state.velocity > 0.01;
+      state.isContracting = state.velocity < -0.01;
+      
+      this.updateMuscleGeometry(
+        state.mesh.geometry as THREE.BufferGeometry,
+        originWorld,
+        insertionWorld,
+        muscle.controlPoints,
+        muscle.bellyPosition || 0.5,
+        muscle.bellyWidth || 0.05,
+        muscle.tendonWidth || 0.015,
+        state.stretchRatio
+      );
+      
+      const material = state.mesh.material as THREE.MeshPhongMaterial;
+      material.color.copy(this.getMuscleColor(state));
+      
+      if (state.isContracting || state.isStretching) {
+        material.opacity = ACTIVE_ALPHA;
+      } else {
+        material.opacity = NEUTRAL_ALPHA;
+      }
+      
+      const label = this.muscleLabels.get(name);
+      if (label) {
+        const bellyPos = muscle.bellyPosition || 0.5;
+        label.position.lerpVectors(originWorld, insertionWorld, bellyPos);
+        label.position.add(new THREE.Vector3(0, 0.08, 0.08));
+      }
+    });
+  }
+
+  updateMuscles(
+    activationLevels: MuscleActivationLevels = {},
+    visibleGroups: { quadriceps: boolean; hamstrings: boolean; adductors: boolean; other: boolean } = 
+      { quadriceps: true, hamstrings: true, adductors: true, other: true }
+  ): void {
+    const groupsChanged = JSON.stringify(this.visibleGroups) !== JSON.stringify(visibleGroups);
+    
+    if (!this.isInitialized || groupsChanged) {
+      this.initializeMuscles(activationLevels, visibleGroups);
+    } else {
+      this.muscleStates.forEach((state, name) => {
+        state.activationLevel = this.getActivationLevel(name, activationLevels);
+      });
     }
   }
 
@@ -548,17 +711,37 @@ export class MuscleVisualizationManager {
     return 0.3;
   }
 
+  getMuscleStates(): Map<string, { 
+    name: string; 
+    stretchRatio: number; 
+    isContracting: boolean; 
+    isStretching: boolean;
+    velocity: number;
+  }> {
+    const states = new Map<string, { name: string; stretchRatio: number; isContracting: boolean; isStretching: boolean; velocity: number }>();
+    this.muscleStates.forEach((state, name) => {
+      states.set(name, {
+        name: state.definition.displayName,
+        stretchRatio: state.stretchRatio,
+        isContracting: state.isContracting,
+        isStretching: state.isStretching,
+        velocity: state.velocity
+      });
+    });
+    return states;
+  }
+
   setShowLabels(show: boolean): void {
     this.showLabels = show;
   }
 
   clearMuscles(): void {
-    this.muscleMeshes.forEach((mesh) => {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+    this.muscleStates.forEach((state) => {
+      this.scene.remove(state.mesh);
+      state.mesh.geometry.dispose();
+      (state.mesh.material as THREE.Material).dispose();
     });
-    this.muscleMeshes.clear();
+    this.muscleStates.clear();
     
     this.muscleLabels.forEach((label) => {
       this.scene.remove(label);
@@ -568,6 +751,8 @@ export class MuscleVisualizationManager {
       label.material.dispose();
     });
     this.muscleLabels.clear();
+    
+    this.isInitialized = false;
   }
 
   dispose(): void {

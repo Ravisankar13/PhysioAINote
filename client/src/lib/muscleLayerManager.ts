@@ -29,7 +29,7 @@ const DEFAULT_MUSCLE_LAYERS: MuscleLayerConfig[] = [
     path: '/models/muscle_system.glb',
     defaultVisible: true,
     defaultOpacity: 0.85,
-    scale: new THREE.Vector3(100, 100, 100),
+    scale: new THREE.Vector3(1.8, 1.8, 1.8),
     position: new THREE.Vector3(0, 0, 0),
     rotation: new THREE.Euler(0, 0, 0)
   }

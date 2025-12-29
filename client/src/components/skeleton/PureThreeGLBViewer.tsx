@@ -9,6 +9,7 @@ import { initializeLegIK, applySquatIK, LegIKState } from '@/lib/legIKSolver';
 import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } from '@/lib/forceVisualization';
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
+import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 
 interface JointConfig {
   flexion?: number;
@@ -386,6 +387,7 @@ interface PureThreeGLBViewerProps {
   zoomToRegion?: AnatomicalRegion | null;
   compensatingJoints?: CompensatingJointInfo[];
   animationConstraints?: AnimationConstraint[];
+  livePose?: Skeleton3DPose | null;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -589,7 +591,8 @@ export default function PureThreeGLBViewer({
   showLabel = false,
   zoomToRegion = null,
   compensatingJoints = [],
-  animationConstraints = []
+  animationConstraints = [],
+  livePose = null
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1353,6 +1356,86 @@ export default function PureThreeGLBViewer({
       }
     });
   }, [compensatingJoints, status]);
+
+  // Apply live pose from camera capture
+  useEffect(() => {
+    if (status !== 'ready' || !livePose) return;
+    
+    const bones = bonesRef.current;
+    const initialRotations = initialRotationsRef.current;
+    
+    if (Object.keys(bones).length === 0) return;
+
+    // Map live pose to skeleton bones
+    const LIVE_POSE_BONE_MAPPING: { [key: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number }[] } = {
+      'spine': [
+        { boneName: 'spine8', axis: 'x', scale: 0.3 },
+        { boneName: 'spine9', axis: 'x', scale: 0.3 },
+        { boneName: 'spine10', axis: 'x', scale: 0.3 },
+        { boneName: 'spine8', axis: 'z', scale: 0.3 },
+        { boneName: 'spine9', axis: 'z', scale: 0.3 },
+        { boneName: 'spine10', axis: 'z', scale: 0.3 },
+      ],
+      'neck': [
+        { boneName: 'spine17', axis: 'x', scale: 0.4 },
+        { boneName: 'spine18', axis: 'x', scale: 0.4 },
+        { boneName: 'spine19', axis: 'x', scale: 0.4 },
+        { boneName: 'spine17', axis: 'z', scale: 0.3 },
+        { boneName: 'spine18', axis: 'z', scale: 0.3 },
+      ],
+      'leftShoulder': [
+        { boneName: 'Humerus_Root_L', axis: 'y', scale: 1 },
+        { boneName: 'Humerus_Root_L', axis: 'z', scale: -0.5 },
+      ],
+      'rightShoulder': [
+        { boneName: 'Humerus_Root_R', axis: 'y', scale: -1 },
+        { boneName: 'Humerus_Root_R', axis: 'z', scale: 0.5 },
+      ],
+      'leftElbow': [
+        { boneName: 'Redius_Alna_L', axis: 'x', scale: -1 },
+      ],
+      'rightElbow': [
+        { boneName: 'Redius_Alna_R', axis: 'x', scale: -1 },
+      ],
+      'leftHip': [
+        { boneName: 'Femer_Root_L', axis: 'x', scale: -1 },
+        { boneName: 'Femer_Root_L', axis: 'z', scale: -0.5 },
+      ],
+      'rightHip': [
+        { boneName: 'Femer_Root_R', axis: 'x', scale: -1 },
+        { boneName: 'Femer_Root_R', axis: 'z', scale: 0.5 },
+      ],
+      'leftKnee': [
+        { boneName: 'fibula_tibia_L', axis: 'x', scale: 1 },
+      ],
+      'rightKnee': [
+        { boneName: 'fibula_tibia_R', axis: 'x', scale: 1 },
+      ],
+    };
+
+    // Reset bones to initial rotation first, then apply live pose
+    Object.entries(LIVE_POSE_BONE_MAPPING).forEach(([jointKey, mappings]) => {
+      const poseJoint = livePose[jointKey as keyof typeof livePose];
+      if (!poseJoint) return;
+
+      mappings.forEach(({ boneName, axis, scale }) => {
+        const bone = bones[boneName];
+        const initial = initialRotations[boneName];
+        if (!bone || !initial) return;
+
+        // Apply the pose rotation based on axis
+        const poseValue = axis === 'x' ? poseJoint.x : axis === 'y' ? poseJoint.y : poseJoint.z;
+        
+        if (axis === 'x') {
+          bone.rotation.x = initial.x + poseValue * scale;
+        } else if (axis === 'y') {
+          bone.rotation.y = initial.y + poseValue * scale;
+        } else if (axis === 'z') {
+          bone.rotation.z = initial.z + poseValue * scale;
+        }
+      });
+    });
+  }, [livePose, status]);
 
   useEffect(() => {
     if (status !== 'ready' || !modelConfig) return;

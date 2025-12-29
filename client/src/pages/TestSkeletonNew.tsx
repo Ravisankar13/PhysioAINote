@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User, Lock, FileText, Save, FolderOpen, Trash2 } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User, Lock, FileText, Save, FolderOpen, Trash2, Camera, Video } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -18,6 +18,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import PureThreeGLBViewer, { AnimationState, AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
+import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
+import { Skeleton3DPose } from "@/utils/mediapipeTo3D";
 import PatientClonePanel from "@/components/skeleton/PatientClonePanel";
 import RegionZoomControls from "@/components/skeleton/RegionZoomControls";
 import { RegionInsightsPanel } from "@/components/skeleton/RegionInsightsPanel";
@@ -268,6 +270,8 @@ export default function TestSkeletonNew() {
   const [multiViewMode, setMultiViewMode] = useState(false);
   const [showPatientClonePanel, setShowPatientClonePanel] = useState(false);
   const [showConstraintsPanel, setShowConstraintsPanel] = useState(false);
+  const [showCameraCapture, setShowCameraCapture] = useState(false);
+  const [livePose, setLivePose] = useState<Skeleton3DPose | null>(null);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
   
@@ -1323,6 +1327,21 @@ export default function TestSkeletonNew() {
                   </span>
                 )}
               </Button>
+              <Button
+                variant={showCameraCapture ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setShowCameraCapture(!showCameraCapture);
+                  if (showCameraCapture) {
+                    setLivePose(null);
+                  }
+                }}
+                className={showCameraCapture ? "bg-purple-600 hover:bg-purple-700" : ""}
+                data-testid="toggle-camera-capture"
+              >
+                <Video className="h-4 w-4 mr-1" />
+                Live Capture
+              </Button>
               {!multiViewMode && (
                 <RegionZoomControls
                   currentRegion={zoomToRegion}
@@ -1380,6 +1399,7 @@ export default function TestSkeletonNew() {
                     muscleVisibility={muscleVisibility}
                     muscleLayerVisibility={muscleLayerVisibility}
                     zoomToRegion={zoomToRegion}
+                    livePose={livePose}
                     compensatingJoints={compensationResult.patterns.map(p => ({
                       joint: p.compensatingJoint,
                       loadIncrease: p.additionalLoad
@@ -1481,6 +1501,42 @@ export default function TestSkeletonNew() {
             className="col-span-2 lg:col-span-1"
             compensationPatterns={compensationResult.patterns}
           />
+        )}
+
+        {/* Camera Pose Capture Panel */}
+        {showCameraCapture && (
+          <Card className="col-span-2 lg:col-span-1">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Video className="h-5 w-5 text-purple-500" />
+                Live Pose Capture
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CameraPoseCapture
+                onPoseUpdate={setLivePose}
+                isActive={showCameraCapture}
+              />
+              {livePose && (
+                <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-400 text-sm font-medium mb-2">
+                    <Activity className="h-4 w-4" />
+                    Live Pose Active
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
+                    <div>Spine: {(livePose.spine.x * 57.3).toFixed(1)}°</div>
+                    <div>Neck: {(livePose.neck.x * 57.3).toFixed(1)}°</div>
+                    <div>L Shoulder: {(livePose.leftShoulder.y * 57.3).toFixed(1)}°</div>
+                    <div>R Shoulder: {(livePose.rightShoulder.y * 57.3).toFixed(1)}°</div>
+                    <div>L Hip: {(livePose.leftHip.x * 57.3).toFixed(1)}°</div>
+                    <div>R Hip: {(livePose.rightHip.x * 57.3).toFixed(1)}°</div>
+                    <div>L Knee: {(livePose.leftKnee.x * 57.3).toFixed(1)}°</div>
+                    <div>R Knee: {(livePose.rightKnee.x * 57.3).toFixed(1)}°</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Right Panel - Controls */}

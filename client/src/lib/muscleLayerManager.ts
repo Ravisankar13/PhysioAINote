@@ -110,6 +110,19 @@ export class MuscleLayerManager {
 
           group.add(gltf.scene);
 
+          // Calculate bounding box for auto-scaling
+          const box = new THREE.Box3().setFromObject(gltf.scene);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+          
+          console.log(`=== MUSCLE LAYER BOUNDING BOX ===`);
+          console.log(`Size: x=${size.x.toFixed(3)}, y=${size.y.toFixed(3)}, z=${size.z.toFixed(3)}`);
+          console.log(`Center: x=${center.x.toFixed(3)}, y=${center.y.toFixed(3)}, z=${center.z.toFixed(3)}`);
+          console.log(`Min: x=${box.min.x.toFixed(3)}, y=${box.min.y.toFixed(3)}, z=${box.min.z.toFixed(3)}`);
+          console.log(`Max: x=${box.max.x.toFixed(3)}, y=${box.max.y.toFixed(3)}, z=${box.max.z.toFixed(3)}`);
+
           if (config.scale) {
             group.scale.copy(config.scale);
           }

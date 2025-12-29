@@ -46,19 +46,6 @@ export default function CameraPoseCapture({
     smootherRef.current = new Posesmoother(smoothingLevel);
   }, [smoothingLevel]);
 
-  // Respond to external isActive prop changes
-  useEffect(() => {
-    if (externalIsActive === false && isActive) {
-      stopCamera();
-    }
-  }, [externalIsActive, isActive, stopCamera]);
-
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
-
   const stopCamera = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -83,6 +70,20 @@ export default function CameraPoseCapture({
     setPoseDetected(false);
     setFps(0);
   }, []);
+
+  // Respond to external isActive prop changes
+  useEffect(() => {
+    if (externalIsActive === false && isActive) {
+      stopCamera();
+    }
+  }, [externalIsActive, isActive, stopCamera]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, [stopCamera]);
 
   const startCamera = useCallback(async () => {
     setIsLoading(true);

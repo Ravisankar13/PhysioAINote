@@ -124,9 +124,20 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3
   const neckLateral = Math.atan2(nose.x - shoulderMidpoint.x, nose.y - shoulderMidpoint.y);
   const neckForward = Math.atan2(nose.z - shoulderMidpoint.z, nose.y - shoulderMidpoint.y);
   
-  // Calculate arm rotations
-  const leftShoulderAngle = calculateAngle(leftElbow, leftShoulder, shoulderMidpoint);
-  const rightShoulderAngle = calculateAngle(rightElbow, rightShoulder, shoulderMidpoint);
+  // Calculate arm rotations - focus on arm elevation (how high the arm is raised)
+  // Calculate vertical angle of upper arm relative to torso (arm elevation/abduction)
+  const leftArmElevation = Math.atan2(
+    leftShoulder.y - leftElbow.y, // Vertical difference (positive = elbow below shoulder)
+    Math.abs(leftElbow.x - leftShoulder.x) + 0.001 // Horizontal distance
+  );
+  const rightArmElevation = Math.atan2(
+    rightShoulder.y - rightElbow.y,
+    Math.abs(rightElbow.x - rightShoulder.x) + 0.001
+  );
+  
+  // Forward flexion: how far the arm is in front/behind the body
+  const leftArmForward = (leftShoulder.z - leftElbow.z) * 3;
+  const rightArmForward = (rightShoulder.z - rightElbow.z) * 3;
   
   const leftElbowAngle = calculateAngle(leftShoulder, leftElbow, leftWrist);
   const rightElbowAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
@@ -150,14 +161,14 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3
       z: Math.max(-0.4, Math.min(0.4, neckLateral * 2)) // Head side tilt
     },
     leftShoulder: {
-      x: Math.max(-1.0, Math.min(2.0, leftShoulderAngle - Math.PI/2)), // Flexion/extension
+      x: Math.max(-1.5, Math.min(1.5, leftArmElevation)), // Arm elevation (raised = positive)
       y: 0, // Internal/external rotation (limited from front view)
-      z: Math.max(-1.5, Math.min(1.5, (leftShoulder.y - shoulderMidpoint.y) * 3)) // Abduction
+      z: Math.max(-1.0, Math.min(1.0, leftArmForward)) // Forward flexion
     },
     rightShoulder: {
-      x: Math.max(-1.0, Math.min(2.0, rightShoulderAngle - Math.PI/2)),
+      x: Math.max(-1.5, Math.min(1.5, rightArmElevation)), // Arm elevation
       y: 0,
-      z: Math.max(-1.5, Math.min(1.5, (rightShoulder.y - shoulderMidpoint.y) * 3))
+      z: Math.max(-1.0, Math.min(1.0, rightArmForward)) // Forward flexion
     },
     leftElbow: {
       x: Math.max(0, Math.min(2.5, Math.PI - leftElbowAngle)), // Flexion only
@@ -197,9 +208,10 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3
  */
 export class Posesmoother {
   private previousPose: Skeleton3DPose | null = null;
-  private smoothingFactor: number = 0.3;
+  private smoothingFactor: number = 0.2; // Lower = smoother but slower response
+  private noiseThreshold: number = 0.015; // Attenuate changes smaller than this
   
-  constructor(smoothingFactor: number = 0.3) {
+  constructor(smoothingFactor: number = 0.2) {
     this.smoothingFactor = smoothingFactor;
   }
   
@@ -211,13 +223,25 @@ export class Posesmoother {
     
     const smoothed: Skeleton3DPose = {} as Skeleton3DPose;
     
-    // Smooth each joint
+    // Smooth each joint with adaptive noise attenuation
     for (const [jointName, rotation] of Object.entries(newPose)) {
       const prevRotation = this.previousPose[jointName as keyof Skeleton3DPose];
+      
+      // Calculate delta
+      const deltaX = rotation.x - prevRotation.x;
+      const deltaY = rotation.y - prevRotation.y;
+      const deltaZ = rotation.z - prevRotation.z;
+      
+      // Adaptive smoothing: attenuate small movements more, let larger movements through faster
+      // This reduces jitter when still but allows slow deliberate movements
+      const scaleX = Math.abs(deltaX) < this.noiseThreshold ? 0.3 : 1.0;
+      const scaleY = Math.abs(deltaY) < this.noiseThreshold ? 0.3 : 1.0;
+      const scaleZ = Math.abs(deltaZ) < this.noiseThreshold ? 0.3 : 1.0;
+      
       smoothed[jointName as keyof Skeleton3DPose] = {
-        x: prevRotation.x + (rotation.x - prevRotation.x) * this.smoothingFactor,
-        y: prevRotation.y + (rotation.y - prevRotation.y) * this.smoothingFactor,
-        z: prevRotation.z + (rotation.z - prevRotation.z) * this.smoothingFactor
+        x: prevRotation.x + deltaX * this.smoothingFactor * scaleX,
+        y: prevRotation.y + deltaY * this.smoothingFactor * scaleY,
+        z: prevRotation.z + deltaZ * this.smoothingFactor * scaleZ
       };
     }
     

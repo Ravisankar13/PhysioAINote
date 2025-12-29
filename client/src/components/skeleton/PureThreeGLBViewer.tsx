@@ -1369,27 +1369,27 @@ export default function PureThreeGLBViewer({
     // Map live pose to skeleton bones
     const LIVE_POSE_BONE_MAPPING: { [key: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number }[] } = {
       'spine': [
-        { boneName: 'spine8', axis: 'x', scale: 0.3 },
-        { boneName: 'spine9', axis: 'x', scale: 0.3 },
-        { boneName: 'spine10', axis: 'x', scale: 0.3 },
-        { boneName: 'spine8', axis: 'z', scale: 0.3 },
-        { boneName: 'spine9', axis: 'z', scale: 0.3 },
-        { boneName: 'spine10', axis: 'z', scale: 0.3 },
+        { boneName: 'spine8', axis: 'x', scale: 0.15 },
+        { boneName: 'spine9', axis: 'x', scale: 0.15 },
+        { boneName: 'spine10', axis: 'x', scale: 0.15 },
+        { boneName: 'spine8', axis: 'z', scale: 0.15 },
+        { boneName: 'spine9', axis: 'z', scale: 0.15 },
+        { boneName: 'spine10', axis: 'z', scale: 0.15 },
       ],
       'neck': [
-        { boneName: 'spine17', axis: 'x', scale: 0.4 },
-        { boneName: 'spine18', axis: 'x', scale: 0.4 },
-        { boneName: 'spine19', axis: 'x', scale: 0.4 },
-        { boneName: 'spine17', axis: 'z', scale: 0.3 },
-        { boneName: 'spine18', axis: 'z', scale: 0.3 },
+        { boneName: 'spine17', axis: 'x', scale: 0.2 },
+        { boneName: 'spine18', axis: 'x', scale: 0.2 },
+        { boneName: 'spine19', axis: 'x', scale: 0.2 },
+        { boneName: 'spine17', axis: 'z', scale: 0.15 },
+        { boneName: 'spine18', axis: 'z', scale: 0.15 },
       ],
       'leftShoulder': [
-        { boneName: 'Humerus_Root_L', axis: 'y', scale: 1 },
-        { boneName: 'Humerus_Root_L', axis: 'z', scale: -0.5 },
+        { boneName: 'Humerus_Root_L', axis: 'x', scale: 1.2 },  // Arm elevation/abduction from x
+        { boneName: 'Humerus_Root_L', axis: 'z', scale: -0.8 }, // Forward flexion from z
       ],
       'rightShoulder': [
-        { boneName: 'Humerus_Root_R', axis: 'y', scale: -1 },
-        { boneName: 'Humerus_Root_R', axis: 'z', scale: 0.5 },
+        { boneName: 'Humerus_Root_R', axis: 'x', scale: -1.2 }, // Arm elevation/abduction (inverted for right)
+        { boneName: 'Humerus_Root_R', axis: 'z', scale: 0.8 },  // Forward flexion from z
       ],
       'leftElbow': [
         { boneName: 'Redius_Alna_L', axis: 'x', scale: -1 },

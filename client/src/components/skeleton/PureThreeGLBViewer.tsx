@@ -1408,39 +1408,42 @@ export default function PureThreeGLBViewer({
       'leftShoulder': [
         // pose.x = flexion angle (arm raised forward)
         // pose.z = abduction angle (arm raised sideways)
-        // For LEFT arm in T-pose: flexion rotates around bone X, abduction rotates around bone Z
-        { boneName: 'HUMERUSL_83', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },  // Flexion (pose.x) -> bone X rotation
-        { boneName: 'HUMERUSL_83', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction (pose.z) -> bone Z rotation
+        // Model uses Humerus_L for left upper arm
+        { boneName: 'Humerus_L', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },  // Flexion (pose.x) -> bone X rotation
+        { boneName: 'Humerus_L', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction (pose.z) -> bone Z rotation
       ],
       'rightShoulder': [
-        // For RIGHT arm: same axes but mirrored signs
-        { boneName: 'HUMERUSR_125', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 }, // Flexion
-        { boneName: 'HUMERUSR_125', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 }, // Abduction (negated for right side)
+        // Model uses Humerus_R for right upper arm
+        { boneName: 'Humerus_R', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 }, // Flexion
+        { boneName: 'Humerus_R', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 }, // Abduction (negated for right side)
       ],
       'leftElbow': [
-        // Elbow only bends one way - flexion
-        // pose.x = how bent the elbow is (0=straight, higher=more bent)
-        { boneName: 'RADIUSL_46', sourceAxis: 'x', targetAxis: 'y', scale: 1.0 },   // Flexion -> bone Y rotation
+        // Model uses Redius_Alna_L for left forearm (elbow flexion)
+        { boneName: 'Redius_Alna_L', sourceAxis: 'x', targetAxis: 'y', scale: 1.0 },   // Flexion -> bone Y rotation
       ],
       'rightElbow': [
-        { boneName: 'RADIUSR_88', sourceAxis: 'x', targetAxis: 'y', scale: -1.0 },  // Flexion (mirrored sign)
+        // Model uses Redius_Alna_R for right forearm
+        { boneName: 'Redius_Alna_R', sourceAxis: 'x', targetAxis: 'y', scale: -1.0 },  // Flexion (mirrored sign)
       ],
       'leftHip': [
         // pose.x = hip flexion (leg forward)
         // pose.z = hip abduction (leg outward)
-        { boneName: 'FEMURL_233', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },   // Flexion -> bone X
-        { boneName: 'FEMURL_233', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction -> bone Z
+        // Model uses Femer_L for left thigh
+        { boneName: 'Femer_L', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },   // Flexion -> bone X
+        { boneName: 'Femer_L', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction -> bone Z
       ],
       'rightHip': [
-        { boneName: 'FEMURR_194', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },   // Flexion
-        { boneName: 'FEMURR_194', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 },  // Abduction (mirrored)
+        // Model uses Femer_R for right thigh
+        { boneName: 'Femer_R', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },   // Flexion
+        { boneName: 'Femer_R', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 },  // Abduction (mirrored)
       ],
       'leftKnee': [
-        // Knee only bends one way
-        { boneName: 'TIBIAL_232', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
+        // Model uses fibula_tibia_L for left shin (knee flexion)
+        { boneName: 'fibula_tibia_L', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
       ],
       'rightKnee': [
-        { boneName: 'TIBIAR_193', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
+        // Model uses fibula_tibia_R for right shin
+        { boneName: 'fibula_tibia_R', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
       ],
     };
 

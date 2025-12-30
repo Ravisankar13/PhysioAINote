@@ -68,8 +68,11 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Apply dead zone to reduce jitter near neutral positions
  * Returns 0 for values below threshold, otherwise scales remaining range
+ * 
+ * Using a small threshold (0.03 radians ≈ 1.7°) to balance noise reduction
+ * with responsiveness for intentional movements
  */
-function applyDeadZone(value: number, threshold: number = 0.05): number {
+function applyDeadZone(value: number, threshold: number = 0.03): number {
   if (Math.abs(value) < threshold) return 0;
   const sign = value > 0 ? 1 : -1;
   return sign * (Math.abs(value) - threshold);

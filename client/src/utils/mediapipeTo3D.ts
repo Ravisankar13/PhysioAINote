@@ -330,8 +330,11 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     z: 0
   };
 
-  // When mirror mode is ON, swap left/right joints so skeleton matches the mirrored video
-  // This keeps the user's left arm moving the skeleton's left arm (as seen in the mirror)
+  // When mirror mode is ON, swap left/right joints AND invert lateral (z) components
+  // The webcam shows a mirror image, so:
+  // 1. User's left arm appears on right side of screen → we detect it as rightShoulder landmarks
+  // 2. Lateral movements (X-axis) are reversed in the mirrored view
+  // 3. We swap joints AND negate z (abduction) to correct both issues
   if (mirrorMode) {
     return {
       spine: {
@@ -344,13 +347,13 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
         y: 0,
         z: clamp(-neckLateral, -0.5, 0.5)   // Invert lateral tilt for mirror
       },
-      // Swap left and right joints
-      leftShoulder: rightShoulderJoint,
-      rightShoulder: leftShoulderJoint,
+      // Swap left/right AND negate z (abduction) for mirror correction
+      leftShoulder: { ...rightShoulderJoint, z: -rightShoulderJoint.z },
+      rightShoulder: { ...leftShoulderJoint, z: -leftShoulderJoint.z },
       leftElbow: rightElbowJoint,
       rightElbow: leftElbowJoint,
-      leftHip: rightHipJoint,
-      rightHip: leftHipJoint,
+      leftHip: { ...rightHipJoint, z: -rightHipJoint.z },
+      rightHip: { ...leftHipJoint, z: -leftHipJoint.z },
       leftKnee: rightKneeJoint,
       rightKnee: leftKneeJoint,
       leftWrist: { x: 0, y: 0, z: 0 },

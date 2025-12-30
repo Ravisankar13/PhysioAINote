@@ -1386,32 +1386,32 @@ export default function PureThreeGLBViewer({
         { boneName: 'spine18', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
       ],
       'leftShoulder': [
-        { boneName: 'Humerus_Root_L', sourceAxis: 'x', targetAxis: 'z', scale: -1.0 },  // Abduction (pose.x) -> bone z-axis
-        { boneName: 'Humerus_Root_L', sourceAxis: 'z', targetAxis: 'x', scale: 0.8 },   // Flexion (pose.z) -> bone x-axis
+        { boneName: 'HUMERUSL_83', sourceAxis: 'x', targetAxis: 'z', scale: -1.0 },  // Abduction (pose.x) -> bone z-axis
+        { boneName: 'HUMERUSL_83', sourceAxis: 'z', targetAxis: 'y', scale: 1.0 },   // Flexion (pose.z) -> bone y-axis (forward/back)
       ],
       'rightShoulder': [
-        { boneName: 'Humerus_Root_R', sourceAxis: 'x', targetAxis: 'z', scale: 1.0 },   // Abduction -> bone z-axis
-        { boneName: 'Humerus_Root_R', sourceAxis: 'z', targetAxis: 'x', scale: -0.8 },  // Flexion -> bone x-axis
+        { boneName: 'HUMERUSR_125', sourceAxis: 'x', targetAxis: 'z', scale: 1.0 },   // Abduction -> bone z-axis
+        { boneName: 'HUMERUSR_125', sourceAxis: 'z', targetAxis: 'y', scale: -1.0 },  // Flexion -> bone y-axis
       ],
       'leftElbow': [
-        { boneName: 'Redius_Alna_L', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
+        { boneName: 'RADIUSL_46', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
       ],
       'rightElbow': [
-        { boneName: 'Redius_Alna_R', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
+        { boneName: 'RADIUSR_88', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
       ],
       'leftHip': [
-        { boneName: 'Femer_Root_L', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
-        { boneName: 'Femer_Root_L', sourceAxis: 'z', targetAxis: 'z', scale: -0.5 },
+        { boneName: 'FEMURL_233', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
+        { boneName: 'FEMURL_233', sourceAxis: 'z', targetAxis: 'z', scale: -0.5 },
       ],
       'rightHip': [
-        { boneName: 'Femer_Root_R', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
-        { boneName: 'Femer_Root_R', sourceAxis: 'z', targetAxis: 'z', scale: 0.5 },
+        { boneName: 'FEMURR_194', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
+        { boneName: 'FEMURR_194', sourceAxis: 'z', targetAxis: 'z', scale: 0.5 },
       ],
       'leftKnee': [
-        { boneName: 'fibula_tibia_L', sourceAxis: 'x', targetAxis: 'x', scale: 1 },
+        { boneName: 'TIBIAL_232', sourceAxis: 'x', targetAxis: 'x', scale: 1 },
       ],
       'rightKnee': [
-        { boneName: 'fibula_tibia_R', sourceAxis: 'x', targetAxis: 'x', scale: 1 },
+        { boneName: 'TIBIAR_193', sourceAxis: 'x', targetAxis: 'x', scale: 1 },
       ],
     };
 
@@ -1467,7 +1467,7 @@ export default function PureThreeGLBViewer({
     });
     
     // Bones that are handled by animation loop (need slider rotations stored separately)
-    const animationLoopBones = new Set(['Humerus_Root_L', 'Humerus_Root_R']);
+    const animationLoopBones = new Set(['Humerus_Root_L', 'Humerus_Root_R', 'HUMERUSL_83', 'HUMERUSR_125']);
     
     // Track slider-only rotations (relative to initial) for animation loop bones
     const sliderOnlyRotations: { [boneName: string]: { x: number; y: number; z: number } } = {};

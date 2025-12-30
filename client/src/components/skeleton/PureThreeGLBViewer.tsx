@@ -10,6 +10,7 @@ import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } f
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
 import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
+import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 
 interface JointConfig {
   flexion?: number;
@@ -1360,8 +1361,8 @@ export default function PureThreeGLBViewer({
     });
   }, [compensatingJoints, status]);
 
-  // Apply live pose from camera capture using EULER-BASED alignment
-  // Uses same approach as slider controls (proven to work) - additive Euler angles from bind pose
+  // Apply live pose from camera capture using BONE_MAPPING directly
+  // Converts Skeleton3DPose to controller values and applies using the same infrastructure as sliders
   useEffect(() => {
     if (status !== 'ready' || !livePose) return;
     
@@ -1371,135 +1372,84 @@ export default function PureThreeGLBViewer({
     if (Object.keys(bones).length === 0) return;
 
     /**
-     * EULER-BASED LIVE POSE APPLICATION
+     * BONE_MAPPING-BASED LIVE POSE APPLICATION
      * 
-     * Same approach as slider controls in BONE_MAPPING:
-     * bone.rotation = initial + poseOffset
+     * Converts the MediaPipe pose to controller values, then applies
+     * using the exact same BONE_MAPPING infrastructure as the sliders.
      * 
-     * This works because it's the same math that powers the working sliders.
-     * Axis mappings match BONE_MAPPING for consistency.
+     * This guarantees consistency because we're using the same code path.
      */
     
-    // Define bone control mappings - matches BONE_MAPPING axis conventions
-    const LIVE_POSE_EULER_CONFIG: { 
-      [boneName: string]: { 
-        source: string; 
-        offsets: { targetAxis: 'x' | 'y' | 'z'; poseAxis: 'x' | 'y' | 'z'; scale: number }[] 
-      } 
-    } = {
-      // Shoulders - using Humerus_Root (matches BONE_MAPPING)
-      'Humerus_Root_L': {
-        source: 'leftShoulder',
-        offsets: [
-          { targetAxis: 'y', poseAxis: 'x', scale: 1.0 },   // Flexion -> Y
-          { targetAxis: 'z', poseAxis: 'z', scale: -1.0 }   // Abduction -> Z
-        ]
-      },
-      'Humerus_Root_R': {
-        source: 'rightShoulder',
-        offsets: [
-          { targetAxis: 'y', poseAxis: 'x', scale: -1.0 },  // Flexion (mirrored)
-          { targetAxis: 'z', poseAxis: 'z', scale: 1.0 }    // Abduction
-        ]
-      },
-      // Elbows (matches BONE_MAPPING)
-      'Redius_Alna_L': {
-        source: 'leftElbow',
-        offsets: [
-          { targetAxis: 'x', poseAxis: 'x', scale: -1.0 }   // Flexion
-        ]
-      },
-      'Redius_Alna_R': {
-        source: 'rightElbow',
-        offsets: [
-          { targetAxis: 'x', poseAxis: 'x', scale: -1.0 }   // Flexion
-        ]
-      },
-      // Hips - using Femer_Root (matches BONE_MAPPING)
-      'Femer_Root_L': {
-        source: 'leftHip',
-        offsets: [
-          { targetAxis: 'x', poseAxis: 'x', scale: -1.0 },  // Flexion -> X
-          { targetAxis: 'z', poseAxis: 'z', scale: -1.0 }   // Abduction -> Z
-        ]
-      },
-      'Femer_Root_R': {
-        source: 'rightHip',
-        offsets: [
-          { targetAxis: 'x', poseAxis: 'x', scale: -1.0 },  // Flexion
-          { targetAxis: 'z', poseAxis: 'z', scale: 1.0 }    // Abduction (mirrored)
-        ]
-      },
-      // Knees (matches BONE_MAPPING)
-      'fibula_tibia_L': {
-        source: 'leftKnee',
-        offsets: [
-          { targetAxis: 'x', poseAxis: 'x', scale: 1.0 }    // Flexion
-        ]
-      },
-      'fibula_tibia_R': {
-        source: 'rightKnee',
-        offsets: [
-          { targetAxis: 'x', poseAxis: 'x', scale: 1.0 }    // Flexion
-        ]
-      }
+    // Convert raw pose to controller-compatible values
+    const controllerValues = poseToControllerValues(livePose);
+    
+    // Map controller values to BONE_MAPPING keys (values in radians, matching slider behavior)
+    const livePoseConfig: { [key: string]: number } = {
+      // Shoulders - flexion and abduction
+      'leftShoulder.flexion': controllerValues.leftShoulder.flexion,
+      'leftShoulder.abduction': controllerValues.leftShoulder.abduction,
+      'rightShoulder.flexion': controllerValues.rightShoulder.flexion,
+      'rightShoulder.abduction': controllerValues.rightShoulder.abduction,
+      // Elbows - flexion only
+      'leftElbow.flexion': controllerValues.leftElbow.flexion,
+      'rightElbow.flexion': controllerValues.rightElbow.flexion,
+      // Hips - flexion and abduction
+      'leftHip.flexion': controllerValues.leftHip.flexion,
+      'leftHip.abduction': controllerValues.leftHip.abduction,
+      'rightHip.flexion': controllerValues.rightHip.flexion,
+      'rightHip.abduction': controllerValues.rightHip.abduction,
+      // Knees - flexion only
+      'leftKnee.flexion': controllerValues.leftKnee.flexion,
+      'rightKnee.flexion': controllerValues.rightKnee.flexion,
+      // Pelvis
+      'pelvis.tilt': controllerValues.pelvis.tilt,
+      'pelvis.obliquity': controllerValues.pelvis.obliquity,
+      // Neck
+      'neck.flexion': controllerValues.neck.flexion,
+      'neck.lateralFlexion': controllerValues.neck.lateralFlexion,
     };
-
-    // Apply Euler-based pose (same as slider approach)
-    Object.entries(LIVE_POSE_EULER_CONFIG).forEach(([boneName, config]) => {
-      const bone = bones[boneName] as THREE.Bone;
-      const initial = initialRotations[boneName];
-      if (!bone || !initial) return;
-
-      const poseJoint = livePose[config.source as keyof typeof livePose];
-      if (!poseJoint) return;
-
-      // Start from bind pose (initial rotation)
-      let newX = initial.x;
-      let newY = initial.y;
-      let newZ = initial.z;
+    
+    // Track rotation deltas per bone (same approach as slider system)
+    const boneRotationDeltas: { [boneName: string]: { x: number; y: number; z: number } } = {};
+    
+    // Process each live pose config through BONE_MAPPING
+    Object.entries(livePoseConfig).forEach(([configKey, value]) => {
+      const mappings = BONE_MAPPING[configKey];
+      if (!mappings) return;
       
-      // Add pose offsets
-      config.offsets.forEach(({ targetAxis, poseAxis, scale }) => {
-        const poseValue = poseAxis === 'x' ? poseJoint.x : 
-                          poseAxis === 'y' ? poseJoint.y : poseJoint.z;
-        const offset = poseValue * scale;
+      // Value is already in radians (from poseToControllerValues)
+      // For slider system, values are in degrees and get converted
+      // For live pose, we're providing radians directly, so use value/PI*180 conversion or adjust scale
+      // Actually, the slider system does: angleInRadians = (value * Math.PI) / 180
+      // So we need to provide the "degrees" equivalent that will convert back to our radians
+      const valueAsDegrees = (value * 180) / Math.PI;
+      const angleInRadians = (valueAsDegrees * Math.PI) / 180; // = value (round-trip)
+      
+      mappings.forEach(({ boneName, axis, scale, isPosition }) => {
+        if (isPosition) return; // Skip position-based for now
         
-        if (targetAxis === 'x') newX += offset;
-        else if (targetAxis === 'y') newY += offset;
-        else if (targetAxis === 'z') newZ += offset;
+        const adjustedAngle = angleInRadians * scale;
+        
+        if (!boneRotationDeltas[boneName]) {
+          boneRotationDeltas[boneName] = { x: 0, y: 0, z: 0 };
+        }
+        
+        if (axis === 'x') boneRotationDeltas[boneName].x += adjustedAngle;
+        else if (axis === 'y') boneRotationDeltas[boneName].y += adjustedAngle;
+        else if (axis === 'z') boneRotationDeltas[boneName].z += adjustedAngle;
       });
-
-      // Apply (same as slider application)
-      bone.rotation.set(newX, newY, newZ);
     });
-
-    // Apply spine/neck with same Euler approach
-    const spineInfluence = 0.3;
-    const spineBones = ['spine6', 'spine7', 'spine8', 'spine9'];
-    const neckBones = ['spine17', 'spine18', 'spine19'];
     
-    spineBones.forEach(boneName => {
+    // Apply rotations to bones (initial + delta, same as slider system)
+    Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
       const bone = bones[boneName] as THREE.Bone;
       const initial = initialRotations[boneName];
       if (!bone || !initial) return;
       
       bone.rotation.set(
-        initial.x + livePose.spine.x * spineInfluence,
-        initial.y,
-        initial.z + livePose.spine.z * spineInfluence * 0.8
-      );
-    });
-    
-    neckBones.forEach(boneName => {
-      const bone = bones[boneName] as THREE.Bone;
-      const initial = initialRotations[boneName];
-      if (!bone || !initial) return;
-      
-      bone.rotation.set(
-        initial.x + livePose.neck.x * 0.4,
-        initial.y,
-        initial.z + livePose.neck.z * 0.3
+        initial.x + delta.x,
+        initial.y + delta.y,
+        initial.z + delta.z
       );
     });
 
@@ -1512,10 +1462,20 @@ export default function PureThreeGLBViewer({
   const prevLivePoseRef = useRef<typeof livePose>(null);
   
   // List of all bones controlled by live pose (for restoration)
+  // These are all bones that can be affected by BONE_MAPPING keys used in livePoseConfig
   const LIVE_CONTROLLED_BONES = [
-    'Humerus_Root_L', 'Humerus_Root_R', 'Redius_Alna_L', 'Redius_Alna_R',
-    'Femer_Root_L', 'Femer_Root_R', 'fibula_tibia_L', 'fibula_tibia_R',
-    'spine6', 'spine7', 'spine8', 'spine9', 'spine17', 'spine18', 'spine19'
+    // Shoulders
+    'Humerus_Root_L', 'Humerus_Root_R',
+    // Elbows
+    'Redius_Alna_L', 'Redius_Alna_R',
+    // Hips
+    'Femer_Root_L', 'Femer_Root_R',
+    // Knees
+    'fibula_tibia_L', 'fibula_tibia_R',
+    // Pelvis
+    'Pelvis_Main',
+    // Neck (spine17-20 for neck.flexion and neck.lateralFlexion)
+    'spine17', 'spine18', 'spine19', 'spine20'
   ];
   
   // Restore all controlled bones when live pose mode exits

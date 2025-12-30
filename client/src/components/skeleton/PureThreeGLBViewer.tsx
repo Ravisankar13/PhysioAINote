@@ -1360,163 +1360,196 @@ export default function PureThreeGLBViewer({
     });
   }, [compensatingJoints, status]);
 
-  // Apply live pose from camera capture using QUATERNION-BASED alignment
-  // This correctly composes bind-pose quaternion with pose rotation quaternion
+  // Apply live pose from camera capture using EULER-BASED alignment
+  // Uses same approach as slider controls (proven to work) - additive Euler angles from bind pose
   useEffect(() => {
     if (status !== 'ready' || !livePose) return;
     
     const bones = bonesRef.current;
-    const bindQuaternions = bindPoseQuaternionsRef.current;
     const initialRotations = initialRotationsRef.current;
     
     if (Object.keys(bones).length === 0) return;
-    if (Object.keys(bindQuaternions).length === 0) return;
 
     /**
-     * QUATERNION-BASED LIVE POSE APPLICATION
+     * EULER-BASED LIVE POSE APPLICATION
      * 
-     * Formula: bone.quaternion = bindPoseQuat * poseRotationQuat
+     * Same approach as slider controls in BONE_MAPPING:
+     * bone.rotation = initial + poseOffset
      * 
-     * Where poseRotationQuat is built from the MediaPipe joint angles
-     * applied around the correct local axes.
+     * This works because it's the same math that powers the working sliders.
+     * Axis mappings match BONE_MAPPING for consistency.
      */
     
-    // Define bone control mappings with rotation order and axis conventions
-    const LIVE_POSE_BONE_CONFIG: { 
+    // Define bone control mappings - matches BONE_MAPPING axis conventions
+    const LIVE_POSE_EULER_CONFIG: { 
       [boneName: string]: { 
         source: string; 
-        rotations: { axis: 'x' | 'y' | 'z'; poseAxis: 'x' | 'y' | 'z'; scale: number }[] 
+        offsets: { targetAxis: 'x' | 'y' | 'z'; poseAxis: 'x' | 'y' | 'z'; scale: number }[] 
       } 
     } = {
-      // Shoulders - using Humerus_Root for primary control
+      // Shoulders - using Humerus_Root (matches BONE_MAPPING)
       'Humerus_Root_L': {
         source: 'leftShoulder',
-        rotations: [
-          { axis: 'y', poseAxis: 'x', scale: 1.0 },   // Flexion (forward) -> Y rotation
-          { axis: 'z', poseAxis: 'z', scale: -1.0 }   // Abduction (sideways) -> Z rotation
+        offsets: [
+          { targetAxis: 'y', poseAxis: 'x', scale: 1.0 },   // Flexion -> Y
+          { targetAxis: 'z', poseAxis: 'z', scale: -1.0 }   // Abduction -> Z
         ]
       },
       'Humerus_Root_R': {
         source: 'rightShoulder',
-        rotations: [
-          { axis: 'y', poseAxis: 'x', scale: -1.0 },  // Flexion (mirrored)
-          { axis: 'z', poseAxis: 'z', scale: 1.0 }    // Abduction
+        offsets: [
+          { targetAxis: 'y', poseAxis: 'x', scale: -1.0 },  // Flexion (mirrored)
+          { targetAxis: 'z', poseAxis: 'z', scale: 1.0 }    // Abduction
         ]
       },
-      // Elbows
+      // Elbows (matches BONE_MAPPING)
       'Redius_Alna_L': {
         source: 'leftElbow',
-        rotations: [
-          { axis: 'x', poseAxis: 'x', scale: -1.0 }   // Flexion
+        offsets: [
+          { targetAxis: 'x', poseAxis: 'x', scale: -1.0 }   // Flexion
         ]
       },
       'Redius_Alna_R': {
         source: 'rightElbow',
-        rotations: [
-          { axis: 'x', poseAxis: 'x', scale: -1.0 }   // Flexion
+        offsets: [
+          { targetAxis: 'x', poseAxis: 'x', scale: -1.0 }   // Flexion
         ]
       },
-      // Hips - using Femer_Root for primary control
+      // Hips - using Femer_Root (matches BONE_MAPPING)
       'Femer_Root_L': {
         source: 'leftHip',
-        rotations: [
-          { axis: 'x', poseAxis: 'x', scale: -1.0 },  // Flexion (forward) -> X rotation
-          { axis: 'z', poseAxis: 'z', scale: -1.0 }   // Abduction -> Z rotation
+        offsets: [
+          { targetAxis: 'x', poseAxis: 'x', scale: -1.0 },  // Flexion -> X
+          { targetAxis: 'z', poseAxis: 'z', scale: -1.0 }   // Abduction -> Z
         ]
       },
       'Femer_Root_R': {
         source: 'rightHip',
-        rotations: [
-          { axis: 'x', poseAxis: 'x', scale: -1.0 },  // Flexion
-          { axis: 'z', poseAxis: 'z', scale: 1.0 }    // Abduction (mirrored)
+        offsets: [
+          { targetAxis: 'x', poseAxis: 'x', scale: -1.0 },  // Flexion
+          { targetAxis: 'z', poseAxis: 'z', scale: 1.0 }    // Abduction (mirrored)
         ]
       },
-      // Knees
+      // Knees (matches BONE_MAPPING)
       'fibula_tibia_L': {
         source: 'leftKnee',
-        rotations: [
-          { axis: 'x', poseAxis: 'x', scale: 1.0 }    // Flexion
+        offsets: [
+          { targetAxis: 'x', poseAxis: 'x', scale: 1.0 }    // Flexion
         ]
       },
       'fibula_tibia_R': {
         source: 'rightKnee',
-        rotations: [
-          { axis: 'x', poseAxis: 'x', scale: 1.0 }    // Flexion
+        offsets: [
+          { targetAxis: 'x', poseAxis: 'x', scale: 1.0 }    // Flexion
         ]
       }
     };
 
-    // Apply quaternion-based pose to each controlled bone
-    Object.entries(LIVE_POSE_BONE_CONFIG).forEach(([boneName, config]) => {
+    // Apply Euler-based pose (same as slider approach)
+    Object.entries(LIVE_POSE_EULER_CONFIG).forEach(([boneName, config]) => {
       const bone = bones[boneName] as THREE.Bone;
-      const bindQuat = bindQuaternions[boneName];
-      if (!bone || !bindQuat) return;
+      const initial = initialRotations[boneName];
+      if (!bone || !initial) return;
 
       const poseJoint = livePose[config.source as keyof typeof livePose];
       if (!poseJoint) return;
 
-      // Build pose rotation quaternion by composing rotations around each axis
-      const poseQuat = new THREE.Quaternion();
+      // Start from bind pose (initial rotation)
+      let newX = initial.x;
+      let newY = initial.y;
+      let newZ = initial.z;
       
-      config.rotations.forEach(({ axis, poseAxis, scale }) => {
-        // Get the pose angle value
-        const angle = (poseAxis === 'x' ? poseJoint.x : 
-                       poseAxis === 'y' ? poseJoint.y : poseJoint.z) * scale;
+      // Add pose offsets
+      config.offsets.forEach(({ targetAxis, poseAxis, scale }) => {
+        const poseValue = poseAxis === 'x' ? poseJoint.x : 
+                          poseAxis === 'y' ? poseJoint.y : poseJoint.z;
+        const offset = poseValue * scale;
         
-        // Create rotation quaternion around the specified local axis
-        const axisVector = axis === 'x' ? new THREE.Vector3(1, 0, 0) :
-                          axis === 'y' ? new THREE.Vector3(0, 1, 0) :
-                          new THREE.Vector3(0, 0, 1);
-        
-        const rotQuat = new THREE.Quaternion().setFromAxisAngle(axisVector, angle);
-        
-        // Compose with existing pose quaternion
-        poseQuat.multiply(rotQuat);
+        if (targetAxis === 'x') newX += offset;
+        else if (targetAxis === 'y') newY += offset;
+        else if (targetAxis === 'z') newZ += offset;
       });
 
-      // Apply: bone.quaternion = bindPose * poseRotation
-      bone.quaternion.copy(bindQuat).multiply(poseQuat);
+      // Apply (same as slider application)
+      bone.rotation.set(newX, newY, newZ);
     });
 
-    // Apply spine/neck with smaller influence (simpler Euler approach is OK here)
+    // Apply spine/neck with same Euler approach
     const spineInfluence = 0.3;
     const spineBones = ['spine6', 'spine7', 'spine8', 'spine9'];
     const neckBones = ['spine17', 'spine18', 'spine19'];
     
     spineBones.forEach(boneName => {
       const bone = bones[boneName] as THREE.Bone;
-      const bindQuat = bindQuaternions[boneName];
-      if (!bone || !bindQuat) return;
+      const initial = initialRotations[boneName];
+      if (!bone || !initial) return;
       
-      const spineRotQuat = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(
-          livePose.spine.x * spineInfluence,
-          0,
-          livePose.spine.z * spineInfluence * 0.8
-        )
+      bone.rotation.set(
+        initial.x + livePose.spine.x * spineInfluence,
+        initial.y,
+        initial.z + livePose.spine.z * spineInfluence * 0.8
       );
-      bone.quaternion.copy(bindQuat).multiply(spineRotQuat);
     });
     
     neckBones.forEach(boneName => {
       const bone = bones[boneName] as THREE.Bone;
-      const bindQuat = bindQuaternions[boneName];
-      if (!bone || !bindQuat) return;
+      const initial = initialRotations[boneName];
+      if (!bone || !initial) return;
       
-      const neckRotQuat = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(
-          livePose.neck.x * 0.4,
-          0,
-          livePose.neck.z * 0.3
-        )
+      bone.rotation.set(
+        initial.x + livePose.neck.x * 0.4,
+        initial.y,
+        initial.z + livePose.neck.z * 0.3
       );
-      bone.quaternion.copy(bindQuat).multiply(neckRotQuat);
     });
 
   }, [livePose, status]);
   
   // Track if live pose is active (to disable slider conflicts)
   const isLivePoseActive = livePose !== null;
+  
+  // Store previous livePose ref to detect when live mode exits
+  const prevLivePoseRef = useRef<typeof livePose>(null);
+  
+  // List of all bones controlled by live pose (for restoration)
+  const LIVE_CONTROLLED_BONES = [
+    'Humerus_Root_L', 'Humerus_Root_R', 'Redius_Alna_L', 'Redius_Alna_R',
+    'Femer_Root_L', 'Femer_Root_R', 'fibula_tibia_L', 'fibula_tibia_R',
+    'spine6', 'spine7', 'spine8', 'spine9', 'spine17', 'spine18', 'spine19'
+  ];
+  
+  // Restore all controlled bones when live pose mode exits
+  useEffect(() => {
+    const wasLivePoseActive = prevLivePoseRef.current !== null;
+    const isNowInactive = livePose === null;
+    
+    // Update ref
+    prevLivePoseRef.current = livePose;
+    
+    // If we just exited live mode, restore ALL controlled bones to bind + slider state
+    if (wasLivePoseActive && isNowInactive && status === 'ready') {
+      const bones = bonesRef.current;
+      const initialRotations = initialRotationsRef.current;
+      const sliderRotations = sliderRotationsRef.current;
+      
+      // Reset ALL bones that were controlled by live pose
+      LIVE_CONTROLLED_BONES.forEach(boneName => {
+        const bone = bones[boneName] as THREE.Bone;
+        const initial = initialRotations[boneName];
+        if (!bone || !initial) return;
+        
+        // Get slider offset if any, otherwise use zero
+        const sliderOffset = sliderRotations[boneName] || { x: 0, y: 0, z: 0 };
+        
+        // Restore to initial (bind) pose + any slider adjustments
+        bone.rotation.set(
+          initial.x + sliderOffset.x,
+          initial.y + sliderOffset.y,
+          initial.z + sliderOffset.z
+        );
+      });
+    }
+  }, [livePose, status]);
 
   useEffect(() => {
     if (status !== 'ready' || !modelConfig) return;

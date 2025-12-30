@@ -17316,6 +17316,39 @@ If there are existing notes, seamlessly integrate the new content while maintain
     }
   });
 
+  // Movement-based clinical assessment with research evidence
+  app.post("/api/movement/clinical-assessment", async (req: Request, res: Response) => {
+    try {
+      const { clinicalAssessmentService } = await import('./services/clinicalAssessmentService');
+      
+      const { intakeData, movementData } = req.body;
+      
+      if (!movementData) {
+        return res.status(400).json({ 
+          error: 'Movement data is required',
+        });
+      }
+      
+      console.log('Generating movement-based clinical assessment...');
+      const assessment = await clinicalAssessmentService.generateAssessment(
+        intakeData || null,
+        movementData
+      );
+      
+      res.json({
+        success: true,
+        assessment,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('Error generating movement clinical assessment:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate clinical assessment',
+        message: error.message 
+      });
+    }
+  });
+
   // Health check endpoint for Cloud Run
   app.get("/health", (req: Request, res: Response) => {
     res.json({

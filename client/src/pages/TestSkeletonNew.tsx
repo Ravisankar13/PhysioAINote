@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense, Component, ReactNode, useCallback, useMemo } from "react";
+import { useState, useEffect, Suspense, Component, ReactNode, useCallback, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User, Lock, FileText, Save, FolderOpen, Trash2, Camera, Video } from "lucide-react";
+import { RotateCcw, Copy, AlertCircle, Loader2, ExternalLink, Play, Pause, SkipBack, Activity, Eye, EyeOff, ArrowDown, Zap, Target, User, Lock, FileText, Save, FolderOpen, Trash2, Camera, Video, Brain, Stethoscope } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -32,6 +32,9 @@ import { Grid2X2, Maximize, Layers } from "lucide-react";
 import { BiomechanicsVisualizationData } from "@/lib/forceVisualization";
 import { calculateFullBiomechanics } from "@/lib/biomechanicsEngine";
 import { PatientCloneState } from "@/lib/patientCloneComposer";
+import ClinicalIntakePanel, { ClinicalIntakeData } from "@/components/skeleton/ClinicalIntakePanel";
+import ClinicalAssessmentResults from "@/components/skeleton/ClinicalAssessmentResults";
+import { MovementPatternRecognizer, MovementAnalysisResult } from "@/lib/movementPatternRecognition";
 
 interface GLBErrorBoundaryProps {
   children: ReactNode;
@@ -275,6 +278,13 @@ export default function TestSkeletonNew() {
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
   
+  // Clinical Assessment State
+  const [clinicalIntakeData, setClinicalIntakeData] = useState<ClinicalIntakeData | null>(null);
+  const [movementAnalysis, setMovementAnalysis] = useState<MovementAnalysisResult | null>(null);
+  const [clinicalAssessment, setClinicalAssessment] = useState<any>(null);
+  const [isGeneratingAssessment, setIsGeneratingAssessment] = useState(false);
+  const patternRecognizerRef = useRef<MovementPatternRecognizer>(new MovementPatternRecognizer());
+  
   // Save/Load skeleton state
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -380,6 +390,60 @@ export default function TestSkeletonNew() {
     calculateCompensations(jointConstraints), 
     [jointConstraints]
   );
+
+  // Update movement analysis when live pose changes
+  useEffect(() => {
+    if (livePose && showCameraCapture) {
+      patternRecognizerRef.current.addPose(livePose);
+      const analysis = patternRecognizerRef.current.analyze(livePose);
+      setMovementAnalysis(analysis);
+    }
+  }, [livePose, showCameraCapture]);
+
+  // Generate clinical assessment with research evidence
+  const generateClinicalAssessment = useCallback(async () => {
+    if (!movementAnalysis) {
+      toast({
+        title: "No Movement Data",
+        description: "Please capture some movement data first by using the camera.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingAssessment(true);
+    try {
+      const response = await apiRequest('/api/movement/clinical-assessment', 'POST', {
+        intakeData: clinicalIntakeData,
+        movementData: {
+          patterns: movementAnalysis.patterns,
+          asymmetries: movementAnalysis.asymmetries,
+          compensations: movementAnalysis.compensations,
+          overallMovementQuality: movementAnalysis.overallMovementQuality,
+          primaryImpairments: movementAnalysis.primaryImpairments,
+          clinicalHypotheses: movementAnalysis.clinicalHypotheses,
+          recommendedFocus: movementAnalysis.recommendedFocus,
+          peakAngles: patternRecognizerRef.current.getPeakValues(),
+        },
+      });
+
+      if (response.success) {
+        setClinicalAssessment(response.assessment);
+        toast({
+          title: "Assessment Generated",
+          description: "Clinical assessment with research evidence is ready.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Assessment Failed",
+        description: error.message || "Could not generate clinical assessment",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingAssessment(false);
+    }
+  }, [movementAnalysis, clinicalIntakeData, toast]);
 
   // Fetch patient presentation data when presentationId is in URL
   useEffect(() => {
@@ -1569,8 +1633,83 @@ export default function TestSkeletonNew() {
                   </div>
                 </div>
               )}
+              {/* Movement Analysis Summary */}
+              {movementAnalysis && (
+                <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-blue-400 text-sm font-medium">
+                      <Stethoscope className="h-4 w-4" />
+                      Movement Analysis
+                    </div>
+                    <Badge variant={movementAnalysis.overallMovementQuality > 70 ? "default" : movementAnalysis.overallMovementQuality > 40 ? "secondary" : "destructive"}>
+                      Quality: {movementAnalysis.overallMovementQuality}/100
+                    </Badge>
+                  </div>
+                  {movementAnalysis.patterns.length > 0 && (
+                    <div className="space-y-1 text-xs">
+                      <p className="text-slate-400">Patterns detected:</p>
+                      {movementAnalysis.patterns.slice(0, 3).map((p, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <Badge variant="outline" className={
+                            p.severity === 'severe' ? 'border-red-500/50 text-red-400' :
+                            p.severity === 'moderate' ? 'border-yellow-500/50 text-yellow-400' :
+                            'border-green-500/50 text-green-400'
+                          }>
+                            {p.severity}
+                          </Badge>
+                          <span className="text-slate-300">{p.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {movementAnalysis.asymmetries.length > 0 && (
+                    <div className="mt-2 text-xs text-orange-400">
+                      {movementAnalysis.asymmetries.length} clinically significant asymmetries detected
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Generate Assessment Button */}
+              {movementAnalysis && (
+                <Button
+                  onClick={generateClinicalAssessment}
+                  disabled={isGeneratingAssessment}
+                  className="w-full mt-4"
+                  data-testid="btn-generate-assessment"
+                >
+                  {isGeneratingAssessment ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating Assessment...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="h-4 w-4 mr-2" />
+                      Generate Clinical Assessment
+                    </>
+                  )}
+                </Button>
+              )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Clinical Intake Panel (Optional) */}
+        {showCameraCapture && (
+          <ClinicalIntakePanel
+            onIntakeChange={setClinicalIntakeData}
+            className="col-span-2"
+          />
+        )}
+
+        {/* Clinical Assessment Results */}
+        {clinicalAssessment && (
+          <ClinicalAssessmentResults
+            assessment={clinicalAssessment}
+            isLoading={isGeneratingAssessment}
+            className="col-span-2"
+          />
         )}
 
         {/* Right Panel - Controls */}

@@ -1,14 +1,24 @@
 /**
  * MediaPipe to 3D Pose Converter
  * Converts MediaPipe pose landmarks to 3D skeleton joint rotations
+ * 
+ * MediaPipe coordinate system:
+ * - X: 0 (left edge) to 1 (right edge) - increases to the right
+ * - Y: 0 (top) to 1 (bottom) - increases downward
+ * - Z: Depth - negative values toward camera, positive away
+ * 
+ * GLB Skeleton coordinate system (THREE.js):
+ * - X: Right
+ * - Y: Up
+ * - Z: Toward camera (out of screen)
  */
 
 import { NormalizedLandmark } from '@mediapipe/pose';
 
 export interface Joint3DRotation {
-  x: number;
-  y: number;
-  z: number;
+  x: number; // Typically flexion/extension
+  y: number; // Typically internal/external rotation
+  z: number; // Typically abduction/adduction
 }
 
 export interface Skeleton3DPose {
@@ -22,6 +32,8 @@ export interface Skeleton3DPose {
   rightHip: Joint3DRotation;
   leftKnee: Joint3DRotation;
   rightKnee: Joint3DRotation;
+  leftWrist: Joint3DRotation;
+  rightWrist: Joint3DRotation;
 }
 
 // MediaPipe landmark indices
@@ -57,34 +69,118 @@ const LANDMARKS = {
   RIGHT_ANKLE: 28
 };
 
+interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
 /**
- * Calculate angle between three points
+ * Create a 3D vector from two landmarks (from -> to)
+ * Converts from MediaPipe coords to THREE.js coords
  */
-function calculateAngle(p1: NormalizedLandmark, p2: NormalizedLandmark, p3: NormalizedLandmark): number {
-  const v1 = {
-    x: p1.x - p2.x,
-    y: p1.y - p2.y
+function createVector(from: NormalizedLandmark, to: NormalizedLandmark): Vec3 {
+  return {
+    x: to.x - from.x,           // Right is positive
+    y: -(to.y - from.y),        // Flip Y: up is positive in THREE.js
+    z: -(to.z - from.z)         // Flip Z: toward camera is positive in THREE.js
   };
-  const v2 = {
-    x: p3.x - p2.x,
-    y: p3.y - p2.y
-  };
-  
-  const dot = v1.x * v2.x + v1.y * v2.y;
-  const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-  const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-  
-  if (mag1 === 0 || mag2 === 0) return 0;
-  
-  const angle = Math.acos(Math.max(-1, Math.min(1, dot / (mag1 * mag2))));
+}
+
+/**
+ * Normalize a vector
+ */
+function normalize(v: Vec3): Vec3 {
+  const len = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+  if (len < 0.0001) return { x: 0, y: -1, z: 0 }; // Default down vector
+  return { x: v.x / len, y: v.y / len, z: v.z / len };
+}
+
+/**
+ * Calculate the angle between two vectors using dot product
+ */
+function angleBetweenVectors(v1: Vec3, v2: Vec3): number {
+  const n1 = normalize(v1);
+  const n2 = normalize(v2);
+  const dot = n1.x * n2.x + n1.y * n2.y + n1.z * n2.z;
+  return Math.acos(Math.max(-1, Math.min(1, dot)));
+}
+
+/**
+ * Calculate the angle of a limb from the vertical (Y-axis) in the frontal plane (X-Y plane)
+ * This gives us abduction angle for arms/legs
+ * Positive = abducted outward from body
+ */
+function calculateAbduction(limbDir: Vec3, isLeftSide: boolean): number {
+  // Project onto frontal plane (X-Y), measure angle from vertical (down = -Y)
+  const frontalAngle = Math.atan2(limbDir.x, -limbDir.y);
+  // For left side, negative X means abducted; for right side, positive X means abducted
+  return isLeftSide ? -frontalAngle : frontalAngle;
+}
+
+/**
+ * Calculate the angle of a limb from vertical in the sagittal plane (Z-Y plane)
+ * This gives us flexion angle
+ * Positive = flexed forward
+ */
+function calculateFlexion(limbDir: Vec3): number {
+  // Project onto sagittal plane (Y-Z), measure angle from vertical
+  // Forward flexion: positive Z component
+  return Math.atan2(limbDir.z, -limbDir.y);
+}
+
+/**
+ * Calculate elbow/knee flexion angle (the bend at the joint)
+ * Returns angle in radians where 0 = straight, PI = fully bent
+ */
+function calculateJointFlexion(
+  proximal: NormalizedLandmark,  // shoulder or hip
+  joint: NormalizedLandmark,     // elbow or knee
+  distal: NormalizedLandmark     // wrist or ankle
+): number {
+  const upperVec = createVector(joint, proximal);
+  const lowerVec = createVector(joint, distal);
+  const angle = angleBetweenVectors(upperVec, lowerVec);
+  // Convert: when arm is straight, angle ≈ PI (vectors point opposite)
+  // We want 0 = straight, so: flexion = PI - angle
+  return Math.PI - angle;
+}
+
+/**
+ * Calculate hip flexion using the thigh direction relative to the torso
+ */
+function calculateHipFlexion(
+  hip: NormalizedLandmark,
+  knee: NormalizedLandmark,
+  hipMidpoint: Vec3
+): number {
+  const thighDir = normalize(createVector(hip, knee));
+  // When standing straight, thigh points down (-Y)
+  // Flexion is forward (positive Z)
+  return Math.atan2(thighDir.z, -thighDir.y);
+}
+
+/**
+ * Calculate hip abduction
+ */
+function calculateHipAbduction(
+  hip: NormalizedLandmark,
+  knee: NormalizedLandmark,
+  isLeft: boolean
+): number {
+  const thighDir = normalize(createVector(hip, knee));
+  // When standing straight, thigh points down
+  // Abduction moves leg outward (left leg: negative X, right leg: positive X)
+  const angle = Math.atan2(Math.abs(thighDir.x), -thighDir.y);
   return angle;
 }
 
 /**
  * Convert MediaPipe landmarks to 3D skeleton pose
+ * All rotations are in radians
  */
 export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3DPose {
-  // Get key landmarks
+  // Extract key landmarks
   const nose = landmarks[LANDMARKS.NOSE];
   const leftShoulder = landmarks[LANDMARKS.LEFT_SHOULDER];
   const rightShoulder = landmarks[LANDMARKS.RIGHT_SHOULDER];
@@ -98,130 +194,148 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3
   const rightKnee = landmarks[LANDMARKS.RIGHT_KNEE];
   const leftAnkle = landmarks[LANDMARKS.LEFT_ANKLE];
   const rightAnkle = landmarks[LANDMARKS.RIGHT_ANKLE];
-  
-  // Calculate shoulder midpoint and hip midpoint
-  const shoulderMidpoint = {
+
+  // Calculate reference points
+  const shoulderMid: Vec3 = {
     x: (leftShoulder.x + rightShoulder.x) / 2,
-    y: (leftShoulder.y + rightShoulder.y) / 2,
-    z: (leftShoulder.z + rightShoulder.z) / 2
+    y: -((leftShoulder.y + rightShoulder.y) / 2),
+    z: -((leftShoulder.z + rightShoulder.z) / 2)
   };
   
-  const hipMidpoint = {
+  const hipMid: Vec3 = {
     x: (leftHip.x + rightHip.x) / 2,
-    y: (leftHip.y + rightHip.y) / 2,
-    z: (leftHip.z + rightHip.z) / 2
+    y: -((leftHip.y + rightHip.y) / 2),
+    z: -((leftHip.z + rightHip.z) / 2)
   };
+
+  // === SPINE CALCULATIONS ===
+  // Lateral tilt: difference in shoulder heights vs hip heights
+  const shoulderTilt = Math.atan2(
+    -(rightShoulder.y - leftShoulder.y), // Flip for Y-up
+    rightShoulder.x - leftShoulder.x
+  );
+  const hipTilt = Math.atan2(
+    -(rightHip.y - leftHip.y),
+    rightHip.x - leftHip.x
+  );
+  const spineLateral = shoulderTilt - hipTilt;
   
-  // Calculate spine rotation (based on shoulder tilt and torso lean)
-  const shoulderTilt = Math.atan2(rightShoulder.y - leftShoulder.y, rightShoulder.x - leftShoulder.x);
-  const hipTilt = Math.atan2(rightHip.y - leftHip.y, rightHip.x - leftHip.x);
-  const spineLatera = shoulderTilt - hipTilt;
+  // Forward lean: how much the shoulders are forward/back of hips
+  const spineForward = Math.atan2(
+    -(shoulderMid.z - hipMid.z),
+    shoulderMid.y - hipMid.y
+  );
+
+  // === NECK CALCULATIONS ===
+  const nosePos: Vec3 = { x: nose.x, y: -nose.y, z: -nose.z };
+  const neckLateral = Math.atan2(nosePos.x - shoulderMid.x, nosePos.y - shoulderMid.y);
+  const neckForward = Math.atan2(nosePos.z - shoulderMid.z, nosePos.y - shoulderMid.y);
+
+  // === ARM CALCULATIONS ===
+  // Left upper arm direction (shoulder to elbow)
+  const leftUpperArm = normalize(createVector(leftShoulder, leftElbow));
+  const leftForearm = normalize(createVector(leftElbow, leftWrist));
   
-  // Calculate torso forward/backward lean
-  const torsoLean = Math.atan2(shoulderMidpoint.z - hipMidpoint.z, shoulderMidpoint.y - hipMidpoint.y);
+  // Right upper arm direction
+  const rightUpperArm = normalize(createVector(rightShoulder, rightElbow));
+  const rightForearm = normalize(createVector(rightElbow, rightWrist));
+
+  // Shoulder flexion (arm raised forward) - stored in .x to match bone mapping expectations
+  // When arm is down: upperArm.y ≈ -1, angle ≈ 0
+  // When arm is forward: upperArm.z > 0, angle increases
+  const leftShoulderFlexion = Math.atan2(leftUpperArm.z, -leftUpperArm.y);
+  const rightShoulderFlexion = Math.atan2(rightUpperArm.z, -rightUpperArm.y);
   
-  // Calculate neck rotation (head position relative to shoulders)
-  const neckLateral = Math.atan2(nose.x - shoulderMidpoint.x, nose.y - shoulderMidpoint.y);
-  const neckForward = Math.atan2(nose.z - shoulderMidpoint.z, nose.y - shoulderMidpoint.y);
+  // Shoulder abduction (arm raised sideways) - stored in .z to match bone mapping expectations
+  // When arm is down: upperArm.y ≈ -1, angle ≈ 0
+  // When arm is horizontal: upperArm.x ≈ ±1, upperArm.y ≈ 0, angle ≈ 90°
+  const leftShoulderAbduction = Math.atan2(-leftUpperArm.x, -leftUpperArm.y);
+  const rightShoulderAbduction = Math.atan2(rightUpperArm.x, -rightUpperArm.y);
+
+  // Elbow flexion (bend angle at elbow)
+  const leftElbowFlexion = calculateJointFlexion(leftShoulder, leftElbow, leftWrist);
+  const rightElbowFlexion = calculateJointFlexion(rightShoulder, rightElbow, rightWrist);
+
+  // === LEG CALCULATIONS ===
+  // Thigh directions
+  const leftThigh = normalize(createVector(leftHip, leftKnee));
+  const rightThigh = normalize(createVector(rightHip, rightKnee));
   
-  // Calculate arm rotations using true 3D shoulder-to-elbow vector
-  // MediaPipe coordinate system: x=right, y=down, z=toward camera
-  // THREE.js skeleton: y=up, so we need to flip y
+  // Shin directions
+  const leftShin = normalize(createVector(leftKnee, leftAnkle));
+  const rightShin = normalize(createVector(rightKnee, rightAnkle));
+
+  // Hip flexion (leg raised forward) - stored in .x
+  const leftHipFlexion = Math.atan2(leftThigh.z, -leftThigh.y);
+  const rightHipFlexion = Math.atan2(rightThigh.z, -rightThigh.y);
   
-  // Left arm: compute 3D vector from shoulder to elbow
-  const leftArmVec = {
-    x: leftElbow.x - leftShoulder.x,  // positive = elbow to the right of shoulder
-    y: -(leftElbow.y - leftShoulder.y), // flip: positive = elbow above shoulder (THREE.js y-up)
-    z: leftElbow.z - leftShoulder.z   // positive = elbow toward camera
-  };
-  
-  // Right arm: compute 3D vector from shoulder to elbow  
-  const rightArmVec = {
-    x: rightElbow.x - rightShoulder.x,
-    y: -(rightElbow.y - rightShoulder.y),
-    z: rightElbow.z - rightShoulder.z
-  };
-  
-  // Normalize vectors
-  const leftArmLen = Math.sqrt(leftArmVec.x * leftArmVec.x + leftArmVec.y * leftArmVec.y + leftArmVec.z * leftArmVec.z) || 0.001;
-  const rightArmLen = Math.sqrt(rightArmVec.x * rightArmVec.x + rightArmVec.y * rightArmVec.y + rightArmVec.z * rightArmVec.z) || 0.001;
-  
-  const leftArmDir = { x: leftArmVec.x / leftArmLen, y: leftArmVec.y / leftArmLen, z: leftArmVec.z / leftArmLen };
-  const rightArmDir = { x: rightArmVec.x / rightArmLen, y: rightArmVec.y / rightArmLen, z: rightArmVec.z / rightArmLen };
-  
-  // Abduction: angle from vertical (y-axis) in the frontal plane (x-y plane)
-  // When arm is down: dir.y ≈ -1 (pointing down), angle ≈ 0
-  // When arm is raised sideways: dir.x ≈ ±1, dir.y ≈ 0, angle ≈ 90°
-  const leftAbduction = Math.atan2(-leftArmDir.x, -leftArmDir.y); // Left arm abducts to the left (negative x)
-  const rightAbduction = Math.atan2(rightArmDir.x, -rightArmDir.y); // Right arm abducts to the right (positive x)
-  
-  // Forward flexion: angle in sagittal plane (y-z plane)
-  // When arm is down: dir.y ≈ -1, angle ≈ 0
-  // When arm is forward: dir.z > 0, angle increases
-  const leftFlexion = Math.atan2(leftArmDir.z, -leftArmDir.y);
-  const rightFlexion = Math.atan2(rightArmDir.z, -rightArmDir.y);
-  
-  const leftElbowAngle = calculateAngle(leftShoulder, leftElbow, leftWrist);
-  const rightElbowAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
-  
-  // Calculate leg rotations
-  const leftHipAngle = calculateAngle(leftKnee, leftHip, hipMidpoint);
-  const rightHipAngle = calculateAngle(rightKnee, rightHip, hipMidpoint);
-  
-  const leftKneeAngle = calculateAngle(leftHip, leftKnee, leftAnkle);
-  const rightKneeAngle = calculateAngle(rightHip, rightKnee, rightAnkle);
-  
+  // Hip abduction (leg moved outward) - stored in .z
+  // Left leg: negative X = abducted (moved left), positive X = adducted (moved right/medial)
+  // Right leg: positive X = abducted (moved right), negative X = adducted (moved left/medial)
+  // Keep signed values to distinguish abduction vs adduction
+  const leftHipAbduction = Math.atan2(-leftThigh.x, -leftThigh.y);  // Negative X for left leg = positive abduction
+  const rightHipAbduction = Math.atan2(rightThigh.x, -rightThigh.y); // Positive X for right leg = positive abduction
+
+  // Knee flexion
+  const leftKneeFlexion = calculateJointFlexion(leftHip, leftKnee, leftAnkle);
+  const rightKneeFlexion = calculateJointFlexion(rightHip, rightKnee, rightAnkle);
+
+  // Clamp helper
+  const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+
   return {
     spine: {
-      x: Math.max(-0.5, Math.min(0.5, torsoLean * 2)), // Forward/backward lean
-      y: 0, // Rotation around vertical axis (minimal from 2D data)
-      z: Math.max(-0.3, Math.min(0.3, spineLatera * 3)) // Lateral flexion
+      x: clamp(spineForward, -0.8, 0.8),      // Forward/backward lean
+      y: 0,                                    // Axial rotation (limited from front view)
+      z: clamp(spineLateral, -0.5, 0.5)       // Lateral flexion
     },
     neck: {
-      x: Math.max(-0.4, Math.min(0.4, neckForward * 3)), // Head forward/back
-      y: 0, // Head rotation (limited from front view)
-      z: Math.max(-0.4, Math.min(0.4, neckLateral * 2)) // Head side tilt
+      x: clamp(neckForward, -0.6, 0.6),       // Head forward/back
+      y: 0,                                    // Head rotation (limited from front view)
+      z: clamp(neckLateral, -0.5, 0.5)        // Head side tilt
     },
     leftShoulder: {
-      x: Math.max(-0.5, Math.min(2.5, leftAbduction)), // Abduction (arm raised sideways)
-      y: 0, // Internal/external rotation (limited from front view)
-      z: Math.max(-1.5, Math.min(1.5, leftFlexion)) // Forward flexion
+      x: clamp(leftShoulderFlexion, -0.5, Math.PI),    // Flexion (arm forward) - mapped to bone X axis
+      y: 0,                                             // Internal/external rotation
+      z: clamp(leftShoulderAbduction, -0.3, Math.PI)   // Abduction (arm out to side) - mapped to bone Z axis
     },
     rightShoulder: {
-      x: Math.max(-0.5, Math.min(2.5, rightAbduction)), // Abduction
+      x: clamp(rightShoulderFlexion, -0.5, Math.PI),   // Flexion
       y: 0,
-      z: Math.max(-1.5, Math.min(1.5, rightFlexion)) // Forward flexion
+      z: clamp(rightShoulderAbduction, -0.3, Math.PI)  // Abduction
     },
     leftElbow: {
-      x: Math.max(0, Math.min(2.5, Math.PI - leftElbowAngle)), // Flexion only
+      x: clamp(leftElbowFlexion, 0, 2.5),              // Flexion only (0 = straight, 2.5 = max bend)
       y: 0,
       z: 0
     },
     rightElbow: {
-      x: Math.max(0, Math.min(2.5, Math.PI - rightElbowAngle)),
+      x: clamp(rightElbowFlexion, 0, 2.5),
       y: 0,
       z: 0
     },
     leftHip: {
-      x: Math.max(-1.0, Math.min(1.5, leftHipAngle - Math.PI/2)), // Flexion/extension
-      y: 0, // Internal/external rotation (limited)
-      z: Math.max(-0.5, Math.min(0.5, (leftHip.x - hipMidpoint.x) * 2)) // Abduction
+      x: clamp(leftHipFlexion, -0.5, 2.0),             // Flexion (leg forward)
+      y: 0,
+      z: clamp(leftHipAbduction, -0.3, 0.8)            // Abduction (leg outward)
     },
     rightHip: {
-      x: Math.max(-1.0, Math.min(1.5, rightHipAngle - Math.PI/2)),
+      x: clamp(rightHipFlexion, -0.5, 2.0),
       y: 0,
-      z: Math.max(-0.5, Math.min(0.5, (rightHip.x - hipMidpoint.x) * 2))
+      z: clamp(rightHipAbduction, -0.3, 0.8)
     },
     leftKnee: {
-      x: Math.max(0, Math.min(2.5, Math.PI - leftKneeAngle)), // Flexion only
+      x: clamp(leftKneeFlexion, 0, 2.5),               // Flexion only
       y: 0,
       z: 0
     },
     rightKnee: {
-      x: Math.max(0, Math.min(2.5, Math.PI - rightKneeAngle)),
+      x: clamp(rightKneeFlexion, 0, 2.5),
       y: 0,
       z: 0
-    }
+    },
+    leftWrist: { x: 0, y: 0, z: 0 },
+    rightWrist: { x: 0, y: 0, z: 0 }
   };
 }
 
@@ -230,40 +344,41 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3
  */
 export class Posesmoother {
   private previousPose: Skeleton3DPose | null = null;
-  private smoothingFactor: number = 0.2; // Lower = smoother but slower response
-  private noiseThreshold: number = 0.015; // Attenuate changes smaller than this
+  private smoothingFactor: number = 0.3; // Higher = faster response
+  private noiseThreshold: number = 0.02; // Ignore tiny movements
   
-  constructor(smoothingFactor: number = 0.2) {
+  constructor(smoothingFactor: number = 0.3) {
     this.smoothingFactor = smoothingFactor;
   }
   
   smooth(newPose: Skeleton3DPose): Skeleton3DPose {
     if (!this.previousPose) {
-      this.previousPose = newPose;
+      this.previousPose = { ...newPose };
       return newPose;
     }
     
     const smoothed: Skeleton3DPose = {} as Skeleton3DPose;
     
-    // Smooth each joint with adaptive noise attenuation
     for (const [jointName, rotation] of Object.entries(newPose)) {
       const prevRotation = this.previousPose[jointName as keyof Skeleton3DPose];
+      if (!prevRotation) {
+        (smoothed as any)[jointName] = rotation;
+        continue;
+      }
       
-      // Calculate delta
+      // Calculate deltas
       const deltaX = rotation.x - prevRotation.x;
       const deltaY = rotation.y - prevRotation.y;
       const deltaZ = rotation.z - prevRotation.z;
       
-      // Adaptive smoothing: attenuate small movements more, let larger movements through faster
-      // This reduces jitter when still but allows slow deliberate movements
-      const scaleX = Math.abs(deltaX) < this.noiseThreshold ? 0.3 : 1.0;
-      const scaleY = Math.abs(deltaY) < this.noiseThreshold ? 0.3 : 1.0;
-      const scaleZ = Math.abs(deltaZ) < this.noiseThreshold ? 0.3 : 1.0;
+      // Adaptive smoothing: small movements get more smoothing to reduce jitter
+      const getScale = (delta: number) => 
+        Math.abs(delta) < this.noiseThreshold ? 0.1 : this.smoothingFactor;
       
       smoothed[jointName as keyof Skeleton3DPose] = {
-        x: prevRotation.x + deltaX * this.smoothingFactor * scaleX,
-        y: prevRotation.y + deltaY * this.smoothingFactor * scaleY,
-        z: prevRotation.z + deltaZ * this.smoothingFactor * scaleZ
+        x: prevRotation.x + deltaX * getScale(deltaX),
+        y: prevRotation.y + deltaY * getScale(deltaY),
+        z: prevRotation.z + deltaZ * getScale(deltaZ)
       };
     }
     

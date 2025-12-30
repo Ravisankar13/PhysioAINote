@@ -1366,76 +1366,120 @@ export default function PureThreeGLBViewer({
     
     if (Object.keys(bones).length === 0) return;
 
-    // Map live pose to skeleton bones
-    // sourceAxis = which axis of the pose data to read (x=abduction, z=flexion for shoulders)
-    // targetAxis = which bone axis to rotate
-    const LIVE_POSE_BONE_MAPPING: { [key: string]: { boneName: string; sourceAxis: 'x' | 'y' | 'z'; targetAxis: 'x' | 'y' | 'z'; scale: number }[] } = {
+    /**
+     * LIVE POSE BONE MAPPING
+     * 
+     * MediaPipe pose values (from convertMediaPipeTo3D):
+     * - shoulder.x = abduction (arm raised sideways, 0=down, PI/2=horizontal)
+     * - shoulder.z = flexion (arm raised forward, 0=down, PI/2=horizontal forward)
+     * - elbow.x = flexion (0=straight, 2.5=fully bent)
+     * - hip.x = flexion (leg forward)
+     * - hip.z = abduction (leg outward)
+     * - knee.x = flexion (0=straight, 2.5=fully bent)
+     * 
+     * GLB skeleton bone local axes (typical T-pose rig):
+     * - Humerus (upper arm): bone points along local Y (down in T-pose)
+     *   - Abduction: rotate around bone's local Z (frontal plane rotation)
+     *   - Flexion: rotate around bone's local X (sagittal plane rotation)
+     * - Femur (thigh): bone points along local -Y (down)
+     *   - Flexion: rotate around local X
+     *   - Abduction: rotate around local Z
+     */
+    const LIVE_POSE_BONE_MAPPING: { [key: string]: { boneName: string; sourceAxis: 'x' | 'y' | 'z'; targetAxis: 'x' | 'y' | 'z'; scale: number; offset?: number }[] } = {
       'spine': [
-        { boneName: 'spine8', sourceAxis: 'x', targetAxis: 'x', scale: 0.15 },
-        { boneName: 'spine9', sourceAxis: 'x', targetAxis: 'x', scale: 0.15 },
-        { boneName: 'spine10', sourceAxis: 'x', targetAxis: 'x', scale: 0.15 },
-        { boneName: 'spine8', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
-        { boneName: 'spine9', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
-        { boneName: 'spine10', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
+        // Distribute spine movement across multiple vertebrae
+        { boneName: 'spine6', sourceAxis: 'x', targetAxis: 'x', scale: 0.3 },   // Forward lean
+        { boneName: 'spine7', sourceAxis: 'x', targetAxis: 'x', scale: 0.3 },
+        { boneName: 'spine8', sourceAxis: 'x', targetAxis: 'x', scale: 0.3 },
+        { boneName: 'spine9', sourceAxis: 'x', targetAxis: 'x', scale: 0.2 },
+        { boneName: 'spine6', sourceAxis: 'z', targetAxis: 'z', scale: 0.25 },  // Lateral lean
+        { boneName: 'spine7', sourceAxis: 'z', targetAxis: 'z', scale: 0.25 },
+        { boneName: 'spine8', sourceAxis: 'z', targetAxis: 'z', scale: 0.25 },
+        { boneName: 'spine9', sourceAxis: 'z', targetAxis: 'z', scale: 0.2 },
       ],
       'neck': [
-        { boneName: 'spine17', sourceAxis: 'x', targetAxis: 'x', scale: 0.2 },
-        { boneName: 'spine18', sourceAxis: 'x', targetAxis: 'x', scale: 0.2 },
-        { boneName: 'spine19', sourceAxis: 'x', targetAxis: 'x', scale: 0.2 },
-        { boneName: 'spine17', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
-        { boneName: 'spine18', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
+        { boneName: 'spine17', sourceAxis: 'x', targetAxis: 'x', scale: 0.4 },  // Head forward/back
+        { boneName: 'spine18', sourceAxis: 'x', targetAxis: 'x', scale: 0.4 },
+        { boneName: 'spine19', sourceAxis: 'x', targetAxis: 'x', scale: 0.3 },
+        { boneName: 'spine17', sourceAxis: 'z', targetAxis: 'z', scale: 0.3 },  // Head tilt
+        { boneName: 'spine18', sourceAxis: 'z', targetAxis: 'z', scale: 0.3 },
+        { boneName: 'spine19', sourceAxis: 'z', targetAxis: 'z', scale: 0.2 },
       ],
       'leftShoulder': [
-        { boneName: 'HUMERUSL_83', sourceAxis: 'x', targetAxis: 'z', scale: -1.0 },  // Abduction (pose.x) -> bone z-axis
-        { boneName: 'HUMERUSL_83', sourceAxis: 'z', targetAxis: 'y', scale: 1.0 },   // Flexion (pose.z) -> bone y-axis (forward/back)
+        // pose.x = flexion angle (arm raised forward)
+        // pose.z = abduction angle (arm raised sideways)
+        // For LEFT arm in T-pose: flexion rotates around bone X, abduction rotates around bone Z
+        { boneName: 'HUMERUSL_83', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },  // Flexion (pose.x) -> bone X rotation
+        { boneName: 'HUMERUSL_83', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction (pose.z) -> bone Z rotation
       ],
       'rightShoulder': [
-        { boneName: 'HUMERUSR_125', sourceAxis: 'x', targetAxis: 'z', scale: 1.0 },   // Abduction -> bone z-axis
-        { boneName: 'HUMERUSR_125', sourceAxis: 'z', targetAxis: 'y', scale: -1.0 },  // Flexion -> bone y-axis
+        // For RIGHT arm: same axes but mirrored signs
+        { boneName: 'HUMERUSR_125', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 }, // Flexion
+        { boneName: 'HUMERUSR_125', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 }, // Abduction (negated for right side)
       ],
       'leftElbow': [
-        { boneName: 'RADIUSL_46', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
+        // Elbow only bends one way - flexion
+        // pose.x = how bent the elbow is (0=straight, higher=more bent)
+        { boneName: 'RADIUSL_46', sourceAxis: 'x', targetAxis: 'y', scale: 1.0 },   // Flexion -> bone Y rotation
       ],
       'rightElbow': [
-        { boneName: 'RADIUSR_88', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
+        { boneName: 'RADIUSR_88', sourceAxis: 'x', targetAxis: 'y', scale: -1.0 },  // Flexion (mirrored sign)
       ],
       'leftHip': [
-        { boneName: 'FEMURL_233', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
-        { boneName: 'FEMURL_233', sourceAxis: 'z', targetAxis: 'z', scale: -0.5 },
+        // pose.x = hip flexion (leg forward)
+        // pose.z = hip abduction (leg outward)
+        { boneName: 'FEMURL_233', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },   // Flexion -> bone X
+        { boneName: 'FEMURL_233', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction -> bone Z
       ],
       'rightHip': [
-        { boneName: 'FEMURR_194', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
-        { boneName: 'FEMURR_194', sourceAxis: 'z', targetAxis: 'z', scale: 0.5 },
+        { boneName: 'FEMURR_194', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },   // Flexion
+        { boneName: 'FEMURR_194', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 },  // Abduction (mirrored)
       ],
       'leftKnee': [
-        { boneName: 'TIBIAL_232', sourceAxis: 'x', targetAxis: 'x', scale: 1 },
+        // Knee only bends one way
+        { boneName: 'TIBIAL_232', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
       ],
       'rightKnee': [
-        { boneName: 'TIBIAR_193', sourceAxis: 'x', targetAxis: 'x', scale: 1 },
+        { boneName: 'TIBIAR_193', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
       ],
     };
 
-    // Reset bones to initial rotation first, then apply live pose
+    // Collect all bone rotations first (to handle multiple mappings to same bone)
+    const boneRotationDeltas: { [boneName: string]: { x: number; y: number; z: number } } = {};
+
     Object.entries(LIVE_POSE_BONE_MAPPING).forEach(([jointKey, mappings]) => {
       const poseJoint = livePose[jointKey as keyof typeof livePose];
       if (!poseJoint) return;
 
-      mappings.forEach(({ boneName, sourceAxis, targetAxis, scale }) => {
-        const bone = bones[boneName];
-        const initial = initialRotations[boneName];
-        if (!bone || !initial) return;
+      mappings.forEach(({ boneName, sourceAxis, targetAxis, scale, offset = 0 }) => {
+        if (!boneRotationDeltas[boneName]) {
+          boneRotationDeltas[boneName] = { x: 0, y: 0, z: 0 };
+        }
 
-        // Read pose value from sourceAxis, apply to bone's targetAxis
+        // Read pose value from sourceAxis
         const poseValue = sourceAxis === 'x' ? poseJoint.x : sourceAxis === 'y' ? poseJoint.y : poseJoint.z;
+        const scaledValue = poseValue * scale + offset;
         
+        // Accumulate to target axis
         if (targetAxis === 'x') {
-          bone.rotation.x = initial.x + poseValue * scale;
+          boneRotationDeltas[boneName].x += scaledValue;
         } else if (targetAxis === 'y') {
-          bone.rotation.y = initial.y + poseValue * scale;
+          boneRotationDeltas[boneName].y += scaledValue;
         } else if (targetAxis === 'z') {
-          bone.rotation.z = initial.z + poseValue * scale;
+          boneRotationDeltas[boneName].z += scaledValue;
         }
       });
+    });
+
+    // Apply accumulated rotations to bones
+    Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
+      const bone = bones[boneName];
+      const initial = initialRotations[boneName];
+      if (!bone || !initial) return;
+
+      bone.rotation.x = initial.x + delta.x;
+      bone.rotation.y = initial.y + delta.y;
+      bone.rotation.z = initial.z + delta.z;
     });
   }, [livePose, status]);
 

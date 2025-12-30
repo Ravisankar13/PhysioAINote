@@ -447,77 +447,6 @@ export default function TestSkeletonNew() {
     }
   }, [movementAnalysis, clinicalIntakeData, toast]);
 
-  // Generate clinical assessment from static posture (slider values)
-  const generateStaticPostureAssessment = useCallback(async () => {
-    setIsGeneratingAssessment(true);
-    try {
-      const staticInput = {
-        modelConfig: {
-          spine: {
-            lordosis: modelConfig.spine.lumbarLordosis,
-            kyphosis: modelConfig.spine.thoracicKyphosis,
-            scoliosis: modelConfig.spine.scoliosis,
-            cervicalFlexion: modelConfig.spine.forwardHead,
-            cervicalLateralFlexion: modelConfig.spine.cervicalLateralFlexion,
-          },
-          pelvis: modelConfig.pelvis,
-          leftHip: modelConfig.leftHip,
-          rightHip: modelConfig.rightHip,
-          leftKnee: {
-            valgus: modelConfig.leftKnee.varus,
-            recurvatum: modelConfig.leftKnee.recurvatum,
-            tibialTorsion: modelConfig.leftKnee.tibialTorsion,
-            tibialSlope: modelConfig.leftKnee.tibialSlope,
-          },
-          rightKnee: {
-            valgus: modelConfig.rightKnee.varus,
-            recurvatum: modelConfig.rightKnee.recurvatum,
-            tibialTorsion: modelConfig.rightKnee.tibialTorsion,
-            tibialSlope: modelConfig.rightKnee.tibialSlope,
-          },
-          leftAnkle: modelConfig.leftAnkle,
-          rightAnkle: modelConfig.rightAnkle,
-        },
-        jointConstraints,
-      };
-
-      const analysis = staticPostureAnalyzerRef.current.analyze(staticInput);
-      const peakAngles = staticPostureAnalyzerRef.current.getPeakAnglesFromConfig(staticInput.modelConfig);
-
-      const response = await apiRequest('/api/movement/clinical-assessment', 'POST', {
-        intakeData: clinicalIntakeData,
-        movementData: {
-          patterns: analysis.patterns,
-          asymmetries: analysis.asymmetries,
-          compensations: analysis.compensations,
-          overallMovementQuality: analysis.overallMovementQuality,
-          primaryImpairments: analysis.primaryImpairments,
-          clinicalHypotheses: analysis.clinicalHypotheses,
-          recommendedFocus: analysis.recommendedFocus,
-          peakAngles,
-          source: 'static_posture',
-        },
-      });
-
-      if (response.success) {
-        setClinicalAssessment(response.assessment);
-        setMovementAnalysis(analysis);
-        toast({
-          title: "Posture Assessment Generated",
-          description: "Clinical assessment based on current skeleton configuration is ready.",
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: "Assessment Failed",
-        description: error.message || "Could not generate posture assessment",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGeneratingAssessment(false);
-    }
-  }, [modelConfig, jointConstraints, clinicalIntakeData, toast]);
-
   // Fetch patient presentation data when presentationId is in URL
   useEffect(() => {
     const fetchPresentation = async () => {
@@ -734,6 +663,77 @@ export default function TestSkeletonNew() {
       flexion: 0,
     },
   });
+
+  // Generate clinical assessment from static posture (slider values)
+  const generateStaticPostureAssessment = useCallback(async () => {
+    setIsGeneratingAssessment(true);
+    try {
+      const staticInput = {
+        modelConfig: {
+          spine: {
+            lordosis: modelConfig.spine.lumbarLordosis,
+            kyphosis: modelConfig.spine.thoracicKyphosis,
+            scoliosis: modelConfig.spine.scoliosis,
+            cervicalFlexion: modelConfig.spine.forwardHead,
+            cervicalLateralFlexion: modelConfig.spine.cervicalLateralFlexion,
+          },
+          pelvis: modelConfig.pelvis,
+          leftHip: modelConfig.leftHip,
+          rightHip: modelConfig.rightHip,
+          leftKnee: {
+            valgus: modelConfig.leftKnee.varus,
+            recurvatum: modelConfig.leftKnee.recurvatum,
+            tibialTorsion: modelConfig.leftKnee.tibialTorsion,
+            tibialSlope: modelConfig.leftKnee.tibialSlope,
+          },
+          rightKnee: {
+            valgus: modelConfig.rightKnee.varus,
+            recurvatum: modelConfig.rightKnee.recurvatum,
+            tibialTorsion: modelConfig.rightKnee.tibialTorsion,
+            tibialSlope: modelConfig.rightKnee.tibialSlope,
+          },
+          leftAnkle: modelConfig.leftAnkle,
+          rightAnkle: modelConfig.rightAnkle,
+        },
+        jointConstraints,
+      };
+
+      const analysis = staticPostureAnalyzerRef.current.analyze(staticInput);
+      const peakAngles = staticPostureAnalyzerRef.current.getPeakAnglesFromConfig(staticInput.modelConfig);
+
+      const response = await apiRequest('/api/movement/clinical-assessment', 'POST', {
+        intakeData: clinicalIntakeData,
+        movementData: {
+          patterns: analysis.patterns,
+          asymmetries: analysis.asymmetries,
+          compensations: analysis.compensations,
+          overallMovementQuality: analysis.overallMovementQuality,
+          primaryImpairments: analysis.primaryImpairments,
+          clinicalHypotheses: analysis.clinicalHypotheses,
+          recommendedFocus: analysis.recommendedFocus,
+          peakAngles,
+          source: 'static_posture',
+        },
+      });
+
+      if (response.success) {
+        setClinicalAssessment(response.assessment);
+        setMovementAnalysis(analysis);
+        toast({
+          title: "Posture Assessment Generated",
+          description: "Clinical assessment based on current skeleton configuration is ready.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Assessment Failed",
+        description: error.message || "Could not generate posture assessment",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingAssessment(false);
+    }
+  }, [modelConfig, jointConstraints, clinicalIntakeData, toast]);
 
   useEffect(() => {
     // Check for WebGL availability

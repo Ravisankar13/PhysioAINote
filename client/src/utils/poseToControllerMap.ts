@@ -2,25 +2,24 @@
  * Pose to Controller Map Utility
  * 
  * Converts MediaPipe pose angles to BONE_MAPPING compatible values.
- * Uses anatomical range limits to normalize inputs so the skeleton
+ * Uses anatomical range limits to clamp inputs so the skeleton
  * moves within physiologically realistic constraints.
  * 
- * This bridges the gap between:
- * - MediaPipe: raw joint angles in radians
- * - BONE_MAPPING: normalized offsets applied to bone rotations
+ * KEY: Neutral pose (arms down, standing) = zero controller values
+ * The raw MediaPipe angles are already relative to neutral, so we
+ * just clamp them to anatomical limits and pass through directly.
  */
 
-import { Skeleton3DPose, Joint3DRotation } from './mediapipeTo3D';
+import { Skeleton3DPose } from './mediapipeTo3D';
 
 /**
  * Joint movement ranges in radians (anatomical norms)
- * Used to normalize MediaPipe values to the skeleton's control range
+ * Used to clamp MediaPipe values to realistic limits
  */
 export const ANATOMICAL_RANGES = {
   shoulder: {
-    flexion: { min: -0.35, max: Math.PI * 0.9 },      // -20° to 162° (arm down to overhead)
-    abduction: { min: -0.17, max: Math.PI * 0.9 },    // -10° to 162° (arm down to overhead)
-    internalRotation: { min: -1.4, max: 1.4 }         // ±80°
+    flexion: { min: -0.35, max: Math.PI * 0.9 },      // -20° to 162° (extension to overhead)
+    abduction: { min: -0.17, max: Math.PI * 0.9 },    // -10° to 162° (adduction to overhead)
   },
   elbow: {
     flexion: { min: 0, max: 2.6 }                      // 0° to 150° (straight to fully bent)
@@ -44,6 +43,7 @@ export const ANATOMICAL_RANGES = {
 
 /**
  * Controller output format matching BONE_MAPPING expectations
+ * All values are in radians, where 0 = neutral position
  */
 export interface ControllerValues {
   leftShoulder: { flexion: number; abduction: number };
@@ -66,120 +66,70 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Normalize a raw angle to a controller value
- * Maps the anatomical range to [-1, 1] or [0, 1] depending on the movement
- */
-function normalizeToRange(
-  value: number, 
-  range: { min: number; max: number },
-  zeroPoint: 'min' | 'center' = 'min'
-): number {
-  const clamped = clamp(value, range.min, range.max);
-  
-  if (zeroPoint === 'center') {
-    // Bidirectional movement (e.g., lateral flexion): normalize to [-1, 1]
-    const center = (range.min + range.max) / 2;
-    const halfRange = (range.max - range.min) / 2;
-    return (clamped - center) / halfRange;
-  } else {
-    // Unidirectional movement (e.g., elbow flexion): normalize to [0, 1]
-    return (clamped - range.min) / (range.max - range.min);
-  }
-}
-
-/**
  * Apply dead zone to reduce jitter near neutral positions
+ * Returns 0 for values below threshold, otherwise scales remaining range
  */
 function applyDeadZone(value: number, threshold: number = 0.05): number {
   if (Math.abs(value) < threshold) return 0;
-  // Scale remaining range to preserve full motion
   const sign = value > 0 ? 1 : -1;
-  return sign * (Math.abs(value) - threshold) / (1 - threshold);
+  return sign * (Math.abs(value) - threshold);
 }
 
 /**
  * Convert Skeleton3DPose to controller-compatible values
  * 
- * The output values are in the same units expected by BONE_MAPPING:
- * - flexion/abduction values that match the slider scale factors
- * - Properly signed for left/right symmetry
+ * The output values are in radians, where 0 = neutral position.
+ * MediaPipe already computes angles relative to neutral (arm down = ~0),
+ * so we just clamp to anatomical limits and apply dead zones.
+ * 
+ * These values go directly to BONE_MAPPING without degree conversion
+ * because we're providing raw radians (the viewer handles the scaling).
  */
 export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   const { shoulder, elbow, hip, knee, spine, neck } = ANATOMICAL_RANGES;
   
-  // Left Shoulder
-  // pose.leftShoulder.x = flexion angle (forward raise)
-  // pose.leftShoulder.z = abduction angle (side raise)
-  const leftShoulderFlexion = normalizeToRange(pose.leftShoulder.x, shoulder.flexion) * shoulder.flexion.max;
-  const leftShoulderAbduction = normalizeToRange(pose.leftShoulder.z, shoulder.abduction) * shoulder.abduction.max;
+  // Shoulders - MediaPipe gives x=flexion, z=abduction, already in radians from vertical
+  // When arm is down, these are ~0. When raised, they increase.
+  const leftShoulderFlexion = applyDeadZone(clamp(pose.leftShoulder.x, shoulder.flexion.min, shoulder.flexion.max));
+  const leftShoulderAbduction = applyDeadZone(clamp(pose.leftShoulder.z, shoulder.abduction.min, shoulder.abduction.max));
   
-  // Right Shoulder
-  const rightShoulderFlexion = normalizeToRange(pose.rightShoulder.x, shoulder.flexion) * shoulder.flexion.max;
-  const rightShoulderAbduction = normalizeToRange(pose.rightShoulder.z, shoulder.abduction) * shoulder.abduction.max;
+  const rightShoulderFlexion = applyDeadZone(clamp(pose.rightShoulder.x, shoulder.flexion.min, shoulder.flexion.max));
+  const rightShoulderAbduction = applyDeadZone(clamp(pose.rightShoulder.z, shoulder.abduction.min, shoulder.abduction.max));
   
-  // Elbows (flexion only - straight=0, bent=positive)
-  const leftElbowFlexion = normalizeToRange(pose.leftElbow.x, elbow.flexion) * elbow.flexion.max;
-  const rightElbowFlexion = normalizeToRange(pose.rightElbow.x, elbow.flexion) * elbow.flexion.max;
+  // Elbows - x=flexion (0=straight, positive=bent)
+  const leftElbowFlexion = applyDeadZone(clamp(pose.leftElbow.x, elbow.flexion.min, elbow.flexion.max));
+  const rightElbowFlexion = applyDeadZone(clamp(pose.rightElbow.x, elbow.flexion.min, elbow.flexion.max));
   
-  // Left Hip
-  const leftHipFlexion = normalizeToRange(pose.leftHip.x, hip.flexion) * hip.flexion.max;
-  const leftHipAbduction = normalizeToRange(pose.leftHip.z, hip.abduction) * hip.abduction.max;
+  // Hips - x=flexion (0=standing, positive=leg forward), z=abduction
+  const leftHipFlexion = applyDeadZone(clamp(pose.leftHip.x, hip.flexion.min, hip.flexion.max));
+  const leftHipAbduction = applyDeadZone(clamp(pose.leftHip.z, hip.abduction.min, hip.abduction.max));
   
-  // Right Hip
-  const rightHipFlexion = normalizeToRange(pose.rightHip.x, hip.flexion) * hip.flexion.max;
-  const rightHipAbduction = normalizeToRange(pose.rightHip.z, hip.abduction) * hip.abduction.max;
+  const rightHipFlexion = applyDeadZone(clamp(pose.rightHip.x, hip.flexion.min, hip.flexion.max));
+  const rightHipAbduction = applyDeadZone(clamp(pose.rightHip.z, hip.abduction.min, hip.abduction.max));
   
-  // Knees
-  const leftKneeFlexion = normalizeToRange(pose.leftKnee.x, knee.flexion) * knee.flexion.max;
-  const rightKneeFlexion = normalizeToRange(pose.rightKnee.x, knee.flexion) * knee.flexion.max;
+  // Knees - x=flexion (0=straight, positive=bent)
+  const leftKneeFlexion = applyDeadZone(clamp(pose.leftKnee.x, knee.flexion.min, knee.flexion.max));
+  const rightKneeFlexion = applyDeadZone(clamp(pose.rightKnee.x, knee.flexion.min, knee.flexion.max));
   
-  // Pelvis (derived from spine pose)
-  const pelvisTilt = applyDeadZone(
-    normalizeToRange(pose.spine.x, spine.forward, 'center')
-  ) * 0.5; // Scale down for subtle pelvic movement
-  
-  const pelvisObliquity = applyDeadZone(
-    normalizeToRange(pose.spine.z, spine.lateral, 'center')
-  ) * 0.3;
+  // Pelvis - derived from spine forward/lateral lean with subtle scaling
+  const pelvisTilt = applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max)) * 0.5;
+  const pelvisObliquity = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max)) * 0.3;
   
   // Neck
-  const neckFlexion = applyDeadZone(
-    normalizeToRange(pose.neck.x, neck.forward, 'center')
-  ) * 0.5;
-  
-  const neckLateralFlexion = applyDeadZone(
-    normalizeToRange(pose.neck.z, neck.lateral, 'center')
-  ) * 0.4;
+  const neckFlexion = applyDeadZone(clamp(pose.neck.x, neck.forward.min, neck.forward.max)) * 0.5;
+  const neckLateralFlexion = applyDeadZone(clamp(pose.neck.z, neck.lateral.min, neck.lateral.max)) * 0.4;
   
   return {
-    leftShoulder: { 
-      flexion: leftShoulderFlexion, 
-      abduction: leftShoulderAbduction 
-    },
-    rightShoulder: { 
-      flexion: rightShoulderFlexion, 
-      abduction: rightShoulderAbduction 
-    },
+    leftShoulder: { flexion: leftShoulderFlexion, abduction: leftShoulderAbduction },
+    rightShoulder: { flexion: rightShoulderFlexion, abduction: rightShoulderAbduction },
     leftElbow: { flexion: leftElbowFlexion },
     rightElbow: { flexion: rightElbowFlexion },
-    leftHip: { 
-      flexion: leftHipFlexion, 
-      abduction: leftHipAbduction 
-    },
-    rightHip: { 
-      flexion: rightHipFlexion, 
-      abduction: rightHipAbduction 
-    },
+    leftHip: { flexion: leftHipFlexion, abduction: leftHipAbduction },
+    rightHip: { flexion: rightHipFlexion, abduction: rightHipAbduction },
     leftKnee: { flexion: leftKneeFlexion },
     rightKnee: { flexion: rightKneeFlexion },
-    pelvis: { 
-      tilt: pelvisTilt, 
-      obliquity: pelvisObliquity 
-    },
-    neck: { 
-      flexion: neckFlexion, 
-      lateralFlexion: neckLateralFlexion 
-    }
+    pelvis: { tilt: pelvisTilt, obliquity: pelvisObliquity },
+    neck: { flexion: neckFlexion, lateralFlexion: neckLateralFlexion }
   };
 }
 

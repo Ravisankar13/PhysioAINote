@@ -1418,17 +1418,11 @@ export default function PureThreeGLBViewer({
       if (!mappings) return;
       
       // Value is already in radians (from poseToControllerValues)
-      // For slider system, values are in degrees and get converted
-      // For live pose, we're providing radians directly, so use value/PI*180 conversion or adjust scale
-      // Actually, the slider system does: angleInRadians = (value * Math.PI) / 180
-      // So we need to provide the "degrees" equivalent that will convert back to our radians
-      const valueAsDegrees = (value * 180) / Math.PI;
-      const angleInRadians = (valueAsDegrees * Math.PI) / 180; // = value (round-trip)
-      
+      // Apply the BONE_MAPPING scale directly (no degree conversion needed)
       mappings.forEach(({ boneName, axis, scale, isPosition }) => {
         if (isPosition) return; // Skip position-based for now
         
-        const adjustedAngle = angleInRadians * scale;
+        const adjustedAngle = value * scale;
         
         if (!boneRotationDeltas[boneName]) {
           boneRotationDeltas[boneName] = { x: 0, y: 0, z: 0 };

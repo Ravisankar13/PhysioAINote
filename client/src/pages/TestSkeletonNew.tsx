@@ -1521,17 +1521,51 @@ export default function TestSkeletonNew() {
                 <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
                   <div className="flex items-center gap-2 text-green-400 text-sm font-medium mb-2">
                     <Activity className="h-4 w-4" />
-                    Live Pose Active
+                    Live Pose Debug
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
-                    <div>Spine: {(livePose.spine.x * 57.3).toFixed(1)}°</div>
-                    <div>Neck: {(livePose.neck.x * 57.3).toFixed(1)}°</div>
-                    <div>L Shoulder: {(livePose.leftShoulder.y * 57.3).toFixed(1)}°</div>
-                    <div>R Shoulder: {(livePose.rightShoulder.y * 57.3).toFixed(1)}°</div>
-                    <div>L Hip: {(livePose.leftHip.x * 57.3).toFixed(1)}°</div>
-                    <div>R Hip: {(livePose.rightHip.x * 57.3).toFixed(1)}°</div>
-                    <div>L Knee: {(livePose.leftKnee.x * 57.3).toFixed(1)}°</div>
-                    <div>R Knee: {(livePose.rightKnee.x * 57.3).toFixed(1)}°</div>
+                  <div className="grid grid-cols-1 gap-2 text-xs text-slate-400 font-mono">
+                    <div className="border-b border-slate-700 pb-1 mb-1 text-slate-300 font-semibold">Shoulders (Abduction | Flexion)</div>
+                    <div className="flex justify-between">
+                      <span>L Shoulder X (Abd):</span>
+                      <span className="text-cyan-400">{(livePose.leftShoulder.x * 57.3).toFixed(1)}°</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>L Shoulder Z (Flex):</span>
+                      <span className="text-purple-400">{(livePose.leftShoulder.z * 57.3).toFixed(1)}°</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>R Shoulder X (Abd):</span>
+                      <span className="text-cyan-400">{(livePose.rightShoulder.x * 57.3).toFixed(1)}°</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>R Shoulder Z (Flex):</span>
+                      <span className="text-purple-400">{(livePose.rightShoulder.z * 57.3).toFixed(1)}°</span>
+                    </div>
+                    <div className="border-b border-slate-700 pb-1 mb-1 mt-2 text-slate-300 font-semibold">Elbows | Hips | Knees</div>
+                    <div className="flex justify-between">
+                      <span>L Elbow:</span>
+                      <span className="text-green-400">{(livePose.leftElbow.x * 57.3).toFixed(1)}°</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>R Elbow:</span>
+                      <span className="text-green-400">{(livePose.rightElbow.x * 57.3).toFixed(1)}°</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>L Hip:</span>
+                      <span className="text-orange-400">{(livePose.leftHip.x * 57.3).toFixed(1)}°</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>R Hip:</span>
+                      <span className="text-orange-400">{(livePose.rightHip.x * 57.3).toFixed(1)}°</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Spine:</span>
+                      <span className="text-yellow-400">{(livePose.spine.x * 57.3).toFixed(1)}°</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Neck:</span>
+                      <span className="text-yellow-400">{(livePose.neck.x * 57.3).toFixed(1)}°</span>
+                    </div>
                   </div>
                 </div>
               )}

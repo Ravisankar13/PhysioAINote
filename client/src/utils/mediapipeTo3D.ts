@@ -124,20 +124,42 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3
   const neckLateral = Math.atan2(nose.x - shoulderMidpoint.x, nose.y - shoulderMidpoint.y);
   const neckForward = Math.atan2(nose.z - shoulderMidpoint.z, nose.y - shoulderMidpoint.y);
   
-  // Calculate arm rotations - focus on arm elevation (how high the arm is raised)
-  // Calculate vertical angle of upper arm relative to torso (arm elevation/abduction)
-  const leftArmElevation = Math.atan2(
-    leftShoulder.y - leftElbow.y, // Vertical difference (positive = elbow below shoulder)
-    Math.abs(leftElbow.x - leftShoulder.x) + 0.001 // Horizontal distance
-  );
-  const rightArmElevation = Math.atan2(
-    rightShoulder.y - rightElbow.y,
-    Math.abs(rightElbow.x - rightShoulder.x) + 0.001
-  );
+  // Calculate arm rotations using true 3D shoulder-to-elbow vector
+  // MediaPipe coordinate system: x=right, y=down, z=toward camera
+  // THREE.js skeleton: y=up, so we need to flip y
   
-  // Forward flexion: how far the arm is in front/behind the body
-  const leftArmForward = (leftShoulder.z - leftElbow.z) * 3;
-  const rightArmForward = (rightShoulder.z - rightElbow.z) * 3;
+  // Left arm: compute 3D vector from shoulder to elbow
+  const leftArmVec = {
+    x: leftElbow.x - leftShoulder.x,  // positive = elbow to the right of shoulder
+    y: -(leftElbow.y - leftShoulder.y), // flip: positive = elbow above shoulder (THREE.js y-up)
+    z: leftElbow.z - leftShoulder.z   // positive = elbow toward camera
+  };
+  
+  // Right arm: compute 3D vector from shoulder to elbow  
+  const rightArmVec = {
+    x: rightElbow.x - rightShoulder.x,
+    y: -(rightElbow.y - rightShoulder.y),
+    z: rightElbow.z - rightShoulder.z
+  };
+  
+  // Normalize vectors
+  const leftArmLen = Math.sqrt(leftArmVec.x * leftArmVec.x + leftArmVec.y * leftArmVec.y + leftArmVec.z * leftArmVec.z) || 0.001;
+  const rightArmLen = Math.sqrt(rightArmVec.x * rightArmVec.x + rightArmVec.y * rightArmVec.y + rightArmVec.z * rightArmVec.z) || 0.001;
+  
+  const leftArmDir = { x: leftArmVec.x / leftArmLen, y: leftArmVec.y / leftArmLen, z: leftArmVec.z / leftArmLen };
+  const rightArmDir = { x: rightArmVec.x / rightArmLen, y: rightArmVec.y / rightArmLen, z: rightArmVec.z / rightArmLen };
+  
+  // Abduction: angle from vertical (y-axis) in the frontal plane (x-y plane)
+  // When arm is down: dir.y ≈ -1 (pointing down), angle ≈ 0
+  // When arm is raised sideways: dir.x ≈ ±1, dir.y ≈ 0, angle ≈ 90°
+  const leftAbduction = Math.atan2(-leftArmDir.x, -leftArmDir.y); // Left arm abducts to the left (negative x)
+  const rightAbduction = Math.atan2(rightArmDir.x, -rightArmDir.y); // Right arm abducts to the right (positive x)
+  
+  // Forward flexion: angle in sagittal plane (y-z plane)
+  // When arm is down: dir.y ≈ -1, angle ≈ 0
+  // When arm is forward: dir.z > 0, angle increases
+  const leftFlexion = Math.atan2(leftArmDir.z, -leftArmDir.y);
+  const rightFlexion = Math.atan2(rightArmDir.z, -rightArmDir.y);
   
   const leftElbowAngle = calculateAngle(leftShoulder, leftElbow, leftWrist);
   const rightElbowAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
@@ -161,14 +183,14 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3
       z: Math.max(-0.4, Math.min(0.4, neckLateral * 2)) // Head side tilt
     },
     leftShoulder: {
-      x: Math.max(-1.5, Math.min(1.5, leftArmElevation)), // Arm elevation (raised = positive)
+      x: Math.max(-0.5, Math.min(2.5, leftAbduction)), // Abduction (arm raised sideways)
       y: 0, // Internal/external rotation (limited from front view)
-      z: Math.max(-1.0, Math.min(1.0, leftArmForward)) // Forward flexion
+      z: Math.max(-1.5, Math.min(1.5, leftFlexion)) // Forward flexion
     },
     rightShoulder: {
-      x: Math.max(-1.5, Math.min(1.5, rightArmElevation)), // Arm elevation
+      x: Math.max(-0.5, Math.min(2.5, rightAbduction)), // Abduction
       y: 0,
-      z: Math.max(-1.0, Math.min(1.0, rightArmForward)) // Forward flexion
+      z: Math.max(-1.5, Math.min(1.5, rightFlexion)) // Forward flexion
     },
     leftElbow: {
       x: Math.max(0, Math.min(2.5, Math.PI - leftElbowAngle)), // Flexion only

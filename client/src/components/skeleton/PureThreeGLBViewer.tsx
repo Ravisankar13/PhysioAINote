@@ -1367,49 +1367,51 @@ export default function PureThreeGLBViewer({
     if (Object.keys(bones).length === 0) return;
 
     // Map live pose to skeleton bones
-    const LIVE_POSE_BONE_MAPPING: { [key: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number }[] } = {
+    // sourceAxis = which axis of the pose data to read (x=abduction, z=flexion for shoulders)
+    // targetAxis = which bone axis to rotate
+    const LIVE_POSE_BONE_MAPPING: { [key: string]: { boneName: string; sourceAxis: 'x' | 'y' | 'z'; targetAxis: 'x' | 'y' | 'z'; scale: number }[] } = {
       'spine': [
-        { boneName: 'spine8', axis: 'x', scale: 0.15 },
-        { boneName: 'spine9', axis: 'x', scale: 0.15 },
-        { boneName: 'spine10', axis: 'x', scale: 0.15 },
-        { boneName: 'spine8', axis: 'z', scale: 0.15 },
-        { boneName: 'spine9', axis: 'z', scale: 0.15 },
-        { boneName: 'spine10', axis: 'z', scale: 0.15 },
+        { boneName: 'spine8', sourceAxis: 'x', targetAxis: 'x', scale: 0.15 },
+        { boneName: 'spine9', sourceAxis: 'x', targetAxis: 'x', scale: 0.15 },
+        { boneName: 'spine10', sourceAxis: 'x', targetAxis: 'x', scale: 0.15 },
+        { boneName: 'spine8', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
+        { boneName: 'spine9', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
+        { boneName: 'spine10', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
       ],
       'neck': [
-        { boneName: 'spine17', axis: 'x', scale: 0.2 },
-        { boneName: 'spine18', axis: 'x', scale: 0.2 },
-        { boneName: 'spine19', axis: 'x', scale: 0.2 },
-        { boneName: 'spine17', axis: 'z', scale: 0.15 },
-        { boneName: 'spine18', axis: 'z', scale: 0.15 },
+        { boneName: 'spine17', sourceAxis: 'x', targetAxis: 'x', scale: 0.2 },
+        { boneName: 'spine18', sourceAxis: 'x', targetAxis: 'x', scale: 0.2 },
+        { boneName: 'spine19', sourceAxis: 'x', targetAxis: 'x', scale: 0.2 },
+        { boneName: 'spine17', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
+        { boneName: 'spine18', sourceAxis: 'z', targetAxis: 'z', scale: 0.15 },
       ],
       'leftShoulder': [
-        { boneName: 'Humerus_Root_L', axis: 'x', scale: 1.2 },  // Arm elevation/abduction from x
-        { boneName: 'Humerus_Root_L', axis: 'z', scale: -0.8 }, // Forward flexion from z
+        { boneName: 'Humerus_Root_L', sourceAxis: 'x', targetAxis: 'z', scale: -1.0 },  // Abduction (pose.x) -> bone z-axis
+        { boneName: 'Humerus_Root_L', sourceAxis: 'z', targetAxis: 'x', scale: 0.8 },   // Flexion (pose.z) -> bone x-axis
       ],
       'rightShoulder': [
-        { boneName: 'Humerus_Root_R', axis: 'x', scale: -1.2 }, // Arm elevation/abduction (inverted for right)
-        { boneName: 'Humerus_Root_R', axis: 'z', scale: 0.8 },  // Forward flexion from z
+        { boneName: 'Humerus_Root_R', sourceAxis: 'x', targetAxis: 'z', scale: 1.0 },   // Abduction -> bone z-axis
+        { boneName: 'Humerus_Root_R', sourceAxis: 'z', targetAxis: 'x', scale: -0.8 },  // Flexion -> bone x-axis
       ],
       'leftElbow': [
-        { boneName: 'Redius_Alna_L', axis: 'x', scale: -1 },
+        { boneName: 'Redius_Alna_L', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
       ],
       'rightElbow': [
-        { boneName: 'Redius_Alna_R', axis: 'x', scale: -1 },
+        { boneName: 'Redius_Alna_R', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
       ],
       'leftHip': [
-        { boneName: 'Femer_Root_L', axis: 'x', scale: -1 },
-        { boneName: 'Femer_Root_L', axis: 'z', scale: -0.5 },
+        { boneName: 'Femer_Root_L', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
+        { boneName: 'Femer_Root_L', sourceAxis: 'z', targetAxis: 'z', scale: -0.5 },
       ],
       'rightHip': [
-        { boneName: 'Femer_Root_R', axis: 'x', scale: -1 },
-        { boneName: 'Femer_Root_R', axis: 'z', scale: 0.5 },
+        { boneName: 'Femer_Root_R', sourceAxis: 'x', targetAxis: 'x', scale: -1 },
+        { boneName: 'Femer_Root_R', sourceAxis: 'z', targetAxis: 'z', scale: 0.5 },
       ],
       'leftKnee': [
-        { boneName: 'fibula_tibia_L', axis: 'x', scale: 1 },
+        { boneName: 'fibula_tibia_L', sourceAxis: 'x', targetAxis: 'x', scale: 1 },
       ],
       'rightKnee': [
-        { boneName: 'fibula_tibia_R', axis: 'x', scale: 1 },
+        { boneName: 'fibula_tibia_R', sourceAxis: 'x', targetAxis: 'x', scale: 1 },
       ],
     };
 
@@ -1418,19 +1420,19 @@ export default function PureThreeGLBViewer({
       const poseJoint = livePose[jointKey as keyof typeof livePose];
       if (!poseJoint) return;
 
-      mappings.forEach(({ boneName, axis, scale }) => {
+      mappings.forEach(({ boneName, sourceAxis, targetAxis, scale }) => {
         const bone = bones[boneName];
         const initial = initialRotations[boneName];
         if (!bone || !initial) return;
 
-        // Apply the pose rotation based on axis
-        const poseValue = axis === 'x' ? poseJoint.x : axis === 'y' ? poseJoint.y : poseJoint.z;
+        // Read pose value from sourceAxis, apply to bone's targetAxis
+        const poseValue = sourceAxis === 'x' ? poseJoint.x : sourceAxis === 'y' ? poseJoint.y : poseJoint.z;
         
-        if (axis === 'x') {
+        if (targetAxis === 'x') {
           bone.rotation.x = initial.x + poseValue * scale;
-        } else if (axis === 'y') {
+        } else if (targetAxis === 'y') {
           bone.rotation.y = initial.y + poseValue * scale;
-        } else if (axis === 'z') {
+        } else if (targetAxis === 'z') {
           bone.rotation.z = initial.z + poseValue * scale;
         }
       });

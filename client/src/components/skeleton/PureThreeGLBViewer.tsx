@@ -601,6 +601,7 @@ export default function PureThreeGLBViewer({
   const [hoverData, setHoverData] = useState<HoverData | null>(null);
   const bonesRef = useRef<{ [name: string]: THREE.Object3D }>({});
   const initialRotationsRef = useRef<{ [name: string]: THREE.Euler }>({});
+  const bindPoseQuaternionsRef = useRef<{ [name: string]: THREE.Quaternion }>({});
   const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const legIKStateRef = useRef<LegIKState | null>(null);
@@ -925,6 +926,8 @@ export default function PureThreeGLBViewer({
               const bone = bones[name];
               console.log(`${i + 1}. ${name} (parent: ${bone.parent?.name || 'none'})`);
               initialRotationsRef.current[name] = bone.rotation.clone();
+              // Also store bind-pose quaternion for quaternion-based live pose tracking
+              bindPoseQuaternionsRef.current[name] = bone.quaternion.clone();
             });
             console.log('=================================');
             
@@ -1357,143 +1360,170 @@ export default function PureThreeGLBViewer({
     });
   }, [compensatingJoints, status]);
 
-  // Apply live pose from camera capture
+  // Apply live pose from camera capture using QUATERNION-BASED alignment
+  // This correctly composes bind-pose quaternion with pose rotation quaternion
   useEffect(() => {
     if (status !== 'ready' || !livePose) return;
     
     const bones = bonesRef.current;
+    const bindQuaternions = bindPoseQuaternionsRef.current;
     const initialRotations = initialRotationsRef.current;
     
     if (Object.keys(bones).length === 0) return;
+    if (Object.keys(bindQuaternions).length === 0) return;
 
     /**
-     * LIVE POSE BONE MAPPING
+     * QUATERNION-BASED LIVE POSE APPLICATION
      * 
-     * MediaPipe pose values (from convertMediaPipeTo3D):
-     * - shoulder.x = abduction (arm raised sideways, 0=down, PI/2=horizontal)
-     * - shoulder.z = flexion (arm raised forward, 0=down, PI/2=horizontal forward)
-     * - elbow.x = flexion (0=straight, 2.5=fully bent)
-     * - hip.x = flexion (leg forward)
-     * - hip.z = abduction (leg outward)
-     * - knee.x = flexion (0=straight, 2.5=fully bent)
+     * Formula: bone.quaternion = bindPoseQuat * poseRotationQuat
      * 
-     * GLB skeleton bone local axes (typical T-pose rig):
-     * - Humerus (upper arm): bone points along local Y (down in T-pose)
-     *   - Abduction: rotate around bone's local Z (frontal plane rotation)
-     *   - Flexion: rotate around bone's local X (sagittal plane rotation)
-     * - Femur (thigh): bone points along local -Y (down)
-     *   - Flexion: rotate around local X
-     *   - Abduction: rotate around local Z
+     * Where poseRotationQuat is built from the MediaPipe joint angles
+     * applied around the correct local axes.
      */
-    const LIVE_POSE_BONE_MAPPING: { [key: string]: { boneName: string; sourceAxis: 'x' | 'y' | 'z'; targetAxis: 'x' | 'y' | 'z'; scale: number; offset?: number }[] } = {
-      'spine': [
-        // Distribute spine movement across multiple vertebrae
-        { boneName: 'spine6', sourceAxis: 'x', targetAxis: 'x', scale: 0.3 },   // Forward lean
-        { boneName: 'spine7', sourceAxis: 'x', targetAxis: 'x', scale: 0.3 },
-        { boneName: 'spine8', sourceAxis: 'x', targetAxis: 'x', scale: 0.3 },
-        { boneName: 'spine9', sourceAxis: 'x', targetAxis: 'x', scale: 0.2 },
-        { boneName: 'spine6', sourceAxis: 'z', targetAxis: 'z', scale: 0.25 },  // Lateral lean
-        { boneName: 'spine7', sourceAxis: 'z', targetAxis: 'z', scale: 0.25 },
-        { boneName: 'spine8', sourceAxis: 'z', targetAxis: 'z', scale: 0.25 },
-        { boneName: 'spine9', sourceAxis: 'z', targetAxis: 'z', scale: 0.2 },
-      ],
-      'neck': [
-        { boneName: 'spine17', sourceAxis: 'x', targetAxis: 'x', scale: 0.4 },  // Head forward/back
-        { boneName: 'spine18', sourceAxis: 'x', targetAxis: 'x', scale: 0.4 },
-        { boneName: 'spine19', sourceAxis: 'x', targetAxis: 'x', scale: 0.3 },
-        { boneName: 'spine17', sourceAxis: 'z', targetAxis: 'z', scale: 0.3 },  // Head tilt
-        { boneName: 'spine18', sourceAxis: 'z', targetAxis: 'z', scale: 0.3 },
-        { boneName: 'spine19', sourceAxis: 'z', targetAxis: 'z', scale: 0.2 },
-      ],
-      'leftShoulder': [
-        // Match BONE_MAPPING: Humerus_Root_L, flexion=Y (scale:1), abduction=Z (scale:-1)
-        { boneName: 'Humerus_Root_L', sourceAxis: 'x', targetAxis: 'y', scale: 1.0 },   // Flexion (pose.x) -> bone Y
-        { boneName: 'Humerus_Root_L', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 },  // Abduction (pose.z) -> bone Z
-      ],
-      'rightShoulder': [
-        // Match BONE_MAPPING: Humerus_Root_R, flexion=Y (scale:-1), abduction=Z (scale:1)
-        { boneName: 'Humerus_Root_R', sourceAxis: 'x', targetAxis: 'y', scale: -1.0 },  // Flexion (mirrored)
-        { boneName: 'Humerus_Root_R', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction
-      ],
-      'leftElbow': [
-        // Match BONE_MAPPING: Redius_Alna_L, flexion=X (scale:-1)
-        { boneName: 'Redius_Alna_L', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },
-      ],
-      'rightElbow': [
-        // Match BONE_MAPPING: Redius_Alna_R, flexion=X (scale:-1)
-        { boneName: 'Redius_Alna_R', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },
-      ],
-      'leftHip': [
-        // Match BONE_MAPPING: Femer_Root_L, flexion=X (scale:-1), abduction=Z (scale:-1)
-        { boneName: 'Femer_Root_L', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },
-        { boneName: 'Femer_Root_L', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 },
-      ],
-      'rightHip': [
-        // Match BONE_MAPPING: Femer_Root_R, flexion=X (scale:-1), abduction=Z (scale:1)
-        { boneName: 'Femer_Root_R', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },
-        { boneName: 'Femer_Root_R', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },
-      ],
-      'leftKnee': [
-        // Match BONE_MAPPING: fibula_tibia_L, flexion=X (scale:1)
-        { boneName: 'fibula_tibia_L', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
-      ],
-      'rightKnee': [
-        // Match BONE_MAPPING: fibula_tibia_R, flexion=X (scale:1)
-        { boneName: 'fibula_tibia_R', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
-      ],
+    
+    // Define bone control mappings with rotation order and axis conventions
+    const LIVE_POSE_BONE_CONFIG: { 
+      [boneName: string]: { 
+        source: string; 
+        rotations: { axis: 'x' | 'y' | 'z'; poseAxis: 'x' | 'y' | 'z'; scale: number }[] 
+      } 
+    } = {
+      // Shoulders - using Humerus_Root for primary control
+      'Humerus_Root_L': {
+        source: 'leftShoulder',
+        rotations: [
+          { axis: 'y', poseAxis: 'x', scale: 1.0 },   // Flexion (forward) -> Y rotation
+          { axis: 'z', poseAxis: 'z', scale: -1.0 }   // Abduction (sideways) -> Z rotation
+        ]
+      },
+      'Humerus_Root_R': {
+        source: 'rightShoulder',
+        rotations: [
+          { axis: 'y', poseAxis: 'x', scale: -1.0 },  // Flexion (mirrored)
+          { axis: 'z', poseAxis: 'z', scale: 1.0 }    // Abduction
+        ]
+      },
+      // Elbows
+      'Redius_Alna_L': {
+        source: 'leftElbow',
+        rotations: [
+          { axis: 'x', poseAxis: 'x', scale: -1.0 }   // Flexion
+        ]
+      },
+      'Redius_Alna_R': {
+        source: 'rightElbow',
+        rotations: [
+          { axis: 'x', poseAxis: 'x', scale: -1.0 }   // Flexion
+        ]
+      },
+      // Hips - using Femer_Root for primary control
+      'Femer_Root_L': {
+        source: 'leftHip',
+        rotations: [
+          { axis: 'x', poseAxis: 'x', scale: -1.0 },  // Flexion (forward) -> X rotation
+          { axis: 'z', poseAxis: 'z', scale: -1.0 }   // Abduction -> Z rotation
+        ]
+      },
+      'Femer_Root_R': {
+        source: 'rightHip',
+        rotations: [
+          { axis: 'x', poseAxis: 'x', scale: -1.0 },  // Flexion
+          { axis: 'z', poseAxis: 'z', scale: 1.0 }    // Abduction (mirrored)
+        ]
+      },
+      // Knees
+      'fibula_tibia_L': {
+        source: 'leftKnee',
+        rotations: [
+          { axis: 'x', poseAxis: 'x', scale: 1.0 }    // Flexion
+        ]
+      },
+      'fibula_tibia_R': {
+        source: 'rightKnee',
+        rotations: [
+          { axis: 'x', poseAxis: 'x', scale: 1.0 }    // Flexion
+        ]
+      }
     };
 
-    // Collect all bone rotations first (to handle multiple mappings to same bone)
-    const boneRotationDeltas: { [boneName: string]: { x: number; y: number; z: number } } = {};
+    // Apply quaternion-based pose to each controlled bone
+    Object.entries(LIVE_POSE_BONE_CONFIG).forEach(([boneName, config]) => {
+      const bone = bones[boneName] as THREE.Bone;
+      const bindQuat = bindQuaternions[boneName];
+      if (!bone || !bindQuat) return;
 
-    Object.entries(LIVE_POSE_BONE_MAPPING).forEach(([jointKey, mappings]) => {
-      const poseJoint = livePose[jointKey as keyof typeof livePose];
+      const poseJoint = livePose[config.source as keyof typeof livePose];
       if (!poseJoint) return;
 
-      mappings.forEach(({ boneName, sourceAxis, targetAxis, scale, offset = 0 }) => {
-        if (!boneRotationDeltas[boneName]) {
-          boneRotationDeltas[boneName] = { x: 0, y: 0, z: 0 };
-        }
-
-        // Read pose value from sourceAxis
-        const poseValue = sourceAxis === 'x' ? poseJoint.x : sourceAxis === 'y' ? poseJoint.y : poseJoint.z;
-        const scaledValue = poseValue * scale + offset;
+      // Build pose rotation quaternion by composing rotations around each axis
+      const poseQuat = new THREE.Quaternion();
+      
+      config.rotations.forEach(({ axis, poseAxis, scale }) => {
+        // Get the pose angle value
+        const angle = (poseAxis === 'x' ? poseJoint.x : 
+                       poseAxis === 'y' ? poseJoint.y : poseJoint.z) * scale;
         
-        // Accumulate to target axis
-        if (targetAxis === 'x') {
-          boneRotationDeltas[boneName].x += scaledValue;
-        } else if (targetAxis === 'y') {
-          boneRotationDeltas[boneName].y += scaledValue;
-        } else if (targetAxis === 'z') {
-          boneRotationDeltas[boneName].z += scaledValue;
-        }
+        // Create rotation quaternion around the specified local axis
+        const axisVector = axis === 'x' ? new THREE.Vector3(1, 0, 0) :
+                          axis === 'y' ? new THREE.Vector3(0, 1, 0) :
+                          new THREE.Vector3(0, 0, 1);
+        
+        const rotQuat = new THREE.Quaternion().setFromAxisAngle(axisVector, angle);
+        
+        // Compose with existing pose quaternion
+        poseQuat.multiply(rotQuat);
       });
+
+      // Apply: bone.quaternion = bindPose * poseRotation
+      bone.quaternion.copy(bindQuat).multiply(poseQuat);
     });
 
-    // Debug: Log available bones and what we're trying to apply
-    console.log('=== LIVE POSE DEBUG ===');
-    console.log('Available bones:', Object.keys(bones).filter(n => 
-      n.includes('Humerus') || n.includes('Redius') || n.includes('Femer') || n.includes('fibula') || n.includes('spine')
-    ));
-    console.log('Rotation deltas to apply:', boneRotationDeltas);
-
-    // Apply accumulated rotations to bones
-    Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
-      const bone = bones[boneName];
-      if (!bone) {
-        console.warn(`BONE NOT FOUND: ${boneName}`);
-      }
-      const initial = initialRotations[boneName];
-      if (!bone || !initial) return;
-
-      bone.rotation.x = initial.x + delta.x;
-      bone.rotation.y = initial.y + delta.y;
-      bone.rotation.z = initial.z + delta.z;
+    // Apply spine/neck with smaller influence (simpler Euler approach is OK here)
+    const spineInfluence = 0.3;
+    const spineBones = ['spine6', 'spine7', 'spine8', 'spine9'];
+    const neckBones = ['spine17', 'spine18', 'spine19'];
+    
+    spineBones.forEach(boneName => {
+      const bone = bones[boneName] as THREE.Bone;
+      const bindQuat = bindQuaternions[boneName];
+      if (!bone || !bindQuat) return;
+      
+      const spineRotQuat = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          livePose.spine.x * spineInfluence,
+          0,
+          livePose.spine.z * spineInfluence * 0.8
+        )
+      );
+      bone.quaternion.copy(bindQuat).multiply(spineRotQuat);
     });
+    
+    neckBones.forEach(boneName => {
+      const bone = bones[boneName] as THREE.Bone;
+      const bindQuat = bindQuaternions[boneName];
+      if (!bone || !bindQuat) return;
+      
+      const neckRotQuat = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          livePose.neck.x * 0.4,
+          0,
+          livePose.neck.z * 0.3
+        )
+      );
+      bone.quaternion.copy(bindQuat).multiply(neckRotQuat);
+    });
+
   }, [livePose, status]);
+  
+  // Track if live pose is active (to disable slider conflicts)
+  const isLivePoseActive = livePose !== null;
 
   useEffect(() => {
     if (status !== 'ready' || !modelConfig) return;
+    
+    // SKIP slider-based bone control when live pose is active
+    // Live pose takes full control of these bones
+    if (livePose) return;
     
     const bones = bonesRef.current;
     const initialRotations = initialRotationsRef.current;
@@ -1636,7 +1666,7 @@ export default function PureThreeGLBViewer({
         bone.position.z = initialPos.z + posOffset.z;
       }
     });
-  }, [modelConfig, status]);
+  }, [modelConfig, status, livePose]);
 
   // Sync animation constraints to ref (avoids restarting animation when constraints change)
   useEffect(() => {
@@ -1646,6 +1676,8 @@ export default function PureThreeGLBViewer({
   useEffect(() => {
     if (!animationState || !animationState.isPlaying || !animationState.currentMovement) return;
     if (status !== 'ready') return;
+    // Disable animation playback when live pose is active
+    if (livePose) return;
     
     const movement = getMovementById(animationState.currentMovement);
     if (!movement) return;

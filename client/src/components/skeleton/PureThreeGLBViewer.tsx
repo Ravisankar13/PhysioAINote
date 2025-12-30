@@ -1406,43 +1406,39 @@ export default function PureThreeGLBViewer({
         { boneName: 'spine19', sourceAxis: 'z', targetAxis: 'z', scale: 0.2 },
       ],
       'leftShoulder': [
-        // pose.x = flexion angle (arm raised forward)
-        // pose.z = abduction angle (arm raised sideways)
-        // Model uses Humerus_L for left upper arm
-        { boneName: 'Humerus_L', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },  // Flexion (pose.x) -> bone X rotation
-        { boneName: 'Humerus_L', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction (pose.z) -> bone Z rotation
+        // Match BONE_MAPPING: Humerus_Root_L, flexion=Y (scale:1), abduction=Z (scale:-1)
+        { boneName: 'Humerus_Root_L', sourceAxis: 'x', targetAxis: 'y', scale: 1.0 },   // Flexion (pose.x) -> bone Y
+        { boneName: 'Humerus_Root_L', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 },  // Abduction (pose.z) -> bone Z
       ],
       'rightShoulder': [
-        // Model uses Humerus_R for right upper arm
-        { boneName: 'Humerus_R', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 }, // Flexion
-        { boneName: 'Humerus_R', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 }, // Abduction (negated for right side)
+        // Match BONE_MAPPING: Humerus_Root_R, flexion=Y (scale:-1), abduction=Z (scale:1)
+        { boneName: 'Humerus_Root_R', sourceAxis: 'x', targetAxis: 'y', scale: -1.0 },  // Flexion (mirrored)
+        { boneName: 'Humerus_Root_R', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction
       ],
       'leftElbow': [
-        // Model uses Redius_Alna_L for left forearm (elbow flexion)
-        { boneName: 'Redius_Alna_L', sourceAxis: 'x', targetAxis: 'y', scale: 1.0 },   // Flexion -> bone Y rotation
+        // Match BONE_MAPPING: Redius_Alna_L, flexion=X (scale:-1)
+        { boneName: 'Redius_Alna_L', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },
       ],
       'rightElbow': [
-        // Model uses Redius_Alna_R for right forearm
-        { boneName: 'Redius_Alna_R', sourceAxis: 'x', targetAxis: 'y', scale: -1.0 },  // Flexion (mirrored sign)
+        // Match BONE_MAPPING: Redius_Alna_R, flexion=X (scale:-1)
+        { boneName: 'Redius_Alna_R', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },
       ],
       'leftHip': [
-        // pose.x = hip flexion (leg forward)
-        // pose.z = hip abduction (leg outward)
-        // Model uses Femer_L for left thigh
-        { boneName: 'Femer_L', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },   // Flexion -> bone X
-        { boneName: 'Femer_L', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },   // Abduction -> bone Z
+        // Match BONE_MAPPING: Femer_Root_L, flexion=X (scale:-1), abduction=Z (scale:-1)
+        { boneName: 'Femer_Root_L', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },
+        { boneName: 'Femer_Root_L', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 },
       ],
       'rightHip': [
-        // Model uses Femer_R for right thigh
-        { boneName: 'Femer_R', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },   // Flexion
-        { boneName: 'Femer_R', sourceAxis: 'z', targetAxis: 'z', scale: -1.0 },  // Abduction (mirrored)
+        // Match BONE_MAPPING: Femer_Root_R, flexion=X (scale:-1), abduction=Z (scale:1)
+        { boneName: 'Femer_Root_R', sourceAxis: 'x', targetAxis: 'x', scale: -1.0 },
+        { boneName: 'Femer_Root_R', sourceAxis: 'z', targetAxis: 'z', scale: 1.0 },
       ],
       'leftKnee': [
-        // Model uses fibula_tibia_L for left shin (knee flexion)
+        // Match BONE_MAPPING: fibula_tibia_L, flexion=X (scale:1)
         { boneName: 'fibula_tibia_L', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
       ],
       'rightKnee': [
-        // Model uses fibula_tibia_R for right shin
+        // Match BONE_MAPPING: fibula_tibia_R, flexion=X (scale:1)
         { boneName: 'fibula_tibia_R', sourceAxis: 'x', targetAxis: 'x', scale: 1.0 },
       ],
     };

@@ -35,6 +35,7 @@ import { PatientCloneState } from "@/lib/patientCloneComposer";
 import ClinicalIntakePanel, { ClinicalIntakeData } from "@/components/skeleton/ClinicalIntakePanel";
 import ClinicalAssessmentResults from "@/components/skeleton/ClinicalAssessmentResults";
 import { MovementPatternRecognizer, MovementAnalysisResult } from "@/lib/movementPatternRecognition";
+import { StaticPostureAnalyzer } from "@/lib/staticPostureAnalyzer";
 
 interface GLBErrorBoundaryProps {
   children: ReactNode;
@@ -284,6 +285,7 @@ export default function TestSkeletonNew() {
   const [clinicalAssessment, setClinicalAssessment] = useState<any>(null);
   const [isGeneratingAssessment, setIsGeneratingAssessment] = useState(false);
   const patternRecognizerRef = useRef<MovementPatternRecognizer>(new MovementPatternRecognizer());
+  const staticPostureAnalyzerRef = useRef<StaticPostureAnalyzer>(new StaticPostureAnalyzer());
   
   // Save/Load skeleton state
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -444,6 +446,77 @@ export default function TestSkeletonNew() {
       setIsGeneratingAssessment(false);
     }
   }, [movementAnalysis, clinicalIntakeData, toast]);
+
+  // Generate clinical assessment from static posture (slider values)
+  const generateStaticPostureAssessment = useCallback(async () => {
+    setIsGeneratingAssessment(true);
+    try {
+      const staticInput = {
+        modelConfig: {
+          spine: {
+            lordosis: modelConfig.spine.lumbarLordosis,
+            kyphosis: modelConfig.spine.thoracicKyphosis,
+            scoliosis: modelConfig.spine.scoliosis,
+            cervicalFlexion: modelConfig.spine.forwardHead,
+            cervicalLateralFlexion: modelConfig.spine.cervicalLateralFlexion,
+          },
+          pelvis: modelConfig.pelvis,
+          leftHip: modelConfig.leftHip,
+          rightHip: modelConfig.rightHip,
+          leftKnee: {
+            valgus: modelConfig.leftKnee.varus,
+            recurvatum: modelConfig.leftKnee.recurvatum,
+            tibialTorsion: modelConfig.leftKnee.tibialTorsion,
+            tibialSlope: modelConfig.leftKnee.tibialSlope,
+          },
+          rightKnee: {
+            valgus: modelConfig.rightKnee.varus,
+            recurvatum: modelConfig.rightKnee.recurvatum,
+            tibialTorsion: modelConfig.rightKnee.tibialTorsion,
+            tibialSlope: modelConfig.rightKnee.tibialSlope,
+          },
+          leftAnkle: modelConfig.leftAnkle,
+          rightAnkle: modelConfig.rightAnkle,
+        },
+        jointConstraints,
+      };
+
+      const analysis = staticPostureAnalyzerRef.current.analyze(staticInput);
+      const peakAngles = staticPostureAnalyzerRef.current.getPeakAnglesFromConfig(staticInput.modelConfig);
+
+      const response = await apiRequest('/api/movement/clinical-assessment', 'POST', {
+        intakeData: clinicalIntakeData,
+        movementData: {
+          patterns: analysis.patterns,
+          asymmetries: analysis.asymmetries,
+          compensations: analysis.compensations,
+          overallMovementQuality: analysis.overallMovementQuality,
+          primaryImpairments: analysis.primaryImpairments,
+          clinicalHypotheses: analysis.clinicalHypotheses,
+          recommendedFocus: analysis.recommendedFocus,
+          peakAngles,
+          source: 'static_posture',
+        },
+      });
+
+      if (response.success) {
+        setClinicalAssessment(response.assessment);
+        setMovementAnalysis(analysis);
+        toast({
+          title: "Posture Assessment Generated",
+          description: "Clinical assessment based on current skeleton configuration is ready.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Assessment Failed",
+        description: error.message || "Could not generate posture assessment",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingAssessment(false);
+    }
+  }, [modelConfig, jointConstraints, clinicalIntakeData, toast]);
 
   // Fetch patient presentation data when presentationId is in URL
   useEffect(() => {
@@ -1724,6 +1797,36 @@ export default function TestSkeletonNew() {
             </div>
           </CardHeader>
           <CardContent className="overflow-y-auto h-[calc(100%-80px)]">
+            {/* Static Posture Assessment Button */}
+            <div className="mb-4 p-4 bg-gradient-to-r from-green-500/10 to-teal-500/10 rounded-lg border border-green-500/20">
+              <h3 className="font-semibold mb-2 text-green-300 flex items-center gap-2">
+                <Stethoscope className="h-4 w-4" />
+                Clinical Assessment
+              </h3>
+              <p className="text-xs text-slate-400 mb-3">
+                Generate a clinical assessment based on the current skeleton configuration and any joint restrictions.
+              </p>
+              <Button
+                onClick={generateStaticPostureAssessment}
+                disabled={isGeneratingAssessment}
+                className="w-full"
+                variant="secondary"
+                data-testid="btn-static-posture-assessment"
+              >
+                {isGeneratingAssessment ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Analyzing Posture...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4 mr-2" />
+                    Analyze Current Posture
+                  </>
+                )}
+              </Button>
+            </div>
+
             {/* Movement Animation Controller */}
             <div className="mb-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-lg border border-purple-500/20">
               <h3 className="font-semibold mb-3 text-purple-300 flex items-center gap-2">

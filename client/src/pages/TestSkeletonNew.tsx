@@ -523,6 +523,10 @@ export default function TestSkeletonNew() {
   }, []);
 
   const handleAnimationFrame = useCallback((jointValues: { [key: string]: { [prop: string]: number } }) => {
+    // Only update modelConfig when an animation is actively playing
+    // This prevents the GLB bind pose from overwriting neutral defaults on initial load
+    if (!animationState.isPlaying) return;
+    
     setModelConfig((prev) => {
       const newConfig = { ...prev };
       
@@ -541,7 +545,7 @@ export default function TestSkeletonNew() {
       
       return newConfig;
     });
-  }, []);
+  }, [animationState.isPlaying]);
 
   const [modelConfig, setModelConfig] = useState({
     limbScales: {

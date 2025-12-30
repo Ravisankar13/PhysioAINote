@@ -179,8 +179,13 @@ function calculateHipAbduction(
  * Convert MediaPipe landmarks to 3D skeleton pose
  * All rotations are in radians
  */
-export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3DPose {
-  // Extract key landmarks
+export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode: boolean = false): Skeleton3DPose {
+  // Mirror mode handling:
+  // - Keep all calculations in the original anatomical coordinate frame
+  // - After computing joint rotations, swap left/right outputs if mirrored
+  // - This preserves biomechanical sign conventions while matching the user's view
+  
+  // Extract key landmarks (no coordinate modifications - keeps math correct)
   const nose = landmarks[LANDMARKS.NOSE];
   const leftShoulder = landmarks[LANDMARKS.LEFT_SHOULDER];
   const rightShoulder = landmarks[LANDMARKS.RIGHT_SHOULDER];
@@ -283,6 +288,77 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3
   // Clamp helper
   const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
 
+  // Build the base pose from calculated values
+  const leftShoulderJoint = {
+    x: clamp(leftShoulderFlexion, -0.5, Math.PI),    // Flexion (arm forward) - mapped to bone X axis
+    y: 0,                                             // Internal/external rotation
+    z: clamp(leftShoulderAbduction, -0.3, Math.PI)   // Abduction (arm out to side) - mapped to bone Z axis
+  };
+  const rightShoulderJoint = {
+    x: clamp(rightShoulderFlexion, -0.5, Math.PI),   // Flexion
+    y: 0,
+    z: clamp(rightShoulderAbduction, -0.3, Math.PI)  // Abduction
+  };
+  const leftElbowJoint = {
+    x: clamp(leftElbowFlexion, 0, 2.5),              // Flexion only (0 = straight, 2.5 = max bend)
+    y: 0,
+    z: 0
+  };
+  const rightElbowJoint = {
+    x: clamp(rightElbowFlexion, 0, 2.5),
+    y: 0,
+    z: 0
+  };
+  const leftHipJoint = {
+    x: clamp(leftHipFlexion, -0.5, 2.0),             // Flexion (leg forward)
+    y: 0,
+    z: clamp(leftHipAbduction, -0.3, 0.8)            // Abduction (leg outward)
+  };
+  const rightHipJoint = {
+    x: clamp(rightHipFlexion, -0.5, 2.0),
+    y: 0,
+    z: clamp(rightHipAbduction, -0.3, 0.8)
+  };
+  const leftKneeJoint = {
+    x: clamp(leftKneeFlexion, 0, 2.5),               // Flexion only
+    y: 0,
+    z: 0
+  };
+  const rightKneeJoint = {
+    x: clamp(rightKneeFlexion, 0, 2.5),
+    y: 0,
+    z: 0
+  };
+
+  // When mirror mode is ON, swap left/right joints so skeleton matches the mirrored video
+  // This keeps the user's left arm moving the skeleton's left arm (as seen in the mirror)
+  if (mirrorMode) {
+    return {
+      spine: {
+        x: clamp(spineForward, -0.8, 0.8),
+        y: 0,
+        z: clamp(-spineLateral, -0.5, 0.5)  // Invert lateral tilt for mirror
+      },
+      neck: {
+        x: clamp(neckForward, -0.6, 0.6),
+        y: 0,
+        z: clamp(-neckLateral, -0.5, 0.5)   // Invert lateral tilt for mirror
+      },
+      // Swap left and right joints
+      leftShoulder: rightShoulderJoint,
+      rightShoulder: leftShoulderJoint,
+      leftElbow: rightElbowJoint,
+      rightElbow: leftElbowJoint,
+      leftHip: rightHipJoint,
+      rightHip: leftHipJoint,
+      leftKnee: rightKneeJoint,
+      rightKnee: leftKneeJoint,
+      leftWrist: { x: 0, y: 0, z: 0 },
+      rightWrist: { x: 0, y: 0, z: 0 }
+    };
+  }
+
+  // Normal mode (no mirroring)
   return {
     spine: {
       x: clamp(spineForward, -0.8, 0.8),      // Forward/backward lean
@@ -294,46 +370,14 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[]): Skeleton3
       y: 0,                                    // Head rotation (limited from front view)
       z: clamp(neckLateral, -0.5, 0.5)        // Head side tilt
     },
-    leftShoulder: {
-      x: clamp(leftShoulderFlexion, -0.5, Math.PI),    // Flexion (arm forward) - mapped to bone X axis
-      y: 0,                                             // Internal/external rotation
-      z: clamp(leftShoulderAbduction, -0.3, Math.PI)   // Abduction (arm out to side) - mapped to bone Z axis
-    },
-    rightShoulder: {
-      x: clamp(rightShoulderFlexion, -0.5, Math.PI),   // Flexion
-      y: 0,
-      z: clamp(rightShoulderAbduction, -0.3, Math.PI)  // Abduction
-    },
-    leftElbow: {
-      x: clamp(leftElbowFlexion, 0, 2.5),              // Flexion only (0 = straight, 2.5 = max bend)
-      y: 0,
-      z: 0
-    },
-    rightElbow: {
-      x: clamp(rightElbowFlexion, 0, 2.5),
-      y: 0,
-      z: 0
-    },
-    leftHip: {
-      x: clamp(leftHipFlexion, -0.5, 2.0),             // Flexion (leg forward)
-      y: 0,
-      z: clamp(leftHipAbduction, -0.3, 0.8)            // Abduction (leg outward)
-    },
-    rightHip: {
-      x: clamp(rightHipFlexion, -0.5, 2.0),
-      y: 0,
-      z: clamp(rightHipAbduction, -0.3, 0.8)
-    },
-    leftKnee: {
-      x: clamp(leftKneeFlexion, 0, 2.5),               // Flexion only
-      y: 0,
-      z: 0
-    },
-    rightKnee: {
-      x: clamp(rightKneeFlexion, 0, 2.5),
-      y: 0,
-      z: 0
-    },
+    leftShoulder: leftShoulderJoint,
+    rightShoulder: rightShoulderJoint,
+    leftElbow: leftElbowJoint,
+    rightElbow: rightElbowJoint,
+    leftHip: leftHipJoint,
+    rightHip: rightHipJoint,
+    leftKnee: leftKneeJoint,
+    rightKnee: rightKneeJoint,
     leftWrist: { x: 0, y: 0, z: 0 },
     rightWrist: { x: 0, y: 0, z: 0 }
   };

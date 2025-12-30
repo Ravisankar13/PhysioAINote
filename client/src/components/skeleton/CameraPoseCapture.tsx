@@ -143,7 +143,7 @@ export default function CameraPoseCapture({
           }
 
           if (onPoseUpdate) {
-            const pose3D = convertMediaPipeTo3D(results.poseLandmarks);
+            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, mirrorVideo);
             const smoothedPose = smootherRef.current.smooth(pose3D);
             onPoseUpdate(smoothedPose);
           }

@@ -1474,9 +1474,19 @@ export default function PureThreeGLBViewer({
       });
     });
 
+    // Debug: Log available bones and what we're trying to apply
+    console.log('=== LIVE POSE DEBUG ===');
+    console.log('Available bones:', Object.keys(bones).filter(n => 
+      n.includes('Humerus') || n.includes('Redius') || n.includes('Femer') || n.includes('fibula') || n.includes('spine')
+    ));
+    console.log('Rotation deltas to apply:', boneRotationDeltas);
+
     // Apply accumulated rotations to bones
     Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
       const bone = bones[boneName];
+      if (!bone) {
+        console.warn(`BONE NOT FOUND: ${boneName}`);
+      }
       const initial = initialRotations[boneName];
       if (!bone || !initial) return;
 

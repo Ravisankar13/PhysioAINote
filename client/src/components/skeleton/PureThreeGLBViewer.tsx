@@ -1404,8 +1404,9 @@ export default function PureThreeGLBViewer({
       // Pelvis
       'pelvis.tilt': controllerValues.pelvis.tilt,
       'pelvis.obliquity': controllerValues.pelvis.obliquity,
-      // Neck
+      // Neck - yaw/pitch/roll for head tracking
       'neck.flexion': controllerValues.neck.flexion,
+      'neck.rotation': controllerValues.neck.rotation,
       'neck.lateralFlexion': controllerValues.neck.lateralFlexion,
     };
     

@@ -37,6 +37,7 @@ export const ANATOMICAL_RANGES = {
   },
   neck: {
     forward: { min: -0.5, max: 0.5 },
+    rotation: { min: -0.8, max: 0.8 },
     lateral: { min: -0.4, max: 0.4 }
   }
 };
@@ -55,7 +56,7 @@ export interface ControllerValues {
   leftKnee: { flexion: number };
   rightKnee: { flexion: number };
   pelvis: { tilt: number; obliquity: number };
-  neck: { flexion: number; lateralFlexion: number };
+  neck: { flexion: number; rotation: number; lateralFlexion: number };
 }
 
 /**
@@ -118,9 +119,10 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   const pelvisTilt = applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max)) * 0.5;
   const pelvisObliquity = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max)) * 0.3;
   
-  // Neck
-  const neckFlexion = applyDeadZone(clamp(pose.neck.x, neck.forward.min, neck.forward.max)) * 0.5;
-  const neckLateralFlexion = applyDeadZone(clamp(pose.neck.z, neck.lateral.min, neck.lateral.max)) * 0.4;
+  // Neck - now with full yaw/pitch/roll mapping
+  const neckFlexion = applyDeadZone(clamp(pose.neck.x, neck.forward.min, neck.forward.max));
+  const neckRotation = applyDeadZone(clamp(pose.neck.y, neck.rotation.min, neck.rotation.max));
+  const neckLateralFlexion = applyDeadZone(clamp(pose.neck.z, neck.lateral.min, neck.lateral.max));
   
   return {
     leftShoulder: { flexion: leftShoulderFlexion, abduction: leftShoulderAbduction },
@@ -132,7 +134,7 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
     leftKnee: { flexion: leftKneeFlexion },
     rightKnee: { flexion: rightKneeFlexion },
     pelvis: { tilt: pelvisTilt, obliquity: pelvisObliquity },
-    neck: { flexion: neckFlexion, lateralFlexion: neckLateralFlexion }
+    neck: { flexion: neckFlexion, rotation: neckRotation, lateralFlexion: neckLateralFlexion }
   };
 }
 
@@ -200,6 +202,7 @@ export class ControllerSmoother {
       },
       neck: {
         flexion: smoothValue(current.neck.flexion, this.previous.neck.flexion),
+        rotation: smoothValue(current.neck.rotation, this.previous.neck.rotation),
         lateralFlexion: smoothValue(current.neck.lateralFlexion, this.previous.neck.lateralFlexion)
       }
     };

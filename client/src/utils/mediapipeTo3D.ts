@@ -231,10 +231,35 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     shoulderMid.y - hipMid.y
   );
 
-  // === NECK CALCULATIONS ===
-  const nosePos: Vec3 = { x: nose.x, y: -nose.y, z: -nose.z };
-  const neckLateral = Math.atan2(nosePos.x - shoulderMid.x, nosePos.y - shoulderMid.y);
-  const neckForward = Math.atan2(nosePos.z - shoulderMid.z, nosePos.y - shoulderMid.y);
+  // === HEAD/NECK CALCULATIONS ===
+  // Use ears and nose for robust head orientation
+  const leftEar = landmarks[LANDMARKS.LEFT_EAR];
+  const rightEar = landmarks[LANDMARKS.RIGHT_EAR];
+  const leftEye = landmarks[LANDMARKS.LEFT_EYE];
+  const rightEye = landmarks[LANDMARKS.RIGHT_EYE];
+  
+  // Ear-to-ear vector for head orientation basis
+  const earVector = createVector(leftEar, rightEar);
+  const eyeVector = createVector(leftEye, rightEye);
+  
+  // YAW (head rotation left/right): determined by ear Z difference
+  // When head turns right, right ear moves closer to camera (more negative Z in MediaPipe)
+  // After coordinate conversion, this means rightEar.z > leftEar.z when turning right
+  // Using atan2 for the angle: positive = turned right, negative = turned left
+  const headYaw = Math.atan2(earVector.z, Math.abs(earVector.x) || 0.01) * 1.5; // Scale up for visibility
+  
+  // ROLL (head tilt sideways): determined by ear height difference
+  // When tilting head right, right ear drops (higher Y in MediaPipe, lower in THREE.js)
+  const headRoll = Math.atan2(earVector.y, Math.abs(earVector.x) || 0.01);
+  
+  // PITCH (nodding up/down): nose position relative to eye midpoint
+  // When looking down, nose Y increases (in MediaPipe), becomes more negative in THREE.js
+  const eyeMidY = -(leftEye.y + rightEye.y) / 2;
+  const noseY = -nose.y;
+  const eyeMidZ = -(leftEye.z + rightEye.z) / 2;
+  const noseZ = -nose.z;
+  // Pitch is forward/back nod - comparing nose to eye center position
+  const headPitch = Math.atan2(noseY - eyeMidY, Math.abs(noseZ - eyeMidZ) + 0.01) - 0.3; // Offset for natural head angle
 
   // === ARM CALCULATIONS ===
   // Left upper arm direction (shoulder to elbow)
@@ -343,9 +368,9 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
         z: clamp(-spineLateral, -0.5, 0.5)  // Invert lateral tilt for mirror
       },
       neck: {
-        x: clamp(neckForward, -0.6, 0.6),
-        y: 0,
-        z: clamp(-neckLateral, -0.5, 0.5)   // Invert lateral tilt for mirror
+        x: clamp(headPitch, -0.6, 0.6),      // Pitch (nodding up/down)
+        y: clamp(-headYaw, -0.8, 0.8),       // Yaw (rotation) - inverted for mirror
+        z: clamp(-headRoll, -0.5, 0.5)       // Roll (side tilt) - inverted for mirror
       },
       // Swap left/right AND negate z (abduction) for mirror correction
       leftShoulder: { ...rightShoulderJoint, z: -rightShoulderJoint.z },
@@ -369,9 +394,9 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
       z: clamp(spineLateral, -0.5, 0.5)       // Lateral flexion
     },
     neck: {
-      x: clamp(neckForward, -0.6, 0.6),       // Head forward/back
-      y: 0,                                    // Head rotation (limited from front view)
-      z: clamp(neckLateral, -0.5, 0.5)        // Head side tilt
+      x: clamp(headPitch, -0.6, 0.6),        // Pitch (nodding up/down)
+      y: clamp(headYaw, -0.8, 0.8),          // Yaw (head rotation left/right)
+      z: clamp(headRoll, -0.5, 0.5)          // Roll (head side tilt)
     },
     leftShoulder: leftShoulderJoint,
     rightShoulder: rightShoulderJoint,

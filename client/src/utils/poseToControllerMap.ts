@@ -80,6 +80,12 @@ function applyDeadZone(value: number, threshold: number = 0.03): number {
 }
 
 /**
+ * Dead zone for arms - larger threshold to prevent twitching when standing still
+ * but small enough to detect intentional ~15° movements
+ */
+const ARM_DEAD_ZONE = 0.12; // ~7 degrees - balances stability vs responsiveness
+
+/**
  * Convert Skeleton3DPose to controller-compatible values
  * 
  * The output values are in radians, where 0 = neutral position.
@@ -93,16 +99,17 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   const { shoulder, elbow, hip, knee, spine, neck } = ANATOMICAL_RANGES;
   
   // Shoulders - MediaPipe gives x=flexion, z=abduction, already in radians from vertical
-  // When arm is down, these are ~0. When raised, they increase.
-  const leftShoulderFlexion = applyDeadZone(clamp(pose.leftShoulder.x, shoulder.flexion.min, shoulder.flexion.max));
-  const leftShoulderAbduction = applyDeadZone(clamp(pose.leftShoulder.z, shoulder.abduction.min, shoulder.abduction.max));
+  // Use larger dead zone for arms to prevent twitching when at rest
+  // No neutral offset - MediaPipe already reports ~0 for arms at rest
+  const leftShoulderFlexion = applyDeadZone(clamp(pose.leftShoulder.x, shoulder.flexion.min, shoulder.flexion.max), ARM_DEAD_ZONE);
+  const leftShoulderAbduction = applyDeadZone(clamp(pose.leftShoulder.z, shoulder.abduction.min, shoulder.abduction.max), ARM_DEAD_ZONE);
   
-  const rightShoulderFlexion = applyDeadZone(clamp(pose.rightShoulder.x, shoulder.flexion.min, shoulder.flexion.max));
-  const rightShoulderAbduction = applyDeadZone(clamp(pose.rightShoulder.z, shoulder.abduction.min, shoulder.abduction.max));
+  const rightShoulderFlexion = applyDeadZone(clamp(pose.rightShoulder.x, shoulder.flexion.min, shoulder.flexion.max), ARM_DEAD_ZONE);
+  const rightShoulderAbduction = applyDeadZone(clamp(pose.rightShoulder.z, shoulder.abduction.min, shoulder.abduction.max), ARM_DEAD_ZONE);
   
-  // Elbows - x=flexion (0=straight, positive=bent)
-  const leftElbowFlexion = applyDeadZone(clamp(pose.leftElbow.x, elbow.flexion.min, elbow.flexion.max));
-  const rightElbowFlexion = applyDeadZone(clamp(pose.rightElbow.x, elbow.flexion.min, elbow.flexion.max));
+  // Elbows - x=flexion (0=straight, positive=bent) - use larger dead zone
+  const leftElbowFlexion = applyDeadZone(clamp(pose.leftElbow.x, elbow.flexion.min, elbow.flexion.max), ARM_DEAD_ZONE);
+  const rightElbowFlexion = applyDeadZone(clamp(pose.rightElbow.x, elbow.flexion.min, elbow.flexion.max), ARM_DEAD_ZONE);
   
   // Hips - x=flexion (0=standing, positive=leg forward), z=abduction
   const leftHipFlexion = applyDeadZone(clamp(pose.leftHip.x, hip.flexion.min, hip.flexion.max));

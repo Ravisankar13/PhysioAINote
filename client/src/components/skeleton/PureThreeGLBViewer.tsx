@@ -1800,17 +1800,27 @@ export default function PureThreeGLBViewer({
       });
     });
     
+    // Bones that are handled by the animation loop (need rotations stored in sliderRotationsRef)
+    const animationLoopBones = new Set(['Humerus_Root_L', 'Humerus_Root_R', 'HUMERUSL_83', 'HUMERUSR_125']);
+    
     // Apply rotations to bones (initial + delta, same as slider system)
     Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
       const bone = bones[boneName] as THREE.Bone;
       const initial = initialRotations[boneName];
       if (!bone || !initial) return;
       
-      bone.rotation.set(
-        initial.x + delta.x,
-        initial.y + delta.y,
-        initial.z + delta.z
-      );
+      if (animationLoopBones.has(boneName)) {
+        // For animation loop bones, merge deltas into sliderRotationsRef for the animation loop to use
+        // This is critical because the animation loop overwrites direct bone rotations
+        sliderRotationsRef.current[boneName] = delta;
+      } else {
+        // For regular bones, apply directly
+        bone.rotation.set(
+          initial.x + delta.x,
+          initial.y + delta.y,
+          initial.z + delta.z
+        );
+      }
     });
 
   }, [livePose, status]);

@@ -1546,6 +1546,52 @@ export default function PureThreeGLBViewer({
       sliderOnlyRotations[boneName] = { x: 0, y: 0, z: 0 };
     });
     
+    // === PELVIS-SPINE COUPLING ===
+    // Biomechanically, pelvic tilt influences lumbar lordosis, and pelvic obliquity influences scoliosis
+    // These are derived values that add to any manual spine adjustments
+    const PELVIS_LUMBAR_RATIO = 0.6;  // ~0.6° lumbar lordosis change per 1° pelvic tilt
+    const PELVIS_SCOLIOSIS_RATIO = 0.5; // ~0.5° scoliosis per 1° pelvic obliquity
+    
+    // Get pelvis values in degrees (from modelConfig)
+    const pelvisConfig = modelConfig.pelvis as { tilt?: number; obliquity?: number } | undefined;
+    const pelvisTilt = pelvisConfig?.tilt || 0;
+    const pelvisObliquity = pelvisConfig?.obliquity || 0;
+    
+    // Compute derived spine adjustments (additive to any existing spine values)
+    const derivedLumbarLordosis = pelvisTilt * PELVIS_LUMBAR_RATIO;
+    const derivedScoliosis = pelvisObliquity * PELVIS_SCOLIOSIS_RATIO;
+    
+    // Apply derived lumbar lordosis to spine2-spine7 (x-axis, same as BONE_MAPPING)
+    const lumbarBones = ['spine2', 'spine3', 'spine4', 'spine5', 'spine6', 'spine7'];
+    const lumbarScale = 0.2; // Match BONE_MAPPING scale
+    lumbarBones.forEach(boneName => {
+      if (boneRotations[boneName]) {
+        const angleInRadians = (derivedLumbarLordosis * Math.PI) / 180;
+        boneRotations[boneName].x += angleInRadians * lumbarScale;
+      }
+    });
+    
+    // Apply derived scoliosis to spine4-spine14 (z-axis, with alternating scales)
+    const scoliosisMappings = [
+      { boneName: 'spine4', scale: 0.1 },
+      { boneName: 'spine5', scale: 0.15 },
+      { boneName: 'spine6', scale: 0.2 },
+      { boneName: 'spine7', scale: 0.2 },
+      { boneName: 'spine8', scale: 0.15 },
+      { boneName: 'spine9', scale: 0.1 },
+      { boneName: 'spine10', scale: -0.1 },
+      { boneName: 'spine11', scale: -0.15 },
+      { boneName: 'spine12', scale: -0.15 },
+      { boneName: 'spine13', scale: -0.1 },
+      { boneName: 'spine14', scale: -0.05 },
+    ];
+    scoliosisMappings.forEach(({ boneName, scale }) => {
+      if (boneRotations[boneName]) {
+        const angleInRadians = (derivedScoliosis * Math.PI) / 180;
+        boneRotations[boneName].z += angleInRadians * scale;
+      }
+    });
+    
     // Accumulate rotations from all sliders
     Object.entries(BONE_MAPPING).forEach(([configKey, mappings]) => {
       const [jointName, propertyName] = configKey.split('.');

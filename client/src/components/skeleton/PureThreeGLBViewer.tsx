@@ -225,41 +225,41 @@ export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegio
     description: 'Humeroulnar, radioulnar joints'
   },
   // Lumbar segment pairs - each segment is ~3cm apart, L1 at ~y=1.0, L5 at ~y=0.5
-  L1_L2: { position: { x: 0.5, y: 0.95, z: 0.8 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2', icon: '🔹', description: 'L1-L2 motion segment' },
-  L2_L3: { position: { x: 0.5, y: 0.85, z: 0.8 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3', icon: '🔹', description: 'L2-L3 motion segment' },
-  L3_L4: { position: { x: 0.5, y: 0.75, z: 0.8 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4', icon: '🔹', description: 'L3-L4 motion segment' },
-  L4_L5: { position: { x: 0.5, y: 0.65, z: 0.8 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5', icon: '🔹', description: 'L4-L5 motion segment - most common disc herniation site' },
-  L5_S1: { position: { x: 0.5, y: 0.55, z: 0.8 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1', icon: '🔹', description: 'L5-S1 lumbosacral junction' },
+  L1_L2: { position: { x: 0.3, y: 0.95, z: 0.4 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2', icon: '🔹', description: 'L1-L2 motion segment' },
+  L2_L3: { position: { x: 0.3, y: 0.85, z: 0.4 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3', icon: '🔹', description: 'L2-L3 motion segment' },
+  L3_L4: { position: { x: 0.3, y: 0.75, z: 0.4 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4', icon: '🔹', description: 'L3-L4 motion segment' },
+  L4_L5: { position: { x: 0.3, y: 0.65, z: 0.4 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5', icon: '🔹', description: 'L4-L5 motion segment - most common disc herniation site' },
+  L5_S1: { position: { x: 0.3, y: 0.55, z: 0.4 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1', icon: '🔹', description: 'L5-S1 lumbosacral junction' },
   // Sub-structure views - facet joints (oblique posterolateral view ~45° from behind)
-  L1_L2_facet: { position: { x: 0.5, y: 0.95, z: -0.5 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Facet', icon: '◇', description: 'L1-L2 zygapophyseal joints' },
-  L2_L3_facet: { position: { x: 0.5, y: 0.85, z: -0.5 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Facet', icon: '◇', description: 'L2-L3 zygapophyseal joints' },
-  L3_L4_facet: { position: { x: 0.5, y: 0.75, z: -0.5 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Facet', icon: '◇', description: 'L3-L4 zygapophyseal joints' },
-  L4_L5_facet: { position: { x: 0.5, y: 0.65, z: -0.5 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Facet', icon: '◇', description: 'L4-L5 zygapophyseal joints' },
-  L5_S1_facet: { position: { x: 0.5, y: 0.55, z: -0.5 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Facet', icon: '◇', description: 'L5-S1 zygapophyseal joints' },
+  L1_L2_facet: { position: { x: 0.3, y: 0.95, z: -0.3 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Facet', icon: '◇', description: 'L1-L2 zygapophyseal joints' },
+  L2_L3_facet: { position: { x: 0.3, y: 0.85, z: -0.3 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Facet', icon: '◇', description: 'L2-L3 zygapophyseal joints' },
+  L3_L4_facet: { position: { x: 0.3, y: 0.75, z: -0.3 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Facet', icon: '◇', description: 'L3-L4 zygapophyseal joints' },
+  L4_L5_facet: { position: { x: 0.3, y: 0.65, z: -0.3 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Facet', icon: '◇', description: 'L4-L5 zygapophyseal joints' },
+  L5_S1_facet: { position: { x: 0.3, y: 0.55, z: -0.3 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Facet', icon: '◇', description: 'L5-S1 zygapophyseal joints' },
   // Pars interarticularis (oblique "Scotty dog" view - posterior-lateral ~30-45°)
-  L1_L2_pars: { position: { x: 0.6, y: 0.95, z: -0.4 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Pars', icon: '🐕', description: 'L1-L2 pars interarticularis' },
-  L2_L3_pars: { position: { x: 0.6, y: 0.85, z: -0.4 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Pars', icon: '🐕', description: 'L2-L3 pars interarticularis' },
-  L3_L4_pars: { position: { x: 0.6, y: 0.75, z: -0.4 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Pars', icon: '🐕', description: 'L3-L4 pars interarticularis' },
-  L4_L5_pars: { position: { x: 0.6, y: 0.65, z: -0.4 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Pars', icon: '🐕', description: 'L4-L5 pars interarticularis - common spondylolysis site' },
-  L5_S1_pars: { position: { x: 0.6, y: 0.55, z: -0.4 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Pars', icon: '🐕', description: 'L5-S1 pars interarticularis' },
-  // Disc (lateral view)
-  L1_L2_disc: { position: { x: 0.8, y: 0.95, z: 0 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Disc', icon: '💿', description: 'L1-L2 intervertebral disc' },
-  L2_L3_disc: { position: { x: 0.8, y: 0.85, z: 0 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Disc', icon: '💿', description: 'L2-L3 intervertebral disc' },
-  L3_L4_disc: { position: { x: 0.8, y: 0.75, z: 0 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Disc', icon: '💿', description: 'L3-L4 intervertebral disc' },
-  L4_L5_disc: { position: { x: 0.8, y: 0.65, z: 0 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Disc', icon: '💿', description: 'L4-L5 intervertebral disc - most common herniation' },
-  L5_S1_disc: { position: { x: 0.8, y: 0.55, z: 0 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Disc', icon: '💿', description: 'L5-S1 intervertebral disc' },
-  // Vertebral body (anterior view)
-  L1_L2_body: { position: { x: 0, y: 0.95, z: 0.8 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Body', icon: '⬜', description: 'L1-L2 vertebral bodies' },
-  L2_L3_body: { position: { x: 0, y: 0.85, z: 0.8 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Body', icon: '⬜', description: 'L2-L3 vertebral bodies' },
-  L3_L4_body: { position: { x: 0, y: 0.75, z: 0.8 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Body', icon: '⬜', description: 'L3-L4 vertebral bodies' },
-  L4_L5_body: { position: { x: 0, y: 0.65, z: 0.8 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Body', icon: '⬜', description: 'L4-L5 vertebral bodies' },
-  L5_S1_body: { position: { x: 0, y: 0.55, z: 0.8 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Body', icon: '⬜', description: 'L5-S1 vertebral bodies' },
-  // Spinous process (posterior view)
-  L1_L2_spinous: { position: { x: 0, y: 0.95, z: -0.6 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Spinous', icon: '▲', description: 'L1-L2 spinous processes' },
-  L2_L3_spinous: { position: { x: 0, y: 0.85, z: -0.6 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Spinous', icon: '▲', description: 'L2-L3 spinous processes' },
-  L3_L4_spinous: { position: { x: 0, y: 0.75, z: -0.6 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Spinous', icon: '▲', description: 'L3-L4 spinous processes' },
-  L4_L5_spinous: { position: { x: 0, y: 0.65, z: -0.6 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Spinous', icon: '▲', description: 'L4-L5 spinous processes' },
-  L5_S1_spinous: { position: { x: 0, y: 0.55, z: -0.6 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Spinous', icon: '▲', description: 'L5-S1 spinous processes' },
+  L1_L2_pars: { position: { x: 0.35, y: 0.95, z: -0.25 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Pars', icon: '🐕', description: 'L1-L2 pars interarticularis' },
+  L2_L3_pars: { position: { x: 0.35, y: 0.85, z: -0.25 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Pars', icon: '🐕', description: 'L2-L3 pars interarticularis' },
+  L3_L4_pars: { position: { x: 0.35, y: 0.75, z: -0.25 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Pars', icon: '🐕', description: 'L3-L4 pars interarticularis' },
+  L4_L5_pars: { position: { x: 0.35, y: 0.65, z: -0.25 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Pars', icon: '🐕', description: 'L4-L5 pars interarticularis - common spondylolysis site' },
+  L5_S1_pars: { position: { x: 0.35, y: 0.55, z: -0.25 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Pars', icon: '🐕', description: 'L5-S1 pars interarticularis' },
+  // Disc (lateral view - close up)
+  L1_L2_disc: { position: { x: 0.4, y: 0.95, z: 0.1 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Disc', icon: '💿', description: 'L1-L2 intervertebral disc' },
+  L2_L3_disc: { position: { x: 0.4, y: 0.85, z: 0.1 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Disc', icon: '💿', description: 'L2-L3 intervertebral disc' },
+  L3_L4_disc: { position: { x: 0.4, y: 0.75, z: 0.1 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Disc', icon: '💿', description: 'L3-L4 intervertebral disc' },
+  L4_L5_disc: { position: { x: 0.4, y: 0.65, z: 0.1 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Disc', icon: '💿', description: 'L4-L5 intervertebral disc - most common herniation' },
+  L5_S1_disc: { position: { x: 0.4, y: 0.55, z: 0.1 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Disc', icon: '💿', description: 'L5-S1 intervertebral disc' },
+  // Vertebral body (anterior view - close up)
+  L1_L2_body: { position: { x: 0, y: 0.95, z: 0.4 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Body', icon: '⬜', description: 'L1-L2 vertebral bodies' },
+  L2_L3_body: { position: { x: 0, y: 0.85, z: 0.4 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Body', icon: '⬜', description: 'L2-L3 vertebral bodies' },
+  L3_L4_body: { position: { x: 0, y: 0.75, z: 0.4 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Body', icon: '⬜', description: 'L3-L4 vertebral bodies' },
+  L4_L5_body: { position: { x: 0, y: 0.65, z: 0.4 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Body', icon: '⬜', description: 'L4-L5 vertebral bodies' },
+  L5_S1_body: { position: { x: 0, y: 0.55, z: 0.4 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Body', icon: '⬜', description: 'L5-S1 vertebral bodies' },
+  // Spinous process (posterior view - close up)
+  L1_L2_spinous: { position: { x: 0, y: 0.95, z: -0.35 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Spinous', icon: '▲', description: 'L1-L2 spinous processes' },
+  L2_L3_spinous: { position: { x: 0, y: 0.85, z: -0.35 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Spinous', icon: '▲', description: 'L2-L3 spinous processes' },
+  L3_L4_spinous: { position: { x: 0, y: 0.75, z: -0.35 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Spinous', icon: '▲', description: 'L3-L4 spinous processes' },
+  L4_L5_spinous: { position: { x: 0, y: 0.65, z: -0.35 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Spinous', icon: '▲', description: 'L4-L5 spinous processes' },
+  L5_S1_spinous: { position: { x: 0, y: 0.55, z: -0.35 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Spinous', icon: '▲', description: 'L5-S1 spinous processes' },
 };
 
 export const REGION_MESH_MAPPING: Record<AnatomicalRegion, string[]> = {
@@ -310,6 +310,89 @@ export const SEGMENT_BONE_MAPPING: Record<string, string[]> = {
   'L1_L2_facet': ['spine6', 'spine7'], 'L1_L2_pars': ['spine6', 'spine7'], 'L1_L2_disc': ['spine6', 'spine7'], 'L1_L2_body': ['spine6', 'spine7'], 'L1_L2_spinous': ['spine6', 'spine7'],
   // Lumbar spine region - all lumbar bones
   'lumbar_spine': ['spine2', 'spine3', 'spine4', 'spine5', 'spine6', 'spine7'],
+};
+
+// Helper to check if a region is a spinal segment (L1_L2, L4_L5, etc.) or sub-structure
+export const isSpinalSegmentView = (region: string | null): boolean => {
+  if (!region) return false;
+  return /^L[1-5]_(L[1-5]|S1)(_facet|_pars|_disc|_body|_spinous)?$/.test(region);
+};
+
+// Get parent segment from sub-structure view
+export const getParentSegment = (region: string): string | null => {
+  const match = region.match(/^(L[1-5]_(L[1-5]|S1))(_facet|_pars|_disc|_body|_spinous)?$/);
+  return match ? match[1] : null;
+};
+
+// Get sub-structure type from view
+export const getSubStructureType = (region: string): SubStructure | null => {
+  const match = region.match(/_(facet|pars|disc|body|spinous)$/);
+  return match ? match[1] as SubStructure : null;
+};
+
+// Anatomical sub-structure overlay configurations
+export interface SubStructureOverlay {
+  type: SubStructure;
+  geometry: 'cylinder' | 'box' | 'sphere' | 'capsule';
+  color: number;
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number };
+  scale: { x: number; y: number; z: number };
+  opacity: number;
+  label: string;
+}
+
+export const SUB_STRUCTURE_OVERLAYS: Record<SubStructure, SubStructureOverlay> = {
+  disc: {
+    type: 'disc',
+    geometry: 'cylinder',
+    color: 0x4fc3f7,
+    position: { x: 0, y: 0.03, z: 0.02 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 0.08, y: 0.025, z: 0.08 },
+    opacity: 0.85,
+    label: 'Intervertebral Disc'
+  },
+  facet: {
+    type: 'facet',
+    geometry: 'sphere',
+    color: 0xffb74d,
+    position: { x: 0.03, y: 0.02, z: -0.04 },
+    rotation: { x: 0.3, y: 0, z: 0 },
+    scale: { x: 0.025, y: 0.015, z: 0.02 },
+    opacity: 0.85,
+    label: 'Facet Joint'
+  },
+  pars: {
+    type: 'pars',
+    geometry: 'cylinder',
+    color: 0xef5350,
+    position: { x: 0.025, y: 0.01, z: -0.025 },
+    rotation: { x: 0.5, y: 0.3, z: 0 },
+    scale: { x: 0.01, y: 0.03, z: 0.01 },
+    opacity: 0.85,
+    label: 'Pars Interarticularis'
+  },
+  body: {
+    type: 'body',
+    geometry: 'box',
+    color: 0xe0e0e0,
+    position: { x: 0, y: 0, z: 0.04 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 0.06, y: 0.05, z: 0.05 },
+    opacity: 0.7,
+    label: 'Vertebral Body'
+  },
+  spinous: {
+    type: 'spinous',
+    geometry: 'box',
+    color: 0xbdbdbd,
+    position: { x: 0, y: 0.01, z: -0.08 },
+    rotation: { x: -0.3, y: 0, z: 0 },
+    scale: { x: 0.015, y: 0.03, z: 0.04 },
+    opacity: 0.85,
+    label: 'Spinous Process'
+  }
 };
 
 export interface CompensatingJointInfo {
@@ -737,26 +820,84 @@ export default function PureThreeGLBViewer({
   useEffect(() => {
     if (!sceneRef.current) return;
     
-    const { camera, controls, model } = sceneRef.current;
+    const { camera, controls, model, scene } = sceneRef.current;
+    const bones = bonesRef.current;
     
-    if (!zoomToRegion || zoomToRegion === 'full_body') {
-      // Clean up any existing segment markers from bones
-      const bones = bonesRef.current;
+    // Helper function to clean up all segment overlays and markers
+    const cleanupSegmentVisuals = () => {
+      // Remove markers from bones
       Object.values(bones).forEach((bone) => {
         if (bone && bone.children) {
-          const markers = bone.children.filter((c: THREE.Object3D) => c.userData.isSegmentMarker);
+          const markers = bone.children.filter((c: THREE.Object3D) => 
+            c.userData.isSegmentMarker || c.userData.isSubStructureOverlay
+          );
           markers.forEach((marker: THREE.Object3D) => bone.remove(marker));
         }
       });
+      // Remove scene-level overlays
+      if (scene) {
+        const overlays = scene.children.filter((c: THREE.Object3D) => 
+          c.userData.isSegmentMarker || c.userData.isSubStructureOverlay
+        );
+        overlays.forEach((overlay: THREE.Object3D) => scene.remove(overlay));
+      }
+    };
+    
+    // Helper to create sub-structure overlay geometry
+    const createSubStructureOverlay = (config: SubStructureOverlay, bone: THREE.Object3D, isLeft: boolean = false) => {
+      let geometry: THREE.BufferGeometry;
+      switch (config.geometry) {
+        case 'cylinder':
+          geometry = new THREE.CylinderGeometry(config.scale.x, config.scale.x, config.scale.y, 16);
+          break;
+        case 'sphere':
+          geometry = new THREE.SphereGeometry(config.scale.x, 16, 16);
+          break;
+        case 'box':
+          geometry = new THREE.BoxGeometry(config.scale.x, config.scale.y, config.scale.z);
+          break;
+        default:
+          geometry = new THREE.SphereGeometry(config.scale.x, 16, 16);
+      }
       
+      const material = new THREE.MeshBasicMaterial({
+        color: config.color,
+        transparent: true,
+        opacity: config.opacity,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+      });
+      
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.userData.isSubStructureOverlay = true;
+      mesh.userData.overlayType = config.type;
+      mesh.userData.label = config.label;
+      mesh.renderOrder = 999;
+      
+      // Position in local bone space
+      const xOffset = isLeft ? -config.position.x : config.position.x;
+      mesh.position.set(xOffset, config.position.y, config.position.z);
+      mesh.rotation.set(config.rotation.x, config.rotation.y, config.rotation.z);
+      
+      return mesh;
+    };
+    
+    if (!zoomToRegion || zoomToRegion === 'full_body') {
+      // Clean up all segment visualizations
+      cleanupSegmentVisuals();
+      
+      // Restore all mesh visibility - must explicitly set visible=true, opacity=1, transparent=false, depthWrite=true
       if (model) {
         model.traverse((child) => {
           if (child instanceof THREE.Mesh && child.material) {
+            child.visible = true;
             const materials = Array.isArray(child.material) ? child.material : [child.material];
             materials.forEach((mat) => {
               if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial || mat instanceof THREE.MeshBasicMaterial) {
                 mat.opacity = 1;
                 mat.transparent = false;
+                mat.depthWrite = true;
               }
             });
           }
@@ -791,45 +932,93 @@ export default function PureThreeGLBViewer({
 
     const focusedMeshes = REGION_MESH_MAPPING[zoomToRegion] || [];
     const focusedBones = SEGMENT_BONE_MAPPING[zoomToRegion] || [];
-    const hasSegmentBones = focusedBones.length > 0;
-    const bones = bonesRef.current;
-    const sceneData = sceneRef.current;
-    const scene = sceneData?.scene;
+    const isSegmentView = isSpinalSegmentView(zoomToRegion);
+    const subStructureType = getSubStructureType(zoomToRegion);
+    const parentSegment = getParentSegment(zoomToRegion);
 
-    // Remove any existing highlight markers from all bones
-    Object.values(bones).forEach((bone) => {
-      if (bone && bone.children) {
-        const markers = bone.children.filter((c: THREE.Object3D) => c.userData.isSegmentMarker);
-        markers.forEach((marker: THREE.Object3D) => bone.remove(marker));
-      }
-    });
-
-    // Create highlight markers for focused bones (spinal segments)
-    // Markers are added as children of bones so they move with the skeleton
-    if (hasSegmentBones && Object.keys(bones).length > 0) {
-      const markerMaterial = new THREE.MeshBasicMaterial({
-        color: 0x00ffff,
-        transparent: true,
-        opacity: 0.7,
-        depthTest: true,
-      });
-      const markerGeometry = new THREE.SphereGeometry(0.08, 16, 16);
-      
-      focusedBones.forEach((boneName) => {
-        const bone = bones[boneName];
-        if (bone) {
-          const marker = new THREE.Mesh(markerGeometry, markerMaterial.clone());
-          marker.userData.isSegmentMarker = true;
-          
-          // Position marker at bone origin (local space)
-          marker.position.set(0, 0, 0);
-          
-          // Add as child of bone so it follows bone movement
-          bone.add(marker);
+    // Clean up previous segment visuals before creating new ones
+    cleanupSegmentVisuals();
+    
+    // Restore all mesh visibility before starting new zoom to prevent stale hidden meshes
+    if (model) {
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          child.visible = true;
+          child.renderOrder = 0;
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((mat) => {
+            if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial || mat instanceof THREE.MeshBasicMaterial) {
+              mat.opacity = 1;
+              mat.transparent = false;
+              mat.depthWrite = true;
+            }
+          });
         }
       });
     }
 
+    // For segment views, create anatomical overlays
+    if (isSegmentView && focusedBones.length > 0 && Object.keys(bones).length > 0) {
+      const lowerBoneName = focusedBones[0]; // e.g., spine3 for L4_L5
+      const upperBoneName = focusedBones[1]; // e.g., spine4 for L4_L5
+      const lowerBone = bones[lowerBoneName];
+      const upperBone = bones[upperBoneName];
+      
+      if (lowerBone && upperBone) {
+        // Create segment vertebral body representations
+        const bodyConfig = SUB_STRUCTURE_OVERLAYS.body;
+        const lowerBody = createSubStructureOverlay(bodyConfig, lowerBone);
+        const upperBody = createSubStructureOverlay(bodyConfig, upperBone);
+        lowerBone.add(lowerBody);
+        upperBone.add(upperBody);
+        
+        // Create intervertebral disc between the two vertebrae
+        const discConfig = SUB_STRUCTURE_OVERLAYS.disc;
+        const disc = createSubStructureOverlay(discConfig, lowerBone);
+        disc.position.y = 0.05; // Position between vertebrae
+        lowerBone.add(disc);
+        
+        // Create bilateral facet joints (posterior)
+        const facetConfig = SUB_STRUCTURE_OVERLAYS.facet;
+        const leftFacet = createSubStructureOverlay(facetConfig, upperBone, true);
+        const rightFacet = createSubStructureOverlay(facetConfig, upperBone, false);
+        upperBone.add(leftFacet);
+        upperBone.add(rightFacet);
+        
+        // Create pars interarticularis (bilateral)
+        const parsConfig = SUB_STRUCTURE_OVERLAYS.pars;
+        const leftPars = createSubStructureOverlay(parsConfig, upperBone, true);
+        const rightPars = createSubStructureOverlay(parsConfig, upperBone, false);
+        upperBone.add(leftPars);
+        upperBone.add(rightPars);
+        
+        // Create spinous process
+        const spinousConfig = SUB_STRUCTURE_OVERLAYS.spinous;
+        const spinous = createSubStructureOverlay(spinousConfig, upperBone);
+        upperBone.add(spinous);
+        
+        // If viewing a specific sub-structure, highlight it
+        if (subStructureType) {
+          // Dim all overlays except the selected sub-structure type
+          [lowerBone, upperBone].forEach((bone) => {
+            bone.children.forEach((child) => {
+              if (child.userData.isSubStructureOverlay) {
+                const mesh = child as THREE.Mesh;
+                const mat = mesh.material as THREE.MeshStandardMaterial;
+                if (child.userData.overlayType !== subStructureType) {
+                  mat.opacity = 0.15;
+                } else {
+                  mat.opacity = 1.0;
+                  mat.emissive = new THREE.Color(0x333333);
+                }
+              }
+            });
+          });
+        }
+      }
+    }
+
+    // Camera animation
     const startPosition = camera.position.clone();
     const endPosition = new THREE.Vector3(
       regionConfig.position.x,
@@ -857,25 +1046,58 @@ export default function PureThreeGLBViewer({
       controls.target.lerpVectors(startTarget, endTarget, easeProgress);
       controls.update();
 
-      // Mesh-level opacity control
-      if (model && focusedMeshes.length > 0) {
+      // Mesh-level visibility and opacity control
+      if (model) {
         model.traverse((child) => {
           if (child instanceof THREE.Mesh && child.material) {
             const meshName = child.name || '';
-            const isFocused = focusedMeshes.includes(meshName);
+            const isFocusedMesh = focusedMeshes.includes(meshName);
             
-            // For segment views, dim non-spine meshes more aggressively
-            const baseOpacity = hasSegmentBones ? 0.08 : 0.15;
-            const targetOpacity = isFocused ? 1 : baseOpacity + (1 - easeProgress) * (1 - baseOpacity);
-            
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            materials.forEach((mat) => {
-              if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial || mat instanceof THREE.MeshBasicMaterial) {
-                mat.transparent = true;
-                mat.opacity = isFocused ? 1 : targetOpacity;
-                mat.depthWrite = mat.opacity > 0.5;
+            // For segment views, hide all non-spine meshes completely
+            if (isSegmentView) {
+              if (!isFocusedMesh) {
+                // Completely hide non-focused meshes
+                const currentOpacity = 1 - easeProgress;
+                
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((mat) => {
+                  if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial || mat instanceof THREE.MeshBasicMaterial) {
+                    mat.transparent = true;
+                    mat.opacity = currentOpacity;
+                    mat.depthWrite = false;
+                    if (progress >= 1) {
+                      child.visible = false;
+                    }
+                  }
+                });
+              } else {
+                // Keep spine mesh visible but semi-transparent to show overlays on top
+                child.visible = true;
+                child.renderOrder = 0;
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((mat) => {
+                  if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial || mat instanceof THREE.MeshBasicMaterial) {
+                    mat.transparent = true;
+                    mat.opacity = 0.25;
+                    mat.depthWrite = true;
+                    mat.depthTest = true;
+                  }
+                });
               }
-            });
+            } else {
+              // Standard region zoom behavior
+              const baseOpacity = 0.15;
+              const targetOpacity = isFocusedMesh ? 1 : baseOpacity + (1 - easeProgress) * (1 - baseOpacity);
+              
+              const materials = Array.isArray(child.material) ? child.material : [child.material];
+              materials.forEach((mat) => {
+                if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial || mat instanceof THREE.MeshBasicMaterial) {
+                  mat.transparent = !isFocusedMesh || targetOpacity < 1;
+                  mat.opacity = isFocusedMesh ? 1 : targetOpacity;
+                  mat.depthWrite = mat.opacity > 0.5;
+                }
+              });
+            }
           }
         });
       }

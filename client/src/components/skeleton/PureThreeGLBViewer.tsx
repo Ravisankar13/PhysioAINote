@@ -84,7 +84,31 @@ export type AnatomicalRegion =
   | 'right_ankle'
   | 'pelvis'
   | 'left_elbow'
-  | 'right_elbow';
+  | 'right_elbow'
+  // Lumbar segment pairs
+  | 'L1_L2'
+  | 'L2_L3'
+  | 'L3_L4'
+  | 'L4_L5'
+  | 'L5_S1'
+  // Sub-structure views
+  | 'L1_L2_facet' | 'L1_L2_pars' | 'L1_L2_disc' | 'L1_L2_body' | 'L1_L2_spinous'
+  | 'L2_L3_facet' | 'L2_L3_pars' | 'L2_L3_disc' | 'L2_L3_body' | 'L2_L3_spinous'
+  | 'L3_L4_facet' | 'L3_L4_pars' | 'L3_L4_disc' | 'L3_L4_body' | 'L3_L4_spinous'
+  | 'L4_L5_facet' | 'L4_L5_pars' | 'L4_L5_disc' | 'L4_L5_body' | 'L4_L5_spinous'
+  | 'L5_S1_facet' | 'L5_S1_pars' | 'L5_S1_disc' | 'L5_S1_body' | 'L5_S1_spinous';
+
+export type SpinalSegment = 'L1_L2' | 'L2_L3' | 'L3_L4' | 'L4_L5' | 'L5_S1';
+export type SubStructure = 'facet' | 'pars' | 'disc' | 'body' | 'spinous';
+
+export const LUMBAR_SEGMENTS: SpinalSegment[] = ['L1_L2', 'L2_L3', 'L3_L4', 'L4_L5', 'L5_S1'];
+export const SUB_STRUCTURES: { id: SubStructure; label: string; description: string }[] = [
+  { id: 'facet', label: 'Facet Joints', description: 'Zygapophyseal joints - posterior articulations' },
+  { id: 'pars', label: 'Pars Interarticularis', description: 'Isthmus connecting superior and inferior articular processes' },
+  { id: 'disc', label: 'Intervertebral Disc', description: 'Nucleus pulposus and annulus fibrosus' },
+  { id: 'body', label: 'Vertebral Body', description: 'Anterior weight-bearing structure' },
+  { id: 'spinous', label: 'Spinous Process', description: 'Posterior bony projection' },
+];
 
 export interface AnatomicalRegionConfig {
   position: { x: number; y: number; z: number };
@@ -200,6 +224,42 @@ export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegio
     icon: '➡️',
     description: 'Humeroulnar, radioulnar joints'
   },
+  // Lumbar segment pairs - each segment is ~3cm apart, L1 at ~y=1.0, L5 at ~y=0.5
+  L1_L2: { position: { x: 0.5, y: 0.95, z: 0.8 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2', icon: '🔹', description: 'L1-L2 motion segment' },
+  L2_L3: { position: { x: 0.5, y: 0.85, z: 0.8 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3', icon: '🔹', description: 'L2-L3 motion segment' },
+  L3_L4: { position: { x: 0.5, y: 0.75, z: 0.8 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4', icon: '🔹', description: 'L3-L4 motion segment' },
+  L4_L5: { position: { x: 0.5, y: 0.65, z: 0.8 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5', icon: '🔹', description: 'L4-L5 motion segment - most common disc herniation site' },
+  L5_S1: { position: { x: 0.5, y: 0.55, z: 0.8 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1', icon: '🔹', description: 'L5-S1 lumbosacral junction' },
+  // Sub-structure views - facet joints (oblique posterolateral view ~45° from behind)
+  L1_L2_facet: { position: { x: 0.5, y: 0.95, z: -0.5 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Facet', icon: '◇', description: 'L1-L2 zygapophyseal joints' },
+  L2_L3_facet: { position: { x: 0.5, y: 0.85, z: -0.5 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Facet', icon: '◇', description: 'L2-L3 zygapophyseal joints' },
+  L3_L4_facet: { position: { x: 0.5, y: 0.75, z: -0.5 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Facet', icon: '◇', description: 'L3-L4 zygapophyseal joints' },
+  L4_L5_facet: { position: { x: 0.5, y: 0.65, z: -0.5 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Facet', icon: '◇', description: 'L4-L5 zygapophyseal joints' },
+  L5_S1_facet: { position: { x: 0.5, y: 0.55, z: -0.5 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Facet', icon: '◇', description: 'L5-S1 zygapophyseal joints' },
+  // Pars interarticularis (oblique "Scotty dog" view - posterior-lateral ~30-45°)
+  L1_L2_pars: { position: { x: 0.6, y: 0.95, z: -0.4 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Pars', icon: '🐕', description: 'L1-L2 pars interarticularis' },
+  L2_L3_pars: { position: { x: 0.6, y: 0.85, z: -0.4 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Pars', icon: '🐕', description: 'L2-L3 pars interarticularis' },
+  L3_L4_pars: { position: { x: 0.6, y: 0.75, z: -0.4 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Pars', icon: '🐕', description: 'L3-L4 pars interarticularis' },
+  L4_L5_pars: { position: { x: 0.6, y: 0.65, z: -0.4 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Pars', icon: '🐕', description: 'L4-L5 pars interarticularis - common spondylolysis site' },
+  L5_S1_pars: { position: { x: 0.6, y: 0.55, z: -0.4 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Pars', icon: '🐕', description: 'L5-S1 pars interarticularis' },
+  // Disc (lateral view)
+  L1_L2_disc: { position: { x: 0.8, y: 0.95, z: 0 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Disc', icon: '💿', description: 'L1-L2 intervertebral disc' },
+  L2_L3_disc: { position: { x: 0.8, y: 0.85, z: 0 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Disc', icon: '💿', description: 'L2-L3 intervertebral disc' },
+  L3_L4_disc: { position: { x: 0.8, y: 0.75, z: 0 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Disc', icon: '💿', description: 'L3-L4 intervertebral disc' },
+  L4_L5_disc: { position: { x: 0.8, y: 0.65, z: 0 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Disc', icon: '💿', description: 'L4-L5 intervertebral disc - most common herniation' },
+  L5_S1_disc: { position: { x: 0.8, y: 0.55, z: 0 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Disc', icon: '💿', description: 'L5-S1 intervertebral disc' },
+  // Vertebral body (anterior view)
+  L1_L2_body: { position: { x: 0, y: 0.95, z: 0.8 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Body', icon: '⬜', description: 'L1-L2 vertebral bodies' },
+  L2_L3_body: { position: { x: 0, y: 0.85, z: 0.8 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Body', icon: '⬜', description: 'L2-L3 vertebral bodies' },
+  L3_L4_body: { position: { x: 0, y: 0.75, z: 0.8 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Body', icon: '⬜', description: 'L3-L4 vertebral bodies' },
+  L4_L5_body: { position: { x: 0, y: 0.65, z: 0.8 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Body', icon: '⬜', description: 'L4-L5 vertebral bodies' },
+  L5_S1_body: { position: { x: 0, y: 0.55, z: 0.8 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Body', icon: '⬜', description: 'L5-S1 vertebral bodies' },
+  // Spinous process (posterior view)
+  L1_L2_spinous: { position: { x: 0, y: 0.95, z: -0.6 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2 Spinous', icon: '▲', description: 'L1-L2 spinous processes' },
+  L2_L3_spinous: { position: { x: 0, y: 0.85, z: -0.6 }, lookAt: { x: 0, y: 0.85, z: 0 }, label: 'L2/L3 Spinous', icon: '▲', description: 'L2-L3 spinous processes' },
+  L3_L4_spinous: { position: { x: 0, y: 0.75, z: -0.6 }, lookAt: { x: 0, y: 0.75, z: 0 }, label: 'L3/L4 Spinous', icon: '▲', description: 'L3-L4 spinous processes' },
+  L4_L5_spinous: { position: { x: 0, y: 0.65, z: -0.6 }, lookAt: { x: 0, y: 0.65, z: 0 }, label: 'L4/L5 Spinous', icon: '▲', description: 'L4-L5 spinous processes' },
+  L5_S1_spinous: { position: { x: 0, y: 0.55, z: -0.6 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Spinous', icon: '▲', description: 'L5-S1 spinous processes' },
 };
 
 export const REGION_MESH_MAPPING: Record<AnatomicalRegion, string[]> = {
@@ -218,6 +278,18 @@ export const REGION_MESH_MAPPING: Record<AnatomicalRegion, string[]> = {
   right_ankle: ['BONES_LEGR002', 'BONES_LEGR1'],
   left_elbow: ['BONES_ARML002', 'BONES_ARML1'],
   right_elbow: ['BONES_ARMR002', 'BONES_ARMR1'],
+  // Lumbar segment pairs - focus on spine and pelvis meshes
+  L1_L2: ['BONES_SPINE1'],
+  L2_L3: ['BONES_SPINE1'],
+  L3_L4: ['BONES_SPINE1'],
+  L4_L5: ['BONES_SPINE1'],
+  L5_S1: ['BONES_SPINE1', 'BONES_PELVIS1'],
+  // Sub-structures all focus on spine mesh
+  L1_L2_facet: ['BONES_SPINE1'], L1_L2_pars: ['BONES_SPINE1'], L1_L2_disc: ['BONES_SPINE1'], L1_L2_body: ['BONES_SPINE1'], L1_L2_spinous: ['BONES_SPINE1'],
+  L2_L3_facet: ['BONES_SPINE1'], L2_L3_pars: ['BONES_SPINE1'], L2_L3_disc: ['BONES_SPINE1'], L2_L3_body: ['BONES_SPINE1'], L2_L3_spinous: ['BONES_SPINE1'],
+  L3_L4_facet: ['BONES_SPINE1'], L3_L4_pars: ['BONES_SPINE1'], L3_L4_disc: ['BONES_SPINE1'], L3_L4_body: ['BONES_SPINE1'], L3_L4_spinous: ['BONES_SPINE1'],
+  L4_L5_facet: ['BONES_SPINE1'], L4_L5_pars: ['BONES_SPINE1'], L4_L5_disc: ['BONES_SPINE1'], L4_L5_body: ['BONES_SPINE1'], L4_L5_spinous: ['BONES_SPINE1'],
+  L5_S1_facet: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_pars: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_disc: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_body: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_spinous: ['BONES_SPINE1', 'BONES_PELVIS1'],
 };
 
 export interface CompensatingJointInfo {

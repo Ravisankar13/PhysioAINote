@@ -264,7 +264,7 @@ export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegio
 
 export const REGION_MESH_MAPPING: Record<AnatomicalRegion, string[]> = {
   full_body: [],
-  lumbar_spine: ['BONES_SPINE1', 'BONES_PELVIS1'],
+  lumbar_spine: ['BONES_SPINE1'],
   thoracic_spine: ['BONES_SPINE1', 'BONES_RIBCAGE1'],
   cervical_spine: ['BONES_SPINE1', 'BONES_HEAD1'],
   left_shoulder: ['BONES_ARML002', 'BONES_ARML1', 'BONES_RIBCAGE1'],
@@ -290,6 +290,26 @@ export const REGION_MESH_MAPPING: Record<AnatomicalRegion, string[]> = {
   L3_L4_facet: ['BONES_SPINE1'], L3_L4_pars: ['BONES_SPINE1'], L3_L4_disc: ['BONES_SPINE1'], L3_L4_body: ['BONES_SPINE1'], L3_L4_spinous: ['BONES_SPINE1'],
   L4_L5_facet: ['BONES_SPINE1'], L4_L5_pars: ['BONES_SPINE1'], L4_L5_disc: ['BONES_SPINE1'], L4_L5_body: ['BONES_SPINE1'], L4_L5_spinous: ['BONES_SPINE1'],
   L5_S1_facet: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_pars: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_disc: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_body: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_spinous: ['BONES_SPINE1', 'BONES_PELVIS1'],
+};
+
+// Bone-level mapping for individual spinal segments
+// Model has spine2-spine20 (19 bones). Lumbar region is roughly spine2-spine7 (lower spine)
+// Each segment pair spans ~2-3 bones to represent the motion segment
+export const SEGMENT_BONE_MAPPING: Record<string, string[]> = {
+  // Lumbar segments - spine2 is lowest (L5), spine7 is highest (L1)
+  'L5_S1': ['spine2', 'spine3'],           // L5-S1 junction
+  'L4_L5': ['spine3', 'spine4'],           // L4-L5 segment
+  'L3_L4': ['spine4', 'spine5'],           // L3-L4 segment
+  'L2_L3': ['spine5', 'spine6'],           // L2-L3 segment
+  'L1_L2': ['spine6', 'spine7'],           // L1-L2 segment
+  // Sub-structures use same bones as their parent segment
+  'L5_S1_facet': ['spine2', 'spine3'], 'L5_S1_pars': ['spine2', 'spine3'], 'L5_S1_disc': ['spine2', 'spine3'], 'L5_S1_body': ['spine2', 'spine3'], 'L5_S1_spinous': ['spine2', 'spine3'],
+  'L4_L5_facet': ['spine3', 'spine4'], 'L4_L5_pars': ['spine3', 'spine4'], 'L4_L5_disc': ['spine3', 'spine4'], 'L4_L5_body': ['spine3', 'spine4'], 'L4_L5_spinous': ['spine3', 'spine4'],
+  'L3_L4_facet': ['spine4', 'spine5'], 'L3_L4_pars': ['spine4', 'spine5'], 'L3_L4_disc': ['spine4', 'spine5'], 'L3_L4_body': ['spine4', 'spine5'], 'L3_L4_spinous': ['spine4', 'spine5'],
+  'L2_L3_facet': ['spine5', 'spine6'], 'L2_L3_pars': ['spine5', 'spine6'], 'L2_L3_disc': ['spine5', 'spine6'], 'L2_L3_body': ['spine5', 'spine6'], 'L2_L3_spinous': ['spine5', 'spine6'],
+  'L1_L2_facet': ['spine6', 'spine7'], 'L1_L2_pars': ['spine6', 'spine7'], 'L1_L2_disc': ['spine6', 'spine7'], 'L1_L2_body': ['spine6', 'spine7'], 'L1_L2_spinous': ['spine6', 'spine7'],
+  // Lumbar spine region - all lumbar bones
+  'lumbar_spine': ['spine2', 'spine3', 'spine4', 'spine5', 'spine6', 'spine7'],
 };
 
 export interface CompensatingJointInfo {
@@ -720,6 +740,15 @@ export default function PureThreeGLBViewer({
     const { camera, controls, model } = sceneRef.current;
     
     if (!zoomToRegion || zoomToRegion === 'full_body') {
+      // Clean up any existing segment markers from bones
+      const bones = bonesRef.current;
+      Object.values(bones).forEach((bone) => {
+        if (bone && bone.children) {
+          const markers = bone.children.filter((c: THREE.Object3D) => c.userData.isSegmentMarker);
+          markers.forEach((marker: THREE.Object3D) => bone.remove(marker));
+        }
+      });
+      
       if (model) {
         model.traverse((child) => {
           if (child instanceof THREE.Mesh && child.material) {
@@ -761,6 +790,45 @@ export default function PureThreeGLBViewer({
     if (!regionConfig) return;
 
     const focusedMeshes = REGION_MESH_MAPPING[zoomToRegion] || [];
+    const focusedBones = SEGMENT_BONE_MAPPING[zoomToRegion] || [];
+    const hasSegmentBones = focusedBones.length > 0;
+    const bones = bonesRef.current;
+    const sceneData = sceneRef.current;
+    const scene = sceneData?.scene;
+
+    // Remove any existing highlight markers from all bones
+    Object.values(bones).forEach((bone) => {
+      if (bone && bone.children) {
+        const markers = bone.children.filter((c: THREE.Object3D) => c.userData.isSegmentMarker);
+        markers.forEach((marker: THREE.Object3D) => bone.remove(marker));
+      }
+    });
+
+    // Create highlight markers for focused bones (spinal segments)
+    // Markers are added as children of bones so they move with the skeleton
+    if (hasSegmentBones && Object.keys(bones).length > 0) {
+      const markerMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.7,
+        depthTest: true,
+      });
+      const markerGeometry = new THREE.SphereGeometry(0.08, 16, 16);
+      
+      focusedBones.forEach((boneName) => {
+        const bone = bones[boneName];
+        if (bone) {
+          const marker = new THREE.Mesh(markerGeometry, markerMaterial.clone());
+          marker.userData.isSegmentMarker = true;
+          
+          // Position marker at bone origin (local space)
+          marker.position.set(0, 0, 0);
+          
+          // Add as child of bone so it follows bone movement
+          bone.add(marker);
+        }
+      });
+    }
 
     const startPosition = camera.position.clone();
     const endPosition = new THREE.Vector3(
@@ -789,13 +857,16 @@ export default function PureThreeGLBViewer({
       controls.target.lerpVectors(startTarget, endTarget, easeProgress);
       controls.update();
 
+      // Mesh-level opacity control
       if (model && focusedMeshes.length > 0) {
         model.traverse((child) => {
           if (child instanceof THREE.Mesh && child.material) {
             const meshName = child.name || '';
             const isFocused = focusedMeshes.includes(meshName);
             
-            const targetOpacity = isFocused ? 1 : 0.15 + (1 - easeProgress) * 0.85;
+            // For segment views, dim non-spine meshes more aggressively
+            const baseOpacity = hasSegmentBones ? 0.08 : 0.15;
+            const targetOpacity = isFocused ? 1 : baseOpacity + (1 - easeProgress) * (1 - baseOpacity);
             
             const materials = Array.isArray(child.material) ? child.material : [child.material];
             materials.forEach((mat) => {

@@ -607,7 +607,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   // In T-pose, arms point laterally. Flexion rotates arm forward (sagittal plane).
   // For left arm pointing left (-X), flexion uses Y-axis rotation
   'leftShoulder.flexion': [{ boneName: 'Humerus_Root_L', axis: 'y', scale: 1 }], // Forward flexion - Y rotation brings arm forward
-  'leftShoulder.abduction': [{ boneName: 'Humerus_Root_L', axis: 'z', scale: -1 }], // Abduction - Z rotation for lateral elevation
+  'leftShoulder.abduction': [{ boneName: 'Humerus_Root_L', axis: 'z', scale: 1 }], // Abduction - Z rotation for lateral elevation (positive for live pose)
   'leftShoulder.internalRotation': [{ boneName: 'Humerus_L', axis: 'x', scale: 1 }], // Internal rotation around humerus long axis
   'leftShoulder.externalRotation': [{ boneName: 'Humerus_L', axis: 'x', scale: -1 }], // External rotation around humerus long axis
   'leftShoulder.retroversion': [{ boneName: 'Humerus_L', axis: 'y', scale: 1 }], // Humeral head retroversion
@@ -616,7 +616,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Humerus_Root_L', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
   ],
   // For right arm pointing right (+X), flexion uses Y-axis rotation (opposite sign)
-  'rightShoulder.flexion': [{ boneName: 'Humerus_Root_R', axis: 'y', scale: -1 }], // Forward flexion - Y rotation brings arm forward
+  'rightShoulder.flexion': [{ boneName: 'Humerus_Root_R', axis: 'y', scale: 1 }], // Forward flexion - Y rotation brings arm forward (positive for live pose)
   'rightShoulder.abduction': [{ boneName: 'Humerus_Root_R', axis: 'z', scale: 1 }], // Abduction - Z rotation for lateral elevation
   'rightShoulder.internalRotation': [{ boneName: 'Humerus_R', axis: 'x', scale: -1 }], // Internal rotation around humerus long axis
   'rightShoulder.externalRotation': [{ boneName: 'Humerus_R', axis: 'x', scale: 1 }], // External rotation around humerus long axis

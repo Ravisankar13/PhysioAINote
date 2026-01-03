@@ -1496,6 +1496,15 @@ export default function PureThreeGLBViewer({
               const newHumerusLWorld = new THREE.Matrix4();
               newHumerusLWorld.copy(ribCage.matrixWorld).multiply(humerusLOffset);
               
+              // Apply slider rotation BEFORE decomposing - this keeps the joint pivot anchored
+              const sliderRot = sliderRotationsRef.current['Humerus_Root_L'];
+              if (sliderRot) {
+                const sliderMatrix = new THREE.Matrix4().makeRotationFromEuler(
+                  new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z)
+                );
+                newHumerusLWorld.multiply(sliderMatrix);
+              }
+              
               const humerusArmature = (humerusL as any).armature as THREE.Object3D;
               if (humerusArmature) {
                 const armatureInverse = new THREE.Matrix4().copy(humerusArmature.matrixWorld).invert();
@@ -1510,12 +1519,6 @@ export default function PureThreeGLBViewer({
                 // Apply clavicle length offset (negative X = laterally outward for left side)
                 pos.x -= clavicleOffsetsRef.current.left;
                 humerusL.position.copy(pos);
-                // Apply slider rotation on top of base quaternion
-                const sliderRot = sliderRotationsRef.current['Humerus_Root_L'];
-                if (sliderRot) {
-                  const sliderQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z));
-                  quat.multiply(sliderQuat);
-                }
                 humerusL.quaternion.copy(quat);
                 humerusL.scale.copy(scale);
                 humerusL.matrixWorldNeedsUpdate = true;
@@ -1528,6 +1531,15 @@ export default function PureThreeGLBViewer({
               const humerusROffset = (humerusR as any).ribCageOffset as THREE.Matrix4;
               const newHumerusRWorld = new THREE.Matrix4();
               newHumerusRWorld.copy(ribCage.matrixWorld).multiply(humerusROffset);
+              
+              // Apply slider rotation BEFORE decomposing - this keeps the joint pivot anchored
+              const sliderRot = sliderRotationsRef.current['Humerus_Root_R'];
+              if (sliderRot) {
+                const sliderMatrix = new THREE.Matrix4().makeRotationFromEuler(
+                  new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z)
+                );
+                newHumerusRWorld.multiply(sliderMatrix);
+              }
               
               const humerusArmature = (humerusR as any).armature as THREE.Object3D;
               if (humerusArmature) {
@@ -1543,12 +1555,6 @@ export default function PureThreeGLBViewer({
                 // Apply clavicle length offset (positive X = laterally outward for right side)
                 pos.x += clavicleOffsetsRef.current.right;
                 humerusR.position.copy(pos);
-                // Apply slider rotation on top of base quaternion
-                const sliderRot = sliderRotationsRef.current['Humerus_Root_R'];
-                if (sliderRot) {
-                  const sliderQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z));
-                  quat.multiply(sliderQuat);
-                }
                 humerusR.quaternion.copy(quat);
                 humerusR.scale.copy(scale);
                 humerusR.matrixWorldNeedsUpdate = true;

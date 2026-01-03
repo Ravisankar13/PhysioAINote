@@ -143,7 +143,9 @@ export default function CameraPoseCapture({
           }
 
           if (onPoseUpdate) {
-            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, mirrorVideo);
+            // Always pass false for mirrorMode - video mirroring is handled in UI only
+            // The pose data should remain anatomically correct (left arm = left humerus)
+            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
             const smoothedPose = smootherRef.current.smooth(pose3D);
             onPoseUpdate(smoothedPose);
           }

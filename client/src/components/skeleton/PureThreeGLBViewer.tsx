@@ -1521,7 +1521,7 @@ export default function PureThreeGLBViewer({
                 humerusL.position.copy(pos);
                 humerusL.quaternion.copy(quat);
                 humerusL.scale.copy(scale);
-                humerusL.matrixWorldNeedsUpdate = true;
+                humerusL.updateMatrixWorld(true); // Force update to propagate to child bones
               }
             }
             
@@ -1557,7 +1557,7 @@ export default function PureThreeGLBViewer({
                 humerusR.position.copy(pos);
                 humerusR.quaternion.copy(quat);
                 humerusR.scale.copy(scale);
-                humerusR.matrixWorldNeedsUpdate = true;
+                humerusR.updateMatrixWorld(true); // Force update to propagate to child bones
               }
             }
           }

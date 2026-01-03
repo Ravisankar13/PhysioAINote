@@ -1488,70 +1488,89 @@ export default function PureThreeGLBViewer({
             // Sync Humerus bones to follow Rib_Cage so arms stay connected to shoulders
             const humerusL = currentBones['Humerus_Root_L'] as THREE.Bone;
             const humerusR = currentBones['Humerus_Root_R'] as THREE.Bone;
+            const initialRotationsLocal = initialRotationsRef.current;
+            const sliderRotationsLocal = sliderRotationsRef.current;
             
-            if (humerusL && (humerusL as any).ribCageOffset && ribCage) {
-              ribCage.updateMatrixWorld(true);
+            // Check if live pose is active (sliderRotationsRef will have entries from live pose)
+            const hasLivePoseRotation = sliderRotationsLocal['Humerus_Root_L'] || sliderRotationsLocal['Humerus_Root_R'];
+            
+            if (humerusL) {
+              const sliderRot = sliderRotationsLocal['Humerus_Root_L'];
+              const initialRot = initialRotationsLocal['Humerus_Root_L'];
               
-              const humerusLOffset = (humerusL as any).ribCageOffset as THREE.Matrix4;
-              const newHumerusLWorld = new THREE.Matrix4();
-              newHumerusLWorld.copy(ribCage.matrixWorld).multiply(humerusLOffset);
-              
-              const humerusArmature = (humerusL as any).armature as THREE.Object3D;
-              if (humerusArmature) {
-                const armatureInverse = new THREE.Matrix4().copy(humerusArmature.matrixWorld).invert();
-                const newHumerusLLocal = new THREE.Matrix4();
-                newHumerusLLocal.copy(armatureInverse).multiply(newHumerusLWorld);
-                
-                const pos = new THREE.Vector3();
-                const quat = new THREE.Quaternion();
-                const scale = new THREE.Vector3();
-                newHumerusLLocal.decompose(pos, quat, scale);
-                
-                // Apply clavicle length offset (negative X = laterally outward for left side)
-                pos.x -= clavicleOffsetsRef.current.left;
-                humerusL.position.copy(pos);
-                // Apply slider rotation on top of base quaternion
-                const sliderRot = sliderRotationsRef.current['Humerus_Root_L'];
-                if (sliderRot) {
-                  const sliderQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z));
-                  quat.multiply(sliderQuat);
-                }
-                humerusL.quaternion.copy(quat);
-                humerusL.scale.copy(scale);
+              if (sliderRot && initialRot) {
+                // Apply rotation relative to initial bind pose (keeps shoulder joint connected)
+                humerusL.rotation.set(
+                  initialRot.x + sliderRot.x,
+                  initialRot.y + sliderRot.y,
+                  initialRot.z + sliderRot.z
+                );
                 humerusL.matrixWorldNeedsUpdate = true;
+              } else if (!hasLivePoseRotation && (humerusL as any).ribCageOffset && ribCage) {
+                // Only use matrix-based sync when NOT in live pose mode
+                ribCage.updateMatrixWorld(true);
+                
+                const humerusLOffset = (humerusL as any).ribCageOffset as THREE.Matrix4;
+                const newHumerusLWorld = new THREE.Matrix4();
+                newHumerusLWorld.copy(ribCage.matrixWorld).multiply(humerusLOffset);
+                
+                const humerusArmature = (humerusL as any).armature as THREE.Object3D;
+                if (humerusArmature) {
+                  const armatureInverse = new THREE.Matrix4().copy(humerusArmature.matrixWorld).invert();
+                  const newHumerusLLocal = new THREE.Matrix4();
+                  newHumerusLLocal.copy(armatureInverse).multiply(newHumerusLWorld);
+                  
+                  const pos = new THREE.Vector3();
+                  const quat = new THREE.Quaternion();
+                  const scale = new THREE.Vector3();
+                  newHumerusLLocal.decompose(pos, quat, scale);
+                  
+                  pos.x -= clavicleOffsetsRef.current.left;
+                  humerusL.position.copy(pos);
+                  humerusL.quaternion.copy(quat);
+                  humerusL.scale.copy(scale);
+                  humerusL.matrixWorldNeedsUpdate = true;
+                }
               }
             }
             
-            if (humerusR && (humerusR as any).ribCageOffset && ribCage) {
-              ribCage.updateMatrixWorld(true);
+            if (humerusR) {
+              const sliderRot = sliderRotationsLocal['Humerus_Root_R'];
+              const initialRot = initialRotationsLocal['Humerus_Root_R'];
               
-              const humerusROffset = (humerusR as any).ribCageOffset as THREE.Matrix4;
-              const newHumerusRWorld = new THREE.Matrix4();
-              newHumerusRWorld.copy(ribCage.matrixWorld).multiply(humerusROffset);
-              
-              const humerusArmature = (humerusR as any).armature as THREE.Object3D;
-              if (humerusArmature) {
-                const armatureInverse = new THREE.Matrix4().copy(humerusArmature.matrixWorld).invert();
-                const newHumerusRLocal = new THREE.Matrix4();
-                newHumerusRLocal.copy(armatureInverse).multiply(newHumerusRWorld);
-                
-                const pos = new THREE.Vector3();
-                const quat = new THREE.Quaternion();
-                const scale = new THREE.Vector3();
-                newHumerusRLocal.decompose(pos, quat, scale);
-                
-                // Apply clavicle length offset (positive X = laterally outward for right side)
-                pos.x += clavicleOffsetsRef.current.right;
-                humerusR.position.copy(pos);
-                // Apply slider rotation on top of base quaternion
-                const sliderRot = sliderRotationsRef.current['Humerus_Root_R'];
-                if (sliderRot) {
-                  const sliderQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z));
-                  quat.multiply(sliderQuat);
-                }
-                humerusR.quaternion.copy(quat);
-                humerusR.scale.copy(scale);
+              if (sliderRot && initialRot) {
+                // Apply rotation relative to initial bind pose (keeps shoulder joint connected)
+                humerusR.rotation.set(
+                  initialRot.x + sliderRot.x,
+                  initialRot.y + sliderRot.y,
+                  initialRot.z + sliderRot.z
+                );
                 humerusR.matrixWorldNeedsUpdate = true;
+              } else if (!hasLivePoseRotation && (humerusR as any).ribCageOffset && ribCage) {
+                // Only use matrix-based sync when NOT in live pose mode
+                ribCage.updateMatrixWorld(true);
+                
+                const humerusROffset = (humerusR as any).ribCageOffset as THREE.Matrix4;
+                const newHumerusRWorld = new THREE.Matrix4();
+                newHumerusRWorld.copy(ribCage.matrixWorld).multiply(humerusROffset);
+                
+                const humerusArmature = (humerusR as any).armature as THREE.Object3D;
+                if (humerusArmature) {
+                  const armatureInverse = new THREE.Matrix4().copy(humerusArmature.matrixWorld).invert();
+                  const newHumerusRLocal = new THREE.Matrix4();
+                  newHumerusRLocal.copy(armatureInverse).multiply(newHumerusRWorld);
+                  
+                  const pos = new THREE.Vector3();
+                  const quat = new THREE.Quaternion();
+                  const scale = new THREE.Vector3();
+                  newHumerusRLocal.decompose(pos, quat, scale);
+                  
+                  pos.x += clavicleOffsetsRef.current.right;
+                  humerusR.position.copy(pos);
+                  humerusR.quaternion.copy(quat);
+                  humerusR.scale.copy(scale);
+                  humerusR.matrixWorldNeedsUpdate = true;
+                }
               }
             }
           }

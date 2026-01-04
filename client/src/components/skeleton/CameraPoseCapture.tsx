@@ -163,13 +163,22 @@ export default function CameraPoseCapture({
               }
               ctx.drawImage(videoRef.current, 0, 0);
               ctx.restore();
-
+              
+              // Mirror landmark x-coordinates when video is mirrored
+              // MediaPipe uses normalized 0-1 coordinates, so we flip x around 0.5
+              const landmarksForDrawing = mirrorVideo
+                ? results.poseLandmarks.map((lm: any) => ({
+                    ...lm,
+                    x: 1 - lm.x  // Mirror x-coordinate
+                  }))
+                : results.poseLandmarks;
+              
               if (window.drawConnectors && window.drawLandmarks) {
-                window.drawConnectors(ctx, results.poseLandmarks, window.POSE_CONNECTIONS, {
+                window.drawConnectors(ctx, landmarksForDrawing, window.POSE_CONNECTIONS, {
                   color: '#00FF00',
                   lineWidth: 2
                 });
-                window.drawLandmarks(ctx, results.poseLandmarks, {
+                window.drawLandmarks(ctx, landmarksForDrawing, {
                   color: '#FF0000',
                   lineWidth: 1,
                   radius: 3
@@ -251,7 +260,6 @@ export default function CameraPoseCapture({
           <canvas
             ref={canvasRef}
             className={`absolute inset-0 w-full h-full object-cover ${!showPreview && 'opacity-0'}`}
-            style={{ transform: mirrorVideo ? 'scaleX(-1)' : 'none' }}
           />
           
           {!isActive && !isLoading && (

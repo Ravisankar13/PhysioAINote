@@ -56,6 +56,7 @@ export interface ControllerValues {
   leftKnee: { flexion: number };
   rightKnee: { flexion: number };
   pelvis: { tilt: number; obliquity: number };
+  spine: { flexion: number; lateralFlexion: number };
   neck: { flexion: number; rotation: number; lateralFlexion: number };
 }
 
@@ -126,6 +127,10 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   const pelvisTilt = applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max)) * 0.5;
   const pelvisObliquity = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max)) * 0.3;
   
+  // Spine - direct mapping for torso forward/lateral bend (distributed across spine bones)
+  const spineFlexion = applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max));
+  const spineLateralFlexion = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max));
+  
   // Neck - now with full yaw/pitch/roll mapping
   const neckFlexion = applyDeadZone(clamp(pose.neck.x, neck.forward.min, neck.forward.max));
   const neckRotation = applyDeadZone(clamp(pose.neck.y, neck.rotation.min, neck.rotation.max));
@@ -141,6 +146,7 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
     leftKnee: { flexion: leftKneeFlexion },
     rightKnee: { flexion: rightKneeFlexion },
     pelvis: { tilt: pelvisTilt, obliquity: pelvisObliquity },
+    spine: { flexion: spineFlexion, lateralFlexion: spineLateralFlexion },
     neck: { flexion: neckFlexion, rotation: neckRotation, lateralFlexion: neckLateralFlexion }
   };
 }
@@ -206,6 +212,10 @@ export class ControllerSmoother {
       pelvis: {
         tilt: smoothValue(current.pelvis.tilt, this.previous.pelvis.tilt),
         obliquity: smoothValue(current.pelvis.obliquity, this.previous.pelvis.obliquity)
+      },
+      spine: {
+        flexion: smoothValue(current.spine.flexion, this.previous.spine?.flexion ?? current.spine.flexion),
+        lateralFlexion: smoothValue(current.spine.lateralFlexion, this.previous.spine?.lateralFlexion ?? current.spine.lateralFlexion)
       },
       neck: {
         flexion: smoothValue(current.neck.flexion, this.previous.neck.flexion),

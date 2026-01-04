@@ -715,6 +715,34 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine6', axis: 'y', scale: 0.1 },
     { boneName: 'spine7', axis: 'y', scale: 0.1 },
   ],
+  // Spine flexion/extension for live pose (forward/backward bending)
+  // Distributes across lumbar and thoracic spine with anatomically realistic distribution
+  'spine.flexion': [
+    { boneName: 'spine2', axis: 'x', scale: 0.15 },  // L5 - lumbar
+    { boneName: 'spine3', axis: 'x', scale: 0.15 },  // L4
+    { boneName: 'spine4', axis: 'x', scale: 0.12 },  // L3
+    { boneName: 'spine5', axis: 'x', scale: 0.12 },  // L2
+    { boneName: 'spine6', axis: 'x', scale: 0.10 },  // L1
+    { boneName: 'spine7', axis: 'x', scale: 0.08 },  // T12 - lower thoracic
+    { boneName: 'spine8', axis: 'x', scale: 0.06 },  // T11
+    { boneName: 'spine9', axis: 'x', scale: 0.05 },  // T10
+    { boneName: 'spine10', axis: 'x', scale: 0.04 }, // T9
+    { boneName: 'spine11', axis: 'x', scale: 0.03 }, // T8
+    { boneName: 'spine12', axis: 'x', scale: 0.02 }, // T7
+  ],
+  // Spine lateral flexion for live pose (side bending)
+  'spine.lateralFlexion': [
+    { boneName: 'spine2', axis: 'z', scale: 0.12 },  // L5 - lumbar
+    { boneName: 'spine3', axis: 'z', scale: 0.12 },  // L4
+    { boneName: 'spine4', axis: 'z', scale: 0.10 },  // L3
+    { boneName: 'spine5', axis: 'z', scale: 0.10 },  // L2
+    { boneName: 'spine6', axis: 'z', scale: 0.08 },  // L1
+    { boneName: 'spine7', axis: 'z', scale: 0.06 },  // T12 - lower thoracic
+    { boneName: 'spine8', axis: 'z', scale: 0.05 },  // T11
+    { boneName: 'spine9', axis: 'z', scale: 0.04 },  // T10
+    { boneName: 'spine10', axis: 'z', scale: 0.03 }, // T9
+    { boneName: 'spine11', axis: 'z', scale: 0.02 }, // T8
+  ],
 
   // === HEAD & NECK (Cervical Spine) ===
   'neck.flexion': [
@@ -1775,6 +1803,9 @@ export default function PureThreeGLBViewer({
       // Pelvis
       'pelvis.tilt': controllerValues.pelvis.tilt,
       'pelvis.obliquity': controllerValues.pelvis.obliquity,
+      // Spine - forward/lateral bending distributed across spine bones
+      'spine.flexion': controllerValues.spine.flexion,
+      'spine.lateralFlexion': controllerValues.spine.lateralFlexion,
       // Neck - yaw/pitch/roll for head tracking
       'neck.flexion': controllerValues.neck.flexion,
       'neck.rotation': controllerValues.neck.rotation,
@@ -1850,6 +1881,9 @@ export default function PureThreeGLBViewer({
     'fibula_tibia_L', 'fibula_tibia_R',
     // Pelvis
     'Pelvis_Main',
+    // Spine (spine2-12 for spine.flexion and spine.lateralFlexion)
+    'spine2', 'spine3', 'spine4', 'spine5', 'spine6', 'spine7',
+    'spine8', 'spine9', 'spine10', 'spine11', 'spine12',
     // Neck (spine17-20 for neck.flexion and neck.lateralFlexion)
     'spine17', 'spine18', 'spine19', 'spine20'
   ];

@@ -87,6 +87,12 @@ function applyDeadZone(value: number, threshold: number = 0.03): number {
 const ARM_DEAD_ZONE = 0.12; // ~7 degrees - balances stability vs responsiveness
 
 /**
+ * Dead zone for spine - smaller threshold relies on ControllerSmoother for jitter control
+ * while preserving moderate torso movements
+ */
+const SPINE_DEAD_ZONE = 0.05; // ~3 degrees - minimal filtering, smoother handles jitter
+
+/**
  * Convert Skeleton3DPose to controller-compatible values
  * 
  * The output values are in radians, where 0 = neutral position.
@@ -128,8 +134,9 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   const pelvisObliquity = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max)) * 0.3;
   
   // Spine - direct mapping for torso forward/lateral bend (distributed across spine bones)
-  const spineFlexion = applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max));
-  const spineLateralFlexion = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max));
+  // Use larger dead zone to only respond to significant torso movements
+  const spineFlexion = applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max), SPINE_DEAD_ZONE);
+  const spineLateralFlexion = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max), SPINE_DEAD_ZONE);
   
   // Neck - now with full yaw/pitch/roll mapping
   const neckFlexion = applyDeadZone(clamp(pose.neck.x, neck.forward.min, neck.forward.max));

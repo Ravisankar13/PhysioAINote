@@ -716,32 +716,33 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'spine7', axis: 'y', scale: 0.1 },
   ],
   // Spine flexion/extension for live pose (forward/backward bending)
-  // Distributes across lumbar and thoracic spine with anatomically realistic distribution
+  // ~65% of original scale values - tracks real movement while reducing sensitivity
   'spine.flexion': [
-    { boneName: 'spine2', axis: 'x', scale: 0.15 },  // L5 - lumbar
-    { boneName: 'spine3', axis: 'x', scale: 0.15 },  // L4
-    { boneName: 'spine4', axis: 'x', scale: 0.12 },  // L3
-    { boneName: 'spine5', axis: 'x', scale: 0.12 },  // L2
-    { boneName: 'spine6', axis: 'x', scale: 0.10 },  // L1
-    { boneName: 'spine7', axis: 'x', scale: 0.08 },  // T12 - lower thoracic
-    { boneName: 'spine8', axis: 'x', scale: 0.06 },  // T11
-    { boneName: 'spine9', axis: 'x', scale: 0.05 },  // T10
-    { boneName: 'spine10', axis: 'x', scale: 0.04 }, // T9
-    { boneName: 'spine11', axis: 'x', scale: 0.03 }, // T8
-    { boneName: 'spine12', axis: 'x', scale: 0.02 }, // T7
+    { boneName: 'spine2', axis: 'x', scale: 0.10 },  // L5 - lumbar
+    { boneName: 'spine3', axis: 'x', scale: 0.10 },  // L4
+    { boneName: 'spine4', axis: 'x', scale: 0.08 },  // L3
+    { boneName: 'spine5', axis: 'x', scale: 0.08 },  // L2
+    { boneName: 'spine6', axis: 'x', scale: 0.065 }, // L1
+    { boneName: 'spine7', axis: 'x', scale: 0.05 },  // T12 - lower thoracic
+    { boneName: 'spine8', axis: 'x', scale: 0.04 },  // T11
+    { boneName: 'spine9', axis: 'x', scale: 0.03 },  // T10
+    { boneName: 'spine10', axis: 'x', scale: 0.025 }, // T9
+    { boneName: 'spine11', axis: 'x', scale: 0.02 }, // T8
+    { boneName: 'spine12', axis: 'x', scale: 0.012 }, // T7
   ],
   // Spine lateral flexion for live pose (side bending)
+  // ~65% of original scale values - tracks real movement while reducing sensitivity
   'spine.lateralFlexion': [
-    { boneName: 'spine2', axis: 'z', scale: 0.12 },  // L5 - lumbar
-    { boneName: 'spine3', axis: 'z', scale: 0.12 },  // L4
-    { boneName: 'spine4', axis: 'z', scale: 0.10 },  // L3
-    { boneName: 'spine5', axis: 'z', scale: 0.10 },  // L2
-    { boneName: 'spine6', axis: 'z', scale: 0.08 },  // L1
-    { boneName: 'spine7', axis: 'z', scale: 0.06 },  // T12 - lower thoracic
-    { boneName: 'spine8', axis: 'z', scale: 0.05 },  // T11
-    { boneName: 'spine9', axis: 'z', scale: 0.04 },  // T10
-    { boneName: 'spine10', axis: 'z', scale: 0.03 }, // T9
-    { boneName: 'spine11', axis: 'z', scale: 0.02 }, // T8
+    { boneName: 'spine2', axis: 'z', scale: 0.08 },  // L5 - lumbar
+    { boneName: 'spine3', axis: 'z', scale: 0.08 },  // L4
+    { boneName: 'spine4', axis: 'z', scale: 0.065 }, // L3
+    { boneName: 'spine5', axis: 'z', scale: 0.065 }, // L2
+    { boneName: 'spine6', axis: 'z', scale: 0.05 },  // L1
+    { boneName: 'spine7', axis: 'z', scale: 0.04 },  // T12 - lower thoracic
+    { boneName: 'spine8', axis: 'z', scale: 0.03 },  // T11
+    { boneName: 'spine9', axis: 'z', scale: 0.025 }, // T10
+    { boneName: 'spine10', axis: 'z', scale: 0.02 }, // T9
+    { boneName: 'spine11', axis: 'z', scale: 0.012 }, // T8
   ],
 
   // === HEAD & NECK (Cervical Spine) ===

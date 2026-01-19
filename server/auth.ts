@@ -9,6 +9,7 @@ import { User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 import Stripe from "stripe";
+import { sendPasswordResetEmail } from "./emailService";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -513,6 +514,124 @@ export function setupAuth(app: Express) {
     } catch (error) {
       console.error("Error fetching admin user data:", error);
       res.status(500).json({ message: "Failed to fetch user data" });
+    }
+  });
+
+  // Request password reset - sends email with reset link
+  app.post("/api/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      
+      // Always return success to prevent email enumeration attacks
+      if (!user) {
+        return res.json({ message: "If an account with that email exists, a password reset link has been sent." });
+      }
+
+      // Generate secure random token
+      const token = randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+
+      // Save token to database
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        token,
+        expiresAt,
+      });
+
+      // Generate reset link (use origin from request or fallback)
+      const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
+      const resetLink = `${origin}/reset-password?token=${token}`;
+
+      // Send email
+      await sendPasswordResetEmail(email, resetLink, user.username || user.fullName || 'User');
+
+      res.json({ message: "If an account with that email exists, a password reset link has been sent." });
+    } catch (error) {
+      console.error("Password reset request error:", error);
+      res.status(500).json({ message: "Failed to process password reset request" });
+    }
+  });
+
+  // Reset password using token
+  app.post("/api/reset-password", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      
+      if (!token || !password) {
+        return res.status(400).json({ message: "Token and password are required" });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      // Find the token
+      const resetToken = await storage.getPasswordResetToken(token);
+      
+      if (!resetToken) {
+        return res.status(400).json({ message: "Invalid or expired reset token" });
+      }
+
+      // Check if token is expired
+      if (new Date() > resetToken.expiresAt) {
+        return res.status(400).json({ message: "Reset token has expired" });
+      }
+
+      // Check if token has already been used
+      if (resetToken.used) {
+        return res.status(400).json({ message: "Reset token has already been used" });
+      }
+
+      // Hash the new password
+      const hashedPassword = await hashPassword(password);
+
+      // Update user's password
+      await storage.updateUserPassword(resetToken.userId, hashedPassword);
+
+      // Mark token as used
+      await storage.markPasswordResetTokenUsed(resetToken.id);
+
+      res.json({ message: "Password has been reset successfully" });
+    } catch (error) {
+      console.error("Password reset error:", error);
+      res.status(500).json({ message: "Failed to reset password" });
+    }
+  });
+
+  // Validate reset token (for UI to check if token is valid before showing form)
+  app.get("/api/validate-reset-token", async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ valid: false, message: "Token is required" });
+      }
+
+      const resetToken = await storage.getPasswordResetToken(token);
+      
+      if (!resetToken) {
+        return res.json({ valid: false, message: "Invalid reset token" });
+      }
+
+      if (new Date() > resetToken.expiresAt) {
+        return res.json({ valid: false, message: "Reset token has expired" });
+      }
+
+      if (resetToken.used) {
+        return res.json({ valid: false, message: "Reset token has already been used" });
+      }
+
+      res.json({ valid: true });
+    } catch (error) {
+      console.error("Token validation error:", error);
+      res.status(500).json({ valid: false, message: "Failed to validate token" });
     }
   });
 }

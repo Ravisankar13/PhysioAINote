@@ -1,7 +1,10 @@
 import {
   users,
+  passwordResetTokens,
   type User,
   type InsertUser,
+  type PasswordResetToken,
+  type InsertPasswordResetToken,
   clinicalNotes,
   type ClinicalNote,
   type InsertClinicalNote,
@@ -178,6 +181,13 @@ export interface IStorage {
   // User Operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  updateUserPassword(userId: number, hashedPassword: string): Promise<User>;
+  
+  // Password Reset Token Operations
+  createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
+  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenUsed(tokenId: number): Promise<void>;
   getAllUsers(): Promise<User[]>;
   getUserCount(): Promise<number>;
   createUser(user: InsertUser): Promise<User>;
@@ -822,6 +832,46 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(eq(users.username, username));
     return results.length > 0 ? results[0] : undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const results = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email));
+    return results.length > 0 ? results[0] : undefined;
+  }
+
+  async updateUserPassword(userId: number, hashedPassword: string): Promise<User> {
+    const result = await db
+      .update(users)
+      .set({ password: hashedPassword })
+      .where(eq(users.id, userId))
+      .returning();
+    return result[0];
+  }
+
+  async createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken> {
+    const result = await db
+      .insert(passwordResetTokens)
+      .values(token)
+      .returning();
+    return result[0];
+  }
+
+  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    const results = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.token, token));
+    return results.length > 0 ? results[0] : undefined;
+  }
+
+  async markPasswordResetTokenUsed(tokenId: number): Promise<void> {
+    await db
+      .update(passwordResetTokens)
+      .set({ used: true })
+      .where(eq(passwordResetTokens.id, tokenId));
   }
 
   async getAllUsers(): Promise<User[]> {

@@ -12,6 +12,8 @@ import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 import Terms from "@/pages/Terms";
 import AuthPage from "@/pages/auth-page";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import SharedNotes from "@/pages/SharedNotes";
 import MyNotes from "@/pages/MyNotes";
 
@@ -213,6 +215,8 @@ function Router() {
           <Route path="/contact" component={Contact} />
           <Route path="/terms" component={Terms} />
           <Route path="/auth" component={AuthPage} />
+          <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/reset-password" component={ResetPassword} />
           <Route path="/trial-welcome">
             <ProtectedRoute component={TrialWelcome} />
           </Route>

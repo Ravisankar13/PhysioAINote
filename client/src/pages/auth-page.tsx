@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -311,6 +311,11 @@ const AuthPage = () => {
                           )}
                           Sign In
                         </Button>
+                        <div className="text-center mt-2">
+                          <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+                            Forgot your password?
+                          </Link>
+                        </div>
                       </form>
                     </Form>
                   </CardContent>

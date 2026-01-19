@@ -130,7 +130,7 @@
     "react-resizable-panels": "^2.1.7",
     "react-router-dom": "^7.6.0",
     "recharts": "^2.15.3",
-    "resend": "^6.7.0",
+    "resend": "^6.8.0",
     "stripe": "^18.4.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",

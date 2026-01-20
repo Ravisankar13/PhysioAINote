@@ -382,6 +382,8 @@ try {
       papaparse: "^5.5.2",
       // Firebase (if used in production)
       firebase: "^11.7.3",
+      // Email service
+      resend: "^6.8.0",
     },
     // Explicitly exclude dev dependencies to prevent accidental inclusion
     devDependencies: {},

@@ -60,13 +60,13 @@ export interface CameraAngleConfig {
 }
 
 export const CAMERA_PRESETS: Record<CameraAngle, CameraAngleConfig> = {
-  front: { position: { x: 0, y: 1.5, z: 8 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Front View' },
-  back: { position: { x: 0, y: 1.5, z: -8 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Back View' },
-  left: { position: { x: -8, y: 1.5, z: 0 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Left Side' },
-  right: { position: { x: 8, y: 1.5, z: 0 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Right Side' },
-  top: { position: { x: 0, y: 10, z: 0.1 }, lookAt: { x: 0, y: 1.2, z: 0 }, label: 'Top View (Transverse)' },
-  perspective: { position: { x: 5, y: 3, z: 5 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: '3/4 View' },
-  custom: { position: { x: 0, y: 1.5, z: 8 }, lookAt: { x: 0, y: 2, z: 0 }, label: 'Custom' },
+  front: { position: { x: 0, y: 1.2, z: 4 }, lookAt: { x: 0, y: 1.2, z: 0 }, label: 'Front View' },
+  back: { position: { x: 0, y: 1.2, z: -4 }, lookAt: { x: 0, y: 1.2, z: 0 }, label: 'Back View' },
+  left: { position: { x: -4, y: 1.2, z: 0 }, lookAt: { x: 0, y: 1.2, z: 0 }, label: 'Left Side' },
+  right: { position: { x: 4, y: 1.2, z: 0 }, lookAt: { x: 0, y: 1.2, z: 0 }, label: 'Right Side' },
+  top: { position: { x: 0, y: 6, z: 0.1 }, lookAt: { x: 0, y: 1.2, z: 0 }, label: 'Top View (Transverse)' },
+  perspective: { position: { x: 3, y: 2, z: 3 }, lookAt: { x: 0, y: 1.2, z: 0 }, label: '3/4 View' },
+  custom: { position: { x: 0, y: 1.2, z: 4 }, lookAt: { x: 0, y: 1.2, z: 0 }, label: 'Custom' },
 };
 
 export type AnatomicalRegion = 
@@ -120,7 +120,7 @@ export interface AnatomicalRegionConfig {
 
 export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegionConfig> = {
   full_body: { 
-    position: { x: 0, y: 1.5, z: 5 }, 
+    position: { x: 0, y: 1.2, z: 3.5 }, 
     lookAt: { x: 0, y: 1.2, z: 0 }, 
     label: 'Full Body',
     icon: '🦴',
@@ -1236,11 +1236,11 @@ export default function PureThreeGLBViewer({
             const center = box.getCenter(new THREE.Vector3());
             
             const maxDim = Math.max(size.x, size.y, size.z);
-            const scale = 2 / maxDim;
+            const scale = 3 / maxDim;
             model.scale.setScalar(scale);
             
             model.position.x = -center.x * scale;
-            model.position.y = -box.min.y * scale;
+            model.position.y = -box.min.y * scale + 0.1;
             model.position.z = -center.z * scale;
             
             const bones: { [name: string]: THREE.Object3D } = {};

@@ -60,13 +60,13 @@ export interface CameraAngleConfig {
 }
 
 export const CAMERA_PRESETS: Record<CameraAngle, CameraAngleConfig> = {
-  front: { position: { x: 0, y: 1.5, z: 2.5 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Front View' },
-  back: { position: { x: 0, y: 1.5, z: -2.5 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Back View' },
-  left: { position: { x: -2.5, y: 1.5, z: 0 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Left Side' },
-  right: { position: { x: 2.5, y: 1.5, z: 0 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Right Side' },
-  top: { position: { x: 0, y: 5, z: 0.1 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Top View (Transverse)' },
-  perspective: { position: { x: 2, y: 1.8, z: 2 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: '3/4 View' },
-  custom: { position: { x: 0, y: 1.5, z: 2.5 }, lookAt: { x: 0, y: 1.5, z: 0 }, label: 'Custom' },
+  front: { position: { x: 0, y: 0.8, z: 2.5 }, lookAt: { x: 0, y: 0.8, z: 0 }, label: 'Front View' },
+  back: { position: { x: 0, y: 0.8, z: -2.5 }, lookAt: { x: 0, y: 0.8, z: 0 }, label: 'Back View' },
+  left: { position: { x: -2.5, y: 0.8, z: 0 }, lookAt: { x: 0, y: 0.8, z: 0 }, label: 'Left Side' },
+  right: { position: { x: 2.5, y: 0.8, z: 0 }, lookAt: { x: 0, y: 0.8, z: 0 }, label: 'Right Side' },
+  top: { position: { x: 0, y: 5, z: 0.1 }, lookAt: { x: 0, y: 0.8, z: 0 }, label: 'Top View (Transverse)' },
+  perspective: { position: { x: 2, y: 1.2, z: 2 }, lookAt: { x: 0, y: 0.8, z: 0 }, label: '3/4 View' },
+  custom: { position: { x: 0, y: 0.8, z: 2.5 }, lookAt: { x: 0, y: 0.8, z: 0 }, label: 'Custom' },
 };
 
 export type AnatomicalRegion = 
@@ -120,8 +120,8 @@ export interface AnatomicalRegionConfig {
 
 export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegionConfig> = {
   full_body: { 
-    position: { x: 0, y: 1.5, z: 2.2 }, 
-    lookAt: { x: 0, y: 1.5, z: 0 }, 
+    position: { x: 0, y: 0.8, z: 2.2 }, 
+    lookAt: { x: 0, y: 0.8, z: 0 }, 
     label: 'Full Body',
     icon: '🦴',
     description: 'Complete skeleton view'
@@ -1240,7 +1240,7 @@ export default function PureThreeGLBViewer({
             model.scale.setScalar(scale);
             
             model.position.x = -center.x * scale;
-            model.position.y = -box.min.y * scale + 0.3;
+            model.position.y = -box.min.y * scale - 0.5;
             model.position.z = -center.z * scale;
             
             const bones: { [name: string]: THREE.Object3D } = {};

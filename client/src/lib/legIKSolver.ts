@@ -14,23 +14,22 @@ export interface IKResult {
   success: boolean;
 }
 
-// Bone names for the 44-bone skeleton_character.glb model
-// Femer_L/R = thigh bones (child of Femer_Root_L/R)
-// fibula_tibia_L/R = shin/knee bones
-// The hip rotation is done at Femer_Root, but we need to rotate Femer for proper thigh movement
+// Bone names for the new 90-bone skeleton model
+// Hierarchy: Hip_L/R → HipPart1 → HipPart2 → Knee_L/R → Ankle_L/R → Toes
+// For IK: thigh rotation applied at Hip_L, shin rotation at Knee_L
 export const LEG_IK_CONFIG = {
   left: {
-    hipBoneName: 'Femer_Root_L',
-    thighBoneName: 'Femer_L',
-    shinBoneName: 'fibula_tibia_L',
-    footBoneName: 'foot_L',
+    hipBoneName: 'Hip_L',      // Hip joint position (root of leg chain)
+    thighBoneName: 'Hip_L',    // Where thigh rotation is applied
+    shinBoneName: 'Knee_L',    // Where knee rotation is applied
+    footBoneName: 'Ankle_L',   // End effector (foot position)
     isLeft: true,
   },
   right: {
-    hipBoneName: 'Femer_Root_R',
-    thighBoneName: 'Femer_R',
-    shinBoneName: 'fibula_tibia_R',
-    footBoneName: 'foot_R',
+    hipBoneName: 'Hip_R',      // Hip joint position (root of leg chain)
+    thighBoneName: 'Hip_R',    // Where thigh rotation is applied
+    shinBoneName: 'Knee_R',    // Where knee rotation is applied
+    footBoneName: 'Ankle_R',   // End effector (foot position)
     isLeft: false,
   },
 };
@@ -155,7 +154,7 @@ export function applyLegIK(
     return;
   }
 
-  // Apply rotation to the THIGH bone (Femer_L/R), not the hip root pivot
+  // Apply rotation to the hip bone (Hip_L/R) for thigh movement
   const thighInitial = initialRotations[config.thighBoneName];
   const shinInitial = initialRotations[config.shinBoneName];
 

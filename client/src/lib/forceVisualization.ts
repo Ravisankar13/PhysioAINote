@@ -83,11 +83,11 @@ export class ForceVisualizationManager {
   private forceMetadata: Map<THREE.Object3D, { label: string; value: number; unit: string; threshold: { safe: number; warning: number; critical: number } }> = new Map();
   
   private jointPositions: { [key: string]: { boneNames: string[]; offset: THREE.Vector3 } } = {
-    lumbarSpine: { boneNames: ['spine4', 'spine5'], offset: new THREE.Vector3(0, 0, 0.3) },
-    leftHip: { boneNames: ['Femer_Root_L'], offset: new THREE.Vector3(0, 0, 0.2) },
-    rightHip: { boneNames: ['Femer_Root_R'], offset: new THREE.Vector3(0, 0, 0.2) },
-    leftKnee: { boneNames: ['fibula_tibia_L'], offset: new THREE.Vector3(0, 0, 0.15) },
-    rightKnee: { boneNames: ['fibula_tibia_R'], offset: new THREE.Vector3(0, 0, 0.15) },
+    lumbarSpine: { boneNames: ['Spine1_M', 'RootPart2_M'], offset: new THREE.Vector3(0, 0, 0.3) },
+    leftHip: { boneNames: ['Hip_L'], offset: new THREE.Vector3(0, 0, 0.2) },
+    rightHip: { boneNames: ['Hip_R'], offset: new THREE.Vector3(0, 0, 0.2) },
+    leftKnee: { boneNames: ['Knee_L'], offset: new THREE.Vector3(0, 0, 0.15) },
+    rightKnee: { boneNames: ['Knee_R'], offset: new THREE.Vector3(0, 0, 0.15) },
   };
 
   constructor(scene: THREE.Scene, bones: { [name: string]: THREE.Object3D }) {
@@ -372,15 +372,15 @@ export class ForceVisualizationManager {
 
   private updateMuscleGlows(muscles: MuscleActivationData): void {
     const musclePositions: { name: string; boneNames: string[]; offset: THREE.Vector3 }[] = [
-      { name: 'erectorSpinae', boneNames: ['spine4', 'spine6'], offset: new THREE.Vector3(0, 0, -0.2) },
-      { name: 'gluteMaxL', boneNames: ['Femer_Root_L'], offset: new THREE.Vector3(-0.1, 0.1, -0.2) },
-      { name: 'gluteMaxR', boneNames: ['Femer_Root_R'], offset: new THREE.Vector3(0.1, 0.1, -0.2) },
-      { name: 'gluteMedL', boneNames: ['Femer_Root_L'], offset: new THREE.Vector3(-0.15, 0.2, 0) },
-      { name: 'gluteMedR', boneNames: ['Femer_Root_R'], offset: new THREE.Vector3(0.15, 0.2, 0) },
-      { name: 'quadsL', boneNames: ['Femer_L'], offset: new THREE.Vector3(0, 0, 0.15) },
-      { name: 'quadsR', boneNames: ['Femer_R'], offset: new THREE.Vector3(0, 0, 0.15) },
-      { name: 'hamstringsL', boneNames: ['Femer_L'], offset: new THREE.Vector3(0, 0, -0.15) },
-      { name: 'hamstringsR', boneNames: ['Femer_R'], offset: new THREE.Vector3(0, 0, -0.15) },
+      { name: 'erectorSpinae', boneNames: ['Spine1_M', 'RootPart2_M'], offset: new THREE.Vector3(0, 0, -0.2) },
+      { name: 'gluteMaxL', boneNames: ['Hip_L'], offset: new THREE.Vector3(-0.1, 0.1, -0.2) },
+      { name: 'gluteMaxR', boneNames: ['Hip_R'], offset: new THREE.Vector3(0.1, 0.1, -0.2) },
+      { name: 'gluteMedL', boneNames: ['Hip_L'], offset: new THREE.Vector3(-0.15, 0.2, 0) },
+      { name: 'gluteMedR', boneNames: ['Hip_R'], offset: new THREE.Vector3(0.15, 0.2, 0) },
+      { name: 'quadsL', boneNames: ['HipPart1_L'], offset: new THREE.Vector3(0, 0, 0.15) },
+      { name: 'quadsR', boneNames: ['HipPart1_R'], offset: new THREE.Vector3(0, 0, 0.15) },
+      { name: 'hamstringsL', boneNames: ['HipPart1_L'], offset: new THREE.Vector3(0, 0, -0.15) },
+      { name: 'hamstringsR', boneNames: ['HipPart1_R'], offset: new THREE.Vector3(0, 0, -0.15) },
     ];
 
     const getActivation = (name: string): number => {

@@ -293,23 +293,23 @@ export const REGION_MESH_MAPPING: Record<AnatomicalRegion, string[]> = {
 };
 
 // Bone-level mapping for individual spinal segments
-// Model has spine2-spine20 (19 bones). Lumbar region is roughly spine2-spine7 (lower spine)
-// Each segment pair spans ~2-3 bones to represent the motion segment
+// New model has simplified spine: Root_M, RootPart1/2_M (pelvis), Spine1_M, Spine1Part1/2_M, Chest_M
+// Lumbar segments mapped to available bones
 export const SEGMENT_BONE_MAPPING: Record<string, string[]> = {
-  // Lumbar segments - spine2 is lowest (L5), spine7 is highest (L1)
-  'L5_S1': ['spine2', 'spine3'],           // L5-S1 junction
-  'L4_L5': ['spine3', 'spine4'],           // L4-L5 segment
-  'L3_L4': ['spine4', 'spine5'],           // L3-L4 segment
-  'L2_L3': ['spine5', 'spine6'],           // L2-L3 segment
-  'L1_L2': ['spine6', 'spine7'],           // L1-L2 segment
+  // Lumbar segments - Root_M is lowest, Spine1_M is higher lumbar
+  'L5_S1': ['Root_M', 'RootPart1_M'],           // L5-S1 junction
+  'L4_L5': ['RootPart1_M', 'RootPart2_M'],      // L4-L5 segment
+  'L3_L4': ['RootPart2_M', 'Spine1_M'],         // L3-L4 segment
+  'L2_L3': ['Spine1_M', 'Spine1Part1_M'],       // L2-L3 segment
+  'L1_L2': ['Spine1Part1_M', 'Spine1Part2_M'],  // L1-L2 segment
   // Sub-structures use same bones as their parent segment
-  'L5_S1_facet': ['spine2', 'spine3'], 'L5_S1_pars': ['spine2', 'spine3'], 'L5_S1_disc': ['spine2', 'spine3'], 'L5_S1_body': ['spine2', 'spine3'], 'L5_S1_spinous': ['spine2', 'spine3'],
-  'L4_L5_facet': ['spine3', 'spine4'], 'L4_L5_pars': ['spine3', 'spine4'], 'L4_L5_disc': ['spine3', 'spine4'], 'L4_L5_body': ['spine3', 'spine4'], 'L4_L5_spinous': ['spine3', 'spine4'],
-  'L3_L4_facet': ['spine4', 'spine5'], 'L3_L4_pars': ['spine4', 'spine5'], 'L3_L4_disc': ['spine4', 'spine5'], 'L3_L4_body': ['spine4', 'spine5'], 'L3_L4_spinous': ['spine4', 'spine5'],
-  'L2_L3_facet': ['spine5', 'spine6'], 'L2_L3_pars': ['spine5', 'spine6'], 'L2_L3_disc': ['spine5', 'spine6'], 'L2_L3_body': ['spine5', 'spine6'], 'L2_L3_spinous': ['spine5', 'spine6'],
-  'L1_L2_facet': ['spine6', 'spine7'], 'L1_L2_pars': ['spine6', 'spine7'], 'L1_L2_disc': ['spine6', 'spine7'], 'L1_L2_body': ['spine6', 'spine7'], 'L1_L2_spinous': ['spine6', 'spine7'],
+  'L5_S1_facet': ['Root_M', 'RootPart1_M'], 'L5_S1_pars': ['Root_M', 'RootPart1_M'], 'L5_S1_disc': ['Root_M', 'RootPart1_M'], 'L5_S1_body': ['Root_M', 'RootPart1_M'], 'L5_S1_spinous': ['Root_M', 'RootPart1_M'],
+  'L4_L5_facet': ['RootPart1_M', 'RootPart2_M'], 'L4_L5_pars': ['RootPart1_M', 'RootPart2_M'], 'L4_L5_disc': ['RootPart1_M', 'RootPart2_M'], 'L4_L5_body': ['RootPart1_M', 'RootPart2_M'], 'L4_L5_spinous': ['RootPart1_M', 'RootPart2_M'],
+  'L3_L4_facet': ['RootPart2_M', 'Spine1_M'], 'L3_L4_pars': ['RootPart2_M', 'Spine1_M'], 'L3_L4_disc': ['RootPart2_M', 'Spine1_M'], 'L3_L4_body': ['RootPart2_M', 'Spine1_M'], 'L3_L4_spinous': ['RootPart2_M', 'Spine1_M'],
+  'L2_L3_facet': ['Spine1_M', 'Spine1Part1_M'], 'L2_L3_pars': ['Spine1_M', 'Spine1Part1_M'], 'L2_L3_disc': ['Spine1_M', 'Spine1Part1_M'], 'L2_L3_body': ['Spine1_M', 'Spine1Part1_M'], 'L2_L3_spinous': ['Spine1_M', 'Spine1Part1_M'],
+  'L1_L2_facet': ['Spine1Part1_M', 'Spine1Part2_M'], 'L1_L2_pars': ['Spine1Part1_M', 'Spine1Part2_M'], 'L1_L2_disc': ['Spine1Part1_M', 'Spine1Part2_M'], 'L1_L2_body': ['Spine1Part1_M', 'Spine1Part2_M'], 'L1_L2_spinous': ['Spine1Part1_M', 'Spine1Part2_M'],
   // Lumbar spine region - all lumbar bones
-  'lumbar_spine': ['spine2', 'spine3', 'spine4', 'spine5', 'spine6', 'spine7'],
+  'lumbar_spine': ['Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Spine1Part2_M'],
 };
 
 // Helper to check if a region is a spinal segment (L1_L2, L4_L5, etc.) or sub-structure
@@ -568,214 +568,176 @@ interface PureThreeGLBViewerProps {
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
   // === HIP / FEMUR ===
-  'leftHip.flexion': [{ boneName: 'Femer_Root_L', axis: 'x', scale: -1 }],
-  'leftHip.extension': [{ boneName: 'Femer_Root_L', axis: 'x', scale: 1 }],
-  'leftHip.abduction': [{ boneName: 'Femer_Root_L', axis: 'z', scale: -1 }],
-  'leftHip.internalRotation': [{ boneName: 'Femer_Root_L', axis: 'y', scale: 1 }],
-  'leftHip.anteversion': [{ boneName: 'Femer_Root_L', axis: 'y', scale: 1 }], // Femoral anteversion - causes internal rotation
-  'leftHip.neckShaftAngle': [{ boneName: 'Femer_Root_L', axis: 'z', scale: 0.5 }], // Coxa vara/valga
-  'rightHip.flexion': [{ boneName: 'Femer_Root_R', axis: 'x', scale: -1 }],
-  'rightHip.extension': [{ boneName: 'Femer_Root_R', axis: 'x', scale: 1 }],
-  'rightHip.abduction': [{ boneName: 'Femer_Root_R', axis: 'z', scale: 1 }],
-  'rightHip.internalRotation': [{ boneName: 'Femer_Root_R', axis: 'y', scale: -1 }],
-  'rightHip.anteversion': [{ boneName: 'Femer_Root_R', axis: 'y', scale: -1 }], // Femoral anteversion - causes internal rotation
-  'rightHip.neckShaftAngle': [{ boneName: 'Femer_Root_R', axis: 'z', scale: -0.5 }], // Coxa vara/valga
+  'leftHip.flexion': [{ boneName: 'Hip_L', axis: 'x', scale: -1 }],
+  'leftHip.extension': [{ boneName: 'Hip_L', axis: 'x', scale: 1 }],
+  'leftHip.abduction': [{ boneName: 'Hip_L', axis: 'z', scale: -1 }],
+  'leftHip.internalRotation': [{ boneName: 'Hip_L', axis: 'y', scale: 1 }],
+  'leftHip.anteversion': [{ boneName: 'Hip_L', axis: 'y', scale: 1 }], // Femoral anteversion - causes internal rotation
+  'leftHip.neckShaftAngle': [{ boneName: 'Hip_L', axis: 'z', scale: 0.5 }], // Coxa vara/valga
+  'rightHip.flexion': [{ boneName: 'Hip_R', axis: 'x', scale: -1 }],
+  'rightHip.extension': [{ boneName: 'Hip_R', axis: 'x', scale: 1 }],
+  'rightHip.abduction': [{ boneName: 'Hip_R', axis: 'z', scale: 1 }],
+  'rightHip.internalRotation': [{ boneName: 'Hip_R', axis: 'y', scale: -1 }],
+  'rightHip.anteversion': [{ boneName: 'Hip_R', axis: 'y', scale: -1 }], // Femoral anteversion - causes internal rotation
+  'rightHip.neckShaftAngle': [{ boneName: 'Hip_R', axis: 'z', scale: -0.5 }], // Coxa vara/valga
   
   // === KNEE / TIBIA ===
-  'leftKnee.flexion': [{ boneName: 'fibula_tibia_L', axis: 'x', scale: 1 }],
-  'leftKnee.varus': [{ boneName: 'fibula_tibia_L', axis: 'z', scale: 1 }], // Genu varum (+) / valgum (-)
-  'leftKnee.tibialTorsion': [{ boneName: 'fibula_tibia_L', axis: 'y', scale: 1 }], // External/internal tibial rotation
-  'leftKnee.recurvatum': [{ boneName: 'fibula_tibia_L', axis: 'x', scale: -0.5 }], // Knee hyperextension
-  'leftKnee.tibialSlope': [{ boneName: 'fibula_tibia_L', axis: 'x', scale: 0.3 }], // Posterior tibial slope
-  'rightKnee.flexion': [{ boneName: 'fibula_tibia_R', axis: 'x', scale: 1 }],
-  'rightKnee.varus': [{ boneName: 'fibula_tibia_R', axis: 'z', scale: -1 }], // Genu varum (+) / valgum (-)
-  'rightKnee.tibialTorsion': [{ boneName: 'fibula_tibia_R', axis: 'y', scale: -1 }], // External/internal tibial rotation
-  'rightKnee.recurvatum': [{ boneName: 'fibula_tibia_R', axis: 'x', scale: -0.5 }], // Knee hyperextension
-  'rightKnee.tibialSlope': [{ boneName: 'fibula_tibia_R', axis: 'x', scale: 0.3 }], // Posterior tibial slope
+  'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'x', scale: 1 }],
+  'leftKnee.varus': [{ boneName: 'Knee_L', axis: 'z', scale: 1 }], // Genu varum (+) / valgum (-)
+  'leftKnee.tibialTorsion': [{ boneName: 'Knee_L', axis: 'y', scale: 1 }], // External/internal tibial rotation
+  'leftKnee.recurvatum': [{ boneName: 'Knee_L', axis: 'x', scale: -0.5 }], // Knee hyperextension
+  'leftKnee.tibialSlope': [{ boneName: 'Knee_L', axis: 'x', scale: 0.3 }], // Posterior tibial slope
+  'rightKnee.flexion': [{ boneName: 'Knee_R', axis: 'x', scale: 1 }],
+  'rightKnee.varus': [{ boneName: 'Knee_R', axis: 'z', scale: -1 }], // Genu varum (+) / valgum (-)
+  'rightKnee.tibialTorsion': [{ boneName: 'Knee_R', axis: 'y', scale: -1 }], // External/internal tibial rotation
+  'rightKnee.recurvatum': [{ boneName: 'Knee_R', axis: 'x', scale: -0.5 }], // Knee hyperextension
+  'rightKnee.tibialSlope': [{ boneName: 'Knee_R', axis: 'x', scale: 0.3 }], // Posterior tibial slope
   
   // === ANKLE & FOOT ===
-  'leftAnkle.dorsiflexion': [{ boneName: 'foot_L', axis: 'x', scale: -1 }],
-  'leftAnkle.plantarflexion': [{ boneName: 'foot_L', axis: 'x', scale: 1 }],
-  'leftAnkle.inversion': [{ boneName: 'foot_L', axis: 'z', scale: 1 }],
-  'leftAnkle.eversion': [{ boneName: 'foot_L', axis: 'z', scale: -1 }],
-  'rightAnkle.dorsiflexion': [{ boneName: 'foot_R', axis: 'x', scale: -1 }],
-  'rightAnkle.plantarflexion': [{ boneName: 'foot_R', axis: 'x', scale: 1 }],
-  'rightAnkle.inversion': [{ boneName: 'foot_R', axis: 'z', scale: -1 }],
-  'rightAnkle.eversion': [{ boneName: 'foot_R', axis: 'z', scale: 1 }],
+  'leftAnkle.dorsiflexion': [{ boneName: 'Ankle_L', axis: 'x', scale: -1 }],
+  'leftAnkle.plantarflexion': [{ boneName: 'Ankle_L', axis: 'x', scale: 1 }],
+  'leftAnkle.inversion': [{ boneName: 'Ankle_L', axis: 'z', scale: 1 }],
+  'leftAnkle.eversion': [{ boneName: 'Ankle_L', axis: 'z', scale: -1 }],
+  'rightAnkle.dorsiflexion': [{ boneName: 'Ankle_R', axis: 'x', scale: -1 }],
+  'rightAnkle.plantarflexion': [{ boneName: 'Ankle_R', axis: 'x', scale: 1 }],
+  'rightAnkle.inversion': [{ boneName: 'Ankle_R', axis: 'z', scale: -1 }],
+  'rightAnkle.eversion': [{ boneName: 'Ankle_R', axis: 'z', scale: 1 }],
   
   // === SHOULDER ===
   // In T-pose, arms point laterally. Flexion rotates arm forward (sagittal plane).
   // For left arm pointing left (-X), flexion uses Y-axis rotation
-  'leftShoulder.flexion': [{ boneName: 'Humerus_Root_L', axis: 'y', scale: -1 }], // Forward flexion - Y rotation brings arm forward (negative for correct direction)
-  'leftShoulder.abduction': [{ boneName: 'Humerus_Root_L', axis: 'z', scale: 1 }], // Abduction - Z rotation for lateral elevation (positive for live pose)
-  'leftShoulder.internalRotation': [{ boneName: 'Humerus_L', axis: 'x', scale: 1 }], // Internal rotation around humerus long axis
-  'leftShoulder.externalRotation': [{ boneName: 'Humerus_L', axis: 'x', scale: -1 }], // External rotation around humerus long axis
-  'leftShoulder.retroversion': [{ boneName: 'Humerus_L', axis: 'y', scale: 1 }], // Humeral head retroversion
+  'leftShoulder.flexion': [{ boneName: 'Shoulder_L', axis: 'y', scale: -1 }], // Forward flexion - Y rotation brings arm forward (negative for correct direction)
+  'leftShoulder.abduction': [{ boneName: 'Shoulder_L', axis: 'z', scale: 1 }], // Abduction - Z rotation for lateral elevation (positive for live pose)
+  'leftShoulder.internalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: 1 }], // Internal rotation around humerus long axis
+  'leftShoulder.externalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: -1 }], // External rotation around humerus long axis
+  'leftShoulder.retroversion': [{ boneName: 'ShoulderPart1_L', axis: 'y', scale: 1 }], // Humeral head retroversion
   'leftShoulder.elevation': [
-    { boneName: 'Rib_Cage', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
-    { boneName: 'Humerus_Root_L', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
+    { boneName: 'Chest_M', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
+    { boneName: 'Shoulder_L', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
   ],
   // For right arm pointing right (+X), flexion uses Y-axis rotation (opposite sign)
-  'rightShoulder.flexion': [{ boneName: 'Humerus_Root_R', axis: 'y', scale: 1 }], // Forward flexion - Y rotation brings arm forward (positive for live pose)
-  'rightShoulder.abduction': [{ boneName: 'Humerus_Root_R', axis: 'z', scale: 1 }], // Abduction - Z rotation for lateral elevation
-  'rightShoulder.internalRotation': [{ boneName: 'Humerus_R', axis: 'x', scale: -1 }], // Internal rotation around humerus long axis
-  'rightShoulder.externalRotation': [{ boneName: 'Humerus_R', axis: 'x', scale: 1 }], // External rotation around humerus long axis
-  'rightShoulder.retroversion': [{ boneName: 'Humerus_R', axis: 'y', scale: -1 }], // Humeral head retroversion
+  'rightShoulder.flexion': [{ boneName: 'Shoulder_R', axis: 'y', scale: 1 }], // Forward flexion - Y rotation brings arm forward (positive for live pose)
+  'rightShoulder.abduction': [{ boneName: 'Shoulder_R', axis: 'z', scale: 1 }], // Abduction - Z rotation for lateral elevation
+  'rightShoulder.internalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: -1 }], // Internal rotation around humerus long axis
+  'rightShoulder.externalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: 1 }], // External rotation around humerus long axis
+  'rightShoulder.retroversion': [{ boneName: 'ShoulderPart1_R', axis: 'y', scale: -1 }], // Humeral head retroversion
   'rightShoulder.elevation': [
-    { boneName: 'Rib_Cage', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
-    { boneName: 'Humerus_Root_R', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
+    { boneName: 'Chest_M', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
+    { boneName: 'Shoulder_R', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
   ],
   
   // === ELBOW ===
-  'leftElbow.flexion': [{ boneName: 'Redius_Alna_L', axis: 'x', scale: -1 }],
-  'leftElbow.pronation': [{ boneName: 'Redius_Alna_L', axis: 'y', scale: 1 }],
-  'leftElbow.carryingAngle': [{ boneName: 'Redius_Alna_L', axis: 'z', scale: -1 }], // Cubitus valgus/varus
-  'rightElbow.flexion': [{ boneName: 'Redius_Alna_R', axis: 'x', scale: -1 }],
-  'rightElbow.pronation': [{ boneName: 'Redius_Alna_R', axis: 'y', scale: -1 }],
-  'rightElbow.carryingAngle': [{ boneName: 'Redius_Alna_R', axis: 'z', scale: 1 }], // Cubitus valgus/varus
+  'leftElbow.flexion': [{ boneName: 'Elbow_L', axis: 'x', scale: -1 }],
+  'leftElbow.pronation': [{ boneName: 'Elbow_L', axis: 'y', scale: 1 }],
+  'leftElbow.carryingAngle': [{ boneName: 'Elbow_L', axis: 'z', scale: -1 }], // Cubitus valgus/varus
+  'rightElbow.flexion': [{ boneName: 'Elbow_R', axis: 'x', scale: -1 }],
+  'rightElbow.pronation': [{ boneName: 'Elbow_R', axis: 'y', scale: -1 }],
+  'rightElbow.carryingAngle': [{ boneName: 'Elbow_R', axis: 'z', scale: 1 }], // Cubitus valgus/varus
   
   // === WRIST ===
-  'leftWrist.deviation': [{ boneName: 'Hand_L', axis: 'z', scale: 1 }], // Ulnar (+) / Radial (-) deviation
-  'leftWrist.flexion': [{ boneName: 'Hand_L', axis: 'x', scale: 1 }], // Flexion (+) / Extension (-)
-  'rightWrist.deviation': [{ boneName: 'Hand_R', axis: 'z', scale: -1 }], // Ulnar (+) / Radial (-) deviation
-  'rightWrist.flexion': [{ boneName: 'Hand_R', axis: 'x', scale: 1 }], // Flexion (+) / Extension (-)
+  'leftWrist.deviation': [{ boneName: 'Wrist_L', axis: 'z', scale: 1 }], // Ulnar (+) / Radial (-) deviation
+  'leftWrist.flexion': [{ boneName: 'Wrist_L', axis: 'x', scale: 1 }], // Flexion (+) / Extension (-)
+  'rightWrist.deviation': [{ boneName: 'Wrist_R', axis: 'z', scale: -1 }], // Ulnar (+) / Radial (-) deviation
+  'rightWrist.flexion': [{ boneName: 'Wrist_R', axis: 'x', scale: 1 }], // Flexion (+) / Extension (-)
   
   // === PELVIS ===
-  'pelvis.tilt': [{ boneName: 'Pelvis_Main', axis: 'x', scale: 1 }],
-  'pelvis.obliquity': [{ boneName: 'Pelvis_Main', axis: 'z', scale: 1 }],
-  'pelvis.rotation': [{ boneName: 'Pelvis_Main', axis: 'y', scale: 1 }],
-  'pelvis.drop': [{ boneName: 'Pelvis_Main', axis: 'y', scale: -0.01, isPosition: true }], // Vertical translation for closed-chain movements
+  'pelvis.tilt': [{ boneName: 'Root_M', axis: 'x', scale: 1 }],
+  'pelvis.obliquity': [{ boneName: 'Root_M', axis: 'z', scale: 1 }],
+  'pelvis.rotation': [{ boneName: 'Root_M', axis: 'y', scale: 1 }],
+  'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }], // Vertical translation for closed-chain movements
   
   // === SPINE ===
   'spine.cervicalLordosis': [
-    { boneName: 'spine17', axis: 'x', scale: 0.2 },
-    { boneName: 'spine18', axis: 'x', scale: 0.2 },
-    { boneName: 'spine19', axis: 'x', scale: 0.2 },
-    { boneName: 'spine20', axis: 'x', scale: 0.2 },
+    { boneName: 'Neck_M', axis: 'x', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'x', scale: 0.2 },
+    { boneName: 'NeckPart2_M', axis: 'x', scale: 0.2 },
   ],
   'spine.thoracicKyphosis': [
-    { boneName: 'spine8', axis: 'x', scale: 0.1 },
-    { boneName: 'spine9', axis: 'x', scale: 0.1 },
-    { boneName: 'spine10', axis: 'x', scale: 0.1 },
-    { boneName: 'spine11', axis: 'x', scale: 0.1 },
-    { boneName: 'spine12', axis: 'x', scale: 0.1 },
-    { boneName: 'spine13', axis: 'x', scale: 0.1 },
-    { boneName: 'spine14', axis: 'x', scale: 0.1 },
-    { boneName: 'spine15', axis: 'x', scale: 0.1 },
-    { boneName: 'spine16', axis: 'x', scale: 0.1 },
+    { boneName: 'Chest_M', axis: 'x', scale: 0.3 },
+    { boneName: 'Spine1Part2_M', axis: 'x', scale: 0.2 },
+    { boneName: 'Spine1Part1_M', axis: 'x', scale: 0.2 },
   ],
   'spine.lumbarLordosis': [
-    { boneName: 'spine2', axis: 'x', scale: 0.2 },
-    { boneName: 'spine3', axis: 'x', scale: 0.2 },
-    { boneName: 'spine4', axis: 'x', scale: 0.2 },
-    { boneName: 'spine5', axis: 'x', scale: 0.2 },
-    { boneName: 'spine6', axis: 'x', scale: 0.2 },
-    { boneName: 'spine7', axis: 'x', scale: 0.2 },
+    { boneName: 'Spine1_M', axis: 'x', scale: 0.3 },
+    { boneName: 'RootPart2_M', axis: 'x', scale: 0.2 },
+    { boneName: 'RootPart1_M', axis: 'x', scale: 0.2 },
   ],
   'spine.scoliosis': [
-    { boneName: 'spine4', axis: 'z', scale: 0.1 },
-    { boneName: 'spine5', axis: 'z', scale: 0.15 },
-    { boneName: 'spine6', axis: 'z', scale: 0.2 },
-    { boneName: 'spine7', axis: 'z', scale: 0.15 },
-    { boneName: 'spine8', axis: 'z', scale: 0.1 },
-    { boneName: 'spine10', axis: 'z', scale: -0.1 },
-    { boneName: 'spine11', axis: 'z', scale: -0.15 },
-    { boneName: 'spine12', axis: 'z', scale: -0.2 },
-    { boneName: 'spine13', axis: 'z', scale: -0.15 },
-    { boneName: 'spine14', axis: 'z', scale: -0.1 },
+    { boneName: 'RootPart1_M', axis: 'z', scale: 0.15 },
+    { boneName: 'RootPart2_M', axis: 'z', scale: 0.2 },
+    { boneName: 'Spine1_M', axis: 'z', scale: 0.15 },
+    { boneName: 'Spine1Part1_M', axis: 'z', scale: -0.15 },
+    { boneName: 'Spine1Part2_M', axis: 'z', scale: -0.2 },
+    { boneName: 'Chest_M', axis: 'z', scale: -0.15 },
   ],
   'spine.cervicalRotation': [
-    { boneName: 'spine17', axis: 'y', scale: 0.2 },
-    { boneName: 'spine18', axis: 'y', scale: 0.25 },
-    { boneName: 'spine19', axis: 'y', scale: 0.3 },
-    { boneName: 'spine20', axis: 'y', scale: 0.25 },
+    { boneName: 'Neck_M', axis: 'y', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'y', scale: 0.2 },
+    { boneName: 'NeckPart2_M', axis: 'y', scale: 0.2 },
   ],
   'spine.cervicalLateralFlexion': [
-    { boneName: 'spine17', axis: 'z', scale: 0.2 },
-    { boneName: 'spine18', axis: 'z', scale: 0.25 },
-    { boneName: 'spine19', axis: 'z', scale: 0.3 },
-    { boneName: 'spine20', axis: 'z', scale: 0.25 },
+    { boneName: 'Neck_M', axis: 'z', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'z', scale: 0.25 },
+    { boneName: 'NeckPart2_M', axis: 'z', scale: 0.2 },
   ],
   'spine.thoracicRotation': [
-    { boneName: 'spine8', axis: 'y', scale: 0.08 },
-    { boneName: 'spine9', axis: 'y', scale: 0.08 },
-    { boneName: 'spine10', axis: 'y', scale: 0.08 },
-    { boneName: 'spine11', axis: 'y', scale: 0.08 },
-    { boneName: 'spine12', axis: 'y', scale: 0.08 },
-    { boneName: 'spine13', axis: 'y', scale: 0.08 },
-    { boneName: 'spine14', axis: 'y', scale: 0.08 },
-    { boneName: 'spine15', axis: 'y', scale: 0.08 },
-    { boneName: 'spine16', axis: 'y', scale: 0.08 },
+    { boneName: 'Chest_M', axis: 'y', scale: 0.2 },
+    { boneName: 'Spine1Part2_M', axis: 'y', scale: 0.15 },
+    { boneName: 'Spine1Part1_M', axis: 'y', scale: 0.15 },
   ],
   'spine.lumbarRotation': [
-    { boneName: 'spine2', axis: 'y', scale: 0.1 },
-    { boneName: 'spine3', axis: 'y', scale: 0.1 },
-    { boneName: 'spine4', axis: 'y', scale: 0.1 },
-    { boneName: 'spine5', axis: 'y', scale: 0.1 },
-    { boneName: 'spine6', axis: 'y', scale: 0.1 },
-    { boneName: 'spine7', axis: 'y', scale: 0.1 },
+    { boneName: 'Spine1_M', axis: 'y', scale: 0.2 },
+    { boneName: 'RootPart2_M', axis: 'y', scale: 0.15 },
+    { boneName: 'RootPart1_M', axis: 'y', scale: 0.15 },
   ],
-  // Spine flexion/extension for live pose (forward/backward bending)
-  // ~65% of original scale values - tracks real movement while reducing sensitivity
   'spine.flexion': [
-    { boneName: 'spine2', axis: 'x', scale: 0.10 },  // L5 - lumbar
-    { boneName: 'spine3', axis: 'x', scale: 0.10 },  // L4
-    { boneName: 'spine4', axis: 'x', scale: 0.08 },  // L3
-    { boneName: 'spine5', axis: 'x', scale: 0.08 },  // L2
-    { boneName: 'spine6', axis: 'x', scale: 0.065 }, // L1
-    { boneName: 'spine7', axis: 'x', scale: 0.05 },  // T12 - lower thoracic
-    { boneName: 'spine8', axis: 'x', scale: 0.04 },  // T11
-    { boneName: 'spine9', axis: 'x', scale: 0.03 },  // T10
-    { boneName: 'spine10', axis: 'x', scale: 0.025 }, // T9
-    { boneName: 'spine11', axis: 'x', scale: 0.02 }, // T8
-    { boneName: 'spine12', axis: 'x', scale: 0.012 }, // T7
+    { boneName: 'RootPart1_M', axis: 'x', scale: 0.15 },
+    { boneName: 'RootPart2_M', axis: 'x', scale: 0.15 },
+    { boneName: 'Spine1_M', axis: 'x', scale: 0.12 },
+    { boneName: 'Spine1Part1_M', axis: 'x', scale: 0.1 },
+    { boneName: 'Spine1Part2_M', axis: 'x', scale: 0.08 },
+    { boneName: 'Chest_M', axis: 'x', scale: 0.05 },
   ],
-  // Spine lateral flexion for live pose (side bending)
-  // ~65% of original scale values - tracks real movement while reducing sensitivity
   'spine.lateralFlexion': [
-    { boneName: 'spine2', axis: 'z', scale: 0.08 },  // L5 - lumbar
-    { boneName: 'spine3', axis: 'z', scale: 0.08 },  // L4
-    { boneName: 'spine4', axis: 'z', scale: 0.065 }, // L3
-    { boneName: 'spine5', axis: 'z', scale: 0.065 }, // L2
-    { boneName: 'spine6', axis: 'z', scale: 0.05 },  // L1
-    { boneName: 'spine7', axis: 'z', scale: 0.04 },  // T12 - lower thoracic
-    { boneName: 'spine8', axis: 'z', scale: 0.03 },  // T11
-    { boneName: 'spine9', axis: 'z', scale: 0.025 }, // T10
-    { boneName: 'spine10', axis: 'z', scale: 0.02 }, // T9
-    { boneName: 'spine11', axis: 'z', scale: 0.012 }, // T8
+    { boneName: 'RootPart1_M', axis: 'z', scale: 0.12 },
+    { boneName: 'RootPart2_M', axis: 'z', scale: 0.12 },
+    { boneName: 'Spine1_M', axis: 'z', scale: 0.1 },
+    { boneName: 'Spine1Part1_M', axis: 'z', scale: 0.08 },
+    { boneName: 'Spine1Part2_M', axis: 'z', scale: 0.06 },
+    { boneName: 'Chest_M', axis: 'z', scale: 0.04 },
   ],
 
   // === HEAD & NECK (Cervical Spine) ===
   'neck.flexion': [
-    { boneName: 'spine17', axis: 'x', scale: -0.25 },
-    { boneName: 'spine18', axis: 'x', scale: -0.25 },
-    { boneName: 'spine19', axis: 'x', scale: -0.25 },
-    { boneName: 'spine20', axis: 'x', scale: -0.25 },
+    { boneName: 'Neck_M', axis: 'x', scale: -0.3 },
+    { boneName: 'NeckPart1_M', axis: 'x', scale: -0.25 },
+    { boneName: 'NeckPart2_M', axis: 'x', scale: -0.2 },
+    { boneName: 'Head_M', axis: 'x', scale: -0.15 },
   ],
   'neck.extension': [
-    { boneName: 'spine17', axis: 'x', scale: 0.25 },
-    { boneName: 'spine18', axis: 'x', scale: 0.25 },
-    { boneName: 'spine19', axis: 'x', scale: 0.25 },
-    { boneName: 'spine20', axis: 'x', scale: 0.25 },
+    { boneName: 'Neck_M', axis: 'x', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'x', scale: 0.25 },
+    { boneName: 'NeckPart2_M', axis: 'x', scale: 0.2 },
+    { boneName: 'Head_M', axis: 'x', scale: 0.15 },
   ],
   'neck.rotation': [
-    { boneName: 'spine17', axis: 'y', scale: 0.2 },
-    { boneName: 'spine18', axis: 'y', scale: 0.25 },
-    { boneName: 'spine19', axis: 'y', scale: 0.3 },
-    { boneName: 'spine20', axis: 'y', scale: 0.25 },
+    { boneName: 'Neck_M', axis: 'y', scale: 0.25 },
+    { boneName: 'NeckPart1_M', axis: 'y', scale: 0.3 },
+    { boneName: 'NeckPart2_M', axis: 'y', scale: 0.25 },
+    { boneName: 'Head_M', axis: 'y', scale: 0.2 },
   ],
   'neck.lateralFlexion': [
-    { boneName: 'spine17', axis: 'z', scale: 0.2 },
-    { boneName: 'spine18', axis: 'z', scale: 0.25 },
-    { boneName: 'spine19', axis: 'z', scale: 0.3 },
-    { boneName: 'spine20', axis: 'z', scale: 0.25 },
+    { boneName: 'Neck_M', axis: 'z', scale: 0.25 },
+    { boneName: 'NeckPart1_M', axis: 'z', scale: 0.3 },
+    { boneName: 'NeckPart2_M', axis: 'z', scale: 0.25 },
+    { boneName: 'Head_M', axis: 'z', scale: 0.2 },
   ],
   'neck.forwardHead': [
-    { boneName: 'spine16', axis: 'x', scale: 0.15 },
-    { boneName: 'spine17', axis: 'x', scale: -0.2 },
-    { boneName: 'spine18', axis: 'x', scale: -0.25 },
-    { boneName: 'spine19', axis: 'x', scale: -0.2 },
-    { boneName: 'spine20', axis: 'x', scale: -0.15 },
+    { boneName: 'Chest_M', axis: 'x', scale: 0.15 },
+    { boneName: 'Neck_M', axis: 'x', scale: -0.25 },
+    { boneName: 'NeckPart1_M', axis: 'x', scale: -0.2 },
+    { boneName: 'NeckPart2_M', axis: 'x', scale: -0.15 },
+    { boneName: 'Head_M', axis: 'x', scale: -0.1 },
   ],
 };
 
@@ -988,8 +950,8 @@ export default function PureThreeGLBViewer({
 
     // For segment views, create anatomical overlays
     if (isSegmentView && focusedBones.length > 0 && Object.keys(bones).length > 0) {
-      const lowerBoneName = focusedBones[0]; // e.g., spine3 for L4_L5
-      const upperBoneName = focusedBones[1]; // e.g., spine4 for L4_L5
+      const lowerBoneName = focusedBones[0]; // e.g., RootPart1_M for L4_L5
+      const upperBoneName = focusedBones[1]; // e.g., RootPart2_M for L4_L5
       const lowerBone = bones[lowerBoneName];
       const upperBone = bones[upperBoneName];
       
@@ -1326,93 +1288,54 @@ export default function PureThreeGLBViewer({
             });
             console.log('=================================');
             
-            // Compute and store the fixed offset between spine20 and Root in bind pose
-            // headOffset = spine20BindInverse * rootBindWorld
-            if (bones['Root'] && bones['spine20']) {
-              const rootBone = bones['Root'] as THREE.Bone;
-              const spine20 = bones['spine20'] as THREE.Bone;
-              const spine16 = bones['spine16'] as THREE.Bone;
-              const ribCage = bones['Rib_Cage'] as THREE.Bone;
-              const armature = rootBone.parent; // Armature
+            // For the new skeleton model, cache offsets for shoulder bones relative to Chest_M
+            // This keeps arms connected when thoracic spine moves
+            const chest = bones['Chest_M'] as THREE.Bone;
+            const shoulderL = bones['Shoulder_L'] as THREE.Bone;
+            const shoulderR = bones['Shoulder_R'] as THREE.Bone;
+            const head = bones['Head_M'] as THREE.Bone;
+            const neck = bones['Neck_M'] as THREE.Bone;
+            
+            if (chest) {
+              chest.updateMatrixWorld(true);
+              const chestBindInverse = chest.matrixWorld.clone().invert();
+              const armature = model.getObjectByName('DeformationSystem') || chest.parent;
               
-              // Update all matrices to get bind pose
-              if (armature) armature.updateMatrixWorld(true);
-              rootBone.updateMatrixWorld(true);
-              spine20.updateMatrixWorld(true);
-              if (spine16) spine16.updateMatrixWorld(true);
-              
-              // Compute headOffset = spine20BindInverse * rootBindWorld
-              // This is the fixed spatial relationship between spine20 and Root
-              const spine20BindInverse = spine20.matrixWorld.clone().invert();
-              const headOffset = spine20BindInverse.clone().multiply(rootBone.matrixWorld);
-              (rootBone as any).headOffset = headOffset;
-              
-              // Store Armature reference and its bind matrix inverse for later
-              if (armature) {
-                (rootBone as any).armature = armature;
-                (rootBone as any).armatureBindInverse = armature.matrixWorld.clone().invert();
-              }
-              
-              // Rib_Cage (shoulders) should follow spine16 (thoracic top), not spine20 (neck)
-              // This ensures arms stay connected when thoracic/lumbar spine moves
-              if (ribCage && spine16) {
-                ribCage.updateMatrixWorld(true);
-                const spine16BindInverse = spine16.matrixWorld.clone().invert();
-                const ribOffset = spine16BindInverse.clone().multiply(ribCage.matrixWorld);
-                (ribCage as any).ribOffset = ribOffset;
-                (ribCage as any).spine16Ref = spine16;
-                (ribCage as any).armature = armature;
-                if (armature) {
-                  (ribCage as any).armatureBindInverse = armature.matrixWorld.clone().invert();
-                }
-              }
-              
-              // Cache offsets for Humerus bones relative to Rib_Cage so arms follow shoulders
-              const humerusL = bones['Humerus_Root_L'] as THREE.Bone;
-              const humerusR = bones['Humerus_Root_R'] as THREE.Bone;
-              
-              if (ribCage) {
-                ribCage.updateMatrixWorld(true);
-                const ribCageBindInverse = ribCage.matrixWorld.clone().invert();
+              // Cache shoulder offsets relative to chest
+              if (shoulderL) {
+                shoulderL.updateMatrixWorld(true);
+                const shoulderLOffset = chestBindInverse.clone().multiply(shoulderL.matrixWorld);
+                (shoulderL as any).chestOffset = shoulderLOffset;
+                (shoulderL as any).chestRef = chest;
+                (shoulderL as any).armature = armature;
                 
-                if (humerusL) {
-                  humerusL.updateMatrixWorld(true);
-                  const humerusLOffset = ribCageBindInverse.clone().multiply(humerusL.matrixWorld);
-                  (humerusL as any).ribCageOffset = humerusLOffset;
-                  (humerusL as any).ribCageRef = ribCage;
-                  (humerusL as any).armature = armature;
-                  
-                  // Debug: Log humerus bone local axes to determine correct flexion/abduction axes
-                  const xAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(humerusL.quaternion);
-                  const yAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(humerusL.quaternion);
-                  const zAxis = new THREE.Vector3(0, 0, 1).applyQuaternion(humerusL.quaternion);
-                  console.log('=== LEFT HUMERUS BONE ORIENTATION ===');
-                  console.log('Local X-axis (world coords):', xAxis.x.toFixed(3), xAxis.y.toFixed(3), xAxis.z.toFixed(3));
-                  console.log('Local Y-axis (world coords):', yAxis.x.toFixed(3), yAxis.y.toFixed(3), yAxis.z.toFixed(3));
-                  console.log('Local Z-axis (world coords):', zAxis.x.toFixed(3), zAxis.y.toFixed(3), zAxis.z.toFixed(3));
-                  console.log('Initial rotation (Euler):', humerusL.rotation.x.toFixed(3), humerusL.rotation.y.toFixed(3), humerusL.rotation.z.toFixed(3));
-                }
-                
-                if (humerusR) {
-                  humerusR.updateMatrixWorld(true);
-                  const humerusROffset = ribCageBindInverse.clone().multiply(humerusR.matrixWorld);
-                  (humerusR as any).ribCageOffset = humerusROffset;
-                  (humerusR as any).ribCageRef = ribCage;
-                  (humerusR as any).armature = armature;
-                  
-                  // Debug: Log humerus bone local axes to determine correct flexion/abduction axes
-                  const xAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(humerusR.quaternion);
-                  const yAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(humerusR.quaternion);
-                  const zAxis = new THREE.Vector3(0, 0, 1).applyQuaternion(humerusR.quaternion);
-                  console.log('=== RIGHT HUMERUS BONE ORIENTATION ===');
-                  console.log('Local X-axis (world coords):', xAxis.x.toFixed(3), xAxis.y.toFixed(3), xAxis.z.toFixed(3));
-                  console.log('Local Y-axis (world coords):', yAxis.x.toFixed(3), yAxis.y.toFixed(3), yAxis.z.toFixed(3));
-                  console.log('Local Z-axis (world coords):', zAxis.x.toFixed(3), zAxis.y.toFixed(3), zAxis.z.toFixed(3));
-                  console.log('Initial rotation (Euler):', humerusR.rotation.x.toFixed(3), humerusR.rotation.y.toFixed(3), humerusR.rotation.z.toFixed(3));
-                }
+                console.log('=== LEFT SHOULDER BONE ORIENTATION ===');
+                console.log('Initial rotation (Euler):', shoulderL.rotation.x.toFixed(3), shoulderL.rotation.y.toFixed(3), shoulderL.rotation.z.toFixed(3));
               }
               
-              console.log('Stored headOffset for Root (relative to spine20), Rib_Cage (relative to spine16), and Humerus bones (relative to Rib_Cage)');
+              if (shoulderR) {
+                shoulderR.updateMatrixWorld(true);
+                const shoulderROffset = chestBindInverse.clone().multiply(shoulderR.matrixWorld);
+                (shoulderR as any).chestOffset = shoulderROffset;
+                (shoulderR as any).chestRef = chest;
+                (shoulderR as any).armature = armature;
+                
+                console.log('=== RIGHT SHOULDER BONE ORIENTATION ===');
+                console.log('Initial rotation (Euler):', shoulderR.rotation.x.toFixed(3), shoulderR.rotation.y.toFixed(3), shoulderR.rotation.z.toFixed(3));
+              }
+              
+              // Cache head offset relative to neck for head following
+              if (head && neck) {
+                neck.updateMatrixWorld(true);
+                head.updateMatrixWorld(true);
+                const neckBindInverse = neck.matrixWorld.clone().invert();
+                const headOffset = neckBindInverse.clone().multiply(head.matrixWorld);
+                (head as any).neckOffset = headOffset;
+                (head as any).neckRef = neck;
+                (head as any).armature = armature;
+              }
+              
+              console.log('Cached bone offsets for new skeleton model (Shoulder_L/R relative to Chest_M, Head_M relative to Neck_M)');
             }
             
             bonesRef.current = bones;
@@ -1449,145 +1372,82 @@ export default function PureThreeGLBViewer({
           
           animationId = requestAnimationFrame(animate);
           
-          // Sync Root to follow spine20, and Rib_Cage to follow spine16
-          // Formula: boneMatrixWorld = referenceSpine.matrixWorld * offset
-          // Then convert to local: boneMatrix = armature.matrixWorld.inverse() * boneMatrixWorld
+          // Sync shoulder bones to follow Chest_M when spine moves
+          // For new skeleton model with proper bone hierarchy
           const currentBones = bonesRef.current;
-          const rootBone = currentBones['Root'] as THREE.Bone;
-          const spine20 = currentBones['spine20'] as THREE.Bone;
-          const ribCage = currentBones['Rib_Cage'] as THREE.Bone;
+          const chest = currentBones['Chest_M'] as THREE.Bone;
+          const shoulderL = currentBones['Shoulder_L'] as THREE.Bone;
+          const shoulderR = currentBones['Shoulder_R'] as THREE.Bone;
           
-          if (rootBone && spine20 && (rootBone as any).headOffset) {
-            // Update spine20's world matrix after slider rotations
-            spine20.updateMatrixWorld(true);
+          if (chest && shoulderL && (shoulderL as any).chestOffset) {
+            chest.updateMatrixWorld(true);
             
-            // Compute new world matrix for Root: spine20.matrixWorld * headOffset
-            const headOffset = (rootBone as any).headOffset as THREE.Matrix4;
-            const newRootWorldMatrix = new THREE.Matrix4();
-            newRootWorldMatrix.copy(spine20.matrixWorld).multiply(headOffset);
+            const shoulderLOffset = (shoulderL as any).chestOffset as THREE.Matrix4;
+            const newShoulderLWorld = new THREE.Matrix4();
+            newShoulderLWorld.copy(chest.matrixWorld).multiply(shoulderLOffset);
             
-            // Convert to local space (relative to Armature)
-            const armature = (rootBone as any).armature as THREE.Object3D;
+            // Apply slider rotation
+            const sliderRot = sliderRotationsRef.current['Shoulder_L'];
+            if (sliderRot) {
+              const sliderMatrix = new THREE.Matrix4().makeRotationFromEuler(
+                new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z)
+              );
+              newShoulderLWorld.multiply(sliderMatrix);
+            }
+            
+            const armature = (shoulderL as any).armature as THREE.Object3D;
             if (armature) {
               armature.updateMatrixWorld(true);
               const armatureInverse = new THREE.Matrix4().copy(armature.matrixWorld).invert();
-              const newRootLocalMatrix = new THREE.Matrix4();
-              newRootLocalMatrix.copy(armatureInverse).multiply(newRootWorldMatrix);
+              const newShoulderLLocal = new THREE.Matrix4();
+              newShoulderLLocal.copy(armatureInverse).multiply(newShoulderLWorld);
               
-              // Decompose and apply to rootBone
               const pos = new THREE.Vector3();
               const quat = new THREE.Quaternion();
               const scale = new THREE.Vector3();
-              newRootLocalMatrix.decompose(pos, quat, scale);
+              newShoulderLLocal.decompose(pos, quat, scale);
               
-              rootBone.position.copy(pos);
-              rootBone.quaternion.copy(quat);
-              rootBone.scale.copy(scale);
-              rootBone.matrixWorldNeedsUpdate = true;
+              pos.x -= clavicleOffsetsRef.current.left;
+              shoulderL.position.copy(pos);
+              shoulderL.quaternion.copy(quat);
+              shoulderL.scale.copy(scale);
+              shoulderL.updateMatrixWorld(true);
+            }
+          }
+          
+          if (chest && shoulderR && (shoulderR as any).chestOffset) {
+            chest.updateMatrixWorld(true);
+            
+            const shoulderROffset = (shoulderR as any).chestOffset as THREE.Matrix4;
+            const newShoulderRWorld = new THREE.Matrix4();
+            newShoulderRWorld.copy(chest.matrixWorld).multiply(shoulderROffset);
+            
+            // Apply slider rotation
+            const sliderRot = sliderRotationsRef.current['Shoulder_R'];
+            if (sliderRot) {
+              const sliderMatrix = new THREE.Matrix4().makeRotationFromEuler(
+                new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z)
+              );
+              newShoulderRWorld.multiply(sliderMatrix);
             }
             
-            // Rib_Cage follows spine16 (not spine20) to keep arms connected during thoracic/lumbar movement
-            if (ribCage && (ribCage as any).ribOffset && (ribCage as any).spine16Ref) {
-              const spine16 = (ribCage as any).spine16Ref as THREE.Bone;
-              spine16.updateMatrixWorld(true);
+            const armature = (shoulderR as any).armature as THREE.Object3D;
+            if (armature) {
+              armature.updateMatrixWorld(true);
+              const armatureInverse = new THREE.Matrix4().copy(armature.matrixWorld).invert();
+              const newShoulderRLocal = new THREE.Matrix4();
+              newShoulderRLocal.copy(armatureInverse).multiply(newShoulderRWorld);
               
-              const ribOffset = (ribCage as any).ribOffset as THREE.Matrix4;
-              const newRibWorldMatrix = new THREE.Matrix4();
-              newRibWorldMatrix.copy(spine16.matrixWorld).multiply(ribOffset);
+              const pos = new THREE.Vector3();
+              const quat = new THREE.Quaternion();
+              const scale = new THREE.Vector3();
+              newShoulderRLocal.decompose(pos, quat, scale);
               
-              const ribArmature = (ribCage as any).armature as THREE.Object3D;
-              if (ribArmature) {
-                const armatureInverse = new THREE.Matrix4().copy(ribArmature.matrixWorld).invert();
-                const newRibLocalMatrix = new THREE.Matrix4();
-                newRibLocalMatrix.copy(armatureInverse).multiply(newRibWorldMatrix);
-                
-                const pos = new THREE.Vector3();
-                const quat = new THREE.Quaternion();
-                const scale = new THREE.Vector3();
-                newRibLocalMatrix.decompose(pos, quat, scale);
-                
-                ribCage.position.copy(pos);
-                ribCage.quaternion.copy(quat);
-                ribCage.scale.copy(scale);
-                ribCage.matrixWorldNeedsUpdate = true;
-                ribCage.updateMatrixWorld(true);
-              }
-            }
-            
-            // Sync Humerus bones to follow Rib_Cage so arms stay connected to shoulders
-            const humerusL = currentBones['Humerus_Root_L'] as THREE.Bone;
-            const humerusR = currentBones['Humerus_Root_R'] as THREE.Bone;
-            
-            if (humerusL && (humerusL as any).ribCageOffset && ribCage) {
-              ribCage.updateMatrixWorld(true);
-              
-              const humerusLOffset = (humerusL as any).ribCageOffset as THREE.Matrix4;
-              const newHumerusLWorld = new THREE.Matrix4();
-              newHumerusLWorld.copy(ribCage.matrixWorld).multiply(humerusLOffset);
-              
-              // Apply slider rotation BEFORE decomposing - this keeps the joint pivot anchored
-              const sliderRot = sliderRotationsRef.current['Humerus_Root_L'];
-              if (sliderRot) {
-                const sliderMatrix = new THREE.Matrix4().makeRotationFromEuler(
-                  new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z)
-                );
-                newHumerusLWorld.multiply(sliderMatrix);
-              }
-              
-              const humerusArmature = (humerusL as any).armature as THREE.Object3D;
-              if (humerusArmature) {
-                const armatureInverse = new THREE.Matrix4().copy(humerusArmature.matrixWorld).invert();
-                const newHumerusLLocal = new THREE.Matrix4();
-                newHumerusLLocal.copy(armatureInverse).multiply(newHumerusLWorld);
-                
-                const pos = new THREE.Vector3();
-                const quat = new THREE.Quaternion();
-                const scale = new THREE.Vector3();
-                newHumerusLLocal.decompose(pos, quat, scale);
-                
-                // Apply clavicle length offset (negative X = laterally outward for left side)
-                pos.x -= clavicleOffsetsRef.current.left;
-                humerusL.position.copy(pos);
-                humerusL.quaternion.copy(quat);
-                humerusL.scale.copy(scale);
-                humerusL.updateMatrixWorld(true); // Force update to propagate to child bones
-              }
-            }
-            
-            if (humerusR && (humerusR as any).ribCageOffset && ribCage) {
-              ribCage.updateMatrixWorld(true);
-              
-              const humerusROffset = (humerusR as any).ribCageOffset as THREE.Matrix4;
-              const newHumerusRWorld = new THREE.Matrix4();
-              newHumerusRWorld.copy(ribCage.matrixWorld).multiply(humerusROffset);
-              
-              // Apply slider rotation BEFORE decomposing - this keeps the joint pivot anchored
-              const sliderRot = sliderRotationsRef.current['Humerus_Root_R'];
-              if (sliderRot) {
-                const sliderMatrix = new THREE.Matrix4().makeRotationFromEuler(
-                  new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z)
-                );
-                newHumerusRWorld.multiply(sliderMatrix);
-              }
-              
-              const humerusArmature = (humerusR as any).armature as THREE.Object3D;
-              if (humerusArmature) {
-                const armatureInverse = new THREE.Matrix4().copy(humerusArmature.matrixWorld).invert();
-                const newHumerusRLocal = new THREE.Matrix4();
-                newHumerusRLocal.copy(armatureInverse).multiply(newHumerusRWorld);
-                
-                const pos = new THREE.Vector3();
-                const quat = new THREE.Quaternion();
-                const scale = new THREE.Vector3();
-                newHumerusRLocal.decompose(pos, quat, scale);
-                
-                // Apply clavicle length offset (positive X = laterally outward for right side)
-                pos.x += clavicleOffsetsRef.current.right;
-                humerusR.position.copy(pos);
-                humerusR.quaternion.copy(quat);
-                humerusR.scale.copy(scale);
-                humerusR.updateMatrixWorld(true); // Force update to propagate to child bones
-              }
+              pos.x += clavicleOffsetsRef.current.right;
+              shoulderR.position.copy(pos);
+              shoulderR.quaternion.copy(quat);
+              shoulderR.scale.copy(scale);
+              shoulderR.updateMatrixWorld(true);
             }
           }
           
@@ -1839,7 +1699,7 @@ export default function PureThreeGLBViewer({
     });
     
     // Bones that are handled by the animation loop (need rotations stored in sliderRotationsRef)
-    const animationLoopBones = new Set(['Humerus_Root_L', 'Humerus_Root_R', 'HUMERUSL_83', 'HUMERUSR_125']);
+    const animationLoopBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);
     
     // Apply rotations to bones (initial + delta, same as slider system)
     Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
@@ -1873,20 +1733,23 @@ export default function PureThreeGLBViewer({
   // These are all bones that can be affected by BONE_MAPPING keys used in livePoseConfig
   const LIVE_CONTROLLED_BONES = [
     // Shoulders
-    'Humerus_Root_L', 'Humerus_Root_R',
+    'Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R',
     // Elbows
-    'Redius_Alna_L', 'Redius_Alna_R',
+    'Elbow_L', 'Elbow_R',
+    // Wrists
+    'Wrist_L', 'Wrist_R',
     // Hips
-    'Femer_Root_L', 'Femer_Root_R',
+    'Hip_L', 'Hip_R', 'HipPart1_L', 'HipPart1_R',
     // Knees
-    'fibula_tibia_L', 'fibula_tibia_R',
+    'Knee_L', 'Knee_R',
+    // Ankles
+    'Ankle_L', 'Ankle_R',
     // Pelvis
-    'Pelvis_Main',
-    // Spine (spine2-12 for spine.flexion and spine.lateralFlexion)
-    'spine2', 'spine3', 'spine4', 'spine5', 'spine6', 'spine7',
-    'spine8', 'spine9', 'spine10', 'spine11', 'spine12',
-    // Neck (spine17-20 for neck.flexion and neck.lateralFlexion)
-    'spine17', 'spine18', 'spine19', 'spine20'
+    'Root_M', 'RootPart1_M', 'RootPart2_M',
+    // Spine
+    'Spine1_M', 'Spine1Part1_M', 'Spine1Part2_M', 'Chest_M',
+    // Neck
+    'Neck_M', 'NeckPart1_M', 'NeckPart2_M', 'Head_M'
   ];
   
   // Restore all controlled bones when live pose mode exits
@@ -1954,7 +1817,7 @@ export default function PureThreeGLBViewer({
     });
     
     // Bones that are handled by animation loop (need slider rotations stored separately)
-    const animationLoopBones = new Set(['Humerus_Root_L', 'Humerus_Root_R', 'HUMERUSL_83', 'HUMERUSR_125']);
+    const animationLoopBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);
     
     // Track slider-only rotations (relative to initial) for animation loop bones
     const sliderOnlyRotations: { [boneName: string]: { x: number; y: number; z: number } } = {};
@@ -1977,8 +1840,8 @@ export default function PureThreeGLBViewer({
     const derivedLumbarLordosis = pelvisTilt * PELVIS_LUMBAR_RATIO;
     const derivedScoliosis = pelvisObliquity * PELVIS_SCOLIOSIS_RATIO;
     
-    // Apply derived lumbar lordosis to spine2-spine7 (x-axis, same as BONE_MAPPING)
-    const lumbarBones = ['spine2', 'spine3', 'spine4', 'spine5', 'spine6', 'spine7'];
+    // Apply derived lumbar lordosis to spine bones (x-axis, same as BONE_MAPPING)
+    const lumbarBones = ['Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Spine1Part2_M'];
     const lumbarScale = 0.2; // Match BONE_MAPPING scale
     lumbarBones.forEach(boneName => {
       if (boneRotations[boneName]) {
@@ -1987,19 +1850,15 @@ export default function PureThreeGLBViewer({
       }
     });
     
-    // Apply derived scoliosis to spine4-spine14 (z-axis, with alternating scales)
+    // Apply derived scoliosis to spine/chest bones (z-axis, with alternating scales)
     const scoliosisMappings = [
-      { boneName: 'spine4', scale: 0.1 },
-      { boneName: 'spine5', scale: 0.15 },
-      { boneName: 'spine6', scale: 0.2 },
-      { boneName: 'spine7', scale: 0.2 },
-      { boneName: 'spine8', scale: 0.15 },
-      { boneName: 'spine9', scale: 0.1 },
-      { boneName: 'spine10', scale: -0.1 },
-      { boneName: 'spine11', scale: -0.15 },
-      { boneName: 'spine12', scale: -0.15 },
-      { boneName: 'spine13', scale: -0.1 },
-      { boneName: 'spine14', scale: -0.05 },
+      { boneName: 'Root_M', scale: 0.1 },
+      { boneName: 'RootPart1_M', scale: 0.15 },
+      { boneName: 'RootPart2_M', scale: 0.2 },
+      { boneName: 'Spine1_M', scale: 0.2 },
+      { boneName: 'Spine1Part1_M', scale: 0.15 },
+      { boneName: 'Spine1Part2_M', scale: 0.1 },
+      { boneName: 'Chest_M', scale: -0.1 },
     ];
     scoliosisMappings.forEach(({ boneName, scale }) => {
       if (boneRotations[boneName]) {
@@ -2290,7 +2149,7 @@ export default function PureThreeGLBViewer({
       if (isClosedChainMovement && legIKStateRef.current) {
         // CLOSED-CHAIN: Use IK to keep feet planted while pelvis drops
         // First apply pelvis position (body lowers)
-        const pelvisBone = bones['Pelvis_Main'] as THREE.Bone;
+        const pelvisBone = bones['Root_M'] as THREE.Bone;
         if (pelvisBone) {
           if (!(pelvisBone as any).initialPosition) {
             (pelvisBone as any).initialPosition = pelvisBone.position.clone();
@@ -2316,7 +2175,7 @@ export default function PureThreeGLBViewer({
         // Apply non-leg rotations (spine, shoulders, etc.) from FK animation
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
           // Skip leg bones - they're controlled by IK
-          if (boneName.includes('Femer') || boneName.includes('fibula') || boneName.includes('foot')) {
+          if (boneName.includes('Hip') || boneName.includes('Knee') || boneName.includes('Ankle') || boneName.includes('Toes')) {
             return;
           }
           const bone = bones[boneName];

@@ -64,12 +64,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'rectusFemoris_L',
     displayName: 'Rectus Femoris (L)',
     origin: {
-      bone: 'Pelvis_Main',
+      bone: 'Root_M',
       offset: new THREE.Vector3(0.12, 0.05, 0.18),
       landmark: 'AIIS'
     },
     insertion: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0, 0.08, 0.15),
       landmark: 'Patella/Quadriceps Tendon'
     },
@@ -85,12 +85,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'vastusLateralis_L',
     displayName: 'Vastus Lateralis (L)',
     origin: {
-      bone: 'Femer_Root_L',
+      bone: 'Hip_L',
       offset: new THREE.Vector3(0.1, -0.1, 0.08),
       landmark: 'Greater Trochanter/Linea Aspera'
     },
     insertion: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0.06, 0.06, 0.12),
       landmark: 'Patella (lateral)'
     },
@@ -106,12 +106,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'vastusMedialis_L',
     displayName: 'Vastus Medialis (L)',
     origin: {
-      bone: 'Femer_L',
+      bone: 'HipPart1_L',
       offset: new THREE.Vector3(-0.08, 0.3, 0.08),
       landmark: 'Linea Aspera (medial)'
     },
     insertion: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(-0.05, 0.06, 0.12),
       landmark: 'Patella (medial)'
     },
@@ -127,12 +127,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'vastusIntermedius_L',
     displayName: 'Vastus Intermedius (L)',
     origin: {
-      bone: 'Femer_L',
+      bone: 'HipPart1_L',
       offset: new THREE.Vector3(0, 0.4, 0.1),
       landmark: 'Anterior Femur'
     },
     insertion: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0, 0.07, 0.13),
       landmark: 'Patella (deep)'
     },
@@ -148,12 +148,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'bicepsFemoris_L',
     displayName: 'Biceps Femoris (L)',
     origin: {
-      bone: 'Pelvis_Main',
+      bone: 'Root_M',
       offset: new THREE.Vector3(0.08, -0.05, -0.15),
       landmark: 'Ischial Tuberosity'
     },
     insertion: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0.08, 0.02, -0.04),
       landmark: 'Fibular Head'
     },
@@ -169,12 +169,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'semimembranosus_L',
     displayName: 'Semimembranosus (L)',
     origin: {
-      bone: 'Pelvis_Main',
+      bone: 'Root_M',
       offset: new THREE.Vector3(0.05, -0.06, -0.14),
       landmark: 'Ischial Tuberosity'
     },
     insertion: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(-0.04, 0.02, -0.05),
       landmark: 'Medial Tibial Condyle'
     },
@@ -190,12 +190,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'semitendinosus_L',
     displayName: 'Semitendinosus (L)',
     origin: {
-      bone: 'Pelvis_Main',
+      bone: 'Root_M',
       offset: new THREE.Vector3(0.06, -0.04, -0.13),
       landmark: 'Ischial Tuberosity'
     },
     insertion: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(-0.05, -0.05, 0.02),
       landmark: 'Pes Anserinus'
     },
@@ -211,12 +211,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'adductorMagnus_L',
     displayName: 'Adductor Magnus (L)',
     origin: {
-      bone: 'Pelvis_Main',
+      bone: 'Root_M',
       offset: new THREE.Vector3(0.02, -0.08, -0.08),
       landmark: 'Ischiopubic Ramus'
     },
     insertion: {
-      bone: 'Femer_L',
+      bone: 'HipPart1_L',
       offset: new THREE.Vector3(-0.06, -0.2, -0.04),
       landmark: 'Linea Aspera/Adductor Tubercle'
     },
@@ -232,12 +232,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'adductorLongus_L',
     displayName: 'Adductor Longus (L)',
     origin: {
-      bone: 'Pelvis_Main',
+      bone: 'Root_M',
       offset: new THREE.Vector3(0.0, -0.02, 0.08),
       landmark: 'Pubic Body'
     },
     insertion: {
-      bone: 'Femer_L',
+      bone: 'HipPart1_L',
       offset: new THREE.Vector3(-0.05, 0.1, -0.02),
       landmark: 'Linea Aspera (middle third)'
     },
@@ -253,12 +253,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'sartorius_L',
     displayName: 'Sartorius (L)',
     origin: {
-      bone: 'Pelvis_Main',
+      bone: 'Root_M',
       offset: new THREE.Vector3(0.15, 0.08, 0.1),
       landmark: 'ASIS'
     },
     insertion: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(-0.05, -0.04, 0.03),
       landmark: 'Pes Anserinus'
     },
@@ -274,12 +274,12 @@ const UPPER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'tensorFasciaeLatae_L',
     displayName: 'Tensor Fasciae Latae (L)',
     origin: {
-      bone: 'Pelvis_Main',
+      bone: 'Root_M',
       offset: new THREE.Vector3(0.16, 0.06, 0.06),
       landmark: 'ASIS'
     },
     insertion: {
-      bone: 'Femer_L',
+      bone: 'HipPart1_L',
       offset: new THREE.Vector3(0.1, -0.15, 0),
       landmark: 'IT Band (lateral femur)'
     },
@@ -299,12 +299,12 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'gastrocnemiusMedial_L',
     displayName: 'Gastrocnemius Medial (L)',
     origin: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(-0.03, 0.18, -0.04),
       landmark: 'Medial Femoral Condyle'
     },
     insertion: {
-      bone: 'foot_L',
+      bone: 'Ankle_L',
       offset: new THREE.Vector3(0, 0.15, -0.06),
       landmark: 'Calcaneus (via Achilles)'
     },
@@ -320,12 +320,12 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'gastrocnemiusLateral_L',
     displayName: 'Gastrocnemius Lateral (L)',
     origin: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0.04, 0.18, -0.04),
       landmark: 'Lateral Femoral Condyle'
     },
     insertion: {
-      bone: 'foot_L',
+      bone: 'Ankle_L',
       offset: new THREE.Vector3(0, 0.15, -0.06),
       landmark: 'Calcaneus (via Achilles)'
     },
@@ -341,12 +341,12 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'soleus_L',
     displayName: 'Soleus (L)',
     origin: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0, 0.1, -0.05),
       landmark: 'Posterior Tibia/Fibula'
     },
     insertion: {
-      bone: 'foot_L',
+      bone: 'Ankle_L',
       offset: new THREE.Vector3(0, 0.12, -0.05),
       landmark: 'Calcaneus (via Achilles)'
     },
@@ -362,12 +362,12 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'plantaris_L',
     displayName: 'Plantaris (L)',
     origin: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0.03, 0.2, -0.03),
       landmark: 'Lateral Supracondylar Line'
     },
     insertion: {
-      bone: 'foot_L',
+      bone: 'Ankle_L',
       offset: new THREE.Vector3(0.01, 0.14, -0.04),
       landmark: 'Calcaneus (medial)'
     },
@@ -384,12 +384,12 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'tibialisAnterior_L',
     displayName: 'Tibialis Anterior (L)',
     origin: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0.02, 0, 0.08),
       landmark: 'Lateral Tibial Condyle'
     },
     insertion: {
-      bone: 'foot_L',
+      bone: 'Ankle_L',
       offset: new THREE.Vector3(-0.02, 0.05, 0.08),
       landmark: 'Medial Cuneiform/1st Metatarsal'
     },
@@ -405,12 +405,12 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'extensorDigitorumLongus_L',
     displayName: 'Extensor Digitorum Longus (L)',
     origin: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0.05, -0.02, 0.06),
       landmark: 'Lateral Tibial Condyle/Fibula'
     },
     insertion: {
-      bone: 'foot_L',
+      bone: 'Ankle_L',
       offset: new THREE.Vector3(0.03, -0.02, 0.1),
       landmark: 'Distal Phalanges 2-5'
     },
@@ -426,12 +426,12 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'extensorHallucisLongus_L',
     displayName: 'Extensor Hallucis Longus (L)',
     origin: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0.03, -0.15, 0.07),
       landmark: 'Middle Fibula'
     },
     insertion: {
-      bone: 'foot_L',
+      bone: 'Ankle_L',
       offset: new THREE.Vector3(-0.01, -0.03, 0.09),
       landmark: 'Distal Phalanx of Hallux'
     },
@@ -448,12 +448,12 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'peroneusLongus_L',
     displayName: 'Peroneus Longus (L)',
     origin: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0.08, -0.03, 0.02),
       landmark: 'Fibular Head/Upper Fibula'
     },
     insertion: {
-      bone: 'foot_L',
+      bone: 'Ankle_L',
       offset: new THREE.Vector3(-0.03, 0, 0.02),
       landmark: '1st Metatarsal Base (plantar)'
     },
@@ -469,12 +469,12 @@ const LOWER_LEG_MUSCLES_LEFT: MuscleDefinition[] = [
     name: 'peroneusBrevis_L',
     displayName: 'Peroneus Brevis (L)',
     origin: {
-      bone: 'fibula_tibia_L',
+      bone: 'Knee_L',
       offset: new THREE.Vector3(0.07, -0.2, 0.02),
       landmark: 'Lower Fibula'
     },
     insertion: {
-      bone: 'foot_L',
+      bone: 'Ankle_L',
       offset: new THREE.Vector3(0.05, 0.02, 0.04),
       landmark: '5th Metatarsal Base'
     },

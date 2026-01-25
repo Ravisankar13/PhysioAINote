@@ -646,21 +646,22 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'pelvis.rotation': [{ boneName: 'Root_M', axis: 'y', scale: 1 }],
   'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }], // Vertical translation for closed-chain movements
   
-  // === SPINE ===
+  // === SPINE (Sagittal plane curves - use Y-axis for forward/backward movement) ===
+  // Note: X = frontal plane (lateral), Z = lateral flexion/scoliosis, Y = sagittal plane
   'spine.cervicalLordosis': [
-    { boneName: 'Neck_M', axis: 'x', scale: 0.3 },
-    { boneName: 'NeckPart1_M', axis: 'x', scale: 0.2 },
-    { boneName: 'NeckPart2_M', axis: 'x', scale: 0.2 },
+    { boneName: 'Neck_M', axis: 'y', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'y', scale: 0.2 },
+    { boneName: 'NeckPart2_M', axis: 'y', scale: 0.2 },
   ],
   'spine.thoracicKyphosis': [
-    { boneName: 'Chest_M', axis: 'x', scale: 0.3 },
-    { boneName: 'Spine1Part2_M', axis: 'x', scale: 0.2 },
-    { boneName: 'Spine1Part1_M', axis: 'x', scale: 0.2 },
+    { boneName: 'Chest_M', axis: 'y', scale: 0.3 },
+    { boneName: 'Spine1Part2_M', axis: 'y', scale: 0.2 },
+    { boneName: 'Spine1Part1_M', axis: 'y', scale: 0.2 },
   ],
   'spine.lumbarLordosis': [
-    { boneName: 'Spine1_M', axis: 'x', scale: 0.3 },
-    { boneName: 'RootPart2_M', axis: 'x', scale: 0.2 },
-    { boneName: 'RootPart1_M', axis: 'x', scale: 0.2 },
+    { boneName: 'Spine1_M', axis: 'y', scale: 0.3 },
+    { boneName: 'RootPart2_M', axis: 'y', scale: 0.2 },
+    { boneName: 'RootPart1_M', axis: 'y', scale: 0.2 },
   ],
   'spine.scoliosis': [
     { boneName: 'RootPart1_M', axis: 'z', scale: 0.15 },

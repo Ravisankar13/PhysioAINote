@@ -1288,55 +1288,10 @@ export default function PureThreeGLBViewer({
             });
             console.log('=================================');
             
-            // For the new skeleton model, cache offsets for shoulder bones relative to Chest_M
-            // This keeps arms connected when thoracic spine moves
-            const chest = bones['Chest_M'] as THREE.Bone;
-            const shoulderL = bones['Shoulder_L'] as THREE.Bone;
-            const shoulderR = bones['Shoulder_R'] as THREE.Bone;
-            const head = bones['Head_M'] as THREE.Bone;
-            const neck = bones['Neck_M'] as THREE.Bone;
-            
-            if (chest) {
-              chest.updateMatrixWorld(true);
-              const chestBindInverse = chest.matrixWorld.clone().invert();
-              const armature = model.getObjectByName('DeformationSystem') || chest.parent;
-              
-              // Cache shoulder offsets relative to chest
-              if (shoulderL) {
-                shoulderL.updateMatrixWorld(true);
-                const shoulderLOffset = chestBindInverse.clone().multiply(shoulderL.matrixWorld);
-                (shoulderL as any).chestOffset = shoulderLOffset;
-                (shoulderL as any).chestRef = chest;
-                (shoulderL as any).armature = armature;
-                
-                console.log('=== LEFT SHOULDER BONE ORIENTATION ===');
-                console.log('Initial rotation (Euler):', shoulderL.rotation.x.toFixed(3), shoulderL.rotation.y.toFixed(3), shoulderL.rotation.z.toFixed(3));
-              }
-              
-              if (shoulderR) {
-                shoulderR.updateMatrixWorld(true);
-                const shoulderROffset = chestBindInverse.clone().multiply(shoulderR.matrixWorld);
-                (shoulderR as any).chestOffset = shoulderROffset;
-                (shoulderR as any).chestRef = chest;
-                (shoulderR as any).armature = armature;
-                
-                console.log('=== RIGHT SHOULDER BONE ORIENTATION ===');
-                console.log('Initial rotation (Euler):', shoulderR.rotation.x.toFixed(3), shoulderR.rotation.y.toFixed(3), shoulderR.rotation.z.toFixed(3));
-              }
-              
-              // Cache head offset relative to neck for head following
-              if (head && neck) {
-                neck.updateMatrixWorld(true);
-                head.updateMatrixWorld(true);
-                const neckBindInverse = neck.matrixWorld.clone().invert();
-                const headOffset = neckBindInverse.clone().multiply(head.matrixWorld);
-                (head as any).neckOffset = headOffset;
-                (head as any).neckRef = neck;
-                (head as any).armature = armature;
-              }
-              
-              console.log('Cached bone offsets for new skeleton model (Shoulder_L/R relative to Chest_M, Head_M relative to Neck_M)');
-            }
+            // New skeleton model has proper bone parenting:
+            // Chest_M → Scapula_L/R → Shoulder_L/R
+            // Arms follow chest naturally through the bone hierarchy - no manual syncing needed
+            console.log('New skeleton model loaded with proper bone hierarchy - arms follow chest naturally');
             
             bonesRef.current = bones;
             
@@ -1372,84 +1327,9 @@ export default function PureThreeGLBViewer({
           
           animationId = requestAnimationFrame(animate);
           
-          // Sync shoulder bones to follow Chest_M when spine moves
-          // For new skeleton model with proper bone hierarchy
-          const currentBones = bonesRef.current;
-          const chest = currentBones['Chest_M'] as THREE.Bone;
-          const shoulderL = currentBones['Shoulder_L'] as THREE.Bone;
-          const shoulderR = currentBones['Shoulder_R'] as THREE.Bone;
-          
-          if (chest && shoulderL && (shoulderL as any).chestOffset) {
-            chest.updateMatrixWorld(true);
-            
-            const shoulderLOffset = (shoulderL as any).chestOffset as THREE.Matrix4;
-            const newShoulderLWorld = new THREE.Matrix4();
-            newShoulderLWorld.copy(chest.matrixWorld).multiply(shoulderLOffset);
-            
-            // Apply slider rotation
-            const sliderRot = sliderRotationsRef.current['Shoulder_L'];
-            if (sliderRot) {
-              const sliderMatrix = new THREE.Matrix4().makeRotationFromEuler(
-                new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z)
-              );
-              newShoulderLWorld.multiply(sliderMatrix);
-            }
-            
-            const armature = (shoulderL as any).armature as THREE.Object3D;
-            if (armature) {
-              armature.updateMatrixWorld(true);
-              const armatureInverse = new THREE.Matrix4().copy(armature.matrixWorld).invert();
-              const newShoulderLLocal = new THREE.Matrix4();
-              newShoulderLLocal.copy(armatureInverse).multiply(newShoulderLWorld);
-              
-              const pos = new THREE.Vector3();
-              const quat = new THREE.Quaternion();
-              const scale = new THREE.Vector3();
-              newShoulderLLocal.decompose(pos, quat, scale);
-              
-              pos.x -= clavicleOffsetsRef.current.left;
-              shoulderL.position.copy(pos);
-              shoulderL.quaternion.copy(quat);
-              shoulderL.scale.copy(scale);
-              shoulderL.updateMatrixWorld(true);
-            }
-          }
-          
-          if (chest && shoulderR && (shoulderR as any).chestOffset) {
-            chest.updateMatrixWorld(true);
-            
-            const shoulderROffset = (shoulderR as any).chestOffset as THREE.Matrix4;
-            const newShoulderRWorld = new THREE.Matrix4();
-            newShoulderRWorld.copy(chest.matrixWorld).multiply(shoulderROffset);
-            
-            // Apply slider rotation
-            const sliderRot = sliderRotationsRef.current['Shoulder_R'];
-            if (sliderRot) {
-              const sliderMatrix = new THREE.Matrix4().makeRotationFromEuler(
-                new THREE.Euler(sliderRot.x, sliderRot.y, sliderRot.z)
-              );
-              newShoulderRWorld.multiply(sliderMatrix);
-            }
-            
-            const armature = (shoulderR as any).armature as THREE.Object3D;
-            if (armature) {
-              armature.updateMatrixWorld(true);
-              const armatureInverse = new THREE.Matrix4().copy(armature.matrixWorld).invert();
-              const newShoulderRLocal = new THREE.Matrix4();
-              newShoulderRLocal.copy(armatureInverse).multiply(newShoulderRWorld);
-              
-              const pos = new THREE.Vector3();
-              const quat = new THREE.Quaternion();
-              const scale = new THREE.Vector3();
-              newShoulderRLocal.decompose(pos, quat, scale);
-              
-              pos.x += clavicleOffsetsRef.current.right;
-              shoulderR.position.copy(pos);
-              shoulderR.quaternion.copy(quat);
-              shoulderR.scale.copy(scale);
-              shoulderR.updateMatrixWorld(true);
-            }
-          }
+          // New skeleton model has proper bone hierarchy:
+          // Chest_M → Scapula_L/R → Shoulder_L/R
+          // Arms follow chest naturally - no manual syncing needed
           
           // Update muscle visualization to follow skeleton movement
           if (muscleVisualizationRef.current) {

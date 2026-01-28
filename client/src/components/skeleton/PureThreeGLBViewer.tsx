@@ -1296,6 +1296,26 @@ export default function PureThreeGLBViewer({
             // Arms follow chest naturally through the bone hierarchy - no manual syncing needed
             console.log('New skeleton model loaded with proper bone hierarchy - arms follow chest naturally');
             
+            // Set default arm position - bring arms down to natural resting position
+            // The model may be in T-pose by default, rotate shoulders to bring arms down
+            const shoulderL = bones['Shoulder_L'] as THREE.Bone;
+            const shoulderR = bones['Shoulder_R'] as THREE.Bone;
+            if (shoulderL) {
+              // Rotate left shoulder to bring arm down (negative abduction on Z-axis)
+              shoulderL.rotation.z -= Math.PI * 0.45; // ~81 degrees down from T-pose
+              // Update the stored initial rotation to include this default position
+              initialRotationsRef.current['Shoulder_L'] = shoulderL.rotation.clone();
+              bindPoseQuaternionsRef.current['Shoulder_L'] = shoulderL.quaternion.clone();
+            }
+            if (shoulderR) {
+              // Rotate right shoulder to bring arm down (negative abduction on Z-axis)
+              shoulderR.rotation.z -= Math.PI * 0.45; // ~81 degrees down from T-pose
+              // Update the stored initial rotation to include this default position
+              initialRotationsRef.current['Shoulder_R'] = shoulderR.rotation.clone();
+              bindPoseQuaternionsRef.current['Shoulder_R'] = shoulderR.quaternion.clone();
+            }
+            console.log('Arms set to default downward resting position');
+            
             bonesRef.current = bones;
             
             // Initialize leg IK solver after bones are loaded

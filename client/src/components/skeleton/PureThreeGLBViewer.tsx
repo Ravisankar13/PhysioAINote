@@ -1332,6 +1332,26 @@ export default function PureThreeGLBViewer({
           // Chest_M → Scapula_L/R → Shoulder_L/R
           // Arms follow chest naturally - no manual syncing needed
           
+          // Apply slider rotations to shoulder bones (when no live pose is controlling them)
+          // These bones are excluded from direct slider application to allow animation/live pose control
+          const sliderRotations = sliderRotationsRef.current;
+          const currentBones = bonesRef.current;
+          const initialRots = initialRotationsRef.current;
+          
+          // Apply stored slider rotations to shoulder bones
+          ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'].forEach(boneName => {
+            const bone = currentBones[boneName] as THREE.Bone;
+            const sliderRot = sliderRotations[boneName];
+            const initialRot = initialRots[boneName];
+            
+            if (bone && sliderRot && initialRot) {
+              // Apply slider rotation on top of initial rotation
+              bone.rotation.x = initialRot.x + sliderRot.x;
+              bone.rotation.y = initialRot.y + sliderRot.y;
+              bone.rotation.z = initialRot.z + sliderRot.z;
+            }
+          });
+          
           // Update muscle visualization to follow skeleton movement
           if (muscleVisualizationRef.current) {
             const now = performance.now();

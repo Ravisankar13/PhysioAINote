@@ -1887,6 +1887,29 @@ export default function PureThreeGLBViewer({
         bone.position.z = initialPos.z + posOffset.z;
       }
     });
+    
+    // Apply clavicle length offsets to move scapula/shoulder laterally
+    // Positive clavicle length = shoulder moves outward (wider shoulders)
+    const scapulaL = bones['Scapula_L'];
+    const scapulaR = bones['Scapula_R'];
+    
+    if (scapulaL) {
+      // Store initial position on first access
+      if (!(scapulaL as any).clavicleInitialX) {
+        (scapulaL as any).clavicleInitialX = scapulaL.position.x;
+      }
+      // Left scapula moves in positive X direction (outward)
+      scapulaL.position.x = (scapulaL as any).clavicleInitialX + clavicleOffsetsRef.current.left;
+    }
+    
+    if (scapulaR) {
+      // Store initial position on first access
+      if (!(scapulaR as any).clavicleInitialX) {
+        (scapulaR as any).clavicleInitialX = scapulaR.position.x;
+      }
+      // Right scapula moves in negative X direction (outward)
+      scapulaR.position.x = (scapulaR as any).clavicleInitialX - clavicleOffsetsRef.current.right;
+    }
   }, [modelConfig, status, livePose]);
 
   // Sync animation constraints to ref (avoids restarting animation when constraints change)

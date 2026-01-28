@@ -1301,17 +1301,17 @@ export default function PureThreeGLBViewer({
             const shoulderL = bones['Shoulder_L'] as THREE.Bone;
             const shoulderR = bones['Shoulder_R'] as THREE.Bone;
             if (shoulderL) {
-              // Rotate left shoulder to bring arm down and slightly forward
+              // Rotate left shoulder to bring arm down and forward
               shoulderL.rotation.z -= Math.PI * 0.45; // ~81 degrees down from T-pose
-              shoulderL.rotation.y += Math.PI * 0.08; // Bring arm slightly forward
+              shoulderL.rotation.y += Math.PI * 0.25; // Bring arm forward (~45 degrees)
               // Update the stored initial rotation to include this default position
               initialRotationsRef.current['Shoulder_L'] = shoulderL.rotation.clone();
               bindPoseQuaternionsRef.current['Shoulder_L'] = shoulderL.quaternion.clone();
             }
             if (shoulderR) {
-              // Rotate right shoulder to bring arm down and slightly forward
+              // Rotate right shoulder to bring arm down and forward
               shoulderR.rotation.z -= Math.PI * 0.45; // ~81 degrees down from T-pose
-              shoulderR.rotation.y -= Math.PI * 0.08; // Bring arm slightly forward (opposite sign for right side)
+              shoulderR.rotation.y -= Math.PI * 0.25; // Bring arm forward (~45 degrees, opposite sign for right side)
               // Update the stored initial rotation to include this default position
               initialRotationsRef.current['Shoulder_R'] = shoulderR.rotation.clone();
               bindPoseQuaternionsRef.current['Shoulder_R'] = shoulderR.quaternion.clone();

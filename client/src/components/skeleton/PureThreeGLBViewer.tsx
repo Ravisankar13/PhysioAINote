@@ -1296,71 +1296,10 @@ export default function PureThreeGLBViewer({
             // Arms follow chest naturally through the bone hierarchy - no manual syncing needed
             console.log('New skeleton model loaded with proper bone hierarchy - arms follow chest naturally');
             
-            // Set default arm position using the exact slider values that produce natural resting pose
-            // Left arm defaults: Flexion(-16°), Abduction(38°), ExtRotation(27°), Retroversion(-1°), Elevation(-10°)
-            const shoulderL = bones['Shoulder_L'] as THREE.Bone;
-            const shoulderR = bones['Shoulder_R'] as THREE.Bone;
-            const shoulderPart1L = bones['ShoulderPart1_L'] as THREE.Bone;
-            const shoulderPart1R = bones['ShoulderPart1_R'] as THREE.Bone;
-            const scapulaL = bones['Scapula_L'] as THREE.Bone;
-            const scapulaR = bones['Scapula_R'] as THREE.Bone;
-            
-            // Convert degrees to radians
-            const toRad = (deg: number) => (deg * Math.PI) / 180;
-            
-            // Left shoulder defaults
-            if (shoulderL) {
-              // Flexion (-16°): y axis, scale -1 → rotation.y += 16 * scale = 16 * -1 * (π/180) = -0.279 rad
-              shoulderL.rotation.y += toRad(-16) * -1;
-              // Abduction (38°): z axis, scale 1 → rotation.z += 38 * (π/180) = 0.663 rad
-              shoulderL.rotation.z += toRad(38) * 1;
-              // Elevation (-10°): x axis, scale 0.3 (partial) → rotation.x += -10 * 0.3 * (π/180)
-              shoulderL.rotation.x += toRad(-10) * 0.3;
-              initialRotationsRef.current['Shoulder_L'] = shoulderL.rotation.clone();
-              bindPoseQuaternionsRef.current['Shoulder_L'] = shoulderL.quaternion.clone();
-            }
-            if (shoulderPart1L) {
-              // External Rotation (27°): x axis, scale -1 → rotation.x += 27 * -1 * (π/180)
-              shoulderPart1L.rotation.x += toRad(27) * -1;
-              // Retroversion (-1°): y axis, scale 1 → rotation.y += -1 * (π/180)
-              shoulderPart1L.rotation.y += toRad(-1) * 1;
-              initialRotationsRef.current['ShoulderPart1_L'] = shoulderPart1L.rotation.clone();
-              bindPoseQuaternionsRef.current['ShoulderPart1_L'] = shoulderPart1L.quaternion.clone();
-            }
-            if (scapulaL) {
-              // Elevation (-10°): z axis, scale 0.5 → rotation.z += -10 * 0.5 * (π/180)
-              scapulaL.rotation.z += toRad(-10) * 0.5;
-              initialRotationsRef.current['Scapula_L'] = scapulaL.rotation.clone();
-              bindPoseQuaternionsRef.current['Scapula_L'] = scapulaL.quaternion.clone();
-            }
-            
-            // Right shoulder - mirror the left side values
-            if (shoulderR) {
-              // Flexion (-16°): y axis, scale 1 (opposite) → rotation.y += -16 * 1 * (π/180)
-              shoulderR.rotation.y += toRad(-16) * 1;
-              // Abduction (38°): z axis, scale 1 → rotation.z += 38 * (π/180) (same direction)
-              shoulderR.rotation.z += toRad(38) * 1;
-              // Elevation (-10°): x axis, scale 0.3
-              shoulderR.rotation.x += toRad(-10) * 0.3;
-              initialRotationsRef.current['Shoulder_R'] = shoulderR.rotation.clone();
-              bindPoseQuaternionsRef.current['Shoulder_R'] = shoulderR.quaternion.clone();
-            }
-            if (shoulderPart1R) {
-              // External Rotation (27°): x axis, scale 1 (opposite) → rotation.x += 27 * 1 * (π/180)
-              shoulderPart1R.rotation.x += toRad(27) * 1;
-              // Retroversion (-1°): y axis, scale -1 (opposite) → rotation.y += -1 * -1 * (π/180)
-              shoulderPart1R.rotation.y += toRad(-1) * -1;
-              initialRotationsRef.current['ShoulderPart1_R'] = shoulderPart1R.rotation.clone();
-              bindPoseQuaternionsRef.current['ShoulderPart1_R'] = shoulderPart1R.quaternion.clone();
-            }
-            if (scapulaR) {
-              // Elevation (-10°): z axis, scale -0.5 (opposite) → rotation.z += -10 * -0.5 * (π/180)
-              scapulaR.rotation.z += toRad(-10) * -0.5;
-              initialRotationsRef.current['Scapula_R'] = scapulaR.rotation.clone();
-              bindPoseQuaternionsRef.current['Scapula_R'] = scapulaR.quaternion.clone();
-            }
-            
-            console.log('Arms set to default natural resting position with specific slider values');
+            // Default arm position is now set via modelConfig default slider values in TestSkeletonNew.tsx
+            // Left arm defaults: Flexion(-16°), Abduction(38°), ExtRotation(27°), Retroversion(-1°), Elevation(-10°), ClavicleLength(-3mm)
+            // Right arm uses the same values mirrored
+            console.log('Arms will be positioned by default slider values from modelConfig');
             
             bonesRef.current = bones;
             

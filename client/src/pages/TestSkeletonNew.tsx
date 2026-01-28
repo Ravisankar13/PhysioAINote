@@ -2667,7 +2667,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('rightShoulder', 'flexion', value);
                             }
                           }}
-                          min={-60}
+                          min={-180}
                           max={180}
                           step={1}
                           className="mt-1"
@@ -2683,7 +2683,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('rightShoulder', 'abduction', value);
                             }
                           }}
-                          min={0}
+                          min={-180}
                           max={180}
                           step={1}
                           className="mt-1"
@@ -2699,7 +2699,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('rightShoulder', 'internalRotation', value);
                             }
                           }}
-                          min={0}
+                          min={-90}
                           max={90}
                           step={1}
                           className="mt-1"
@@ -2715,7 +2715,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('rightShoulder', 'externalRotation', value);
                             }
                           }}
-                          min={0}
+                          min={-90}
                           max={90}
                           step={1}
                           className="mt-1"
@@ -2731,7 +2731,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('rightShoulder', 'retroversion', value);
                             }
                           }}
-                          min={-30}
+                          min={-60}
                           max={60}
                           step={1}
                           className="mt-1"
@@ -2747,7 +2747,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('rightShoulder', 'elevation', value);
                             }
                           }}
-                          min={-20}
+                          min={-30}
                           max={30}
                           step={1}
                           className="mt-1"
@@ -2783,7 +2783,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('leftShoulder', 'flexion', value);
                             }
                           }}
-                          min={-60}
+                          min={-180}
                           max={180}
                           step={1}
                           className="mt-1"
@@ -2799,7 +2799,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('leftShoulder', 'abduction', value);
                             }
                           }}
-                          min={0}
+                          min={-180}
                           max={180}
                           step={1}
                           className="mt-1"
@@ -2815,7 +2815,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('leftShoulder', 'internalRotation', value);
                             }
                           }}
-                          min={0}
+                          min={-90}
                           max={90}
                           step={1}
                           className="mt-1"
@@ -2831,7 +2831,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('leftShoulder', 'externalRotation', value);
                             }
                           }}
-                          min={0}
+                          min={-90}
                           max={90}
                           step={1}
                           className="mt-1"
@@ -2847,7 +2847,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('leftShoulder', 'retroversion', value);
                             }
                           }}
-                          min={-30}
+                          min={-60}
                           max={60}
                           step={1}
                           className="mt-1"
@@ -2863,7 +2863,7 @@ export default function TestSkeletonNew() {
                               handleSliderChange('leftShoulder', 'elevation', value);
                             }
                           }}
-                          min={-20}
+                          min={-30}
                           max={30}
                           step={1}
                           className="mt-1"

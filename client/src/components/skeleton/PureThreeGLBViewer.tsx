@@ -777,6 +777,8 @@ export default function PureThreeGLBViewer({
   const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
   const muscleLayerManagerRef = useRef<MuscleLayerManager | null>(null);
   const animationConstraintsRef = useRef<AnimationConstraint[]>([]);
+  const livePoseActiveRef = useRef<boolean>(false);
+  const animationPlayingRef = useRef<boolean>(false);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const sceneRef = useRef<{
     scene: THREE.Scene;
@@ -1332,25 +1334,29 @@ export default function PureThreeGLBViewer({
           // Chest_M → Scapula_L/R → Shoulder_L/R
           // Arms follow chest naturally - no manual syncing needed
           
-          // Apply slider rotations to shoulder bones (when no live pose is controlling them)
+          // Apply slider rotations to shoulder bones only when no live pose or animation is active
           // These bones are excluded from direct slider application to allow animation/live pose control
-          const sliderRotations = sliderRotationsRef.current;
-          const currentBones = bonesRef.current;
-          const initialRots = initialRotationsRef.current;
+          const isLivePoseOrAnimationActive = livePoseActiveRef.current || animationPlayingRef.current;
           
-          // Apply stored slider rotations to shoulder bones
-          ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'].forEach(boneName => {
-            const bone = currentBones[boneName] as THREE.Bone;
-            const sliderRot = sliderRotations[boneName];
-            const initialRot = initialRots[boneName];
+          if (!isLivePoseOrAnimationActive) {
+            const sliderRotations = sliderRotationsRef.current;
+            const currentBones = bonesRef.current;
+            const initialRots = initialRotationsRef.current;
             
-            if (bone && sliderRot && initialRot) {
-              // Apply slider rotation on top of initial rotation
-              bone.rotation.x = initialRot.x + sliderRot.x;
-              bone.rotation.y = initialRot.y + sliderRot.y;
-              bone.rotation.z = initialRot.z + sliderRot.z;
-            }
-          });
+            // Apply stored slider rotations to shoulder bones
+            ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'].forEach(boneName => {
+              const bone = currentBones[boneName] as THREE.Bone;
+              const sliderRot = sliderRotations[boneName];
+              const initialRot = initialRots[boneName];
+              
+              if (bone && sliderRot && initialRot) {
+                // Apply slider rotation on top of initial rotation
+                bone.rotation.x = initialRot.x + sliderRot.x;
+                bone.rotation.y = initialRot.y + sliderRot.y;
+                bone.rotation.z = initialRot.z + sliderRot.z;
+              }
+            });
+          }
           
           // Update muscle visualization to follow skeleton movement
           if (muscleVisualizationRef.current) {
@@ -1882,6 +1888,15 @@ export default function PureThreeGLBViewer({
   useEffect(() => {
     animationConstraintsRef.current = animationConstraints || [];
   }, [animationConstraints]);
+
+  // Keep refs updated for animation loop access
+  useEffect(() => {
+    livePoseActiveRef.current = livePose !== null;
+  }, [livePose]);
+
+  useEffect(() => {
+    animationPlayingRef.current = animationState?.isPlaying || false;
+  }, [animationState?.isPlaying]);
 
   useEffect(() => {
     if (!animationState || !animationState.isPlaying || !animationState.currentMovement) return;

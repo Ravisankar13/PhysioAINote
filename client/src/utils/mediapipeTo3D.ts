@@ -407,13 +407,15 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
         y: clamp(-headYaw, -0.8, 0.8),       // Yaw (rotation) - inverted for mirror
         z: clamp(-headRoll, -0.5, 0.5)       // Roll (side tilt) - inverted for mirror
       },
-      // Swap left/right AND negate z (abduction) for mirror correction
-      leftShoulder: { ...rightShoulderJoint, z: -rightShoulderJoint.z },
-      rightShoulder: { ...leftShoulderJoint, z: -leftShoulderJoint.z },
+      // Swap left/right joints for mirror mode
+      // Abduction (z) should NOT be negated - it's always positive (arm going up)
+      // The lateral direction is already handled by the swap
+      leftShoulder: rightShoulderJoint,
+      rightShoulder: leftShoulderJoint,
       leftElbow: rightElbowJoint,
       rightElbow: leftElbowJoint,
-      leftHip: { ...rightHipJoint, z: -rightHipJoint.z },
-      rightHip: { ...leftHipJoint, z: -leftHipJoint.z },
+      leftHip: rightHipJoint,
+      rightHip: leftHipJoint,
       leftKnee: rightKneeJoint,
       rightKnee: leftKneeJoint,
       leftWrist: { x: 0, y: 0, z: 0 },

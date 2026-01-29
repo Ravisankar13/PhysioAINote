@@ -1339,29 +1339,25 @@ export default function PureThreeGLBViewer({
           // Chest_M → Scapula_L/R → Shoulder_L/R
           // Arms follow chest naturally - no manual syncing needed
           
-          // Apply slider rotations to shoulder bones only when no live pose or animation is active
-          // These bones are excluded from direct slider application to allow animation/live pose control
-          const isLivePoseOrAnimationActive = livePoseActiveRef.current || animationPlayingRef.current;
+          // Apply rotations to shoulder bones from sliderRotationsRef
+          // These are stored there by either: 1) sliders (when no live pose/animation) or 2) live pose effect
+          const sliderRotations = sliderRotationsRef.current;
+          const currentBones = bonesRef.current;
+          const initialRots = initialRotationsRef.current;
           
-          if (!isLivePoseOrAnimationActive) {
-            const sliderRotations = sliderRotationsRef.current;
-            const currentBones = bonesRef.current;
-            const initialRots = initialRotationsRef.current;
+          // Always apply stored rotations to shoulder bones (live pose effect stores values here too)
+          ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'].forEach(boneName => {
+            const bone = currentBones[boneName] as THREE.Bone;
+            const sliderRot = sliderRotations[boneName];
+            const initialRot = initialRots[boneName];
             
-            // Apply stored slider rotations to shoulder bones
-            ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'].forEach(boneName => {
-              const bone = currentBones[boneName] as THREE.Bone;
-              const sliderRot = sliderRotations[boneName];
-              const initialRot = initialRots[boneName];
-              
-              if (bone && sliderRot && initialRot) {
-                // Apply slider rotation on top of initial rotation
-                bone.rotation.x = initialRot.x + sliderRot.x;
-                bone.rotation.y = initialRot.y + sliderRot.y;
-                bone.rotation.z = initialRot.z + sliderRot.z;
-              }
-            });
-          }
+            if (bone && sliderRot && initialRot) {
+              // Apply rotation delta on top of initial rotation
+              bone.rotation.x = initialRot.x + sliderRot.x;
+              bone.rotation.y = initialRot.y + sliderRot.y;
+              bone.rotation.z = initialRot.z + sliderRot.z;
+            }
+          });
           
           // Update muscle visualization to follow skeleton movement
           if (muscleVisualizationRef.current) {
@@ -1834,7 +1830,10 @@ export default function PureThreeGLBViewer({
     });
     
     // Store slider rotations for animation loop to use
-    sliderRotationsRef.current = sliderOnlyRotations;
+    // Only update if live pose is NOT active (live pose effect sets these values itself)
+    if (!livePose) {
+      sliderRotationsRef.current = sliderOnlyRotations;
+    }
     
     // Extract and store clavicle length offsets (in mm, convert to scene units)
     // Positive value = longer clavicle = shoulder moves laterally outward

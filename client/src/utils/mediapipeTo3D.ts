@@ -270,17 +270,54 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightUpperArm = normalize(createVector(rightShoulder, rightElbow));
   const rightForearm = normalize(createVector(rightElbow, rightWrist));
 
-  // Shoulder flexion (arm raised forward) - stored in .x to match bone mapping expectations
-  // When arm is down: upperArm.y ≈ -1, angle ≈ 0
-  // When arm is forward: upperArm.z > 0, angle increases
-  const leftShoulderFlexion = Math.atan2(leftUpperArm.z, -leftUpperArm.y);
-  const rightShoulderFlexion = Math.atan2(rightUpperArm.z, -rightUpperArm.y);
+  // SPHERICAL COORDINATE APPROACH for shoulder angles
+  // This properly handles all arm positions including overhead
+  //
+  // Coordinate system (THREE.js after conversion):
+  // - X: Right (positive)
+  // - Y: Up (positive)  
+  // - Z: Toward camera (positive)
+  //
+  // Arm down position: vector = (0, -1, 0)
+  // Arm forward (90° flexion): vector = (0, 0, 1)
+  // Arm to side (90° abduction): vector = (±1, 0, 0)
+  // Arm overhead: vector = (0, 1, 0)
+  //
+  // Using elevation-azimuth decomposition:
+  // 1. Elevation = angle from vertical down axis (0° = down, 180° = up)
+  // 2. Azimuth = direction in horizontal plane (0° = forward, 90° = to side)
+  //
+  // Then map to flexion/abduction based on azimuth:
+  // - Azimuth 0° (forward) = pure flexion
+  // - Azimuth 90° (side) = pure abduction
+  // - Mixed azimuth = blend of both
   
-  // Shoulder abduction (arm raised sideways) - stored in .z to match bone mapping expectations
-  // When arm is down: upperArm.y ≈ -1, angle ≈ 0
-  // When arm is horizontal: upperArm.x ≈ ±1, upperArm.y ≈ 0, angle ≈ 90°
-  const leftShoulderAbduction = Math.atan2(-leftUpperArm.x, -leftUpperArm.y);
-  const rightShoulderAbduction = Math.atan2(rightUpperArm.x, -rightUpperArm.y);
+  // Left arm elevation (angle from straight down)
+  // -leftUpperArm.y = positive when arm down (y negative), negative when arm up
+  const leftElevation = Math.acos(Math.max(-1, Math.min(1, -leftUpperArm.y)));
+  const rightElevation = Math.acos(Math.max(-1, Math.min(1, -rightUpperArm.y)));
+  
+  // Azimuth (direction in horizontal plane) using atan2(x, z)
+  // For left arm: -x direction = abduction, +z direction = flexion
+  // For right arm: +x direction = abduction, +z direction = flexion
+  const leftAzimuth = Math.atan2(-leftUpperArm.x, leftUpperArm.z); // -x = side, +z = forward
+  const rightAzimuth = Math.atan2(rightUpperArm.x, rightUpperArm.z); // +x = side, +z = forward
+  
+  // Decompose elevation into flexion and abduction based on azimuth
+  // azimuth = 0 means pure forward (flexion)
+  // azimuth = π/2 or -π/2 means pure side (abduction)
+  // cos(azimuth) gives flexion weight, sin(azimuth) gives abduction weight
+  const leftFlexionWeight = Math.cos(leftAzimuth);
+  const leftAbductionWeight = Math.sin(leftAzimuth);
+  const rightFlexionWeight = Math.cos(rightAzimuth);
+  const rightAbductionWeight = Math.sin(rightAzimuth);
+  
+  // Final angles: elevation distributed by direction weights
+  // Positive flexion = arm forward, positive abduction = arm to side
+  const leftShoulderFlexion = leftElevation * leftFlexionWeight;
+  const leftShoulderAbduction = leftElevation * Math.abs(leftAbductionWeight); // abs because abduction is always positive
+  const rightShoulderFlexion = rightElevation * rightFlexionWeight;
+  const rightShoulderAbduction = rightElevation * Math.abs(rightAbductionWeight);
 
   // Elbow flexion (bend angle at elbow)
   const leftElbowFlexion = calculateJointFlexion(leftShoulder, leftElbow, leftWrist);

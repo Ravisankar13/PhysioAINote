@@ -27,6 +27,18 @@ interface JointConfig {
   [key: string]: number | undefined;
 }
 
+interface ScapulaConfig {
+  protraction?: number;     // Forward movement (shoulder blade moving away from spine)
+  retraction?: number;      // Backward movement (shoulder blade moving toward spine)
+  elevation?: number;       // Upward movement (shrugging)
+  depression?: number;      // Downward movement
+  upwardRotation?: number;  // Glenoid facing upward (occurs with arm elevation)
+  downwardRotation?: number; // Glenoid facing downward
+  anteriorTilt?: number;    // Forward tilt of inferior angle
+  posteriorTilt?: number;   // Backward tilt of inferior angle
+  winging?: number;         // Medial border lifting off ribcage
+}
+
 interface ModelConfig {
   leftHip?: JointConfig;
   rightHip?: JointConfig;
@@ -36,12 +48,14 @@ interface ModelConfig {
   rightAnkle?: JointConfig;
   leftShoulder?: JointConfig;
   rightShoulder?: JointConfig;
+  leftScapula?: ScapulaConfig;
+  rightScapula?: ScapulaConfig;
   leftElbow?: JointConfig;
   rightElbow?: JointConfig;
   pelvis?: { tilt?: number; obliquity?: number; rotation?: number };
   spine?: { cervicalLordosis?: number; thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number };
   neck?: { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number };
-  [key: string]: JointConfig | { tilt?: number; obliquity?: number; rotation?: number } | { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number } | { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number } | undefined;
+  [key: string]: JointConfig | ScapulaConfig | { tilt?: number; obliquity?: number; rotation?: number } | { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number } | { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number } | undefined;
 }
 
 export interface AnimationState {
@@ -624,6 +638,54 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightShoulder.elevation': [
     { boneName: 'Chest_M', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
     { boneName: 'Shoulder_R', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
+  ],
+  
+  // === SCAPULA ===
+  // Scapula movements on the thorax - critical for scapulohumeral rhythm
+  // Note: Scapula_L/R are children of Chest_M in the bone hierarchy
+  //
+  // Scapula local axes (observed from bone hierarchy):
+  // - X axis: Points laterally (left for L, right for R)
+  // - Y axis: Points superiorly (up)  
+  // - Z axis: Points anteriorly (forward)
+  //
+  // Protraction/Retraction: Scapula moves around ribcage (Y-axis rotation - internal/external rotation of scapula)
+  // Protraction = scapula rotates forward around vertical axis
+  'leftScapula.protraction': [{ boneName: 'Scapula_L', axis: 'y', scale: 1 }],   // Scapula rotates forward around vertical axis
+  'leftScapula.retraction': [{ boneName: 'Scapula_L', axis: 'y', scale: -1 }],   // Scapula rotates backward
+  'rightScapula.protraction': [{ boneName: 'Scapula_R', axis: 'y', scale: -1 }], // Opposite direction for right
+  'rightScapula.retraction': [{ boneName: 'Scapula_R', axis: 'y', scale: 1 }],
+  
+  // Elevation/Depression: Scapula moves up/down (X-axis rotation - tips the scapula to elevate glenoid)
+  // In the local frame, X-axis rotation tips the scapula for elevation effect
+  'leftScapula.elevation': [{ boneName: 'Scapula_L', axis: 'x', scale: -1 }],    // Shrug - scapula elevates
+  'leftScapula.depression': [{ boneName: 'Scapula_L', axis: 'x', scale: 1 }],    // Push down
+  'rightScapula.elevation': [{ boneName: 'Scapula_R', axis: 'x', scale: -1 }],   // Same direction for right (symmetric motion)
+  'rightScapula.depression': [{ boneName: 'Scapula_R', axis: 'x', scale: 1 }],
+  
+  // Upward/Downward Rotation: Glenoid points up (Z-axis rotation - frontal plane rotation)
+  // Inferior angle moves laterally when glenoid faces upward
+  'leftScapula.upwardRotation': [{ boneName: 'Scapula_L', axis: 'z', scale: 1 }],    // Inferior angle moves lateral, glenoid faces up
+  'leftScapula.downwardRotation': [{ boneName: 'Scapula_L', axis: 'z', scale: -1 }], // Inferior angle moves medial
+  'rightScapula.upwardRotation': [{ boneName: 'Scapula_R', axis: 'z', scale: -1 }],  // Opposite for right side
+  'rightScapula.downwardRotation': [{ boneName: 'Scapula_R', axis: 'z', scale: 1 }],
+  
+  // Anterior/Posterior Tilt: Inferior angle tips forward/backward (X-axis rotation)
+  // Different from elevation - this is pure sagittal plane tilt
+  'leftScapula.anteriorTilt': [{ boneName: 'Scapula_L', axis: 'x', scale: 0.5 }],    // Inferior angle tips forward (anterior)
+  'leftScapula.posteriorTilt': [{ boneName: 'Scapula_L', axis: 'x', scale: -0.5 }],  // Inferior angle tips backward (posterior)
+  'rightScapula.anteriorTilt': [{ boneName: 'Scapula_R', axis: 'x', scale: 0.5 }],
+  'rightScapula.posteriorTilt': [{ boneName: 'Scapula_R', axis: 'x', scale: -0.5 }],
+  
+  // Winging: Medial border lifts off ribcage (common dysfunction - combination of movements)
+  // Primary: Y rotation (protraction) + Z rotation (helps lift medial border)
+  'leftScapula.winging': [
+    { boneName: 'Scapula_L', axis: 'y', scale: 0.6 },  // Protraction component
+    { boneName: 'Scapula_L', axis: 'z', scale: 0.4 }   // Upward rotation component (lifts medial border)
+  ],
+  'rightScapula.winging': [
+    { boneName: 'Scapula_R', axis: 'y', scale: -0.6 }, // Opposite rotation for right
+    { boneName: 'Scapula_R', axis: 'z', scale: -0.4 }
   ],
   
   // === ELBOW ===

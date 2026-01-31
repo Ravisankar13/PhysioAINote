@@ -81,6 +81,8 @@ interface ModelConfig {
   rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
   leftShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
   rightShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
+  leftScapula: { protraction: number; retraction: number; elevation: number; depression: number; upwardRotation: number; downwardRotation: number; anteriorTilt: number; posteriorTilt: number; winging: number };
+  rightScapula: { protraction: number; retraction: number; elevation: number; depression: number; upwardRotation: number; downwardRotation: number; anteriorTilt: number; posteriorTilt: number; winging: number };
   leftElbow: { flexion: number; carryingAngle: number; pronation: number };
   rightElbow: { flexion: number; carryingAngle: number; pronation: number };
   leftWrist: { deviation: number; flexion: number };
@@ -507,7 +509,13 @@ export default function TestSkeletonNew() {
   });
 
   const handlePatientCloneUpdate = useCallback((cloneState: PatientCloneState) => {
-    setModelConfig(cloneState.modelConfig);
+    // Merge with defaults to ensure all required properties exist (including new scapula properties)
+    setModelConfig(prev => ({
+      ...prev,
+      ...cloneState.modelConfig,
+      leftScapula: (cloneState.modelConfig as any).leftScapula || prev.leftScapula,
+      rightScapula: (cloneState.modelConfig as any).rightScapula || prev.rightScapula,
+    }));
     if (cloneState.biomechanicsData && cloneState.biomechanicsData.anthropometrics) {
       setPatientAnthropometrics({
         heightCm: cloneState.biomechanicsData.anthropometrics.heightCm,
@@ -647,6 +655,28 @@ export default function TestSkeletonNew() {
       protraction: 0,
       winging: 0,
       clavicleLength: 0,
+    },
+    leftScapula: {
+      protraction: 0,
+      retraction: 0,
+      elevation: 0,
+      depression: 0,
+      upwardRotation: 0,
+      downwardRotation: 0,
+      anteriorTilt: 0,
+      posteriorTilt: 0,
+      winging: 0,
+    },
+    rightScapula: {
+      protraction: 0,
+      retraction: 0,
+      elevation: 0,
+      depression: 0,
+      upwardRotation: 0,
+      downwardRotation: 0,
+      anteriorTilt: 0,
+      posteriorTilt: 0,
+      winging: 0,
     },
     leftElbow: {
       flexion: 0,
@@ -938,6 +968,28 @@ export default function TestSkeletonNew() {
         protraction: 0,
         winging: 0,
         clavicleLength: 0,
+      },
+      leftScapula: {
+        protraction: 0,
+        retraction: 0,
+        elevation: 0,
+        depression: 0,
+        upwardRotation: 0,
+        downwardRotation: 0,
+        anteriorTilt: 0,
+        posteriorTilt: 0,
+        winging: 0,
+      },
+      rightScapula: {
+        protraction: 0,
+        retraction: 0,
+        elevation: 0,
+        depression: 0,
+        upwardRotation: 0,
+        downwardRotation: 0,
+        anteriorTilt: 0,
+        posteriorTilt: 0,
+        winging: 0,
       },
       leftElbow: {
         flexion: 0,
@@ -2881,6 +2933,192 @@ export default function TestSkeletonNew() {
                           }}
                           min={-15}
                           max={15}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold">Scapula Mechanics</h3>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={linkedSides.shoulders}
+                        onCheckedChange={(checked) => 
+                          setLinkedSides(prev => ({ ...prev, shoulders: checked }))
+                        }
+                      />
+                      <Label className="text-sm">Link Sides</Label>
+                    </div>
+                  </div>
+
+                  {/* Scapula Controls */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Left Scapula</Label>
+                      <div>
+                        <Label className="text-xs">Protraction ({modelConfig.leftScapula.protraction}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftScapula.protraction]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftScapula', 'protraction', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightScapula', 'protraction', value);
+                            }
+                          }}
+                          min={-30}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Elevation ({modelConfig.leftScapula.elevation}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftScapula.elevation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftScapula', 'elevation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightScapula', 'elevation', value);
+                            }
+                          }}
+                          min={-20}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Upward Rotation ({modelConfig.leftScapula.upwardRotation}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftScapula.upwardRotation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftScapula', 'upwardRotation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightScapula', 'upwardRotation', value);
+                            }
+                          }}
+                          min={-20}
+                          max={60}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Anterior Tilt ({modelConfig.leftScapula.anteriorTilt}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftScapula.anteriorTilt]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftScapula', 'anteriorTilt', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightScapula', 'anteriorTilt', value);
+                            }
+                          }}
+                          min={-20}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Winging ({modelConfig.leftScapula.winging}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftScapula.winging]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftScapula', 'winging', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightScapula', 'winging', value);
+                            }
+                          }}
+                          min={0}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Right Scapula</Label>
+                      <div>
+                        <Label className="text-xs">Protraction ({modelConfig.rightScapula.protraction}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightScapula.protraction]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightScapula', 'protraction', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftScapula', 'protraction', value);
+                            }
+                          }}
+                          min={-30}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Elevation ({modelConfig.rightScapula.elevation}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightScapula.elevation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightScapula', 'elevation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftScapula', 'elevation', value);
+                            }
+                          }}
+                          min={-20}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Upward Rotation ({modelConfig.rightScapula.upwardRotation}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightScapula.upwardRotation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightScapula', 'upwardRotation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftScapula', 'upwardRotation', value);
+                            }
+                          }}
+                          min={-20}
+                          max={60}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Anterior Tilt ({modelConfig.rightScapula.anteriorTilt}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightScapula.anteriorTilt]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightScapula', 'anteriorTilt', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftScapula', 'anteriorTilt', value);
+                            }
+                          }}
+                          min={-20}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Winging ({modelConfig.rightScapula.winging}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightScapula.winging]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightScapula', 'winging', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftScapula', 'winging', value);
+                            }
+                          }}
+                          min={0}
+                          max={30}
                           step={1}
                           className="mt-1"
                         />

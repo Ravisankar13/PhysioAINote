@@ -1780,26 +1780,15 @@ export default function PureThreeGLBViewer({
     
     if (Object.keys(bones).length === 0) return;
     
-    // Debug: Check if leftScapula is being received correctly
-    if ((modelConfig as any).leftScapula) {
-      const ls = (modelConfig as any).leftScapula;
-      const hasNonZero = Object.values(ls).some((v: any) => v !== 0);
-      if (hasNonZero) {
-        console.log('[DEBUG] leftScapula config received:', ls);
-      }
-    }
-    
     // First, collect all rotation contributions per bone per axis
     const boneRotations: { [boneName: string]: { x: number; y: number; z: number } } = {};
     const bonePositions: { [boneName: string]: { x: number; y: number; z: number } } = {};
     
     // Initialize all bones to their initial rotation
-    let scapulaLHasInitial = false;
     Object.keys(bones).forEach(boneName => {
       const initial = initialRotations[boneName];
       if (initial) {
         boneRotations[boneName] = { x: initial.x, y: initial.y, z: initial.z };
-        if (boneName === 'Scapula_L') scapulaLHasInitial = true;
       }
       // Store initial positions for position-based transforms
       const bone = bones[boneName];
@@ -1809,12 +1798,6 @@ export default function PureThreeGLBViewer({
         }
       }
     });
-    
-    // Debug: Log once if Scapula_L is missing from initialRotations
-    if (!scapulaLHasInitial && !boneRotations['Scapula_L']) {
-      console.warn('[DEBUG] Scapula_L NOT in initialRotations! Available scapula:', 
-        Object.keys(initialRotations).filter(k => k.includes('Scapula')));
-    }
     
     // Bones that are handled by animation loop (need slider rotations stored separately)
     const animationLoopBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);

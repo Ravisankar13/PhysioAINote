@@ -1875,15 +1875,11 @@ export default function TestSkeletonNew() {
           />
         )}
 
-        {/* Right Panel - Controls */}
+        {/* Right Panel - Clinical Controls */}
         <Card className="h-[600px] overflow-hidden">
           <CardHeader>
             <div className="flex justify-between items-center">
-              <CardTitle>Joint Parameters</CardTitle>
-              <Button onClick={resetAll} variant="outline" size="sm">
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Reset All
-              </Button>
+              <CardTitle>Clinical Controls</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="overflow-y-auto h-[calc(100%-80px)]">
@@ -2005,16 +2001,30 @@ export default function TestSkeletonNew() {
               </div>
             </div>
 
-            <Separator className="my-4" />
+          </CardContent>
+        </Card>
+      </div>
 
-            <Tabs defaultValue="spine" className="w-full">
-              <TabsList className="grid grid-cols-3 w-full">
-                <TabsTrigger value="spine">Spine & Pelvis</TabsTrigger>
-                <TabsTrigger value="lower">Lower Body</TabsTrigger>
-                <TabsTrigger value="upper">Upper Body</TabsTrigger>
-              </TabsList>
+      {/* Joint Parameters - Sliders Panel (Above Biomechanics) */}
+      <Card className="mt-6">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Joint Parameters</CardTitle>
+            <Button onClick={resetAll} variant="outline" size="sm">
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset All
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="spine" className="w-full">
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="spine">Spine & Pelvis</TabsTrigger>
+              <TabsTrigger value="lower">Lower Body</TabsTrigger>
+              <TabsTrigger value="upper">Upper Body</TabsTrigger>
+            </TabsList>
 
-              {/* Spine & Pelvis Tab */}
+            {/* Spine & Pelvis Tab */}
               <TabsContent value="spine" className="space-y-4">
                 <div className="space-y-4">
                   <h3 className="font-semibold">Spinal Curves</h3>
@@ -3343,9 +3353,8 @@ export default function TestSkeletonNew() {
                 </div>
               </TabsContent>
             </Tabs>
-          </CardContent>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Biomechanical Analysis Panel */}
       <div className="mt-6">

@@ -1634,13 +1634,123 @@ export default function TestSkeletonNew() {
 
         {/* Joint Zoom Cameras - Show when adjusting sliders */}
         {showJointZoom && activeJointGroup && (
-          <div className="col-span-2 lg:col-span-1">
+          <div className="col-span-2 lg:col-span-1 space-y-4">
             <JointZoomCameras
               activeJointGroup={activeJointGroup}
               modelConfig={modelConfig}
               animationState={animationState}
               onClose={() => setActiveJointGroup(null)}
             />
+            {/* Clinical Controls - Shown under zoom cameras when active */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Clinical Controls</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4 p-3 bg-gradient-to-r from-green-500/10 to-teal-500/10 rounded-lg border border-green-500/20">
+                  <h3 className="font-semibold mb-2 text-green-300 flex items-center gap-2 text-sm">
+                    <Stethoscope className="h-4 w-4" />
+                    Clinical Assessment
+                  </h3>
+                  <p className="text-xs text-slate-400 mb-2">
+                    Generate a clinical assessment based on the current skeleton configuration.
+                  </p>
+                  <Button
+                    onClick={generateStaticPostureAssessment}
+                    disabled={isGeneratingAssessment}
+                    className="w-full"
+                    variant="secondary"
+                    size="sm"
+                    data-testid="btn-static-posture-assessment-zoom"
+                  >
+                    {isGeneratingAssessment ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analyzing Posture...</>
+                    ) : (
+                      <><Brain className="h-4 w-4 mr-2" />Analyze Current Posture</>
+                    )}
+                  </Button>
+                </div>
+                <div className="p-3 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-lg border border-purple-500/20">
+                  <h3 className="font-semibold mb-2 text-purple-300 flex items-center gap-2 text-sm">
+                    <Play className="h-4 w-4" />
+                    Movement Animation
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <Select
+                        value={animationState.currentMovement || ''}
+                        onValueChange={(value) => {
+                          setAnimationState(prev => ({
+                            ...prev,
+                            currentMovement: value || null,
+                            progress: 0,
+                          }));
+                        }}
+                      >
+                        <SelectTrigger className="flex-1" data-testid="select-movement-zoom">
+                          <SelectValue placeholder="Select movement..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MOVEMENT_SEQUENCES.map((seq) => (
+                            <SelectItem key={seq.id} value={seq.id}>
+                              {seq.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant={animationState.isPlaying ? "destructive" : "default"}
+                        size="sm"
+                        onClick={() => {
+                          if (!animationState.currentMovement) return;
+                          setAnimationState(prev => ({ ...prev, isPlaying: !prev.isPlaying }));
+                        }}
+                        disabled={!animationState.currentMovement}
+                        data-testid="button-play-pause-zoom"
+                      >
+                        {animationState.isPlaying ? (
+                          <><Pause className="h-4 w-4 mr-1" /> Pause</>
+                        ) : (
+                          <><Play className="h-4 w-4 mr-1" /> Play</>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setAnimationState(prev => ({
+                            ...prev,
+                            isPlaying: false,
+                            progress: 0,
+                          }));
+                          resetAll();
+                        }}
+                        data-testid="button-reset-animation-zoom"
+                      >
+                        <SkipBack className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Speed: {animationState.speed}x</Label>
+                      <Slider
+                        value={[animationState.speed]}
+                        onValueChange={(value) => setAnimationState(prev => ({ ...prev, speed: value[0] }))}
+                        min={0.25}
+                        max={2}
+                        step={0.25}
+                        className="mt-1"
+                        data-testid="slider-animation-speed-zoom"
+                      />
+                    </div>
+                    {animationState.currentMovement && (
+                      <p className="text-xs text-muted-foreground">
+                        {MOVEMENT_SEQUENCES.find(s => s.id === animationState.currentMovement)?.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -1875,7 +1985,8 @@ export default function TestSkeletonNew() {
           />
         )}
 
-        {/* Right Panel - Clinical Controls */}
+        {/* Right Panel - Clinical Controls (hidden when zoom cameras are active) */}
+        {!(showJointZoom && activeJointGroup) && (
         <Card className="h-[600px] overflow-hidden">
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -2003,6 +2114,7 @@ export default function TestSkeletonNew() {
 
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* Joint Parameters - Sliders Panel (Above Biomechanics) */}

@@ -277,6 +277,142 @@ export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegio
   L5_S1_spinous: { position: { x: 0, y: 0.55, z: -0.35 }, lookAt: { x: 0, y: 0.55, z: 0 }, label: 'L5/S1 Spinous', icon: '▲', description: 'L5-S1 spinous processes' },
 };
 
+// Joint group types for slider-based camera zooming
+export type JointGroup = 
+  | 'leftHip' 
+  | 'rightHip' 
+  | 'leftKnee' 
+  | 'rightKnee' 
+  | 'leftAnkle' 
+  | 'rightAnkle'
+  | 'leftShoulder' 
+  | 'rightShoulder' 
+  | 'leftScapula'
+  | 'rightScapula'
+  | 'leftElbow' 
+  | 'rightElbow'
+  | 'leftWrist'
+  | 'rightWrist'
+  | 'pelvis'
+  | 'spine'
+  | 'neck'
+  | null;
+
+// Multi-angle camera presets for each joint group
+// Each joint has 2-3 optimal viewing angles for clinical assessment
+export interface JointZoomCamera {
+  position: { x: number; y: number; z: number };
+  lookAt: { x: number; y: number; z: number };
+  label: string;
+}
+
+export const JOINT_ZOOM_CAMERAS: Record<Exclude<JointGroup, null>, JointZoomCamera[]> = {
+  leftHip: [
+    { position: { x: 0, y: 0.5, z: 1.2 }, lookAt: { x: -0.2, y: 0.5, z: 0 }, label: 'Anterior' },
+    { position: { x: -1.2, y: 0.5, z: 0 }, lookAt: { x: -0.2, y: 0.5, z: 0 }, label: 'Lateral' },
+    { position: { x: -0.8, y: 0.5, z: -0.8 }, lookAt: { x: -0.2, y: 0.5, z: 0 }, label: 'Posterior-Lateral' },
+  ],
+  rightHip: [
+    { position: { x: 0, y: 0.5, z: 1.2 }, lookAt: { x: 0.2, y: 0.5, z: 0 }, label: 'Anterior' },
+    { position: { x: 1.2, y: 0.5, z: 0 }, lookAt: { x: 0.2, y: 0.5, z: 0 }, label: 'Lateral' },
+    { position: { x: 0.8, y: 0.5, z: -0.8 }, lookAt: { x: 0.2, y: 0.5, z: 0 }, label: 'Posterior-Lateral' },
+  ],
+  leftKnee: [
+    { position: { x: 0, y: 0, z: 1.0 }, lookAt: { x: -0.15, y: 0, z: 0 }, label: 'Anterior' },
+    { position: { x: -1.0, y: 0, z: 0 }, lookAt: { x: -0.15, y: 0, z: 0 }, label: 'Lateral' },
+    { position: { x: -0.5, y: 0.5, z: 0.8 }, lookAt: { x: -0.15, y: 0, z: 0 }, label: 'Patellar' },
+  ],
+  rightKnee: [
+    { position: { x: 0, y: 0, z: 1.0 }, lookAt: { x: 0.15, y: 0, z: 0 }, label: 'Anterior' },
+    { position: { x: 1.0, y: 0, z: 0 }, lookAt: { x: 0.15, y: 0, z: 0 }, label: 'Lateral' },
+    { position: { x: 0.5, y: 0.5, z: 0.8 }, lookAt: { x: 0.15, y: 0, z: 0 }, label: 'Patellar' },
+  ],
+  leftAnkle: [
+    { position: { x: 0, y: -0.5, z: 0.8 }, lookAt: { x: -0.12, y: -0.5, z: 0 }, label: 'Anterior' },
+    { position: { x: -0.8, y: -0.5, z: 0 }, lookAt: { x: -0.12, y: -0.5, z: 0 }, label: 'Lateral' },
+    { position: { x: 0.4, y: -0.5, z: 0.4 }, lookAt: { x: -0.12, y: -0.5, z: 0 }, label: 'Medial' },
+  ],
+  rightAnkle: [
+    { position: { x: 0, y: -0.5, z: 0.8 }, lookAt: { x: 0.12, y: -0.5, z: 0 }, label: 'Anterior' },
+    { position: { x: 0.8, y: -0.5, z: 0 }, lookAt: { x: 0.12, y: -0.5, z: 0 }, label: 'Lateral' },
+    { position: { x: -0.4, y: -0.5, z: 0.4 }, lookAt: { x: 0.12, y: -0.5, z: 0 }, label: 'Medial' },
+  ],
+  leftShoulder: [
+    { position: { x: -0.3, y: 1.65, z: 1.2 }, lookAt: { x: -0.5, y: 1.65, z: 0 }, label: 'Anterior' },
+    { position: { x: -1.5, y: 1.65, z: 0 }, lookAt: { x: -0.5, y: 1.65, z: 0 }, label: 'Lateral' },
+    { position: { x: -0.3, y: 1.65, z: -1.0 }, lookAt: { x: -0.5, y: 1.65, z: 0 }, label: 'Posterior' },
+  ],
+  rightShoulder: [
+    { position: { x: 0.3, y: 1.65, z: 1.2 }, lookAt: { x: 0.5, y: 1.65, z: 0 }, label: 'Anterior' },
+    { position: { x: 1.5, y: 1.65, z: 0 }, lookAt: { x: 0.5, y: 1.65, z: 0 }, label: 'Lateral' },
+    { position: { x: 0.3, y: 1.65, z: -1.0 }, lookAt: { x: 0.5, y: 1.65, z: 0 }, label: 'Posterior' },
+  ],
+  leftScapula: [
+    { position: { x: -0.5, y: 1.5, z: -1.2 }, lookAt: { x: -0.4, y: 1.5, z: 0 }, label: 'Posterior' },
+    { position: { x: -1.4, y: 1.5, z: -0.3 }, lookAt: { x: -0.4, y: 1.5, z: 0 }, label: 'Lateral-Posterior' },
+    { position: { x: -0.3, y: 2.2, z: -0.5 }, lookAt: { x: -0.4, y: 1.5, z: 0 }, label: 'Superior' },
+  ],
+  rightScapula: [
+    { position: { x: 0.5, y: 1.5, z: -1.2 }, lookAt: { x: 0.4, y: 1.5, z: 0 }, label: 'Posterior' },
+    { position: { x: 1.4, y: 1.5, z: -0.3 }, lookAt: { x: 0.4, y: 1.5, z: 0 }, label: 'Lateral-Posterior' },
+    { position: { x: 0.3, y: 2.2, z: -0.5 }, lookAt: { x: 0.4, y: 1.5, z: 0 }, label: 'Superior' },
+  ],
+  leftElbow: [
+    { position: { x: -0.5, y: 1.2, z: 1.0 }, lookAt: { x: -0.7, y: 1.2, z: 0 }, label: 'Anterior' },
+    { position: { x: -1.5, y: 1.2, z: 0 }, lookAt: { x: -0.7, y: 1.2, z: 0 }, label: 'Lateral' },
+    { position: { x: -0.5, y: 1.2, z: -0.8 }, lookAt: { x: -0.7, y: 1.2, z: 0 }, label: 'Posterior' },
+  ],
+  rightElbow: [
+    { position: { x: 0.5, y: 1.2, z: 1.0 }, lookAt: { x: 0.7, y: 1.2, z: 0 }, label: 'Anterior' },
+    { position: { x: 1.5, y: 1.2, z: 0 }, lookAt: { x: 0.7, y: 1.2, z: 0 }, label: 'Lateral' },
+    { position: { x: 0.5, y: 1.2, z: -0.8 }, lookAt: { x: 0.7, y: 1.2, z: 0 }, label: 'Posterior' },
+  ],
+  leftWrist: [
+    { position: { x: -0.5, y: 0.9, z: 0.8 }, lookAt: { x: -0.8, y: 0.9, z: 0 }, label: 'Dorsal' },
+    { position: { x: -1.3, y: 0.9, z: 0 }, lookAt: { x: -0.8, y: 0.9, z: 0 }, label: 'Lateral' },
+  ],
+  rightWrist: [
+    { position: { x: 0.5, y: 0.9, z: 0.8 }, lookAt: { x: 0.8, y: 0.9, z: 0 }, label: 'Dorsal' },
+    { position: { x: 1.3, y: 0.9, z: 0 }, lookAt: { x: 0.8, y: 0.9, z: 0 }, label: 'Lateral' },
+  ],
+  pelvis: [
+    { position: { x: 0, y: 0.6, z: 1.2 }, lookAt: { x: 0, y: 0.6, z: 0 }, label: 'Anterior' },
+    { position: { x: 1.0, y: 0.6, z: 0.6 }, lookAt: { x: 0, y: 0.6, z: 0 }, label: 'Oblique' },
+    { position: { x: 0, y: 0.6, z: -1.0 }, lookAt: { x: 0, y: 0.6, z: 0 }, label: 'Posterior' },
+  ],
+  spine: [
+    { position: { x: 1.0, y: 1.0, z: 0 }, lookAt: { x: 0, y: 1.0, z: 0 }, label: 'Lateral' },
+    { position: { x: 0, y: 1.0, z: -1.2 }, lookAt: { x: 0, y: 1.0, z: 0 }, label: 'Posterior' },
+    { position: { x: 0.7, y: 1.0, z: -0.7 }, lookAt: { x: 0, y: 1.0, z: 0 }, label: 'Oblique' },
+  ],
+  neck: [
+    { position: { x: 0, y: 1.9, z: 1.0 }, lookAt: { x: 0, y: 1.9, z: 0 }, label: 'Anterior' },
+    { position: { x: 0.8, y: 1.9, z: 0 }, lookAt: { x: 0, y: 1.9, z: 0 }, label: 'Lateral' },
+    { position: { x: 0, y: 1.9, z: -0.8 }, lookAt: { x: 0, y: 1.9, z: 0 }, label: 'Posterior' },
+  ],
+};
+
+// Map joint group to display label
+export const JOINT_GROUP_LABELS: Record<Exclude<JointGroup, null>, string> = {
+  leftHip: 'Left Hip',
+  rightHip: 'Right Hip',
+  leftKnee: 'Left Knee',
+  rightKnee: 'Right Knee',
+  leftAnkle: 'Left Ankle',
+  rightAnkle: 'Right Ankle',
+  leftShoulder: 'Left Shoulder',
+  rightShoulder: 'Right Shoulder',
+  leftScapula: 'Left Scapula',
+  rightScapula: 'Right Scapula',
+  leftElbow: 'Left Elbow',
+  rightElbow: 'Right Elbow',
+  leftWrist: 'Left Wrist',
+  rightWrist: 'Right Wrist',
+  pelvis: 'Pelvis',
+  spine: 'Spine',
+  neck: 'Neck',
+};
+
 export const REGION_MESH_MAPPING: Record<AnatomicalRegion, string[]> = {
   full_body: [],
   lumbar_spine: ['BONES_SPINE1'],
@@ -579,6 +715,9 @@ interface PureThreeGLBViewerProps {
   compensatingJoints?: CompensatingJointInfo[];
   animationConstraints?: AnimationConstraint[];
   livePose?: Skeleton3DPose | null;
+  fixedCameraPosition?: { x: number; y: number; z: number };
+  fixedCameraLookAt?: { x: number; y: number; z: number };
+  showLoadingSpinner?: boolean;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -835,7 +974,10 @@ export default function PureThreeGLBViewer({
   zoomToRegion = null,
   compensatingJoints = [],
   animationConstraints = [],
-  livePose = null
+  livePose = null,
+  fixedCameraPosition,
+  fixedCameraLookAt,
+  showLoadingSpinner = true
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1196,10 +1338,15 @@ export default function PureThreeGLBViewer({
         scene.background = new THREE.Color(0x1a1a2e);
 
         const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-        const preset = CAMERA_PRESETS[cameraAngle];
-        camera.position.set(preset.position.x, preset.position.y, preset.position.z);
-        camera.lookAt(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
-        console.log('THREE.js camera initialized with angle:', cameraAngle);
+        // Use fixed camera position if provided, otherwise use preset
+        if (fixedCameraPosition && fixedCameraLookAt) {
+          camera.position.set(fixedCameraPosition.x, fixedCameraPosition.y, fixedCameraPosition.z);
+          camera.lookAt(fixedCameraLookAt.x, fixedCameraLookAt.y, fixedCameraLookAt.z);
+        } else {
+          const preset = CAMERA_PRESETS[cameraAngle];
+          camera.position.set(preset.position.x, preset.position.y, preset.position.z);
+          camera.lookAt(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+        }
 
         const renderer = new THREE.WebGLRenderer({ 
           antialias: true,
@@ -1237,7 +1384,9 @@ export default function PureThreeGLBViewer({
         controls.dampingFactor = 0.05;
         controls.minDistance = 1;
         controls.maxDistance = 20;
-        controls.target.set(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+        // Set controls target based on camera lookAt
+        const lookAtTarget = fixedCameraLookAt || CAMERA_PRESETS[cameraAngle].lookAt;
+        controls.target.set(lookAtTarget.x, lookAtTarget.y, lookAtTarget.z);
         controls.enabled = !disableControls;
         if (disableControls) {
           controls.enableRotate = false;
@@ -1496,14 +1645,20 @@ export default function PureThreeGLBViewer({
     if (!sceneRef.current) return;
     
     const { camera, controls, renderer } = sceneRef.current;
-    const preset = CAMERA_PRESETS[cameraAngle];
     
-    // Update camera position and look-at target
-    camera.position.set(preset.position.x, preset.position.y, preset.position.z);
-    camera.lookAt(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+    // Use fixed camera position if provided, otherwise use preset
+    if (fixedCameraPosition && fixedCameraLookAt) {
+      camera.position.set(fixedCameraPosition.x, fixedCameraPosition.y, fixedCameraPosition.z);
+      camera.lookAt(fixedCameraLookAt.x, fixedCameraLookAt.y, fixedCameraLookAt.z);
+      controls.target.set(fixedCameraLookAt.x, fixedCameraLookAt.y, fixedCameraLookAt.z);
+    } else {
+      const preset = CAMERA_PRESETS[cameraAngle];
+      camera.position.set(preset.position.x, preset.position.y, preset.position.z);
+      camera.lookAt(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+      controls.target.set(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+    }
     
-    // Update controls target and enabled state
-    controls.target.set(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
+    // Update controls enabled state
     controls.enabled = !disableControls;
     
     // Fully lock the view when controls are disabled - block all pointer events on canvas

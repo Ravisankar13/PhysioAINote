@@ -16,7 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import PureThreeGLBViewer, { AnimationState, AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
+import PureThreeGLBViewer, { AnimationState, AnatomicalRegion, JointGroup } from "@/components/skeleton/PureThreeGLBViewer";
+import JointZoomCameras from "@/components/skeleton/JointZoomCameras";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
 import { Skeleton3DPose } from "@/utils/mediapipeTo3D";
@@ -277,6 +278,8 @@ export default function TestSkeletonNew() {
   const [showPatientClonePanel, setShowPatientClonePanel] = useState(false);
   const [showConstraintsPanel, setShowConstraintsPanel] = useState(false);
   const [showCameraCapture, setShowCameraCapture] = useState(false);
+  const [activeJointGroup, setActiveJointGroup] = useState<JointGroup>(null);
+  const [showJointZoom, setShowJointZoom] = useState(true);
   const [livePose, setLivePose] = useState<Skeleton3DPose | null>(null);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
@@ -786,6 +789,11 @@ export default function TestSkeletonNew() {
         [property]: value[0],
       },
     }));
+    // Set the active joint group for zoom cameras
+    const jointGroup = joint as JointGroup;
+    if (jointGroup && jointGroup !== activeJointGroup) {
+      setActiveJointGroup(jointGroup);
+    }
   };
 
   // Compute biomechanics data for force visualization
@@ -1500,6 +1508,16 @@ export default function TestSkeletonNew() {
                 )}
               </Button>
               <Button
+                variant={showJointZoom ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowJointZoom(!showJointZoom)}
+                className={showJointZoom ? "bg-purple-600 hover:bg-purple-700" : ""}
+                data-testid="toggle-joint-zoom"
+              >
+                <Target className="h-4 w-4 mr-1" />
+                {showJointZoom ? "Joint Zoom On" : "Joint Zoom Off"}
+              </Button>
+              <Button
                 variant={showPatientClonePanel ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowPatientClonePanel(!showPatientClonePanel)}
@@ -1613,6 +1631,18 @@ export default function TestSkeletonNew() {
             )}
           </CardContent>
         </Card>
+
+        {/* Joint Zoom Cameras - Show when adjusting sliders */}
+        {showJointZoom && activeJointGroup && (
+          <div className="col-span-2 lg:col-span-1">
+            <JointZoomCameras
+              activeJointGroup={activeJointGroup}
+              modelConfig={modelConfig}
+              animationState={animationState}
+              onClose={() => setActiveJointGroup(null)}
+            />
+          </div>
+        )}
 
         {/* Patient Clone Panel - Conditionally Shown */}
         {showPatientClonePanel && (

@@ -37,6 +37,7 @@ interface ScapulaConfig {
   anteriorTilt?: number;    // Forward tilt of inferior angle
   posteriorTilt?: number;   // Backward tilt of inferior angle
   winging?: number;         // Medial border lifting off ribcage
+  clavicleRotation?: number; // Axial rotation of clavicle (posterior/anterior rotation)
 }
 
 interface ModelConfig {
@@ -686,6 +687,18 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightScapula.winging': [
     { boneName: 'Scapula_R', axis: 'y', scale: -0.6 }, // Opposite rotation for right
     { boneName: 'Scapula_R', axis: 'z', scale: -0.4 }
+  ],
+  
+  // Clavicle axial rotation - simulates rotation along clavicle's long axis
+  // Posterior rotation: clavicle rotates backward, elevating acromial end
+  // Anterior rotation: clavicle rotates forward, depressing acromial end
+  'leftScapula.clavicleRotation': [
+    { boneName: 'Scapula_L', axis: 'z', scale: 0.8 },  // Primary rotation axis
+    { boneName: 'Scapula_L', axis: 'x', scale: 0.3 }   // Secondary tilt component
+  ],
+  'rightScapula.clavicleRotation': [
+    { boneName: 'Scapula_R', axis: 'z', scale: -0.8 }, // Mirrored for right side
+    { boneName: 'Scapula_R', axis: 'x', scale: 0.3 }   // Same tilt direction
   ],
   
   // === ELBOW ===

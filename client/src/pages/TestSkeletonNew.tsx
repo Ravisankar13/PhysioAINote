@@ -81,8 +81,8 @@ interface ModelConfig {
   rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
   leftShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
   rightShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
-  leftScapula: { protraction: number; retraction: number; elevation: number; depression: number; upwardRotation: number; downwardRotation: number; anteriorTilt: number; posteriorTilt: number; winging: number };
-  rightScapula: { protraction: number; retraction: number; elevation: number; depression: number; upwardRotation: number; downwardRotation: number; anteriorTilt: number; posteriorTilt: number; winging: number };
+  leftScapula: { protraction: number; retraction: number; elevation: number; depression: number; upwardRotation: number; downwardRotation: number; anteriorTilt: number; posteriorTilt: number; winging: number; clavicleRotation: number };
+  rightScapula: { protraction: number; retraction: number; elevation: number; depression: number; upwardRotation: number; downwardRotation: number; anteriorTilt: number; posteriorTilt: number; winging: number; clavicleRotation: number };
   leftElbow: { flexion: number; carryingAngle: number; pronation: number };
   rightElbow: { flexion: number; carryingAngle: number; pronation: number };
   leftWrist: { deviation: number; flexion: number };
@@ -666,6 +666,7 @@ export default function TestSkeletonNew() {
       anteriorTilt: 0,
       posteriorTilt: 0,
       winging: 0,
+      clavicleRotation: 0,
     },
     rightScapula: {
       protraction: 0,
@@ -677,6 +678,7 @@ export default function TestSkeletonNew() {
       anteriorTilt: 0,
       posteriorTilt: 0,
       winging: 0,
+      clavicleRotation: 0,
     },
     leftElbow: {
       flexion: 0,
@@ -979,6 +981,7 @@ export default function TestSkeletonNew() {
         anteriorTilt: 0,
         posteriorTilt: 0,
         winging: 0,
+        clavicleRotation: 0,
       },
       rightScapula: {
         protraction: 0,
@@ -990,6 +993,7 @@ export default function TestSkeletonNew() {
         anteriorTilt: 0,
         posteriorTilt: 0,
         winging: 0,
+        clavicleRotation: 0,
       },
       leftElbow: {
         flexion: 0,

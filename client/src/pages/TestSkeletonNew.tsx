@@ -3043,6 +3043,22 @@ export default function TestSkeletonNew() {
                           className="mt-1"
                         />
                       </div>
+                      <div>
+                        <Label className="text-xs">Clavicle Rotation ({modelConfig.leftScapula.clavicleRotation}°)</Label>
+                        <Slider
+                          value={[modelConfig.leftScapula.clavicleRotation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('leftScapula', 'clavicleRotation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('rightScapula', 'clavicleRotation', value);
+                            }
+                          }}
+                          min={-30}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -3122,6 +3138,22 @@ export default function TestSkeletonNew() {
                             }
                           }}
                           min={0}
+                          max={30}
+                          step={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Clavicle Rotation ({modelConfig.rightScapula.clavicleRotation}°)</Label>
+                        <Slider
+                          value={[modelConfig.rightScapula.clavicleRotation]}
+                          onValueChange={(value) => {
+                            handleSliderChange('rightScapula', 'clavicleRotation', value);
+                            if (linkedSides.shoulders) {
+                              handleSliderChange('leftScapula', 'clavicleRotation', value);
+                            }
+                          }}
+                          min={-30}
                           max={30}
                           step={1}
                           className="mt-1"

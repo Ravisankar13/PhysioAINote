@@ -9,7 +9,7 @@ import { initializeLegIK, applySquatIK, LegIKState } from '@/lib/legIKSolver';
 import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } from '@/lib/forceVisualization';
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
-import { splitMuscleMeshes, setMuscleGroupVisibility, setAllMuscleGroupsVisibility, disposeMuscleGroups, MUSCLE_GROUPS, type SplitMuscleGroup } from '@/lib/muscleGroupSplitter';
+import { classifyMuscleMeshes, setMuscleGroupVisibility, setAllMuscleGroupsVisibility, disposeMuscleGroups, MUSCLE_GROUPS, type SplitMuscleGroup } from '@/lib/muscleGroupSplitter';
 import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 
@@ -1449,7 +1449,7 @@ export default function PureThreeGLBViewer({
             
             const muscleMeshes: THREE.Object3D[] = [];
             
-            const BONE_MATERIAL_NAME = 'lambert4.001';
+            const BONE_MATERIAL_NAME = 'lambert4';
             
             model.traverse((child) => {
               objectTypes.push(`${child.name}: ${child.type}`);
@@ -1488,68 +1488,7 @@ export default function PureThreeGLBViewer({
               }
             });
             
-            // Fix bicep muscle skin weights: polySurface21 has left-side vertices
-            // incorrectly weighted to Shoulder_R instead of Shoulder_L, and right-side
-            // vertices with Root_M/joint1 weights instead of Shoulder_R
             model.updateMatrixWorld(true);
-            muscleMeshes.forEach((mesh) => {
-              if (mesh.name === 'polySurface21' && mesh instanceof THREE.SkinnedMesh && mesh.skeleton) {
-                const geo = mesh.geometry;
-                const skinIndex = geo.getAttribute('skinIndex');
-                const position = geo.getAttribute('position');
-                if (skinIndex && position) {
-                  const boneNameToIdx: Record<string, number> = {};
-                  mesh.skeleton.bones.forEach((b, i) => { boneNameToIdx[b.name] = i; });
-                  
-                  const rightToLeftMap: Record<number, number> = {};
-                  const armBonePairs = [
-                    ['Shoulder', 'ShoulderPart1', 'ShoulderPart2', 'Elbow', 'ElbowPart1', 'ElbowPart2', 'Scapula']
-                  ];
-                  armBonePairs[0].forEach(base => {
-                    const rIdx = boneNameToIdx[`${base}_R`];
-                    const lIdx = boneNameToIdx[`${base}_L`];
-                    if (rIdx !== undefined && lIdx !== undefined) {
-                      rightToLeftMap[rIdx] = lIdx;
-                    }
-                  });
-                  
-                  const ROOT_M_IDX = boneNameToIdx['Root_M'];
-                  const JOINT1_IDX = boneNameToIdx['joint1'];
-                  const SHOULDER_R_IDX = boneNameToIdx['Shoulder_R'];
-                  const SHOULDER_L_IDX = boneNameToIdx['Shoulder_L'];
-                  
-                  let leftRemapped = 0;
-                  let rightFixed = 0;
-                  const arr = skinIndex.array;
-                  
-                  for (let i = 0; i < position.count; i++) {
-                    const x = position.getX(i);
-                    if (x > 0) {
-                      for (let j = 0; j < 4; j++) {
-                        const boneIdx = arr[i * 4 + j];
-                        if (rightToLeftMap[boneIdx] !== undefined) {
-                          arr[i * 4 + j] = rightToLeftMap[boneIdx];
-                          leftRemapped++;
-                        } else if (boneIdx === ROOT_M_IDX || boneIdx === JOINT1_IDX) {
-                          arr[i * 4 + j] = SHOULDER_L_IDX;
-                          leftRemapped++;
-                        }
-                      }
-                    } else {
-                      for (let j = 0; j < 4; j++) {
-                        const boneIdx = arr[i * 4 + j];
-                        if (boneIdx === ROOT_M_IDX || boneIdx === JOINT1_IDX) {
-                          arr[i * 4 + j] = SHOULDER_R_IDX;
-                          rightFixed++;
-                        }
-                      }
-                    }
-                  }
-                  skinIndex.needsUpdate = true;
-                  console.log(`Fixed polySurface21 bicep weights: left side remapped ${leftRemapped}, right side fixed ${rightFixed}`);
-                }
-              }
-            });
             
             // Analyze skull mesh skeleton to find the controlling bone
             if (skullMesh !== null) {
@@ -1612,7 +1551,7 @@ export default function PureThreeGLBViewer({
             
             if (muscleMeshes.length > 0 && splitMuscleGroupsRef.current.size === 0) {
               try {
-                const groups = splitMuscleMeshes(muscleMeshes);
+                const groups = classifyMuscleMeshes(muscleMeshes);
                 splitMuscleGroupsRef.current = groups;
                 const groupIds = Array.from(groups.keys());
                 console.log('Muscle groups split successfully:', groupIds);

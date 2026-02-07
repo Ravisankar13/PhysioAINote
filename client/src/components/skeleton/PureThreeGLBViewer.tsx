@@ -1482,11 +1482,42 @@ export default function PureThreeGLBViewer({
               }
             });
             
-            // Log all meshes for debugging
-            console.log('=== ALL MESHES IN MODEL ===');
-            model.traverse((child) => {
-              if (child instanceof THREE.Mesh) {
-                console.log(`Mesh: ${child.name}, parent: ${child.parent?.name || 'none'}`);
+            // Debug: Log muscle mesh info and skin bone weights
+            console.log('=== MUSCLE MESH SKIN ANALYSIS ===');
+            model.updateMatrixWorld(true);
+            muscleMeshes.forEach((mesh) => {
+              if (mesh instanceof THREE.SkinnedMesh && mesh.skeleton) {
+                const geo = mesh.geometry;
+                const skinIndex = geo.getAttribute('skinIndex');
+                const skinWeight = geo.getAttribute('skinWeight');
+                if (skinIndex && skinWeight) {
+                  const boneCounts: Record<string, number> = {};
+                  for (let i = 0; i < skinIndex.count; i++) {
+                    for (let j = 0; j < 4; j++) {
+                      const boneIdx = skinIndex.getComponent(i * 4 + j) !== undefined ? (skinIndex as any).getX ? skinIndex.getComponent(j) : 0 : 0;
+                      const idx = Math.floor(skinIndex.array[i * 4 + j]);
+                      const w = skinWeight.array[i * 4 + j];
+                      if (w > 0.1 && mesh.skeleton.bones[idx]) {
+                        const bname = mesh.skeleton.bones[idx].name;
+                        boneCounts[bname] = (boneCounts[bname] || 0) + w;
+                      }
+                    }
+                  }
+                  const sorted = Object.entries(boneCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                  const matName = Array.isArray(mesh.material) ? mesh.material.map((m: THREE.Material) => m.name).join(',') : (mesh.material as THREE.Material).name;
+                  console.log(`Muscle: ${mesh.name} | mat: ${matName} | top bones: ${sorted.map(([n, c]) => `${n}(${c.toFixed(0)})`).join(', ')}`);
+                }
+              }
+            });
+            // Log arm bone positions for reference
+            const armBoneNames = ['Shoulder_R', 'Elbow_R', 'Wrist_R', 'Shoulder_L', 'Elbow_L', 'Wrist_L', 'Scapula_R', 'Scapula_L'];
+            console.log('=== ARM BONE POSITIONS ===');
+            armBoneNames.forEach(name => {
+              const bone = bones[name];
+              if (bone) {
+                const wp = new THREE.Vector3();
+                bone.getWorldPosition(wp);
+                console.log(`Bone: ${name} | pos: (${wp.x.toFixed(2)}, ${wp.y.toFixed(2)}, ${wp.z.toFixed(2)})`);
               }
             });
             

@@ -1397,18 +1397,6 @@ export default function TestSkeletonNew() {
                       3D Muscle
                     </Label>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Switch
-                      id="show-muscles"
-                      checked={showMuscleLayer}
-                      onCheckedChange={(checked) => setShowMuscleLayer(checked)}
-                      data-testid="switch-show-muscles"
-                    />
-                    <Label htmlFor="show-muscles" className="text-xs flex items-center gap-1 cursor-pointer">
-                      <Activity className="h-3 w-3 text-red-500" />
-                      Body
-                    </Label>
-                  </div>
                 </div>
                 {muscleLayerVisibility.enabled && (
                   <div className="flex flex-wrap items-center gap-3 mt-1 p-2 bg-slate-700/50 rounded-lg">
@@ -1578,7 +1566,23 @@ export default function TestSkeletonNew() {
               )}
             </div>
           </CardHeader>
-          <CardContent className={multiViewMode ? "" : "h-[calc(100%-80px)]"}>
+          <CardContent className={multiViewMode ? "" : "h-[calc(100%-80px)] relative"}>
+            {!multiViewMode && (
+              <Button
+                variant={showMuscleLayer ? "default" : "outline"}
+                size="lg"
+                onClick={() => setShowMuscleLayer(prev => !prev)}
+                className={`absolute top-3 left-3 z-20 shadow-lg font-semibold text-sm px-5 py-2 ${
+                  showMuscleLayer 
+                    ? 'bg-red-600 hover:bg-red-700 text-white border-red-600' 
+                    : 'bg-white/90 hover:bg-white text-gray-800 border-gray-300'
+                }`}
+                data-testid="btn-toggle-muscles"
+              >
+                <Activity className="h-4 w-4 mr-2" />
+                {showMuscleLayer ? 'Hide Muscles' : 'Show Muscles'}
+              </Button>
+            )}
             {multiViewMode ? (
               <MultiViewSkeletonLayout
                 modelPath="/models/skeleton_character.glb"

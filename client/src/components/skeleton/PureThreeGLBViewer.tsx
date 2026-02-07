@@ -1443,11 +1443,7 @@ export default function PureThreeGLBViewer({
             
             const muscleMeshes: THREE.Object3D[] = [];
             
-            const MUSCLE_NODE_NAMES = [
-              'muscle_3_USA 04_0',
-              'sklton:muscle_USA07_1',
-            ];
-            const MUSCLE_MATERIAL_NAME = 'lambert2.001';
+            const BONE_MATERIAL_NAME = 'lambert4.001';
             
             model.traverse((child) => {
               objectTypes.push(`${child.name}: ${child.type}`);
@@ -1456,14 +1452,12 @@ export default function PureThreeGLBViewer({
                 child.receiveShadow = true;
                 
                 const lowerName = child.name.toLowerCase();
-                const hasMuscleMaterial = child.material
+                const hasBoneMaterial = child.material
                   ? Array.isArray(child.material)
-                    ? child.material.some((m: THREE.Material) => m.name === MUSCLE_MATERIAL_NAME)
-                    : (child.material as THREE.Material).name === MUSCLE_MATERIAL_NAME
+                    ? child.material.every((m: THREE.Material) => m.name === BONE_MATERIAL_NAME)
+                    : (child.material as THREE.Material).name === BONE_MATERIAL_NAME
                   : false;
-                const isMuscle = MUSCLE_NODE_NAMES.includes(child.name) ||
-                  lowerName.includes('muscle') ||
-                  hasMuscleMaterial;
+                const isMuscle = !hasBoneMaterial;
                 
                 if (isMuscle) {
                   muscleMeshes.push(child);

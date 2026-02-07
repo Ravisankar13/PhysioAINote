@@ -718,6 +718,7 @@ interface PureThreeGLBViewerProps {
   fixedCameraPosition?: { x: number; y: number; z: number };
   fixedCameraLookAt?: { x: number; y: number; z: number };
   showLoadingSpinner?: boolean;
+  showMuscles?: boolean;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -977,7 +978,8 @@ export default function PureThreeGLBViewer({
   livePose = null,
   fixedCameraPosition,
   fixedCameraLookAt,
-  showLoadingSpinner = true
+  showLoadingSpinner = true,
+  showMuscles = true
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -993,6 +995,7 @@ export default function PureThreeGLBViewer({
   const forceVisualizationRef = useRef<ForceVisualizationManager | null>(null);
   const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
   const muscleLayerManagerRef = useRef<MuscleLayerManager | null>(null);
+  const muscleMeshesRef = useRef<THREE.Object3D[]>([]);
   const animationConstraintsRef = useRef<AnimationConstraint[]>([]);
   const livePoseActiveRef = useRef<boolean>(false);
   const animationPlayingRef = useRef<boolean>(false);
@@ -1438,13 +1441,36 @@ export default function PureThreeGLBViewer({
             
             let skullMesh: THREE.Object3D | null = null;
             
+            const muscleMeshes: THREE.Object3D[] = [];
+            
+            const MUSCLE_NODE_NAMES = [
+              'muscle_3_USA 04_0',
+              'sklton:muscle_USA07_1',
+            ];
+            const MUSCLE_MATERIAL_NAME = 'lambert2.001';
+            
             model.traverse((child) => {
               objectTypes.push(`${child.name}: ${child.type}`);
               if (child instanceof THREE.Mesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
-                // Find skull mesh by name pattern
+                
                 const lowerName = child.name.toLowerCase();
+                const hasMuscleMaterial = child.material
+                  ? Array.isArray(child.material)
+                    ? child.material.some((m: THREE.Material) => m.name === MUSCLE_MATERIAL_NAME)
+                    : (child.material as THREE.Material).name === MUSCLE_MATERIAL_NAME
+                  : false;
+                const isMuscle = MUSCLE_NODE_NAMES.includes(child.name) ||
+                  lowerName.includes('muscle') ||
+                  hasMuscleMaterial;
+                
+                if (isMuscle) {
+                  muscleMeshes.push(child);
+                  child.visible = showMuscles;
+                  console.log('Found muscle mesh:', child.name);
+                }
+                
                 if (lowerName.includes('skull') || lowerName.includes('head') || lowerName.includes('cranium')) {
                   skullMesh = child;
                   console.log('Found skull mesh:', child.name);
@@ -1526,6 +1552,8 @@ export default function PureThreeGLBViewer({
             console.log('Arms will be positioned by default slider values from modelConfig');
             
             bonesRef.current = bones;
+            muscleMeshesRef.current = muscleMeshes;
+            console.log(`Found ${muscleMeshes.length} muscle meshes, visibility: ${showMuscles}`);
             
             // Initialize leg IK solver after bones are loaded
             legIKStateRef.current = initializeLegIK(bones as { [name: string]: THREE.Bone });
@@ -2539,6 +2567,14 @@ export default function PureThreeGLBViewer({
       // Cleanup handled in unmount effect
     };
   }, [muscleLayerVisibility, muscleLayerConfigs, status]);
+
+  useEffect(() => {
+    if (muscleMeshesRef.current.length > 0) {
+      muscleMeshesRef.current.forEach(mesh => {
+        mesh.visible = showMuscles;
+      });
+    }
+  }, [showMuscles]);
 
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {

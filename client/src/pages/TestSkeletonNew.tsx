@@ -280,6 +280,7 @@ export default function TestSkeletonNew() {
   const [showCameraCapture, setShowCameraCapture] = useState(false);
   const [activeJointGroup, setActiveJointGroup] = useState<JointGroup>(null);
   const [showJointZoom, setShowJointZoom] = useState(true);
+  const [showMuscleLayer, setShowMuscleLayer] = useState(true);
   const [livePose, setLivePose] = useState<Skeleton3DPose | null>(null);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
@@ -1396,6 +1397,18 @@ export default function TestSkeletonNew() {
                       3D Muscle
                     </Label>
                   </div>
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      id="show-muscles"
+                      checked={showMuscleLayer}
+                      onCheckedChange={(checked) => setShowMuscleLayer(checked)}
+                      data-testid="switch-show-muscles"
+                    />
+                    <Label htmlFor="show-muscles" className="text-xs flex items-center gap-1 cursor-pointer">
+                      <Activity className="h-3 w-3 text-red-500" />
+                      Body
+                    </Label>
+                  </div>
                 </div>
                 {muscleLayerVisibility.enabled && (
                   <div className="flex flex-wrap items-center gap-3 mt-1 p-2 bg-slate-700/50 rounded-lg">
@@ -1615,6 +1628,7 @@ export default function TestSkeletonNew() {
                     muscleLayerVisibility={muscleLayerVisibility}
                     zoomToRegion={zoomToRegion}
                     livePose={livePose}
+                    showMuscles={showMuscleLayer}
                     compensatingJoints={compensationResult.patterns.map(p => ({
                       joint: p.compensatingJoint,
                       loadIncrease: p.additionalLoad

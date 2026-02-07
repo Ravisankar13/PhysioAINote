@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import PureThreeGLBViewer, { AnimationState, AnatomicalRegion, JointGroup } from "@/components/skeleton/PureThreeGLBViewer";
+import { MUSCLE_GROUPS } from "@/lib/muscleGroupSplitter";
 import JointZoomCameras from "@/components/skeleton/JointZoomCameras";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
@@ -281,6 +282,9 @@ export default function TestSkeletonNew() {
   const [activeJointGroup, setActiveJointGroup] = useState<JointGroup>(null);
   const [showJointZoom, setShowJointZoom] = useState(true);
   const [showMuscleLayer, setShowMuscleLayer] = useState(true);
+  const [individualMuscleVisibility, setIndividualMuscleVisibility] = useState<{ [groupId: string]: boolean }>({});
+  const [availableMuscleGroups, setAvailableMuscleGroups] = useState<string[]>([]);
+  const [showMusclePanel, setShowMusclePanel] = useState(false);
   const [livePose, setLivePose] = useState<Skeleton3DPose | null>(null);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
@@ -1568,20 +1572,105 @@ export default function TestSkeletonNew() {
           </CardHeader>
           <CardContent className={multiViewMode ? "" : "h-[calc(100%-80px)] relative"}>
             {!multiViewMode && (
-              <Button
-                variant={showMuscleLayer ? "default" : "outline"}
-                size="lg"
-                onClick={() => setShowMuscleLayer(prev => !prev)}
-                className={`absolute top-3 left-3 z-20 shadow-lg font-semibold text-sm px-5 py-2 ${
-                  showMuscleLayer 
-                    ? 'bg-red-600 hover:bg-red-700 text-white border-red-600' 
-                    : 'bg-white/90 hover:bg-white text-gray-800 border-gray-300'
-                }`}
-                data-testid="btn-toggle-muscles"
-              >
-                <Activity className="h-4 w-4 mr-2" />
-                {showMuscleLayer ? 'Hide Muscles' : 'Show Muscles'}
-              </Button>
+              <div className="absolute top-3 left-3 z-20 flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <Button
+                    variant={showMuscleLayer ? "default" : "outline"}
+                    size="lg"
+                    onClick={() => setShowMuscleLayer(prev => !prev)}
+                    className={`shadow-lg font-semibold text-sm px-5 py-2 ${
+                      showMuscleLayer 
+                        ? 'bg-red-600 hover:bg-red-700 text-white border-red-600' 
+                        : 'bg-white/90 hover:bg-white text-gray-800 border-gray-300'
+                    }`}
+                    data-testid="btn-toggle-muscles"
+                  >
+                    <Activity className="h-4 w-4 mr-2" />
+                    {showMuscleLayer ? 'Hide Muscles' : 'Show Muscles'}
+                  </Button>
+                  {showMuscleLayer && availableMuscleGroups.length > 0 && (
+                    <Button
+                      variant={showMusclePanel ? "default" : "outline"}
+                      size="lg"
+                      onClick={() => setShowMusclePanel(prev => !prev)}
+                      className={`shadow-lg font-semibold text-sm px-4 py-2 ${
+                        showMusclePanel
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
+                          : 'bg-white/90 hover:bg-white text-gray-800 border-gray-300'
+                      }`}
+                    >
+                      <Layers className="h-4 w-4 mr-1" />
+                      Individual
+                    </Button>
+                  )}
+                </div>
+                {showMusclePanel && showMuscleLayer && availableMuscleGroups.length > 0 && (
+                  <div className="bg-slate-900/95 backdrop-blur-sm rounded-lg border border-slate-700 p-3 shadow-xl max-h-[400px] overflow-y-auto w-[220px]">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Muscle Groups</span>
+                      <div className="flex gap-1">
+                        <button
+                          className="text-[10px] text-blue-400 hover:text-blue-300 px-1.5 py-0.5 rounded bg-blue-500/10 hover:bg-blue-500/20"
+                          onClick={() => {
+                            const allVisible: { [k: string]: boolean } = {};
+                            availableMuscleGroups.forEach(id => { allVisible[id] = true; });
+                            setIndividualMuscleVisibility(allVisible);
+                          }}
+                        >
+                          All
+                        </button>
+                        <button
+                          className="text-[10px] text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded bg-red-500/10 hover:bg-red-500/20"
+                          onClick={() => {
+                            const noneVisible: { [k: string]: boolean } = {};
+                            availableMuscleGroups.forEach(id => { noneVisible[id] = false; });
+                            setIndividualMuscleVisibility(noneVisible);
+                          }}
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      {availableMuscleGroups.map(groupId => {
+                        const def = MUSCLE_GROUPS.find(g => g.id === groupId);
+                        const label = def?.label || groupId;
+                        const color = def?.color || '#888';
+                        const isVisible = individualMuscleVisibility[groupId] !== false;
+                        return (
+                          <button
+                            key={groupId}
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-all ${
+                              isVisible
+                                ? 'bg-slate-700/60 text-white hover:bg-slate-700'
+                                : 'bg-slate-800/40 text-slate-500 hover:bg-slate-800/60'
+                            }`}
+                            onClick={() => {
+                              setIndividualMuscleVisibility(prev => ({
+                                ...prev,
+                                [groupId]: !isVisible,
+                              }));
+                            }}
+                          >
+                            <span
+                              className="w-3 h-3 rounded-full flex-shrink-0 border"
+                              style={{
+                                backgroundColor: isVisible ? color : 'transparent',
+                                borderColor: color,
+                                opacity: isVisible ? 1 : 0.4,
+                              }}
+                            />
+                            <span className="flex-1">{label}</span>
+                            {isVisible && (
+                              <span className="text-[10px] text-green-400">ON</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             {multiViewMode ? (
               <MultiViewSkeletonLayout
@@ -1633,6 +1722,13 @@ export default function TestSkeletonNew() {
                     zoomToRegion={zoomToRegion}
                     livePose={livePose}
                     showMuscles={showMuscleLayer}
+                    individualMuscleVisibility={individualMuscleVisibility}
+                    onMuscleGroupsReady={(groupIds) => {
+                      setAvailableMuscleGroups(groupIds);
+                      const defaultVis: { [k: string]: boolean } = {};
+                      groupIds.forEach(id => { defaultVis[id] = true; });
+                      setIndividualMuscleVisibility(defaultVis);
+                    }}
                     compensatingJoints={compensationResult.patterns.map(p => ({
                       joint: p.compensatingJoint,
                       loadIncrease: p.additionalLoad

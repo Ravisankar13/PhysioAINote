@@ -9,6 +9,7 @@ import { initializeLegIK, applySquatIK, LegIKState } from '@/lib/legIKSolver';
 import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } from '@/lib/forceVisualization';
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
+import { splitMuscleMeshes, setMuscleGroupVisibility, setAllMuscleGroupsVisibility, disposeMuscleGroups, MUSCLE_GROUPS, type SplitMuscleGroup } from '@/lib/muscleGroupSplitter';
 import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 
@@ -719,6 +720,8 @@ interface PureThreeGLBViewerProps {
   fixedCameraLookAt?: { x: number; y: number; z: number };
   showLoadingSpinner?: boolean;
   showMuscles?: boolean;
+  individualMuscleVisibility?: { [groupId: string]: boolean };
+  onMuscleGroupsReady?: (groupIds: string[]) => void;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -979,7 +982,9 @@ export default function PureThreeGLBViewer({
   fixedCameraPosition,
   fixedCameraLookAt,
   showLoadingSpinner = true,
-  showMuscles = true
+  showMuscles = true,
+  individualMuscleVisibility,
+  onMuscleGroupsReady
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -996,6 +1001,7 @@ export default function PureThreeGLBViewer({
   const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
   const muscleLayerManagerRef = useRef<MuscleLayerManager | null>(null);
   const muscleMeshesRef = useRef<THREE.Object3D[]>([]);
+  const splitMuscleGroupsRef = useRef<Map<string, SplitMuscleGroup>>(new Map());
   const animationConstraintsRef = useRef<AnimationConstraint[]>([]);
   const livePoseActiveRef = useRef<boolean>(false);
   const animationPlayingRef = useRef<boolean>(false);
@@ -1603,6 +1609,26 @@ export default function PureThreeGLBViewer({
             bonesRef.current = bones;
             muscleMeshesRef.current = muscleMeshes;
             console.log(`Found ${muscleMeshes.length} muscle meshes, visibility: ${showMuscles}`);
+            
+            if (muscleMeshes.length > 0 && splitMuscleGroupsRef.current.size === 0) {
+              try {
+                const groups = splitMuscleMeshes(muscleMeshes);
+                splitMuscleGroupsRef.current = groups;
+                const groupIds = Array.from(groups.keys());
+                console.log('Muscle groups split successfully:', groupIds);
+                if (onMuscleGroupsReady) {
+                  onMuscleGroupsReady(groupIds);
+                }
+                if (individualMuscleVisibility) {
+                  groupIds.forEach(id => {
+                    const visible = individualMuscleVisibility[id] !== false;
+                    setMuscleGroupVisibility(groups, id, visible);
+                  });
+                }
+              } catch (err) {
+                console.error('Failed to split muscle meshes:', err);
+              }
+            }
             
             // Initialize leg IK solver after bones are loaded
             legIKStateRef.current = initializeLegIK(bones as { [name: string]: THREE.Bone });
@@ -2618,12 +2644,24 @@ export default function PureThreeGLBViewer({
   }, [muscleLayerVisibility, muscleLayerConfigs, status]);
 
   useEffect(() => {
-    if (muscleMeshesRef.current.length > 0) {
-      muscleMeshesRef.current.forEach(mesh => {
-        mesh.visible = showMuscles;
-      });
+    if (splitMuscleGroupsRef.current.size > 0) {
+      setAllMuscleGroupsVisibility(splitMuscleGroupsRef.current, showMuscles);
+      if (showMuscles && individualMuscleVisibility) {
+        Array.from(splitMuscleGroupsRef.current.keys()).forEach(id => {
+          const visible = individualMuscleVisibility[id] !== false;
+          setMuscleGroupVisibility(splitMuscleGroupsRef.current, id, visible);
+        });
+      }
     }
   }, [showMuscles]);
+
+  useEffect(() => {
+    if (!individualMuscleVisibility || splitMuscleGroupsRef.current.size === 0) return;
+    Array.from(splitMuscleGroupsRef.current.keys()).forEach(id => {
+      const visible = individualMuscleVisibility[id] !== false;
+      setMuscleGroupVisibility(splitMuscleGroupsRef.current, id, visible);
+    });
+  }, [individualMuscleVisibility]);
 
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -2660,6 +2698,9 @@ export default function PureThreeGLBViewer({
       if (muscleLayerManagerRef.current) {
         muscleLayerManagerRef.current.dispose();
         muscleLayerManagerRef.current = null;
+      }
+      if (splitMuscleGroupsRef.current.size > 0) {
+        disposeMuscleGroups(splitMuscleGroupsRef.current);
       }
     };
   }, []);

@@ -20,6 +20,7 @@ import PureThreeGLBViewer, { AnimationState, AnatomicalRegion, JointGroup } from
 import { MUSCLE_GROUPS } from "@/lib/muscleGroupSplitter";
 import { computeAllMuscleStates, applyOverridesAndChains, type MuscleStatesMap, type MuscleStatus, type MuscleOverride, type PathologyType, type LengthOverride, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { propagateChainEffects, computeWholeBodyTensionScore, getChainMembership, MYOFASCIAL_CHAINS } from "@/lib/myofascialChains";
+import { computeBidirectionalEffects, applyBidirectionalToModelConfig, mergeReciprocalInhibitions, getAntagonistFor, type BidirectionalResult } from "@/lib/bidirectionalMuscleJoint";
 import JointZoomCameras from "@/components/skeleton/JointZoomCameras";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
@@ -289,6 +290,7 @@ export default function TestSkeletonNew() {
   const [showMusclePanel, setShowMusclePanel] = useState(false);
   const [muscleOverrides, setMuscleOverrides] = useState<{ [muscleId: string]: MuscleOverride }>({});
   const [expandedMuscle, setExpandedMuscle] = useState<string | null>(null);
+  const [bidirectionalMode, setBidirectionalMode] = useState(true);
   const [livePose, setLivePose] = useState<Skeleton3DPose | null>(null);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
@@ -798,7 +800,6 @@ export default function TestSkeletonNew() {
         [property]: value[0],
       },
     }));
-    // Set the active joint group for zoom cameras
     const jointGroup = joint as JointGroup;
     if (jointGroup && jointGroup !== activeJointGroup) {
       setActiveJointGroup(jointGroup);
@@ -886,24 +887,61 @@ export default function TestSkeletonNew() {
     };
   }, [modelConfig, forceVisualization, patientAnthropometrics]);
 
+  const bidirectionalResult = useMemo<BidirectionalResult | null>(() => {
+    if (!bidirectionalMode) return null;
+    const hasManualOverrides = Object.values(muscleOverrides).some(o => o.isManual);
+    if (!hasManualOverrides) return null;
+    return computeBidirectionalEffects(muscleOverrides, modelConfig);
+  }, [muscleOverrides, bidirectionalMode, modelConfig]);
+
+  const effectiveModelConfig = useMemo(() => {
+    if (!bidirectionalResult) return modelConfig;
+    return applyBidirectionalToModelConfig(modelConfig, bidirectionalResult);
+  }, [modelConfig, bidirectionalResult]);
+
+  const effectiveOverrides = useMemo(() => {
+    if (!bidirectionalResult) return muscleOverrides;
+    return mergeReciprocalInhibitions(muscleOverrides, bidirectionalResult.reciprocalInhibitions);
+  }, [muscleOverrides, bidirectionalResult]);
+
+  const muscleDrivenJoints = useMemo(() => {
+    return bidirectionalResult?.muscleDrivenJoints ?? new Set<string>();
+  }, [bidirectionalResult]);
+
   const baseMuscleTensions = useMemo(() => {
-    const base = computeAllMuscleStates(modelConfig);
+    const base = computeAllMuscleStates(effectiveModelConfig);
     const tensions: { [id: string]: number } = {};
     Object.entries(base).forEach(([id, s]) => { tensions[id] = s.tension; });
     return { baseStates: base, tensions };
-  }, [modelConfig]);
+  }, [effectiveModelConfig]);
 
   const chainPropagation = useMemo(() => {
-    return propagateChainEffects(baseMuscleTensions.tensions, muscleOverrides);
-  }, [baseMuscleTensions.tensions, muscleOverrides]);
+    return propagateChainEffects(baseMuscleTensions.tensions, effectiveOverrides);
+  }, [baseMuscleTensions.tensions, effectiveOverrides]);
 
   const muscleStates = useMemo(() => {
-    return applyOverridesAndChains(baseMuscleTensions.baseStates, muscleOverrides, chainPropagation);
-  }, [baseMuscleTensions.baseStates, muscleOverrides, chainPropagation]);
+    return applyOverridesAndChains(baseMuscleTensions.baseStates, effectiveOverrides, chainPropagation);
+  }, [baseMuscleTensions.baseStates, effectiveOverrides, chainPropagation]);
 
   const wholeBodyScore = useMemo(() => {
-    return computeWholeBodyTensionScore(baseMuscleTensions.tensions, muscleOverrides);
-  }, [baseMuscleTensions.tensions, muscleOverrides]);
+    return computeWholeBodyTensionScore(baseMuscleTensions.tensions, effectiveOverrides);
+  }, [baseMuscleTensions.tensions, effectiveOverrides]);
+
+  const getMuscleDrivenDelta = useCallback((joint: string, param: string): number | null => {
+    if (!bidirectionalResult) return null;
+    const adj = bidirectionalResult.jointAdjustments[joint]?.[param] ?? 0;
+    const coup = bidirectionalResult.couplingEffects[joint]?.[param] ?? 0;
+    const total = adj + coup;
+    if (Math.abs(total) < 0.5) return null;
+    return Math.round(total);
+  }, [bidirectionalResult]);
+
+  const jointLabel = useCallback((label: string, joint: string, param: string, baseValue: number): string => {
+    const delta = getMuscleDrivenDelta(joint, param);
+    if (delta === null) return `${label} (${baseValue}°)`;
+    const effectiveVal = Math.round((effectiveModelConfig as any)[joint]?.[param] ?? baseValue);
+    return `${label} (${baseValue}° → ${effectiveVal}°)`;
+  }, [getMuscleDrivenDelta, effectiveModelConfig]);
 
   const resetAll = () => {
     setModelConfig({
@@ -1700,7 +1738,7 @@ export default function TestSkeletonNew() {
             {multiViewMode ? (
               <MultiViewSkeletonLayout
                 modelPath="/models/skeleton_character.glb"
-                modelConfig={modelConfig}
+                modelConfig={effectiveModelConfig}
                 animationState={animationState}
                 onAnimationFrame={handleAnimationFrame}
                 biomechanicsData={biomechanicsData}
@@ -1737,7 +1775,7 @@ export default function TestSkeletonNew() {
                 }>
                   <PureThreeGLBViewer 
                     modelPath="/models/skeleton_character.glb" 
-                    modelConfig={modelConfig} 
+                    modelConfig={effectiveModelConfig} 
                     className="w-full h-full"
                     animationState={animationState}
                     onAnimationFrame={handleAnimationFrame}
@@ -1777,7 +1815,7 @@ export default function TestSkeletonNew() {
           <div className="space-y-4">
             <JointZoomCameras
               activeJointGroup={activeJointGroup}
-              modelConfig={modelConfig}
+              modelConfig={effectiveModelConfig}
               animationState={animationState}
               onClose={() => setActiveJointGroup(null)}
             />
@@ -2266,6 +2304,14 @@ export default function TestSkeletonNew() {
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block"></span> Neutral</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Lengthened</span>
               </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="bidirectional-toggle" className="text-xs text-slate-400 cursor-pointer">Muscles Move Bones</Label>
+                <Switch
+                  id="bidirectional-toggle"
+                  checked={bidirectionalMode}
+                  onCheckedChange={setBidirectionalMode}
+                />
+              </div>
               {Object.keys(muscleOverrides).length > 0 && (
                 <Button
                   variant="ghost"
@@ -2279,6 +2325,31 @@ export default function TestSkeletonNew() {
               )}
             </div>
           </div>
+          {bidirectionalMode && bidirectionalResult && (
+            <div className="mt-2 px-1">
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(bidirectionalResult.jointAdjustments).map(([joint, params]) => (
+                  Object.entries(params).filter(([, v]) => Math.abs(v) > 0.5).map(([param, val]) => (
+                    <span key={`${joint}.${param}`} className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/25">
+                      {joint.replace(/([A-Z])/g, ' $1').trim()} {param}: {val > 0 ? '+' : ''}{Math.round(val)}°
+                    </span>
+                  ))
+                ))}
+                {Object.entries(bidirectionalResult.reciprocalInhibitions).map(([muscle, amount]) => (
+                  <span key={muscle} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                    {muscle.replace(/_/g, ' ')}: {Math.round(amount)}% reciprocal inhib
+                  </span>
+                ))}
+                {Object.entries(bidirectionalResult.couplingEffects).map(([joint, params]) => (
+                  Object.entries(params).filter(([, v]) => Math.abs(v) > 0.5).map(([param, val]) => (
+                    <span key={`c-${joint}.${param}`} className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/25">
+                      coupled: {joint.replace(/([A-Z])/g, ' $1').trim()} {param}: {val > 0 ? '+' : ''}{Math.round(val)}°
+                    </span>
+                  ))
+                ))}
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {/* Whole Body Tension Summary */}
@@ -2396,6 +2467,26 @@ export default function TestSkeletonNew() {
                     {muscle.description !== 'neutral resting position' && (
                       <p className="text-[10px] text-slate-500 mt-1 leading-tight italic">{muscle.description}</p>
                     )}
+
+                    {bidirectionalMode && (() => {
+                      const antagonists = getAntagonistFor(muscle.id);
+                      const recipInhib = bidirectionalResult?.reciprocalInhibitions[muscle.id];
+                      if (antagonists.length === 0 && !recipInhib) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {antagonists.map(ant => (
+                            <span key={ant} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 border border-slate-600/50">
+                              ↔ {ant.replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                          {recipInhib && recipInhib > 1 && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                              {Math.round(recipInhib)}% reciprocal inhib
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Expanded Override Controls */}
                     {isExpanded && (
@@ -2678,7 +2769,7 @@ export default function TestSkeletonNew() {
                       />
                     </div>
                     <div>
-                      <Label>Thoracic Kyphosis ({modelConfig.spine.thoracicKyphosis}°)</Label>
+                      <Label>{jointLabel('Thoracic Kyphosis', 'spine', 'thoracicKyphosis', modelConfig.spine.thoracicKyphosis)}</Label>
                       <Slider
                         value={[modelConfig.spine.thoracicKyphosis]}
                         onValueChange={(value) => handleSliderChange('spine', 'thoracicKyphosis', value)}
@@ -2689,7 +2780,7 @@ export default function TestSkeletonNew() {
                       />
                     </div>
                     <div>
-                      <Label>Lumbar Lordosis ({modelConfig.spine.lumbarLordosis}°)</Label>
+                      <Label>{jointLabel('Lumbar Lordosis', 'spine', 'lumbarLordosis', modelConfig.spine.lumbarLordosis)}</Label>
                       <Slider
                         value={[modelConfig.spine.lumbarLordosis]}
                         onValueChange={(value) => handleSliderChange('spine', 'lumbarLordosis', value)}
@@ -2811,7 +2902,7 @@ export default function TestSkeletonNew() {
                       />
                     </div>
                     <div>
-                      <Label>Forward Head Posture ({modelConfig.neck.forwardHead}°)</Label>
+                      <Label>{jointLabel('Forward Head Posture', 'neck', 'forwardHead', modelConfig.neck.forwardHead)}</Label>
                       <Slider
                         value={[modelConfig.neck.forwardHead]}
                         onValueChange={(value) => handleSliderChange('neck', 'forwardHead', value)}
@@ -2828,7 +2919,7 @@ export default function TestSkeletonNew() {
                   <h3 className="font-semibold">Pelvic Alignment</h3>
                   <div className="space-y-3">
                     <div>
-                      <Label>Pelvic Tilt ({modelConfig.pelvis.tilt}°)</Label>
+                      <Label>{jointLabel('Pelvic Tilt', 'pelvis', 'tilt', modelConfig.pelvis.tilt)}</Label>
                       <Slider
                         value={[modelConfig.pelvis.tilt]}
                         onValueChange={(value) => handleSliderChange('pelvis', 'tilt', value)}
@@ -2884,7 +2975,7 @@ export default function TestSkeletonNew() {
                         </Button>
                       </div>
                       <div>
-                        <Label className="text-xs">Flexion ({modelConfig.leftHip.flexion}°)</Label>
+                        <Label className="text-xs">{jointLabel('Flexion', 'leftHip', 'flexion', modelConfig.leftHip.flexion)}</Label>
                         <Slider
                           value={[modelConfig.leftHip.flexion]}
                           onValueChange={(value) => {
@@ -2900,7 +2991,7 @@ export default function TestSkeletonNew() {
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">Extension ({modelConfig.leftHip.extension}°)</Label>
+                        <Label className="text-xs">{jointLabel('Extension', 'leftHip', 'extension', modelConfig.leftHip.extension)}</Label>
                         <Slider
                           value={[modelConfig.leftHip.extension]}
                           onValueChange={(value) => {
@@ -2962,7 +3053,7 @@ export default function TestSkeletonNew() {
                         </Button>
                       </div>
                       <div>
-                        <Label className="text-xs">Flexion ({modelConfig.rightHip.flexion}°)</Label>
+                        <Label className="text-xs">{jointLabel('Flexion', 'rightHip', 'flexion', modelConfig.rightHip.flexion)}</Label>
                         <Slider
                           value={[modelConfig.rightHip.flexion]}
                           onValueChange={(value) => {
@@ -3048,7 +3139,7 @@ export default function TestSkeletonNew() {
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Left Knee</Label>
                       <div>
-                        <Label className="text-xs">Flexion ({modelConfig.leftKnee.flexion}°)</Label>
+                        <Label className="text-xs">{jointLabel('Flexion', 'leftKnee', 'flexion', modelConfig.leftKnee.flexion)}</Label>
                         <Slider
                           value={[modelConfig.leftKnee.flexion]}
                           onValueChange={(value) => {
@@ -3132,7 +3223,7 @@ export default function TestSkeletonNew() {
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Right Knee</Label>
                       <div>
-                        <Label className="text-xs">Flexion ({modelConfig.rightKnee.flexion}°)</Label>
+                        <Label className="text-xs">{jointLabel('Flexion', 'rightKnee', 'flexion', modelConfig.rightKnee.flexion)}</Label>
                         <Slider
                           value={[modelConfig.rightKnee.flexion]}
                           onValueChange={(value) => {
@@ -3234,7 +3325,7 @@ export default function TestSkeletonNew() {
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Left Ankle</Label>
                       <div>
-                        <Label className="text-xs">Dorsiflexion ({modelConfig.leftAnkle.dorsiflexion}°)</Label>
+                        <Label className="text-xs">{jointLabel('Dorsiflexion', 'leftAnkle', 'dorsiflexion', modelConfig.leftAnkle.dorsiflexion)}</Label>
                         <Slider
                           value={[modelConfig.leftAnkle.dorsiflexion]}
                           onValueChange={(value) => {
@@ -3302,7 +3393,7 @@ export default function TestSkeletonNew() {
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Right Ankle</Label>
                       <div>
-                        <Label className="text-xs">Dorsiflexion ({modelConfig.rightAnkle.dorsiflexion}°)</Label>
+                        <Label className="text-xs">{jointLabel('Dorsiflexion', 'rightAnkle', 'dorsiflexion', modelConfig.rightAnkle.dorsiflexion)}</Label>
                         <Slider
                           value={[modelConfig.rightAnkle.dorsiflexion]}
                           onValueChange={(value) => {
@@ -3859,7 +3950,7 @@ export default function TestSkeletonNew() {
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Left Elbow</Label>
                       <div>
-                        <Label className="text-xs">Flexion ({modelConfig.leftElbow.flexion}°)</Label>
+                        <Label className="text-xs">{jointLabel('Flexion', 'leftElbow', 'flexion', modelConfig.leftElbow.flexion)}</Label>
                         <Slider
                           value={[modelConfig.leftElbow.flexion]}
                           onValueChange={(value) => {

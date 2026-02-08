@@ -10,6 +10,7 @@ import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } f
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
 import { classifyMuscleMeshes, setMuscleGroupVisibility, setAllMuscleGroupsVisibility, disposeMuscleGroups, MUSCLE_GROUPS, type SplitMuscleGroup } from '@/lib/muscleGroupSplitter';
+import { type MuscleStatesMap, getMuscleColor } from '@/lib/muscleBiomechanicsEngine';
 import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 
@@ -722,6 +723,7 @@ interface PureThreeGLBViewerProps {
   showMuscles?: boolean;
   individualMuscleVisibility?: { [groupId: string]: boolean };
   onMuscleGroupsReady?: (groupIds: string[]) => void;
+  muscleStates?: MuscleStatesMap;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -984,7 +986,8 @@ export default function PureThreeGLBViewer({
   showLoadingSpinner = true,
   showMuscles = true,
   individualMuscleVisibility,
-  onMuscleGroupsReady
+  onMuscleGroupsReady,
+  muscleStates
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -2601,6 +2604,38 @@ export default function PureThreeGLBViewer({
       setMuscleGroupVisibility(splitMuscleGroupsRef.current, id, visible);
     });
   }, [individualMuscleVisibility]);
+
+  useEffect(() => {
+    if (splitMuscleGroupsRef.current.size === 0) return;
+
+    if (!muscleStates) {
+      originalMaterialsRef.current.forEach((originalMat, mesh) => {
+        mesh.material = originalMat;
+      });
+      return;
+    }
+
+    splitMuscleGroupsRef.current.forEach((group, groupId) => {
+      const state = muscleStates[groupId];
+      if (!state) return;
+
+      const color = getMuscleColor(state);
+
+      group.meshes.forEach((mesh) => {
+        if (mesh instanceof THREE.SkinnedMesh || mesh instanceof THREE.Mesh) {
+          if (!originalMaterialsRef.current.has(mesh)) {
+            originalMaterialsRef.current.set(mesh, (mesh.material as THREE.Material).clone());
+          }
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          if (mat.color) {
+            mat.color.setRGB(color.r, color.g, color.b);
+            mat.emissive?.setRGB(color.r * 0.15, color.g * 0.15, color.b * 0.15);
+            mat.needsUpdate = true;
+          }
+        }
+      });
+    });
+  }, [muscleStates]);
 
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {

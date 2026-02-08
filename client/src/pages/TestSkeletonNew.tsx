@@ -18,6 +18,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import PureThreeGLBViewer, { AnimationState, AnatomicalRegion, JointGroup } from "@/components/skeleton/PureThreeGLBViewer";
 import { MUSCLE_GROUPS } from "@/lib/muscleGroupSplitter";
+import { computeAllMuscleStates, type MuscleStatesMap, type MuscleStatus } from "@/lib/muscleBiomechanicsEngine";
 import JointZoomCameras from "@/components/skeleton/JointZoomCameras";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
@@ -882,6 +883,10 @@ export default function TestSkeletonNew() {
     };
   }, [modelConfig, forceVisualization, patientAnthropometrics]);
 
+  const muscleStates = useMemo(() => {
+    return computeAllMuscleStates(modelConfig);
+  }, [modelConfig]);
+
   const resetAll = () => {
     setModelConfig({
       limbScales: {
@@ -1739,6 +1744,7 @@ export default function TestSkeletonNew() {
                       maxROM: c.maxROM,
                       normalROM: c.normalROM
                     }))}
+                    muscleStates={showMuscleLayer ? muscleStates : undefined}
                   />
                 </Suspense>
               </GLBErrorBoundary>
@@ -2224,6 +2230,71 @@ export default function TestSkeletonNew() {
         </Card>
         )}
       </div>
+
+      {/* Muscle Biomechanics State Panel */}
+      {showMuscleLayer && (
+      <Card className="mt-6">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-purple-400" />
+              Muscle States
+            </CardTitle>
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span> Shortened</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block"></span> Neutral</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Lengthened</span>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.values(muscleStates).map((muscle: MuscleStatus) => {
+              const stateColor = muscle.state === 'shortened' ? 'border-red-500/40 bg-red-500/5' :
+                muscle.state === 'lengthened' ? 'border-blue-500/40 bg-blue-500/5' :
+                'border-green-500/40 bg-green-500/5';
+              const stateTextColor = muscle.state === 'shortened' ? 'text-red-400' :
+                muscle.state === 'lengthened' ? 'text-blue-400' : 'text-green-400';
+              const activationColor = muscle.activation === 'high' ? 'bg-orange-500' :
+                muscle.activation === 'moderate' ? 'bg-yellow-500' :
+                muscle.activation === 'low' ? 'bg-slate-400' : 'bg-slate-600';
+              return (
+                <div key={muscle.id} className={`rounded-lg border p-3 ${stateColor} transition-all duration-300`}>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-medium text-sm">{muscle.label}</span>
+                    <span className={`text-xs font-semibold uppercase ${stateTextColor}`}>{muscle.state}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Tension</span>
+                      <span className="text-slate-300">{Math.round(muscle.tension)}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          muscle.tension > 70 ? 'bg-red-500' : muscle.tension > 40 ? 'bg-yellow-500' : 'bg-blue-400'
+                        }`}
+                        style={{ width: `${muscle.tension}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-xs mt-1">
+                      <span className="text-slate-400">Activation</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className={`w-2 h-2 rounded-full ${activationColor}`}></div>
+                        <span className="text-slate-300 capitalize">{muscle.activation}</span>
+                      </div>
+                    </div>
+                    {muscle.description !== 'neutral resting position' && (
+                      <p className="text-[10px] text-slate-500 mt-1 leading-tight italic">{muscle.description}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+      )}
 
       {/* Joint Parameters - Sliders Panel (Above Biomechanics) */}
       <Card className="mt-6">

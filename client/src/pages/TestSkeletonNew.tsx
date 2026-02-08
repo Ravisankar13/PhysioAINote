@@ -1322,9 +1322,9 @@ export default function TestSkeletonNew() {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Panel - Visualization */}
-        <Card className={multiViewMode ? "col-span-2" : ""} style={{ height: multiViewMode ? 'auto' : '600px' }}>
+      <div className="space-y-6">
+        {/* 3D Skeleton Viewer - Full Width */}
+        <Card style={{ height: multiViewMode ? 'auto' : '700px' }}>
           <CardHeader className="pb-2 space-y-3">
             <div className="flex items-center justify-between">
               <CardTitle>Skeleton Visualization</CardTitle>
@@ -1748,7 +1748,7 @@ export default function TestSkeletonNew() {
 
         {/* Joint Zoom Cameras - Show when adjusting sliders */}
         {showJointZoom && activeJointGroup && (
-          <div className="col-span-2 lg:col-span-1 space-y-4">
+          <div className="space-y-4">
             <JointZoomCameras
               activeJointGroup={activeJointGroup}
               modelConfig={modelConfig}
@@ -1873,7 +1873,6 @@ export default function TestSkeletonNew() {
           <PatientClonePanel
             onPatientCloneUpdate={handlePatientCloneUpdate}
             currentModelConfig={modelConfig}
-            className="col-span-2 lg:col-span-1"
           />
         )}
 
@@ -1883,12 +1882,10 @@ export default function TestSkeletonNew() {
             <JointConstraintsCard
               constraints={jointConstraints}
               onConstraintsChange={setJointConstraints}
-              className="col-span-2 lg:col-span-1"
             />
             <DiagnosticAssessmentPanel
               constraints={jointConstraints}
               compensationResult={compensationResult}
-              className="col-span-2 lg:col-span-1"
             />
           </>
         )}
@@ -1949,14 +1946,13 @@ export default function TestSkeletonNew() {
             }
             pelvisRotation={modelConfig.pelvis.rotation}
             bodyWeightKg={70}
-            className="col-span-2 lg:col-span-1"
             compensationPatterns={compensationResult.patterns}
           />
         )}
 
         {/* Camera Pose Capture Panel */}
         {showCameraCapture && (
-          <Card className="col-span-2 lg:col-span-1">
+          <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Video className="h-5 w-5 text-purple-500" />
@@ -2086,7 +2082,6 @@ export default function TestSkeletonNew() {
         {showCameraCapture && (
           <ClinicalIntakePanel
             onIntakeChange={setClinicalIntakeData}
-            className="col-span-2"
           />
         )}
 
@@ -2095,19 +2090,18 @@ export default function TestSkeletonNew() {
           <ClinicalAssessmentResults
             assessment={clinicalAssessment}
             isLoading={isGeneratingAssessment}
-            className="col-span-2"
           />
         )}
 
         {/* Right Panel - Clinical Controls (hidden when zoom cameras are active) */}
         {!(showJointZoom && activeJointGroup) && (
-        <Card className="h-[600px] overflow-hidden">
+        <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Clinical Controls</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="overflow-y-auto h-[calc(100%-80px)]">
+          <CardContent>
             {/* Static Posture Assessment Button */}
             <div className="mb-4 p-4 bg-gradient-to-r from-green-500/10 to-teal-500/10 rounded-lg border border-green-500/20">
               <h3 className="font-semibold mb-2 text-green-300 flex items-center gap-2">

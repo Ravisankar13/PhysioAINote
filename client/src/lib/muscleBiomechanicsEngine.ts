@@ -478,6 +478,65 @@ export function computeAllMuscleStates(modelConfig: any): MuscleStatesMap {
   return results;
 }
 
+export interface MuscleOverride {
+  tensionOffset: number;
+  activationOffset: number;
+  isManual: boolean;
+}
+
+export function applyOverridesAndChains(
+  baseStates: MuscleStatesMap,
+  overrides: { [muscleId: string]: MuscleOverride },
+  chainEffects: { [muscleId: string]: { totalChainTension: number; totalChainActivation: number } }
+): MuscleStatesMap {
+  const results: MuscleStatesMap = {};
+
+  for (const [id, base] of Object.entries(baseStates)) {
+    const override = overrides[id];
+    const chain = chainEffects[id];
+
+    let newTension = base.tension;
+    let newActivation = base.activationPercent;
+
+    if (override?.isManual) {
+      newTension += override.tensionOffset;
+      newActivation += override.activationOffset;
+    }
+
+    if (chain) {
+      newTension += chain.totalChainTension;
+      newActivation += chain.totalChainActivation;
+    }
+
+    newTension = Math.max(5, Math.min(95, newTension));
+    newActivation = Math.max(0, Math.min(100, newActivation));
+
+    const chainDescs: string[] = [];
+    if (override?.isManual && override.tensionOffset !== 0) {
+      chainDescs.push(`manual override (${override.tensionOffset > 0 ? '+' : ''}${Math.round(override.tensionOffset)}% tension)`);
+    }
+    if (chain && Math.abs(chain.totalChainTension) > 1) {
+      chainDescs.push(`chain propagation (${chain.totalChainTension > 0 ? '+' : ''}${Math.round(chain.totalChainTension)}% tension)`);
+    }
+
+    const desc = chainDescs.length > 0
+      ? (base.description !== 'neutral resting position' ? base.description + '; ' : '') + chainDescs.join('; ')
+      : base.description;
+
+    results[id] = {
+      id,
+      label: base.label,
+      state: tensionToState(newTension),
+      tension: newTension,
+      activation: tensionToActivation(newActivation),
+      activationPercent: newActivation,
+      description: desc,
+    };
+  }
+
+  return results;
+}
+
 export function getMuscleColor(status: MuscleStatus): { r: number; g: number; b: number } {
   const t = status.tension / 100;
   const a = status.activationPercent / 100;

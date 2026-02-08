@@ -18,7 +18,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import PureThreeGLBViewer, { AnimationState, AnatomicalRegion, JointGroup } from "@/components/skeleton/PureThreeGLBViewer";
 import { MUSCLE_GROUPS } from "@/lib/muscleGroupSplitter";
-import { computeAllMuscleStates, type MuscleStatesMap, type MuscleStatus } from "@/lib/muscleBiomechanicsEngine";
+import { computeAllMuscleStates, applyOverridesAndChains, type MuscleStatesMap, type MuscleStatus, type MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
+import { propagateChainEffects, computeWholeBodyTensionScore, getChainMembership, MYOFASCIAL_CHAINS } from "@/lib/myofascialChains";
 import JointZoomCameras from "@/components/skeleton/JointZoomCameras";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
@@ -286,6 +287,8 @@ export default function TestSkeletonNew() {
   const [individualMuscleVisibility, setIndividualMuscleVisibility] = useState<{ [groupId: string]: boolean }>({});
   const [availableMuscleGroups, setAvailableMuscleGroups] = useState<string[]>([]);
   const [showMusclePanel, setShowMusclePanel] = useState(false);
+  const [muscleOverrides, setMuscleOverrides] = useState<{ [muscleId: string]: MuscleOverride }>({});
+  const [expandedMuscle, setExpandedMuscle] = useState<string | null>(null);
   const [livePose, setLivePose] = useState<Skeleton3DPose | null>(null);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
@@ -883,9 +886,24 @@ export default function TestSkeletonNew() {
     };
   }, [modelConfig, forceVisualization, patientAnthropometrics]);
 
-  const muscleStates = useMemo(() => {
-    return computeAllMuscleStates(modelConfig);
+  const baseMuscleTensions = useMemo(() => {
+    const base = computeAllMuscleStates(modelConfig);
+    const tensions: { [id: string]: number } = {};
+    Object.entries(base).forEach(([id, s]) => { tensions[id] = s.tension; });
+    return { baseStates: base, tensions };
   }, [modelConfig]);
+
+  const chainPropagation = useMemo(() => {
+    return propagateChainEffects(baseMuscleTensions.tensions, muscleOverrides);
+  }, [baseMuscleTensions.tensions, muscleOverrides]);
+
+  const muscleStates = useMemo(() => {
+    return applyOverridesAndChains(baseMuscleTensions.baseStates, muscleOverrides, chainPropagation);
+  }, [baseMuscleTensions.baseStates, muscleOverrides, chainPropagation]);
+
+  const wholeBodyScore = useMemo(() => {
+    return computeWholeBodyTensionScore(baseMuscleTensions.tensions, muscleOverrides);
+  }, [baseMuscleTensions.tensions, muscleOverrides]);
 
   const resetAll = () => {
     setModelConfig({
@@ -1039,6 +1057,8 @@ export default function TestSkeletonNew() {
       shoulders: false,
       elbows: false,
     });
+    setMuscleOverrides({});
+    setExpandedMuscle(null);
   };
 
   const copyToSide = (fromSide: 'left' | 'right', joint: string) => {
@@ -2238,16 +2258,73 @@ export default function TestSkeletonNew() {
           <div className="flex justify-between items-center">
             <CardTitle className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-purple-400" />
-              Muscle States
+              Muscle States & Fascial Chains
             </CardTitle>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span> Shortened</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block"></span> Neutral</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Lengthened</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span> Shortened</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block"></span> Neutral</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Lengthened</span>
+              </div>
+              {Object.keys(muscleOverrides).length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7"
+                  onClick={() => setMuscleOverrides({})}
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Clear Overrides
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
         <CardContent>
+          {/* Whole Body Tension Summary */}
+          <div className={`mb-4 p-3 rounded-lg border ${
+            wholeBodyScore.level === 'critical' ? 'border-red-500/50 bg-red-500/10' :
+            wholeBodyScore.level === 'high' ? 'border-orange-500/50 bg-orange-500/10' :
+            wholeBodyScore.level === 'moderate' ? 'border-yellow-500/50 bg-yellow-500/10' :
+            'border-green-500/50 bg-green-500/10'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Whole-Body Tension</span>
+              <span className={`text-lg font-bold ${
+                wholeBodyScore.level === 'critical' ? 'text-red-400' :
+                wholeBodyScore.level === 'high' ? 'text-orange-400' :
+                wholeBodyScore.level === 'moderate' ? 'text-yellow-400' :
+                'text-green-400'
+              }`}>{wholeBodyScore.score}/100</span>
+            </div>
+            <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden mb-2">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  wholeBodyScore.level === 'critical' ? 'bg-red-500' :
+                  wholeBodyScore.level === 'high' ? 'bg-orange-500' :
+                  wholeBodyScore.level === 'moderate' ? 'bg-yellow-500' :
+                  'bg-green-500'
+                }`}
+                style={{ width: `${wholeBodyScore.score}%` }}
+              />
+            </div>
+            <p className="text-xs text-slate-400">{wholeBodyScore.description}</p>
+          </div>
+
+          {/* Fascial Chain Legend */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            {Array.from(new Map(MYOFASCIAL_CHAINS.map(c => [c.color, c])).values()).map(chain => {
+              const baseName = chain.name.replace(/ \([LR]\)$/, '');
+              return (
+                <span key={chain.color} className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: chain.color }}></span>
+                  {baseName}
+                </span>
+              );
+            })}
+          </div>
+
+          {/* Muscle Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {Object.values(muscleStates).map((muscle: MuscleStatus) => {
               const stateColor = muscle.state === 'shortened' ? 'border-red-500/40 bg-red-500/5' :
@@ -2258,10 +2335,20 @@ export default function TestSkeletonNew() {
               const activationColor = muscle.activation === 'high' ? 'bg-orange-500' :
                 muscle.activation === 'moderate' ? 'bg-yellow-500' :
                 muscle.activation === 'low' ? 'bg-slate-400' : 'bg-slate-600';
+              const isExpanded = expandedMuscle === muscle.id;
+              const override = muscleOverrides[muscle.id];
+              const hasOverride = override?.isManual;
+              const chains = getChainMembership(muscle.id);
+              const propagated = chainPropagation[muscle.id];
+              const hasChainEffects = propagated && (propagated.chainEffects.length > 0 || propagated.slingEffects.length > 0);
               return (
-                <div key={muscle.id} className={`rounded-lg border p-3 ${stateColor} transition-all duration-300`}>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium text-sm">{muscle.label}</span>
+                <div key={muscle.id} className={`rounded-lg border p-3 ${stateColor} transition-all duration-300 ${hasOverride ? 'ring-1 ring-purple-500/50' : ''}`}>
+                  <div className="flex justify-between items-center mb-2 cursor-pointer" onClick={() => setExpandedMuscle(isExpanded ? null : muscle.id)}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-sm">{muscle.label}</span>
+                      {hasOverride && <Lock className="h-3 w-3 text-purple-400" />}
+                      {hasChainEffects && <Zap className="h-3 w-3 text-yellow-400" />}
+                    </div>
                     <span className={`text-xs font-semibold uppercase ${stateTextColor}`}>{muscle.state}</span>
                   </div>
                   <div className="space-y-1.5">
@@ -2284,8 +2371,123 @@ export default function TestSkeletonNew() {
                         <span className="text-slate-300 capitalize">{muscle.activation}</span>
                       </div>
                     </div>
+
+                    {/* Chain membership badges */}
+                    {chains.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {Array.from(new Map(chains.map(c => [c.color, c])).values()).map(chain => (
+                          <span key={chain.id} className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: chain.color + '20', color: chain.color, border: `1px solid ${chain.color}40` }}>
+                            {chain.name.replace(' Line', '').replace('Superficial ', 'S.').replace(/ \([LR]\)$/, '')}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     {muscle.description !== 'neutral resting position' && (
                       <p className="text-[10px] text-slate-500 mt-1 leading-tight italic">{muscle.description}</p>
+                    )}
+
+                    {/* Expanded Override Controls */}
+                    {isExpanded && (
+                      <div className="mt-3 pt-3 border-t border-slate-700 space-y-3">
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-slate-400">Tightness Override</span>
+                            <span className="text-slate-300">{override?.tensionOffset ? (override.tensionOffset > 0 ? '+' : '') + Math.round(override.tensionOffset) + '%' : '0%'}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-40"
+                            max="40"
+                            step="1"
+                            value={override?.tensionOffset ?? 0}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setMuscleOverrides(prev => ({
+                                ...prev,
+                                [muscle.id]: {
+                                  tensionOffset: val,
+                                  activationOffset: prev[muscle.id]?.activationOffset ?? 0,
+                                  isManual: val !== 0 || (prev[muscle.id]?.activationOffset ?? 0) !== 0,
+                                }
+                              }));
+                            }}
+                            className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-purple-500"
+                          />
+                          <div className="flex justify-between text-[9px] text-slate-600 mt-0.5">
+                            <span>Lengthened</span>
+                            <span>Neutral</span>
+                            <span>Tight</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-slate-400">Activation Override</span>
+                            <span className="text-slate-300">{override?.activationOffset ? (override.activationOffset > 0 ? '+' : '') + Math.round(override.activationOffset) + '%' : '0%'}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-30"
+                            max="50"
+                            step="1"
+                            value={override?.activationOffset ?? 0}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setMuscleOverrides(prev => ({
+                                ...prev,
+                                [muscle.id]: {
+                                  tensionOffset: prev[muscle.id]?.tensionOffset ?? 0,
+                                  activationOffset: val,
+                                  isManual: (prev[muscle.id]?.tensionOffset ?? 0) !== 0 || val !== 0,
+                                }
+                              }));
+                            }}
+                            className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-orange-500"
+                          />
+                          <div className="flex justify-between text-[9px] text-slate-600 mt-0.5">
+                            <span>Inhibited</span>
+                            <span>Normal</span>
+                            <span>Overactive</span>
+                          </div>
+                        </div>
+                        {hasOverride && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full h-6 text-[10px] text-slate-400"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMuscleOverrides(prev => {
+                                const next = { ...prev };
+                                delete next[muscle.id];
+                                return next;
+                              });
+                            }}
+                          >
+                            Reset This Muscle
+                          </Button>
+                        )}
+
+                        {/* Chain propagation effects */}
+                        {hasChainEffects && propagated && (
+                          <div className="mt-2 pt-2 border-t border-slate-700">
+                            <span className="text-[10px] text-slate-400 font-medium">Chain Effects:</span>
+                            <div className="mt-1 space-y-0.5">
+                              {propagated.chainEffects.concat(propagated.slingEffects).slice(0, 5).map((effect, i) => (
+                                <div key={i} className="flex items-center justify-between text-[9px]">
+                                  <span className="text-slate-500">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: effect.chainColor }}></span>
+                                    {effect.chainName.replace(' Line', '').replace('Superficial ', 'S.')} via {effect.sourceMuscle.replace('_', ' ')}
+                                  </span>
+                                  <span className={effect.tensionDelta > 0 ? 'text-red-400' : 'text-blue-400'}>
+                                    {effect.tensionDelta > 0 ? '+' : ''}{effect.tensionDelta.toFixed(1)}%
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

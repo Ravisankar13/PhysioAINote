@@ -478,11 +478,39 @@ export function computeAllMuscleStates(modelConfig: any): MuscleStatesMap {
   return results;
 }
 
+export type PathologyType = 'strain' | 'spasm' | 'trigger_point' | 'weakness' | 'fibrosis' | 'inflammation' | 'tendinopathy' | 'none';
+export type LengthOverride = 'shortened' | 'neutral' | 'lengthened' | 'none';
+
 export interface MuscleOverride {
   tensionOffset: number;
   activationOffset: number;
+  lengthOverride: LengthOverride;
+  inhibition: number;
+  pathology: PathologyType;
   isManual: boolean;
 }
+
+export const PATHOLOGY_EFFECTS: Record<PathologyType, { tensionMod: number; activationMod: number }> = {
+  strain: { tensionMod: 15, activationMod: -20 },
+  spasm: { tensionMod: 30, activationMod: 25 },
+  trigger_point: { tensionMod: 20, activationMod: 10 },
+  weakness: { tensionMod: -15, activationMod: -30 },
+  fibrosis: { tensionMod: 25, activationMod: -10 },
+  inflammation: { tensionMod: 10, activationMod: -15 },
+  tendinopathy: { tensionMod: 5, activationMod: -25 },
+  none: { tensionMod: 0, activationMod: 0 },
+};
+
+export const PATHOLOGY_LABELS: Record<PathologyType, string> = {
+  strain: 'Muscle Strain',
+  spasm: 'Muscle Spasm',
+  trigger_point: 'Trigger Point',
+  weakness: 'Muscle Weakness',
+  fibrosis: 'Fibrosis/Adhesion',
+  inflammation: 'Inflammation',
+  tendinopathy: 'Tendinopathy',
+  none: 'None',
+};
 
 export function applyOverridesAndChains(
   baseStates: MuscleStatesMap,
@@ -497,10 +525,35 @@ export function applyOverridesAndChains(
 
     let newTension = base.tension;
     let newActivation = base.activationPercent;
+    let forcedState: MuscleState | null = null;
 
     if (override?.isManual) {
       newTension += override.tensionOffset;
       newActivation += override.activationOffset;
+
+      if (override.lengthOverride !== 'none') {
+        forcedState = override.lengthOverride as MuscleState;
+        if (override.lengthOverride === 'shortened') {
+          newTension = Math.max(newTension, 70);
+        } else if (override.lengthOverride === 'lengthened') {
+          newTension = Math.min(newTension, 30);
+        } else {
+          newTension = 50 + override.tensionOffset;
+        }
+      }
+
+      if (override.inhibition > 0) {
+        const inhibFactor = 1 - (override.inhibition / 100);
+        newActivation *= inhibFactor;
+      }
+
+      if (override.pathology !== 'none') {
+        const pathEffects = PATHOLOGY_EFFECTS[override.pathology];
+        if (pathEffects) {
+          newTension += pathEffects.tensionMod;
+          newActivation += pathEffects.activationMod;
+        }
+      }
     }
 
     if (chain) {
@@ -515,6 +568,16 @@ export function applyOverridesAndChains(
     if (override?.isManual && override.tensionOffset !== 0) {
       chainDescs.push(`manual override (${override.tensionOffset > 0 ? '+' : ''}${Math.round(override.tensionOffset)}% tension)`);
     }
+    if (override?.isManual && override.lengthOverride !== 'none') {
+      chainDescs.push(`length set to ${override.lengthOverride}`);
+    }
+    if (override?.isManual && override.inhibition > 0) {
+      chainDescs.push(`${Math.round(override.inhibition)}% inhibited`);
+    }
+    if (override?.isManual && override.pathology !== 'none') {
+      const label = PATHOLOGY_LABELS[override.pathology] || override.pathology;
+      chainDescs.push(`pathology: ${label}`);
+    }
     if (chain && Math.abs(chain.totalChainTension) > 1) {
       chainDescs.push(`chain propagation (${chain.totalChainTension > 0 ? '+' : ''}${Math.round(chain.totalChainTension)}% tension)`);
     }
@@ -526,7 +589,7 @@ export function applyOverridesAndChains(
     results[id] = {
       id,
       label: base.label,
-      state: tensionToState(newTension),
+      state: forcedState || tensionToState(newTension),
       tension: newTension,
       activation: tensionToActivation(newActivation),
       activationPercent: newActivation,

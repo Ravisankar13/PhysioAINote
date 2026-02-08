@@ -18,7 +18,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import PureThreeGLBViewer, { AnimationState, AnatomicalRegion, JointGroup } from "@/components/skeleton/PureThreeGLBViewer";
 import { MUSCLE_GROUPS } from "@/lib/muscleGroupSplitter";
-import { computeAllMuscleStates, applyOverridesAndChains, type MuscleStatesMap, type MuscleStatus, type MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
+import { computeAllMuscleStates, applyOverridesAndChains, type MuscleStatesMap, type MuscleStatus, type MuscleOverride, type PathologyType, type LengthOverride, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { propagateChainEffects, computeWholeBodyTensionScore, getChainMembership, MYOFASCIAL_CHAINS } from "@/lib/myofascialChains";
 import JointZoomCameras from "@/components/skeleton/JointZoomCameras";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
@@ -2342,12 +2342,22 @@ export default function TestSkeletonNew() {
               const propagated = chainPropagation[muscle.id];
               const hasChainEffects = propagated && (propagated.chainEffects.length > 0 || propagated.slingEffects.length > 0);
               return (
-                <div key={muscle.id} className={`rounded-lg border p-3 ${stateColor} transition-all duration-300 ${hasOverride ? 'ring-1 ring-purple-500/50' : ''}`}>
+                <div key={muscle.id} className={`rounded-lg border p-3 ${stateColor} transition-all duration-300 ${hasOverride ? 'ring-1 ring-purple-500/50' : ''} ${override?.pathology && override.pathology !== 'none' ? 'ring-1 ring-red-500/40' : ''}`}>
                   <div className="flex justify-between items-center mb-2 cursor-pointer" onClick={() => setExpandedMuscle(isExpanded ? null : muscle.id)}>
                     <div className="flex items-center gap-1.5">
                       <span className="font-medium text-sm">{muscle.label}</span>
                       {hasOverride && <Lock className="h-3 w-3 text-purple-400" />}
                       {hasChainEffects && <Zap className="h-3 w-3 text-yellow-400" />}
+                      {override?.pathology && override.pathology !== 'none' && (
+                        <span className="text-[8px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30">
+                          {PATHOLOGY_LABELS[override.pathology]}
+                        </span>
+                      )}
+                      {override?.inhibition && override.inhibition > 0 && (
+                        <span className="text-[8px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                          {Math.round(override.inhibition)}% inhib
+                        </span>
+                      )}
                     </div>
                     <span className={`text-xs font-semibold uppercase ${stateTextColor}`}>{muscle.state}</span>
                   </div>
@@ -2403,14 +2413,19 @@ export default function TestSkeletonNew() {
                             value={override?.tensionOffset ?? 0}
                             onChange={(e) => {
                               const val = Number(e.target.value);
-                              setMuscleOverrides(prev => ({
-                                ...prev,
-                                [muscle.id]: {
+                              setMuscleOverrides(prev => {
+                                const existing = prev[muscle.id];
+                                const updated: MuscleOverride = {
                                   tensionOffset: val,
-                                  activationOffset: prev[muscle.id]?.activationOffset ?? 0,
-                                  isManual: val !== 0 || (prev[muscle.id]?.activationOffset ?? 0) !== 0,
-                                }
-                              }));
+                                  activationOffset: existing?.activationOffset ?? 0,
+                                  lengthOverride: existing?.lengthOverride ?? 'none',
+                                  inhibition: existing?.inhibition ?? 0,
+                                  pathology: existing?.pathology ?? 'none',
+                                  isManual: true,
+                                };
+                                updated.isManual = val !== 0 || updated.activationOffset !== 0 || updated.lengthOverride !== 'none' || updated.inhibition > 0 || updated.pathology !== 'none';
+                                return { ...prev, [muscle.id]: updated };
+                              });
                             }}
                             className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-purple-500"
                           />
@@ -2433,14 +2448,19 @@ export default function TestSkeletonNew() {
                             value={override?.activationOffset ?? 0}
                             onChange={(e) => {
                               const val = Number(e.target.value);
-                              setMuscleOverrides(prev => ({
-                                ...prev,
-                                [muscle.id]: {
-                                  tensionOffset: prev[muscle.id]?.tensionOffset ?? 0,
+                              setMuscleOverrides(prev => {
+                                const existing = prev[muscle.id];
+                                const updated: MuscleOverride = {
+                                  tensionOffset: existing?.tensionOffset ?? 0,
                                   activationOffset: val,
-                                  isManual: (prev[muscle.id]?.tensionOffset ?? 0) !== 0 || val !== 0,
-                                }
-                              }));
+                                  lengthOverride: existing?.lengthOverride ?? 'none',
+                                  inhibition: existing?.inhibition ?? 0,
+                                  pathology: existing?.pathology ?? 'none',
+                                  isManual: true,
+                                };
+                                updated.isManual = updated.tensionOffset !== 0 || val !== 0 || updated.lengthOverride !== 'none' || updated.inhibition > 0 || updated.pathology !== 'none';
+                                return { ...prev, [muscle.id]: updated };
+                              });
                             }}
                             className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-orange-500"
                           />
@@ -2449,6 +2469,130 @@ export default function TestSkeletonNew() {
                             <span>Normal</span>
                             <span>Overactive</span>
                           </div>
+                        </div>
+
+                        {/* Length Override */}
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-slate-400">Length Override</span>
+                            <span className="text-slate-300 capitalize">{override?.lengthOverride === 'none' || !override?.lengthOverride ? 'Auto' : override.lengthOverride}</span>
+                          </div>
+                          <div className="flex gap-1">
+                            {(['none', 'shortened', 'neutral', 'lengthened'] as LengthOverride[]).map(len => (
+                              <button
+                                key={len}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMuscleOverrides(prev => {
+                                    const existing = prev[muscle.id];
+                                    const updated: MuscleOverride = {
+                                      tensionOffset: existing?.tensionOffset ?? 0,
+                                      activationOffset: existing?.activationOffset ?? 0,
+                                      lengthOverride: len,
+                                      inhibition: existing?.inhibition ?? 0,
+                                      pathology: existing?.pathology ?? 'none',
+                                      isManual: true,
+                                    };
+                                    updated.isManual = updated.tensionOffset !== 0 || updated.activationOffset !== 0 || len !== 'none' || updated.inhibition > 0 || updated.pathology !== 'none';
+                                    return { ...prev, [muscle.id]: updated };
+                                  });
+                                }}
+                                className={`flex-1 text-[9px] py-1 px-1 rounded border transition-all ${
+                                  (override?.lengthOverride ?? 'none') === len
+                                    ? len === 'shortened' ? 'bg-red-500/20 border-red-500/50 text-red-300'
+                                    : len === 'lengthened' ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
+                                    : len === 'neutral' ? 'bg-green-500/20 border-green-500/50 text-green-300'
+                                    : 'bg-slate-700/50 border-slate-500 text-slate-300'
+                                    : 'border-slate-700 text-slate-500 hover:border-slate-500'
+                                }`}
+                              >
+                                {len === 'none' ? 'Auto' : len.charAt(0).toUpperCase() + len.slice(1)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Inhibition Slider */}
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-slate-400">Inhibition</span>
+                            <span className="text-slate-300">{Math.round(override?.inhibition ?? 0)}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={override?.inhibition ?? 0}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setMuscleOverrides(prev => {
+                                const existing = prev[muscle.id];
+                                const updated: MuscleOverride = {
+                                  tensionOffset: existing?.tensionOffset ?? 0,
+                                  activationOffset: existing?.activationOffset ?? 0,
+                                  lengthOverride: existing?.lengthOverride ?? 'none',
+                                  inhibition: val,
+                                  pathology: existing?.pathology ?? 'none',
+                                  isManual: true,
+                                };
+                                updated.isManual = updated.tensionOffset !== 0 || updated.activationOffset !== 0 || updated.lengthOverride !== 'none' || val > 0 || updated.pathology !== 'none';
+                                return { ...prev, [muscle.id]: updated };
+                              });
+                            }}
+                            className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-yellow-500"
+                          />
+                          <div className="flex justify-between text-[9px] text-slate-600 mt-0.5">
+                            <span>Normal</span>
+                            <span>Partial</span>
+                            <span>Full</span>
+                          </div>
+                        </div>
+
+                        {/* Pathology Selector */}
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="text-slate-400">Pathology</span>
+                            <span className="text-slate-300">{PATHOLOGY_LABELS[override?.pathology ?? 'none']}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {(Object.keys(PATHOLOGY_LABELS) as PathologyType[]).map(path => (
+                              <button
+                                key={path}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMuscleOverrides(prev => {
+                                    const existing = prev[muscle.id];
+                                    const updated: MuscleOverride = {
+                                      tensionOffset: existing?.tensionOffset ?? 0,
+                                      activationOffset: existing?.activationOffset ?? 0,
+                                      lengthOverride: existing?.lengthOverride ?? 'none',
+                                      inhibition: existing?.inhibition ?? 0,
+                                      pathology: path,
+                                      isManual: true,
+                                    };
+                                    updated.isManual = updated.tensionOffset !== 0 || updated.activationOffset !== 0 || updated.lengthOverride !== 'none' || updated.inhibition > 0 || path !== 'none';
+                                    return { ...prev, [muscle.id]: updated };
+                                  });
+                                }}
+                                className={`text-[8px] py-0.5 px-1.5 rounded-full border transition-all ${
+                                  (override?.pathology ?? 'none') === path
+                                    ? path === 'none' ? 'bg-slate-700/50 border-slate-500 text-slate-300'
+                                    : 'bg-red-500/20 border-red-500/50 text-red-300'
+                                    : 'border-slate-700 text-slate-600 hover:border-slate-500 hover:text-slate-400'
+                                }`}
+                              >
+                                {PATHOLOGY_LABELS[path]}
+                              </button>
+                            ))}
+                          </div>
+                          {override?.pathology && override.pathology !== 'none' && (
+                            <div className="mt-1.5 text-[9px] text-slate-500 bg-slate-800/50 rounded p-1.5">
+                              <span className="text-red-400 font-medium">{PATHOLOGY_LABELS[override.pathology]}:</span>{' '}
+                              {PATHOLOGY_EFFECTS[override.pathology].tensionMod > 0 ? '+' : ''}{PATHOLOGY_EFFECTS[override.pathology].tensionMod}% tension,{' '}
+                              {PATHOLOGY_EFFECTS[override.pathology].activationMod > 0 ? '+' : ''}{PATHOLOGY_EFFECTS[override.pathology].activationMod}% activation
+                            </div>
+                          )}
                         </div>
                         {hasOverride && (
                           <Button

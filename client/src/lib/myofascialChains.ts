@@ -1,4 +1,4 @@
-import { type MuscleOverride } from './muscleBiomechanicsEngine';
+import { type MuscleOverride, PATHOLOGY_EFFECTS } from './muscleBiomechanicsEngine';
 
 export interface ChainLink {
   muscleId: string;
@@ -267,7 +267,10 @@ export function propagateChainEffects(
     for (const sourceId of uniqueIds) {
       const baseTension = baseTensions[sourceId] ?? 50;
       const override = overrides[sourceId];
-      const effectiveTension = baseTension + (override?.tensionOffset ?? 0);
+      let effectiveTension = baseTension + (override?.tensionOffset ?? 0);
+      if (override?.lengthOverride === 'shortened') effectiveTension = Math.max(effectiveTension, 70);
+      else if (override?.lengthOverride === 'lengthened') effectiveTension = Math.min(effectiveTension, 30);
+      if (override?.pathology && override.pathology !== 'none') effectiveTension += PATHOLOGY_EFFECTS[override.pathology].tensionMod;
       const deviation = effectiveTension - 50;
 
       if (Math.abs(deviation) < 5) continue;
@@ -311,7 +314,10 @@ export function propagateChainEffects(
       const processPair = (source: string, target: string) => {
         const baseTension = baseTensions[source] ?? 50;
         const override = overrides[source];
-        const effectiveTension = baseTension + (override?.tensionOffset ?? 0);
+        let effectiveTension = baseTension + (override?.tensionOffset ?? 0);
+        if (override?.lengthOverride === 'shortened') effectiveTension = Math.max(effectiveTension, 70);
+        else if (override?.lengthOverride === 'lengthened') effectiveTension = Math.min(effectiveTension, 30);
+        if (override?.pathology && override.pathology !== 'none') effectiveTension += PATHOLOGY_EFFECTS[override.pathology].tensionMod;
         const deviation = effectiveTension - 50;
 
         if (Math.abs(deviation) < 5) return;
@@ -354,10 +360,22 @@ export function computeWholeBodyTensionScore(
   let maxDeviation = 0;
   let overrideCount = 0;
 
+  let pathologyCount = 0;
+  let inhibitionTotal = 0;
+
   for (const id of ids) {
     const base = tensions[id];
     const override = overrides[id];
-    const effective = base + (override?.tensionOffset ?? 0);
+    let effective = base + (override?.tensionOffset ?? 0);
+    if (override?.lengthOverride === 'shortened') effective = Math.max(effective, 70);
+    else if (override?.lengthOverride === 'lengthened') effective = Math.min(effective, 30);
+    if (override?.pathology && override.pathology !== 'none') {
+      effective += PATHOLOGY_EFFECTS[override.pathology].tensionMod;
+      pathologyCount++;
+    }
+    if (override?.inhibition && override.inhibition > 0) {
+      inhibitionTotal += override.inhibition;
+    }
     const dev = Math.abs(effective - 50);
     totalDeviation += dev;
     maxDeviation = Math.max(maxDeviation, dev);
@@ -365,7 +383,10 @@ export function computeWholeBodyTensionScore(
   }
 
   const avgDeviation = totalDeviation / ids.length;
-  const score = Math.min(100, avgDeviation * 2 + maxDeviation * 0.5);
+  let score = Math.min(100, avgDeviation * 2 + maxDeviation * 0.5);
+  score += pathologyCount * 5;
+  score += (inhibitionTotal / ids.length) * 0.3;
+  score = Math.min(100, score);
 
   let level: 'low' | 'moderate' | 'high' | 'critical';
   let description: string;
@@ -384,8 +405,12 @@ export function computeWholeBodyTensionScore(
     description = 'High systemic tension, multiple fascial chains under stress';
   }
 
-  if (overrideCount > 0) {
-    description += ` (${overrideCount} manual override${overrideCount > 1 ? 's' : ''} applied)`;
+  const details: string[] = [];
+  if (overrideCount > 0) details.push(`${overrideCount} override${overrideCount > 1 ? 's' : ''}`);
+  if (pathologyCount > 0) details.push(`${pathologyCount} patholog${pathologyCount > 1 ? 'ies' : 'y'}`);
+  if (inhibitionTotal > 0) details.push('inhibition present');
+  if (details.length > 0) {
+    description += ` (${details.join(', ')})`;
   }
 
   return { score: Math.round(score), level, description };

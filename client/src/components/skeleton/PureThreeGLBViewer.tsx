@@ -724,6 +724,11 @@ interface PureThreeGLBViewerProps {
   individualMuscleVisibility?: { [groupId: string]: boolean };
   onMuscleGroupsReady?: (groupIds: string[]) => void;
   muscleStates?: MuscleStatesMap;
+  highlightRegions?: Array<{
+    region: AnatomicalRegion;
+    color: number;
+    intensity: number;
+  }>;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -987,7 +992,8 @@ export default function PureThreeGLBViewer({
   showMuscles = true,
   individualMuscleVisibility,
   onMuscleGroupsReady,
-  muscleStates
+  muscleStates,
+  highlightRegions
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1009,6 +1015,7 @@ export default function PureThreeGLBViewer({
   const livePoseActiveRef = useRef<boolean>(false);
   const animationPlayingRef = useRef<boolean>(false);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
+  const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -1332,6 +1339,55 @@ export default function PureThreeGLBViewer({
 
     animateZoom();
   }, [zoomToRegion]);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { model } = sceneRef.current;
+    if (!model) return;
+
+    highlightedMeshesRef.current.forEach((entries) => {
+      entries.forEach(({ mesh, originalEmissive, originalIntensity }) => {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((mat) => {
+          if (mat instanceof THREE.MeshStandardMaterial) {
+            mat.emissive.copy(originalEmissive);
+            mat.emissiveIntensity = originalIntensity;
+          }
+        });
+      });
+    });
+    highlightedMeshesRef.current.clear();
+
+    if (!highlightRegions || highlightRegions.length === 0) return;
+
+    for (const highlight of highlightRegions) {
+      const meshNames = REGION_MESH_MAPPING[highlight.region] || [];
+      if (meshNames.length === 0) continue;
+
+      const entries: { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[] = [];
+
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh && meshNames.includes(child.name)) {
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((mat) => {
+            if (mat instanceof THREE.MeshStandardMaterial) {
+              entries.push({
+                mesh: child,
+                originalEmissive: mat.emissive.clone(),
+                originalIntensity: mat.emissiveIntensity,
+              });
+              mat.emissive = new THREE.Color(highlight.color);
+              mat.emissiveIntensity = highlight.intensity;
+            }
+          });
+        }
+      });
+
+      if (entries.length > 0) {
+        highlightedMeshesRef.current.set(highlight.region, entries);
+      }
+    }
+  }, [highlightRegions]);
 
   useEffect(() => {
     if (!containerRef.current) return;

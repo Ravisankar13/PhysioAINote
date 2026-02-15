@@ -9,6 +9,14 @@ PhysioGPT is an advanced AI-powered physiotherapy platform providing comprehensi
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (Feb 15, 2026)
+- **Interactive Skeleton-to-Text System**: Skeleton viewer now reacts to clinical conversation content:
+  - Clinical text parser (client/src/lib/clinicalTextParser.ts) detects body regions, pain types, pathologies, and severity from messages
+  - PureThreeGLBViewer highlightRegions prop applies colored emissive glow to affected mesh groups
+  - Color coding: red=pain, amber=dysfunction, blue=referral, purple=weakness, yellow=stiffness
+  - Auto-opens skeleton panel and zooms to primary affected region when clinical content is detected
+  - Legend overlay on skeleton shows detected regions with color-coded type indicators
+  - 300ms debounce on parsing to prevent UI jank during streaming
+- **Voice Recording Bug Fixes**: Fixed stale isStreaming closure preventing final report generation, SpeechRecognition restart index, welcome screen streaming visibility
 - **PhysioGPT Page Redesign**: Complete rewrite as ChatGPT-style clinical assistant:
   - ChatGPT-style layout: collapsible sidebar (conversation history), collapsible skeleton viewer panel (40% height), chat interface
   - Integrated PureThreeGLBViewer skeleton with zoomToRegion for body region focus, compact joint controls overlay
@@ -17,7 +25,7 @@ Preferred communication style: Simple, everyday language.
   - Quick actions toolbar: Assessment, Differentials, Manual Therapy, Exercise Rx, Patient Education, Red Flags
   - 9 body regions with special tests, red flags, and contextual suggestions
   - Conversation CRUD with sidebar, PDF download, evidence grades
-- **Key Files**: client/src/pages/PhysioGPT.tsx (complete rewrite)
+- **Key Files**: client/src/pages/PhysioGPT.tsx, client/src/lib/clinicalTextParser.ts
 
 ## System Architecture
 

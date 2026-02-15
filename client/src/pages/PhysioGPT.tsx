@@ -53,6 +53,7 @@ import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
+import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 
 const BODY_REGIONS = {
   cervical: {
@@ -320,6 +321,7 @@ export default function PhysioGPT() {
   const [showSpecialTests, setShowSpecialTests] = useState(false);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [modelConfig, setModelConfig] = useState<ModelConfig>({ ...DEFAULT_MODEL_CONFIG });
+  const [clinicalHighlights, setClinicalHighlights] = useState<RegionHighlight[]>([]);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -376,6 +378,44 @@ export default function PhysioGPT() {
       if (abortControllerRef.current) abortControllerRef.current.abort();
     };
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const contexts: ParsedClinicalContext[] = [];
+
+      if (messages.length > 0) {
+        const recentMessages = messages.slice(-6);
+        for (const msg of recentMessages) {
+          if (msg.content) {
+            contexts.push(parseClinicalText(msg.content));
+          }
+        }
+      }
+
+      if (streamingContent) {
+        contexts.push(parseClinicalText(streamingContent));
+      }
+
+      if (liveTranscript) {
+        contexts.push(parseClinicalText(liveTranscript));
+      }
+
+      if (contexts.length > 0) {
+        const merged = mergeHighlights(contexts);
+        setClinicalHighlights(merged.highlights);
+
+        if (merged.primaryRegion && !selectedRegion) {
+          setZoomToRegion(merged.primaryRegion);
+          if (!skeletonOpen && merged.highlights.length > 0) {
+            setSkeletonOpen(true);
+          }
+        }
+      } else {
+        setClinicalHighlights([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [messages, streamingContent, liveTranscript]);
 
   const triggerLiveAnalysis = useCallback(async (transcript: string) => {
     if (isAnalyzingRef.current || !transcript.trim() || transcript.length < 30) return;
@@ -875,6 +915,11 @@ export default function PhysioGPT() {
               modelConfig={modelConfig as any}
               zoomToRegion={zoomToRegion}
               className="w-full h-full"
+              highlightRegions={clinicalHighlights.map(h => ({
+                region: h.region,
+                color: HIGHLIGHT_COLORS[h.type].hex,
+                intensity: 0.3 + h.severity * 0.7,
+              }))}
             />
 
             {/* Joint Controls Overlay */}
@@ -932,6 +977,25 @@ export default function PhysioGPT() {
                     <Slider min={-20} max={20} step={1} value={[modelConfig.pelvis.tilt]}
                       onValueChange={([v]) => updateModelConfig('pelvis.tilt', v)} className="mt-1" />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Clinical Highlights Legend */}
+            {clinicalHighlights.length > 0 && (
+              <div className="absolute top-2 left-2 bg-black/70 backdrop-blur rounded-lg px-3 py-2 z-10 max-w-[200px]">
+                <p className="text-[10px] text-gray-300 uppercase tracking-wider mb-1.5 font-medium">Detected Regions</p>
+                <div className="space-y-1">
+                  {clinicalHighlights.map((h, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: HIGHLIGHT_COLORS[h.type].css, boxShadow: `0 0 6px ${HIGHLIGHT_COLORS[h.type].css}` }}
+                      />
+                      <span className="text-[11px] text-white truncate">{h.label}</span>
+                      <span className="text-[9px] text-gray-400 ml-auto">{HIGHLIGHT_COLORS[h.type].label}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

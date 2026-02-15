@@ -18,9 +18,94 @@ interface RegionPattern {
   patterns: RegExp[];
   region: AnatomicalRegion;
   label: string;
+  bilateral?: boolean;
+  bilateralRegions?: [AnatomicalRegion, AnatomicalRegion];
 }
 
-const REGION_PATTERNS: RegionPattern[] = [
+const SIDED_PATTERNS: RegionPattern[] = [
+  {
+    patterns: [
+      /\b(left\s*(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP|biceps\s*tendon))\b/i,
+      /\b(left\s*(subacromial|impingement|frozen\s*shoulder|adhesive\s*capsulitis))\b/i,
+    ],
+    region: 'left_shoulder',
+    label: 'Left Shoulder',
+  },
+  {
+    patterns: [
+      /\b(right\s*(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP|biceps\s*tendon))\b/i,
+      /\b(right\s*(subacromial|impingement|frozen\s*shoulder|adhesive\s*capsulitis))\b/i,
+    ],
+    region: 'right_shoulder',
+    label: 'Right Shoulder',
+  },
+  {
+    patterns: [
+      /\b(left\s*(hip|groin|trochant|gluteal|piriformis|labr[au]m|acetabul|femoral|FAI|GTPS|greater\s*trochant))\b/i,
+      /\b(left\s*(iliotibial|ITB|IT\s*band|TFL|tensor\s*fasciae?\s*latae?|psoas|iliopsoas|adductor|snapping\s*hip|bursitis))\b/i,
+    ],
+    region: 'left_hip',
+    label: 'Left Hip',
+  },
+  {
+    patterns: [
+      /\b(right\s*(hip|groin|trochant|gluteal|piriformis|labr[au]m|acetabul|femoral|FAI|GTPS|greater\s*trochant))\b/i,
+      /\b(right\s*(iliotibial|ITB|IT\s*band|TFL|tensor\s*fasciae?\s*latae?|psoas|iliopsoas|adductor|snapping\s*hip|bursitis))\b/i,
+    ],
+    region: 'right_hip',
+    label: 'Right Hip',
+  },
+  {
+    patterns: [
+      /\b(left\s*(knee|patell|meniscus|ACL|PCL|MCL|LCL|tibial|popliteal|ITB|IT\s*band))\b/i,
+      /\b(left\s*(PFPS|patellofemoral|chondromalacia|baker'?s?\s*cyst|Osgood|pes\s*anserine))\b/i,
+    ],
+    region: 'left_knee',
+    label: 'Left Knee',
+  },
+  {
+    patterns: [
+      /\b(right\s*(knee|patell|meniscus|ACL|PCL|MCL|LCL|tibial|popliteal|ITB|IT\s*band))\b/i,
+      /\b(right\s*(PFPS|patellofemoral|chondromalacia|baker'?s?\s*cyst|Osgood|pes\s*anserine))\b/i,
+    ],
+    region: 'right_knee',
+    label: 'Right Knee',
+  },
+  {
+    patterns: [
+      /\b(left\s*(ankle|foot|achilles|plantar|calcaneal|talar|subtalar|metatarsal|ATFL|CFL))\b/i,
+      /\b(left\s*(lateral\s*ankle|medial\s*ankle|peroneal|tibialis|midfoot|forefoot|rearfoot|bunion|hallux))\b/i,
+    ],
+    region: 'left_ankle',
+    label: 'Left Ankle/Foot',
+  },
+  {
+    patterns: [
+      /\b(right\s*(ankle|foot|achilles|plantar|calcaneal|talar|subtalar|metatarsal|ATFL|CFL))\b/i,
+      /\b(right\s*(lateral\s*ankle|medial\s*ankle|peroneal|tibialis|midfoot|forefoot|rearfoot|bunion|hallux))\b/i,
+    ],
+    region: 'right_ankle',
+    label: 'Right Ankle/Foot',
+  },
+  {
+    patterns: [
+      /\b(left\s*(elbow|epicondyl|olecranon|ulnar|radial\s*head|tennis\s*elbow|golfer'?s?\s*elbow))\b/i,
+      /\b(left\s*(lateral\s*epicondyl|medial\s*epicondyl|cubital\s*tunnel))\b/i,
+    ],
+    region: 'left_elbow',
+    label: 'Left Elbow',
+  },
+  {
+    patterns: [
+      /\b(right\s*(elbow|epicondyl|olecranon|ulnar|radial\s*head|tennis\s*elbow|golfer'?s?\s*elbow))\b/i,
+      /\b(right\s*(lateral\s*epicondyl|medial\s*epicondyl|cubital\s*tunnel))\b/i,
+    ],
+    region: 'right_elbow',
+    label: 'Right Elbow',
+  },
+];
+
+const MIDLINE_PATTERNS: RegionPattern[] = [
   {
     patterns: [
       /\b(low(er)?\s*back|lumbar|lumbosacral|L[1-5]|sacroiliac|SI\s*joint|LBP)\b/i,
@@ -52,42 +137,24 @@ const REGION_PATTERNS: RegionPattern[] = [
   },
   {
     patterns: [
-      /\b(left\s*(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP|biceps\s*tendon))\b/i,
-      /\b(left\s*(subacromial|impingement|frozen\s*shoulder|adhesive\s*capsulitis))\b/i,
+      /\b(pelvis|pelvic|sacr(um|al)|coccyx|pubic|SIJ|iliac|ischial|ASIS|PSIS)\b/i,
+      /\b(pelvic\s*(floor|girdle|tilt|obliquity)|sacroiliac|coccydynia|symphysis\s*pubis|SPD)\b/i,
+      /\b(pelvic\s*(instability|dysfunction))\b/i,
     ],
-    region: 'left_shoulder',
-    label: 'Left Shoulder',
+    region: 'pelvis',
+    label: 'Pelvis',
   },
-  {
-    patterns: [
-      /\b(right\s*(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP|biceps\s*tendon))\b/i,
-      /\b(right\s*(subacromial|impingement|frozen\s*shoulder|adhesive\s*capsulitis))\b/i,
-    ],
-    region: 'right_shoulder',
-    label: 'Right Shoulder',
-  },
+];
+
+const UNSIDED_BILATERAL_PATTERNS: RegionPattern[] = [
   {
     patterns: [
       /\b(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP|impingement|frozen\s*shoulder|adhesive\s*capsulitis|subacromial|biceps\s*tendon|bicipital)\b/i,
     ],
-    region: 'left_shoulder',
-    label: 'Shoulder',
-  },
-  {
-    patterns: [
-      /\b(left\s*(hip|groin|trochant|gluteal|piriformis|labr[au]m|acetabul|femoral|FAI|GTPS|greater\s*trochant))\b/i,
-      /\b(left\s*(iliotibial|ITB|IT\s*band|TFL|tensor\s*fasciae?\s*latae?|psoas|iliopsoas|adductor|snapping\s*hip|bursitis))\b/i,
-    ],
-    region: 'left_hip',
-    label: 'Left Hip',
-  },
-  {
-    patterns: [
-      /\b(right\s*(hip|groin|trochant|gluteal|piriformis|labr[au]m|acetabul|femoral|FAI|GTPS|greater\s*trochant))\b/i,
-      /\b(right\s*(iliotibial|ITB|IT\s*band|TFL|tensor\s*fasciae?\s*latae?|psoas|iliopsoas|adductor|snapping\s*hip|bursitis))\b/i,
-    ],
-    region: 'right_hip',
-    label: 'Right Hip',
+    region: 'right_shoulder',
+    label: 'Shoulder (bilateral)',
+    bilateral: true,
+    bilateralRegions: ['left_shoulder', 'right_shoulder'],
   },
   {
     patterns: [
@@ -96,48 +163,20 @@ const REGION_PATTERNS: RegionPattern[] = [
       /\b(iliotibial|ITB|IT\s*band|TFL|tensor\s*fasciae?\s*latae?|psoas|iliopsoas|adductor|snapping\s*hip)\b/i,
       /\b(hip\s*(OA|osteoarthritis|replacement|arthroplasty|impingement|dysplasia|labral))\b/i,
     ],
-    region: 'left_hip',
-    label: 'Hip',
-  },
-  {
-    patterns: [
-      /\b(left\s*(knee|patell|meniscus|ACL|PCL|MCL|LCL|tibial|popliteal|ITB|IT\s*band))\b/i,
-      /\b(left\s*(PFPS|patellofemoral|chondromalacia|baker'?s?\s*cyst|Osgood|pes\s*anserine))\b/i,
-    ],
-    region: 'left_knee',
-    label: 'Left Knee',
-  },
-  {
-    patterns: [
-      /\b(right\s*(knee|patell|meniscus|ACL|PCL|MCL|LCL|tibial|popliteal|ITB|IT\s*band))\b/i,
-      /\b(right\s*(PFPS|patellofemoral|chondromalacia|baker'?s?\s*cyst|Osgood|pes\s*anserine))\b/i,
-    ],
-    region: 'right_knee',
-    label: 'Right Knee',
+    region: 'right_hip',
+    label: 'Hip (bilateral)',
+    bilateral: true,
+    bilateralRegions: ['left_hip', 'right_hip'],
   },
   {
     patterns: [
       /\b(knee|patell|meniscus|ACL|PCL|MCL|LCL|popliteal|patellofemoral|chondromalacia)\b/i,
       /\b(PFPS|baker'?s?\s*cyst|Osgood[\s-]*Schlatter|pes\s*anserine|knee\s*(OA|osteoarthritis|replacement|arthroplasty))\b/i,
     ],
-    region: 'left_knee',
-    label: 'Knee',
-  },
-  {
-    patterns: [
-      /\b(left\s*(ankle|foot|achilles|plantar|calcaneal|talar|subtalar|metatarsal|ATFL|CFL))\b/i,
-      /\b(left\s*(lateral\s*ankle|medial\s*ankle|peroneal|tibialis|midfoot|forefoot|rearfoot|bunion|hallux))\b/i,
-    ],
-    region: 'left_ankle',
-    label: 'Left Ankle/Foot',
-  },
-  {
-    patterns: [
-      /\b(right\s*(ankle|foot|achilles|plantar|calcaneal|talar|subtalar|metatarsal|ATFL|CFL))\b/i,
-      /\b(right\s*(lateral\s*ankle|medial\s*ankle|peroneal|tibialis|midfoot|forefoot|rearfoot|bunion|hallux))\b/i,
-    ],
-    region: 'right_ankle',
-    label: 'Right Ankle/Foot',
+    region: 'right_knee',
+    label: 'Knee (bilateral)',
+    bilateral: true,
+    bilateralRegions: ['left_knee', 'right_knee'],
   },
   {
     patterns: [
@@ -145,40 +184,19 @@ const REGION_PATTERNS: RegionPattern[] = [
       /\b(ATFL|CFL|lateral\s*ankle\s*sprain|peroneal|tibialis\s*posterior|shin\s*splint|MTSS|medial\s*tibial)\b/i,
       /\b(bunion|hallux\s*(valgus|rigidus|limitus)|morton'?s?\s*(neuroma|toe)|sesamoid)\b/i,
     ],
-    region: 'left_ankle',
-    label: 'Ankle/Foot',
-  },
-  {
-    patterns: [
-      /\b(left\s*(elbow|epicondyl|olecranon|ulnar|radial\s*head|tennis\s*elbow|golfer'?s?\s*elbow))\b/i,
-      /\b(left\s*(lateral\s*epicondyl|medial\s*epicondyl|cubital\s*tunnel))\b/i,
-    ],
-    region: 'left_elbow',
-    label: 'Left Elbow',
-  },
-  {
-    patterns: [
-      /\b(right\s*(elbow|epicondyl|olecranon|ulnar|radial\s*head|tennis\s*elbow|golfer'?s?\s*elbow))\b/i,
-      /\b(right\s*(lateral\s*epicondyl|medial\s*epicondyl|cubital\s*tunnel))\b/i,
-    ],
-    region: 'right_elbow',
-    label: 'Right Elbow',
+    region: 'right_ankle',
+    label: 'Ankle/Foot (bilateral)',
+    bilateral: true,
+    bilateralRegions: ['left_ankle', 'right_ankle'],
   },
   {
     patterns: [
       /\b(elbow|epicondyl|olecranon|tennis\s*elbow|golfer'?s?\s*elbow|lateral\s*epicondyl|medial\s*epicondyl|cubital\s*tunnel)\b/i,
     ],
-    region: 'left_elbow',
-    label: 'Elbow',
-  },
-  {
-    patterns: [
-      /\b(pelvis|pelvic|sacr(um|al)|coccyx|pubic|SIJ|iliac|ischial|ASIS|PSIS)\b/i,
-      /\b(pelvic\s*(floor|girdle|tilt|obliquity)|sacroiliac|coccydynia|symphysis\s*pubis|SPD)\b/i,
-      /\b(pelvic\s*(instability|dysfunction))\b/i,
-    ],
-    region: 'pelvis',
-    label: 'Pelvis',
+    region: 'right_elbow',
+    label: 'Elbow (bilateral)',
+    bilateral: true,
+    bilateralRegions: ['left_elbow', 'right_elbow'],
   },
 ];
 
@@ -234,6 +252,31 @@ const SEVERITY_PATTERNS: { pattern: RegExp; severity: number }[] = [
   { pattern: /\b(chronic|persistent|long[\s-]*standing|recurrent|ongoing)\b/i, severity: 0.5 },
 ];
 
+function getTypeAndSeverity(text: string, globalType: HighlightType, globalSeverity: number, pattern: RegExp) {
+  let regionType = globalType;
+  let regionSeverity = globalSeverity;
+
+  const surroundingMatch = text.match(new RegExp(`.{0,80}${pattern.source}.{0,80}`, 'i'));
+  if (surroundingMatch) {
+    const context = surroundingMatch[0];
+    for (const tp of TYPE_PATTERNS) {
+      if (tp.patterns.some(p => p.test(context))) {
+        regionType = tp.type;
+        regionSeverity = Math.min(1, regionSeverity + tp.severityBoost);
+        break;
+      }
+    }
+    for (const sp of SEVERITY_PATTERNS) {
+      if (sp.pattern.test(context)) {
+        regionSeverity = sp.severity;
+        break;
+      }
+    }
+  }
+
+  return { regionType, regionSeverity };
+}
+
 export function parseClinicalText(text: string): ParsedClinicalContext {
   const highlights: RegionHighlight[] = [];
   const seen = new Set<string>();
@@ -254,41 +297,44 @@ export function parseClinicalText(text: string): ParsedClinicalContext {
     }
   }
 
-  for (const rp of REGION_PATTERNS) {
+  const addHighlight = (region: AnatomicalRegion, label: string, type: HighlightType, severity: number) => {
+    if (!seen.has(region)) {
+      seen.add(region);
+      highlights.push({ region, type, severity, label });
+    }
+  };
+
+  for (const rp of SIDED_PATTERNS) {
     for (const pattern of rp.patterns) {
       if (pattern.test(text)) {
-        const key = rp.region;
-        if (!seen.has(key)) {
-          seen.add(key);
+        const { regionType, regionSeverity } = getTypeAndSeverity(text, globalType, globalSeverity, pattern);
+        addHighlight(rp.region, rp.label, regionType, regionSeverity);
+        break;
+      }
+    }
+  }
 
-          let regionType = globalType;
-          let regionSeverity = globalSeverity;
+  for (const rp of MIDLINE_PATTERNS) {
+    for (const pattern of rp.patterns) {
+      if (pattern.test(text)) {
+        const { regionType, regionSeverity } = getTypeAndSeverity(text, globalType, globalSeverity, pattern);
+        addHighlight(rp.region, rp.label, regionType, regionSeverity);
+        break;
+      }
+    }
+  }
 
-          const surroundingMatch = text.match(new RegExp(`.{0,80}${pattern.source}.{0,80}`, 'i'));
-          if (surroundingMatch) {
-            const context = surroundingMatch[0];
-            for (const tp of TYPE_PATTERNS) {
-              if (tp.patterns.some(p => p.test(context))) {
-                regionType = tp.type;
-                regionSeverity = Math.min(1, regionSeverity + tp.severityBoost);
-                break;
-              }
-            }
-            for (const sp of SEVERITY_PATTERNS) {
-              if (sp.pattern.test(context)) {
-                regionSeverity = sp.severity;
-                break;
-              }
-            }
-          }
+  for (const rp of UNSIDED_BILATERAL_PATTERNS) {
+    if (!rp.bilateral || !rp.bilateralRegions) continue;
+    const [leftRegion, rightRegion] = rp.bilateralRegions;
+    if (seen.has(leftRegion) || seen.has(rightRegion)) continue;
 
-          highlights.push({
-            region: rp.region,
-            type: regionType,
-            severity: regionSeverity,
-            label: rp.label,
-          });
-        }
+    for (const pattern of rp.patterns) {
+      if (pattern.test(text)) {
+        const { regionType, regionSeverity } = getTypeAndSeverity(text, globalType, globalSeverity, pattern);
+        const reducedSeverity = Math.max(0.2, regionSeverity * 0.6);
+        addHighlight(leftRegion, rp.label.replace(' (bilateral)', ''), regionType, reducedSeverity);
+        addHighlight(rightRegion, rp.label.replace(' (bilateral)', ''), regionType, reducedSeverity);
         break;
       }
     }

@@ -5988,19 +5988,19 @@ Respond with only a number between 1-100 representing the relevance score.`;
   app.post("/api/physiogpt/chat/stream", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       console.log("PhysioGPT stream request received");
-      const { message, conversationId, patientContext, virtualPatient, clinicalContext } = req.body;
+      const { message, conversationId, patientContext, virtualPatient, clinicalContext, isVoiceSession } = req.body;
       
       if (!message || typeof message !== 'string') {
         return res.status(400).json({ error: "Message is required" });
       }
 
-      // Use the streaming service
       await physioGptStreamService.streamResponse({
         message,
         conversationId,
         patientContext,
         virtualPatient,
         clinicalContext,
+        isVoiceSession: !!isVoiceSession,
         userId: req.user!.id
       }, res);
       

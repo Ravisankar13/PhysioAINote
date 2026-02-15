@@ -24,6 +24,7 @@ interface StreamRequest {
   patientContext?: any;
   virtualPatient?: any;
   clinicalContext?: any;
+  isVoiceSession?: boolean;
   userId: number;
 }
 
@@ -92,6 +93,54 @@ Example format:
 - Progression: Add 5kg when pain <3/10 during exercise for 1 week
 - Regression: Bilateral heel drops if unable to complete unilateral`;
 
+    const voiceSessionInstructions = `
+VOICE CLINICAL SESSION ANALYSIS:
+When you receive a message tagged as [CLINICAL SESSION RECORDING], you are acting as a senior physiotherapy diagnostician analyzing a recorded clinical session. You MUST provide a comprehensive, structured clinical report using these exact section headers (use markdown ## headers):
+
+## Session Summary
+Summarize the key points, chief complaint, history of present illness, and relevant patient demographics.
+
+## Clinical Findings
+Extract and organize all subjective and objective findings mentioned. Note what was reported vs what was observed/tested.
+
+## Differential Diagnosis
+Provide a ranked list of differential diagnoses with:
+- Most likely diagnosis first with percentage likelihood
+- Clinical reasoning for each (why it fits or doesn't)
+- Key distinguishing features between differentials
+
+## Assessment
+Your clinical impression integrating all findings. Include:
+- Primary working diagnosis with confidence level
+- Stage/severity classification if applicable
+- Irritability and nature of the condition
+- Contributing factors identified
+
+## Treatment Plan
+Evidence-based treatment plan with:
+- Short-term goals (2-4 weeks) and long-term goals (8-12 weeks)
+- Specific interventions with dosage (sets, reps, frequency, intensity)
+- Manual therapy techniques if indicated
+- Patient education points
+- Home exercise program
+- Progression criteria
+
+## Prognosis
+Expected recovery timeline, prognostic factors (positive and negative), and expected functional outcomes.
+
+## Missing Information
+Clearly list what additional information is needed:
+- Specific special tests that should be performed
+- Imaging or investigations recommended
+- Subjective history gaps
+- Objective assessment components not yet done
+- Outcome measures to establish baselines
+
+## Red Flags
+Any red flags or yellow flags identified, and recommended actions if present. If none identified, state "No red flags identified in this session."
+
+IMPORTANT: Be thorough and specific. Reference evidence where possible (e.g., "Based on the Ottawa Ankle Rules..." or "Per CPG guidelines..."). If the recording lacks sufficient detail for a confident diagnosis, explicitly state this and prioritize the Missing Information section.`;
+
     return `You are PhysioGPT, a specialized clinical decision support system for physiotherapists. You provide evidence-based, physiotherapy-specific guidance that goes beyond general medical knowledge.
 
 ${contextPrompt}
@@ -101,6 +150,8 @@ ${professionalMode ? 'PROFESSIONAL MODE ACTIVE: Use technical terminology, inclu
 ${clinicalReasoningFramework}
 
 ${exerciseDosageFormat}
+
+${voiceSessionInstructions}
 
 PHYSIOTHERAPY-SPECIFIC FOCUS:
 - Movement analysis and biomechanical assessment
@@ -180,12 +231,12 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         { role: 'user', content: request.message }
       ];
       
-      // Start streaming from OpenAI
+      const isVoiceSession = request.isVoiceSession || request.message.includes('[CLINICAL SESSION RECORDING');
       const stream = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: openaiMessages as any,
-        max_tokens: 2500,
-        temperature: 0.7,
+        max_tokens: isVoiceSession ? 4096 : 2500,
+        temperature: isVoiceSession ? 0.4 : 0.7,
         stream: true,
       });
       

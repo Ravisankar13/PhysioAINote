@@ -1614,6 +1614,36 @@ export default function PureThreeGLBViewer({
       });
       const hits = raycasterRef.current.intersectObjects(meshes, false);
       if (hits.length > 0) return hits[0].point.clone();
+
+      const modelCenter = new THREE.Vector3();
+      const box = new THREE.Box3().setFromObject(model);
+      box.getCenter(modelCenter);
+      const cameraDir = new THREE.Vector3();
+      camera.getWorldDirection(cameraDir);
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+        cameraDir.clone().negate(),
+        modelCenter
+      );
+      const ray = raycasterRef.current.ray;
+      const planeHit = new THREE.Vector3();
+      if (ray.intersectPlane(plane, planeHit)) {
+        const bones = bonesRef.current;
+        let minDist = Infinity;
+        let nearestBonePos: THREE.Vector3 | null = null;
+        const worldPos = new THREE.Vector3();
+        for (const [name, bone] of Object.entries(bones)) {
+          if (!BONE_ANATOMICAL_LABELS[name]) continue;
+          bone.getWorldPosition(worldPos);
+          const dist = planeHit.distanceTo(worldPos);
+          if (dist < minDist) {
+            minDist = dist;
+            nearestBonePos = worldPos.clone();
+          }
+        }
+        if (nearestBonePos && minDist < 2.0) {
+          return nearestBonePos;
+        }
+      }
       return null;
     };
 
@@ -2070,6 +2100,7 @@ export default function PureThreeGLBViewer({
           
           const width = containerRef.current.clientWidth;
           const height = containerRef.current.clientHeight;
+          if (width === 0 || height === 0) return;
           
           sceneRef.current.camera.aspect = width / height;
           sceneRef.current.camera.updateProjectionMatrix();
@@ -2078,8 +2109,14 @@ export default function PureThreeGLBViewer({
         
         window.addEventListener('resize', handleResize);
 
+        const resizeObserver = new ResizeObserver(() => {
+          handleResize();
+        });
+        resizeObserver.observe(container);
+
         return () => {
           window.removeEventListener('resize', handleResize);
+          resizeObserver.disconnect();
         };
 
       } catch (error) {

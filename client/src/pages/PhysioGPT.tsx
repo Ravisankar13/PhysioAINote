@@ -1670,6 +1670,18 @@ export default function PhysioGPT() {
               >
                 Reset View
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 text-xs bg-white/90 hover:bg-white shadow-sm"
+                onClick={() => {
+                  setModelConfig({ ...DEFAULT_MODEL_CONFIG });
+                  toast({ title: "Skeleton Reset", description: "All joints returned to default position." });
+                }}
+              >
+                <Bone className="h-3 w-3 mr-1" />
+                Reset Skeleton
+              </Button>
             </div>
 
           </div>

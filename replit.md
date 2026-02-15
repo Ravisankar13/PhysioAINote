@@ -8,6 +8,17 @@ PhysioGPT is an advanced AI-powered physiotherapy platform providing comprehensi
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (Feb 15, 2026)
+- **PhysioGPT Page Redesign**: Complete rewrite as ChatGPT-style clinical assistant:
+  - ChatGPT-style layout: collapsible sidebar (conversation history), collapsible skeleton viewer panel (40% height), chat interface
+  - Integrated PureThreeGLBViewer skeleton with zoomToRegion for body region focus, compact joint controls overlay
+  - Voice recording: MediaRecorder → Whisper transcription → AI clinical analysis with structured thought process (differential diagnosis, treatment approach, evidence)
+  - Streaming SSE responses with ClinicalResponseDisplay for structured clinical formatting
+  - Quick actions toolbar: Assessment, Differentials, Manual Therapy, Exercise Rx, Patient Education, Red Flags
+  - 9 body regions with special tests, red flags, and contextual suggestions
+  - Conversation CRUD with sidebar, PDF download, evidence grades
+- **Key Files**: client/src/pages/PhysioGPT.tsx (complete rewrite)
+
 ## System Architecture
 
 ### Frontend

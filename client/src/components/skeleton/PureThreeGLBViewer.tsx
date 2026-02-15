@@ -2053,8 +2053,19 @@ export default function PureThreeGLBViewer({
 
     const cachedModelMeshes: THREE.Mesh[] = [];
     model.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.visible) cachedModelMeshes.push(child);
+      if (child instanceof THREE.Mesh) {
+        cachedModelMeshes.push(child);
+        if (child.geometry) {
+          child.geometry.computeBoundingSphere();
+          child.geometry.computeBoundingBox();
+        }
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach((mat) => {
+          if (mat) mat.side = THREE.DoubleSide;
+        });
+      }
     });
+    const getVisibleMeshes = () => cachedModelMeshes.filter(m => m.visible);
 
     const vertexCacheRef = { verts: null as THREE.Vector3[] | null, normals: null as THREE.Vector3[] | null, matrixHash: '' };
     const getMatrixHash = () => {
@@ -2068,7 +2079,8 @@ export default function PureThreeGLBViewer({
     const buildVertexCache = () => {
       const hash = getMatrixHash();
       if (vertexCacheRef.verts && vertexCacheRef.matrixHash === hash) return;
-      for (const mesh of cachedModelMeshes) {
+      const visibleMeshes = getVisibleMeshes();
+      for (const mesh of visibleMeshes) {
         mesh.updateMatrixWorld(true);
       }
       vertexCacheRef.verts = [];
@@ -2076,14 +2088,13 @@ export default function PureThreeGLBViewer({
       const tempV = new THREE.Vector3();
       const tempN = new THREE.Vector3();
       const normalMatrix = new THREE.Matrix3();
-      for (const mesh of cachedModelMeshes) {
+      for (const mesh of visibleMeshes) {
         const geo = mesh.geometry;
         if (!geo || !geo.attributes.position) continue;
         const posAttr = geo.attributes.position;
         const normalAttr = geo.attributes.normal;
         normalMatrix.getNormalMatrix(mesh.matrixWorld);
-        const step = posAttr.count > 10000 ? 2 : 1;
-        for (let i = 0; i < posAttr.count; i += step) {
+        for (let i = 0; i < posAttr.count; i++) {
           tempV.fromBufferAttribute(posAttr, i);
           tempV.applyMatrix4(mesh.matrixWorld);
           vertexCacheRef.verts.push(tempV.clone());
@@ -2100,30 +2111,32 @@ export default function PureThreeGLBViewer({
     };
 
     const raycastModel = (ndc: THREE.Vector2, preciseOnly = false): THREE.Vector3 | null => {
+      const visibleMeshes = getVisibleMeshes();
       raycasterRef.current.setFromCamera(ndc, camera);
-      const hits = raycasterRef.current.intersectObjects(cachedModelMeshes, false);
+      const hits = raycasterRef.current.intersectObjects(visibleMeshes, true);
       if (hits.length > 0) return hits[0].point.clone();
 
       const modelBox = new THREE.Box3().setFromObject(model);
       const modelSize = modelBox.getSize(new THREE.Vector3()).length();
       const camDist = camera.position.distanceTo(modelBox.getCenter(new THREE.Vector3()));
-      const spread = Math.max(0.008, Math.min(0.04, (modelSize / camDist) * 0.012));
+      const spread = Math.max(0.01, Math.min(0.05, (modelSize / camDist) * 0.015));
 
-      const offsets = [
-        [spread, 0], [-spread, 0], [0, spread], [0, -spread],
-        [spread * 0.7, spread * 0.7], [-spread * 0.7, spread * 0.7],
-        [spread * 0.7, -spread * 0.7], [-spread * 0.7, -spread * 0.7],
-        [spread * 1.5, 0], [-spread * 1.5, 0], [0, spread * 1.5], [0, -spread * 1.5],
-        [spread * 2, 0], [-spread * 2, 0], [0, spread * 2], [0, -spread * 2],
-        [spread * 2, spread], [-spread * 2, spread], [spread, spread * 2], [-spread, -spread * 2],
-      ];
+      const offsets: number[][] = [];
+      const rings = [0.5, 0.7, 1, 1.5, 2, 2.5, 3];
+      for (const r of rings) {
+        const steps = r <= 1 ? 4 : 8;
+        for (let a = 0; a < steps; a++) {
+          const angle = (a / steps) * Math.PI * 2;
+          offsets.push([Math.cos(angle) * spread * r, Math.sin(angle) * spread * r]);
+        }
+      }
       const tempNdc = new THREE.Vector2();
       let closestHit: THREE.Vector3 | null = null;
       let closestDist = Infinity;
       for (const [dx, dy] of offsets) {
         tempNdc.set(ndc.x + dx, ndc.y + dy);
         raycasterRef.current.setFromCamera(tempNdc, camera);
-        const spreadHits = raycasterRef.current.intersectObjects(cachedModelMeshes, false);
+        const spreadHits = raycasterRef.current.intersectObjects(visibleMeshes, true);
         if (spreadHits.length > 0) {
           const pt = spreadHits[0].point;
           const d = pt.distanceTo(camera.position);
@@ -2145,7 +2158,7 @@ export default function PureThreeGLBViewer({
       let bestPoint: THREE.Vector3 | null = null;
       let bestScore = Infinity;
       const closestOnRay = new THREE.Vector3();
-      const maxSnapDist = 0.35;
+      const maxSnapDist = 0.6;
       for (let i = 0; i < vertexCacheRef.verts.length; i++) {
         const v = vertexCacheRef.verts[i];
         ray.closestPointToPoint(v, closestOnRay);

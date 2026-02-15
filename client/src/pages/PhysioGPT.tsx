@@ -48,7 +48,8 @@ import {
   Crosshair,
   Ruler,
   Activity,
-  Weight
+  Weight,
+  Scan
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -964,6 +965,93 @@ export default function PhysioGPT() {
     sendMessageStreaming(prompt);
   }, [painMarkers]);
 
+  const handleAnalyzeSkeleton = useCallback(() => {
+    const sections: string[] = [];
+
+    const deviations: string[] = [];
+    const mc = modelConfig;
+    const addIfNonZero = (label: string, val: number | undefined, unit = '°') => {
+      if (val && Math.abs(val) > 0) deviations.push(`${label}: ${val > 0 ? '+' : ''}${val}${unit}`);
+    };
+    addIfNonZero('Thoracic Kyphosis', mc.spine?.thoracicKyphosis);
+    addIfNonZero('Lumbar Lordosis', mc.spine?.lumbarLordosis);
+    addIfNonZero('Scoliosis', mc.spine?.scoliosis);
+    addIfNonZero('Forward Head', mc.spine?.forwardHead);
+    addIfNonZero('Lateral Shift', mc.spine?.lateralShift);
+    addIfNonZero('Cervical Rotation', mc.neck?.rotation);
+    addIfNonZero('Cervical Flexion', mc.neck?.flexion);
+    addIfNonZero('Cervical Lateral Flexion', mc.neck?.lateralFlexion);
+    addIfNonZero('Pelvis Tilt', mc.pelvis?.tilt);
+    addIfNonZero('Pelvis Obliquity', mc.pelvis?.obliquity);
+    addIfNonZero('Pelvis Rotation', mc.pelvis?.rotation);
+    addIfNonZero('L Hip Flexion', mc.leftHip?.flexion);
+    addIfNonZero('L Hip Abduction', mc.leftHip?.abduction);
+    addIfNonZero('L Hip Internal Rotation', mc.leftHip?.internalRotation);
+    addIfNonZero('R Hip Flexion', mc.rightHip?.flexion);
+    addIfNonZero('R Hip Abduction', mc.rightHip?.abduction);
+    addIfNonZero('R Hip Internal Rotation', mc.rightHip?.internalRotation);
+    addIfNonZero('L Knee Flexion', mc.leftKnee?.flexion);
+    addIfNonZero('L Knee Varus', mc.leftKnee?.varus);
+    addIfNonZero('R Knee Flexion', mc.rightKnee?.flexion);
+    addIfNonZero('R Knee Varus', mc.rightKnee?.varus);
+    addIfNonZero('L Ankle Dorsiflexion', mc.leftAnkle?.dorsiflexion);
+    addIfNonZero('L Ankle Plantarflexion', mc.leftAnkle?.plantarflexion);
+    addIfNonZero('R Ankle Dorsiflexion', mc.rightAnkle?.dorsiflexion);
+    addIfNonZero('R Ankle Plantarflexion', mc.rightAnkle?.plantarflexion);
+    addIfNonZero('L Shoulder Flexion', mc.leftShoulder?.flexion);
+    addIfNonZero('L Shoulder Abduction', mc.leftShoulder?.abduction);
+    addIfNonZero('R Shoulder Flexion', mc.rightShoulder?.flexion);
+    addIfNonZero('R Shoulder Abduction', mc.rightShoulder?.abduction);
+    addIfNonZero('L Elbow Flexion', mc.leftElbow?.flexion);
+    addIfNonZero('R Elbow Flexion', mc.rightElbow?.flexion);
+
+    if (deviations.length > 0) {
+      sections.push(`**Current Skeleton Posture / Joint Angles:**\n${deviations.join('\n')}`);
+    } else {
+      sections.push('**Current Skeleton Posture:** Neutral standing position (all joints at 0°)');
+    }
+
+    if (painMarkers.length > 0) {
+      const typeLabels: Record<string, string> = { point: 'focal point', area: 'broad area', referred: 'referred pain pattern', line: 'pain along a line/path' };
+      const markerLines = painMarkers.map((m, i) => {
+        const desc = m.description ? ` - "${m.description}"` : '';
+        const typeInfo = typeLabels[m.type || 'point'] || 'focal point';
+        let extra = '';
+        if (m.type === 'referred' && m.referralTargetLabel) extra = ` → refers to ${m.referralTargetLabel}`;
+        if (m.type === 'line' && m.linePoints) extra = ` (${m.linePoints.length + 1} points along path)`;
+        if (m.type === 'area' && m.radius) extra = ` (radius ~${Math.round(m.radius * 100)}mm)`;
+        return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${extra}${desc}`;
+      });
+      sections.push(`**Pain Markers (${painMarkers.length}):**\n${markerLines.join('\n')}`);
+    }
+
+    const forces = calculatePosturalForces(modelConfig);
+    const highForces = forces.joints.filter(j => j.status === 'high' || j.status === 'very_high');
+    const forceLines = forces.joints.map(j =>
+      `- ${j.label}: ${(j.forceBW * 100).toFixed(0)}% BW (${forceToNewtons(j.forceBW, bodyWeightKg)}N) — ${j.status}`
+    );
+    sections.push(`**Estimated Joint Forces (Body Weight: ${bodyWeightKg}kg):**\n${forceLines.join('\n')}`);
+    if (highForces.length > 0) {
+      sections.push(`**Elevated Loading Detected:** ${highForces.map(j => j.label).join(', ')}`);
+    }
+    if (forces.baseSupportShift > 0.02) {
+      sections.push('**Center of Mass:** Shifted from base of support center');
+    }
+
+    if (romMeasurements.length > 0) {
+      const romLines = romMeasurements.map(m => {
+        const status = getRomStatus(m);
+        return `- ${m.jointLabel} ${m.movementLabel}: ${m.measuredValue}${m.unit} (Normal: ${m.normalRange[0]}-${m.normalRange[1]}${m.unit}) — ${status}`;
+      });
+      sections.push(`**ROM Measurements:**\n${romLines.join('\n')}`);
+    }
+
+    const prompt = `I need a comprehensive clinical analysis of the following patient skeleton assessment:\n\n${sections.join('\n\n')}\n\nPlease provide:\n1. **Postural Assessment**: Analyze the overall posture and identify any deviations, asymmetries, or compensatory patterns\n2. **Biomechanical Analysis**: Interpret the joint forces and loading patterns — are any joints at risk?\n3. **Pain Pattern Analysis**: If pain markers are present, correlate them with the postural findings and joint loading\n4. **Differential Diagnoses**: What conditions could explain this presentation?\n5. **Clinical Recommendations**: Assessment priorities, treatment approaches, and exercise prescription\n6. **Red Flags**: Any concerning findings that warrant further investigation`;
+
+    sendMessageStreaming(prompt);
+    toast({ title: "Analyzing Skeleton", description: "Sending full skeleton assessment to AI for clinical interpretation..." });
+  }, [modelConfig, painMarkers, bodyWeightKg, romMeasurements, getRomStatus]);
+
   const handleSendMessage = useCallback((messageContent?: string) => {
     const content = messageContent || message.trim();
     if (!content) return;
@@ -1681,6 +1769,16 @@ export default function PhysioGPT() {
               >
                 <Bone className="h-3 w-3 mr-1" />
                 Reset Skeleton
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 text-xs bg-gradient-to-r from-teal-500 to-teal-600 text-white hover:from-teal-600 hover:to-teal-700 shadow-sm"
+                onClick={handleAnalyzeSkeleton}
+                disabled={isStreaming}
+              >
+                <Scan className="h-3 w-3 mr-1" />
+                Analyze Skeleton
               </Button>
             </div>
 

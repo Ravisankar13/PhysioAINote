@@ -329,9 +329,17 @@ export default function PhysioGPT() {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isAnalyzingSession, setIsAnalyzingSession] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
+  const liveTranscriptRef = useRef("");
+  const lastAnalyzedLengthRef = useRef(0);
+  const analysisTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isAnalyzingRef = useRef(false);
+  const interimAbortRef = useRef<AbortController | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -355,6 +363,86 @@ export default function PhysioGPT() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent]);
 
+  useEffect(() => {
+    return () => {
+      if (speechRecognitionRef.current) {
+        try { speechRecognitionRef.current.stop(); } catch {}
+      }
+      if (analysisTimerRef.current) clearInterval(analysisTimerRef.current);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (interimAbortRef.current) interimAbortRef.current.abort();
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
+  }, []);
+
+  const triggerLiveAnalysis = useCallback(async (transcript: string) => {
+    if (isAnalyzingRef.current || !transcript.trim() || transcript.length < 30) return;
+    isAnalyzingRef.current = true;
+    lastAnalyzedLengthRef.current = transcript.length;
+
+    if (interimAbortRef.current) interimAbortRef.current.abort();
+    const analysisAbort = new AbortController();
+    interimAbortRef.current = analysisAbort;
+
+    try {
+      setIsStreaming(true);
+      setStreamingContent("");
+
+      const voiceMessage = `[LIVE CLINICAL SESSION - In Progress]\n\nThe following is a real-time transcription of an ongoing clinical physiotherapy session. Provide a concise interim clinical analysis based on what has been discussed so far:\n\n---\n${transcript}\n---\n\nProvide a brief interim analysis:\n1. **Session Summary** - Key points discussed so far and emerging chief complaint\n2. **Clinical Findings** - Relevant findings extracted so far\n3. **Differential Diagnosis** - Preliminary ranked list based on current information\n4. **Assessment** - Initial clinical impression\n5. **Missing Information** - What additional information is still needed`;
+
+      const response = await fetch("/api/physiogpt/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: voiceMessage,
+          conversationId: selectedConversationId,
+          isVoiceSession: true,
+          isInterimAnalysis: true,
+          clinicalContext: {
+            bodyRegion: selectedRegion ? BODY_REGIONS[selectedRegion].name : undefined,
+            professionalMode: true
+          }
+        }),
+        signal: analysisAbort.signal,
+      });
+
+      if (!response.ok) throw new Error("Analysis failed");
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedContent = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === 'chunk') {
+                  accumulatedContent += data.data;
+                  setStreamingContent(accumulatedContent);
+                } else if (data.type === 'conversationId' && !selectedConversationId) {
+                  setSelectedConversationId(data.data);
+                }
+              } catch {}
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error("Live analysis error:", error);
+      }
+    } finally {
+      isAnalyzingRef.current = false;
+      setIsStreaming(false);
+    }
+  }, [selectedConversationId, selectedRegion]);
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -362,46 +450,14 @@ export default function PhysioGPT() {
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       setRecordingDuration(0);
+      setLiveTranscript("");
+      setInterimTranscript("");
+      liveTranscriptRef.current = "";
+      lastAnalyzedLengthRef.current = 0;
+      isAnalyzingRef.current = false;
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        if (audioBlob.size < 1000) {
-          toast({ title: "Recording too short", description: "Please record for at least a few seconds", variant: "destructive" });
-          return;
-        }
-
-        setIsTranscribing(true);
-        try {
-          const formData = new FormData();
-          formData.append('audio', audioBlob, 'recording.webm');
-          const res = await fetch('/api/transcribe-quick', { method: 'POST', body: formData });
-          if (!res.ok) throw new Error('Transcription failed');
-          const data = await res.json();
-          const transcribedText = data.transcription || data.text;
-          if (transcribedText) {
-            setIsTranscribing(false);
-            setIsAnalyzingSession(true);
-            const durationMins = Math.floor(recordingDuration / 60);
-            const durationSecs = recordingDuration % 60;
-            const durationStr = durationMins > 0 ? `${durationMins}m ${durationSecs}s` : `${durationSecs}s`;
-            const voiceMessage = `[CLINICAL SESSION RECORDING - Duration: ${durationStr}]\n\nThe following is a transcription of a clinical physiotherapy session. Please analyze this as a professional diagnostician and provide a comprehensive clinical report:\n\n---\n${transcribedText}\n---\n\nPlease provide:\n1. **Session Summary** - Key points discussed and chief complaint\n2. **Clinical Findings** - Relevant subjective and objective findings extracted\n3. **Differential Diagnosis** - Ranked list with reasoning for each\n4. **Assessment** - Your clinical impression based on the evidence\n5. **Treatment Plan** - Evidence-based interventions with dosage parameters\n6. **Prognosis** - Expected outcomes and timeline\n7. **Missing Information** - What additional information, tests, or assessments are needed to refine the diagnosis\n8. **Red Flags** - Any concerning signs that require urgent attention`;
-            sendMessageStreaming(voiceMessage, true);
-          } else {
-            toast({ title: "No speech detected", description: "Please try recording again", variant: "destructive" });
-          }
-        } catch {
-          toast({ title: "Transcription failed", description: "Could not process the audio recording", variant: "destructive" });
-        } finally {
-          setIsTranscribing(false);
-          setIsAnalyzingSession(false);
-        }
       };
 
       mediaRecorder.start(250);
@@ -409,17 +465,108 @@ export default function PhysioGPT() {
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration(d => d + 1);
       }, 1000);
+
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        recognition.maxAlternatives = 1;
+
+        let recognitionResultIndex = 0;
+        recognition.onresult = (event: any) => {
+          let interimText = "";
+          for (let i = recognitionResultIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            if (result.isFinal) {
+              liveTranscriptRef.current += result[0].transcript + " ";
+              setLiveTranscript(liveTranscriptRef.current.trim());
+              recognitionResultIndex = i + 1;
+            } else {
+              interimText += result[0].transcript;
+            }
+          }
+          setInterimTranscript(interimText);
+        };
+
+        recognition.onerror = (event: any) => {
+          if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            console.error("Speech recognition error:", event.error);
+          }
+        };
+
+        recognition.onend = () => {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            try { recognition.start(); } catch {}
+          }
+        };
+
+        recognition.start();
+        speechRecognitionRef.current = recognition;
+      }
+
+      analysisTimerRef.current = setInterval(() => {
+        const currentTranscript = liveTranscriptRef.current;
+        const newContentLength = currentTranscript.length - lastAnalyzedLengthRef.current;
+        if (newContentLength > 50 && !isAnalyzingRef.current) {
+          triggerLiveAnalysis(currentTranscript);
+        }
+      }, 12000);
+
     } catch {
       toast({ title: "Microphone access denied", variant: "destructive" });
     }
   };
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
+    if (analysisTimerRef.current) {
+      clearInterval(analysisTimerRef.current);
+      analysisTimerRef.current = null;
+    }
+
+    if (speechRecognitionRef.current) {
+      try { speechRecognitionRef.current.stop(); } catch {}
+      speechRecognitionRef.current = null;
+    }
+
+    if (interimAbortRef.current) {
+      interimAbortRef.current.abort();
+      interimAbortRef.current = null;
+    }
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
     }
     setIsRecording(false);
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+
+    const finalTranscript = liveTranscriptRef.current.trim();
+    setStreamingContent("");
+    setIsStreaming(false);
+
+    if (finalTranscript.length > 20) {
+      setIsAnalyzingSession(true);
+      const durationMins = Math.floor(recordingDuration / 60);
+      const durationSecs = recordingDuration % 60;
+      const durationStr = durationMins > 0 ? `${durationMins}m ${durationSecs}s` : `${durationSecs}s`;
+      const voiceMessage = `[CLINICAL SESSION RECORDING - Duration: ${durationStr}]\n\nThe following is a transcription of a clinical physiotherapy session. Please analyze this as a professional diagnostician and provide a comprehensive clinical report:\n\n---\n${finalTranscript}\n---\n\nPlease provide:\n1. **Session Summary** - Key points discussed and chief complaint\n2. **Clinical Findings** - Relevant subjective and objective findings extracted\n3. **Differential Diagnosis** - Ranked list with reasoning for each\n4. **Assessment** - Your clinical impression based on the evidence\n5. **Treatment Plan** - Evidence-based interventions with dosage parameters\n6. **Prognosis** - Expected outcomes and timeline\n7. **Missing Information** - What additional information, tests, or assessments are needed to refine the diagnosis\n8. **Red Flags** - Any concerning signs that require urgent attention`;
+      
+      await new Promise(resolve => setTimeout(resolve, 300));
+      isAnalyzingRef.current = false;
+      setLiveTranscript("");
+      setInterimTranscript("");
+      sendMessageStreaming(voiceMessage, true);
+    } else if (finalTranscript.length > 0) {
+      toast({ title: "Recording too short", description: "Please speak more for a proper clinical analysis", variant: "destructive" });
+      setLiveTranscript("");
+      setInterimTranscript("");
+    } else {
+      toast({ title: "No speech detected", description: "Please try recording again. Make sure your microphone is working.", variant: "destructive" });
+      setLiveTranscript("");
+      setInterimTranscript("");
+    }
   };
 
   const sendMessageStreaming = async (messageContent: string, isVoiceSession: boolean = false) => {
@@ -525,6 +672,7 @@ export default function PhysioGPT() {
       }
     } finally {
       setIsStreaming(false);
+      setIsAnalyzingSession(false);
     }
   };
 
@@ -1146,29 +1294,33 @@ export default function PhysioGPT() {
             <div className="max-w-3xl mx-auto">
               {/* Recording indicator */}
               {isRecording && (
-                <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-red-50 rounded-lg border border-red-200">
-                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-red-700 font-semibold">Recording Clinical Session</span>
-                      <span className="text-sm text-red-600 font-mono font-bold">{formatRecordingTime(recordingDuration)}</span>
+                <div className="mb-2 space-y-2">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-lg border border-red-200">
+                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-red-700 font-semibold">Recording Clinical Session</span>
+                        <span className="text-sm text-red-600 font-mono font-bold">{formatRecordingTime(recordingDuration)}</span>
+                      </div>
+                      <span className="text-xs text-red-500">AI analysis updates live as you speak</span>
                     </div>
-                    <span className="text-xs text-red-500">Speak clearly — the AI will analyze and provide a full clinical report when you stop</span>
+                    <Button variant="destructive" size="sm" className="h-7 text-xs px-3" onClick={stopRecording}>
+                      <MicOff className="h-3 w-3 mr-1" />
+                      Stop & Analyze
+                    </Button>
                   </div>
-                  <Button variant="destructive" size="sm" className="h-7 text-xs px-3" onClick={stopRecording}>
-                    <MicOff className="h-3 w-3 mr-1" />
-                    Stop & Analyze
-                  </Button>
-                </div>
-              )}
-
-              {isTranscribing && (
-                <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                  <div>
-                    <span className="text-sm text-blue-700 font-medium">Transcribing session audio...</span>
-                    <p className="text-xs text-blue-500">Converting speech to text via AI</p>
-                  </div>
+                  {(liveTranscript || interimTranscript) && (
+                    <div className="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Mic className="h-3 w-3 text-gray-500" />
+                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Live Transcript</span>
+                      </div>
+                      <p className="text-xs text-gray-700 leading-relaxed max-h-20 overflow-y-auto">
+                        {liveTranscript}
+                        {interimTranscript && <span className="text-gray-400 italic"> {interimTranscript}</span>}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1176,8 +1328,8 @@ export default function PhysioGPT() {
                 <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-teal-50 rounded-lg border border-teal-200">
                   <Brain className="h-4 w-4 animate-pulse text-teal-600" />
                   <div>
-                    <span className="text-sm text-teal-700 font-medium">Analyzing clinical session...</span>
-                    <p className="text-xs text-teal-500">Generating diagnosis, assessment, and treatment plan</p>
+                    <span className="text-sm text-teal-700 font-medium">Generating final clinical report...</span>
+                    <p className="text-xs text-teal-500">Comprehensive diagnosis, assessment, and treatment plan</p>
                   </div>
                 </div>
               )}

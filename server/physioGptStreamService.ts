@@ -25,6 +25,7 @@ interface StreamRequest {
   virtualPatient?: any;
   clinicalContext?: any;
   isVoiceSession?: boolean;
+  isInterimAnalysis?: boolean;
   userId: number;
 }
 
@@ -232,10 +233,11 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       ];
       
       const isVoiceSession = request.isVoiceSession || request.message.includes('[CLINICAL SESSION RECORDING');
+      const isInterim = request.isInterimAnalysis;
       const stream = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: openaiMessages as any,
-        max_tokens: isVoiceSession ? 4096 : 2500,
+        max_tokens: isInterim ? 1500 : (isVoiceSession ? 4096 : 2500),
         temperature: isVoiceSession ? 0.4 : 0.7,
         stream: true,
       });

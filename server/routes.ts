@@ -5988,7 +5988,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
   app.post("/api/physiogpt/chat/stream", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       console.log("PhysioGPT stream request received");
-      const { message, conversationId, patientContext, virtualPatient, clinicalContext, isVoiceSession } = req.body;
+      const { message, conversationId, patientContext, virtualPatient, clinicalContext, isVoiceSession, isInterimAnalysis } = req.body;
       
       if (!message || typeof message !== 'string') {
         return res.status(400).json({ error: "Message is required" });
@@ -6001,6 +6001,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
         virtualPatient,
         clinicalContext,
         isVoiceSession: !!isVoiceSession,
+        isInterimAnalysis: !!isInterimAnalysis,
         userId: req.user!.id
       }, res);
       

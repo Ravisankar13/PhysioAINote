@@ -556,6 +556,166 @@ export interface PainMarker {
   description?: string;
 }
 
+export interface RomMovement {
+  id: string;
+  label: string;
+  normalRange: [number, number];
+  unit: string;
+}
+
+export interface RomJointDefinition {
+  id: string;
+  label: string;
+  boneName: string;
+  movements: RomMovement[];
+}
+
+export interface RomMeasurement {
+  jointId: string;
+  jointLabel: string;
+  movementId: string;
+  movementLabel: string;
+  measuredValue: number;
+  normalRange: [number, number];
+  unit: string;
+  timestamp: number;
+}
+
+export const ROM_JOINT_DEFINITIONS: RomJointDefinition[] = [
+  {
+    id: 'left_shoulder', label: 'Left Shoulder', boneName: 'Shoulder_L',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 180], unit: '°' },
+      { id: 'extension', label: 'Extension', normalRange: [0, 60], unit: '°' },
+      { id: 'abduction', label: 'Abduction', normalRange: [0, 180], unit: '°' },
+      { id: 'internal_rotation', label: 'Internal Rotation', normalRange: [0, 70], unit: '°' },
+      { id: 'external_rotation', label: 'External Rotation', normalRange: [0, 90], unit: '°' },
+    ]
+  },
+  {
+    id: 'right_shoulder', label: 'Right Shoulder', boneName: 'Shoulder_R',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 180], unit: '°' },
+      { id: 'extension', label: 'Extension', normalRange: [0, 60], unit: '°' },
+      { id: 'abduction', label: 'Abduction', normalRange: [0, 180], unit: '°' },
+      { id: 'internal_rotation', label: 'Internal Rotation', normalRange: [0, 70], unit: '°' },
+      { id: 'external_rotation', label: 'External Rotation', normalRange: [0, 90], unit: '°' },
+    ]
+  },
+  {
+    id: 'left_elbow', label: 'Left Elbow', boneName: 'Elbow_L',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 150], unit: '°' },
+      { id: 'extension', label: 'Extension (Hyperextension)', normalRange: [0, 10], unit: '°' },
+      { id: 'pronation', label: 'Pronation', normalRange: [0, 80], unit: '°' },
+      { id: 'supination', label: 'Supination', normalRange: [0, 80], unit: '°' },
+    ]
+  },
+  {
+    id: 'right_elbow', label: 'Right Elbow', boneName: 'Elbow_R',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 150], unit: '°' },
+      { id: 'extension', label: 'Extension (Hyperextension)', normalRange: [0, 10], unit: '°' },
+      { id: 'pronation', label: 'Pronation', normalRange: [0, 80], unit: '°' },
+      { id: 'supination', label: 'Supination', normalRange: [0, 80], unit: '°' },
+    ]
+  },
+  {
+    id: 'left_wrist', label: 'Left Wrist', boneName: 'Wrist_L',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 80], unit: '°' },
+      { id: 'extension', label: 'Extension', normalRange: [0, 70], unit: '°' },
+      { id: 'radial_deviation', label: 'Radial Deviation', normalRange: [0, 20], unit: '°' },
+      { id: 'ulnar_deviation', label: 'Ulnar Deviation', normalRange: [0, 30], unit: '°' },
+    ]
+  },
+  {
+    id: 'right_wrist', label: 'Right Wrist', boneName: 'Wrist_R',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 80], unit: '°' },
+      { id: 'extension', label: 'Extension', normalRange: [0, 70], unit: '°' },
+      { id: 'radial_deviation', label: 'Radial Deviation', normalRange: [0, 20], unit: '°' },
+      { id: 'ulnar_deviation', label: 'Ulnar Deviation', normalRange: [0, 30], unit: '°' },
+    ]
+  },
+  {
+    id: 'left_hip', label: 'Left Hip', boneName: 'Hip_L',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 120], unit: '°' },
+      { id: 'extension', label: 'Extension', normalRange: [0, 30], unit: '°' },
+      { id: 'abduction', label: 'Abduction', normalRange: [0, 45], unit: '°' },
+      { id: 'adduction', label: 'Adduction', normalRange: [0, 30], unit: '°' },
+      { id: 'internal_rotation', label: 'Internal Rotation', normalRange: [0, 45], unit: '°' },
+      { id: 'external_rotation', label: 'External Rotation', normalRange: [0, 45], unit: '°' },
+    ]
+  },
+  {
+    id: 'right_hip', label: 'Right Hip', boneName: 'Hip_R',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 120], unit: '°' },
+      { id: 'extension', label: 'Extension', normalRange: [0, 30], unit: '°' },
+      { id: 'abduction', label: 'Abduction', normalRange: [0, 45], unit: '°' },
+      { id: 'adduction', label: 'Adduction', normalRange: [0, 30], unit: '°' },
+      { id: 'internal_rotation', label: 'Internal Rotation', normalRange: [0, 45], unit: '°' },
+      { id: 'external_rotation', label: 'External Rotation', normalRange: [0, 45], unit: '°' },
+    ]
+  },
+  {
+    id: 'left_knee', label: 'Left Knee', boneName: 'Knee_L',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 135], unit: '°' },
+      { id: 'extension_deficit', label: 'Extension Lag / Contracture', normalRange: [0, 5], unit: '°' },
+    ]
+  },
+  {
+    id: 'right_knee', label: 'Right Knee', boneName: 'Knee_R',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 135], unit: '°' },
+      { id: 'extension_deficit', label: 'Extension Lag / Contracture', normalRange: [0, 5], unit: '°' },
+    ]
+  },
+  {
+    id: 'left_ankle', label: 'Left Ankle', boneName: 'Ankle_L',
+    movements: [
+      { id: 'dorsiflexion', label: 'Dorsiflexion', normalRange: [0, 20], unit: '°' },
+      { id: 'plantarflexion', label: 'Plantarflexion', normalRange: [0, 50], unit: '°' },
+      { id: 'inversion', label: 'Inversion', normalRange: [0, 35], unit: '°' },
+      { id: 'eversion', label: 'Eversion', normalRange: [0, 15], unit: '°' },
+    ]
+  },
+  {
+    id: 'right_ankle', label: 'Right Ankle', boneName: 'Ankle_R',
+    movements: [
+      { id: 'dorsiflexion', label: 'Dorsiflexion', normalRange: [0, 20], unit: '°' },
+      { id: 'plantarflexion', label: 'Plantarflexion', normalRange: [0, 50], unit: '°' },
+      { id: 'inversion', label: 'Inversion', normalRange: [0, 35], unit: '°' },
+      { id: 'eversion', label: 'Eversion', normalRange: [0, 15], unit: '°' },
+    ]
+  },
+  {
+    id: 'cervical_spine', label: 'Cervical Spine', boneName: 'Neck_M',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 50], unit: '°' },
+      { id: 'extension', label: 'Extension', normalRange: [0, 60], unit: '°' },
+      { id: 'rotation_left', label: 'Rotation Left', normalRange: [0, 80], unit: '°' },
+      { id: 'rotation_right', label: 'Rotation Right', normalRange: [0, 80], unit: '°' },
+      { id: 'lateral_flexion_left', label: 'Lateral Flexion Left', normalRange: [0, 45], unit: '°' },
+      { id: 'lateral_flexion_right', label: 'Lateral Flexion Right', normalRange: [0, 45], unit: '°' },
+    ]
+  },
+  {
+    id: 'lumbar_spine', label: 'Lumbar Spine', boneName: 'Spine1_M',
+    movements: [
+      { id: 'flexion', label: 'Flexion', normalRange: [0, 60], unit: '°' },
+      { id: 'extension', label: 'Extension', normalRange: [0, 25], unit: '°' },
+      { id: 'lateral_flexion_left', label: 'Lateral Flexion Left', normalRange: [0, 25], unit: '°' },
+      { id: 'lateral_flexion_right', label: 'Lateral Flexion Right', normalRange: [0, 25], unit: '°' },
+      { id: 'rotation_left', label: 'Rotation Left', normalRange: [0, 10], unit: '°' },
+      { id: 'rotation_right', label: 'Rotation Right', normalRange: [0, 10], unit: '°' },
+    ]
+  },
+];
+
 const BONE_ANATOMICAL_LABELS: Record<string, string> = {
   'Head_M': 'Head',
   'Neck_M': 'Neck (Cervical)',
@@ -778,6 +938,9 @@ interface PureThreeGLBViewerProps {
   onPainMarkerMove?: (id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => void;
   onPainMarkerRemove?: (id: string) => void;
   enablePainMarkers?: boolean;
+  enableRomMode?: boolean;
+  onRomJointSelect?: (jointDef: RomJointDefinition) => void;
+  selectedRomJointId?: string | null;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -1047,7 +1210,10 @@ export default function PureThreeGLBViewer({
   onPainMarkerAdd,
   onPainMarkerMove,
   onPainMarkerRemove,
-  enablePainMarkers = false
+  enablePainMarkers = false,
+  enableRomMode = false,
+  onRomJointSelect,
+  selectedRomJointId = null,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1080,6 +1246,11 @@ export default function PureThreeGLBViewer({
   painMarkerCallbacksRef.current = { onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove };
   const enablePainMarkersRef = useRef(enablePainMarkers);
   enablePainMarkersRef.current = enablePainMarkers;
+  const enableRomModeRef = useRef(enableRomMode);
+  enableRomModeRef.current = enableRomMode;
+  const onRomJointSelectRef = useRef(onRomJointSelect);
+  onRomJointSelectRef.current = onRomJointSelect;
+  const romHighlightMeshesRef = useRef<THREE.Mesh[]>([]);
 
   const findNearestBone = useCallback((position: THREE.Vector3): { boneName: string; label: string } => {
     const bones = bonesRef.current;
@@ -1844,6 +2015,85 @@ export default function PureThreeGLBViewer({
       }
     };
   }, [enablePainMarkers, findNearestBone]);
+
+  useEffect(() => {
+    if (!sceneRef.current || !enableRomMode) return;
+    const { scene } = sceneRef.current;
+    const bones = bonesRef.current;
+
+    romHighlightMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
+    romHighlightMeshesRef.current = [];
+
+    ROM_JOINT_DEFINITIONS.forEach(jointDef => {
+      const bone = bones[jointDef.boneName];
+      if (!bone) return;
+      const isSelected = selectedRomJointId === jointDef.id;
+      const geo = new THREE.SphereGeometry(isSelected ? 0.045 : 0.035, 16, 16);
+      const mat = new THREE.MeshBasicMaterial({
+        color: isSelected ? 0x00e5ff : 0x4fc3f7,
+        transparent: true,
+        opacity: isSelected ? 0.9 : 0.5,
+        depthTest: false,
+      });
+      const sphere = new THREE.Mesh(geo, mat);
+      sphere.userData.romJointId = jointDef.id;
+      sphere.userData.romBoneName = jointDef.boneName;
+      sphere.renderOrder = 999;
+      const worldPos = new THREE.Vector3();
+      bone.getWorldPosition(worldPos);
+      sphere.position.copy(worldPos);
+      scene.add(sphere);
+      romHighlightMeshesRef.current.push(sphere);
+    });
+
+    const updatePositions = () => {
+      if (!enableRomModeRef.current) return;
+      const wp = new THREE.Vector3();
+      romHighlightMeshesRef.current.forEach(sphere => {
+        const bn = sphere.userData.romBoneName as string;
+        const b = bonesRef.current[bn];
+        if (b) {
+          b.getWorldPosition(wp);
+          sphere.position.copy(wp);
+        }
+      });
+      romAnimFrameRef.current = requestAnimationFrame(updatePositions);
+    };
+    const romAnimFrameRef = { current: requestAnimationFrame(updatePositions) };
+
+    return () => {
+      cancelAnimationFrame(romAnimFrameRef.current);
+      romHighlightMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
+      romHighlightMeshesRef.current = [];
+    };
+  }, [enableRomMode, selectedRomJointId]);
+
+  useEffect(() => {
+    if (!enableRomMode || !sceneRef.current) return;
+    const domElement = sceneRef.current.renderer.domElement;
+    const camera = sceneRef.current.camera;
+
+    const onClick = (e: MouseEvent) => {
+      if (!enableRomModeRef.current) return;
+      const rect = domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const hits = raycasterRef.current.intersectObjects(romHighlightMeshesRef.current, false);
+      if (hits.length > 0) {
+        const jointId = hits[0].object.userData.romJointId;
+        const jointDef = ROM_JOINT_DEFINITIONS.find(j => j.id === jointId);
+        if (jointDef) {
+          onRomJointSelectRef.current?.(jointDef);
+        }
+      }
+    };
+
+    domElement.addEventListener('click', onClick);
+    return () => { domElement.removeEventListener('click', onClick); };
+  }, [enableRomMode]);
 
   useEffect(() => {
     if (!containerRef.current) return;

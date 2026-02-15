@@ -45,7 +45,8 @@ import {
   PanelLeftOpen,
   SlidersHorizontal,
   MapPin,
-  Crosshair
+  Crosshair,
+  Ruler
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -53,7 +54,8 @@ import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
-import type { AnatomicalRegion, PainMarker } from "@/components/skeleton/PureThreeGLBViewer";
+import type { AnatomicalRegion, PainMarker, RomJointDefinition, RomMeasurement } from "@/components/skeleton/PureThreeGLBViewer";
+import { ROM_JOINT_DEFINITIONS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 
@@ -331,6 +333,10 @@ export default function PhysioGPT() {
   const [painMarkerMode, setPainMarkerMode] = useState(false);
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
+  const [romMode, setRomMode] = useState(false);
+  const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
+  const [romValues, setRomValues] = useState<Record<string, number>>({});
+  const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -843,6 +849,83 @@ export default function PhysioGPT() {
     sendMessageStreaming(prompt);
   }, [isStreaming]);
 
+  const handleRomJointSelect = useCallback((jointDef: RomJointDefinition) => {
+    setSelectedRomJoint(jointDef);
+    const defaults: Record<string, number> = {};
+    jointDef.movements.forEach(m => {
+      const isDeficitType = m.id.includes('deficit') || m.label.toLowerCase().includes('contracture') || m.label.toLowerCase().includes('lag');
+      defaults[m.id] = isDeficitType ? 0 : m.normalRange[1];
+    });
+    setRomValues(defaults);
+  }, []);
+
+  const handleRomSave = useCallback(() => {
+    if (!selectedRomJoint) return;
+    const newMeasurements: RomMeasurement[] = [];
+    selectedRomJoint.movements.forEach(movement => {
+      const isDeficitType = movement.id.includes('deficit') || movement.label.toLowerCase().includes('contracture') || movement.label.toLowerCase().includes('lag');
+      const val = romValues[movement.id];
+      const defaultVal = isDeficitType ? 0 : movement.normalRange[1];
+      if (val !== undefined && val !== defaultVal) {
+        newMeasurements.push({
+          jointId: selectedRomJoint.id,
+          jointLabel: selectedRomJoint.label,
+          movementId: movement.id,
+          movementLabel: movement.label,
+          measuredValue: val,
+          normalRange: movement.normalRange,
+          unit: movement.unit,
+          timestamp: Date.now(),
+        });
+      }
+    });
+    if (newMeasurements.length > 0) {
+      setRomMeasurements(prev => [...prev, ...newMeasurements]);
+    }
+    setSelectedRomJoint(null);
+    setRomValues({});
+  }, [selectedRomJoint, romValues]);
+
+  const getRomStatus = useCallback((m: RomMeasurement) => {
+    const isDeficitType = m.movementId.includes('deficit') || m.movementLabel.toLowerCase().includes('contracture') || m.movementLabel.toLowerCase().includes('lag');
+    if (isDeficitType) {
+      return m.measuredValue > m.normalRange[1]
+        ? `Abnormal (+${m.measuredValue - m.normalRange[1]}${m.unit} beyond acceptable)`
+        : 'Within Normal Limits';
+    }
+    if (m.normalRange[1] === 0) return 'Within Normal Limits';
+    const deficit = Math.round(((m.normalRange[1] - m.measuredValue) / m.normalRange[1]) * 100);
+    return m.measuredValue >= m.normalRange[1] ? 'Within Normal Limits' : `Restricted (${deficit}% deficit)`;
+  }, []);
+
+  const isRomRestricted = useCallback((m: RomMeasurement) => {
+    const isDeficitType = m.movementId.includes('deficit') || m.movementLabel.toLowerCase().includes('contracture') || m.movementLabel.toLowerCase().includes('lag');
+    if (isDeficitType) return m.measuredValue > m.normalRange[1];
+    return m.measuredValue < m.normalRange[1];
+  }, []);
+
+  const handleRomSendToChat = useCallback(() => {
+    if (romMeasurements.length === 0) return;
+    const byJoint = new Map<string, RomMeasurement[]>();
+    romMeasurements.forEach(m => {
+      const existing = byJoint.get(m.jointLabel) || [];
+      existing.push(m);
+      byJoint.set(m.jointLabel, existing);
+    });
+
+    let prompt = 'The following Range of Motion (ROM) measurements were recorded during the assessment:\n\n';
+    byJoint.forEach((measurements, jointLabel) => {
+      prompt += `**${jointLabel}:**\n`;
+      measurements.forEach(m => {
+        const status = getRomStatus(m);
+        prompt += `- ${m.movementLabel}: ${m.measuredValue}${m.unit} (Normal: ${m.normalRange[0]}-${m.normalRange[1]}${m.unit}) — ${status}\n`;
+      });
+      prompt += '\n';
+    });
+    prompt += 'Please provide a clinical interpretation of these ROM findings. What are the potential causes of any restrictions? What treatment approaches would you recommend? Are there any functional implications?';
+    sendMessageStreaming(prompt);
+  }, [romMeasurements, getRomStatus]);
+
   const handleAskAboutPainMarkers = useCallback(() => {
     if (painMarkers.length === 0) return;
     const markerDescriptions = painMarkers.map((m, i) => {
@@ -1016,6 +1099,9 @@ export default function PhysioGPT() {
               onPainMarkerAdd={handlePainMarkerAdd}
               onPainMarkerMove={handlePainMarkerMove}
               onPainMarkerRemove={handlePainMarkerRemove}
+              enableRomMode={romMode}
+              onRomJointSelect={handleRomJointSelect}
+              selectedRomJointId={selectedRomJoint?.id || null}
             />
 
             {/* Joint Controls Overlay */}
@@ -1186,6 +1272,132 @@ export default function PhysioGPT() {
               </div>
             )}
 
+            {/* ROM Joint Slider Panel */}
+            {selectedRomJoint && romMode && (
+              <div className="absolute top-2 right-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2 z-20 w-72 max-h-[calc(100%-16px)] overflow-y-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-[11px] text-blue-300 uppercase tracking-wider font-medium">ROM Assessment</p>
+                    <p className="text-[13px] text-white font-semibold">{selectedRomJoint.label}</p>
+                  </div>
+                  <button
+                    className="text-gray-400 hover:text-white"
+                    onClick={() => { setSelectedRomJoint(null); setRomValues({}); }}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {selectedRomJoint.movements.map(movement => {
+                    const isDeficitType = movement.id.includes('deficit') || movement.label.toLowerCase().includes('contracture') || movement.label.toLowerCase().includes('lag');
+                    const val = romValues[movement.id] ?? (isDeficitType ? 0 : movement.normalRange[1]);
+                    const maxRange = isDeficitType ? Math.max(movement.normalRange[1] * 6, 30) : Math.max(movement.normalRange[1], 10);
+                    const restricted = isDeficitType ? val > movement.normalRange[1] : val < movement.normalRange[1];
+                    const pct = isDeficitType
+                      ? (maxRange > 0 ? Math.round(((maxRange - val) / maxRange) * 100) : 100)
+                      : (maxRange > 0 ? Math.round((val / maxRange) * 100) : 100);
+                    return (
+                      <div key={movement.id}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] text-gray-300">{movement.label}</span>
+                          <span className={`text-[12px] font-mono font-bold ${restricted ? 'text-amber-400' : 'text-green-400'}`}>
+                            {val}{movement.unit}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Slider
+                            value={[val]}
+                            min={0}
+                            max={maxRange}
+                            step={1}
+                            onValueChange={([v]) => setRomValues(prev => ({ ...prev, [movement.id]: v }))}
+                            className="flex-1"
+                          />
+                          <span className="text-[9px] text-gray-500 w-14 text-right">
+                            {isDeficitType ? 'Accept:' : 'Normal:'} {movement.normalRange[1]}{movement.unit}
+                          </span>
+                        </div>
+                        {restricted && (
+                          <div className="mt-0.5 h-1 rounded-full bg-gray-700 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-1 mt-3">
+                  <Button
+                    size="sm"
+                    className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={handleRomSave}
+                  >
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Save Measurements
+                  </Button>
+                  <button
+                    className="text-[10px] text-gray-400 hover:text-white px-2"
+                    onClick={() => { setSelectedRomJoint(null); setRomValues({}); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ROM Measurements List */}
+            {romMeasurements.length > 0 && romMode && !selectedRomJoint && (
+              <div className="absolute bottom-12 right-2 bg-black/80 backdrop-blur rounded-lg px-3 py-2 z-10 w-72 max-h-64 overflow-y-auto">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[10px] text-blue-300 uppercase tracking-wider font-medium">ROM Findings ({romMeasurements.length})</p>
+                  <button
+                    className="text-[10px] text-red-400 hover:text-red-300"
+                    onClick={() => setRomMeasurements([])}
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <div className="space-y-1">
+                  {romMeasurements.map((m, i) => {
+                    const restricted = isRomRestricted(m);
+                    return (
+                      <div key={i} className="flex items-center gap-2 bg-white/5 rounded px-2 py-1">
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${restricted ? 'bg-amber-400' : 'bg-green-400'}`} />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[10px] text-gray-400">{m.jointLabel}</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[11px] text-white truncate">{m.movementLabel}</span>
+                            <span className={`text-[11px] font-mono font-bold ${restricted ? 'text-amber-400' : 'text-green-400'}`}>
+                              {m.measuredValue}{m.unit}
+                            </span>
+                            <span className="text-[9px] text-gray-500">/ {m.normalRange[1]}{m.unit}</span>
+                          </div>
+                        </div>
+                        <button
+                          className="text-gray-500 hover:text-red-400"
+                          onClick={() => setRomMeasurements(prev => prev.filter((_, idx) => idx !== i))}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full mt-2 h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={handleRomSendToChat}
+                  disabled={isStreaming}
+                >
+                  <Stethoscope className="h-3 w-3 mr-1" />
+                  Send ROM to Chat
+                </Button>
+              </div>
+            )}
+
             {/* Skeleton controls bar */}
             <div className="absolute bottom-2 left-2 flex gap-1 z-10">
               <Button
@@ -1196,6 +1408,8 @@ export default function PhysioGPT() {
                   const newMode = !painMarkerMode;
                   setPainMarkerMode(newMode);
                   if (newMode) {
+                    setRomMode(false);
+                    setSelectedRomJoint(null);
                     if (!skeletonOpen) setSkeletonOpen(true);
                     toast({ title: "Pain Marker Mode", description: "Click on the skeleton to place markers. Right-click to remove. Drag to reposition." });
                   }
@@ -1203,6 +1417,26 @@ export default function PhysioGPT() {
               >
                 <MapPin className="h-3 w-3 mr-1" />
                 {painMarkerMode ? 'Marking...' : 'Mark Pain'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${romMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white/90 hover:bg-white'}`}
+                onClick={() => {
+                  const newMode = !romMode;
+                  setRomMode(newMode);
+                  if (newMode) {
+                    setPainMarkerMode(false);
+                    if (!skeletonOpen) setSkeletonOpen(true);
+                    toast({ title: "ROM Measurement Mode", description: "Click on a highlighted joint to measure its range of motion." });
+                  } else {
+                    setSelectedRomJoint(null);
+                    setRomValues({});
+                  }
+                }}
+              >
+                <Ruler className="h-3 w-3 mr-1" />
+                {romMode ? 'Measuring...' : 'Measure ROM'}
               </Button>
               <Button
                 variant="secondary"

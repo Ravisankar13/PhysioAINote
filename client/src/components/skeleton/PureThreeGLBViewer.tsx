@@ -2051,44 +2051,116 @@ export default function PureThreeGLBViewer({
       );
     };
 
-    const raycastModel = (ndc: THREE.Vector2): THREE.Vector3 | null => {
-      raycasterRef.current.setFromCamera(ndc, camera);
-      const meshes: THREE.Mesh[] = [];
-      model.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.visible) meshes.push(child);
-      });
-      const hits = raycasterRef.current.intersectObjects(meshes, false);
-      if (hits.length > 0) return hits[0].point.clone();
+    const cachedModelMeshes: THREE.Mesh[] = [];
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.visible) cachedModelMeshes.push(child);
+    });
 
-      const modelCenter = new THREE.Vector3();
-      const box = new THREE.Box3().setFromObject(model);
-      box.getCenter(modelCenter);
-      const cameraDir = new THREE.Vector3();
-      camera.getWorldDirection(cameraDir);
-      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
-        cameraDir.clone().negate(),
-        modelCenter
-      );
-      const ray = raycasterRef.current.ray;
-      const planeHit = new THREE.Vector3();
-      if (ray.intersectPlane(plane, planeHit)) {
-        const boneResult = findNearestBone(planeHit);
-        if (boneResult.boneName) {
-          const bones = bonesRef.current;
-          if (boneResult.boneName.startsWith('virt_')) {
-            return planeHit;
-          }
-          const realBone = bones[boneResult.boneName];
-          if (realBone) {
-            const boneWorldPos = new THREE.Vector3();
-            realBone.getWorldPosition(boneWorldPos);
-            if (planeHit.distanceTo(boneWorldPos) < 2.0) {
-              return planeHit;
-            }
+    const vertexCacheRef = { verts: null as THREE.Vector3[] | null, normals: null as THREE.Vector3[] | null, matrixHash: '' };
+    const getMatrixHash = () => {
+      let h = '';
+      for (let i = 0; i < Math.min(cachedModelMeshes.length, 5); i++) {
+        const m = cachedModelMeshes[i].matrixWorld.elements;
+        h += m[12].toFixed(3) + m[13].toFixed(3) + m[14].toFixed(3);
+      }
+      return h;
+    };
+    const buildVertexCache = () => {
+      const hash = getMatrixHash();
+      if (vertexCacheRef.verts && vertexCacheRef.matrixHash === hash) return;
+      for (const mesh of cachedModelMeshes) {
+        mesh.updateMatrixWorld(true);
+      }
+      vertexCacheRef.verts = [];
+      vertexCacheRef.normals = [];
+      const tempV = new THREE.Vector3();
+      const tempN = new THREE.Vector3();
+      const normalMatrix = new THREE.Matrix3();
+      for (const mesh of cachedModelMeshes) {
+        const geo = mesh.geometry;
+        if (!geo || !geo.attributes.position) continue;
+        const posAttr = geo.attributes.position;
+        const normalAttr = geo.attributes.normal;
+        normalMatrix.getNormalMatrix(mesh.matrixWorld);
+        const step = posAttr.count > 10000 ? 2 : 1;
+        for (let i = 0; i < posAttr.count; i += step) {
+          tempV.fromBufferAttribute(posAttr, i);
+          tempV.applyMatrix4(mesh.matrixWorld);
+          vertexCacheRef.verts.push(tempV.clone());
+          if (normalAttr) {
+            tempN.fromBufferAttribute(normalAttr, i);
+            tempN.applyMatrix3(normalMatrix).normalize();
+            vertexCacheRef.normals!.push(tempN.clone());
+          } else {
+            vertexCacheRef.normals!.push(new THREE.Vector3(0, 0, 1));
           }
         }
       }
-      return null;
+      vertexCacheRef.matrixHash = hash;
+    };
+
+    const raycastModel = (ndc: THREE.Vector2, preciseOnly = false): THREE.Vector3 | null => {
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const hits = raycasterRef.current.intersectObjects(cachedModelMeshes, false);
+      if (hits.length > 0) return hits[0].point.clone();
+
+      const modelBox = new THREE.Box3().setFromObject(model);
+      const modelSize = modelBox.getSize(new THREE.Vector3()).length();
+      const camDist = camera.position.distanceTo(modelBox.getCenter(new THREE.Vector3()));
+      const spread = Math.max(0.008, Math.min(0.04, (modelSize / camDist) * 0.012));
+
+      const offsets = [
+        [spread, 0], [-spread, 0], [0, spread], [0, -spread],
+        [spread * 0.7, spread * 0.7], [-spread * 0.7, spread * 0.7],
+        [spread * 0.7, -spread * 0.7], [-spread * 0.7, -spread * 0.7],
+        [spread * 1.5, 0], [-spread * 1.5, 0], [0, spread * 1.5], [0, -spread * 1.5],
+        [spread * 2, 0], [-spread * 2, 0], [0, spread * 2], [0, -spread * 2],
+        [spread * 2, spread], [-spread * 2, spread], [spread, spread * 2], [-spread, -spread * 2],
+      ];
+      const tempNdc = new THREE.Vector2();
+      let closestHit: THREE.Vector3 | null = null;
+      let closestDist = Infinity;
+      for (const [dx, dy] of offsets) {
+        tempNdc.set(ndc.x + dx, ndc.y + dy);
+        raycasterRef.current.setFromCamera(tempNdc, camera);
+        const spreadHits = raycasterRef.current.intersectObjects(cachedModelMeshes, false);
+        if (spreadHits.length > 0) {
+          const pt = spreadHits[0].point;
+          const d = pt.distanceTo(camera.position);
+          if (d < closestDist) {
+            closestDist = d;
+            closestHit = pt.clone();
+          }
+        }
+      }
+      if (closestHit) return closestHit;
+
+      if (preciseOnly) return null;
+
+      buildVertexCache();
+      if (!vertexCacheRef.verts || !vertexCacheRef.normals) return null;
+
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const ray = raycasterRef.current.ray;
+      let bestPoint: THREE.Vector3 | null = null;
+      let bestScore = Infinity;
+      const closestOnRay = new THREE.Vector3();
+      const maxSnapDist = 0.35;
+      for (let i = 0; i < vertexCacheRef.verts.length; i++) {
+        const v = vertexCacheRef.verts[i];
+        ray.closestPointToPoint(v, closestOnRay);
+        const d = v.distanceTo(closestOnRay);
+        if (d > maxSnapDist) continue;
+        const normal = vertexCacheRef.normals[i];
+        const viewDir = ray.direction;
+        const facing = normal.dot(viewDir);
+        const score = d + (facing < 0 ? 0 : 0.15);
+        if (score < bestScore) {
+          bestScore = score;
+          bestPoint = v.clone();
+        }
+      }
+      return bestPoint;
     };
 
     const raycastPainMarkers = (ndc: THREE.Vector2): string | null => {
@@ -2180,7 +2252,7 @@ export default function PureThreeGLBViewer({
     const onMouseMove = (e: MouseEvent) => {
       if (draggingMarkerRef.current) {
         const ndc = getMouseNDC(e);
-        const hitPoint = raycastModel(ndc);
+        const hitPoint = raycastModel(ndc, true);
         if (hitPoint) {
           draggingMarkerRef.current.mesh.position.copy(hitPoint);
           draggingMarkerRef.current.outerMesh.position.copy(hitPoint);
@@ -2191,7 +2263,7 @@ export default function PureThreeGLBViewer({
 
       if (areaDragRef.current) {
         const ndc = getMouseNDC(e);
-        const hitPoint = raycastModel(ndc);
+        const hitPoint = raycastModel(ndc, true);
         if (hitPoint) {
           const radius = Math.max(0.05, areaDragRef.current.startPoint.distanceTo(hitPoint));
           painMarkerCallbacksRef.current.onPainMarkerUpdate?.(areaDragRef.current.markerId, { radius });

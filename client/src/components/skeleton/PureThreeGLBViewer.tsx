@@ -2178,6 +2178,7 @@ export default function PureThreeGLBViewer({
     });
 
     const poseBoneNames = Object.keys(POSE_BONE_MAP).filter(name => !!bones[name]);
+    console.log('[PoseMode] Initialized with', cachedMeshes.length, 'meshes,', poseBoneNames.length, 'pose bones:', poseBoneNames);
 
     const getMouseNDC = (e: MouseEvent) => {
       const rect = domElement.getBoundingClientRect();
@@ -2187,12 +2188,39 @@ export default function PureThreeGLBViewer({
       );
     };
 
-    const MAX_BONE_DISTANCE = 0.5;
+    const MAX_BONE_DISTANCE = 1.5;
 
     const findBoneFromRaycast = (ndc: THREE.Vector2): string | null => {
       raycasterRef.current.setFromCamera(ndc, camera);
-      const hits = raycasterRef.current.intersectObjects(cachedMeshes, false);
-      if (hits.length === 0) return null;
+      const hits = raycasterRef.current.intersectObjects(cachedMeshes, true);
+      if (hits.length === 0) {
+        const modelCenter = new THREE.Vector3();
+        const box = new THREE.Box3().setFromObject(model);
+        box.getCenter(modelCenter);
+        const cameraDir = new THREE.Vector3();
+        camera.getWorldDirection(cameraDir);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+          cameraDir.clone().negate(),
+          modelCenter
+        );
+        const planeHit = new THREE.Vector3();
+        if (raycasterRef.current.ray.intersectPlane(plane, planeHit)) {
+          const worldPos = new THREE.Vector3();
+          let nearestBone = '';
+          let nearestDist = Infinity;
+          for (const name of poseBoneNames) {
+            const bone = bones[name];
+            bone.getWorldPosition(worldPos);
+            const d = planeHit.distanceTo(worldPos);
+            if (d < nearestDist) {
+              nearestDist = d;
+              nearestBone = name;
+            }
+          }
+          if (nearestDist <= MAX_BONE_DISTANCE) return nearestBone;
+        }
+        return null;
+      }
       const hitPoint = hits[0].point;
       const worldPos = new THREE.Vector3();
       let nearestBone = '';

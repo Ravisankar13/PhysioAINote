@@ -326,6 +326,8 @@ export default function PhysioGPT() {
   const [clinicalHighlights, setClinicalHighlights] = useState<RegionHighlight[]>([]);
   const [painMarkers, setPainMarkers] = useState<PainMarker[]>([]);
   const [painMarkerMode, setPainMarkerMode] = useState(false);
+  const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
+  const [markerDescription, setMarkerDescription] = useState('');
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -768,6 +770,8 @@ export default function PhysioGPT() {
 
   const handlePainMarkerAdd = useCallback((marker: PainMarker) => {
     setPainMarkers(prev => [...prev, marker]);
+    setEditingMarkerId(marker.id);
+    setMarkerDescription('');
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
@@ -776,12 +780,39 @@ export default function PhysioGPT() {
 
   const handlePainMarkerRemove = useCallback((id: string) => {
     setPainMarkers(prev => prev.filter(m => m.id !== id));
-  }, []);
+    if (editingMarkerId === id) {
+      setEditingMarkerId(null);
+      setMarkerDescription('');
+    }
+  }, [editingMarkerId]);
+
+  const handlePainMarkerDescriptionSubmit = useCallback((markerId: string, description: string) => {
+    if (!description.trim() || isStreaming) return;
+    let label = 'Unknown area';
+    setPainMarkers(prev => {
+      const updated = prev.map(m => {
+        if (m.id === markerId) {
+          label = m.anatomicalLabel;
+          return { ...m, description: description.trim() };
+        }
+        return m;
+      });
+      return updated;
+    });
+    setEditingMarkerId(null);
+    setMarkerDescription('');
+
+    const prompt = `The patient has marked pain at the ${label} on the anatomical skeleton and describes it as: "${description.trim()}"\n\nPlease provide a clinical assessment. What are the likely differential diagnoses? What specific assessments, special tests, or imaging would you recommend? Are there any red flags to consider?`;
+    sendMessageStreaming(prompt);
+  }, [isStreaming]);
 
   const handleAskAboutPainMarkers = useCallback(() => {
     if (painMarkers.length === 0) return;
-    const markerDescriptions = painMarkers.map((m, i) => `${i + 1}. ${m.anatomicalLabel}`).join('\n');
-    const prompt = `The patient has indicated pain in the following areas on the anatomical skeleton:\n${markerDescriptions}\n\nPlease provide a clinical assessment considering these pain locations. What could be the differential diagnoses? What assessment approach would you recommend? Are there any patterns suggesting a specific condition?`;
+    const markerDescriptions = painMarkers.map((m, i) => {
+      const desc = m.description ? ` - "${m.description}"` : '';
+      return `${i + 1}. ${m.anatomicalLabel}${desc}`;
+    }).join('\n');
+    const prompt = `The patient has indicated pain in the following areas on the anatomical skeleton:\n${markerDescriptions}\n\nPlease provide a clinical assessment considering these pain locations and descriptions. What could be the differential diagnoses? What assessment approach would you recommend? Are there any patterns suggesting a specific condition?`;
     sendMessageStreaming(prompt);
   }, [painMarkers]);
 
@@ -1027,27 +1058,79 @@ export default function PhysioGPT() {
 
             {/* Pain Marker List Panel */}
             {painMarkers.length > 0 && (
-              <div className="absolute bottom-12 right-2 bg-black/80 backdrop-blur rounded-lg px-3 py-2 z-10 w-56 max-h-48 overflow-y-auto">
+              <div className="absolute bottom-12 right-2 bg-black/80 backdrop-blur rounded-lg px-3 py-2 z-10 w-64 max-h-64 overflow-y-auto">
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] text-gray-300 uppercase tracking-wider font-medium">Pain Markers ({painMarkers.length})</p>
                   <button
                     className="text-[10px] text-red-400 hover:text-red-300"
-                    onClick={() => setPainMarkers([])}
+                    onClick={() => { setPainMarkers([]); setEditingMarkerId(null); setMarkerDescription(''); }}
                   >
                     Clear All
                   </button>
                 </div>
-                <div className="space-y-1">
-                  {painMarkers.map((m, i) => (
-                    <div key={m.id} className="flex items-center gap-2 group">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-red-500" style={{ boxShadow: '0 0 6px #ff2222' }} />
-                      <span className="text-[11px] text-white truncate flex-1">{m.anatomicalLabel}</span>
-                      <button
-                        className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => handlePainMarkerRemove(m.id)}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                <div className="space-y-2">
+                  {painMarkers.map((m) => (
+                    <div key={m.id} className="bg-white/5 rounded px-2 py-1.5">
+                      <div className="flex items-center gap-2 group">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-red-500" style={{ boxShadow: '0 0 6px #ff2222' }} />
+                        <span className="text-[11px] text-white truncate flex-1 font-medium">{m.anatomicalLabel}</span>
+                        <button
+                          className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handlePainMarkerRemove(m.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                      {m.description && editingMarkerId !== m.id && (
+                        <p className="text-[10px] text-gray-400 mt-1 ml-4 italic cursor-pointer hover:text-gray-300"
+                          onClick={() => { setEditingMarkerId(m.id); setMarkerDescription(m.description || ''); }}
+                        >
+                          "{m.description}"
+                        </p>
+                      )}
+                      {editingMarkerId === m.id ? (
+                        <div className="mt-1.5 ml-4">
+                          <input
+                            type="text"
+                            autoFocus
+                            className="w-full bg-white/10 border border-white/20 rounded px-2 py-1 text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-teal-500"
+                            placeholder="Describe the pain (e.g., sharp, dull, radiating...)"
+                            value={markerDescription}
+                            onChange={(e) => setMarkerDescription(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && markerDescription.trim() && !isStreaming) {
+                                handlePainMarkerDescriptionSubmit(m.id, markerDescription);
+                              }
+                              if (e.key === 'Escape') {
+                                setEditingMarkerId(null);
+                                setMarkerDescription('');
+                              }
+                            }}
+                          />
+                          <div className="flex gap-1 mt-1">
+                            <button
+                              className="flex-1 bg-teal-600 hover:bg-teal-700 text-white text-[10px] rounded px-2 py-0.5 disabled:opacity-50"
+                              disabled={!markerDescription.trim() || isStreaming}
+                              onClick={() => handlePainMarkerDescriptionSubmit(m.id, markerDescription)}
+                            >
+                              Send to Chat
+                            </button>
+                            <button
+                              className="text-[10px] text-gray-400 hover:text-white px-2 py-0.5"
+                              onClick={() => { setEditingMarkerId(null); setMarkerDescription(''); }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : !m.description && (
+                        <button
+                          className="text-[10px] text-teal-400 hover:text-teal-300 mt-1 ml-4"
+                          onClick={() => { setEditingMarkerId(m.id); setMarkerDescription(''); }}
+                        >
+                          + Add description
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1058,7 +1141,7 @@ export default function PhysioGPT() {
                   disabled={isStreaming}
                 >
                   <Stethoscope className="h-3 w-3 mr-1" />
-                  Ask About These Areas
+                  Ask About All Areas
                 </Button>
               </div>
             )}

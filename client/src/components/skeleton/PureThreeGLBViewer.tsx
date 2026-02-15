@@ -553,6 +553,7 @@ export interface PainMarker {
   position: { x: number; y: number; z: number };
   nearestBone: string;
   anatomicalLabel: string;
+  description?: string;
 }
 
 const BONE_ANATOMICAL_LABELS: Record<string, string> = {
@@ -1083,7 +1084,8 @@ export default function PureThreeGLBViewer({
   const findNearestBone = useCallback((position: THREE.Vector3): { boneName: string; label: string } => {
     const bones = bonesRef.current;
     let minDist = Infinity;
-    let nearest = 'Root_M';
+    let nearestLabel = 'Pelvis / Sacrum';
+    let nearestBone = 'Root_M';
     const worldPos = new THREE.Vector3();
 
     for (const [name, bone] of Object.entries(bones)) {
@@ -1092,11 +1094,70 @@ export default function PureThreeGLBViewer({
       const dist = position.distanceTo(worldPos);
       if (dist < minDist) {
         minDist = dist;
-        nearest = name;
+        nearestBone = name;
+        nearestLabel = BONE_ANATOMICAL_LABELS[name];
       }
     }
 
-    return { boneName: nearest, label: BONE_ANATOMICAL_LABELS[nearest] || nearest };
+    const virtualPoints: Array<{ label: string; boneName: string; boneA: string; boneB: string; t: number; offsetX?: number }> = [
+      { label: 'C1-C2 (Upper Cervical)', boneName: 'virt_C1C2', boneA: 'Head_M', boneB: 'NeckPart1_M', t: 0.5 },
+      { label: 'C3-C4 (Mid Cervical)', boneName: 'virt_C3C4', boneA: 'NeckPart1_M', boneB: 'NeckPart2_M', t: 0.5 },
+      { label: 'C5-C6 (Lower Cervical)', boneName: 'virt_C5C6', boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.3 },
+      { label: 'C7-T1 (Cervicothoracic Junction)', boneName: 'virt_C7T1', boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.6 },
+      { label: 'T1-T4 (Upper Thoracic)', boneName: 'virt_T1T4', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.2 },
+      { label: 'T5-T8 (Mid Thoracic)', boneName: 'virt_T5T8', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.6 },
+      { label: 'T9-T10 (Lower Thoracic)', boneName: 'virt_T9T10', boneA: 'Spine1Part2_M', boneB: 'Spine1Part1_M', t: 0.5 },
+      { label: 'T11-T12 (Thoracolumbar Junction)', boneName: 'virt_T11T12', boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.3 },
+      { label: 'L1-L2 (Upper Lumbar)', boneName: 'virt_L1L2', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.2 },
+      { label: 'L3 (Mid Lumbar)', boneName: 'virt_L3', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.5 },
+      { label: 'L4-L5 (Lower Lumbar)', boneName: 'virt_L4L5', boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.3 },
+      { label: 'L5-S1 (Lumbosacral Junction)', boneName: 'virt_L5S1', boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.4 },
+      { label: 'Sacrum', boneName: 'virt_sacrum', boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.7 },
+      { label: 'Coccyx', boneName: 'virt_coccyx', boneA: 'Root_M', boneB: 'Root_M', t: 1.0 },
+      { label: 'Left Upper Ribs (1-4)', boneName: 'virt_ribs_upper_L', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: -0.15 },
+      { label: 'Right Upper Ribs (1-4)', boneName: 'virt_ribs_upper_R', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: 0.15 },
+      { label: 'Left Mid Ribs (5-8)', boneName: 'virt_ribs_mid_L', boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: -0.18 },
+      { label: 'Right Mid Ribs (5-8)', boneName: 'virt_ribs_mid_R', boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: 0.18 },
+      { label: 'Left Lower Ribs (9-12)', boneName: 'virt_ribs_lower_L', boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: -0.15 },
+      { label: 'Right Lower Ribs (9-12)', boneName: 'virt_ribs_lower_R', boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: 0.15 },
+      { label: 'Sternum', boneName: 'virt_sternum', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: 0 },
+      { label: 'Left SI Joint', boneName: 'virt_SI_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.3 },
+      { label: 'Right SI Joint', boneName: 'virt_SI_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.3 },
+      { label: 'Left Greater Trochanter', boneName: 'virt_GT_L', boneA: 'Hip_L', boneB: 'HipPart1_L', t: 0.2 },
+      { label: 'Right Greater Trochanter', boneName: 'virt_GT_R', boneA: 'Hip_R', boneB: 'HipPart1_R', t: 0.2 },
+      { label: 'Left IT Band', boneName: 'virt_ITB_L', boneA: 'HipPart1_L', boneB: 'Knee_L', t: 0.5, offsetX: -0.05 },
+      { label: 'Right IT Band', boneName: 'virt_ITB_R', boneA: 'HipPart1_R', boneB: 'Knee_R', t: 0.5, offsetX: 0.05 },
+      { label: 'Left Calf / Gastrocnemius', boneName: 'virt_calf_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.4 },
+      { label: 'Right Calf / Gastrocnemius', boneName: 'virt_calf_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.4 },
+      { label: 'Left Achilles Tendon', boneName: 'virt_achilles_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.85 },
+      { label: 'Right Achilles Tendon', boneName: 'virt_achilles_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.85 },
+      { label: 'Left Forearm', boneName: 'virt_forearm_L', boneA: 'Elbow_L', boneB: 'Wrist_L', t: 0.5 },
+      { label: 'Right Forearm', boneName: 'virt_forearm_R', boneA: 'Elbow_R', boneB: 'Wrist_R', t: 0.5 },
+      { label: 'Left Biceps', boneName: 'virt_biceps_L', boneA: 'Shoulder_L', boneB: 'Elbow_L', t: 0.5 },
+      { label: 'Right Biceps', boneName: 'virt_biceps_R', boneA: 'Shoulder_R', boneB: 'Elbow_R', t: 0.5 },
+    ];
+
+    const posA = new THREE.Vector3();
+    const posB = new THREE.Vector3();
+    const virtPos = new THREE.Vector3();
+
+    for (const vp of virtualPoints) {
+      const boneA = bones[vp.boneA];
+      const boneB = bones[vp.boneB];
+      if (!boneA || !boneB) continue;
+      boneA.getWorldPosition(posA);
+      boneB.getWorldPosition(posB);
+      virtPos.lerpVectors(posA, posB, vp.t);
+      if (vp.offsetX) virtPos.x += vp.offsetX;
+      const dist = position.distanceTo(virtPos);
+      if (dist < minDist) {
+        minDist = dist;
+        nearestBone = vp.boneName;
+        nearestLabel = vp.label;
+      }
+    }
+
+    return { boneName: nearestBone, label: nearestLabel };
   }, []);
 
   const sceneRef = useRef<{
@@ -1627,21 +1688,20 @@ export default function PureThreeGLBViewer({
       const ray = raycasterRef.current.ray;
       const planeHit = new THREE.Vector3();
       if (ray.intersectPlane(plane, planeHit)) {
-        const bones = bonesRef.current;
-        let minDist = Infinity;
-        let nearestBonePos: THREE.Vector3 | null = null;
-        const worldPos = new THREE.Vector3();
-        for (const [name, bone] of Object.entries(bones)) {
-          if (!BONE_ANATOMICAL_LABELS[name]) continue;
-          bone.getWorldPosition(worldPos);
-          const dist = planeHit.distanceTo(worldPos);
-          if (dist < minDist) {
-            minDist = dist;
-            nearestBonePos = worldPos.clone();
+        const boneResult = findNearestBone(planeHit);
+        if (boneResult.boneName) {
+          const bones = bonesRef.current;
+          if (boneResult.boneName.startsWith('virt_')) {
+            return planeHit;
           }
-        }
-        if (nearestBonePos && minDist < 2.0) {
-          return nearestBonePos;
+          const realBone = bones[boneResult.boneName];
+          if (realBone) {
+            const boneWorldPos = new THREE.Vector3();
+            realBone.getWorldPosition(boneWorldPos);
+            if (planeHit.distanceTo(boneWorldPos) < 2.0) {
+              return planeHit;
+            }
+          }
         }
       }
       return null;

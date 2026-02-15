@@ -415,35 +415,35 @@ export const JOINT_GROUP_LABELS: Record<Exclude<JointGroup, null>, string> = {
   neck: 'Neck',
 };
 
-export const REGION_MESH_MAPPING: Record<AnatomicalRegion, string[]> = {
+export const REGION_BONE_MAPPING: Record<AnatomicalRegion, string[]> = {
   full_body: [],
-  lumbar_spine: ['BONES_SPINE1'],
-  thoracic_spine: ['BONES_SPINE1', 'BONES_RIBCAGE1'],
-  cervical_spine: ['BONES_SPINE1', 'BONES_HEAD1'],
-  left_shoulder: ['BONES_ARML002', 'BONES_ARML1', 'BONES_RIBCAGE1'],
-  right_shoulder: ['BONES_ARMR002', 'BONES_ARMR1', 'BONES_RIBCAGE1'],
-  left_hip: ['BONES_LEGL002', 'BONES_LEGL1', 'BONES_PELVIS1'],
-  right_hip: ['BONES_LEGR002', 'BONES_LEGR1', 'BONES_PELVIS1'],
-  pelvis: ['BONES_PELVIS1', 'BONES_SPINE1'],
-  left_knee: ['BONES_LEGL002', 'BONES_LEGL1'],
-  right_knee: ['BONES_LEGR002', 'BONES_LEGR1'],
-  left_ankle: ['BONES_LEGL002', 'BONES_LEGL1'],
-  right_ankle: ['BONES_LEGR002', 'BONES_LEGR1'],
-  left_elbow: ['BONES_ARML002', 'BONES_ARML1'],
-  right_elbow: ['BONES_ARMR002', 'BONES_ARMR1'],
-  // Lumbar segment pairs - focus on spine and pelvis meshes
-  L1_L2: ['BONES_SPINE1'],
-  L2_L3: ['BONES_SPINE1'],
-  L3_L4: ['BONES_SPINE1'],
-  L4_L5: ['BONES_SPINE1'],
-  L5_S1: ['BONES_SPINE1', 'BONES_PELVIS1'],
-  // Sub-structures all focus on spine mesh
-  L1_L2_facet: ['BONES_SPINE1'], L1_L2_pars: ['BONES_SPINE1'], L1_L2_disc: ['BONES_SPINE1'], L1_L2_body: ['BONES_SPINE1'], L1_L2_spinous: ['BONES_SPINE1'],
-  L2_L3_facet: ['BONES_SPINE1'], L2_L3_pars: ['BONES_SPINE1'], L2_L3_disc: ['BONES_SPINE1'], L2_L3_body: ['BONES_SPINE1'], L2_L3_spinous: ['BONES_SPINE1'],
-  L3_L4_facet: ['BONES_SPINE1'], L3_L4_pars: ['BONES_SPINE1'], L3_L4_disc: ['BONES_SPINE1'], L3_L4_body: ['BONES_SPINE1'], L3_L4_spinous: ['BONES_SPINE1'],
-  L4_L5_facet: ['BONES_SPINE1'], L4_L5_pars: ['BONES_SPINE1'], L4_L5_disc: ['BONES_SPINE1'], L4_L5_body: ['BONES_SPINE1'], L4_L5_spinous: ['BONES_SPINE1'],
-  L5_S1_facet: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_pars: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_disc: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_body: ['BONES_SPINE1', 'BONES_PELVIS1'], L5_S1_spinous: ['BONES_SPINE1', 'BONES_PELVIS1'],
+  lumbar_spine: ['Spine1_M', 'Spine1Part1_M', 'Spine1Part2_M'],
+  thoracic_spine: ['Chest_M', 'Spine1Part2_M'],
+  cervical_spine: ['Neck_M', 'NeckPart1_M', 'NeckPart2_M'],
+  left_shoulder: ['Shoulder_L', 'ShoulderPart1_L'],
+  right_shoulder: ['Shoulder_R', 'ShoulderPart1_R'],
+  left_hip: ['Hip_L', 'HipPart1_L'],
+  right_hip: ['Hip_R', 'HipPart1_R'],
+  pelvis: ['Root_M', 'RootPart1_M', 'RootPart2_M'],
+  left_knee: ['Knee_L'],
+  right_knee: ['Knee_R'],
+  left_ankle: ['Ankle_L'],
+  right_ankle: ['Ankle_R'],
+  left_elbow: ['Elbow_L', 'ElbowPart1_L'],
+  right_elbow: ['Elbow_R', 'ElbowPart1_R'],
+  L1_L2: ['Spine1Part1_M'],
+  L2_L3: ['Spine1_M'],
+  L3_L4: ['RootPart2_M'],
+  L4_L5: ['RootPart1_M'],
+  L5_S1: ['Root_M'],
+  L1_L2_facet: ['Spine1Part1_M'], L1_L2_pars: ['Spine1Part1_M'], L1_L2_disc: ['Spine1Part1_M'], L1_L2_body: ['Spine1Part1_M'], L1_L2_spinous: ['Spine1Part1_M'],
+  L2_L3_facet: ['Spine1_M'], L2_L3_pars: ['Spine1_M'], L2_L3_disc: ['Spine1_M'], L2_L3_body: ['Spine1_M'], L2_L3_spinous: ['Spine1_M'],
+  L3_L4_facet: ['RootPart2_M'], L3_L4_pars: ['RootPart2_M'], L3_L4_disc: ['RootPart2_M'], L3_L4_body: ['RootPart2_M'], L3_L4_spinous: ['RootPart2_M'],
+  L4_L5_facet: ['RootPart1_M'], L4_L5_pars: ['RootPart1_M'], L4_L5_disc: ['RootPart1_M'], L4_L5_body: ['RootPart1_M'], L4_L5_spinous: ['RootPart1_M'],
+  L5_S1_facet: ['Root_M'], L5_S1_pars: ['Root_M'], L5_S1_disc: ['Root_M'], L5_S1_body: ['Root_M'], L5_S1_spinous: ['Root_M'],
 };
+
+export const REGION_MESH_MAPPING = REGION_BONE_MAPPING;
 
 // Bone-level mapping for individual spinal segments
 // New model has simplified spine: Root_M, RootPart1/2_M (pelvis), Spine1_M, Spine1Part1/2_M, Chest_M
@@ -1016,6 +1016,7 @@ export default function PureThreeGLBViewer({
   const animationPlayingRef = useRef<boolean>(false);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
+  const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -1342,52 +1343,92 @@ export default function PureThreeGLBViewer({
 
   useEffect(() => {
     if (!sceneRef.current) return;
-    const { model } = sceneRef.current;
+    const { scene, model } = sceneRef.current;
     if (!model) return;
 
-    highlightedMeshesRef.current.forEach((entries) => {
-      entries.forEach(({ mesh, originalEmissive, originalIntensity }) => {
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        materials.forEach((mat) => {
-          if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial) {
-            (mat as any).emissive.copy(originalEmissive);
-            (mat as any).emissiveIntensity = originalIntensity;
-          }
-        });
-      });
+    highlightOverlaysRef.current.forEach((overlay) => {
+      scene.remove(overlay);
+      overlay.geometry.dispose();
+      if (overlay.material instanceof THREE.Material) overlay.material.dispose();
     });
-    highlightedMeshesRef.current.clear();
+    highlightOverlaysRef.current = [];
 
     if (!highlightRegions || highlightRegions.length === 0) return;
 
+    model.updateMatrixWorld(true);
+
+    const bones: Record<string, THREE.Object3D> = {};
+    model.traverse((child) => {
+      if ((child as any).isBone || child instanceof THREE.Bone) {
+        bones[child.name] = child;
+      }
+    });
+
+    const REGION_GLOW_SIZE: Partial<Record<AnatomicalRegion, number>> = {
+      lumbar_spine: 0.35,
+      thoracic_spine: 0.4,
+      cervical_spine: 0.2,
+      pelvis: 0.4,
+      left_shoulder: 0.25,
+      right_shoulder: 0.25,
+      left_hip: 0.3,
+      right_hip: 0.3,
+      left_knee: 0.2,
+      right_knee: 0.2,
+      left_ankle: 0.15,
+      right_ankle: 0.15,
+      left_elbow: 0.18,
+      right_elbow: 0.18,
+    };
+
     for (const highlight of highlightRegions) {
-      const meshNames = REGION_MESH_MAPPING[highlight.region] || [];
-      if (meshNames.length === 0) continue;
+      const boneNames = REGION_MESH_MAPPING[highlight.region] || [];
+      if (boneNames.length === 0) continue;
 
-      const entries: { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[] = [];
+      const color = new THREE.Color(highlight.color);
+      const glowSize = REGION_GLOW_SIZE[highlight.region] || 0.25;
+      const intensity = Math.max(highlight.intensity, 0.6);
 
-      model.traverse((child) => {
-        if (!(child instanceof THREE.Mesh)) return;
-        const nameMatch = meshNames.includes(child.name) ||
-          meshNames.some(n => child.name.startsWith(n) || child.name.includes(n));
-        if (!nameMatch) return;
+      for (const boneName of boneNames) {
+        const bone = bones[boneName];
+        if (!bone) continue;
 
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        materials.forEach((mat) => {
-          if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial) {
-            entries.push({
-              mesh: child,
-              originalEmissive: (mat as any).emissive.clone(),
-              originalIntensity: (mat as any).emissiveIntensity ?? 1,
-            });
-            (mat as any).emissive = new THREE.Color(highlight.color);
-            (mat as any).emissiveIntensity = Math.max(highlight.intensity, 0.8);
-          }
+        const worldPos = new THREE.Vector3();
+        bone.getWorldPosition(worldPos);
+
+        const geo = new THREE.SphereGeometry(glowSize, 16, 12);
+        const mat = new THREE.MeshBasicMaterial({
+          color: color,
+          transparent: true,
+          opacity: intensity * 0.45,
+          depthWrite: false,
+          depthTest: true,
+          side: THREE.DoubleSide,
         });
-      });
 
-      if (entries.length > 0) {
-        highlightedMeshesRef.current.set(highlight.region, entries);
+        const glowMesh = new THREE.Mesh(geo, mat);
+        glowMesh.position.copy(worldPos);
+        glowMesh.renderOrder = 999;
+        glowMesh.userData.isHighlightOverlay = true;
+
+        scene.add(glowMesh);
+        highlightOverlaysRef.current.push(glowMesh);
+
+        const outerGeo = new THREE.SphereGeometry(glowSize * 1.6, 12, 8);
+        const outerMat = new THREE.MeshBasicMaterial({
+          color: color,
+          transparent: true,
+          opacity: intensity * 0.15,
+          depthWrite: false,
+          depthTest: true,
+          side: THREE.DoubleSide,
+        });
+        const outerGlow = new THREE.Mesh(outerGeo, outerMat);
+        outerGlow.position.copy(worldPos);
+        outerGlow.renderOrder = 998;
+        outerGlow.userData.isHighlightOverlay = true;
+        scene.add(outerGlow);
+        highlightOverlaysRef.current.push(outerGlow);
       }
     }
   }, [highlightRegions]);
@@ -1799,20 +1840,19 @@ export default function PureThreeGLBViewer({
       return;
     }
 
-    // Map joint types to mesh names for compensation highlighting
     const JOINT_TO_MESH: Record<string, string[]> = {
-      'lumbar_spine': ['BONES_SPINE1'],
-      'thoracic_spine': ['BONES_SPINE1', 'BONES_RIBCAGE1'],
-      'cervical_spine': ['BONES_HEAD1'],
-      'pelvis': ['BONES_PELVIS1'],
-      'left_hip': ['BONES_LEGL1'],
-      'right_hip': ['BONES_LEGR1'],
-      'left_knee': ['BONES_LEGL002'],
-      'right_knee': ['BONES_LEGR002'],
-      'left_ankle': ['BONES_LEGL002'],
-      'right_ankle': ['BONES_LEGR002'],
-      'left_shoulder': ['BONES_ARML1'],
-      'right_shoulder': ['BONES_ARMR1'],
+      'lumbar_spine': ['Spine1_M'],
+      'thoracic_spine': ['Chest_M'],
+      'cervical_spine': ['Neck_M'],
+      'pelvis': ['Root_M'],
+      'left_hip': ['Hip_L'],
+      'right_hip': ['Hip_R'],
+      'left_knee': ['Knee_L'],
+      'right_knee': ['Knee_R'],
+      'left_ankle': ['Ankle_L'],
+      'right_ankle': ['Ankle_R'],
+      'left_shoulder': ['Shoulder_L'],
+      'right_shoulder': ['Shoulder_R'],
     };
 
     // Collect all meshes that should be highlighted

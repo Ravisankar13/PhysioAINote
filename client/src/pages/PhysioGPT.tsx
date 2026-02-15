@@ -703,7 +703,8 @@ export default function PhysioGPT() {
         <div className={`${skeletonOpen ? 'h-[40%]' : 'h-0'} transition-all duration-300 overflow-hidden border-b bg-gray-900 relative flex-shrink-0`}>
           <div className="h-full w-full relative">
             <PureThreeGLBViewer
-              modelConfig={modelConfig}
+              modelPath="/models/skeleton_character.glb"
+              modelConfig={modelConfig as any}
               zoomToRegion={zoomToRegion}
               className="w-full h-full"
             />

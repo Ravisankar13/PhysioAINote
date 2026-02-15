@@ -1481,26 +1481,6 @@ export default function PhysioGPT() {
               </Button>
             </div>
 
-            {/* Body region quick buttons in skeleton area */}
-            <div className="absolute top-2 left-2 flex flex-wrap gap-1 z-10 max-w-[200px]">
-              {(Object.keys(BODY_REGIONS) as Array<keyof typeof BODY_REGIONS>).map((region) => {
-                const data = BODY_REGIONS[region];
-                const isSelected = selectedRegion === region;
-                return (
-                  <button
-                    key={region}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                      isSelected
-                        ? 'bg-teal-500 text-white'
-                        : 'bg-white/80 text-gray-700 hover:bg-white'
-                    }`}
-                    onClick={() => handleRegionSelect(region)}
-                  >
-                    {data.icon} {data.name.split(' ')[0]}
-                  </button>
-                );
-              })}
-            </div>
           </div>
         </div>
 

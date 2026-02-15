@@ -548,12 +548,20 @@ export const SUB_STRUCTURE_OVERLAYS: Record<SubStructure, SubStructureOverlay> =
   }
 };
 
+export type PainMarkerType = 'point' | 'area' | 'referred' | 'line';
+
 export interface PainMarker {
   id: string;
+  type: PainMarkerType;
   position: { x: number; y: number; z: number };
   nearestBone: string;
   anatomicalLabel: string;
   description?: string;
+  radius?: number;
+  referralTarget?: { x: number; y: number; z: number };
+  referralTargetBone?: string;
+  referralTargetLabel?: string;
+  linePoints?: Array<{ x: number; y: number; z: number }>;
 }
 
 export interface RomMovement {
@@ -937,7 +945,9 @@ interface PureThreeGLBViewerProps {
   onPainMarkerAdd?: (marker: PainMarker) => void;
   onPainMarkerMove?: (id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => void;
   onPainMarkerRemove?: (id: string) => void;
+  onPainMarkerUpdate?: (id: string, updates: Partial<PainMarker>) => void;
   enablePainMarkers?: boolean;
+  activePainMarkerType?: PainMarkerType;
   enableRomMode?: boolean;
   onRomJointSelect?: (jointDef: RomJointDefinition) => void;
   selectedRomJointId?: string | null;
@@ -1254,7 +1264,9 @@ export default function PureThreeGLBViewer({
   onPainMarkerAdd,
   onPainMarkerMove,
   onPainMarkerRemove,
+  onPainMarkerUpdate,
   enablePainMarkers = false,
+  activePainMarkerType = 'point',
   enableRomMode = false,
   onRomJointSelect,
   selectedRomJointId = null,
@@ -1283,15 +1295,27 @@ export default function PureThreeGLBViewer({
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
-  const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh }>>(new Map());
+  const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
   const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh } | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
-  const painMarkerCallbacksRef = useRef({ onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove });
-  painMarkerCallbacksRef.current = { onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove };
+  const painMarkerCallbacksRef = useRef({ onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove, onPainMarkerUpdate });
+  painMarkerCallbacksRef.current = { onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove, onPainMarkerUpdate };
   const enablePainMarkersRef = useRef(enablePainMarkers);
   enablePainMarkersRef.current = enablePainMarkers;
+  const activePainMarkerTypeRef = useRef(activePainMarkerType);
+  activePainMarkerTypeRef.current = activePainMarkerType;
+  const pendingReferralRef = useRef<PainMarker | null>(null);
+  const pendingLineRef = useRef<PainMarker | null>(null);
+  const areaDragRef = useRef<{ startPoint: THREE.Vector3; markerId: string } | null>(null);
+
+  useEffect(() => {
+    pendingReferralRef.current = null;
+    pendingLineRef.current = null;
+    areaDragRef.current = null;
+  }, [activePainMarkerType, enablePainMarkers]);
+
   const enableRomModeRef = useRef(enableRomMode);
   enableRomModeRef.current = enableRomMode;
   const onRomJointSelectRef = useRef(onRomJointSelect);
@@ -1826,23 +1850,77 @@ export default function PureThreeGLBViewer({
         meshes.outer.geometry.dispose();
         (meshes.inner.material as THREE.Material).dispose();
         (meshes.outer.material as THREE.Material).dispose();
+        if (meshes.extra) {
+          meshes.extra.forEach(obj => {
+            scene.remove(obj);
+            if (obj instanceof THREE.Mesh) {
+              obj.geometry.dispose();
+              (obj.material as THREE.Material).dispose();
+            } else if (obj instanceof THREE.Line) {
+              obj.geometry.dispose();
+              (obj.material as THREE.Material).dispose();
+            }
+          });
+        }
         painMarkerMeshesRef.current.delete(id);
       }
     });
 
     for (const marker of painMarkers) {
+      const pos = new THREE.Vector3(marker.position.x, marker.position.y, marker.position.z);
+      const markerType = marker.type || 'point';
+
       if (painMarkerMeshesRef.current.has(marker.id)) {
         const meshes = painMarkerMeshesRef.current.get(marker.id)!;
-        meshes.inner.position.set(marker.position.x, marker.position.y, marker.position.z);
-        meshes.outer.position.set(marker.position.x, marker.position.y, marker.position.z);
+        meshes.inner.position.copy(pos);
+        meshes.outer.position.copy(pos);
+
+        if (markerType === 'area' && marker.radius) {
+          const r = marker.radius;
+          meshes.outer.scale.set(r / 0.1, r / 0.1, r / 0.1);
+        }
+
+        if (markerType === 'referred' && marker.referralTarget && meshes.extra && meshes.extra.length >= 3) {
+          const tp = new THREE.Vector3(marker.referralTarget.x, marker.referralTarget.y, marker.referralTarget.z);
+          meshes.extra[0].position.copy(tp);
+          meshes.extra[1].position.copy(tp);
+          const lineGeo = new THREE.BufferGeometry().setFromPoints([pos, tp]);
+          (meshes.extra[2] as THREE.Line).geometry.dispose();
+          (meshes.extra[2] as THREE.Line).geometry = lineGeo;
+          (meshes.extra[2] as THREE.Line).computeLineDistances();
+        }
+
+        if (markerType === 'line' && marker.linePoints && meshes.extra) {
+          const pts = [pos, ...marker.linePoints.map(p => new THREE.Vector3(p.x, p.y, p.z))];
+          const lineObj = meshes.extra.find(o => o instanceof THREE.Line) as THREE.Line | undefined;
+          if (lineObj) {
+            lineObj.geometry.dispose();
+            lineObj.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+          }
+          const dotMeshes = meshes.extra.filter(o => o instanceof THREE.Mesh) as THREE.Mesh[];
+          dotMeshes.forEach((dm, i) => {
+            if (i < marker.linePoints!.length) {
+              dm.position.set(marker.linePoints![i].x, marker.linePoints![i].y, marker.linePoints![i].z);
+              dm.visible = true;
+            } else {
+              dm.visible = false;
+            }
+          });
+        }
         continue;
       }
 
-      const pos = new THREE.Vector3(marker.position.x, marker.position.y, marker.position.z);
+      const COLORS = {
+        point: 0xff2222,
+        area: 0xff6600,
+        referred: 0x9933ff,
+        line: 0xff4488,
+      };
+      const color = COLORS[markerType] || COLORS.point;
 
       const innerGeo = new THREE.SphereGeometry(0.06, 16, 12);
       const innerMat = new THREE.MeshBasicMaterial({
-        color: 0xff2222,
+        color,
         transparent: true,
         opacity: 0.7,
         depthWrite: false,
@@ -1855,11 +1933,17 @@ export default function PureThreeGLBViewer({
       innerMesh.userData.isPainMarker = true;
       innerMesh.userData.markerId = marker.id;
 
-      const outerGeo = new THREE.SphereGeometry(0.1, 12, 8);
+      let outerGeo: THREE.BufferGeometry;
+      if (markerType === 'area') {
+        const r = marker.radius || 0.15;
+        outerGeo = new THREE.SphereGeometry(r, 20, 14);
+      } else {
+        outerGeo = new THREE.SphereGeometry(0.1, 12, 8);
+      }
       const outerMat = new THREE.MeshBasicMaterial({
-        color: 0xff2222,
+        color,
         transparent: true,
-        opacity: 0.2,
+        opacity: markerType === 'area' ? 0.25 : 0.2,
         depthWrite: false,
         depthTest: true,
         side: THREE.DoubleSide,
@@ -1872,7 +1956,63 @@ export default function PureThreeGLBViewer({
 
       scene.add(innerMesh);
       scene.add(outerMesh);
-      painMarkerMeshesRef.current.set(marker.id, { inner: innerMesh, outer: outerMesh });
+
+      const extraObjects: THREE.Object3D[] = [];
+
+      if (markerType === 'referred' && marker.referralTarget) {
+        const tp = new THREE.Vector3(marker.referralTarget.x, marker.referralTarget.y, marker.referralTarget.z);
+
+        const tInnerGeo = new THREE.SphereGeometry(0.05, 12, 8);
+        const tInnerMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
+        const tInnerMesh = new THREE.Mesh(tInnerGeo, tInnerMat);
+        tInnerMesh.position.copy(tp);
+        tInnerMesh.renderOrder = 1001;
+        tInnerMesh.userData.isPainMarker = true;
+        tInnerMesh.userData.markerId = marker.id;
+
+        const tOuterGeo = new THREE.SphereGeometry(0.08, 10, 6);
+        const tOuterMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff, transparent: true, opacity: 0.15, depthWrite: false, side: THREE.DoubleSide });
+        const tOuterMesh = new THREE.Mesh(tOuterGeo, tOuterMat);
+        tOuterMesh.position.copy(tp);
+        tOuterMesh.renderOrder = 1000;
+        tOuterMesh.userData.isPainMarker = true;
+        tOuterMesh.userData.markerId = marker.id;
+
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([pos, tp]);
+        const lineMat = new THREE.LineDashedMaterial({ color: 0xcc66ff, dashSize: 0.04, gapSize: 0.02, transparent: true, opacity: 0.7, depthTest: true, depthWrite: false });
+        const line = new THREE.Line(lineGeo, lineMat);
+        line.computeLineDistances();
+        line.renderOrder = 999;
+
+        scene.add(tInnerMesh);
+        scene.add(tOuterMesh);
+        scene.add(line);
+        extraObjects.push(tInnerMesh, tOuterMesh, line);
+      }
+
+      if (markerType === 'line' && marker.linePoints && marker.linePoints.length > 0) {
+        const pts = [pos, ...marker.linePoints.map(p => new THREE.Vector3(p.x, p.y, p.z))];
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8, depthTest: true, depthWrite: false, linewidth: 2 });
+        const line = new THREE.Line(lineGeo, lineMat);
+        line.renderOrder = 999;
+        scene.add(line);
+        extraObjects.push(line);
+
+        for (const lp of marker.linePoints) {
+          const dotGeo = new THREE.SphereGeometry(0.03, 8, 6);
+          const dotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+          const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+          dotMesh.position.set(lp.x, lp.y, lp.z);
+          dotMesh.renderOrder = 1001;
+          dotMesh.userData.isPainMarker = true;
+          dotMesh.userData.markerId = marker.id;
+          scene.add(dotMesh);
+          extraObjects.push(dotMesh);
+        }
+      }
+
+      painMarkerMeshesRef.current.set(marker.id, { inner: innerMesh, outer: outerMesh, extra: extraObjects.length > 0 ? extraObjects : undefined });
     }
   }, [painMarkers]);
 
@@ -1885,6 +2025,13 @@ export default function PureThreeGLBViewer({
         meshes.outer.geometry.dispose();
         (meshes.inner.material as THREE.Material).dispose();
         (meshes.outer.material as THREE.Material).dispose();
+        if (meshes.extra) {
+          meshes.extra.forEach(obj => {
+            if (obj.parent) obj.parent.remove(obj);
+            if (obj instanceof THREE.Mesh) { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }
+            else if (obj instanceof THREE.Line) { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }
+          });
+        }
       });
       painMarkerMeshesRef.current.clear();
     };
@@ -1965,15 +2112,22 @@ export default function PureThreeGLBViewer({
         if (markerId) {
           e.preventDefault();
           e.stopPropagation();
+          pendingReferralRef.current = null;
+          pendingLineRef.current = null;
+          areaDragRef.current = null;
           painMarkerCallbacksRef.current.onPainMarkerRemove?.(markerId);
           return;
         }
+        pendingReferralRef.current = null;
+        pendingLineRef.current = null;
+        areaDragRef.current = null;
+        return;
       }
 
       if (e.button === 0) {
         const ndc = getMouseNDC(e);
         const markerId = raycastPainMarkers(ndc);
-        if (markerId) {
+        if (markerId && !pendingReferralRef.current && !pendingLineRef.current) {
           const meshes = painMarkerMeshesRef.current.get(markerId);
           if (meshes) {
             draggingMarkerRef.current = { id: markerId, mesh: meshes.inner, outerMesh: meshes.outer };
@@ -1981,6 +2135,27 @@ export default function PureThreeGLBViewer({
             domElement.style.cursor = 'grabbing';
             e.preventDefault();
             e.stopPropagation();
+          }
+          return;
+        }
+
+        if (activePainMarkerTypeRef.current === 'area') {
+          const hitPoint = raycastModel(ndc);
+          if (hitPoint) {
+            const boneInfo = findNearestBone(hitPoint);
+            const id = `pm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            areaDragRef.current = { startPoint: hitPoint.clone(), markerId: id };
+            controls.enabled = false;
+            const marker: PainMarker = {
+              id,
+              type: 'area',
+              position: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
+              nearestBone: boneInfo.boneName,
+              anatomicalLabel: boneInfo.label,
+              radius: 0.05,
+            };
+            painMarkerCallbacksRef.current.onPainMarkerAdd?.(marker);
+            e.preventDefault();
           }
         }
       }
@@ -2014,15 +2189,33 @@ export default function PureThreeGLBViewer({
         return;
       }
 
+      if (areaDragRef.current) {
+        const ndc = getMouseNDC(e);
+        const hitPoint = raycastModel(ndc);
+        if (hitPoint) {
+          const radius = Math.max(0.05, areaDragRef.current.startPoint.distanceTo(hitPoint));
+          painMarkerCallbacksRef.current.onPainMarkerUpdate?.(areaDragRef.current.markerId, { radius });
+        }
+        e.preventDefault();
+        return;
+      }
+
       if (!enablePainMarkersRef.current) return;
       const ndc = getMouseNDC(e);
       const markerId = raycastPainMarkers(ndc);
-      domElement.style.cursor = markerId ? 'grab' : '';
+      domElement.style.cursor = markerId ? 'grab' : (pendingReferralRef.current || pendingLineRef.current ? 'crosshair' : '');
     };
 
     const onWindowMouseUp = (e: MouseEvent) => {
       if (draggingMarkerRef.current) {
         finishDrag();
+        mouseDownPosRef.current = null;
+        return;
+      }
+
+      if (areaDragRef.current) {
+        areaDragRef.current = null;
+        controls.enabled = true;
         mouseDownPosRef.current = null;
         return;
       }
@@ -2036,16 +2229,63 @@ export default function PureThreeGLBViewer({
         if (Math.sqrt(dx * dx + dy * dy) < 5) {
           const ndc = getMouseNDC(e);
           const existingMarker = raycastPainMarkers(ndc);
-          if (!existingMarker) {
+          const mType = activePainMarkerTypeRef.current;
+
+          if (mType === 'referred' && pendingReferralRef.current) {
+            if (!existingMarker) {
+              const hitPoint = raycastModel(ndc);
+              if (hitPoint) {
+                const boneInfo = findNearestBone(hitPoint);
+                painMarkerCallbacksRef.current.onPainMarkerUpdate?.(pendingReferralRef.current.id, {
+                  referralTarget: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
+                  referralTargetBone: boneInfo.boneName,
+                  referralTargetLabel: boneInfo.label,
+                });
+                pendingReferralRef.current = null;
+                domElement.style.cursor = '';
+              }
+            }
+            mouseDownPosRef.current = null;
+            return;
+          }
+
+          if (mType === 'line' && pendingLineRef.current) {
+            if (!existingMarker) {
+              const hitPoint = raycastModel(ndc);
+              if (hitPoint) {
+                const existing = pendingLineRef.current.linePoints || [];
+                painMarkerCallbacksRef.current.onPainMarkerUpdate?.(pendingLineRef.current.id, {
+                  linePoints: [...existing, { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z }],
+                });
+                pendingLineRef.current = { ...pendingLineRef.current, linePoints: [...existing, { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z }] };
+              }
+            }
+            mouseDownPosRef.current = null;
+            return;
+          }
+
+          if (!existingMarker && mType !== 'area') {
             const hitPoint = raycastModel(ndc);
             if (hitPoint) {
               const boneInfo = findNearestBone(hitPoint);
               const marker: PainMarker = {
                 id: `pm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                type: mType,
                 position: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
                 nearestBone: boneInfo.boneName,
                 anatomicalLabel: boneInfo.label,
               };
+
+              if (mType === 'referred') {
+                pendingReferralRef.current = marker;
+                domElement.style.cursor = 'crosshair';
+              }
+              if (mType === 'line') {
+                marker.linePoints = [];
+                pendingLineRef.current = marker;
+                domElement.style.cursor = 'crosshair';
+              }
+
               painMarkerCallbacksRef.current.onPainMarkerAdd?.(marker);
             }
           }
@@ -2053,6 +2293,16 @@ export default function PureThreeGLBViewer({
       }
 
       mouseDownPosRef.current = null;
+    };
+
+    const onDblClick = (e: MouseEvent) => {
+      if (!enablePainMarkersRef.current) return;
+      if (pendingLineRef.current) {
+        pendingLineRef.current = null;
+        domElement.style.cursor = '';
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
 
     const onContextMenu = (e: MouseEvent) => {
@@ -2067,18 +2317,23 @@ export default function PureThreeGLBViewer({
     domElement.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onWindowMouseUp);
+    domElement.addEventListener('dblclick', onDblClick);
     domElement.addEventListener('contextmenu', onContextMenu);
 
     return () => {
       domElement.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onWindowMouseUp);
+      domElement.removeEventListener('dblclick', onDblClick);
       domElement.removeEventListener('contextmenu', onContextMenu);
       if (draggingMarkerRef.current) {
         draggingMarkerRef.current = null;
         controls.enabled = true;
         domElement.style.cursor = '';
       }
+      areaDragRef.current = null;
+      pendingReferralRef.current = null;
+      pendingLineRef.current = null;
     };
   }, [enablePainMarkers, findNearestBone]);
 

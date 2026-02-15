@@ -54,7 +54,7 @@ import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
-import type { AnatomicalRegion, PainMarker, RomJointDefinition, RomMeasurement } from "@/components/skeleton/PureThreeGLBViewer";
+import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement } from "@/components/skeleton/PureThreeGLBViewer";
 import { ROM_JOINT_DEFINITIONS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
@@ -331,6 +331,7 @@ export default function PhysioGPT() {
   const [clinicalHighlights, setClinicalHighlights] = useState<RegionHighlight[]>([]);
   const [painMarkers, setPainMarkers] = useState<PainMarker[]>([]);
   const [painMarkerMode, setPainMarkerMode] = useState(false);
+  const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
   const [romMode, setRomMode] = useState(false);
@@ -830,6 +831,10 @@ export default function PhysioGPT() {
     }
   }, [editingMarkerId]);
 
+  const handlePainMarkerUpdate = useCallback((id: string, updates: Partial<PainMarker>) => {
+    setPainMarkers(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  }, []);
+
   const handlePainMarkerDescriptionSubmit = useCallback((markerId: string, description: string) => {
     if (!description.trim() || isStreaming) return;
     let label = 'Unknown area';
@@ -846,7 +851,18 @@ export default function PhysioGPT() {
     setEditingMarkerId(null);
     setMarkerDescription('');
 
-    const prompt = `The patient has marked pain at the ${label} on the anatomical skeleton and describes it as: "${description.trim()}"\n\nPlease provide a clinical assessment. What are the likely differential diagnoses? What specific assessments, special tests, or imaging would you recommend? Are there any red flags to consider?`;
+    let markerInfo = '';
+    const targetMarker = painMarkers.find(m => m.id === markerId);
+    if (targetMarker) {
+      const typeLabels: Record<string, string> = { point: 'focal point of', area: 'broad area of', referred: 'referred', line: 'pain along a line near' };
+      markerInfo = typeLabels[targetMarker.type || 'point'] || 'focal point of';
+      if (targetMarker.type === 'referred' && targetMarker.referralTargetLabel) {
+        markerInfo += ` pain at ${label} referring to ${targetMarker.referralTargetLabel}`;
+        label = '';
+      }
+    }
+    const locationDesc = label ? `${markerInfo} pain at the ${label}` : markerInfo;
+    const prompt = `The patient has marked ${locationDesc} on the anatomical skeleton and describes it as: "${description.trim()}"\n\nPlease provide a clinical assessment. What are the likely differential diagnoses? What specific assessments, special tests, or imaging would you recommend? Are there any red flags to consider?`;
     sendMessageStreaming(prompt);
   }, [isStreaming]);
 
@@ -929,11 +945,17 @@ export default function PhysioGPT() {
 
   const handleAskAboutPainMarkers = useCallback(() => {
     if (painMarkers.length === 0) return;
+    const typeLabels: Record<string, string> = { point: 'focal point', area: 'broad area', referred: 'referred pain pattern', line: 'pain along a line/path' };
     const markerDescriptions = painMarkers.map((m, i) => {
       const desc = m.description ? ` - "${m.description}"` : '';
-      return `${i + 1}. ${m.anatomicalLabel}${desc}`;
+      const typeInfo = typeLabels[m.type || 'point'] || 'focal point';
+      let extra = '';
+      if (m.type === 'referred' && m.referralTargetLabel) extra = ` → refers to ${m.referralTargetLabel}`;
+      if (m.type === 'line' && m.linePoints) extra = ` (${m.linePoints.length + 1} points along path)`;
+      if (m.type === 'area' && m.radius) extra = ` (radius ~${Math.round(m.radius * 100)}mm)`;
+      return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${extra}${desc}`;
     }).join('\n');
-    const prompt = `The patient has indicated pain in the following areas on the anatomical skeleton:\n${markerDescriptions}\n\nPlease provide a clinical assessment considering these pain locations and descriptions. What could be the differential diagnoses? What assessment approach would you recommend? Are there any patterns suggesting a specific condition?`;
+    const prompt = `The patient has indicated pain in the following areas on the anatomical skeleton:\n${markerDescriptions}\n\nPlease provide a clinical assessment considering these pain locations, types, and patterns. What could be the differential diagnoses? What assessment approach would you recommend? Are there any patterns suggesting a specific condition? Pay special attention to any referred pain patterns and pain distributions.`;
     sendMessageStreaming(prompt);
   }, [painMarkers]);
 
@@ -1096,10 +1118,12 @@ export default function PhysioGPT() {
                 intensity: 0.3 + h.severity * 0.7,
               }))}
               enablePainMarkers={painMarkerMode}
+              activePainMarkerType={activePainMarkerType}
               painMarkers={painMarkers}
               onPainMarkerAdd={handlePainMarkerAdd}
               onPainMarkerMove={handlePainMarkerMove}
               onPainMarkerRemove={handlePainMarkerRemove}
+              onPainMarkerUpdate={handlePainMarkerUpdate}
               enableRomMode={romMode}
               onRomJointSelect={handleRomJointSelect}
               selectedRomJointId={selectedRomJoint?.id || null}
@@ -1198,11 +1222,33 @@ export default function PhysioGPT() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {painMarkers.map((m) => (
+                  {painMarkers.map((m) => {
+                    const typeColors: Record<string, { bg: string; shadow: string; label: string }> = {
+                      point: { bg: 'bg-red-500', shadow: '#ff2222', label: 'Point' },
+                      area: { bg: 'bg-orange-500', shadow: '#ff6600', label: 'Area' },
+                      referred: { bg: 'bg-purple-500', shadow: '#9933ff', label: 'Referred' },
+                      line: { bg: 'bg-pink-500', shadow: '#ff4488', label: 'Line' },
+                    };
+                    const tc = typeColors[m.type || 'point'] || typeColors.point;
+                    return (
                     <div key={m.id} className="bg-white/5 rounded px-2 py-1.5">
                       <div className="flex items-center gap-2 group">
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-red-500" style={{ boxShadow: '0 0 6px #ff2222' }} />
-                        <span className="text-[11px] text-white truncate flex-1 font-medium">{m.anatomicalLabel}</span>
+                        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${tc.bg}`} style={{ boxShadow: `0 0 6px ${tc.shadow}` }} />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[11px] text-white truncate block font-medium">{m.anatomicalLabel}</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] text-gray-400 uppercase">{tc.label}</span>
+                            {m.type === 'referred' && m.referralTargetLabel && (
+                              <span className="text-[9px] text-purple-300">→ {m.referralTargetLabel}</span>
+                            )}
+                            {m.type === 'line' && m.linePoints && (
+                              <span className="text-[9px] text-pink-300">{m.linePoints.length + 1} pts</span>
+                            )}
+                            {m.type === 'area' && m.radius && (
+                              <span className="text-[9px] text-orange-300">r={Math.round(m.radius * 100)}mm</span>
+                            )}
+                          </div>
+                        </div>
                         <button
                           className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() => handlePainMarkerRemove(m.id)}
@@ -1261,7 +1307,8 @@ export default function PhysioGPT() {
                         </button>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <Button
                   size="sm"
@@ -1403,25 +1450,65 @@ export default function PhysioGPT() {
 
             {/* Skeleton controls bar */}
             <div className="absolute bottom-2 left-2 flex gap-1 z-10">
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${painMarkerMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white/90 hover:bg-white'}`}
-                onClick={() => {
-                  const newMode = !painMarkerMode;
-                  setPainMarkerMode(newMode);
-                  if (newMode) {
-                    setRomMode(false);
-                    setPoseMode(false);
-                    setSelectedRomJoint(null);
-                    if (!skeletonOpen) setSkeletonOpen(true);
-                    toast({ title: "Pain Marker Mode", description: "Click on the skeleton to place markers. Right-click to remove. Drag to reposition." });
-                  }
-                }}
-              >
-                <MapPin className="h-3 w-3 mr-1" />
-                {painMarkerMode ? 'Marking...' : 'Mark Pain'}
-              </Button>
+              <div className="relative flex items-center">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={`h-7 text-xs shadow-sm rounded-r-none ${painMarkerMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white/90 hover:bg-white'}`}
+                  onClick={() => {
+                    const newMode = !painMarkerMode;
+                    setPainMarkerMode(newMode);
+                    if (newMode) {
+                      setRomMode(false);
+                      setPoseMode(false);
+                      setSelectedRomJoint(null);
+                      if (!skeletonOpen) setSkeletonOpen(true);
+                      const tips: Record<PainMarkerType, string> = {
+                        point: "Click to place a point marker. Right-click to remove. Drag to reposition.",
+                        area: "Click and drag to draw a pain area. Right-click to remove.",
+                        referred: "Click to place origin, then click again for referral target. Right-click to cancel/remove.",
+                        line: "Click to place points along the pain path. Double-click to finish. Right-click to cancel/remove.",
+                      };
+                      toast({ title: "Pain Marker Mode", description: tips[activePainMarkerType] });
+                    }
+                  }}
+                >
+                  <MapPin className="h-3 w-3 mr-1" />
+                  {painMarkerMode ? 'Marking...' : 'Mark Pain'}
+                </Button>
+                {painMarkerMode && (
+                  <div className="flex items-center bg-red-500/90 rounded-r-md overflow-hidden h-7">
+                    {([
+                      { type: 'point' as PainMarkerType, icon: '•', tip: 'Point' },
+                      { type: 'area' as PainMarkerType, icon: '◉', tip: 'Area' },
+                      { type: 'referred' as PainMarkerType, icon: '→', tip: 'Referred' },
+                      { type: 'line' as PainMarkerType, icon: '⁓', tip: 'Line' },
+                    ]).map(({ type, icon, tip }) => (
+                      <button
+                        key={type}
+                        title={tip}
+                        className={`px-1.5 h-full text-xs font-bold transition-colors ${
+                          activePainMarkerType === type
+                            ? 'bg-white text-red-600'
+                            : 'text-white/80 hover:text-white hover:bg-red-600'
+                        }`}
+                        onClick={() => {
+                          setActivePainMarkerType(type);
+                          const tips: Record<PainMarkerType, string> = {
+                            point: "Click to place a point marker. Drag to reposition.",
+                            area: "Click and drag to draw a pain area.",
+                            referred: "Click origin, then click referral target.",
+                            line: "Click to place points along path. Double-click to finish.",
+                          };
+                          toast({ title: `${tip} Pain`, description: tips[type] });
+                        }}
+                      >
+                        {icon}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Button
                 variant="secondary"
                 size="sm"

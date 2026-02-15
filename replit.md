@@ -33,6 +33,13 @@ Preferred communication style: Simple, everyday language.
   - Double-click to reset any joint to 0°; orbit controls disabled during drag
   - Syncs back to modelConfig via onModelConfigChange callback, keeping sliders in sync
   - Mutually exclusive with Pain Marker and ROM modes
+- **Extended Pain Marker Types**: Four types of pain markers for comprehensive pain documentation:
+  - Point: Single focal dot (red), click to place, drag to reposition
+  - Area: Broad region (orange), click-drag to define center and radius for diffuse pain
+  - Referred: Two connected points (purple) with dashed line showing referral pattern, click origin then target
+  - Line: Multi-point path (pink), click to add points, double-click to finish, for radicular/dermatomal patterns
+  - Type selector sub-buttons appear in toolbar when pain marker mode is active
+  - AI prompts include marker type, referral targets, and area radius for better clinical context
 - **Key Files**: client/src/pages/PhysioGPT.tsx, client/src/lib/clinicalTextParser.ts, client/src/components/skeleton/PureThreeGLBViewer.tsx
 
 ## System Architecture

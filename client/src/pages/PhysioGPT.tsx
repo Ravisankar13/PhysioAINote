@@ -317,6 +317,9 @@ export default function PhysioGPT() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [skeletonOpen, setSkeletonOpen] = useState(false);
+  const [skeletonHeight, setSkeletonHeight] = useState(40);
+  const [isDraggingResize, setIsDraggingResize] = useState(false);
+  const mainContentRef = useRef<HTMLDivElement>(null);
   const [showJointControls, setShowJointControls] = useState(false);
 
   const [selectedRegion, setSelectedRegion] = useState<keyof typeof BODY_REGIONS | null>(null);
@@ -768,6 +771,40 @@ export default function PhysioGPT() {
     },
   });
 
+  const resizeStartY = useRef<number | null>(null);
+  const didDrag = useRef(false);
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeStartY.current = e.clientY;
+    didDrag.current = false;
+    setIsDraggingResize(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isDraggingResize) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!mainContentRef.current) return;
+      if (resizeStartY.current !== null && Math.abs(e.clientY - resizeStartY.current) > 3) {
+        didDrag.current = true;
+      }
+      const rect = mainContentRef.current.getBoundingClientRect();
+      const offsetY = e.clientY - rect.top;
+      const pct = (offsetY / rect.height) * 100;
+      setSkeletonHeight(Math.min(Math.max(pct, 15), 80));
+    };
+    const handleMouseUp = () => {
+      setIsDraggingResize(false);
+      resizeStartY.current = null;
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingResize]);
+
   const handlePainMarkerAdd = useCallback((marker: PainMarker) => {
     setPainMarkers(prev => [...prev, marker]);
     setEditingMarkerId(marker.id);
@@ -957,9 +994,12 @@ export default function PhysioGPT() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div ref={mainContentRef} className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isDraggingResize ? 'select-none cursor-row-resize' : ''}`}>
         {/* Skeleton Viewer Panel */}
-        <div className={`${skeletonOpen ? 'h-[40%]' : 'h-0'} transition-all duration-300 overflow-hidden border-b bg-gray-900 relative flex-shrink-0`}>
+        <div
+          className={`${skeletonOpen ? '' : 'h-0'} overflow-hidden border-b bg-gray-900 relative flex-shrink-0`}
+          style={skeletonOpen ? { height: `${skeletonHeight}%`, transition: isDraggingResize ? 'none' : 'height 0.3s ease' } : undefined}
+        >
           <div className="h-full w-full relative">
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
@@ -1206,15 +1246,26 @@ export default function PhysioGPT() {
           </div>
         </div>
 
-        {/* Skeleton toggle button */}
-        <button
-          onClick={() => setSkeletonOpen(!skeletonOpen)}
-          className="w-full flex items-center justify-center gap-1.5 py-1 bg-white border-b hover:bg-gray-50 text-xs text-gray-500 transition-colors"
-        >
-          {skeletonOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          {skeletonOpen ? 'Hide' : 'Show'} Skeleton Viewer
-          {skeletonOpen ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-        </button>
+        {/* Skeleton resize handle / toggle */}
+        <div className="relative flex-shrink-0">
+          {skeletonOpen && (
+            <div
+              className="absolute inset-x-0 -top-1 h-3 cursor-row-resize z-20 group"
+              onMouseDown={handleResizeMouseDown}
+            >
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 mx-auto w-12 rounded-full bg-gray-300 group-hover:bg-teal-400 transition-colors" />
+            </div>
+          )}
+          <button
+            onClick={() => { if (!didDrag.current) setSkeletonOpen(!skeletonOpen); }}
+            className={`w-full flex items-center justify-center gap-1.5 py-1.5 bg-white border-b hover:bg-gray-50 text-xs text-gray-500 transition-colors ${skeletonOpen ? 'cursor-row-resize' : 'cursor-pointer'}`}
+            onMouseDown={(e) => { if (skeletonOpen) handleResizeMouseDown(e); }}
+          >
+            {skeletonOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {skeletonOpen ? 'Hide' : 'Show'} Skeleton Viewer
+            {skeletonOpen ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+          </button>
+        </div>
 
         {/* Chat Area */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">

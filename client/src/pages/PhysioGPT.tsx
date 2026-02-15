@@ -404,11 +404,8 @@ export default function PhysioGPT() {
         const merged = mergeHighlights(contexts);
         setClinicalHighlights(merged.highlights);
 
-        if (merged.primaryRegion && !selectedRegion) {
-          setZoomToRegion(merged.primaryRegion);
-          if (!skeletonOpen && merged.highlights.length > 0) {
-            setSkeletonOpen(true);
-          }
+        if (merged.highlights.length > 0 && !skeletonOpen) {
+          setSkeletonOpen(true);
         }
       } else {
         setClinicalHighlights([]);

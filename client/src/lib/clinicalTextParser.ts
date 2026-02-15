@@ -23,59 +23,68 @@ interface RegionPattern {
 const REGION_PATTERNS: RegionPattern[] = [
   {
     patterns: [
-      /\b(low(er)?\s*back|lumbar|lumbosacral|L[1-5]|sacroiliac|SI\s*joint)\b/i,
-      /\b(lumbar\s*(spine|region|area|disc|stenosis|radiculopathy|spondylosis))\b/i,
+      /\b(low(er)?\s*back|lumbar|lumbosacral|L[1-5]|sacroiliac|SI\s*joint|LBP)\b/i,
+      /\b(lumbar\s*(spine|region|area|disc|stenosis|radiculopathy|spondylosis|spondylolisthesis|facet))\b/i,
+      /\b(cauda\s*equina|spinal\s*stenosis)\b/i,
     ],
     region: 'lumbar_spine',
     label: 'Lumbar Spine',
   },
   {
     patterns: [
-      /\b(thoracic|mid[\s-]*back|upper\s*back|T[1-9]|T1[0-2]|rib|costal|intercostal)\b/i,
-      /\b(thoracic\s*(spine|region|area|kyphosis))\b/i,
+      /\b(thoracic|mid[\s-]*back|upper\s*back|T[1-9]\b|T1[0-2]|rib|costal|intercostal)\b/i,
+      /\b(thoracic\s*(spine|region|area|kyphosis|outlet))\b/i,
+      /\b(TOS|Scheuermann)/i,
     ],
     region: 'thoracic_spine',
     label: 'Thoracic Spine',
   },
   {
     patterns: [
-      /\b(cervical|neck|C[1-7]|whiplash|torticollis|cervicogenic)\b/i,
-      /\b(cervical\s*(spine|region|area|radiculopathy|myelopathy|spondylosis))\b/i,
+      /\b(cervical|neck|C[1-7]\b|whiplash|torticollis|cervicogenic|WAD)\b/i,
+      /\b(cervical\s*(spine|region|area|radiculopathy|myelopathy|spondylosis|disc|facet))\b/i,
+      /\bC[1-7]\s*[\/\-]\s*[CT][1-9]\b/i,
+      /\b(CTJ|cervicothoracic|upper\s*trap|levator\s*scap|SCM|sternocleidomastoid)\b/i,
+      /\b(text\s*neck|forward\s*head|headache|occipital|suboccipital)\b/i,
     ],
     region: 'cervical_spine',
     label: 'Cervical Spine',
   },
   {
     patterns: [
-      /\b(left\s*(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP))\b/i,
+      /\b(left\s*(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP|biceps\s*tendon))\b/i,
+      /\b(left\s*(subacromial|impingement|frozen\s*shoulder|adhesive\s*capsulitis))\b/i,
     ],
     region: 'left_shoulder',
     label: 'Left Shoulder',
   },
   {
     patterns: [
-      /\b(right\s*(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP))\b/i,
+      /\b(right\s*(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP|biceps\s*tendon))\b/i,
+      /\b(right\s*(subacromial|impingement|frozen\s*shoulder|adhesive\s*capsulitis))\b/i,
     ],
     region: 'right_shoulder',
     label: 'Right Shoulder',
   },
   {
     patterns: [
-      /\b(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP|impingement|frozen\s*shoulder|adhesive\s*capsulitis)\b/i,
+      /\b(shoulder|rotator\s*cuff|supraspinatus|infraspinatus|subscapularis|deltoid|acromion|AC\s*joint|glenohumeral|labr[au]m|SLAP|impingement|frozen\s*shoulder|adhesive\s*capsulitis|subacromial|biceps\s*tendon|bicipital)\b/i,
     ],
     region: 'left_shoulder',
     label: 'Shoulder',
   },
   {
     patterns: [
-      /\b(left\s*(hip|groin|trochant|gluteal|piriformis|labr[au]m|acetabul|femoral|FAI))\b/i,
+      /\b(left\s*(hip|groin|trochant|gluteal|piriformis|labr[au]m|acetabul|femoral|FAI|GTPS|greater\s*trochant))\b/i,
+      /\b(left\s*(iliotibial|ITB|IT\s*band|TFL|tensor\s*fasciae?\s*latae?|psoas|iliopsoas|adductor|snapping\s*hip|bursitis))\b/i,
     ],
     region: 'left_hip',
     label: 'Left Hip',
   },
   {
     patterns: [
-      /\b(right\s*(hip|groin|trochant|gluteal|piriformis|labr[au]m|acetabul|femoral|FAI))\b/i,
+      /\b(right\s*(hip|groin|trochant|gluteal|piriformis|labr[au]m|acetabul|femoral|FAI|GTPS|greater\s*trochant))\b/i,
+      /\b(right\s*(iliotibial|ITB|IT\s*band|TFL|tensor\s*fasciae?\s*latae?|psoas|iliopsoas|adductor|snapping\s*hip|bursitis))\b/i,
     ],
     region: 'right_hip',
     label: 'Right Hip',
@@ -83,6 +92,9 @@ const REGION_PATTERNS: RegionPattern[] = [
   {
     patterns: [
       /\b(hip|groin|trochant|gluteal|piriformis|acetabul|FAI|femoroacetabular)\b/i,
+      /\b(GTPS|greater\s*trochanteric\s*pain|trochanteric\s*bursitis)\b/i,
+      /\b(iliotibial|ITB|IT\s*band|TFL|tensor\s*fasciae?\s*latae?|psoas|iliopsoas|adductor|snapping\s*hip)\b/i,
+      /\b(hip\s*(OA|osteoarthritis|replacement|arthroplasty|impingement|dysplasia|labral))\b/i,
     ],
     region: 'left_hip',
     label: 'Hip',
@@ -90,6 +102,7 @@ const REGION_PATTERNS: RegionPattern[] = [
   {
     patterns: [
       /\b(left\s*(knee|patell|meniscus|ACL|PCL|MCL|LCL|tibial|popliteal|ITB|IT\s*band))\b/i,
+      /\b(left\s*(PFPS|patellofemoral|chondromalacia|baker'?s?\s*cyst|Osgood|pes\s*anserine))\b/i,
     ],
     region: 'left_knee',
     label: 'Left Knee',
@@ -97,6 +110,7 @@ const REGION_PATTERNS: RegionPattern[] = [
   {
     patterns: [
       /\b(right\s*(knee|patell|meniscus|ACL|PCL|MCL|LCL|tibial|popliteal|ITB|IT\s*band))\b/i,
+      /\b(right\s*(PFPS|patellofemoral|chondromalacia|baker'?s?\s*cyst|Osgood|pes\s*anserine))\b/i,
     ],
     region: 'right_knee',
     label: 'Right Knee',
@@ -104,20 +118,23 @@ const REGION_PATTERNS: RegionPattern[] = [
   {
     patterns: [
       /\b(knee|patell|meniscus|ACL|PCL|MCL|LCL|popliteal|patellofemoral|chondromalacia)\b/i,
+      /\b(PFPS|baker'?s?\s*cyst|Osgood[\s-]*Schlatter|pes\s*anserine|knee\s*(OA|osteoarthritis|replacement|arthroplasty))\b/i,
     ],
     region: 'left_knee',
     label: 'Knee',
   },
   {
     patterns: [
-      /\b(left\s*(ankle|foot|achilles|plantar|calcaneal|talar|subtalar|metatarsal))\b/i,
+      /\b(left\s*(ankle|foot|achilles|plantar|calcaneal|talar|subtalar|metatarsal|ATFL|CFL))\b/i,
+      /\b(left\s*(lateral\s*ankle|medial\s*ankle|peroneal|tibialis|midfoot|forefoot|rearfoot|bunion|hallux))\b/i,
     ],
     region: 'left_ankle',
     label: 'Left Ankle/Foot',
   },
   {
     patterns: [
-      /\b(right\s*(ankle|foot|achilles|plantar|calcaneal|talar|subtalar|metatarsal))\b/i,
+      /\b(right\s*(ankle|foot|achilles|plantar|calcaneal|talar|subtalar|metatarsal|ATFL|CFL))\b/i,
+      /\b(right\s*(lateral\s*ankle|medial\s*ankle|peroneal|tibialis|midfoot|forefoot|rearfoot|bunion|hallux))\b/i,
     ],
     region: 'right_ankle',
     label: 'Right Ankle/Foot',
@@ -125,6 +142,8 @@ const REGION_PATTERNS: RegionPattern[] = [
   {
     patterns: [
       /\b(ankle|foot|achilles|plantar\s*fasci|calcaneal|subtalar|metatarsal|heel\s*(pain|spur))\b/i,
+      /\b(ATFL|CFL|lateral\s*ankle\s*sprain|peroneal|tibialis\s*posterior|shin\s*splint|MTSS|medial\s*tibial)\b/i,
+      /\b(bunion|hallux\s*(valgus|rigidus|limitus)|morton'?s?\s*(neuroma|toe)|sesamoid)\b/i,
     ],
     region: 'left_ankle',
     label: 'Ankle/Foot',
@@ -132,6 +151,7 @@ const REGION_PATTERNS: RegionPattern[] = [
   {
     patterns: [
       /\b(left\s*(elbow|epicondyl|olecranon|ulnar|radial\s*head|tennis\s*elbow|golfer'?s?\s*elbow))\b/i,
+      /\b(left\s*(lateral\s*epicondyl|medial\s*epicondyl|cubital\s*tunnel))\b/i,
     ],
     region: 'left_elbow',
     label: 'Left Elbow',
@@ -139,20 +159,23 @@ const REGION_PATTERNS: RegionPattern[] = [
   {
     patterns: [
       /\b(right\s*(elbow|epicondyl|olecranon|ulnar|radial\s*head|tennis\s*elbow|golfer'?s?\s*elbow))\b/i,
+      /\b(right\s*(lateral\s*epicondyl|medial\s*epicondyl|cubital\s*tunnel))\b/i,
     ],
     region: 'right_elbow',
     label: 'Right Elbow',
   },
   {
     patterns: [
-      /\b(elbow|epicondyl|olecranon|tennis\s*elbow|golfer'?s?\s*elbow|lateral\s*epicondyl|medial\s*epicondyl)\b/i,
+      /\b(elbow|epicondyl|olecranon|tennis\s*elbow|golfer'?s?\s*elbow|lateral\s*epicondyl|medial\s*epicondyl|cubital\s*tunnel)\b/i,
     ],
     region: 'left_elbow',
     label: 'Elbow',
   },
   {
     patterns: [
-      /\b(pelvis|pelvic|sacr(um|al)|coccyx|pubic|SIJ|iliac|ischial)\b/i,
+      /\b(pelvis|pelvic|sacr(um|al)|coccyx|pubic|SIJ|iliac|ischial|ASIS|PSIS)\b/i,
+      /\b(pelvic\s*(floor|girdle|tilt|obliquity)|sacroiliac|coccydynia|symphysis\s*pubis|SPD)\b/i,
+      /\b(pelvic\s*(instability|dysfunction))\b/i,
     ],
     region: 'pelvis',
     label: 'Pelvis',
@@ -168,36 +191,36 @@ interface TypePattern {
 const TYPE_PATTERNS: TypePattern[] = [
   {
     patterns: [
-      /\b(pain|painful|ache|aching|hurt|sore|soreness|tender|tenderness|sharp|shooting|burning|throbbing|stabbing|excruciating|agony|discomfort|nociceptive)\b/i,
-      /\b(VAS|NRS|pain\s*scale|pain\s*level|pain\s*score)\b/i,
+      /\b(pain|painful|ache|aching|hurt|hurts|hurting|sore|soreness|tender|tenderness|sharp|shooting|burning|throbbing|stabbing|excruciating|agony|discomfort|nociceptive|aggravat|irritat|flare[\s-]*up)\b/i,
+      /\b(VAS|NRS|pain\s*scale|pain\s*level|pain\s*score|P!|NPRS)\b/i,
     ],
     type: 'pain',
     severityBoost: 0,
   },
   {
     patterns: [
-      /\b(dysfunction|dysfunctional|impairment|instability|unstable|sublux|malalign|deformity|degenerat|pathology|lesion|tear|rupture|fracture|sprain|strain)\b/i,
+      /\b(dysfunction|dysfunctional|impairment|instability|unstable|sublux|malalign|deformity|degenerat|pathology|lesion|tear|rupture|fracture|sprain|strain|OA|osteoarthritis|arthritis|tendinopathy|tendonitis|tendinitis|bursitis|synovitis)\b/i,
     ],
     type: 'dysfunction',
     severityBoost: 0.1,
   },
   {
     patterns: [
-      /\b(referr|radiat|radiating|radiculopathy|radicular|sciatica|referred\s*pain|nerve\s*root|dermatomal|myotomal)\b/i,
+      /\b(referr|radiat|radiating|radiculopathy|radicular|sciatica|referred\s*pain|nerve\s*root|dermatomal|myotomal|neuropathy|neurogenic|neural\s*tension|nerve\s*entrap)\b/i,
     ],
     type: 'referral',
     severityBoost: 0,
   },
   {
     patterns: [
-      /\b(weak|weakness|atrophy|atrophied|wasting|inhibit|inhibited|give\s*way|give\s*out|muscle\s*loss|paresis)\b/i,
+      /\b(weak|weakness|atrophy|atrophied|wasting|inhibit|inhibited|give\s*way|give\s*out|muscle\s*loss|paresis|MRC\s*grade)\b/i,
     ],
     type: 'weakness',
     severityBoost: 0,
   },
   {
     patterns: [
-      /\b(stiff|stiffness|restricted|restriction|limited|limitation|ROM|range\s*of\s*motion|hypomobil|tight|tightness|contracture|frozen)\b/i,
+      /\b(stiff|stiffness|restricted|restriction|limited|limitation|ROM|range\s*of\s*motion|hypomobil|tight|tightness|contracture|frozen|ankylosis|decreased\s*ROM)\b/i,
     ],
     type: 'stiffness',
     severityBoost: 0,

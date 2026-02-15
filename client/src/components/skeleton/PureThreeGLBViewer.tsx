@@ -1349,9 +1349,9 @@ export default function PureThreeGLBViewer({
       entries.forEach(({ mesh, originalEmissive, originalIntensity }) => {
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         materials.forEach((mat) => {
-          if (mat instanceof THREE.MeshStandardMaterial) {
-            mat.emissive.copy(originalEmissive);
-            mat.emissiveIntensity = originalIntensity;
+          if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial) {
+            (mat as any).emissive.copy(originalEmissive);
+            (mat as any).emissiveIntensity = originalIntensity;
           }
         });
       });
@@ -1367,20 +1367,23 @@ export default function PureThreeGLBViewer({
       const entries: { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[] = [];
 
       model.traverse((child) => {
-        if (child instanceof THREE.Mesh && meshNames.includes(child.name)) {
-          const materials = Array.isArray(child.material) ? child.material : [child.material];
-          materials.forEach((mat) => {
-            if (mat instanceof THREE.MeshStandardMaterial) {
-              entries.push({
-                mesh: child,
-                originalEmissive: mat.emissive.clone(),
-                originalIntensity: mat.emissiveIntensity,
-              });
-              mat.emissive = new THREE.Color(highlight.color);
-              mat.emissiveIntensity = highlight.intensity;
-            }
-          });
-        }
+        if (!(child instanceof THREE.Mesh)) return;
+        const nameMatch = meshNames.includes(child.name) ||
+          meshNames.some(n => child.name.startsWith(n) || child.name.includes(n));
+        if (!nameMatch) return;
+
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((mat) => {
+          if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial) {
+            entries.push({
+              mesh: child,
+              originalEmissive: (mat as any).emissive.clone(),
+              originalIntensity: (mat as any).emissiveIntensity ?? 1,
+            });
+            (mat as any).emissive = new THREE.Color(highlight.color);
+            (mat as any).emissiveIntensity = Math.max(highlight.intensity, 0.8);
+          }
+        });
       });
 
       if (entries.length > 0) {

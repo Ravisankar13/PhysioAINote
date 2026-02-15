@@ -40,7 +40,16 @@ Preferred communication style: Simple, everyday language.
   - Line: Multi-point path (pink), click to add points, double-click to finish, for radicular/dermatomal patterns
   - Type selector sub-buttons appear in toolbar when pain marker mode is active
   - AI prompts include marker type, referral targets, and area radius for better clinical context
-- **Key Files**: client/src/pages/PhysioGPT.tsx, client/src/lib/clinicalTextParser.ts, client/src/components/skeleton/PureThreeGLBViewer.tsx
+- **Real-Time Postural Force Analysis**: Joint loading calculation as % body weight based on skeleton pose:
+  - Postural force engine (client/src/lib/posturalForceEngine.ts) using body segment parameters (Winter, 2009)
+  - Calculates compression and shear forces for 12 joints: cervical, lumbar, bilateral hips/knees/ankles/shoulders/elbows
+  - Static equilibrium model with segment mass percentages, lever arm calculations, and angle-dependent moment multipliers
+  - Color-coded status: green (<80% BW), yellow (80-150%), orange (150-300%), red (>300%)
+  - Force overlay panel with body weight input for absolute Newton conversion
+  - COM shift warning when posture deviates from center
+  - Real-time updates via useMemo tied to modelConfig changes
+  - "Forces" toolbar toggle button (amber) in skeleton controls bar
+- **Key Files**: client/src/pages/PhysioGPT.tsx, client/src/lib/clinicalTextParser.ts, client/src/components/skeleton/PureThreeGLBViewer.tsx, client/src/lib/posturalForceEngine.ts
 
 ## System Architecture
 

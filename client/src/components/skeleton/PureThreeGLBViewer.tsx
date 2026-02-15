@@ -548,6 +548,49 @@ export const SUB_STRUCTURE_OVERLAYS: Record<SubStructure, SubStructureOverlay> =
   }
 };
 
+export interface PainMarker {
+  id: string;
+  position: { x: number; y: number; z: number };
+  nearestBone: string;
+  anatomicalLabel: string;
+}
+
+const BONE_ANATOMICAL_LABELS: Record<string, string> = {
+  'Head_M': 'Head',
+  'Neck_M': 'Neck (Cervical)',
+  'NeckPart1_M': 'Upper Cervical',
+  'NeckPart2_M': 'Lower Cervical',
+  'Chest_M': 'Thoracic Spine / Chest',
+  'Spine1_M': 'Upper Lumbar',
+  'Spine1Part1_M': 'Mid Lumbar',
+  'Spine1Part2_M': 'Lower Thoracic',
+  'Root_M': 'Pelvis / Sacrum',
+  'RootPart1_M': 'Lower Lumbar',
+  'RootPart2_M': 'Lumbosacral Junction',
+  'Shoulder_L': 'Left Shoulder',
+  'Shoulder_R': 'Right Shoulder',
+  'ShoulderPart1_L': 'Left Upper Arm',
+  'ShoulderPart1_R': 'Right Upper Arm',
+  'ShoulderPart2_L': 'Left Mid Arm',
+  'ShoulderPart2_R': 'Right Mid Arm',
+  'Scapula_L': 'Left Scapula',
+  'Scapula_R': 'Right Scapula',
+  'Elbow_L': 'Left Elbow',
+  'Elbow_R': 'Right Elbow',
+  'Wrist_L': 'Left Wrist / Hand',
+  'Wrist_R': 'Right Wrist / Hand',
+  'Hip_L': 'Left Hip',
+  'Hip_R': 'Right Hip',
+  'HipPart1_L': 'Left Upper Thigh',
+  'HipPart1_R': 'Right Upper Thigh',
+  'Knee_L': 'Left Knee',
+  'Knee_R': 'Right Knee',
+  'Ankle_L': 'Left Ankle',
+  'Ankle_R': 'Right Ankle',
+  'Toes_L': 'Left Foot',
+  'Toes_R': 'Right Foot',
+};
+
 export interface CompensatingJointInfo {
   joint: string;
   loadIncrease: number;
@@ -729,6 +772,11 @@ interface PureThreeGLBViewerProps {
     color: number;
     intensity: number;
   }>;
+  painMarkers?: PainMarker[];
+  onPainMarkerAdd?: (marker: PainMarker) => void;
+  onPainMarkerMove?: (id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => void;
+  onPainMarkerRemove?: (id: string) => void;
+  enablePainMarkers?: boolean;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -993,7 +1041,12 @@ export default function PureThreeGLBViewer({
   individualMuscleVisibility,
   onMuscleGroupsReady,
   muscleStates,
-  highlightRegions
+  highlightRegions,
+  painMarkers = [],
+  onPainMarkerAdd,
+  onPainMarkerMove,
+  onPainMarkerRemove,
+  enablePainMarkers = false
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1017,6 +1070,35 @@ export default function PureThreeGLBViewer({
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
+  const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh }>>(new Map());
+  const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh } | null>(null);
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const mouseRef = useRef(new THREE.Vector2());
+  const painMarkerCallbacksRef = useRef({ onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove });
+  painMarkerCallbacksRef.current = { onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove };
+  const enablePainMarkersRef = useRef(enablePainMarkers);
+  enablePainMarkersRef.current = enablePainMarkers;
+
+  const findNearestBone = useCallback((position: THREE.Vector3): { boneName: string; label: string } => {
+    const bones = bonesRef.current;
+    let minDist = Infinity;
+    let nearest = 'Root_M';
+    const worldPos = new THREE.Vector3();
+
+    for (const [name, bone] of Object.entries(bones)) {
+      if (!BONE_ANATOMICAL_LABELS[name]) continue;
+      bone.getWorldPosition(worldPos);
+      const dist = position.distanceTo(worldPos);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = name;
+      }
+    }
+
+    return { boneName: nearest, label: BONE_ANATOMICAL_LABELS[nearest] || nearest };
+  }, []);
+
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -1432,6 +1514,246 @@ export default function PureThreeGLBViewer({
       }
     }
   }, [highlightRegions]);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene } = sceneRef.current;
+
+    const existingIds = new Set(painMarkers.map(m => m.id));
+    painMarkerMeshesRef.current.forEach((meshes, id) => {
+      if (!existingIds.has(id)) {
+        scene.remove(meshes.inner);
+        scene.remove(meshes.outer);
+        meshes.inner.geometry.dispose();
+        meshes.outer.geometry.dispose();
+        (meshes.inner.material as THREE.Material).dispose();
+        (meshes.outer.material as THREE.Material).dispose();
+        painMarkerMeshesRef.current.delete(id);
+      }
+    });
+
+    for (const marker of painMarkers) {
+      if (painMarkerMeshesRef.current.has(marker.id)) {
+        const meshes = painMarkerMeshesRef.current.get(marker.id)!;
+        meshes.inner.position.set(marker.position.x, marker.position.y, marker.position.z);
+        meshes.outer.position.set(marker.position.x, marker.position.y, marker.position.z);
+        continue;
+      }
+
+      const pos = new THREE.Vector3(marker.position.x, marker.position.y, marker.position.z);
+
+      const innerGeo = new THREE.SphereGeometry(0.06, 16, 12);
+      const innerMat = new THREE.MeshBasicMaterial({
+        color: 0xff2222,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.DoubleSide,
+      });
+      const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+      innerMesh.position.copy(pos);
+      innerMesh.renderOrder = 1001;
+      innerMesh.userData.isPainMarker = true;
+      innerMesh.userData.markerId = marker.id;
+
+      const outerGeo = new THREE.SphereGeometry(0.1, 12, 8);
+      const outerMat = new THREE.MeshBasicMaterial({
+        color: 0xff2222,
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.DoubleSide,
+      });
+      const outerMesh = new THREE.Mesh(outerGeo, outerMat);
+      outerMesh.position.copy(pos);
+      outerMesh.renderOrder = 1000;
+      outerMesh.userData.isPainMarker = true;
+      outerMesh.userData.markerId = marker.id;
+
+      scene.add(innerMesh);
+      scene.add(outerMesh);
+      painMarkerMeshesRef.current.set(marker.id, { inner: innerMesh, outer: outerMesh });
+    }
+  }, [painMarkers]);
+
+  useEffect(() => {
+    return () => {
+      painMarkerMeshesRef.current.forEach((meshes) => {
+        if (meshes.inner.parent) meshes.inner.parent.remove(meshes.inner);
+        if (meshes.outer.parent) meshes.outer.parent.remove(meshes.outer);
+        meshes.inner.geometry.dispose();
+        meshes.outer.geometry.dispose();
+        (meshes.inner.material as THREE.Material).dispose();
+        (meshes.outer.material as THREE.Material).dispose();
+      });
+      painMarkerMeshesRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sceneRef.current || !enablePainMarkers) return;
+    const { renderer, camera, scene, model, controls } = sceneRef.current;
+    if (!model || !renderer) return;
+    const domElement = renderer.domElement;
+
+    const getMouseNDC = (e: MouseEvent) => {
+      const rect = domElement.getBoundingClientRect();
+      return new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+    };
+
+    const raycastModel = (ndc: THREE.Vector2): THREE.Vector3 | null => {
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const meshes: THREE.Mesh[] = [];
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.visible) meshes.push(child);
+      });
+      const hits = raycasterRef.current.intersectObjects(meshes, false);
+      if (hits.length > 0) return hits[0].point.clone();
+      return null;
+    };
+
+    const raycastPainMarkers = (ndc: THREE.Vector2): string | null => {
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const markerMeshes: THREE.Mesh[] = [];
+      painMarkerMeshesRef.current.forEach((meshes) => {
+        markerMeshes.push(meshes.inner);
+      });
+      const hits = raycasterRef.current.intersectObjects(markerMeshes, false);
+      if (hits.length > 0) return hits[0].object.userData.markerId;
+      return null;
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (!enablePainMarkersRef.current) return;
+      mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+
+      if (e.button === 2) {
+        const ndc = getMouseNDC(e);
+        const markerId = raycastPainMarkers(ndc);
+        if (markerId) {
+          e.preventDefault();
+          e.stopPropagation();
+          painMarkerCallbacksRef.current.onPainMarkerRemove?.(markerId);
+          return;
+        }
+      }
+
+      if (e.button === 0) {
+        const ndc = getMouseNDC(e);
+        const markerId = raycastPainMarkers(ndc);
+        if (markerId) {
+          const meshes = painMarkerMeshesRef.current.get(markerId);
+          if (meshes) {
+            draggingMarkerRef.current = { id: markerId, mesh: meshes.inner, outerMesh: meshes.outer };
+            controls.enabled = false;
+            domElement.style.cursor = 'grabbing';
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+      }
+    };
+
+    const finishDrag = () => {
+      if (!draggingMarkerRef.current) return;
+      const drag = draggingMarkerRef.current;
+      const pos = drag.mesh.position;
+      const boneInfo = findNearestBone(pos);
+      painMarkerCallbacksRef.current.onPainMarkerMove?.(
+        drag.id,
+        { x: pos.x, y: pos.y, z: pos.z },
+        boneInfo.boneName,
+        boneInfo.label
+      );
+      draggingMarkerRef.current = null;
+      controls.enabled = true;
+      domElement.style.cursor = '';
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (draggingMarkerRef.current) {
+        const ndc = getMouseNDC(e);
+        const hitPoint = raycastModel(ndc);
+        if (hitPoint) {
+          draggingMarkerRef.current.mesh.position.copy(hitPoint);
+          draggingMarkerRef.current.outerMesh.position.copy(hitPoint);
+        }
+        e.preventDefault();
+        return;
+      }
+
+      if (!enablePainMarkersRef.current) return;
+      const ndc = getMouseNDC(e);
+      const markerId = raycastPainMarkers(ndc);
+      domElement.style.cursor = markerId ? 'grab' : '';
+    };
+
+    const onWindowMouseUp = (e: MouseEvent) => {
+      if (draggingMarkerRef.current) {
+        finishDrag();
+        mouseDownPosRef.current = null;
+        return;
+      }
+
+      if (!enablePainMarkersRef.current) return;
+      const downPos = mouseDownPosRef.current;
+
+      if (e.button === 0 && downPos) {
+        const dx = e.clientX - downPos.x;
+        const dy = e.clientY - downPos.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 5) {
+          const ndc = getMouseNDC(e);
+          const existingMarker = raycastPainMarkers(ndc);
+          if (!existingMarker) {
+            const hitPoint = raycastModel(ndc);
+            if (hitPoint) {
+              const boneInfo = findNearestBone(hitPoint);
+              const marker: PainMarker = {
+                id: `pm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                position: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
+                nearestBone: boneInfo.boneName,
+                anatomicalLabel: boneInfo.label,
+              };
+              painMarkerCallbacksRef.current.onPainMarkerAdd?.(marker);
+            }
+          }
+        }
+      }
+
+      mouseDownPosRef.current = null;
+    };
+
+    const onContextMenu = (e: MouseEvent) => {
+      if (!enablePainMarkersRef.current) return;
+      const ndc = getMouseNDC(e);
+      const markerId = raycastPainMarkers(ndc);
+      if (markerId) {
+        e.preventDefault();
+      }
+    };
+
+    domElement.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onWindowMouseUp);
+    domElement.addEventListener('contextmenu', onContextMenu);
+
+    return () => {
+      domElement.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onWindowMouseUp);
+      domElement.removeEventListener('contextmenu', onContextMenu);
+      if (draggingMarkerRef.current) {
+        draggingMarkerRef.current = null;
+        controls.enabled = true;
+        domElement.style.cursor = '';
+      }
+    };
+  }, [enablePainMarkers, findNearestBone]);
 
   useEffect(() => {
     if (!containerRef.current) return;

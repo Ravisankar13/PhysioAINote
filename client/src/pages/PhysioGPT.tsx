@@ -342,6 +342,7 @@ export default function PhysioGPT() {
   const interimAbortRef = useRef<AbortController | null>(null);
   const triggerLiveAnalysisRef = useRef<(transcript: string) => void>(() => {});
 
+  const isStreamingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -440,6 +441,7 @@ export default function PhysioGPT() {
       }
     } finally {
       isAnalyzingRef.current = false;
+      isStreamingRef.current = false;
       setIsStreaming(false);
     }
   }, [selectedConversationId, selectedRegion]);
@@ -548,6 +550,7 @@ export default function PhysioGPT() {
 
     const finalTranscript = liveTranscriptRef.current.trim();
     setStreamingContent("");
+    isStreamingRef.current = false;
     setIsStreaming(false);
 
     if (finalTranscript.length > 20) {
@@ -574,7 +577,8 @@ export default function PhysioGPT() {
   };
 
   const sendMessageStreaming = async (messageContent: string, isVoiceSession: boolean = false) => {
-    if (isStreaming) return;
+    if (isStreamingRef.current) return;
+    isStreamingRef.current = true;
     setIsStreaming(true);
     setStreamingContent("");
 
@@ -675,6 +679,7 @@ export default function PhysioGPT() {
         toast({ title: "Error", description: "Failed to send message", variant: "destructive" });
       }
     } finally {
+      isStreamingRef.current = false;
       setIsStreaming(false);
       setIsAnalyzingSession(false);
     }

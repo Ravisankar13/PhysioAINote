@@ -340,6 +340,7 @@ export default function PhysioGPT() {
   const analysisTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isAnalyzingRef = useRef(false);
   const interimAbortRef = useRef<AbortController | null>(null);
+  const triggerLiveAnalysisRef = useRef<(transcript: string) => void>(() => {});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -443,6 +444,8 @@ export default function PhysioGPT() {
     }
   }, [selectedConversationId, selectedRegion]);
 
+  triggerLiveAnalysisRef.current = triggerLiveAnalysis;
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -498,6 +501,7 @@ export default function PhysioGPT() {
 
         recognition.onend = () => {
           if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            recognitionResultIndex = 0;
             try { recognition.start(); } catch {}
           }
         };
@@ -510,9 +514,9 @@ export default function PhysioGPT() {
         const currentTranscript = liveTranscriptRef.current;
         const newContentLength = currentTranscript.length - lastAnalyzedLengthRef.current;
         if (newContentLength > 50 && !isAnalyzingRef.current) {
-          triggerLiveAnalysis(currentTranscript);
+          triggerLiveAnalysisRef.current(currentTranscript);
         }
-      }, 12000);
+      }, 10000);
 
     } catch {
       toast({ title: "Microphone access denied", variant: "destructive" });
@@ -1062,6 +1066,47 @@ export default function PhysioGPT() {
                         })}
                       </div>
                     </div>
+
+                    {/* Streaming response during recording (no conversation yet) */}
+                    {isStreaming && streamingContent && (
+                      <div className="mt-6 max-w-3xl mx-auto">
+                        <div className="flex gap-3">
+                          <Avatar className="h-7 w-7 border border-teal-200 flex-shrink-0 mt-1">
+                            <AvatarFallback className="bg-teal-600 text-white text-xs">
+                              <Bot className="h-3.5 w-3.5" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="max-w-[80%] text-left">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-700 py-0">
+                                Live Interim Analysis
+                              </Badge>
+                            </div>
+                            <div className="rounded-2xl px-4 py-3 bg-white border shadow-sm">
+                              <ClinicalResponseDisplay content={streamingContent} professionalMode={true} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {isStreaming && !streamingContent && (
+                      <div className="mt-6 max-w-3xl mx-auto">
+                        <div className="flex gap-3">
+                          <Avatar className="h-7 w-7 border border-teal-200 flex-shrink-0 mt-1">
+                            <AvatarFallback className="bg-teal-600 text-white text-xs">
+                              <Bot className="h-3.5 w-3.5" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="rounded-2xl px-4 py-3 bg-white border shadow-sm">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : loadingMessages ? (

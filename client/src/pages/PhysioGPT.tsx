@@ -334,6 +334,7 @@ export default function PhysioGPT() {
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
   const [romMode, setRomMode] = useState(false);
+  const [poseMode, setPoseMode] = useState(false);
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
   const [romValues, setRomValues] = useState<Record<string, number>>({});
   const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
@@ -1102,6 +1103,8 @@ export default function PhysioGPT() {
               enableRomMode={romMode}
               onRomJointSelect={handleRomJointSelect}
               selectedRomJointId={selectedRomJoint?.id || null}
+              enablePoseMode={poseMode}
+              onModelConfigChange={updateModelConfig}
             />
 
             {/* Joint Controls Overlay */}
@@ -1409,6 +1412,7 @@ export default function PhysioGPT() {
                   setPainMarkerMode(newMode);
                   if (newMode) {
                     setRomMode(false);
+                    setPoseMode(false);
                     setSelectedRomJoint(null);
                     if (!skeletonOpen) setSkeletonOpen(true);
                     toast({ title: "Pain Marker Mode", description: "Click on the skeleton to place markers. Right-click to remove. Drag to reposition." });
@@ -1427,6 +1431,7 @@ export default function PhysioGPT() {
                   setRomMode(newMode);
                   if (newMode) {
                     setPainMarkerMode(false);
+                    setPoseMode(false);
                     if (!skeletonOpen) setSkeletonOpen(true);
                     toast({ title: "ROM Measurement Mode", description: "Click on a highlighted joint to measure its range of motion." });
                   } else {
@@ -1437,6 +1442,25 @@ export default function PhysioGPT() {
               >
                 <Ruler className="h-3 w-3 mr-1" />
                 {romMode ? 'Measuring...' : 'Measure ROM'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${poseMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-white/90 hover:bg-white'}`}
+                onClick={() => {
+                  const newMode = !poseMode;
+                  setPoseMode(newMode);
+                  if (newMode) {
+                    setPainMarkerMode(false);
+                    setRomMode(false);
+                    setSelectedRomJoint(null);
+                    if (!skeletonOpen) setSkeletonOpen(true);
+                    toast({ title: "Pose Mode", description: "Click and drag limbs to adjust the skeleton pose. Double-click to reset a joint." });
+                  }
+                }}
+              >
+                <Hand className="h-3 w-3 mr-1" />
+                {poseMode ? 'Posing...' : 'Pose'}
               </Button>
               <Button
                 variant="secondary"

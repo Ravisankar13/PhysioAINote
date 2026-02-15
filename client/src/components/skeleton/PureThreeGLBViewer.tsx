@@ -941,6 +941,8 @@ interface PureThreeGLBViewerProps {
   enableRomMode?: boolean;
   onRomJointSelect?: (jointDef: RomJointDefinition) => void;
   selectedRomJointId?: string | null;
+  enablePoseMode?: boolean;
+  onModelConfigChange?: (path: string, value: number) => void;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -1179,6 +1181,48 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   ],
 };
 
+interface PoseBoneConfig {
+  configKey: string;
+  label: string;
+  axis: 'x' | 'y' | 'z';
+  scale: number;
+  minValue: number;
+  maxValue: number;
+  sensitivity: number;
+}
+
+const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
+  'Hip_L': { configKey: 'leftHip.flexion', label: 'L Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
+  'HipPart1_L': { configKey: 'leftHip.flexion', label: 'L Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
+  'Hip_R': { configKey: 'rightHip.flexion', label: 'R Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
+  'HipPart1_R': { configKey: 'rightHip.flexion', label: 'R Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
+  'Knee_L': { configKey: 'leftKnee.flexion', label: 'L Knee Flexion', axis: 'x', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
+  'Knee_R': { configKey: 'rightKnee.flexion', label: 'R Knee Flexion', axis: 'x', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
+  'Ankle_L': { configKey: 'leftAnkle.dorsiflexion', label: 'L Ankle Dorsiflexion', axis: 'x', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
+  'Ankle_R': { configKey: 'rightAnkle.dorsiflexion', label: 'R Ankle Dorsiflexion', axis: 'x', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
+  'Shoulder_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'ShoulderPart1_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'Shoulder_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'ShoulderPart1_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'Elbow_L': { configKey: 'leftElbow.flexion', label: 'L Elbow Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
+  'Elbow_R': { configKey: 'rightElbow.flexion', label: 'R Elbow Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
+  'Wrist_L': { configKey: 'leftWrist.flexion', label: 'L Wrist Flexion', axis: 'x', scale: 1, minValue: -80, maxValue: 80, sensitivity: 0.3 },
+  'Wrist_R': { configKey: 'rightWrist.flexion', label: 'R Wrist Flexion', axis: 'x', scale: 1, minValue: -80, maxValue: 80, sensitivity: 0.3 },
+  'Root_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
+  'RootPart1_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
+  'RootPart2_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
+  'Spine1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'y', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Spine1Part1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'y', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Spine1Part2_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'y', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Chest_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'y', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Neck_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
+  'NeckPart1_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
+  'NeckPart2_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
+  'Head_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
+  'Scapula_L': { configKey: 'leftShoulder.abduction', label: 'L Shoulder Abduction', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
+  'Scapula_R': { configKey: 'rightShoulder.abduction', label: 'R Shoulder Abduction', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
+};
+
 export default function PureThreeGLBViewer({ 
   modelPath = '/models/rigged-skeleton.glb',
   modelConfig,
@@ -1214,6 +1258,8 @@ export default function PureThreeGLBViewer({
   enableRomMode = false,
   onRomJointSelect,
   selectedRomJointId = null,
+  enablePoseMode = false,
+  onModelConfigChange,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1251,6 +1297,26 @@ export default function PureThreeGLBViewer({
   const onRomJointSelectRef = useRef(onRomJointSelect);
   onRomJointSelectRef.current = onRomJointSelect;
   const romHighlightMeshesRef = useRef<THREE.Mesh[]>([]);
+  const enablePoseModeRef = useRef(enablePoseMode);
+  enablePoseModeRef.current = enablePoseMode;
+  const onModelConfigChangeRef = useRef(onModelConfigChange);
+  onModelConfigChangeRef.current = onModelConfigChange;
+  const modelConfigRef = useRef(modelConfig);
+  modelConfigRef.current = modelConfig;
+  const [poseModeTooltip, setPoseModeTooltip] = useState<{ x: number; y: number; label: string; value: string } | null>(null);
+  const poseDragRef = useRef<{
+    boneName: string;
+    configKey: string;
+    startX: number;
+    startY: number;
+    startValue: number;
+    axis: 'x' | 'y' | 'z';
+    scale: number;
+    sensitivity: number;
+    label: string;
+  } | null>(null);
+  const poseSelectedBoneRef = useRef<string | null>(null);
+  const poseHighlightMeshRef = useRef<THREE.Mesh | null>(null);
 
   const findNearestBone = useCallback((position: THREE.Vector3): { boneName: string; label: string } => {
     const bones = bonesRef.current;
@@ -2094,6 +2160,244 @@ export default function PureThreeGLBViewer({
     domElement.addEventListener('click', onClick);
     return () => { domElement.removeEventListener('click', onClick); };
   }, [enableRomMode]);
+
+  useEffect(() => {
+    if (!sceneRef.current || !enablePoseMode) return;
+    const { renderer, camera, scene, model, controls } = sceneRef.current;
+    if (!model || !renderer) return;
+    const domElement = renderer.domElement;
+    const bones = bonesRef.current;
+
+    let hoveredBone: string | null = null;
+    let hoverGlow: THREE.Mesh | null = null;
+    let selectedGlow: THREE.Mesh | null = null;
+
+    const cachedMeshes: THREE.Mesh[] = [];
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.visible) cachedMeshes.push(child);
+    });
+
+    const poseBoneNames = Object.keys(POSE_BONE_MAP).filter(name => !!bones[name]);
+
+    const getMouseNDC = (e: MouseEvent) => {
+      const rect = domElement.getBoundingClientRect();
+      return new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+    };
+
+    const MAX_BONE_DISTANCE = 0.5;
+
+    const findBoneFromRaycast = (ndc: THREE.Vector2): string | null => {
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const hits = raycasterRef.current.intersectObjects(cachedMeshes, false);
+      if (hits.length === 0) return null;
+      const hitPoint = hits[0].point;
+      const worldPos = new THREE.Vector3();
+      let nearestBone = '';
+      let nearestDist = Infinity;
+      for (const name of poseBoneNames) {
+        const bone = bones[name];
+        bone.getWorldPosition(worldPos);
+        const d = hitPoint.distanceTo(worldPos);
+        if (d < nearestDist) {
+          nearestDist = d;
+          nearestBone = name;
+        }
+      }
+      if (nearestDist > MAX_BONE_DISTANCE) return null;
+      return nearestBone || null;
+    };
+
+    const createGlowSphere = (boneName: string, color: number, opacity: number): THREE.Mesh => {
+      const geo = new THREE.SphereGeometry(0.05, 16, 16);
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthTest: false });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.renderOrder = 1001;
+      const bone = bones[boneName];
+      if (bone) {
+        const wp = new THREE.Vector3();
+        bone.getWorldPosition(wp);
+        mesh.position.copy(wp);
+      }
+      scene.add(mesh);
+      return mesh;
+    };
+
+    const removeGlow = (mesh: THREE.Mesh | null) => {
+      if (mesh) {
+        scene.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+    };
+
+    const getCurrentValue = (configKey: string): number => {
+      const cfg = modelConfigRef.current;
+      if (!cfg) return 0;
+      const [group, prop] = configKey.split('.');
+      const groupObj = (cfg as any)[group];
+      return groupObj?.[prop] ?? 0;
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!enablePoseModeRef.current) return;
+
+      if (poseDragRef.current) {
+        const dx = e.clientX - poseDragRef.current.startX;
+        const dy = e.clientY - poseDragRef.current.startY;
+        const useVertical = poseDragRef.current.axis === 'x';
+        const rawDelta = useVertical ? -dy : dx;
+        const dragDistance = rawDelta * poseDragRef.current.scale * poseDragRef.current.sensitivity;
+        const cfg = POSE_BONE_MAP[poseDragRef.current.boneName];
+        if (!cfg) return;
+        let newValue = poseDragRef.current.startValue + dragDistance;
+        newValue = Math.max(cfg.minValue, Math.min(cfg.maxValue, Math.round(newValue)));
+        onModelConfigChangeRef.current?.(cfg.configKey, newValue);
+
+        const rect = domElement.getBoundingClientRect();
+        setPoseModeTooltip({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top - 40,
+          label: cfg.label,
+          value: `${newValue}°`,
+        });
+
+        if (selectedGlow) {
+          const bone = bones[poseDragRef.current.boneName];
+          if (bone) {
+            const wp = new THREE.Vector3();
+            bone.getWorldPosition(wp);
+            selectedGlow.position.copy(wp);
+          }
+        }
+        return;
+      }
+
+      const ndc = getMouseNDC(e);
+      const boneName = findBoneFromRaycast(ndc);
+
+      if (boneName !== hoveredBone) {
+        removeGlow(hoverGlow);
+        hoverGlow = null;
+        hoveredBone = boneName;
+
+        if (boneName && POSE_BONE_MAP[boneName] && boneName !== poseSelectedBoneRef.current) {
+          hoverGlow = createGlowSphere(boneName, 0x66ffcc, 0.4);
+          domElement.style.cursor = 'grab';
+          const cfg = POSE_BONE_MAP[boneName];
+          const val = getCurrentValue(cfg.configKey);
+          const rect = domElement.getBoundingClientRect();
+          setPoseModeTooltip({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top - 40,
+            label: cfg.label,
+            value: `${val}°`,
+          });
+        } else {
+          domElement.style.cursor = '';
+          setPoseModeTooltip(null);
+        }
+      }
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (!enablePoseModeRef.current || e.button !== 0) return;
+      const ndc = getMouseNDC(e);
+      const boneName = findBoneFromRaycast(ndc);
+      if (!boneName || !POSE_BONE_MAP[boneName]) return;
+
+      const cfg = POSE_BONE_MAP[boneName];
+      const currentVal = getCurrentValue(cfg.configKey);
+
+      removeGlow(selectedGlow);
+      selectedGlow = createGlowSphere(boneName, 0x00ff88, 0.7);
+      poseSelectedBoneRef.current = boneName;
+      poseHighlightMeshRef.current = selectedGlow;
+
+      poseDragRef.current = {
+        boneName,
+        configKey: cfg.configKey,
+        startX: e.clientX,
+        startY: e.clientY,
+        startValue: currentVal,
+        axis: cfg.axis,
+        scale: cfg.scale,
+        sensitivity: cfg.sensitivity,
+        label: cfg.label,
+      };
+
+      controls.enabled = false;
+      domElement.style.cursor = 'grabbing';
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (poseDragRef.current) {
+        poseDragRef.current = null;
+        controls.enabled = true;
+        domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
+        setPoseModeTooltip(null);
+      }
+    };
+
+    const onDblClick = (e: MouseEvent) => {
+      if (!enablePoseModeRef.current) return;
+      const ndc = getMouseNDC(e);
+      const boneName = findBoneFromRaycast(ndc);
+      if (!boneName || !POSE_BONE_MAP[boneName]) return;
+      const cfg = POSE_BONE_MAP[boneName];
+      onModelConfigChangeRef.current?.(cfg.configKey, 0);
+      setPoseModeTooltip(null);
+    };
+
+    const poseGlowAnimFrame = { current: 0 };
+    const animateGlows = () => {
+      poseGlowAnimFrame.current = requestAnimationFrame(animateGlows);
+      const wp = new THREE.Vector3();
+      if (selectedGlow && poseSelectedBoneRef.current) {
+        const bone = bones[poseSelectedBoneRef.current];
+        if (bone) {
+          bone.getWorldPosition(wp);
+          selectedGlow.position.copy(wp);
+        }
+      }
+      if (hoverGlow && hoveredBone) {
+        const bone = bones[hoveredBone];
+        if (bone) {
+          bone.getWorldPosition(wp);
+          hoverGlow.position.copy(wp);
+        }
+      }
+    };
+    poseGlowAnimFrame.current = requestAnimationFrame(animateGlows);
+
+    domElement.addEventListener('mousemove', onMouseMove);
+    domElement.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
+    domElement.addEventListener('dblclick', onDblClick);
+
+    return () => {
+      cancelAnimationFrame(poseGlowAnimFrame.current);
+      domElement.removeEventListener('mousemove', onMouseMove);
+      domElement.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
+      domElement.removeEventListener('dblclick', onDblClick);
+      removeGlow(hoverGlow);
+      removeGlow(selectedGlow);
+      hoverGlow = null;
+      selectedGlow = null;
+      hoveredBone = null;
+      poseSelectedBoneRef.current = null;
+      poseHighlightMeshRef.current = null;
+      poseDragRef.current = null;
+      controls.enabled = true;
+      domElement.style.cursor = '';
+      setPoseModeTooltip(null);
+    };
+  }, [enablePoseMode, status]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -3537,6 +3841,18 @@ export default function PureThreeGLBViewer({
         </div>
       )}
       
+      {/* Pose mode tooltip */}
+      {poseModeTooltip && enablePoseMode && (
+        <div
+          className="absolute pointer-events-none z-20"
+          style={{ left: poseModeTooltip.x, top: poseModeTooltip.y, transform: 'translateX(-50%)' }}
+        >
+          <div className="px-3 py-1.5 rounded-lg shadow-lg bg-emerald-600/90 backdrop-blur text-white text-sm font-medium">
+            <div className="text-[10px] text-emerald-200 uppercase tracking-wider">{poseModeTooltip.label}</div>
+            <div className="text-base font-bold">{poseModeTooltip.value}</div>
+          </div>
+        </div>
+      )}
       {/* Force value tooltip */}
       {hoverData && (
         <div 

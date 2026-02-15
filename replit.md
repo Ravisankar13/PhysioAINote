@@ -25,7 +25,15 @@ Preferred communication style: Simple, everyday language.
   - Quick actions toolbar: Assessment, Differentials, Manual Therapy, Exercise Rx, Patient Education, Red Flags
   - 9 body regions with special tests, red flags, and contextual suggestions
   - Conversation CRUD with sidebar, PDF download, evidence grades
-- **Key Files**: client/src/pages/PhysioGPT.tsx, client/src/lib/clinicalTextParser.ts
+- **Direct Bone Manipulation (Pose Mode)**: Click-and-drag skeleton posing without sliders:
+  - POSE_BONE_MAP reverse mapping: bone names → config keys with axis, scale, min/max, sensitivity
+  - Raycasting on cached meshes finds nearest pose-controllable bone with 0.5 unit distance threshold
+  - Vertical drag for flexion/extension (x-axis bones), horizontal drag for rotation/lateral (y/z-axis bones)
+  - Green glow sphere on hover, brighter on selection; tooltip shows joint name + current angle
+  - Double-click to reset any joint to 0°; orbit controls disabled during drag
+  - Syncs back to modelConfig via onModelConfigChange callback, keeping sliders in sync
+  - Mutually exclusive with Pain Marker and ROM modes
+- **Key Files**: client/src/pages/PhysioGPT.tsx, client/src/lib/clinicalTextParser.ts, client/src/components/skeleton/PureThreeGLBViewer.tsx
 
 ## System Architecture
 

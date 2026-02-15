@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,9 @@ import {
   SlidersHorizontal,
   MapPin,
   Crosshair,
-  Ruler
+  Ruler,
+  Activity,
+  Weight
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -58,6 +60,7 @@ import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, 
 import { ROM_JOINT_DEFINITIONS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
+import { calculatePosturalForces, forceToNewtons, getStatusColor, type ForceAnalysisResult, type JointForceResult } from "@/lib/posturalForceEngine";
 
 const BODY_REGIONS = {
   cervical: {
@@ -331,6 +334,8 @@ export default function PhysioGPT() {
   const [clinicalHighlights, setClinicalHighlights] = useState<RegionHighlight[]>([]);
   const [painMarkers, setPainMarkers] = useState<PainMarker[]>([]);
   const [painMarkerMode, setPainMarkerMode] = useState(false);
+  const [forceMode, setForceMode] = useState(false);
+  const [bodyWeightKg, setBodyWeightKg] = useState(70);
   const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
@@ -1014,6 +1019,11 @@ export default function PhysioGPT() {
     });
   };
 
+  const forceAnalysis = useMemo(() => {
+    if (!forceMode) return null;
+    return calculatePosturalForces(modelConfig);
+  }, [modelConfig, forceMode]);
+
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-gray-50 overflow-hidden">
       {/* Sidebar */}
@@ -1190,8 +1200,86 @@ export default function PhysioGPT() {
               </div>
             )}
 
+            {/* Force Analysis Overlay */}
+            {forceMode && forceAnalysis && (
+              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[220px] max-h-[calc(100%-60px)] overflow-y-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5 text-amber-400" />
+                    <span className="text-[11px] font-semibold text-white">Joint Forces</span>
+                  </div>
+                  <button
+                    className="text-[10px] text-gray-400 hover:text-white"
+                    onClick={() => setForceMode(false)}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5 mb-2 bg-white/5 rounded px-2 py-1">
+                  <Weight className="h-3 w-3 text-gray-400" />
+                  <span className="text-[10px] text-gray-300">Body Weight:</span>
+                  <input
+                    type="number"
+                    value={bodyWeightKg}
+                    onChange={(e) => setBodyWeightKg(Math.max(20, Math.min(300, Number(e.target.value) || 70)))}
+                    className="w-12 bg-transparent border-b border-gray-600 text-white text-[11px] text-center outline-none focus:border-amber-400"
+                  />
+                  <span className="text-[10px] text-gray-400">kg</span>
+                </div>
+
+                <div className="space-y-1">
+                  {forceAnalysis.joints.map((j) => (
+                    <div key={j.joint} className="flex items-center gap-1.5 py-0.5">
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: getStatusColor(j.status), boxShadow: `0 0 4px ${getStatusColor(j.status)}` }}
+                      />
+                      <span className="text-[10px] text-gray-300 flex-1 truncate">{j.label}</span>
+                      <span className="text-[11px] font-bold text-white tabular-nums" style={{ color: getStatusColor(j.status) }}>
+                        {(j.forceBW * 100).toFixed(0)}%
+                      </span>
+                      <span className="text-[9px] text-gray-500 w-[38px] text-right tabular-nums">
+                        {forceToNewtons(j.forceBW, bodyWeightKg)}N
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {forceAnalysis.baseSupportShift > 0.02 && (
+                  <div className="mt-2 pt-2 border-t border-white/10">
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle className="h-3 w-3 text-amber-400" />
+                      <span className="text-[10px] text-amber-300">COM shifted from center</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-2 pt-2 border-t border-white/10">
+                  <div className="flex items-center gap-3 text-[9px]">
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#22c55e' }} />
+                      <span className="text-gray-400">&lt;80%</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#eab308' }} />
+                      <span className="text-gray-400">80-150%</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#f97316' }} />
+                      <span className="text-gray-400">150-300%</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />
+                      <span className="text-gray-400">&gt;300%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Clinical Highlights Legend */}
-            {clinicalHighlights.length > 0 && (
+            {clinicalHighlights.length > 0 && !forceMode && (
               <div className="absolute top-2 left-2 bg-black/70 backdrop-blur rounded-lg px-3 py-2 z-10 max-w-[200px]">
                 <p className="text-[10px] text-gray-300 uppercase tracking-wider mb-1.5 font-medium">Detected Regions</p>
                 <div className="space-y-1">
@@ -1548,6 +1636,22 @@ export default function PhysioGPT() {
               >
                 <Hand className="h-3 w-3 mr-1" />
                 {poseMode ? 'Posing...' : 'Pose'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${forceMode ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-white/90 hover:bg-white'}`}
+                onClick={() => {
+                  const newMode = !forceMode;
+                  setForceMode(newMode);
+                  if (newMode) {
+                    if (!skeletonOpen) setSkeletonOpen(true);
+                    toast({ title: "Force Analysis", description: "Showing joint loading as % body weight. Adjust joints to see forces change." });
+                  }
+                }}
+              >
+                <Activity className="h-3 w-3 mr-1" />
+                {forceMode ? 'Forces On' : 'Forces'}
               </Button>
               <Button
                 variant="secondary"

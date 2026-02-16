@@ -1764,7 +1764,8 @@ export default function PhysioGPT() {
                 className="h-7 text-xs bg-white/90 hover:bg-white shadow-sm"
                 onClick={() => {
                   setModelConfig({ ...DEFAULT_MODEL_CONFIG });
-                  toast({ title: "Skeleton Reset", description: "All joints returned to default position." });
+                  setPainMarkers([]);
+                  toast({ title: "Skeleton Reset", description: "All joints and pain markers cleared." });
                 }}
               >
                 <Bone className="h-3 w-3 mr-1" />

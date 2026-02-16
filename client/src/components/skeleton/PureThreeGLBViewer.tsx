@@ -2120,7 +2120,7 @@ export default function PureThreeGLBViewer({
       const worldPos = new THREE.Vector3();
       const closestOnRay = new THREE.Vector3();
       let bestPoint: THREE.Vector3 | null = null;
-      let bestDist = 1.2;
+      let bestDist = 2.0;
       for (const [name, bone] of Object.entries(bones)) {
         if (!BONE_ANATOMICAL_LABELS[name]) continue;
         bone.getWorldPosition(worldPos);
@@ -2128,23 +2128,49 @@ export default function PureThreeGLBViewer({
         const d = worldPos.distanceTo(closestOnRay);
         if (d < bestDist) {
           bestDist = d;
-          bestPoint = closestOnRay.clone();
+          bestPoint = worldPos.clone();
         }
       }
-      const virtualPoints: Array<{ boneA: string; boneB: string; t: number; offsetX?: number }> = [
-        { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3 },
+      const virtualPoints: Array<{ boneA: string; boneB: string; t: number; offsetX?: number; offsetZ?: number }> = [
+        { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.2 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.5 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.8 },
         { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: -0.15 },
         { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: 0.15 },
-        { boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: -0.18 },
-        { boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: 0.18 },
-        { boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: -0.15 },
-        { boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: 0.15 },
-        { boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.5 },
-        { boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.5 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetZ: 0.1 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetZ: -0.1 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.3, offsetX: -0.18 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.3, offsetX: 0.18 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.7 },
+        { boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.3, offsetX: -0.15 },
+        { boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.3, offsetX: 0.15 },
+        { boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5 },
+        { boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.3 },
+        { boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.7 },
+        { boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.3 },
+        { boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.7 },
+        { boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.5 },
+        { boneA: 'Head_M', boneB: 'NeckPart1_M', t: 0.5 },
         { boneA: 'NeckPart1_M', boneB: 'NeckPart2_M', t: 0.5 },
-        { boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.5 },
+        { boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.3 },
+        { boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.7 },
         { boneA: 'Root_M', boneB: 'Hip_L', t: 0.3 },
         { boneA: 'Root_M', boneB: 'Hip_R', t: 0.3 },
+        { boneA: 'Hip_L', boneB: 'HipPart1_L', t: 0.5 },
+        { boneA: 'Hip_R', boneB: 'HipPart1_R', t: 0.5 },
+        { boneA: 'HipPart1_L', boneB: 'Knee_L', t: 0.5 },
+        { boneA: 'HipPart1_R', boneB: 'Knee_R', t: 0.5 },
+        { boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.3 },
+        { boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.7 },
+        { boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.3 },
+        { boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.7 },
+        { boneA: 'Shoulder_L', boneB: 'Elbow_L', t: 0.3 },
+        { boneA: 'Shoulder_L', boneB: 'Elbow_L', t: 0.7 },
+        { boneA: 'Shoulder_R', boneB: 'Elbow_R', t: 0.3 },
+        { boneA: 'Shoulder_R', boneB: 'Elbow_R', t: 0.7 },
+        { boneA: 'Elbow_L', boneB: 'Wrist_L', t: 0.5 },
+        { boneA: 'Elbow_R', boneB: 'Wrist_R', t: 0.5 },
       ];
       const posA = new THREE.Vector3();
       const posB = new THREE.Vector3();
@@ -2157,11 +2183,12 @@ export default function PureThreeGLBViewer({
         bB.getWorldPosition(posB);
         virtPos.lerpVectors(posA, posB, vp.t);
         if (vp.offsetX) virtPos.x += vp.offsetX;
+        if (vp.offsetZ) virtPos.z += vp.offsetZ;
         ray.closestPointToPoint(virtPos, closestOnRay);
         const d = virtPos.distanceTo(closestOnRay);
         if (d < bestDist) {
           bestDist = d;
-          bestPoint = closestOnRay.clone();
+          bestPoint = virtPos.clone();
         }
       }
       return bestPoint;
@@ -2172,13 +2199,18 @@ export default function PureThreeGLBViewer({
       const visibleMeshes = getVisibleMeshes();
       const primaryMeshes = visibleMeshes.length > 0 ? visibleMeshes : allMeshes;
       raycasterRef.current.setFromCamera(ndc, camera);
-      let hits = raycasterRef.current.intersectObjects(primaryMeshes, true);
+      const hits = raycasterRef.current.intersectObjects(primaryMeshes, true);
       if (hits.length > 0) return hits[0].point.clone();
 
       if (visibleMeshes.length < allMeshes.length) {
-        hits = raycasterRef.current.intersectObjects(allMeshes, true);
-        if (hits.length > 0) return hits[0].point.clone();
+        const allHits = raycasterRef.current.intersectObjects(allMeshes, true);
+        if (allHits.length > 0) return allHits[0].point.clone();
       }
+
+      const boneHit = raycastBonePosition(ndc);
+      if (boneHit) return boneHit;
+
+      if (preciseOnly) return null;
 
       const modelBox = new THREE.Box3().setFromObject(model);
       const modelSize = modelBox.getSize(new THREE.Vector3()).length();
@@ -2212,8 +2244,6 @@ export default function PureThreeGLBViewer({
       }
       if (closestHit) return closestHit;
 
-      if (preciseOnly) return null;
-
       buildVertexCache(true);
       if (!vertexCacheRef.verts || !vertexCacheRef.normals) return null;
 
@@ -2237,9 +2267,7 @@ export default function PureThreeGLBViewer({
           bestPoint = v.clone();
         }
       }
-      if (bestPoint) return bestPoint;
-
-      return raycastBonePosition(ndc);
+      return bestPoint;
     };
 
     const raycastPainMarkers = (ndc: THREE.Vector2): string | null => {
@@ -2377,7 +2405,8 @@ export default function PureThreeGLBViewer({
       if (e.button === 0 && downPos) {
         const dx = e.clientX - downPos.x;
         const dy = e.clientY - downPos.y;
-        if (Math.sqrt(dx * dx + dy * dy) < 5) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 5) {
           const ndc = getMouseNDC(e);
           const existingMarker = raycastPainMarkers(ndc);
           const mType = activePainMarkerTypeRef.current;

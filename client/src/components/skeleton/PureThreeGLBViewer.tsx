@@ -2066,29 +2066,31 @@ export default function PureThreeGLBViewer({
       }
     });
     const getVisibleMeshes = () => cachedModelMeshes.filter(m => m.visible);
+    const getAllMeshes = () => cachedModelMeshes;
 
-    const vertexCacheRef = { verts: null as THREE.Vector3[] | null, normals: null as THREE.Vector3[] | null, matrixHash: '' };
-    const getMatrixHash = () => {
-      let h = '';
+    const vertexCacheRef = { verts: null as THREE.Vector3[] | null, normals: null as THREE.Vector3[] | null, matrixHash: '', useAll: false };
+    const getMatrixHash = (useAll: boolean) => {
+      let h = useAll ? 'ALL:' : 'VIS:';
       for (let i = 0; i < Math.min(cachedModelMeshes.length, 5); i++) {
         const m = cachedModelMeshes[i].matrixWorld.elements;
         h += m[12].toFixed(3) + m[13].toFixed(3) + m[14].toFixed(3);
       }
       return h;
     };
-    const buildVertexCache = () => {
-      const hash = getMatrixHash();
+    const buildVertexCache = (useAll = false) => {
+      const hash = getMatrixHash(useAll);
       if (vertexCacheRef.verts && vertexCacheRef.matrixHash === hash) return;
-      const visibleMeshes = getVisibleMeshes();
-      for (const mesh of visibleMeshes) {
+      const meshes = useAll ? getAllMeshes() : getVisibleMeshes();
+      for (const mesh of meshes) {
         mesh.updateMatrixWorld(true);
       }
       vertexCacheRef.verts = [];
       vertexCacheRef.normals = [];
+      vertexCacheRef.useAll = useAll;
       const tempV = new THREE.Vector3();
       const tempN = new THREE.Vector3();
       const normalMatrix = new THREE.Matrix3();
-      for (const mesh of visibleMeshes) {
+      for (const mesh of meshes) {
         const geo = mesh.geometry;
         if (!geo || !geo.attributes.position) continue;
         const posAttr = geo.attributes.position;
@@ -2110,21 +2112,83 @@ export default function PureThreeGLBViewer({
       vertexCacheRef.matrixHash = hash;
     };
 
-    const raycastModel = (ndc: THREE.Vector2, preciseOnly = false): THREE.Vector3 | null => {
-      const visibleMeshes = getVisibleMeshes();
+    const raycastBonePosition = (ndc: THREE.Vector2): THREE.Vector3 | null => {
+      const bones = bonesRef.current;
+      if (!bones || Object.keys(bones).length === 0) return null;
       raycasterRef.current.setFromCamera(ndc, camera);
-      const hits = raycasterRef.current.intersectObjects(visibleMeshes, true);
+      const ray = raycasterRef.current.ray;
+      const worldPos = new THREE.Vector3();
+      const closestOnRay = new THREE.Vector3();
+      let bestPoint: THREE.Vector3 | null = null;
+      let bestDist = 1.2;
+      for (const [name, bone] of Object.entries(bones)) {
+        if (!BONE_ANATOMICAL_LABELS[name]) continue;
+        bone.getWorldPosition(worldPos);
+        ray.closestPointToPoint(worldPos, closestOnRay);
+        const d = worldPos.distanceTo(closestOnRay);
+        if (d < bestDist) {
+          bestDist = d;
+          bestPoint = closestOnRay.clone();
+        }
+      }
+      const virtualPoints: Array<{ boneA: string; boneB: string; t: number; offsetX?: number }> = [
+        { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: -0.15 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: 0.15 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: -0.18 },
+        { boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: 0.18 },
+        { boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: -0.15 },
+        { boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: 0.15 },
+        { boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.5 },
+        { boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.5 },
+        { boneA: 'NeckPart1_M', boneB: 'NeckPart2_M', t: 0.5 },
+        { boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.5 },
+        { boneA: 'Root_M', boneB: 'Hip_L', t: 0.3 },
+        { boneA: 'Root_M', boneB: 'Hip_R', t: 0.3 },
+      ];
+      const posA = new THREE.Vector3();
+      const posB = new THREE.Vector3();
+      const virtPos = new THREE.Vector3();
+      for (const vp of virtualPoints) {
+        const bA = bones[vp.boneA];
+        const bB = bones[vp.boneB];
+        if (!bA || !bB) continue;
+        bA.getWorldPosition(posA);
+        bB.getWorldPosition(posB);
+        virtPos.lerpVectors(posA, posB, vp.t);
+        if (vp.offsetX) virtPos.x += vp.offsetX;
+        ray.closestPointToPoint(virtPos, closestOnRay);
+        const d = virtPos.distanceTo(closestOnRay);
+        if (d < bestDist) {
+          bestDist = d;
+          bestPoint = closestOnRay.clone();
+        }
+      }
+      return bestPoint;
+    };
+
+    const raycastModel = (ndc: THREE.Vector2, preciseOnly = false): THREE.Vector3 | null => {
+      const allMeshes = getAllMeshes();
+      const visibleMeshes = getVisibleMeshes();
+      const primaryMeshes = visibleMeshes.length > 0 ? visibleMeshes : allMeshes;
+      raycasterRef.current.setFromCamera(ndc, camera);
+      let hits = raycasterRef.current.intersectObjects(primaryMeshes, true);
       if (hits.length > 0) return hits[0].point.clone();
+
+      if (visibleMeshes.length < allMeshes.length) {
+        hits = raycasterRef.current.intersectObjects(allMeshes, true);
+        if (hits.length > 0) return hits[0].point.clone();
+      }
 
       const modelBox = new THREE.Box3().setFromObject(model);
       const modelSize = modelBox.getSize(new THREE.Vector3()).length();
       const camDist = camera.position.distanceTo(modelBox.getCenter(new THREE.Vector3()));
-      const spread = Math.max(0.01, Math.min(0.05, (modelSize / camDist) * 0.015));
+      const spread = Math.max(0.015, Math.min(0.08, (modelSize / camDist) * 0.025));
 
       const offsets: number[][] = [];
-      const rings = [0.5, 0.7, 1, 1.5, 2, 2.5, 3];
+      const rings = [0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5];
       for (const r of rings) {
-        const steps = r <= 1 ? 4 : 8;
+        const steps = r <= 1 ? 6 : 10;
         for (let a = 0; a < steps; a++) {
           const angle = (a / steps) * Math.PI * 2;
           offsets.push([Math.cos(angle) * spread * r, Math.sin(angle) * spread * r]);
@@ -2136,7 +2200,7 @@ export default function PureThreeGLBViewer({
       for (const [dx, dy] of offsets) {
         tempNdc.set(ndc.x + dx, ndc.y + dy);
         raycasterRef.current.setFromCamera(tempNdc, camera);
-        const spreadHits = raycasterRef.current.intersectObjects(visibleMeshes, true);
+        const spreadHits = raycasterRef.current.intersectObjects(allMeshes, true);
         if (spreadHits.length > 0) {
           const pt = spreadHits[0].point;
           const d = pt.distanceTo(camera.position);
@@ -2150,7 +2214,7 @@ export default function PureThreeGLBViewer({
 
       if (preciseOnly) return null;
 
-      buildVertexCache();
+      buildVertexCache(true);
       if (!vertexCacheRef.verts || !vertexCacheRef.normals) return null;
 
       raycasterRef.current.setFromCamera(ndc, camera);
@@ -2158,7 +2222,7 @@ export default function PureThreeGLBViewer({
       let bestPoint: THREE.Vector3 | null = null;
       let bestScore = Infinity;
       const closestOnRay = new THREE.Vector3();
-      const maxSnapDist = 0.6;
+      const maxSnapDist = 1.5;
       for (let i = 0; i < vertexCacheRef.verts.length; i++) {
         const v = vertexCacheRef.verts[i];
         ray.closestPointToPoint(v, closestOnRay);
@@ -2173,7 +2237,9 @@ export default function PureThreeGLBViewer({
           bestPoint = v.clone();
         }
       }
-      return bestPoint;
+      if (bestPoint) return bestPoint;
+
+      return raycastBonePosition(ndc);
     };
 
     const raycastPainMarkers = (ndc: THREE.Vector2): string | null => {

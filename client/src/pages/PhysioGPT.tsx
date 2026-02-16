@@ -49,7 +49,10 @@ import {
   Ruler,
   Activity,
   Weight,
-  Scan
+  Scan,
+  Camera,
+  CameraOff,
+  Pause
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -58,6 +61,9 @@ import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDispl
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement } from "@/components/skeleton/PureThreeGLBViewer";
+import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
+import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
+import type { Skeleton3DPose } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
@@ -342,6 +348,9 @@ export default function PhysioGPT() {
   const [markerDescription, setMarkerDescription] = useState('');
   const [romMode, setRomMode] = useState(false);
   const [poseMode, setPoseMode] = useState(false);
+  const [cameraMode, setCameraMode] = useState(false);
+  const [cameraPoseActive, setCameraPoseActive] = useState(false);
+  const controllerSmootherRef = useRef(new ControllerSmoother(0.35, 0.015));
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
   const [romValues, setRomValues] = useState<Record<string, number>>({});
   const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
@@ -965,6 +974,51 @@ export default function PhysioGPT() {
     sendMessageStreaming(prompt);
   }, [painMarkers]);
 
+  const handleCameraPoseUpdate = useCallback((pose: Skeleton3DPose) => {
+    if (!cameraPoseActive) return;
+    const controllerVals = poseToControllerValues(pose);
+    const smoothed = controllerSmootherRef.current.smooth(controllerVals);
+    const rad2deg = (r: number) => Math.round((r * 180) / Math.PI);
+
+    setModelConfig(prev => ({
+      ...prev,
+      leftShoulder: { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: rad2deg(smoothed.leftShoulder.abduction) },
+      rightShoulder: { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: rad2deg(smoothed.rightShoulder.abduction) },
+      leftElbow: { ...prev.leftElbow, flexion: rad2deg(smoothed.leftElbow.flexion) },
+      rightElbow: { ...prev.rightElbow, flexion: rad2deg(smoothed.rightElbow.flexion) },
+      leftHip: { ...prev.leftHip, flexion: rad2deg(smoothed.leftHip.flexion), abduction: rad2deg(smoothed.leftHip.abduction) },
+      rightHip: { ...prev.rightHip, flexion: rad2deg(smoothed.rightHip.flexion), abduction: rad2deg(smoothed.rightHip.abduction) },
+      leftKnee: { ...prev.leftKnee, flexion: rad2deg(smoothed.leftKnee.flexion) },
+      rightKnee: { ...prev.rightKnee, flexion: rad2deg(smoothed.rightKnee.flexion) },
+      pelvis: { ...prev.pelvis, tilt: rad2deg(smoothed.pelvis.tilt), obliquity: rad2deg(smoothed.pelvis.obliquity) },
+      spine: { ...prev.spine, thoracicKyphosis: rad2deg(smoothed.spine.flexion), scoliosis: rad2deg(smoothed.spine.lateralFlexion) },
+      neck: { ...prev.neck, flexion: rad2deg(smoothed.neck.flexion), rotation: rad2deg(smoothed.neck.rotation), lateralFlexion: rad2deg(smoothed.neck.lateralFlexion) },
+    }));
+  }, [cameraPoseActive]);
+
+  const toggleCameraMode = useCallback(() => {
+    const newMode = !cameraMode;
+    setCameraMode(newMode);
+    if (newMode) {
+      setPainMarkerMode(false);
+      setRomMode(false);
+      setPoseMode(false);
+      setSelectedRomJoint(null);
+      setCameraPoseActive(true);
+      controllerSmootherRef.current = new ControllerSmoother(0.35, 0.015);
+      if (!skeletonOpen) setSkeletonOpen(true);
+      toast({ title: "Camera Capture", description: "Position the patient in frame. The skeleton will mirror their posture in real-time." });
+    } else {
+      setCameraPoseActive(false);
+    }
+  }, [cameraMode, skeletonOpen, toast]);
+
+  const handleCapturePose = useCallback(() => {
+    setCameraPoseActive(false);
+    setCameraMode(false);
+    toast({ title: "Pose Captured", description: "Patient posture has been captured on the skeleton. You can now analyze it or add pain markers." });
+  }, [toast]);
+
   const handleAnalyzeSkeleton = useCallback(() => {
     const sections: string[] = [];
 
@@ -1204,7 +1258,29 @@ export default function PhysioGPT() {
           className={`${skeletonOpen ? '' : 'h-0'} overflow-hidden border-b bg-gray-900 relative flex-shrink-0`}
           style={skeletonOpen ? { height: `${skeletonHeight}%`, transition: isDraggingResize ? 'none' : 'height 0.3s ease' } : undefined}
         >
-          <div className="h-full w-full relative">
+          <div className="h-full w-full relative flex">
+            {cameraMode && (
+              <div className="w-[40%] h-full flex-shrink-0 relative border-r border-gray-700">
+                <CameraPoseCapture
+                  onPoseUpdate={handleCameraPoseUpdate}
+                  isActive={cameraMode}
+                  className="h-full border-0 rounded-none [&_.aspect-video]:!aspect-auto [&_.aspect-video]:!h-full"
+                />
+                {cameraPoseActive && (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+                    <Button
+                      size="sm"
+                      className="h-8 bg-green-600 hover:bg-green-700 text-white shadow-lg"
+                      onClick={handleCapturePose}
+                    >
+                      <Pause className="h-3.5 w-3.5 mr-1.5" />
+                      Capture Pose
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
               modelConfig={modelConfig as any}
@@ -1637,6 +1713,8 @@ export default function PhysioGPT() {
                     if (newMode) {
                       setRomMode(false);
                       setPoseMode(false);
+                      setCameraMode(false);
+                      setCameraPoseActive(false);
                       setSelectedRomJoint(null);
                       if (!skeletonOpen) setSkeletonOpen(true);
                       const tips: Record<PainMarkerType, string> = {
@@ -1695,6 +1773,8 @@ export default function PhysioGPT() {
                   if (newMode) {
                     setPainMarkerMode(false);
                     setPoseMode(false);
+                    setCameraMode(false);
+                    setCameraPoseActive(false);
                     if (!skeletonOpen) setSkeletonOpen(true);
                     toast({ title: "ROM Measurement Mode", description: "Click on a highlighted joint to measure its range of motion." });
                   } else {
@@ -1716,6 +1796,8 @@ export default function PhysioGPT() {
                   if (newMode) {
                     setPainMarkerMode(false);
                     setRomMode(false);
+                    setCameraMode(false);
+                    setCameraPoseActive(false);
                     setSelectedRomJoint(null);
                     if (!skeletonOpen) setSkeletonOpen(true);
                     toast({ title: "Pose Mode", description: "Click and drag limbs to adjust the skeleton pose. Double-click to reset a joint." });
@@ -1724,6 +1806,15 @@ export default function PhysioGPT() {
               >
                 <Hand className="h-3 w-3 mr-1" />
                 {poseMode ? 'Posing...' : 'Pose'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${cameraMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white/90 hover:bg-white'}`}
+                onClick={toggleCameraMode}
+              >
+                {cameraMode ? <CameraOff className="h-3 w-3 mr-1" /> : <Camera className="h-3 w-3 mr-1" />}
+                {cameraMode ? 'Stop Camera' : 'Camera'}
               </Button>
               <Button
                 variant="secondary"
@@ -1783,6 +1874,7 @@ export default function PhysioGPT() {
               </Button>
             </div>
 
+          </div>
           </div>
         </div>
 

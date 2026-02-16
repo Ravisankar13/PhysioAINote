@@ -8,7 +8,22 @@ PhysioGPT is an advanced AI-powered physiotherapy platform providing comprehensi
 
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes (Feb 15, 2026)
+## Recent Changes (Feb 16, 2026)
+- **Comprehensive Shoulder Assessment System**: Deep clinical shoulder assessment with AI-powered differential diagnosis:
+  - Shoulder assessment library (client/src/lib/shoulderAssessment.ts): 21 special tests with sensitivity/specificity/LR+/LR-, 10 muscle tests, 6 ROM norms, 11 differential diagnoses, 7 kinetic chain contributors, 6 pain zones
+  - ShoulderAssessmentPanel (client/src/components/shoulder/ShoulderAssessmentPanel.tsx): 10-step guided assessment wizard (History → Observation → AROM → PROM → Resisted → Special Tests → Neuro → Functional → Kinetic Chain → Summary)
+  - Special tests with expandable technique details, +/-/? result buttons, sensitivity/specificity/LR display
+  - Capsular pattern detection (ER > ABD > Flex > IR) for adhesive capsulitis identification
+  - Kinetic chain analysis using skeleton posture data: scapulothoracic, thoracic spine, cervical spine, rib cage, pelvis/lumbar, contralateral shoulder, ipsilateral hip
+  - Differential diagnosis scoring algorithm weighting onset type, pain location, special test results (LR-weighted), capsular pattern, muscle weakness, prevalence
+  - ROM comparison against normative data with age-adjusted ranges, color-coded status (normal/restricted/below functional)
+  - Left/Right side selection with zoom to affected shoulder
+  - "Send to AI for Full Clinical Analysis" builds comprehensive structured prompt with all findings
+  - Backend system prompt enhanced with shoulder-specific frameworks: kinetic chain analysis, capsular pattern recognition, differential weighting, treatment phasing, scapulohumeral rhythm
+  - "Shoulder Assess" button in skeleton controls bar opens overlay panel
+- **Key Files**: client/src/lib/shoulderAssessment.ts, client/src/components/shoulder/ShoulderAssessmentPanel.tsx
+
+## Previous Changes (Feb 15, 2026)
 - **Interactive Skeleton-to-Text System**: Skeleton viewer now reacts to clinical conversation content:
   - Clinical text parser (client/src/lib/clinicalTextParser.ts) detects body regions, pain types, pathologies, and severity from messages
   - PureThreeGLBViewer highlightRegions prop applies colored emissive glow to affected mesh groups

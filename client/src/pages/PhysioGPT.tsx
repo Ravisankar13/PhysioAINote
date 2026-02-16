@@ -62,6 +62,7 @@ import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement } from "@/components/skeleton/PureThreeGLBViewer";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
+import ShoulderAssessmentPanel from "@/components/shoulder/ShoulderAssessmentPanel";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
 import type { Skeleton3DPose } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS } from "@/components/skeleton/PureThreeGLBViewer";
@@ -117,15 +118,22 @@ const BODY_REGIONS = {
     color: "from-teal-500 to-teal-600",
     skeletonRegion: "left_shoulder" as AnatomicalRegion,
     specialTests: [
-      { name: "Neer's Test", purpose: "Subacromial impingement", positive: "Pain with passive flexion" },
-      { name: "Hawkins-Kennedy", purpose: "Subacromial impingement", positive: "Pain with internal rotation" },
-      { name: "Empty Can Test", purpose: "Supraspinatus pathology", positive: "Weakness or pain" },
-      { name: "External Rotation Lag Sign", purpose: "Infraspinatus tear", positive: "Inability to maintain ER" },
-      { name: "Apprehension Test", purpose: "Anterior instability", positive: "Apprehension/guarding" },
-      { name: "O'Brien's Test", purpose: "SLAP lesion", positive: "Deep pain reduced with supination" },
-      { name: "Speed's Test", purpose: "Biceps tendinopathy", positive: "Bicipital groove pain" }
+      { name: "Neer's Impingement Test", purpose: "Subacromial impingement (Sens 72%, Spec 60%)", positive: "Pain with passive flexion in IR" },
+      { name: "Hawkins-Kennedy Test", purpose: "Subacromial impingement (Sens 79%, Spec 59%)", positive: "Pain with passive IR at 90° flexion" },
+      { name: "Empty Can (Jobe's) Test", purpose: "Supraspinatus integrity (Sens 69%, Spec 62%)", positive: "Pain/weakness in scapular plane" },
+      { name: "Full Can Test", purpose: "Supraspinatus (Sens 77%, Spec 74%)", positive: "Pain/weakness thumbs up" },
+      { name: "External Rotation Lag Sign", purpose: "Infraspinatus tear (Sens 46%, Spec 94%)", positive: "Arm drops into IR >5°" },
+      { name: "Hornblower's Sign", purpose: "Teres minor tear (Sens 100%, Spec 93%)", positive: "Cannot ER in 90° ABD" },
+      { name: "Lift-Off Test", purpose: "Subscapularis tear (Sens 18%, Spec 92%)", positive: "Cannot lift hand off back" },
+      { name: "Bear Hug Test", purpose: "Upper subscapularis (Sens 60%, Spec 92%)", positive: "Cannot maintain hand on shoulder" },
+      { name: "Apprehension Test", purpose: "Anterior instability (Sens 72%, Spec 96%)", positive: "Apprehension in ABD/ER" },
+      { name: "Relocation Test", purpose: "Confirms instability (LR+ 34.0)", positive: "Relief with posterior force" },
+      { name: "O'Brien's Test", purpose: "SLAP lesion (Sens 63%, Spec 73%)", positive: "Deep pain reduced with supination" },
+      { name: "Cross-Body Adduction", purpose: "AC joint (Sens 77%, Spec 79%)", positive: "Pain at AC joint" },
+      { name: "Scapular Assistance Test", purpose: "Scapular dyskinesis contribution", positive: "Pain reduces with manual assist" },
+      { name: "Speed's Test", purpose: "Biceps tendinopathy (Sens 32%, Spec 75%)", positive: "Bicipital groove pain" }
     ],
-    redFlags: ["Severe trauma", "Dislocation", "Sudden weakness", "Night pain waking from sleep"]
+    redFlags: ["Severe trauma with deformity", "Acute dislocation", "Sudden pseudoparalysis", "Progressive neurological deficit", "Night pain unrelieved by any position", "Vascular compromise signs"]
   },
   elbow: {
     name: "Elbow",
@@ -350,6 +358,8 @@ export default function PhysioGPT() {
   const [poseMode, setPoseMode] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
   const [cameraPoseActive, setCameraPoseActive] = useState(false);
+  const [showShoulderAssessment, setShowShoulderAssessment] = useState(false);
+  const [shoulderAssessmentSide, setShoulderAssessmentSide] = useState<'left' | 'right'>('right');
   const controllerSmootherRef = useRef(new ControllerSmoother(0.35, 0.015));
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
   const [romValues, setRomValues] = useState<Record<string, number>>({});
@@ -1872,7 +1882,56 @@ export default function PhysioGPT() {
                 <Scan className="h-3 w-3 mr-1" />
                 Analyze Skeleton
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${showShoulderAssessment ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gradient-to-r from-cyan-500 to-teal-500 text-white hover:from-cyan-600 hover:to-teal-600'}`}
+                onClick={() => {
+                  if (showShoulderAssessment) {
+                    setShowShoulderAssessment(false);
+                  } else {
+                    setShowShoulderAssessment(true);
+                    if (!skeletonOpen) setSkeletonOpen(true);
+                    setZoomToRegion(shoulderAssessmentSide === 'left' ? 'left_shoulder' : 'right_shoulder');
+                  }
+                }}
+              >
+                <Stethoscope className="h-3 w-3 mr-1" />
+                Shoulder Assess
+              </Button>
+              {showShoulderAssessment && (
+                <div className="flex bg-cyan-500/90 rounded-md overflow-hidden h-7 items-center">
+                  {(['left', 'right'] as const).map(s => (
+                    <button
+                      key={s}
+                      className={`px-2 h-full text-[10px] font-medium transition-colors ${
+                        shoulderAssessmentSide === s ? 'bg-white text-cyan-600' : 'text-white/80 hover:text-white hover:bg-cyan-600'
+                      }`}
+                      onClick={() => {
+                        setShoulderAssessmentSide(s);
+                        setZoomToRegion(s === 'left' ? 'left_shoulder' : 'right_shoulder');
+                      }}
+                    >
+                      {s === 'left' ? 'L' : 'R'}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {showShoulderAssessment && (
+              <div className="absolute top-2 right-2 z-30 w-80 h-[calc(100%-50px)]">
+                <ShoulderAssessmentPanel
+                  modelConfig={modelConfig}
+                  side={shoulderAssessmentSide}
+                  onClose={() => setShowShoulderAssessment(false)}
+                  onSendToChat={(msg) => {
+                    setShowShoulderAssessment(false);
+                    handleSendMessage(msg);
+                  }}
+                />
+              </div>
+            )}
 
           </div>
           </div>

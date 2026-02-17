@@ -946,6 +946,7 @@ interface PureThreeGLBViewerProps {
   onPainMarkerMove?: (id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => void;
   onPainMarkerRemove?: (id: string) => void;
   onPainMarkerUpdate?: (id: string, updates: Partial<PainMarker>) => void;
+  onPainMarkerSelect?: (id: string) => void;
   enablePainMarkers?: boolean;
   activePainMarkerType?: PainMarkerType;
   enableRomMode?: boolean;
@@ -1265,6 +1266,7 @@ export default function PureThreeGLBViewer({
   onPainMarkerMove,
   onPainMarkerRemove,
   onPainMarkerUpdate,
+  onPainMarkerSelect,
   enablePainMarkers = false,
   activePainMarkerType = 'point',
   enableRomMode = false,
@@ -1296,12 +1298,12 @@ export default function PureThreeGLBViewer({
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
-  const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh } | null>(null);
+  const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh; hasMoved: boolean } | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
-  const painMarkerCallbacksRef = useRef({ onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove, onPainMarkerUpdate });
-  painMarkerCallbacksRef.current = { onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove, onPainMarkerUpdate };
+  const painMarkerCallbacksRef = useRef({ onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove, onPainMarkerUpdate, onPainMarkerSelect });
+  painMarkerCallbacksRef.current = { onPainMarkerAdd, onPainMarkerMove, onPainMarkerRemove, onPainMarkerUpdate, onPainMarkerSelect };
   const enablePainMarkersRef = useRef(enablePainMarkers);
   enablePainMarkersRef.current = enablePainMarkers;
   const activePainMarkerTypeRef = useRef(activePainMarkerType);
@@ -2370,7 +2372,7 @@ export default function PureThreeGLBViewer({
         if (markerId && !pendingReferralRef.current && !pendingLineRef.current) {
           const meshes = painMarkerMeshesRef.current.get(markerId);
           if (meshes) {
-            draggingMarkerRef.current = { id: markerId, mesh: meshes.inner, outerMesh: meshes.outer };
+            draggingMarkerRef.current = { id: markerId, mesh: meshes.inner, outerMesh: meshes.outer, hasMoved: false };
             controls.enabled = false;
             domElement.style.cursor = 'grabbing';
             e.preventDefault();
@@ -2422,6 +2424,7 @@ export default function PureThreeGLBViewer({
         const ndc = getMouseNDC(e);
         const hitPoint = raycastModel(ndc, true);
         if (hitPoint) {
+          draggingMarkerRef.current.hasMoved = true;
           draggingMarkerRef.current.mesh.position.copy(hitPoint);
           draggingMarkerRef.current.outerMesh.position.copy(hitPoint);
         }
@@ -2448,8 +2451,14 @@ export default function PureThreeGLBViewer({
 
     const onWindowMouseUp = (e: MouseEvent) => {
       if (draggingMarkerRef.current) {
+        const drag = draggingMarkerRef.current;
+        const hasMoved = drag.hasMoved;
+        const markerId = drag.id;
         finishDrag();
         mouseDownPosRef.current = null;
+        if (!hasMoved) {
+          painMarkerCallbacksRef.current.onPainMarkerSelect?.(markerId);
+        }
         return;
       }
 

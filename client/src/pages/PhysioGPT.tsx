@@ -52,7 +52,8 @@ import {
   Scan,
   Camera,
   CameraOff,
-  Pause
+  Pause,
+  Sparkles
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -1344,6 +1345,10 @@ ${ddxList}`;
               onPainMarkerMove={handlePainMarkerMove}
               onPainMarkerRemove={handlePainMarkerRemove}
               onPainMarkerUpdate={handlePainMarkerUpdate}
+              onPainMarkerSelect={(id: string) => {
+                const marker = painMarkers.find(m => m.id === id);
+                if (marker) setClinicalBubbleMarker(marker);
+              }}
               enableRomMode={romMode}
               onRomJointSelect={handleRomJointSelect}
               selectedRomJointId={selectedRomJoint?.id || null}
@@ -1550,6 +1555,13 @@ ${ddxList}`;
                             )}
                           </div>
                         </div>
+                        <button
+                          className="text-teal-400/70 hover:text-teal-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Open clinical analysis"
+                          onClick={(e) => { e.stopPropagation(); setClinicalBubbleMarker(m); }}
+                        >
+                          <Sparkles className="h-3 w-3" />
+                        </button>
                         <button
                           className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() => handlePainMarkerRemove(m.id)}

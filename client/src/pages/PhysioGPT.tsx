@@ -62,6 +62,7 @@ import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement } from "@/components/skeleton/PureThreeGLBViewer";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
+import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
 import ShoulderAssessmentPanel from "@/components/shoulder/ShoulderAssessmentPanel";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
 import type { Skeleton3DPose } from "@/utils/mediapipeTo3D";
@@ -360,6 +361,9 @@ export default function PhysioGPT() {
   const [cameraPoseActive, setCameraPoseActive] = useState(false);
   const [showShoulderAssessment, setShowShoulderAssessment] = useState(false);
   const [shoulderAssessmentSide, setShoulderAssessmentSide] = useState<'left' | 'right'>('right');
+  const [clinicalBubbleMarker, setClinicalBubbleMarker] = useState<PainMarker | null>(null);
+  const [clinicalBubbleSeverity, setClinicalBubbleSeverity] = useState<string>("moderate");
+  const skeletonContainerRef = useRef<HTMLDivElement>(null);
   const controllerSmootherRef = useRef(new ControllerSmoother(0.35, 0.015));
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
   const [romValues, setRomValues] = useState<Record<string, number>>({});
@@ -838,8 +842,8 @@ export default function PhysioGPT() {
 
   const handlePainMarkerAdd = useCallback((marker: PainMarker) => {
     setPainMarkers(prev => [...prev, marker]);
-    setEditingMarkerId(marker.id);
-    setMarkerDescription('');
+    setClinicalBubbleMarker(marker);
+    setClinicalBubbleSeverity("moderate");
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
@@ -852,11 +856,45 @@ export default function PhysioGPT() {
       setEditingMarkerId(null);
       setMarkerDescription('');
     }
+    setClinicalBubbleMarker(prev => prev?.id === id ? null : prev);
   }, [editingMarkerId]);
 
   const handlePainMarkerUpdate = useCallback((id: string, updates: Partial<PainMarker>) => {
     setPainMarkers(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
   }, []);
+
+  const handleClinicalBubbleDeepDive = useCallback((markerId: string, data: ClinicalBubbleData, answers: Record<string, string>) => {
+    const marker = painMarkers.find(m => m.id === markerId);
+    if (!marker) return;
+
+    const ddxList = data.differentials.map(d => `${d.name} (${d.likelihood}): ${d.reasoning}`).join('\n');
+    const answeredQs = Object.entries(answers).map(([q, a]) => `- ${q}: ${a}`).join('\n');
+    const assessments = data.assessment.map(a => `- ${a.test}: ${a.purpose}`).join('\n');
+    const treatments = data.treatments.map(t => `- ${t.name}: ${t.description}`).join('\n');
+    const exercises = data.exercises.map(e => `- ${e.name}: ${e.description}`).join('\n');
+
+    let prompt = `Deep clinical analysis requested for ${marker.type} pain at the ${marker.anatomicalLabel} (severity: ${clinicalBubbleSeverity}).
+
+**Initial Differential Diagnosis:**
+${ddxList}`;
+
+    if (answeredQs) {
+      prompt += `\n\n**Subjective History Gathered:**\n${answeredQs}`;
+    }
+
+    prompt += `\n\n**Suggested Assessments:**\n${assessments}`;
+    prompt += `\n\n**Initial Treatment Ideas:**\n${treatments}`;
+    prompt += `\n\n**Initial Exercise Ideas:**\n${exercises}`;
+
+    if (data.redFlags.length > 0) {
+      prompt += `\n\n**Red Flags Identified:**\n${data.redFlags.map(f => `⚠️ ${f}`).join('\n')}`;
+    }
+
+    prompt += `\n\nPlease provide a comprehensive deep-dive clinical analysis. Refine the differential diagnosis, suggest a detailed objective examination protocol, provide a structured treatment plan with progression, and prescribe specific exercises with sets/reps/frequency. Address any red flags and provide clinical reasoning for your recommendations.`;
+
+    setClinicalBubbleMarker(null);
+    sendMessageStreaming(prompt);
+  }, [painMarkers, clinicalBubbleSeverity]);
 
   const handlePainMarkerDescriptionSubmit = useCallback((markerId: string, description: string) => {
     if (!description.trim() || isStreaming) return;
@@ -1288,7 +1326,7 @@ export default function PhysioGPT() {
                 )}
               </div>
             )}
-            <div className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
+            <div ref={skeletonContainerRef} className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
               modelConfig={modelConfig as any}
@@ -1476,7 +1514,7 @@ export default function PhysioGPT() {
                   <p className="text-[10px] text-gray-300 uppercase tracking-wider font-medium">Pain Markers ({painMarkers.length})</p>
                   <button
                     className="text-[10px] text-red-400 hover:text-red-300"
-                    onClick={() => { setPainMarkers([]); setEditingMarkerId(null); setMarkerDescription(''); }}
+                    onClick={() => { setPainMarkers([]); setEditingMarkerId(null); setMarkerDescription(''); setClinicalBubbleMarker(null); }}
                   >
                     Clear All
                   </button>
@@ -1495,7 +1533,10 @@ export default function PhysioGPT() {
                       <div className="flex items-center gap-2 group">
                         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${tc.bg}`} style={{ boxShadow: `0 0 6px ${tc.shadow}` }} />
                         <div className="flex-1 min-w-0">
-                          <span className="text-[11px] text-white truncate block font-medium">{m.anatomicalLabel}</span>
+                          <span
+                            className="text-[11px] text-white truncate block font-medium cursor-pointer hover:text-teal-300 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); setClinicalBubbleMarker(m); setClinicalBubbleSeverity("moderate"); }}
+                          >{m.anatomicalLabel}</span>
                           <div className="flex items-center gap-1">
                             <span className="text-[9px] text-gray-400 uppercase">{tc.label}</span>
                             {m.type === 'referred' && m.referralTargetLabel && (
@@ -1580,6 +1621,21 @@ export default function PhysioGPT() {
                   Ask About All Areas
                 </Button>
               </div>
+            )}
+
+            {/* Clinical Bubble */}
+            {clinicalBubbleMarker && (
+              <ClinicalBubble
+                key={clinicalBubbleMarker.id}
+                markerId={clinicalBubbleMarker.id}
+                region={clinicalBubbleMarker.anatomicalLabel}
+                markerType={clinicalBubbleMarker.type}
+                position={{ x: 50, y: 15 }}
+                onClose={() => setClinicalBubbleMarker(null)}
+                onDeepDive={handleClinicalBubbleDeepDive}
+                severity={clinicalBubbleSeverity}
+                onSeverityChange={setClinicalBubbleSeverity}
+              />
             )}
 
             {/* ROM Joint Slider Panel */}

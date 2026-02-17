@@ -5951,6 +5951,68 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  // Clinical Bubble AI endpoint - returns structured clinical data for pain marker regions
+  app.post("/api/physiogpt/clinical-bubble", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { region, markerType, severity, answeredQuestions } = req.body;
+      if (!region) return res.status(400).json({ error: "Region is required" });
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const openai = new OpenAI({ apiKey, baseURL });
+
+      const answersContext = answeredQuestions && Object.keys(answeredQuestions).length > 0
+        ? `\n\nThe clinician has gathered the following subjective history:\n${Object.entries(answeredQuestions).map(([q, a]) => `- ${q}: ${a}`).join('\n')}\n\nRefine your differential diagnosis and recommendations based on these answers.`
+        : '';
+
+      const prompt = `You are a clinical physiotherapy expert. A clinician has placed a ${markerType} pain marker on the "${region}" region of a patient's body. The reported severity is "${severity || 'moderate'}".${answersContext}
+
+Provide a structured clinical analysis in JSON format with these fields:
+{
+  "differentials": [{"name": "condition name", "likelihood": "high|moderate|low", "reasoning": "brief clinical reasoning"}],
+  "questions": [{"id": "q1", "question": "clinical question to ask", "options": ["option1", "option2", "option3"]}],
+  "assessment": [{"test": "special test name", "purpose": "what it tests for", "technique": "brief technique description"}],
+  "treatments": [{"name": "treatment name", "description": "brief description", "frequency": "e.g. 2-3x/week"}],
+  "exercises": [{"name": "exercise name", "description": "brief description", "sets": "3", "reps": "10-12"}],
+  "redFlags": ["red flag description if applicable"]
+}
+
+Guidelines:
+- Provide 3-5 differential diagnoses ranked by likelihood
+- Provide 3-5 targeted clinical questions with 3-4 answer options each that will help narrow the differential
+- Provide 3-5 objective assessment tests specific to this region
+- Provide 3-4 evidence-based treatment approaches
+- Provide 3-4 therapeutic exercises appropriate for the condition
+- Only include red flags if genuinely concerning patterns exist for this region
+- Be concise but clinically precise
+- Return ONLY valid JSON, no markdown or explanation`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: 2000,
+      });
+
+      const content = completion.choices[0]?.message?.content || '{}';
+      const parsed = JSON.parse(content);
+
+      res.json({
+        differentials: parsed.differentials || [],
+        questions: parsed.questions || [],
+        assessment: parsed.assessment || [],
+        treatments: parsed.treatments || [],
+        exercises: parsed.exercises || [],
+        redFlags: parsed.redFlags || [],
+      });
+    } catch (error: any) {
+      console.error("Clinical bubble error:", error);
+      res.status(500).json({ error: "Failed to generate clinical analysis" });
+    }
+  });
+
   // PhysioGPT API Routes
   app.post("/api/physiogpt/chat", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

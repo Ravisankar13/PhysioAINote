@@ -8,7 +8,20 @@ PhysioGPT is an advanced AI-powered physiotherapy platform providing comprehensi
 
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes (Feb 16, 2026)
+## Recent Changes (Feb 17, 2026)
+- **Clinical Bubble on Pain Markers**: AI-powered floating clinical info panel that auto-appears when a pain marker is placed:
+  - ClinicalBubble component (client/src/components/skeleton/ClinicalBubble.tsx): tabs for DDx, Questions (Hx), Assessment (Obj), Treatment (Tx), Exercises (Ex)
+  - New API endpoint /api/physiogpt/clinical-bubble: Uses OpenAI JSON mode to return structured clinical data (differentials, questions, assessments, treatments, exercises, red flags)
+  - Interactive follow-up questions with clickable answer options; "Refine" button sends answers to AI for updated recommendations
+  - Severity selector (mild/moderate/severe) adjusts clinical recommendations
+  - Red flags alert banner when concerning patterns detected
+  - "Deep Dive with AI" button sends all bubble data + answered questions to PhysioGPT chat for comprehensive analysis
+  - Clicking marker names in pain marker list re-opens the clinical bubble
+  - Bubble remounts (key={markerId}) on marker change; refetches on severity change
+- **Disabled auto-highlight from AI responses**: Clinical text parser no longer highlights skeleton regions based on PhysioGPT AI response text, only user messages and voice transcripts trigger highlights
+- **Key Files**: client/src/components/skeleton/ClinicalBubble.tsx, client/src/pages/PhysioGPT.tsx, server/routes.ts
+
+## Previous Changes (Feb 16, 2026)
 - **Comprehensive Shoulder Assessment System**: Deep clinical shoulder assessment with AI-powered differential diagnosis:
   - Shoulder assessment library (client/src/lib/shoulderAssessment.ts): 21 special tests with sensitivity/specificity/LR+/LR-, 10 muscle tests, 6 ROM norms, 11 differential diagnoses, 7 kinetic chain contributors, 6 pain zones
   - ShoulderAssessmentPanel (client/src/components/shoulder/ShoulderAssessmentPanel.tsx): 10-step guided assessment wizard (History → Observation → AROM → PROM → Resisted → Special Tests → Neuro → Functional → Kinetic Chain → Summary)

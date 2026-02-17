@@ -1999,7 +1999,21 @@ export default function PureThreeGLBViewer({
     });
 
     for (const marker of painMarkers) {
-      const pos = new THREE.Vector3(marker.position.x, marker.position.y, marker.position.z);
+      let pos = new THREE.Vector3(marker.position.x, marker.position.y, marker.position.z);
+      if (pos.lengthSq() < 0.0001 && marker.nearestBone && marker.nearestBone.startsWith('virt_')) {
+        const vp = ANATOMICAL_VIRTUAL_POINTS.find(v => v.boneName === marker.nearestBone);
+        const bRef = bonesRef.current;
+        if (vp && bRef[vp.boneA] && bRef[vp.boneB]) {
+          const pA = new THREE.Vector3();
+          const pB = new THREE.Vector3();
+          bRef[vp.boneA].getWorldPosition(pA);
+          bRef[vp.boneB].getWorldPosition(pB);
+          pos.lerpVectors(pA, pB, vp.t);
+          if (vp.offsetX) pos.x += vp.offsetX;
+          if (vp.offsetY) pos.y += vp.offsetY;
+          if (vp.offsetZ) pos.z += vp.offsetZ;
+        }
+      }
       const markerType = marker.type || 'point';
 
       if (painMarkerMeshesRef.current.has(marker.id)) {

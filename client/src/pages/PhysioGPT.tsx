@@ -70,7 +70,7 @@ import type { KineticChainConnection } from "@/lib/kineticChainMap";
 import ShoulderAssessmentPanel from "@/components/shoulder/ShoulderAssessmentPanel";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
 import type { Skeleton3DPose } from "@/utils/mediapipeTo3D";
-import { ROM_JOINT_DEFINITIONS } from "@/components/skeleton/PureThreeGLBViewer";
+import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, type ForceAnalysisResult, type JointForceResult } from "@/lib/posturalForceEngine";
@@ -370,6 +370,7 @@ export default function PhysioGPT() {
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
+  const [expandedZoomRegion, setExpandedZoomRegion] = useState<string | null>(null);
   const skeletonContainerRef = useRef<HTMLDivElement>(null);
   const controllerSmootherRef = useRef(new ControllerSmoother(0.35, 0.015));
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
@@ -846,6 +847,23 @@ export default function PhysioGPT() {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDraggingResize]);
+
+  const zoomRegionLandmarks = useMemo(() => [
+    { region: 'cervical_spine' as AnatomicalRegion, label: 'Neck / Cervical', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => ['Head_M','NeckPart1_M','NeckPart2_M','Neck_M'].some(b => p.boneA === b || p.boneB === b) && !p.label.includes('Rib') && !p.label.includes('Sternoclavicular') && !p.label.includes('Manubrium')).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'thoracic_spine' as AnatomicalRegion, label: 'Thoracic / Ribs', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => (['Chest_M','Spine1Part2_M','Spine1Part1_M','Spine1_M'].some(b => p.boneA === b || p.boneB === b) && !p.label.includes('Scapula') && !p.label.includes('Sternoclavicular')) || p.label.includes('Rib') || p.label.includes('Costochondral') || p.label.includes('Costovertebral') || p.label.includes('Xiphoid') || p.label.includes('Manubrium') || p.label.includes('Sternum')).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'lumbar_spine' as AnatomicalRegion, label: 'Lumbar / Spine', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.match(/^L[1-5]|Lumbosacral|Sacrum|Coccyx/) || p.label.includes('Facet Joint')).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'pelvis' as AnatomicalRegion, label: 'Pelvis', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('ASIS') || p.label.includes('PSIS') || p.label.includes('Ischial') || p.label.includes('Iliac Crest') || p.label.includes('Pubic') || p.label.includes('SI Joint') || p.label.includes('Acetabulum') || p.label.includes('Hamstring Origin') || p.label.includes('Adductor Origin')).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'left_shoulder' as AnatomicalRegion, label: 'L Shoulder', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Left') && (p.label.includes('Acromioclavicular') || p.label.includes('Coracoid') || p.label.includes('Glenohumeral') || p.label.includes('Subacromial') || p.label.includes('Bicipital Groove') || p.label.includes('Deltoid Tub') || p.label.includes('Infrascapular') || p.label.includes('Sternoclavicular'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'right_shoulder' as AnatomicalRegion, label: 'R Shoulder', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Right') && (p.label.includes('Acromioclavicular') || p.label.includes('Coracoid') || p.label.includes('Glenohumeral') || p.label.includes('Subacromial') || p.label.includes('Bicipital Groove') || p.label.includes('Deltoid Tub') || p.label.includes('Infrascapular') || p.label.includes('Sternoclavicular'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'left_elbow' as AnatomicalRegion, label: 'L Elbow / Wrist', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Left') && (p.label.includes('Epicondyle') || p.label.includes('Olecranon') || p.label.includes('Radial') || p.label.includes('Ulnar Styloid') || p.label.includes('Carpal Tunnel'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'right_elbow' as AnatomicalRegion, label: 'R Elbow / Wrist', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Right') && (p.label.includes('Epicondyle') || p.label.includes('Olecranon') || p.label.includes('Radial') || p.label.includes('Ulnar Styloid') || p.label.includes('Carpal Tunnel'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'left_hip' as AnatomicalRegion, label: 'L Hip / Thigh', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Left') && (p.label.includes('Greater Trochanter') || p.label.includes('Lesser Trochanter') || p.label.includes('IT Band') || p.label.includes('Quadriceps') || p.label.includes('Biceps'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'right_hip' as AnatomicalRegion, label: 'R Hip / Thigh', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Right') && (p.label.includes('Greater Trochanter') || p.label.includes('Lesser Trochanter') || p.label.includes('IT Band') || p.label.includes('Quadriceps') || p.label.includes('Biceps'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'left_knee' as AnatomicalRegion, label: 'L Knee', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Left') && (p.label.includes('Patella') || p.label.includes('Tibial Tuberosity') || p.label.includes('Fibular Head') || p.label.includes('Joint Line') || p.label.includes('Popliteal'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'right_knee' as AnatomicalRegion, label: 'R Knee', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Right') && (p.label.includes('Patella') || p.label.includes('Tibial Tuberosity') || p.label.includes('Fibular Head') || p.label.includes('Joint Line') || p.label.includes('Popliteal'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'left_ankle' as AnatomicalRegion, label: 'L Ankle / Foot', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Left') && (p.label.includes('Malleolus') || p.label.includes('Calcaneus') || p.label.includes('Navicular') || p.label.includes('Metatarsal') || p.label.includes('Plantar') || p.label.includes('Achilles') || p.label.includes('Anterior Tibialis') || p.label.includes('Peroneal') || p.label.includes('Tibial Shaft') || p.label.includes('Calf'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+    { region: 'right_ankle' as AnatomicalRegion, label: 'R Ankle / Foot', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => p.label.includes('Right') && (p.label.includes('Malleolus') || p.label.includes('Calcaneus') || p.label.includes('Navicular') || p.label.includes('Metatarsal') || p.label.includes('Plantar') || p.label.includes('Achilles') || p.label.includes('Anterior Tibialis') || p.label.includes('Peroneal') || p.label.includes('Tibial Shaft') || p.label.includes('Calf'))).map(p => ({ label: p.label, boneName: p.boneName })) },
+  ], []);
 
   const handleLandmarkSelect = useCallback((landmark: { label: string; boneName: string; position: { x: number; y: number; z: number } }) => {
     const newMarker: PainMarker = {
@@ -1523,57 +1541,81 @@ ${ddxList}`;
               </div>
             )}
 
-            {/* Zoom Tool Region Navigator */}
-            {zoomToolMode && (
-              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[220px] max-h-[calc(100%-60px)] overflow-y-auto">
+            {/* Zoom Tool Region Navigator with Landmark Browser */}
+            {zoomToolMode && (() => {
+              const stripSide = (label: string) => label.replace(/^(Left |Right )/, '').replace(/ \(.*\)$/, '');
+
+              return (
+              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[230px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
                     <Search className="h-3.5 w-3.5 text-cyan-400" />
-                    <span className="text-[11px] font-semibold text-white">Zoom & Landmarks</span>
+                    <span className="text-[11px] font-semibold text-white">Anatomy Browser</span>
                   </div>
                   <button className="text-gray-400 hover:text-white" onClick={() => setZoomToolMode(false)}>
                     <X className="h-3 w-3" />
                   </button>
                 </div>
-                <p className="text-[9px] text-gray-400 mb-2">Zoom into a region to see anatomical landmarks. Click a landmark to mark pain.</p>
-                <div className="grid grid-cols-2 gap-1">
-                  {([
-                    { region: 'cervical_spine' as AnatomicalRegion, label: 'Neck' },
-                    { region: 'thoracic_spine' as AnatomicalRegion, label: 'Thoracic' },
-                    { region: 'lumbar_spine' as AnatomicalRegion, label: 'Lumbar' },
-                    { region: 'pelvis' as AnatomicalRegion, label: 'Pelvis' },
-                    { region: 'left_shoulder' as AnatomicalRegion, label: 'L Shoulder' },
-                    { region: 'right_shoulder' as AnatomicalRegion, label: 'R Shoulder' },
-                    { region: 'left_hip' as AnatomicalRegion, label: 'L Hip' },
-                    { region: 'right_hip' as AnatomicalRegion, label: 'R Hip' },
-                    { region: 'left_knee' as AnatomicalRegion, label: 'L Knee' },
-                    { region: 'right_knee' as AnatomicalRegion, label: 'R Knee' },
-                    { region: 'left_ankle' as AnatomicalRegion, label: 'L Ankle' },
-                    { region: 'right_ankle' as AnatomicalRegion, label: 'R Ankle' },
-                    { region: 'left_elbow' as AnatomicalRegion, label: 'L Elbow' },
-                    { region: 'right_elbow' as AnatomicalRegion, label: 'R Elbow' },
-                  ]).map(({ region, label }) => (
-                    <button
-                      key={region}
-                      className={`text-[10px] px-2 py-1.5 rounded transition-colors text-left ${
-                        zoomToRegion === region
-                          ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/40'
-                          : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white border border-transparent'
-                      }`}
-                      onClick={() => setZoomToRegion(region)}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                <p className="text-[9px] text-gray-400 mb-2">Select a region to zoom in, or expand to pick a specific landmark.</p>
+                <div className="space-y-0.5">
+                  {zoomRegionLandmarks.map(({ region, label, landmarks }) => {
+                    const isExpanded = expandedZoomRegion === region;
+                    const isActive = zoomToRegion === region;
+                    return (
+                      <div key={region} className="rounded-md overflow-hidden">
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            className={`flex-1 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-l-md transition-colors text-left ${
+                              isActive
+                                ? 'bg-cyan-500/25 text-cyan-300'
+                                : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
+                            }`}
+                            onClick={() => { setZoomToRegion(region); setExpandedZoomRegion(isExpanded ? null : region); }}
+                          >
+                            <Bone className="h-3 w-3 flex-shrink-0 opacity-60" />
+                            <span className="flex-1">{label}</span>
+                            <span className="text-[8px] text-gray-500">{landmarks.length}</span>
+                          </button>
+                          <button
+                            className={`px-1.5 py-1.5 rounded-r-md transition-colors ${
+                              isExpanded
+                                ? 'bg-cyan-500/25 text-cyan-300'
+                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                            }`}
+                            onClick={(e) => { e.stopPropagation(); setExpandedZoomRegion(isExpanded ? null : region); if (!isExpanded) setZoomToRegion(region); }}
+                          >
+                            <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                        </div>
+                        {isExpanded && landmarks.length > 0 && (
+                          <div className="ml-2 mt-0.5 mb-1 border-l border-cyan-500/20 pl-2 space-y-0.5">
+                            {landmarks.map((lm) => (
+                              <button
+                                key={lm.boneName}
+                                className="w-full flex items-center gap-1.5 text-[9px] px-1.5 py-1 rounded text-left text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
+                                onClick={() => {
+                                  handleLandmarkSelect({ label: lm.label, boneName: lm.boneName, position: { x: 0, y: 0, z: 0 } });
+                                }}
+                              >
+                                <MapPin className="h-2.5 w-2.5 flex-shrink-0 text-cyan-500/50" />
+                                <span className="truncate">{stripSide(lm.label)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 <button
                   className="w-full mt-2 text-[10px] px-2 py-1 rounded bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
-                  onClick={() => setZoomToRegion('full_body')}
+                  onClick={() => { setZoomToRegion('full_body'); setExpandedZoomRegion(null); }}
                 >
                   Reset to Full Body
                 </button>
               </div>
-            )}
+              );
+            })()}
 
             {/* Clinical Highlights Legend */}
             {clinicalHighlights.length > 0 && !forceMode && (

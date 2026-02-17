@@ -352,6 +352,7 @@ export default function PhysioGPT() {
   const [painMarkers, setPainMarkers] = useState<PainMarker[]>([]);
   const [painMarkerMode, setPainMarkerMode] = useState(false);
   const [forceMode, setForceMode] = useState(false);
+  const [selectedForceJoint, setSelectedForceJoint] = useState<string | null>(null);
   const [bodyWeightKg, setBodyWeightKg] = useState(70);
   const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
@@ -1272,6 +1273,10 @@ ${ddxList}`;
               onModelConfigChange={updateModelConfig}
               enableZoomTool={zoomToolMode}
               onLandmarkSelect={handleLandmarkSelect}
+              forceOverlay={forceMode && forceAnalysis ? forceAnalysis.joints : null}
+              bodyWeightKg={bodyWeightKg}
+              selectedForceJoint={selectedForceJoint}
+              onForceJointSelect={(joint) => setSelectedForceJoint(prev => prev === joint ? null : joint)}
             />
 
             {/* Joint Controls Overlay */}
@@ -1361,20 +1366,40 @@ ${ddxList}`;
                   <span className="text-[10px] text-gray-400">kg</span>
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {forceAnalysis.joints.map((j) => (
-                    <div key={j.joint} className="flex items-center gap-1.5 py-0.5">
-                      <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: getStatusColor(j.status), boxShadow: `0 0 4px ${getStatusColor(j.status)}` }}
-                      />
-                      <span className="text-[10px] text-gray-300 flex-1 truncate">{j.label}</span>
-                      <span className="text-[11px] font-bold text-white tabular-nums" style={{ color: getStatusColor(j.status) }}>
-                        {(j.forceBW * 100).toFixed(0)}%
-                      </span>
-                      <span className="text-[9px] text-gray-500 w-[38px] text-right tabular-nums">
-                        {forceToNewtons(j.forceBW, bodyWeightKg)}N
-                      </span>
+                    <div key={j.joint}>
+                      <button
+                        onClick={() => setSelectedForceJoint(prev => prev === j.joint ? null : j.joint)}
+                        className={`w-full flex items-center gap-1.5 py-1 px-1 rounded transition-colors ${selectedForceJoint === j.joint ? 'bg-white/10 ring-1 ring-white/20' : 'hover:bg-white/5'}`}
+                      >
+                        <div
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: getStatusColor(j.status), boxShadow: `0 0 4px ${getStatusColor(j.status)}` }}
+                        />
+                        <span className="text-[10px] text-gray-300 flex-1 truncate text-left">{j.label}</span>
+                        <span className="text-[11px] font-bold text-white tabular-nums" style={{ color: getStatusColor(j.status) }}>
+                          {(j.forceBW * 100).toFixed(0)}%
+                        </span>
+                        <span className="text-[9px] text-gray-500 w-[38px] text-right tabular-nums">
+                          {forceToNewtons(j.forceBW, bodyWeightKg)}N
+                        </span>
+                      </button>
+                      {selectedForceJoint === j.joint && (
+                        <div className="ml-3.5 mt-0.5 mb-1 px-2 py-1.5 bg-white/5 rounded border-l-2 space-y-1" style={{ borderColor: getStatusColor(j.status) }}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] text-gray-400">Compression</span>
+                            <span className="text-[10px] text-white font-medium">{(j.compressionBW * 100).toFixed(0)}% BW ({forceToNewtons(j.compressionBW, bodyWeightKg)}N)</span>
+                          </div>
+                          {j.shearBW > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] text-gray-400">Shear</span>
+                              <span className="text-[10px] text-white font-medium">{(j.shearBW * 100).toFixed(0)}% BW ({forceToNewtons(j.shearBW, bodyWeightKg)}N)</span>
+                            </div>
+                          )}
+                          <p className="text-[9px] text-gray-400 leading-relaxed">{j.clinical}</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1661,6 +1686,7 @@ ${ddxList}`;
                   setTestChainActive({ connection, originalRegion });
                   setZoomToRegion(connection.region);
                   setPoseMode(true);
+                  setForceMode(true);
                 }}
               />
             )}

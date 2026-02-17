@@ -1105,7 +1105,26 @@ interface PureThreeGLBViewerProps {
   onModelConfigChange?: (path: string, value: number) => void;
   enableZoomTool?: boolean;
   onLandmarkSelect?: (landmark: { label: string; boneName: string; position: { x: number; y: number; z: number } }) => void;
+  forceOverlay?: { joint: string; label: string; forceBW: number; status: 'low' | 'moderate' | 'high' | 'very_high'; clinical: string }[] | null;
+  bodyWeightKg?: number;
+  selectedForceJoint?: string | null;
+  onForceJointSelect?: (joint: string) => void;
 }
+
+const FORCE_JOINT_TO_BONE: Record<string, string> = {
+  cervical: 'Neck_M',
+  lumbar: 'RootPart1_M',
+  leftHip: 'Hip_L',
+  rightHip: 'Hip_R',
+  leftKnee: 'Knee_L',
+  rightKnee: 'Knee_R',
+  leftAnkle: 'Ankle_L',
+  rightAnkle: 'Ankle_R',
+  leftShoulder: 'Shoulder_L',
+  rightShoulder: 'Shoulder_R',
+  leftElbow: 'Elbow_L',
+  rightElbow: 'Elbow_R',
+};
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
   // === HIP / FEMUR ===
@@ -1427,6 +1446,10 @@ export default function PureThreeGLBViewer({
   onModelConfigChange,
   enableZoomTool = false,
   onLandmarkSelect,
+  forceOverlay = null,
+  bodyWeightKg = 70,
+  selectedForceJoint = null,
+  onForceJointSelect,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1462,6 +1485,12 @@ export default function PureThreeGLBViewer({
   const activePainMarkerTypeRef = useRef(activePainMarkerType);
   activePainMarkerTypeRef.current = activePainMarkerType;
   const [landmarkLabels, setLandmarkLabels] = useState<Array<{ label: string; boneName: string; screenX: number; screenY: number; worldPos: { x: number; y: number; z: number }; distance: number }>>([]);
+  const [forceLabels, setForceLabels] = useState<Array<{ joint: string; label: string; forceBW: number; status: string; screenX: number; screenY: number }>>([]);
+  const forceOverlayRef = useRef(forceOverlay);
+  forceOverlayRef.current = forceOverlay;
+  const onForceJointSelectRef = useRef(onForceJointSelect);
+  onForceJointSelectRef.current = onForceJointSelect;
+  const forceFrameCounter = useRef(0);
   const enableZoomToolRef = useRef(enableZoomTool);
   enableZoomToolRef.current = enableZoomTool;
   const landmarkSelectRef = useRef(onLandmarkSelect);
@@ -3458,6 +3487,40 @@ export default function PureThreeGLBViewer({
             }
           }
 
+          forceFrameCounter.current++;
+          if (forceFrameCounter.current % 3 === 0 && forceOverlayRef.current && forceOverlayRef.current.length > 0 && containerRef.current) {
+            const bones = bonesRef.current;
+            const cam = sceneRef.current.camera;
+            const rect = containerRef.current.getBoundingClientRect();
+            const projectedForces: Array<{ joint: string; label: string; forceBW: number; status: string; screenX: number; screenY: number }> = [];
+            const tmpVec = new THREE.Vector3();
+            const projV = new THREE.Vector3();
+
+            for (const fj of forceOverlayRef.current) {
+              const boneName = FORCE_JOINT_TO_BONE[fj.joint];
+              if (!boneName) continue;
+              const bone = bones[boneName];
+              if (!bone) continue;
+              bone.getWorldPosition(tmpVec);
+              projV.copy(tmpVec).project(cam);
+              const sx = (projV.x * 0.5 + 0.5) * rect.width;
+              const sy = (-projV.y * 0.5 + 0.5) * rect.height;
+              if (projV.z > 0 && projV.z < 1 && sx > -20 && sx < rect.width + 20 && sy > -20 && sy < rect.height + 20) {
+                projectedForces.push({
+                  joint: fj.joint,
+                  label: fj.label,
+                  forceBW: fj.forceBW,
+                  status: fj.status,
+                  screenX: sx,
+                  screenY: sy,
+                });
+              }
+            }
+            setForceLabels(projectedForces);
+          } else if (!forceOverlayRef.current || forceOverlayRef.current.length === 0) {
+            setForceLabels(prev => prev.length > 0 ? [] : prev);
+          }
+
           sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
         };
         
@@ -4619,6 +4682,41 @@ export default function PureThreeGLBViewer({
               </div>
             </button>
           ))}
+        </>
+      )}
+      {/* Force overlay labels on joints */}
+      {forceLabels.length > 0 && (
+        <>
+          {forceLabels.map((fl) => {
+            const pct = (fl.forceBW * 100).toFixed(0);
+            const isSelected = selectedForceJoint === fl.joint;
+            const statusColor = fl.status === 'very_high' ? '#ef4444' : fl.status === 'high' ? '#f97316' : fl.status === 'moderate' ? '#eab308' : '#22c55e';
+            const bgOpacity = isSelected ? '95' : '80';
+            return (
+              <button
+                key={fl.joint}
+                className={`absolute z-15 transform -translate-x-1/2 -translate-y-1/2 transition-all ${isSelected ? 'scale-110' : 'hover:scale-105'}`}
+                style={{ left: fl.screenX, top: fl.screenY, pointerEvents: 'auto' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onForceJointSelectRef.current?.(fl.joint);
+                }}
+              >
+                <div className="flex flex-col items-center gap-0.5">
+                  <div
+                    className="w-3 h-3 rounded-full border-2 border-white/60"
+                    style={{ backgroundColor: statusColor, boxShadow: `0 0 8px ${statusColor}, 0 0 16px ${statusColor}40` }}
+                  />
+                  <div
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold whitespace-nowrap shadow-lg backdrop-blur-sm ${isSelected ? 'ring-1 ring-white/50' : ''}`}
+                    style={{ backgroundColor: `${statusColor}${bgOpacity}`, color: fl.status === 'low' ? '#052e16' : '#fff' }}
+                  >
+                    {pct}% BW
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </>
       )}
       {/* Pose mode tooltip */}

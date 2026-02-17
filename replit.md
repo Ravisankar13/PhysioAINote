@@ -18,8 +18,17 @@ Preferred communication style: Simple, everyday language.
   - "Deep Dive with AI" button sends all bubble data + answered questions to PhysioGPT chat for comprehensive analysis
   - Clicking marker names in pain marker list re-opens the clinical bubble
   - Bubble remounts (key={markerId}) on marker change; refetches on severity change
+- **Kinetic Chain Connection System**: Connected regions analysis for pain markers:
+  - Kinetic chain map (client/src/lib/kineticChainMap.ts): Maps 14 body regions to anatomically connected areas with clinical reasoning, relationships, and test prompts
+  - Collapsible "Connected Regions" section at bottom of ClinicalBubble (not a separate tab)
+  - Blue glow highlights on connected skeleton regions when section is expanded
+  - "Mark & Analyze" button places a secondary pain marker on connected region and opens its clinical bubble
+  - "Test the Chain" mode: activates pose mode, zooms to connected region, shows amber panel with test prompt and "Send Posture to AI for Analysis" button
+  - Clinical reasoning for each connection (e.g., shoulder → thoracic spine: scapulothoracic rhythm)
+  - Click-to-select pain markers on 3D skeleton (onPainMarkerSelect callback with hasMoved drag detection)
+  - Sparkle icon button in marker list for quick re-analysis
 - **Disabled auto-highlight from AI responses**: Clinical text parser no longer highlights skeleton regions based on PhysioGPT AI response text, only user messages and voice transcripts trigger highlights
-- **Key Files**: client/src/components/skeleton/ClinicalBubble.tsx, client/src/pages/PhysioGPT.tsx, server/routes.ts
+- **Key Files**: client/src/components/skeleton/ClinicalBubble.tsx, client/src/pages/PhysioGPT.tsx, server/routes.ts, client/src/lib/kineticChainMap.ts
 
 ## Previous Changes (Feb 16, 2026)
 - **Comprehensive Shoulder Assessment System**: Deep clinical shoulder assessment with AI-powered differential diagnosis:

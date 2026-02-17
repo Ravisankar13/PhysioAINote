@@ -53,7 +53,8 @@ import {
   Camera,
   CameraOff,
   Pause,
-  Sparkles
+  Sparkles,
+  Zap
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -64,6 +65,7 @@ import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement } from "@/components/skeleton/PureThreeGLBViewer";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
 import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
+import type { KineticChainConnection } from "@/lib/kineticChainMap";
 import ShoulderAssessmentPanel from "@/components/shoulder/ShoulderAssessmentPanel";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
 import type { Skeleton3DPose } from "@/utils/mediapipeTo3D";
@@ -364,6 +366,8 @@ export default function PhysioGPT() {
   const [shoulderAssessmentSide, setShoulderAssessmentSide] = useState<'left' | 'right'>('right');
   const [clinicalBubbleMarker, setClinicalBubbleMarker] = useState<PainMarker | null>(null);
   const [clinicalBubbleSeverity, setClinicalBubbleSeverity] = useState<string>("moderate");
+  const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
+  const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const skeletonContainerRef = useRef<HTMLDivElement>(null);
   const controllerSmootherRef = useRef(new ControllerSmoother(0.35, 0.015));
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
@@ -1333,11 +1337,18 @@ ${ddxList}`;
               modelConfig={modelConfig as any}
               zoomToRegion={zoomToRegion}
               className="w-full h-full"
-              highlightRegions={clinicalHighlights.map(h => ({
-                region: h.region,
-                color: HIGHLIGHT_COLORS[h.type].hex,
-                intensity: 0.3 + h.severity * 0.7,
-              }))}
+              highlightRegions={[
+                ...clinicalHighlights.map(h => ({
+                  region: h.region,
+                  color: HIGHLIGHT_COLORS[h.type].hex,
+                  intensity: 0.3 + h.severity * 0.7,
+                })),
+                ...connectionHighlights.map(r => ({
+                  region: r,
+                  color: 0x3b82f6,
+                  intensity: 0.5,
+                })),
+              ]}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
               painMarkers={painMarkers}
@@ -1643,11 +1654,66 @@ ${ddxList}`;
                 region={clinicalBubbleMarker.anatomicalLabel}
                 markerType={clinicalBubbleMarker.type}
                 position={{ x: 50, y: 15 }}
-                onClose={() => setClinicalBubbleMarker(null)}
+                onClose={() => { setClinicalBubbleMarker(null); setConnectionHighlights([]); setTestChainActive(null); }}
                 onDeepDive={handleClinicalBubbleDeepDive}
                 severity={clinicalBubbleSeverity}
                 onSeverityChange={setClinicalBubbleSeverity}
+                onHighlightConnections={(regions) => setConnectionHighlights(regions)}
+                onClearConnectionHighlights={() => setConnectionHighlights([])}
+                onConnectionClick={(connRegion, label) => {
+                  setZoomToRegion(connRegion);
+                  const id = `pm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                  const newMarker: PainMarker = {
+                    id,
+                    type: 'point',
+                    position: { x: 0, y: 0, z: 0 },
+                    nearestBone: '',
+                    anatomicalLabel: label,
+                  };
+                  setPainMarkers(prev => [...prev, newMarker]);
+                  setClinicalBubbleMarker(newMarker);
+                  setClinicalBubbleSeverity("moderate");
+                }}
+                onTestChain={(connection, originalRegion) => {
+                  setTestChainActive({ connection, originalRegion });
+                  setZoomToRegion(connection.region);
+                  setPoseMode(true);
+                }}
               />
+            )}
+
+            {/* Test the Chain panel */}
+            {testChainActive && (
+              <div className="absolute bottom-2 left-2 right-2 bg-amber-900/90 backdrop-blur-xl rounded-xl shadow-2xl border border-amber-600/50 p-3 z-50 animate-in slide-in-from-bottom-2 duration-200">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-amber-400" />
+                    <span className="text-xs font-semibold text-amber-200">Test the Chain</span>
+                  </div>
+                  <button onClick={() => { setTestChainActive(null); setPoseMode(false); }} className="text-gray-400 hover:text-white p-0.5">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] text-amber-300/80 bg-amber-500/20 px-2 py-0.5 rounded-full">{testChainActive.originalRegion}</span>
+                  <ArrowRight className="h-3 w-3 text-amber-400/60" />
+                  <span className="text-[10px] text-blue-300/80 bg-blue-500/20 px-2 py-0.5 rounded-full">{testChainActive.connection.label}</span>
+                </div>
+                <p className="text-[11px] text-amber-100/90 leading-relaxed mb-2">{testChainActive.connection.testPrompt}</p>
+                <p className="text-[10px] text-amber-300/60">Pose mode is active — drag the skeleton joints to test this connection. Watch how changes in the {testChainActive.connection.label.toLowerCase()} affect the {testChainActive.originalRegion.toLowerCase()}.</p>
+                <button
+                  onClick={() => {
+                    const prompt = `I'm examining a patient with ${testChainActive.originalRegion.toLowerCase()} pain. I tested the kinetic chain connection to the ${testChainActive.connection.label} (${testChainActive.connection.relationship}). The clinical reasoning is: ${testChainActive.connection.clinicalReason}. Based on the current skeleton posture, analyze the relationship between these two regions. What does the current posture tell us about the connection? What treatment approach would you recommend to address the ${testChainActive.connection.label}'s contribution to the ${testChainActive.originalRegion.toLowerCase()} pain?`;
+                    handleSendMessage(prompt);
+                    setTestChainActive(null);
+                    setPoseMode(false);
+                  }}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-600 to-teal-600 hover:from-amber-500 hover:to-teal-500 text-white text-[11px] font-medium rounded-lg py-2 transition-all"
+                >
+                  <Send className="h-3 w-3" />
+                  Send Posture to AI for Analysis
+                </button>
+              </div>
             )}
 
             {/* ROM Joint Slider Panel */}

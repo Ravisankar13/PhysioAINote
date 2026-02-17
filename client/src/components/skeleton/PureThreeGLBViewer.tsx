@@ -1266,22 +1266,23 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'pelvis.rotation': [{ boneName: 'Root_M', axis: 'y', scale: 1 }],
   'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }], // Vertical translation for closed-chain movements
   
-  // === SPINE (Sagittal plane curves - use Y-axis for forward/backward movement) ===
-  // Note: X = frontal plane (lateral), Z = lateral flexion/scoliosis, Y = sagittal plane
+  // === SPINE (Sagittal plane curves) ===
+  // Axis convention for midline spine bones: X = sagittal (flexion/extension), Y = transverse (rotation), Z = frontal (lateral flexion)
+  // Lordosis = extension (backward curve), Kyphosis = flexion (forward curve)
   'spine.cervicalLordosis': [
-    { boneName: 'Neck_M', axis: 'y', scale: 0.3 },
-    { boneName: 'NeckPart1_M', axis: 'y', scale: 0.2 },
-    { boneName: 'NeckPart2_M', axis: 'y', scale: 0.2 },
+    { boneName: 'Neck_M', axis: 'x', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'x', scale: 0.2 },
+    { boneName: 'NeckPart2_M', axis: 'x', scale: 0.2 },
   ],
   'spine.thoracicKyphosis': [
-    { boneName: 'Chest_M', axis: 'y', scale: 0.3 },
-    { boneName: 'Spine1Part2_M', axis: 'y', scale: 0.2 },
-    { boneName: 'Spine1Part1_M', axis: 'y', scale: 0.2 },
+    { boneName: 'Chest_M', axis: 'x', scale: 0.3 },
+    { boneName: 'Spine1Part2_M', axis: 'x', scale: 0.2 },
+    { boneName: 'Spine1Part1_M', axis: 'x', scale: 0.2 },
   ],
   'spine.lumbarLordosis': [
-    { boneName: 'Spine1_M', axis: 'y', scale: 0.3 },
-    { boneName: 'RootPart2_M', axis: 'y', scale: 0.2 },
-    { boneName: 'RootPart1_M', axis: 'y', scale: 0.2 },
+    { boneName: 'Spine1_M', axis: 'x', scale: -0.3 },
+    { boneName: 'RootPart2_M', axis: 'x', scale: -0.2 },
+    { boneName: 'RootPart1_M', axis: 'x', scale: -0.2 },
   ],
   'spine.scoliosis': [
     { boneName: 'RootPart1_M', axis: 'z', scale: 0.15 },
@@ -1392,10 +1393,10 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'Root_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
   'RootPart1_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
   'RootPart2_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
-  'Spine1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'y', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
-  'Spine1Part1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'y', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
-  'Spine1Part2_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'y', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
-  'Chest_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'y', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Spine1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'x', scale: -1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Spine1Part1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'x', scale: -1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Spine1Part2_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'x', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Chest_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'x', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
   'Neck_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
   'NeckPart1_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
   'NeckPart2_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },

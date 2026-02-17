@@ -403,7 +403,7 @@ export default function ClinicalBubble({
             </button>
 
             {connectionsOpen && (
-              <div className="px-3 pb-3 space-y-1.5">
+              <div className="px-3 pb-3 space-y-1.5 max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
                 <p className="text-[9px] text-gray-500 mb-2">Pain in the {region.toLowerCase()} may be connected to these areas through the kinetic chain:</p>
                 {connections.map((conn) => {
                   const isExpanded = expandedConnection === conn.label;

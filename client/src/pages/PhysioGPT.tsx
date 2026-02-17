@@ -54,7 +54,8 @@ import {
   CameraOff,
   Pause,
   Sparkles,
-  Zap
+  Zap,
+  Search
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -368,6 +369,7 @@ export default function PhysioGPT() {
   const [clinicalBubbleSeverity, setClinicalBubbleSeverity] = useState<string>("moderate");
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
+  const [zoomToolMode, setZoomToolMode] = useState(false);
   const skeletonContainerRef = useRef<HTMLDivElement>(null);
   const controllerSmootherRef = useRef(new ControllerSmoother(0.35, 0.015));
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
@@ -844,6 +846,21 @@ export default function PhysioGPT() {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDraggingResize]);
+
+  const handleLandmarkSelect = useCallback((landmark: { label: string; boneName: string; position: { x: number; y: number; z: number } }) => {
+    const newMarker: PainMarker = {
+      id: `landmark-${Date.now()}`,
+      type: 'point',
+      position: landmark.position,
+      nearestBone: landmark.boneName,
+      anatomicalLabel: landmark.label,
+      description: `Pain at ${landmark.label}`,
+    };
+    setPainMarkers(prev => [...prev, newMarker]);
+    setClinicalBubbleMarker(newMarker);
+    setClinicalBubbleSeverity("moderate");
+    toast({ title: "Landmark Marked", description: `Pain marker placed at ${landmark.label}` });
+  }, [toast]);
 
   const handlePainMarkerAdd = useCallback((marker: PainMarker) => {
     setPainMarkers(prev => [...prev, marker]);
@@ -1365,6 +1382,8 @@ ${ddxList}`;
               selectedRomJointId={selectedRomJoint?.id || null}
               enablePoseMode={poseMode}
               onModelConfigChange={updateModelConfig}
+              enableZoomTool={zoomToolMode}
+              onLandmarkSelect={handleLandmarkSelect}
             />
 
             {/* Joint Controls Overlay */}
@@ -1501,6 +1520,58 @@ ${ddxList}`;
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Zoom Tool Region Navigator */}
+            {zoomToolMode && (
+              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[220px] max-h-[calc(100%-60px)] overflow-y-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Search className="h-3.5 w-3.5 text-cyan-400" />
+                    <span className="text-[11px] font-semibold text-white">Zoom & Landmarks</span>
+                  </div>
+                  <button className="text-gray-400 hover:text-white" onClick={() => setZoomToolMode(false)}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+                <p className="text-[9px] text-gray-400 mb-2">Zoom into a region to see anatomical landmarks. Click a landmark to mark pain.</p>
+                <div className="grid grid-cols-2 gap-1">
+                  {([
+                    { region: 'cervical_spine' as AnatomicalRegion, label: 'Neck' },
+                    { region: 'thoracic_spine' as AnatomicalRegion, label: 'Thoracic' },
+                    { region: 'lumbar_spine' as AnatomicalRegion, label: 'Lumbar' },
+                    { region: 'pelvis' as AnatomicalRegion, label: 'Pelvis' },
+                    { region: 'left_shoulder' as AnatomicalRegion, label: 'L Shoulder' },
+                    { region: 'right_shoulder' as AnatomicalRegion, label: 'R Shoulder' },
+                    { region: 'left_hip' as AnatomicalRegion, label: 'L Hip' },
+                    { region: 'right_hip' as AnatomicalRegion, label: 'R Hip' },
+                    { region: 'left_knee' as AnatomicalRegion, label: 'L Knee' },
+                    { region: 'right_knee' as AnatomicalRegion, label: 'R Knee' },
+                    { region: 'left_ankle' as AnatomicalRegion, label: 'L Ankle' },
+                    { region: 'right_ankle' as AnatomicalRegion, label: 'R Ankle' },
+                    { region: 'left_elbow' as AnatomicalRegion, label: 'L Elbow' },
+                    { region: 'right_elbow' as AnatomicalRegion, label: 'R Elbow' },
+                  ]).map(({ region, label }) => (
+                    <button
+                      key={region}
+                      className={`text-[10px] px-2 py-1.5 rounded transition-colors text-left ${
+                        zoomToRegion === region
+                          ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/40'
+                          : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white border border-transparent'
+                      }`}
+                      onClick={() => setZoomToRegion(region)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="w-full mt-2 text-[10px] px-2 py-1 rounded bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+                  onClick={() => setZoomToRegion('full_body')}
+                >
+                  Reset to Full Body
+                </button>
               </div>
             )}
 
@@ -1957,6 +2028,27 @@ ${ddxList}`;
               >
                 {cameraMode ? <CameraOff className="h-3 w-3 mr-1" /> : <Camera className="h-3 w-3 mr-1" />}
                 {cameraMode ? 'Stop Camera' : 'Camera'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${zoomToolMode ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-white/90 hover:bg-white'}`}
+                onClick={() => {
+                  const newMode = !zoomToolMode;
+                  setZoomToolMode(newMode);
+                  if (newMode) {
+                    setPainMarkerMode(false);
+                    setRomMode(false);
+                    setPoseMode(false);
+                    setCameraMode(false);
+                    setCameraPoseActive(false);
+                    if (!skeletonOpen) setSkeletonOpen(true);
+                    toast({ title: "Zoom & Landmark Tool", description: "Scroll to zoom into specific anatomical structures. Click on a labeled landmark to place a pain marker and get AI clinical analysis." });
+                  }
+                }}
+              >
+                <Search className="h-3 w-3 mr-1" />
+                {zoomToolMode ? 'Zooming...' : 'Zoom'}
               </Button>
               <Button
                 variant="secondary"

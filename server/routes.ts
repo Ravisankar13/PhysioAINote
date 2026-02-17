@@ -5966,11 +5966,18 @@ Respond with only a number between 1-100 representing the relevance score.`;
         ? `\n\nThe clinician has gathered the following subjective history:\n${Object.entries(answeredQuestions).map(([q, a]) => `- ${q}: ${a}`).join('\n')}\n\nRefine your differential diagnosis and recommendations based on these answers.`
         : '';
 
-      const prompt = `You are a clinical physiotherapy expert. A clinician has placed a ${markerType} pain marker on the "${region}" region of a patient's body. The reported severity is "${severity || 'moderate'}".${answersContext}
+      const prompt = `You are a clinical physiotherapy expert. A clinician has placed a ${markerType} pain marker on the "${region}" of a patient's body. The reported severity is "${severity || 'moderate'}".${answersContext}
+
+IMPORTANT: The anatomical location "${region}" is a PRECISE bony landmark or anatomical structure identified on a 3D skeleton model. Provide your clinical analysis specific to this EXACT structure, not just the general region. For example:
+- If the location is "L4-L5 Disc", focus on disc pathology at that specific level
+- If the location is "Left Greater Trochanter", focus on trochanteric conditions
+- If the location is "Left ASIS", focus on conditions affecting the anterior pelvis
+- If the location is "Left Lateral Epicondyle", focus on lateral elbow pathology
+- If the location is a facet joint, focus on facet-mediated pain at that level
 
 Provide a structured clinical analysis in JSON format with these fields:
 {
-  "differentials": [{"name": "condition name", "likelihood": "high|moderate|low", "reasoning": "brief clinical reasoning"}],
+  "differentials": [{"name": "condition name", "likelihood": "high|moderate|low", "reasoning": "brief clinical reasoning specific to this anatomical landmark"}],
   "questions": [{"id": "q1", "question": "clinical question to ask", "options": ["option1", "option2", "option3"]}],
   "assessment": [{"test": "special test name", "purpose": "what it tests for", "technique": "brief technique description"}],
   "treatments": [{"name": "treatment name", "description": "brief description", "frequency": "e.g. 2-3x/week"}],
@@ -5979,13 +5986,13 @@ Provide a structured clinical analysis in JSON format with these fields:
 }
 
 Guidelines:
-- Provide 3-5 differential diagnoses ranked by likelihood
+- Provide 3-5 differential diagnoses ranked by likelihood, specific to the exact anatomical structure
 - Provide 3-5 targeted clinical questions with 3-4 answer options each that will help narrow the differential
-- Provide 3-5 objective assessment tests specific to this region
+- Provide 3-5 objective assessment tests specific to this anatomical landmark
 - Provide 3-4 evidence-based treatment approaches
 - Provide 3-4 therapeutic exercises appropriate for the condition
-- Only include red flags if genuinely concerning patterns exist for this region
-- Be concise but clinically precise
+- Only include red flags if genuinely concerning patterns exist for this structure
+- Be concise but clinically precise - reference the specific anatomy in your reasoning
 - Return ONLY valid JSON, no markdown or explanation`;
 
       const completion = await openai.chat.completions.create({

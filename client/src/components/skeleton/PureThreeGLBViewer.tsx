@@ -760,6 +760,155 @@ const BONE_ANATOMICAL_LABELS: Record<string, string> = {
   'Toes_R': 'Right Foot',
 };
 
+export const ANATOMICAL_VIRTUAL_POINTS: Array<{ label: string; boneName: string; boneA: string; boneB: string; t: number; offsetX?: number; offsetY?: number; offsetZ?: number }> = [
+  { label: 'C1-C2 (Upper Cervical)', boneName: 'virt_C1C2', boneA: 'Head_M', boneB: 'NeckPart1_M', t: 0.5 },
+  { label: 'C3-C4 (Mid Cervical)', boneName: 'virt_C3C4', boneA: 'NeckPart1_M', boneB: 'NeckPart2_M', t: 0.5 },
+  { label: 'C5-C6 (Lower Cervical)', boneName: 'virt_C5C6', boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.3 },
+  { label: 'C7-T1 (Cervicothoracic Junction)', boneName: 'virt_C7T1', boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.6 },
+  { label: 'T1-T4 (Upper Thoracic)', boneName: 'virt_T1T4', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.2 },
+  { label: 'T5-T8 (Mid Thoracic)', boneName: 'virt_T5T8', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.6 },
+  { label: 'T9-T10 (Lower Thoracic)', boneName: 'virt_T9T10', boneA: 'Spine1Part2_M', boneB: 'Spine1Part1_M', t: 0.5 },
+  { label: 'T11-T12 (Thoracolumbar Junction)', boneName: 'virt_T11T12', boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.3 },
+  { label: 'L1-L2 (Upper Lumbar)', boneName: 'virt_L1L2', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.2 },
+  { label: 'L3 (Mid Lumbar)', boneName: 'virt_L3', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.5 },
+  { label: 'L4-L5 (Lower Lumbar)', boneName: 'virt_L4L5', boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.3 },
+  { label: 'L5-S1 (Lumbosacral Junction)', boneName: 'virt_L5S1', boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.4 },
+  { label: 'Sacrum', boneName: 'virt_sacrum', boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.7 },
+  { label: 'Coccyx', boneName: 'virt_coccyx', boneA: 'Root_M', boneB: 'Root_M', t: 1.0 },
+  { label: 'Left Upper Ribs (1-4)', boneName: 'virt_ribs_upper_L', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: -0.15 },
+  { label: 'Right Upper Ribs (1-4)', boneName: 'virt_ribs_upper_R', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: 0.15 },
+  { label: 'Left Mid Ribs (5-8)', boneName: 'virt_ribs_mid_L', boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: -0.18 },
+  { label: 'Right Mid Ribs (5-8)', boneName: 'virt_ribs_mid_R', boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: 0.18 },
+  { label: 'Left Lower Ribs (9-12)', boneName: 'virt_ribs_lower_L', boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: -0.15 },
+  { label: 'Right Lower Ribs (9-12)', boneName: 'virt_ribs_lower_R', boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: 0.15 },
+  { label: 'Sternum', boneName: 'virt_sternum', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: 0 },
+  { label: 'Left SI Joint', boneName: 'virt_SI_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.3 },
+  { label: 'Right SI Joint', boneName: 'virt_SI_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.3 },
+  { label: 'Left Greater Trochanter', boneName: 'virt_GT_L', boneA: 'Hip_L', boneB: 'HipPart1_L', t: 0.2 },
+  { label: 'Right Greater Trochanter', boneName: 'virt_GT_R', boneA: 'Hip_R', boneB: 'HipPart1_R', t: 0.2 },
+  { label: 'Left IT Band', boneName: 'virt_ITB_L', boneA: 'HipPart1_L', boneB: 'Knee_L', t: 0.5, offsetX: -0.05 },
+  { label: 'Right IT Band', boneName: 'virt_ITB_R', boneA: 'HipPart1_R', boneB: 'Knee_R', t: 0.5, offsetX: 0.05 },
+  { label: 'Left Calf / Gastrocnemius', boneName: 'virt_calf_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.4 },
+  { label: 'Right Calf / Gastrocnemius', boneName: 'virt_calf_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.4 },
+  { label: 'Left Achilles Tendon', boneName: 'virt_achilles_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.85 },
+  { label: 'Right Achilles Tendon', boneName: 'virt_achilles_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.85 },
+  { label: 'Left Forearm', boneName: 'virt_forearm_L', boneA: 'Elbow_L', boneB: 'Wrist_L', t: 0.5 },
+  { label: 'Right Forearm', boneName: 'virt_forearm_R', boneA: 'Elbow_R', boneB: 'Wrist_R', t: 0.5 },
+  { label: 'Left Biceps', boneName: 'virt_biceps_L', boneA: 'Shoulder_L', boneB: 'Elbow_L', t: 0.5 },
+  { label: 'Right Biceps', boneName: 'virt_biceps_R', boneA: 'Shoulder_R', boneB: 'Elbow_R', t: 0.5 },
+  { label: 'Left ASIS (Anterior Superior Iliac Spine)', boneName: 'virt_ASIS_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.15, offsetZ: 0.12 },
+  { label: 'Right ASIS (Anterior Superior Iliac Spine)', boneName: 'virt_ASIS_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.15, offsetZ: 0.12 },
+  { label: 'Left PSIS (Posterior Superior Iliac Spine)', boneName: 'virt_PSIS_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.15, offsetZ: -0.1 },
+  { label: 'Right PSIS (Posterior Superior Iliac Spine)', boneName: 'virt_PSIS_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.15, offsetZ: -0.1 },
+  { label: 'Left Ischial Tuberosity', boneName: 'virt_ischial_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.4, offsetY: -0.08, offsetZ: -0.05 },
+  { label: 'Right Ischial Tuberosity', boneName: 'virt_ischial_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.4, offsetY: -0.08, offsetZ: -0.05 },
+  { label: 'Pubic Symphysis', boneName: 'virt_pubic_symphysis', boneA: 'Hip_L', boneB: 'Hip_R', t: 0.5, offsetZ: 0.15, offsetY: -0.05 },
+  { label: 'Left Iliac Crest', boneName: 'virt_iliac_crest_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.1, offsetY: 0.03, offsetX: -0.08 },
+  { label: 'Right Iliac Crest', boneName: 'virt_iliac_crest_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.1, offsetY: 0.03, offsetX: 0.08 },
+  { label: 'Left Acetabulum (Hip Socket)', boneName: 'virt_acetabulum_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.5 },
+  { label: 'Right Acetabulum (Hip Socket)', boneName: 'virt_acetabulum_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.5 },
+  { label: 'Left Lesser Trochanter', boneName: 'virt_lesser_troch_L', boneA: 'Hip_L', boneB: 'HipPart1_L', t: 0.15, offsetZ: -0.03, offsetX: 0.02 },
+  { label: 'Right Lesser Trochanter', boneName: 'virt_lesser_troch_R', boneA: 'Hip_R', boneB: 'HipPart1_R', t: 0.15, offsetZ: -0.03, offsetX: -0.02 },
+  { label: 'Left Tibial Tuberosity', boneName: 'virt_tib_tub_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.08, offsetZ: 0.04 },
+  { label: 'Right Tibial Tuberosity', boneName: 'virt_tib_tub_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.08, offsetZ: 0.04 },
+  { label: 'Left Fibular Head', boneName: 'virt_fib_head_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.06, offsetX: -0.04 },
+  { label: 'Right Fibular Head', boneName: 'virt_fib_head_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.06, offsetX: 0.04 },
+  { label: 'Left Patella', boneName: 'virt_patella_L', boneA: 'HipPart2_L', boneB: 'Knee_L', t: 0.95, offsetZ: 0.06 },
+  { label: 'Right Patella', boneName: 'virt_patella_R', boneA: 'HipPart2_R', boneB: 'Knee_R', t: 0.95, offsetZ: 0.06 },
+  { label: 'Left Medial Knee Joint Line', boneName: 'virt_med_knee_L', boneA: 'HipPart2_L', boneB: 'Knee_L', t: 0.98, offsetX: 0.03 },
+  { label: 'Right Medial Knee Joint Line', boneName: 'virt_med_knee_R', boneA: 'HipPart2_R', boneB: 'Knee_R', t: 0.98, offsetX: -0.03 },
+  { label: 'Left Lateral Knee Joint Line', boneName: 'virt_lat_knee_L', boneA: 'HipPart2_L', boneB: 'Knee_L', t: 0.98, offsetX: -0.03 },
+  { label: 'Right Lateral Knee Joint Line', boneName: 'virt_lat_knee_R', boneA: 'HipPart2_R', boneB: 'Knee_R', t: 0.98, offsetX: 0.03 },
+  { label: 'Left Popliteal Fossa', boneName: 'virt_popliteal_L', boneA: 'HipPart2_L', boneB: 'Knee_L', t: 0.98, offsetZ: -0.05 },
+  { label: 'Right Popliteal Fossa', boneName: 'virt_popliteal_R', boneA: 'HipPart2_R', boneB: 'Knee_R', t: 0.98, offsetZ: -0.05 },
+  { label: 'Left Medial Malleolus', boneName: 'virt_med_mall_L', boneA: 'Ankle_L', boneB: 'Toes_L', t: 0.05, offsetX: 0.03 },
+  { label: 'Right Medial Malleolus', boneName: 'virt_med_mall_R', boneA: 'Ankle_R', boneB: 'Toes_R', t: 0.05, offsetX: -0.03 },
+  { label: 'Left Lateral Malleolus', boneName: 'virt_lat_mall_L', boneA: 'Ankle_L', boneB: 'Toes_L', t: 0.05, offsetX: -0.03 },
+  { label: 'Right Lateral Malleolus', boneName: 'virt_lat_mall_R', boneA: 'Ankle_R', boneB: 'Toes_R', t: 0.05, offsetX: 0.03 },
+  { label: 'Left Calcaneus (Heel)', boneName: 'virt_calcaneus_L', boneA: 'Ankle_L', boneB: 'Toes_L', t: 0.15, offsetZ: -0.06 },
+  { label: 'Right Calcaneus (Heel)', boneName: 'virt_calcaneus_R', boneA: 'Ankle_R', boneB: 'Toes_R', t: 0.15, offsetZ: -0.06 },
+  { label: 'Left Navicular', boneName: 'virt_navicular_L', boneA: 'Ankle_L', boneB: 'Toes_L', t: 0.3, offsetX: 0.02, offsetZ: 0.02 },
+  { label: 'Right Navicular', boneName: 'virt_navicular_R', boneA: 'Ankle_R', boneB: 'Toes_R', t: 0.3, offsetX: -0.02, offsetZ: 0.02 },
+  { label: 'Left 1st Metatarsal Head', boneName: 'virt_1st_met_L', boneA: 'Toes_L', boneB: 'ToesEnd_L', t: 0.3, offsetX: 0.03 },
+  { label: 'Right 1st Metatarsal Head', boneName: 'virt_1st_met_R', boneA: 'Toes_R', boneB: 'ToesEnd_R', t: 0.3, offsetX: -0.03 },
+  { label: 'Left 5th Metatarsal Base', boneName: 'virt_5th_met_L', boneA: 'Ankle_L', boneB: 'Toes_L', t: 0.5, offsetX: -0.04 },
+  { label: 'Right 5th Metatarsal Base', boneName: 'virt_5th_met_R', boneA: 'Ankle_R', boneB: 'Toes_R', t: 0.5, offsetX: 0.04 },
+  { label: 'Left Plantar Fascia', boneName: 'virt_plantar_L', boneA: 'Ankle_L', boneB: 'Toes_L', t: 0.5, offsetY: -0.03 },
+  { label: 'Right Plantar Fascia', boneName: 'virt_plantar_R', boneA: 'Ankle_R', boneB: 'Toes_R', t: 0.5, offsetY: -0.03 },
+  { label: 'Left Acromioclavicular Joint', boneName: 'virt_AC_L', boneA: 'Scapula_L', boneB: 'Shoulder_L', t: 0.5, offsetY: 0.04 },
+  { label: 'Right Acromioclavicular Joint', boneName: 'virt_AC_R', boneA: 'Scapula_R', boneB: 'Shoulder_R', t: 0.5, offsetY: 0.04 },
+  { label: 'Left Coracoid Process', boneName: 'virt_coracoid_L', boneA: 'Scapula_L', boneB: 'Shoulder_L', t: 0.4, offsetZ: 0.06 },
+  { label: 'Right Coracoid Process', boneName: 'virt_coracoid_R', boneA: 'Scapula_R', boneB: 'Shoulder_R', t: 0.4, offsetZ: 0.06 },
+  { label: 'Left Glenohumeral Joint', boneName: 'virt_GH_L', boneA: 'Scapula_L', boneB: 'Shoulder_L', t: 0.8 },
+  { label: 'Right Glenohumeral Joint', boneName: 'virt_GH_R', boneA: 'Scapula_R', boneB: 'Shoulder_R', t: 0.8 },
+  { label: 'Left Subacromial Space', boneName: 'virt_subacr_L', boneA: 'Scapula_L', boneB: 'Shoulder_L', t: 0.6, offsetY: 0.03 },
+  { label: 'Right Subacromial Space', boneName: 'virt_subacr_R', boneA: 'Scapula_R', boneB: 'Shoulder_R', t: 0.6, offsetY: 0.03 },
+  { label: 'Left Bicipital Groove', boneName: 'virt_bicip_groove_L', boneA: 'Shoulder_L', boneB: 'ShoulderPart1_L', t: 0.1, offsetZ: 0.04 },
+  { label: 'Right Bicipital Groove', boneName: 'virt_bicip_groove_R', boneA: 'Shoulder_R', boneB: 'ShoulderPart1_R', t: 0.1, offsetZ: 0.04 },
+  { label: 'Left Deltoid Tuberosity', boneName: 'virt_deltoid_tub_L', boneA: 'Shoulder_L', boneB: 'ShoulderPart1_L', t: 0.4, offsetX: -0.03 },
+  { label: 'Right Deltoid Tuberosity', boneName: 'virt_deltoid_tub_R', boneA: 'Shoulder_R', boneB: 'ShoulderPart1_R', t: 0.4, offsetX: 0.03 },
+  { label: 'Left Lateral Epicondyle', boneName: 'virt_lat_epic_L', boneA: 'ShoulderPart2_L', boneB: 'Elbow_L', t: 0.9, offsetX: -0.03 },
+  { label: 'Right Lateral Epicondyle', boneName: 'virt_lat_epic_R', boneA: 'ShoulderPart2_R', boneB: 'Elbow_R', t: 0.9, offsetX: 0.03 },
+  { label: 'Left Medial Epicondyle', boneName: 'virt_med_epic_L', boneA: 'ShoulderPart2_L', boneB: 'Elbow_L', t: 0.9, offsetX: 0.03 },
+  { label: 'Right Medial Epicondyle', boneName: 'virt_med_epic_R', boneA: 'ShoulderPart2_R', boneB: 'Elbow_R', t: 0.9, offsetX: -0.03 },
+  { label: 'Left Olecranon', boneName: 'virt_olecranon_L', boneA: 'Elbow_L', boneB: 'ElbowPart1_L', t: 0.05, offsetZ: -0.04 },
+  { label: 'Right Olecranon', boneName: 'virt_olecranon_R', boneA: 'Elbow_R', boneB: 'ElbowPart1_R', t: 0.05, offsetZ: -0.04 },
+  { label: 'Left Radial Head', boneName: 'virt_radial_head_L', boneA: 'Elbow_L', boneB: 'ElbowPart1_L', t: 0.05, offsetX: -0.03, offsetZ: 0.02 },
+  { label: 'Right Radial Head', boneName: 'virt_radial_head_R', boneA: 'Elbow_R', boneB: 'ElbowPart1_R', t: 0.05, offsetX: 0.03, offsetZ: 0.02 },
+  { label: 'Left Radial Styloid', boneName: 'virt_rad_styloid_L', boneA: 'ElbowPart2_L', boneB: 'Wrist_L', t: 0.9, offsetX: -0.02 },
+  { label: 'Right Radial Styloid', boneName: 'virt_rad_styloid_R', boneA: 'ElbowPart2_R', boneB: 'Wrist_R', t: 0.9, offsetX: 0.02 },
+  { label: 'Left Ulnar Styloid', boneName: 'virt_uln_styloid_L', boneA: 'ElbowPart2_L', boneB: 'Wrist_L', t: 0.9, offsetX: 0.02 },
+  { label: 'Right Ulnar Styloid', boneName: 'virt_uln_styloid_R', boneA: 'ElbowPart2_R', boneB: 'Wrist_R', t: 0.9, offsetX: -0.02 },
+  { label: 'Left Carpal Tunnel', boneName: 'virt_carpal_tunnel_L', boneA: 'Wrist_L', boneB: 'MiddleFinger1_L', t: 0.2, offsetZ: 0.02 },
+  { label: 'Right Carpal Tunnel', boneName: 'virt_carpal_tunnel_R', boneA: 'Wrist_R', boneB: 'MiddleFinger1_R', t: 0.2, offsetZ: 0.02 },
+  { label: 'L1-L2 Disc', boneName: 'virt_L1L2_disc', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.2, offsetZ: 0.04 },
+  { label: 'L2-L3 Disc', boneName: 'virt_L2L3_disc', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.5, offsetZ: 0.04 },
+  { label: 'L3-L4 Disc', boneName: 'virt_L3L4_disc', boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.2, offsetZ: 0.04 },
+  { label: 'L4-L5 Disc', boneName: 'virt_L4L5_disc', boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.5, offsetZ: 0.04 },
+  { label: 'L5-S1 Disc', boneName: 'virt_L5S1_disc', boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.4, offsetZ: 0.04 },
+  { label: 'L1-L2 Facet Joint (Left)', boneName: 'virt_L1L2_facet_L', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.2, offsetZ: -0.04, offsetX: -0.03 },
+  { label: 'L1-L2 Facet Joint (Right)', boneName: 'virt_L1L2_facet_R', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.2, offsetZ: -0.04, offsetX: 0.03 },
+  { label: 'L2-L3 Facet Joint (Left)', boneName: 'virt_L2L3_facet_L', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.5, offsetZ: -0.04, offsetX: -0.03 },
+  { label: 'L2-L3 Facet Joint (Right)', boneName: 'virt_L2L3_facet_R', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.5, offsetZ: -0.04, offsetX: 0.03 },
+  { label: 'L3-L4 Facet Joint (Left)', boneName: 'virt_L3L4_facet_L', boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.2, offsetZ: -0.04, offsetX: -0.03 },
+  { label: 'L3-L4 Facet Joint (Right)', boneName: 'virt_L3L4_facet_R', boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.2, offsetZ: -0.04, offsetX: 0.03 },
+  { label: 'L4-L5 Facet Joint (Left)', boneName: 'virt_L4L5_facet_L', boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.5, offsetZ: -0.04, offsetX: -0.03 },
+  { label: 'L4-L5 Facet Joint (Right)', boneName: 'virt_L4L5_facet_R', boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.5, offsetZ: -0.04, offsetX: 0.03 },
+  { label: 'L5-S1 Facet Joint (Left)', boneName: 'virt_L5S1_facet_L', boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.4, offsetZ: -0.04, offsetX: -0.03 },
+  { label: 'L5-S1 Facet Joint (Right)', boneName: 'virt_L5S1_facet_R', boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.4, offsetZ: -0.04, offsetX: 0.03 },
+  { label: 'TMJ (Left Temporomandibular Joint)', boneName: 'virt_TMJ_L', boneA: 'Head_M', boneB: 'Neck_M', t: 0.1, offsetX: -0.06, offsetZ: 0.04 },
+  { label: 'TMJ (Right Temporomandibular Joint)', boneName: 'virt_TMJ_R', boneA: 'Head_M', boneB: 'Neck_M', t: 0.1, offsetX: 0.06, offsetZ: 0.04 },
+  { label: 'Occiput (Base of Skull)', boneName: 'virt_occiput', boneA: 'Head_M', boneB: 'Neck_M', t: 0.15, offsetZ: -0.06 },
+  { label: 'Mastoid Process (Left)', boneName: 'virt_mastoid_L', boneA: 'Head_M', boneB: 'Neck_M', t: 0.15, offsetX: -0.06 },
+  { label: 'Mastoid Process (Right)', boneName: 'virt_mastoid_R', boneA: 'Head_M', boneB: 'Neck_M', t: 0.15, offsetX: 0.06 },
+  { label: 'Hyoid Bone', boneName: 'virt_hyoid', boneA: 'Head_M', boneB: 'NeckPart1_M', t: 0.6, offsetZ: 0.06 },
+  { label: 'C7 Spinous Process', boneName: 'virt_C7_SP', boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.5, offsetZ: -0.06 },
+  { label: 'Left Costochondral Junction (Ribs 1-3)', boneName: 'virt_costo_upper_L', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.2, offsetX: -0.08, offsetZ: 0.1 },
+  { label: 'Right Costochondral Junction (Ribs 1-3)', boneName: 'virt_costo_upper_R', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.2, offsetX: 0.08, offsetZ: 0.1 },
+  { label: 'Left Costovertebral Joint (T1-T6)', boneName: 'virt_costov_upper_L', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: -0.06, offsetZ: -0.04 },
+  { label: 'Right Costovertebral Joint (T1-T6)', boneName: 'virt_costov_upper_R', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: 0.06, offsetZ: -0.04 },
+  { label: 'Left Costovertebral Joint (T7-T12)', boneName: 'virt_costov_lower_L', boneA: 'Spine1Part2_M', boneB: 'Spine1_M', t: 0.5, offsetX: -0.06, offsetZ: -0.04 },
+  { label: 'Right Costovertebral Joint (T7-T12)', boneName: 'virt_costov_lower_R', boneA: 'Spine1Part2_M', boneB: 'Spine1_M', t: 0.5, offsetX: 0.06, offsetZ: -0.04 },
+  { label: 'Xiphoid Process', boneName: 'virt_xiphoid', boneA: 'Spine1Part2_M', boneB: 'Spine1Part1_M', t: 0.3, offsetZ: 0.12 },
+  { label: 'Manubrium', boneName: 'virt_manubrium', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.15, offsetZ: 0.1 },
+  { label: 'Left Sternoclavicular Joint', boneName: 'virt_SC_L', boneA: 'Chest_M', boneB: 'Scapula_L', t: 0.15, offsetZ: 0.08 },
+  { label: 'Right Sternoclavicular Joint', boneName: 'virt_SC_R', boneA: 'Chest_M', boneB: 'Scapula_R', t: 0.15, offsetZ: 0.08 },
+  { label: 'Left Infrascapular Region', boneName: 'virt_infrascap_L', boneA: 'Scapula_L', boneB: 'Shoulder_L', t: 0.2, offsetZ: -0.08, offsetY: -0.08 },
+  { label: 'Right Infrascapular Region', boneName: 'virt_infrascap_R', boneA: 'Scapula_R', boneB: 'Shoulder_R', t: 0.2, offsetZ: -0.08, offsetY: -0.08 },
+  { label: 'Left Hamstring Origin', boneName: 'virt_hamstring_origin_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.45, offsetZ: -0.08 },
+  { label: 'Right Hamstring Origin', boneName: 'virt_hamstring_origin_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.45, offsetZ: -0.08 },
+  { label: 'Left Adductor Origin', boneName: 'virt_adductor_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.45, offsetX: 0.03, offsetZ: 0.03 },
+  { label: 'Right Adductor Origin', boneName: 'virt_adductor_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.45, offsetX: -0.03, offsetZ: 0.03 },
+  { label: 'Left Mid-Thigh (Quadriceps)', boneName: 'virt_quad_L', boneA: 'HipPart1_L', boneB: 'Knee_L', t: 0.4, offsetZ: 0.04 },
+  { label: 'Right Mid-Thigh (Quadriceps)', boneName: 'virt_quad_R', boneA: 'HipPart1_R', boneB: 'Knee_R', t: 0.4, offsetZ: 0.04 },
+  { label: 'Left Tibial Shaft (Mid)', boneName: 'virt_tib_shaft_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.5, offsetZ: 0.03 },
+  { label: 'Right Tibial Shaft (Mid)', boneName: 'virt_tib_shaft_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.5, offsetZ: 0.03 },
+  { label: 'Left Anterior Tibialis', boneName: 'virt_ant_tib_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.3, offsetX: -0.02, offsetZ: 0.03 },
+  { label: 'Right Anterior Tibialis', boneName: 'virt_ant_tib_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.3, offsetX: 0.02, offsetZ: 0.03 },
+  { label: 'Left Peroneal Region', boneName: 'virt_peroneal_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.4, offsetX: -0.04 },
+  { label: 'Right Peroneal Region', boneName: 'virt_peroneal_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.4, offsetX: 0.04 },
+];
+
 export interface CompensatingJointInfo {
   joint: string;
   loadIncrease: number;
@@ -954,6 +1103,8 @@ interface PureThreeGLBViewerProps {
   selectedRomJointId?: string | null;
   enablePoseMode?: boolean;
   onModelConfigChange?: (path: string, value: number) => void;
+  enableZoomTool?: boolean;
+  onLandmarkSelect?: (landmark: { label: string; boneName: string; position: { x: number; y: number; z: number } }) => void;
 }
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
@@ -1274,6 +1425,8 @@ export default function PureThreeGLBViewer({
   selectedRomJointId = null,
   enablePoseMode = false,
   onModelConfigChange,
+  enableZoomTool = false,
+  onLandmarkSelect,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1308,6 +1461,17 @@ export default function PureThreeGLBViewer({
   enablePainMarkersRef.current = enablePainMarkers;
   const activePainMarkerTypeRef = useRef(activePainMarkerType);
   activePainMarkerTypeRef.current = activePainMarkerType;
+  const [landmarkLabels, setLandmarkLabels] = useState<Array<{ label: string; boneName: string; screenX: number; screenY: number; worldPos: { x: number; y: number; z: number }; distance: number }>>([]);
+  const enableZoomToolRef = useRef(enableZoomTool);
+  enableZoomToolRef.current = enableZoomTool;
+  const landmarkSelectRef = useRef(onLandmarkSelect);
+  landmarkSelectRef.current = onLandmarkSelect;
+  const landmarkFrameCounter = useRef(0);
+  useEffect(() => {
+    if (!enableZoomTool) {
+      setLandmarkLabels([]);
+    }
+  }, [enableZoomTool]);
   const pendingReferralRef = useRef<PainMarker | null>(null);
   const pendingLineRef = useRef<PainMarker | null>(null);
   const areaDragRef = useRef<{ startPoint: THREE.Vector3; markerId: string } | null>(null);
@@ -1362,43 +1526,7 @@ export default function PureThreeGLBViewer({
       }
     }
 
-    const virtualPoints: Array<{ label: string; boneName: string; boneA: string; boneB: string; t: number; offsetX?: number }> = [
-      { label: 'C1-C2 (Upper Cervical)', boneName: 'virt_C1C2', boneA: 'Head_M', boneB: 'NeckPart1_M', t: 0.5 },
-      { label: 'C3-C4 (Mid Cervical)', boneName: 'virt_C3C4', boneA: 'NeckPart1_M', boneB: 'NeckPart2_M', t: 0.5 },
-      { label: 'C5-C6 (Lower Cervical)', boneName: 'virt_C5C6', boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.3 },
-      { label: 'C7-T1 (Cervicothoracic Junction)', boneName: 'virt_C7T1', boneA: 'NeckPart2_M', boneB: 'Chest_M', t: 0.6 },
-      { label: 'T1-T4 (Upper Thoracic)', boneName: 'virt_T1T4', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.2 },
-      { label: 'T5-T8 (Mid Thoracic)', boneName: 'virt_T5T8', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.6 },
-      { label: 'T9-T10 (Lower Thoracic)', boneName: 'virt_T9T10', boneA: 'Spine1Part2_M', boneB: 'Spine1Part1_M', t: 0.5 },
-      { label: 'T11-T12 (Thoracolumbar Junction)', boneName: 'virt_T11T12', boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.3 },
-      { label: 'L1-L2 (Upper Lumbar)', boneName: 'virt_L1L2', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.2 },
-      { label: 'L3 (Mid Lumbar)', boneName: 'virt_L3', boneA: 'Spine1_M', boneB: 'RootPart1_M', t: 0.5 },
-      { label: 'L4-L5 (Lower Lumbar)', boneName: 'virt_L4L5', boneA: 'RootPart1_M', boneB: 'RootPart2_M', t: 0.3 },
-      { label: 'L5-S1 (Lumbosacral Junction)', boneName: 'virt_L5S1', boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.4 },
-      { label: 'Sacrum', boneName: 'virt_sacrum', boneA: 'RootPart2_M', boneB: 'Root_M', t: 0.7 },
-      { label: 'Coccyx', boneName: 'virt_coccyx', boneA: 'Root_M', boneB: 'Root_M', t: 1.0 },
-      { label: 'Left Upper Ribs (1-4)', boneName: 'virt_ribs_upper_L', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: -0.15 },
-      { label: 'Right Upper Ribs (1-4)', boneName: 'virt_ribs_upper_R', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: 0.15 },
-      { label: 'Left Mid Ribs (5-8)', boneName: 'virt_ribs_mid_L', boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: -0.18 },
-      { label: 'Right Mid Ribs (5-8)', boneName: 'virt_ribs_mid_R', boneA: 'Chest_M', boneB: 'Spine1Part1_M', t: 0.5, offsetX: 0.18 },
-      { label: 'Left Lower Ribs (9-12)', boneName: 'virt_ribs_lower_L', boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: -0.15 },
-      { label: 'Right Lower Ribs (9-12)', boneName: 'virt_ribs_lower_R', boneA: 'Spine1Part1_M', boneB: 'Spine1_M', t: 0.5, offsetX: 0.15 },
-      { label: 'Sternum', boneName: 'virt_sternum', boneA: 'Chest_M', boneB: 'Spine1Part2_M', t: 0.3, offsetX: 0 },
-      { label: 'Left SI Joint', boneName: 'virt_SI_L', boneA: 'Root_M', boneB: 'Hip_L', t: 0.3 },
-      { label: 'Right SI Joint', boneName: 'virt_SI_R', boneA: 'Root_M', boneB: 'Hip_R', t: 0.3 },
-      { label: 'Left Greater Trochanter', boneName: 'virt_GT_L', boneA: 'Hip_L', boneB: 'HipPart1_L', t: 0.2 },
-      { label: 'Right Greater Trochanter', boneName: 'virt_GT_R', boneA: 'Hip_R', boneB: 'HipPart1_R', t: 0.2 },
-      { label: 'Left IT Band', boneName: 'virt_ITB_L', boneA: 'HipPart1_L', boneB: 'Knee_L', t: 0.5, offsetX: -0.05 },
-      { label: 'Right IT Band', boneName: 'virt_ITB_R', boneA: 'HipPart1_R', boneB: 'Knee_R', t: 0.5, offsetX: 0.05 },
-      { label: 'Left Calf / Gastrocnemius', boneName: 'virt_calf_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.4 },
-      { label: 'Right Calf / Gastrocnemius', boneName: 'virt_calf_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.4 },
-      { label: 'Left Achilles Tendon', boneName: 'virt_achilles_L', boneA: 'Knee_L', boneB: 'Ankle_L', t: 0.85 },
-      { label: 'Right Achilles Tendon', boneName: 'virt_achilles_R', boneA: 'Knee_R', boneB: 'Ankle_R', t: 0.85 },
-      { label: 'Left Forearm', boneName: 'virt_forearm_L', boneA: 'Elbow_L', boneB: 'Wrist_L', t: 0.5 },
-      { label: 'Right Forearm', boneName: 'virt_forearm_R', boneA: 'Elbow_R', boneB: 'Wrist_R', t: 0.5 },
-      { label: 'Left Biceps', boneName: 'virt_biceps_L', boneA: 'Shoulder_L', boneB: 'Elbow_L', t: 0.5 },
-      { label: 'Right Biceps', boneName: 'virt_biceps_R', boneA: 'Shoulder_R', boneB: 'Elbow_R', t: 0.5 },
-    ];
+    const virtualPoints = ANATOMICAL_VIRTUAL_POINTS;
 
     const posA = new THREE.Vector3();
     const posB = new THREE.Vector3();
@@ -1412,6 +1540,8 @@ export default function PureThreeGLBViewer({
       boneB.getWorldPosition(posB);
       virtPos.lerpVectors(posA, posB, vp.t);
       if (vp.offsetX) virtPos.x += vp.offsetX;
+      if (vp.offsetY) virtPos.y += vp.offsetY;
+      if (vp.offsetZ) virtPos.z += vp.offsetZ;
       const dist = position.distanceTo(virtPos);
       if (dist < minDist) {
         minDist = dist;
@@ -3237,6 +3367,83 @@ export default function PureThreeGLBViewer({
           }
           
           sceneRef.current.controls.update();
+
+          landmarkFrameCounter.current++;
+          if (landmarkFrameCounter.current % 6 === 0) {
+            if (enableZoomToolRef.current && containerRef.current) {
+              const cam = sceneRef.current.camera;
+              const ctrl = sceneRef.current.controls;
+              const cameraPos = cam.position;
+              const targetPos = ctrl.target;
+              const viewDistance = cameraPos.distanceTo(targetPos);
+              const LANDMARK_VISIBILITY_THRESHOLD = 2.5;
+
+              if (viewDistance < LANDMARK_VISIBILITY_THRESHOLD) {
+                const bones = bonesRef.current;
+                const rect = containerRef.current.getBoundingClientRect();
+                const projectedLabels: Array<{ label: string; boneName: string; screenX: number; screenY: number; worldPos: { x: number; y: number; z: number }; distance: number }> = [];
+                const tempPosA = new THREE.Vector3();
+                const tempPosB = new THREE.Vector3();
+                const tempVirt = new THREE.Vector3();
+                const projVec = new THREE.Vector3();
+
+                for (const [name, bone] of Object.entries(bones)) {
+                  if (!BONE_ANATOMICAL_LABELS[name]) continue;
+                  bone.getWorldPosition(tempVirt);
+                  const dist = cameraPos.distanceTo(tempVirt);
+                  if (dist > 3) continue;
+                  projVec.copy(tempVirt).project(cam);
+                  const sx = (projVec.x * 0.5 + 0.5) * rect.width;
+                  const sy = (-projVec.y * 0.5 + 0.5) * rect.height;
+                  if (projVec.z > 0 && projVec.z < 1 && sx > 0 && sx < rect.width && sy > 0 && sy < rect.height) {
+                    projectedLabels.push({
+                      label: BONE_ANATOMICAL_LABELS[name],
+                      boneName: name,
+                      screenX: sx,
+                      screenY: sy,
+                      worldPos: { x: tempVirt.x, y: tempVirt.y, z: tempVirt.z },
+                      distance: dist
+                    });
+                  }
+                }
+
+                for (const vp of ANATOMICAL_VIRTUAL_POINTS) {
+                  const boneA = bones[vp.boneA];
+                  const boneB = bones[vp.boneB];
+                  if (!boneA || !boneB) continue;
+                  boneA.getWorldPosition(tempPosA);
+                  boneB.getWorldPosition(tempPosB);
+                  tempVirt.lerpVectors(tempPosA, tempPosB, vp.t);
+                  if (vp.offsetX) tempVirt.x += vp.offsetX;
+                  if (vp.offsetY) tempVirt.y += vp.offsetY;
+                  if (vp.offsetZ) tempVirt.z += vp.offsetZ;
+                  const dist = cameraPos.distanceTo(tempVirt);
+                  if (dist > 3) continue;
+                  projVec.copy(tempVirt).project(cam);
+                  const sx = (projVec.x * 0.5 + 0.5) * rect.width;
+                  const sy = (-projVec.y * 0.5 + 0.5) * rect.height;
+                  if (projVec.z > 0 && projVec.z < 1 && sx > 0 && sx < rect.width && sy > 0 && sy < rect.height) {
+                    projectedLabels.push({
+                      label: vp.label,
+                      boneName: vp.boneName,
+                      screenX: sx,
+                      screenY: sy,
+                      worldPos: { x: tempVirt.x, y: tempVirt.y, z: tempVirt.z },
+                      distance: dist
+                    });
+                  }
+                }
+
+                projectedLabels.sort((a, b) => a.distance - b.distance);
+                setLandmarkLabels(projectedLabels.slice(0, 15));
+              } else {
+                setLandmarkLabels(prev => prev.length > 0 ? [] : prev);
+              }
+            } else {
+              setLandmarkLabels(prev => prev.length > 0 ? [] : prev);
+            }
+          }
+
           sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
         };
         
@@ -4374,6 +4581,32 @@ export default function PureThreeGLBViewer({
         </div>
       )}
       
+      {enableZoomTool && landmarkLabels.length > 0 && (
+        <>
+          {landmarkLabels.map((lm) => (
+            <button
+              key={lm.boneName}
+              className="absolute z-15 transform -translate-x-1/2 -translate-y-1/2 group"
+              style={{ left: lm.screenX, top: lm.screenY, pointerEvents: 'auto' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                landmarkSelectRef.current?.({
+                  label: lm.label,
+                  boneName: lm.boneName,
+                  position: lm.worldPos
+                });
+              }}
+            >
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-cyan-400 border border-cyan-300 shadow-[0_0_6px_rgba(34,211,238,0.6)] group-hover:shadow-[0_0_10px_rgba(34,211,238,0.9)] group-hover:scale-150 transition-all" />
+                <div className="px-1.5 py-0.5 rounded bg-slate-900/85 backdrop-blur-sm border border-cyan-500/30 text-[9px] font-medium text-cyan-300 whitespace-nowrap opacity-80 group-hover:opacity-100 group-hover:bg-slate-800/95 group-hover:border-cyan-400/60 group-hover:text-cyan-200 transition-all shadow-lg max-w-[140px] truncate">
+                  {lm.label}
+                </div>
+              </div>
+            </button>
+          ))}
+        </>
+      )}
       {/* Pose mode tooltip */}
       {poseModeTooltip && enablePoseMode && (
         <div

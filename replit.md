@@ -1,92 +1,12 @@
-# PhysioGPT Platform - Compressed
+# PhysioGPT Platform
 
 ## Overview
 
-PhysioGPT is an advanced AI-powered physiotherapy platform providing comprehensive clinical decision support for practitioners and students. It integrates modern web technologies with specialized AI models to offer tools for SOAP note generation, virtual patient analysis, evidence-based exercise prescription, and extensive research integration. The platform aims to revolutionize physiotherapy practice by enhancing efficiency, accuracy, and educational capabilities, ultimately improving patient outcomes and practitioner workflow. The business vision is to become the leading AI solution for physiotherapy, offering significant market potential by improving diagnostic precision and treatment efficacy.
+PhysioGPT is an advanced AI-powered physiotherapy platform designed to provide comprehensive clinical decision support for practitioners and students. It integrates modern web technologies with specialized AI models to offer tools for SOAP note generation, virtual patient analysis, evidence-based exercise prescription, and extensive research integration. The platform aims to revolutionize physiotherapy practice by enhancing efficiency, accuracy, and educational capabilities, ultimately improving patient outcomes and practitioner workflow. The business vision is to become the leading AI solution for physiotherapy, offering significant market potential by improving diagnostic precision and treatment efficacy.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
-
-## Recent Changes (Feb 17, 2026)
-- **Clinical Bubble on Pain Markers**: AI-powered floating clinical info panel that auto-appears when a pain marker is placed:
-  - ClinicalBubble component (client/src/components/skeleton/ClinicalBubble.tsx): tabs for DDx, Questions (Hx), Assessment (Obj), Treatment (Tx), Exercises (Ex)
-  - New API endpoint /api/physiogpt/clinical-bubble: Uses OpenAI JSON mode to return structured clinical data (differentials, questions, assessments, treatments, exercises, red flags)
-  - Interactive follow-up questions with clickable answer options; "Refine" button sends answers to AI for updated recommendations
-  - Severity selector (mild/moderate/severe) adjusts clinical recommendations
-  - Red flags alert banner when concerning patterns detected
-  - "Deep Dive with AI" button sends all bubble data + answered questions to PhysioGPT chat for comprehensive analysis
-  - Clicking marker names in pain marker list re-opens the clinical bubble
-  - Bubble remounts (key={markerId}) on marker change; refetches on severity change
-- **Kinetic Chain Connection System**: Connected regions analysis for pain markers:
-  - Kinetic chain map (client/src/lib/kineticChainMap.ts): Maps 14 body regions to anatomically connected areas with clinical reasoning, relationships, and test prompts
-  - Collapsible "Connected Regions" section at bottom of ClinicalBubble (not a separate tab)
-  - Blue glow highlights on connected skeleton regions when section is expanded
-  - "Mark & Analyze" button places a secondary pain marker on connected region and opens its clinical bubble
-  - "Test the Chain" mode: activates pose mode, zooms to connected region, shows amber panel with test prompt and "Send Posture to AI for Analysis" button
-  - Clinical reasoning for each connection (e.g., shoulder → thoracic spine: scapulothoracic rhythm)
-  - Click-to-select pain markers on 3D skeleton (onPainMarkerSelect callback with hasMoved drag detection)
-  - Sparkle icon button in marker list for quick re-analysis
-- **Disabled auto-highlight from AI responses**: Clinical text parser no longer highlights skeleton regions based on PhysioGPT AI response text, only user messages and voice transcripts trigger highlights
-- **Key Files**: client/src/components/skeleton/ClinicalBubble.tsx, client/src/pages/PhysioGPT.tsx, server/routes.ts, client/src/lib/kineticChainMap.ts
-
-## Previous Changes (Feb 16, 2026)
-- **Comprehensive Shoulder Assessment System**: Deep clinical shoulder assessment with AI-powered differential diagnosis:
-  - Shoulder assessment library (client/src/lib/shoulderAssessment.ts): 21 special tests with sensitivity/specificity/LR+/LR-, 10 muscle tests, 6 ROM norms, 11 differential diagnoses, 7 kinetic chain contributors, 6 pain zones
-  - ShoulderAssessmentPanel (client/src/components/shoulder/ShoulderAssessmentPanel.tsx): 10-step guided assessment wizard (History → Observation → AROM → PROM → Resisted → Special Tests → Neuro → Functional → Kinetic Chain → Summary)
-  - Special tests with expandable technique details, +/-/? result buttons, sensitivity/specificity/LR display
-  - Capsular pattern detection (ER > ABD > Flex > IR) for adhesive capsulitis identification
-  - Kinetic chain analysis using skeleton posture data: scapulothoracic, thoracic spine, cervical spine, rib cage, pelvis/lumbar, contralateral shoulder, ipsilateral hip
-  - Differential diagnosis scoring algorithm weighting onset type, pain location, special test results (LR-weighted), capsular pattern, muscle weakness, prevalence
-  - ROM comparison against normative data with age-adjusted ranges, color-coded status (normal/restricted/below functional)
-  - Left/Right side selection with zoom to affected shoulder
-  - "Send to AI for Full Clinical Analysis" builds comprehensive structured prompt with all findings
-  - Backend system prompt enhanced with shoulder-specific frameworks: kinetic chain analysis, capsular pattern recognition, differential weighting, treatment phasing, scapulohumeral rhythm
-  - "Shoulder Assess" button in skeleton controls bar opens overlay panel
-- **Key Files**: client/src/lib/shoulderAssessment.ts, client/src/components/shoulder/ShoulderAssessmentPanel.tsx
-
-## Previous Changes (Feb 15, 2026)
-- **Interactive Skeleton-to-Text System**: Skeleton viewer now reacts to clinical conversation content:
-  - Clinical text parser (client/src/lib/clinicalTextParser.ts) detects body regions, pain types, pathologies, and severity from messages
-  - PureThreeGLBViewer highlightRegions prop applies colored emissive glow to affected mesh groups
-  - Color coding: red=pain, amber=dysfunction, blue=referral, purple=weakness, yellow=stiffness
-  - Auto-opens skeleton panel and zooms to primary affected region when clinical content is detected
-  - Legend overlay on skeleton shows detected regions with color-coded type indicators
-  - 300ms debounce on parsing to prevent UI jank during streaming
-- **Voice Recording Bug Fixes**: Fixed stale isStreaming closure preventing final report generation, SpeechRecognition restart index, welcome screen streaming visibility
-- **PhysioGPT Page Redesign**: Complete rewrite as ChatGPT-style clinical assistant:
-  - ChatGPT-style layout: collapsible sidebar (conversation history), collapsible skeleton viewer panel (40% height), chat interface
-  - Integrated PureThreeGLBViewer skeleton with zoomToRegion for body region focus, compact joint controls overlay
-  - Voice recording: MediaRecorder → Whisper transcription → AI clinical analysis with structured thought process (differential diagnosis, treatment approach, evidence)
-  - Streaming SSE responses with ClinicalResponseDisplay for structured clinical formatting
-  - Quick actions toolbar: Assessment, Differentials, Manual Therapy, Exercise Rx, Patient Education, Red Flags
-  - 9 body regions with special tests, red flags, and contextual suggestions
-  - Conversation CRUD with sidebar, PDF download, evidence grades
-- **Direct Bone Manipulation (Pose Mode)**: Click-and-drag skeleton posing without sliders:
-  - POSE_BONE_MAP reverse mapping: bone names → config keys with axis, scale, min/max, sensitivity
-  - Raycasting on cached meshes finds nearest pose-controllable bone with 0.5 unit distance threshold
-  - Vertical drag for flexion/extension (x-axis bones), horizontal drag for rotation/lateral (y/z-axis bones)
-  - Green glow sphere on hover, brighter on selection; tooltip shows joint name + current angle
-  - Double-click to reset any joint to 0°; orbit controls disabled during drag
-  - Syncs back to modelConfig via onModelConfigChange callback, keeping sliders in sync
-  - Mutually exclusive with Pain Marker and ROM modes
-- **Extended Pain Marker Types**: Four types of pain markers for comprehensive pain documentation:
-  - Point: Single focal dot (red), click to place, drag to reposition
-  - Area: Broad region (orange), click-drag to define center and radius for diffuse pain
-  - Referred: Two connected points (purple) with dashed line showing referral pattern, click origin then target
-  - Line: Multi-point path (pink), click to add points, double-click to finish, for radicular/dermatomal patterns
-  - Type selector sub-buttons appear in toolbar when pain marker mode is active
-  - AI prompts include marker type, referral targets, and area radius for better clinical context
-- **Real-Time Postural Force Analysis**: Joint loading calculation as % body weight based on skeleton pose:
-  - Postural force engine (client/src/lib/posturalForceEngine.ts) using body segment parameters (Winter, 2009)
-  - Calculates compression and shear forces for 12 joints: cervical, lumbar, bilateral hips/knees/ankles/shoulders/elbows
-  - Static equilibrium model with segment mass percentages, lever arm calculations, and angle-dependent moment multipliers
-  - Color-coded status: green (<80% BW), yellow (80-150%), orange (150-300%), red (>300%)
-  - Force overlay panel with body weight input for absolute Newton conversion
-  - COM shift warning when posture deviates from center
-  - Real-time updates via useMemo tied to modelConfig changes
-  - "Forces" toolbar toggle button (amber) in skeleton controls bar
-- **Key Files**: client/src/pages/PhysioGPT.tsx, client/src/lib/clinicalTextParser.ts, client/src/components/skeleton/PureThreeGLBViewer.tsx, client/src/lib/posturalForceEngine.ts
 
 ## System Architecture
 
@@ -108,28 +28,29 @@ Preferred communication style: Simple, everyday language.
 - **ORM**: Drizzle ORM
 - **Migrations**: Drizzle Kit
 
-### Deployment Considerations
-- **Camera Access Requirements**: Movement Analysis page requires HTTPS for camera access.
-- **Deployment**: Replit autoscale deployment with Vite for frontend and ESBuild for backend bundling on Node.js 20.
-
 ### Key Features & Design Patterns
-- **AI Integration**: Leverages OpenAI GPT-4o for clinical analysis, content generation, specialized models for virtual patient analysis, research gap analysis, exercise generation, real-time movement analysis from webcam, and privacy-preserving SOAP-to-Virtual-Patient conversion.
-- **Biomechanical Systems**:
-    - **Bidirectional Muscle-Joint System**: Anatomically accurate system mapping 18 muscles to joints with force resolution, agonist/antagonist pairs, and joint coupling rules. Includes visual indicators and a toggle for effects.
-    - **3D Force Visualization System**: Real-time biomechanical overlays on GLB skeleton using THREE.js, showing force vector arrows, joint stress indicators, and muscle activation glow with interactive hover labels.
-    - **Biomechanical Clinical Assessment System**: Patient digital twin system with biomechanics calculation engine, injury risk scoring, and AI clinical assessment for treatment strategy generation.
-- **Multi-View Skeleton Visualization**: Simultaneous display of skeleton from multiple angles with 4 fixed camera presets, synchronized viewers, and view toggle controls.
-- **Expanded MuscleOverride System**: Includes length override, inhibition, and 7 pathology types with per-pathology tension/activation modifiers.
-- **Motion Capture & Virtual Patient System**: WebRTC camera integration for real-time pose detection, skeleton overlay, AI-powered virtual patient generation from movement data, and detailed movement analysis. Includes a medical-grade 3D skeleton system with dynamic anatomical accuracy.
-- **Virtual Patient Management System with Mixamo Integration**: Comprehensive CRUD interface for managing patient 3D models with persistent configurations, supporting both procedural skeleton generation and Mixamo rigged models. Features customizable pathologies, advanced slider controls, animation playback, and privacy-preserving integration with SOAP notes.
-- **Enhanced Body Scanner X-Ray Alternative**: Medical-grade anatomical visualization with enhanced rib cage, detailed hip/pelvis, comprehensive knee joint, and enhanced elbow complex, including clinical measurements and alignment assessments.
-- **Comprehensive Running Gait Analysis**: Professional-grade biomechanical analysis with 25+ real-time metrics including cadence, stride length, ground contact time, foot strike pattern, vertical oscillation, joint angles, body position metrics, symmetry analysis, and efficiency indicators.
-- **Clinical Documentation**: AI-enhanced SOAP note generation, OpenAI Whisper for audio transcription, automated PII de-identification, version control, and an AI Automatic Paperwork System. Includes a temporary SOAP Notes system with auto-expiry and auto-save.
-- **PhysioGPT Clinical Enhancements**: Transformed PhysioGPT page into a comprehensive clinical decision support system with clinical context panel, integrated clinical tools (outcome measures, prediction rules), clinical quick actions, professional mode for technical documentation, enhanced system prompts, and structured clinical response display.
+- **AI Integration**: Leverages OpenAI GPT-4o for clinical analysis, content generation, virtual patient analysis, research gap analysis, exercise generation, real-time movement analysis, and privacy-preserving SOAP-to-Virtual-Patient conversion.
+- **Biomechanical Systems**: Includes a bidirectional muscle-joint system, 3D force visualization, and a biomechanical clinical assessment system for patient digital twins and injury risk scoring.
+- **Multi-View Skeleton Visualization**: Simultaneous display of the skeleton from multiple angles with fixed camera presets and synchronized viewers.
+- **Expanded MuscleOverride System**: Allows for length override, inhibition, and pathology-specific modifiers.
+- **Motion Capture & Virtual Patient System**: WebRTC camera integration for real-time pose detection, skeleton overlay, AI-powered virtual patient generation, and detailed movement analysis using a medical-grade 3D skeleton system.
+- **Virtual Patient Management System with Mixamo Integration**: CRUD interface for managing patient 3D models with procedural generation or Mixamo integration, customizable pathologies, advanced controls, and animation playback.
+- **Enhanced Body Scanner X-Ray Alternative**: Medical-grade anatomical visualization with detailed structures like the rib cage, hip/pelvis, knee, and elbow, including clinical measurements and alignment assessments.
+- **Comprehensive Running Gait Analysis**: Professional-grade biomechanical analysis with 25+ real-time metrics for gait, joint angles, and efficiency.
+- **Clinical Documentation**: AI-enhanced SOAP note generation, OpenAI Whisper for audio transcription, automated PII de-identification, version control, and an AI Automatic Paperwork System.
+- **PhysioGPT Clinical Enhancements**: Transforms the PhysioGPT page into a comprehensive clinical decision support system with a clinical context panel, integrated tools, quick actions, professional mode, enhanced system prompts, and structured clinical response display.
 - **Exercise Prescription**: Comprehensive, body part-specific, difficulty-scaled, and evidence-based exercise database with AI-powered recommendations.
 - **Research Integration**: AI-analyzed research database with bias assessment and clinical application insights.
-- **UI/UX Decisions**: Shadcn/ui and Tailwind CSS for a modern, professional aesthetic with clear visual hierarchy, intuitive navigation, color-coded clinical feedback, and responsive design.
+- **UI/UX Decisions**: Utilizes Shadcn/ui and Tailwind CSS for a modern, professional aesthetic with clear visual hierarchy, intuitive navigation, color-coded clinical feedback, and responsive design.
 - **Security**: Encrypted session secrets, robust CORS configuration, Zod schema validation, and secure file upload handling.
+- **Clinical Bubble on Pain Markers**: An AI-powered floating clinical info panel that appears when a pain marker is placed, offering differential diagnoses, questions, assessments, treatments, and exercises. It includes interactive follow-up questions, a severity selector, red flag alerts, and a "Deep Dive with AI" feature.
+- **Kinetic Chain Connection System**: Analyzes connected regions for pain markers using a kinetic chain map, highlighting connected skeleton regions and allowing placement of secondary pain markers on connected areas. Includes a "Test the Chain" mode for pose analysis.
+- **Zoom Tool with Anatomical Landmark System**: Allows deep zoom into specific anatomical structures with identification of over 147 anatomical virtual points. Clicking a landmark places a pain marker and opens the clinical bubble with structure-specific differential diagnoses.
+- **Comprehensive Shoulder Assessment System**: A deep clinical shoulder assessment system with AI-powered differential diagnosis, including 21 special tests, muscle tests, ROM norms, differential diagnoses, and kinetic chain contributors. Features a guided assessment wizard, capsular pattern detection, and differential diagnosis scoring.
+- **Interactive Skeleton-to-Text System**: The skeleton viewer reacts to clinical conversation content by highlighting body regions, pain types, pathologies, and severity with color-coded emissive glows.
+- **Direct Bone Manipulation (Pose Mode)**: Enables click-and-drag skeleton posing without sliders, allowing manipulation of joints with real-time feedback and a reset function.
+- **Extended Pain Marker Types**: Supports four types of pain markers: Point, Area, Referred, and Line, for comprehensive pain documentation.
+- **Real-Time Postural Force Analysis**: Calculates joint loading as a percentage of body weight based on skeleton pose, providing real-time updates and color-coded status for 12 joints.
 
 ## External Dependencies
 

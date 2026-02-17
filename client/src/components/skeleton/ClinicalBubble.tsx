@@ -388,23 +388,36 @@ export default function ClinicalBubble({
           ) : null}
         </div>
 
-        {connections.length > 0 && !loading && data && (
-          <div className="border-t border-gray-700/50">
+        <div className="px-3 py-2 border-t border-gray-700/50 flex gap-2">
+          <button
+            onClick={() => data && onDeepDive(markerId, data, answers)}
+            disabled={!data || loading}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 text-white text-[11px] font-medium rounded-lg py-2 transition-all disabled:opacity-50"
+          >
+            <Send className="h-3 w-3" />
+            Deep Dive with AI
+          </button>
+        </div>
+      </div>
+
+      {connections.length > 0 && !loading && data && (
+        <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-blue-500/30 overflow-hidden">
             <button
               onClick={() => setConnectionsOpen(!connectionsOpen)}
               className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <Link2 className="h-3.5 w-3.5 text-blue-400" />
-                <span className="text-[11px] font-medium text-blue-300">Connected Regions</span>
+                <span className="text-[11px] font-medium text-blue-300">Kinetic Chain Connections</span>
                 <span className="text-[9px] text-gray-500 bg-white/5 px-1.5 py-0.5 rounded-full">{connections.length}</span>
               </div>
               <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${connectionsOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {connectionsOpen && (
-              <div className="px-3 pb-3 space-y-1.5 max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                <p className="text-[9px] text-gray-500 mb-2">Pain in the {region.toLowerCase()} may be connected to these areas through the kinetic chain:</p>
+              <div className="px-3 pb-3 space-y-1.5 max-h-[220px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent border-t border-gray-700/30">
+                <p className="text-[9px] text-gray-500 mt-2 mb-2">Pain in the {region.toLowerCase()} may be connected to these areas through the kinetic chain:</p>
                 {connections.map((conn) => {
                   const isExpanded = expandedConnection === conn.label;
                   return (
@@ -458,19 +471,8 @@ export default function ClinicalBubble({
               </div>
             )}
           </div>
-        )}
-
-        <div className="px-3 py-2 border-t border-gray-700/50 flex gap-2">
-          <button
-            onClick={() => data && onDeepDive(markerId, data, answers)}
-            disabled={!data || loading}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 text-white text-[11px] font-medium rounded-lg py-2 transition-all disabled:opacity-50"
-          >
-            <Send className="h-3 w-3" />
-            Deep Dive with AI
-          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

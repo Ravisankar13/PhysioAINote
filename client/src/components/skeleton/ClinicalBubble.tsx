@@ -177,13 +177,11 @@ export default function ClinicalBubble({
     left: `${Math.min(Math.max(position.x + 20, 10), 55)}%`,
     top: `${Math.min(Math.max(position.y - 20, 5), 30)}%`,
     zIndex: 50,
-    maxWidth: "340px",
-    width: "320px",
   };
 
   return (
-    <div style={bubbleStyle} className="animate-in fade-in slide-in-from-left-2 duration-200">
-      <div className="bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-700/50 overflow-hidden">
+    <div style={bubbleStyle} className="flex items-start gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
+      <div className="bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-700/50 overflow-hidden w-[320px] max-w-[340px] flex-shrink-0">
         <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-teal-600/30 to-blue-600/30 border-b border-gray-700/50">
           <div className="flex items-center gap-2 min-w-0">
             <Stethoscope className="h-3.5 w-3.5 text-teal-400 flex-shrink-0" />
@@ -401,7 +399,7 @@ export default function ClinicalBubble({
       </div>
 
       {connections.length > 0 && !loading && data && (
-        <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+        <div className="w-[280px] flex-shrink-0 animate-in fade-in slide-in-from-left-2 duration-200">
           <div className="bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-blue-500/30 overflow-hidden">
             <button
               onClick={() => setConnectionsOpen(!connectionsOpen)}

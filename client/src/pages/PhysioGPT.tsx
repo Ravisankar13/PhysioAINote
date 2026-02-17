@@ -428,15 +428,13 @@ export default function PhysioGPT() {
       if (messages.length > 0) {
         const recentMessages = messages.slice(-6);
         for (const msg of recentMessages) {
-          if (msg.content) {
+          if (msg.content && msg.role === 'user') {
             contexts.push(parseClinicalText(msg.content));
           }
         }
       }
 
-      if (streamingContent) {
-        contexts.push(parseClinicalText(streamingContent));
-      }
+      
 
       if (liveTranscript) {
         contexts.push(parseClinicalText(liveTranscript));
@@ -454,7 +452,7 @@ export default function PhysioGPT() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [messages, streamingContent, liveTranscript]);
+  }, [messages, liveTranscript]);
 
   const triggerLiveAnalysis = useCallback(async (transcript: string) => {
     if (isAnalyzingRef.current || !transcript.trim() || transcript.length < 30) return;

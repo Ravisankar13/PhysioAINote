@@ -340,11 +340,8 @@ export default function PhysioGPT() {
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [skeletonOpen, setSkeletonOpen] = useState(false);
-  const [skeletonHeight, setSkeletonHeight] = useState(40);
-  const [isDraggingResize, setIsDraggingResize] = useState(false);
-  const mainContentRef = useRef<HTMLDivElement>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatPanelOpen, setChatPanelOpen] = useState(true);
   const [showJointControls, setShowJointControls] = useState(false);
 
   const [selectedRegion, setSelectedRegion] = useState<keyof typeof BODY_REGIONS | null>(null);
@@ -456,8 +453,7 @@ export default function PhysioGPT() {
         const merged = mergeHighlights(contexts);
         setClinicalHighlights(merged.highlights);
 
-        if (merged.highlights.length > 0 && !skeletonOpen) {
-          setSkeletonOpen(true);
+        if (merged.highlights.length > 0) {
         }
       } else {
         setClinicalHighlights([]);
@@ -814,40 +810,6 @@ export default function PhysioGPT() {
     },
   });
 
-  const resizeStartY = useRef<number | null>(null);
-  const didDrag = useRef(false);
-
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    resizeStartY.current = e.clientY;
-    didDrag.current = false;
-    setIsDraggingResize(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isDraggingResize) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!mainContentRef.current) return;
-      if (resizeStartY.current !== null && Math.abs(e.clientY - resizeStartY.current) > 3) {
-        didDrag.current = true;
-      }
-      const rect = mainContentRef.current.getBoundingClientRect();
-      const offsetY = e.clientY - rect.top;
-      const pct = (offsetY / rect.height) * 100;
-      setSkeletonHeight(Math.min(Math.max(pct, 15), 80));
-    };
-    const handleMouseUp = () => {
-      setIsDraggingResize(false);
-      resizeStartY.current = null;
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDraggingResize]);
-
   const zoomRegionLandmarks = useMemo(() => [
     { region: 'cervical_spine' as AnatomicalRegion, label: 'Neck / Cervical', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => ['Head_M','NeckPart1_M','NeckPart2_M','Neck_M'].some(b => p.boneA === b || p.boneB === b) && !p.label.includes('Rib') && !p.label.includes('Sternoclavicular') && !p.label.includes('Manubrium')).map(p => ({ label: p.label, boneName: p.boneName })) },
     { region: 'thoracic_spine' as AnatomicalRegion, label: 'Thoracic / Ribs', landmarks: ANATOMICAL_VIRTUAL_POINTS.filter(p => (['Chest_M','Spine1Part2_M','Spine1Part1_M','Spine1_M'].some(b => p.boneA === b || p.boneB === b) && !p.label.includes('Scapula') && !p.label.includes('Sternoclavicular')) || p.label.includes('Rib') || p.label.includes('Costochondral') || p.label.includes('Costovertebral') || p.label.includes('Xiphoid') || p.label.includes('Manubrium') || p.label.includes('Sternum')).map(p => ({ label: p.label, boneName: p.boneName })) },
@@ -1092,12 +1054,11 @@ ${ddxList}`;
       setSelectedRomJoint(null);
       setCameraPoseActive(true);
       controllerSmootherRef.current = new ControllerSmoother(0.35, 0.015);
-      if (!skeletonOpen) setSkeletonOpen(true);
       toast({ title: "Camera Capture", description: "Position the patient in frame. The skeleton will mirror their posture in real-time." });
     } else {
       setCameraPoseActive(false);
     }
-  }, [cameraMode, skeletonOpen, toast]);
+  }, [cameraMode, toast]);
 
   const handleCapturePose = useCallback(() => {
     setCameraPoseActive(false);
@@ -1210,8 +1171,6 @@ ${ddxList}`;
 
     const regionData = BODY_REGIONS[region];
     setZoomToRegion(regionData.skeletonRegion);
-    if (!skeletonOpen) setSkeletonOpen(true);
-
     setSuggestions([
       `What assessment approach should I use for ${regionData.name.toLowerCase()} pain?`,
       `What are the common differential diagnoses for ${regionData.name.toLowerCase()}?`,
@@ -1253,98 +1212,9 @@ ${ddxList}`;
   }, [modelConfig, forceMode]);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-gray-50 overflow-hidden">
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-[280px]' : 'w-0'} transition-all duration-300 overflow-hidden border-r bg-white flex-shrink-0`}>
-        <div className="w-[280px] p-4 h-full flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg">
-                <Stethoscope className="h-4 w-4 text-white" />
-              </div>
-              <span className="font-semibold text-gray-800 text-sm">PhysioGPT</span>
-            </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSidebarOpen(false)}>
-              <PanelLeftClose className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <Button onClick={handleNewConversation} className="w-full mb-4 bg-teal-600 hover:bg-teal-700 h-9 text-sm">
-            <Plus className="h-4 w-4 mr-2" />
-            New Consultation
-          </Button>
-
-          <ScrollArea className="flex-1 -mx-2 px-2">
-            <div className="space-y-1.5">
-              {loadingConversations ? (
-                <>
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                </>
-              ) : conversations.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No consultations yet</p>
-                </div>
-              ) : (
-                conversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className={`group relative flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                      selectedConversationId === conv.id ? 'bg-teal-50 border border-teal-200' : 'hover:bg-gray-50'
-                    }`}
-                    onClick={() => setSelectedConversationId(conv.id)}
-                  >
-                    <MessageCircle className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{conv.title}</p>
-                      <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                        <Clock className="h-3 w-3" />
-                        {new Date(conv.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 absolute right-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm("Delete this conversation?")) {
-                          deleteConversationMutation.mutate(conv.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </div>
-      </div>
-
-      {/* Sidebar toggle when collapsed */}
-      {!sidebarOpen && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSidebarOpen(true)}
-          className="absolute left-2 top-20 z-20 bg-white shadow-md h-8 w-8"
-        >
-          <PanelLeftOpen className="h-4 w-4" />
-        </Button>
-      )}
-
-      {/* Main Content Area */}
-      <div ref={mainContentRef} className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isDraggingResize ? 'select-none cursor-row-resize' : ''}`}>
-        {/* Skeleton Viewer Panel */}
-        <div
-          className={`${skeletonOpen ? '' : 'h-0'} overflow-hidden border-b bg-gray-900 relative flex-shrink-0`}
-          style={skeletonOpen ? { height: `${skeletonHeight}%`, transition: isDraggingResize ? 'none' : 'height 0.3s ease' } : undefined}
-        >
-          <div className="h-full w-full relative flex">
+    <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 relative overflow-hidden">
+      {/* Full-Page Skeleton Viewer */}
+      <div className="h-full w-full relative flex">
             {cameraMode && (
               <div className="w-[40%] h-full flex-shrink-0 relative border-r border-gray-700">
                 <CameraPoseCapture
@@ -1971,7 +1841,7 @@ ${ddxList}`;
                       setCameraMode(false);
                       setCameraPoseActive(false);
                       setSelectedRomJoint(null);
-                      if (!skeletonOpen) setSkeletonOpen(true);
+
                       const tips: Record<PainMarkerType, string> = {
                         point: "Click to place a point marker. Right-click to remove. Drag to reposition.",
                         area: "Click and drag to draw a pain area. Right-click to remove.",
@@ -2030,7 +1900,6 @@ ${ddxList}`;
                     setPoseMode(false);
                     setCameraMode(false);
                     setCameraPoseActive(false);
-                    if (!skeletonOpen) setSkeletonOpen(true);
                     toast({ title: "ROM Measurement Mode", description: "Click on a highlighted joint to measure its range of motion." });
                   } else {
                     setSelectedRomJoint(null);
@@ -2054,7 +1923,6 @@ ${ddxList}`;
                     setCameraMode(false);
                     setCameraPoseActive(false);
                     setSelectedRomJoint(null);
-                    if (!skeletonOpen) setSkeletonOpen(true);
                     toast({ title: "Pose Mode", description: "Click and drag limbs to adjust the skeleton pose. Double-click to reset a joint." });
                   }
                 }}
@@ -2084,7 +1952,6 @@ ${ddxList}`;
                     setPoseMode(false);
                     setCameraMode(false);
                     setCameraPoseActive(false);
-                    if (!skeletonOpen) setSkeletonOpen(true);
                     toast({ title: "Zoom & Landmark Tool", description: "Scroll to zoom into specific anatomical structures. Click on a labeled landmark to place a pain marker and get AI clinical analysis." });
                   }
                 }}
@@ -2100,7 +1967,6 @@ ${ddxList}`;
                   const newMode = !forceMode;
                   setForceMode(newMode);
                   if (newMode) {
-                    if (!skeletonOpen) setSkeletonOpen(true);
                     toast({ title: "Force Analysis", description: "Showing joint loading as % body weight. Adjust joints to see forces change." });
                   }
                 }}
@@ -2157,7 +2023,6 @@ ${ddxList}`;
                     setShowShoulderAssessment(false);
                   } else {
                     setShowShoulderAssessment(true);
-                    if (!skeletonOpen) setSkeletonOpen(true);
                     setZoomToRegion(shoulderAssessmentSide === 'left' ? 'left_shoulder' : 'right_shoulder');
                   }
                 }}
@@ -2201,33 +2066,93 @@ ${ddxList}`;
 
           </div>
           </div>
-        </div>
 
-        {/* Skeleton resize handle / toggle */}
-        <div className="relative flex-shrink-0">
-          {skeletonOpen && (
-            <div
-              className="absolute inset-x-0 -top-1 h-3 cursor-row-resize z-20 group"
-              onMouseDown={handleResizeMouseDown}
-            >
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 mx-auto w-12 rounded-full bg-gray-300 group-hover:bg-teal-400 transition-colors" />
+      {/* Conversation History Sidebar - floating overlay inside skeleton */}
+      <div className={`absolute top-0 left-0 h-full z-30 transition-all duration-300 ${sidebarOpen ? 'w-[260px]' : 'w-0'} overflow-hidden`}>
+        <div className="w-[260px] h-full bg-black/90 backdrop-blur-md border-r border-white/10 flex flex-col">
+          <div className="flex items-center justify-between p-3 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <div className="p-1 bg-gradient-to-br from-teal-500 to-teal-600 rounded">
+                <Stethoscope className="h-3.5 w-3.5 text-white" />
+              </div>
+              <span className="font-semibold text-white text-xs">History</span>
             </div>
-          )}
-          <button
-            onClick={() => { if (!didDrag.current) setSkeletonOpen(!skeletonOpen); }}
-            className={`w-full flex items-center justify-center gap-1.5 py-1.5 bg-white border-b hover:bg-gray-50 text-xs text-gray-500 transition-colors ${skeletonOpen ? 'cursor-row-resize' : 'cursor-pointer'}`}
-            onMouseDown={(e) => { if (skeletonOpen) handleResizeMouseDown(e); }}
-          >
-            {skeletonOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            {skeletonOpen ? 'Hide' : 'Show'} Skeleton Viewer
-            {skeletonOpen ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-          </button>
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10" onClick={() => setSidebarOpen(false)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <div className="p-2">
+            <Button onClick={handleNewConversation} className="w-full bg-teal-600 hover:bg-teal-700 h-8 text-xs">
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              New Consultation
+            </Button>
+          </div>
+          <ScrollArea className="flex-1 px-2">
+            <div className="space-y-1">
+              {loadingConversations ? (
+                <>
+                  <Skeleton className="h-10 w-full bg-white/10" />
+                  <Skeleton className="h-10 w-full bg-white/10" />
+                </>
+              ) : conversations.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                  <MessageCircle className="h-6 w-6 mx-auto mb-1.5 opacity-30" />
+                  <p className="text-xs">No consultations yet</p>
+                </div>
+              ) : (
+                conversations.map((conv) => (
+                  <div
+                    key={conv.id}
+                    className={`group relative flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer transition-colors ${
+                      selectedConversationId === conv.id ? 'bg-teal-500/20 border border-teal-500/30' : 'hover:bg-white/5'
+                    }`}
+                    onClick={() => setSelectedConversationId(conv.id)}
+                  >
+                    <MessageCircle className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-200 truncate">{conv.title}</p>
+                      <p className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5">
+                        <Clock className="h-2.5 w-2.5" />
+                        {new Date(conv.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400 absolute right-1 text-gray-500"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm("Delete this conversation?")) {
+                          deleteConversationMutation.mutate(conv.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
         </div>
+      </div>
 
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Chat Panel - collapsible floating overlay inside skeleton */}
+      <div className={`absolute top-0 right-0 h-full z-30 transition-all duration-300 ${chatPanelOpen ? 'w-[380px]' : 'w-0'} overflow-hidden`}>
+        <div className="w-[380px] h-full bg-white/95 backdrop-blur-md border-l border-gray-200 shadow-2xl flex flex-col">
+          <div className="flex items-center justify-between px-3 py-2 border-b bg-white">
+            <div className="flex items-center gap-2">
+              <div className="p-1 bg-gradient-to-br from-teal-500 to-teal-600 rounded">
+                <Bot className="h-3.5 w-3.5 text-white" />
+              </div>
+              <span className="font-semibold text-gray-800 text-xs">PhysioGPT Chat</span>
+            </div>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setChatPanelOpen(false)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
           <ScrollArea className="flex-1">
-            <div className="p-4">
+            <div className="p-3">
               {!selectedConversationId && !isStreaming ? (
                 /* Welcome Screen */
                 <div className="h-full flex items-center justify-center min-h-[400px]">
@@ -2631,34 +2556,54 @@ ${ddxList}`;
                   placeholder={
                     currentRegionData
                       ? `Ask about ${currentRegionData.name.toLowerCase()} assessment or treatment...`
-                      : "Ask me about assessment, treatment, or clinical reasoning..."
+                      : "Ask about assessment, treatment, or clinical reasoning..."
                   }
                   disabled={sendMessageMutation.isPending || isStreaming || isRecording || isTranscribing || isAnalyzingSession}
-                  className="flex-1 h-10"
+                  className="flex-1 h-9 text-sm"
                 />
                 <Button
                   type="button"
                   variant={isRecording ? "destructive" : "outline"}
                   size="icon"
-                  className="h-10 w-10 flex-shrink-0"
+                  className="h-9 w-9 flex-shrink-0"
                   onClick={isRecording ? stopRecording : startRecording}
                   disabled={isStreaming || isTranscribing || isAnalyzingSession}
                 >
-                  {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  {isRecording ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
                 </Button>
                 <Button
                   type="submit"
                   disabled={!message.trim() || sendMessageMutation.isPending || isStreaming || isRecording || isTranscribing || isAnalyzingSession}
-                  className="bg-teal-600 hover:bg-teal-700 h-10 w-10 flex-shrink-0"
+                  className="bg-teal-600 hover:bg-teal-700 h-9 w-9 flex-shrink-0"
                   size="icon"
                 >
-                  {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {isStreaming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 </Button>
               </form>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Toggle buttons for panels */}
+      {!chatPanelOpen && (
+        <button
+          onClick={() => setChatPanelOpen(true)}
+          className="absolute top-3 right-3 z-30 flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg shadow-lg transition-colors text-xs font-medium"
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          Chat
+        </button>
+      )}
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="absolute top-3 left-3 z-30 flex items-center gap-1.5 px-3 py-2 bg-black/70 hover:bg-black/80 text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
+        >
+          <Clock className="h-3.5 w-3.5" />
+          History
+        </button>
+      )}
     </div>
   );
 }

@@ -82,7 +82,7 @@ import { pdfGenerator } from "@/services/pdfGenerator";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority } from "@/lib/muscleBiomechanicsEngine";
-import { KINETIC_CHAINS, type KineticChainDefinition } from "@/lib/kineticChainExplorer";
+import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
 
@@ -1357,6 +1357,21 @@ ${ddxList}`;
   const getEvidenceGradeColor = (grade: EvidenceGrade) => grade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : grade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : grade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
 
   const getIntegrityColor = (score: number) => score >= 80 ? '#22c55e' : score >= 60 ? '#eab308' : score >= 40 ? '#f97316' : '#ef4444';
+
+  const chainHighlightBones = useMemo(() => {
+    if (!selectedChainId) return undefined;
+    const chain = KINETIC_CHAINS.find(c => c.id === selectedChainId);
+    if (!chain) return undefined;
+    const colorHex = parseInt(chain.color.replace('#', ''), 16);
+    const boneNames = getChainBoneNames(selectedChainId, 'both');
+    const uniqueBones = [...new Set(boneNames)];
+    return uniqueBones.map(boneName => ({
+      boneName,
+      color: colorHex,
+      intensity: 0.7,
+      glowSize: boneName.includes('Root') || boneName.includes('Spine') || boneName.includes('Chest') ? 0.25 : 0.2,
+    }));
+  }, [selectedChainId]);
   const getIntegrityLabel = (score: number) => score >= 80 ? 'Good' : score >= 60 ? 'Fair' : score >= 40 ? 'Poor' : 'Critical';
   const getSeverityColor = (severity: 'mild' | 'moderate' | 'severe') => severity === 'severe' ? 'text-red-400' : severity === 'moderate' ? 'text-orange-400' : 'text-yellow-400';
 
@@ -1403,6 +1418,7 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
+              highlightBoneNames={chainHighlightBones}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
               painMarkers={painMarkers}
@@ -2345,6 +2361,18 @@ ${ddxList}`;
                                         <div className="flex-1 min-w-0">
                                           <span className={`text-[9px] truncate block ${isProblematic ? 'text-red-300' : 'text-white'}`}>{link.label}</span>
                                           <span className="text-[7px] text-gray-500">{link.region}</span>
+                                          {(() => {
+                                            const mapping = CHAIN_BONE_MAPPING[chain.id];
+                                            if (!mapping) return null;
+                                            const hasLeft = mapping.left.length > 0;
+                                            const hasRight = mapping.right.length > 0;
+                                            const isMidlineRegion = ['spine', 'head', 'neck', 'trunk', 'pelvis', 'core', 'chest', 'sacrum', 'lumbar', 'thoracic', 'cervical'].some(r => link.region.toLowerCase().includes(r));
+                                            if (isMidlineRegion) return <span className="text-[6px] text-purple-400/60 ml-1">M</span>;
+                                            if (hasLeft && hasRight) return <span className="text-[6px] text-blue-400/60 ml-1">L) R)</span>;
+                                            if (hasLeft) return <span className="text-[6px] text-blue-400/60 ml-1">L)</span>;
+                                            if (hasRight) return <span className="text-[6px] text-blue-400/60 ml-1">R)</span>;
+                                            return null;
+                                          })()}
                                         </div>
                                         {isProblematic && <AlertTriangle className="h-2.5 w-2.5 text-red-400 flex-shrink-0" />}
                                         <span className={`text-[6px] px-1 rounded ${link.role === 'primary' ? 'bg-white/10 text-gray-300' : 'bg-white/5 text-gray-500'}`}>

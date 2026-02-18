@@ -1093,6 +1093,12 @@ interface PureThreeGLBViewerProps {
     color: number;
     intensity: number;
   }>;
+  highlightBoneNames?: Array<{
+    boneName: string;
+    color: number;
+    intensity: number;
+    glowSize?: number;
+  }>;
   painMarkers?: PainMarker[];
   onPainMarkerAdd?: (marker: PainMarker) => void;
   onPainMarkerMove?: (id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => void;
@@ -1491,6 +1497,7 @@ export default function PureThreeGLBViewer({
   onMuscleGroupsReady,
   muscleStates,
   highlightRegions,
+  highlightBoneNames,
   painMarkers = [],
   onPainMarkerAdd,
   onPainMarkerMove,
@@ -1533,6 +1540,7 @@ export default function PureThreeGLBViewer({
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
+  const chainHighlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
   const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh; hasMoved: boolean } | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -2057,6 +2065,73 @@ export default function PureThreeGLBViewer({
       }
     }
   }, [highlightRegions]);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene, model } = sceneRef.current;
+
+    chainHighlightOverlaysRef.current.forEach((overlay) => {
+      scene.remove(overlay);
+      overlay.geometry.dispose();
+      if (overlay.material instanceof THREE.Material) overlay.material.dispose();
+    });
+    chainHighlightOverlaysRef.current = [];
+
+    if (!highlightBoneNames || highlightBoneNames.length === 0 || !model) return;
+
+    model.updateMatrixWorld(true);
+
+    const bones: Record<string, THREE.Object3D> = {};
+    model.traverse((child) => {
+      if ((child as any).isBone || child instanceof THREE.Bone) {
+        bones[child.name] = child;
+      }
+    });
+
+    for (const highlight of highlightBoneNames) {
+      const bone = bones[highlight.boneName];
+      if (!bone) continue;
+
+      const worldPos = new THREE.Vector3();
+      bone.getWorldPosition(worldPos);
+
+      const glowSize = highlight.glowSize || 0.2;
+      const color = new THREE.Color(highlight.color);
+      const intensity = Math.max(highlight.intensity, 0.5);
+
+      const geo = new THREE.SphereGeometry(glowSize, 16, 12);
+      const mat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: intensity * 0.5,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.DoubleSide,
+      });
+      const glowMesh = new THREE.Mesh(geo, mat);
+      glowMesh.position.copy(worldPos);
+      glowMesh.renderOrder = 997;
+      glowMesh.userData.isChainHighlight = true;
+      scene.add(glowMesh);
+      chainHighlightOverlaysRef.current.push(glowMesh);
+
+      const outerGeo = new THREE.SphereGeometry(glowSize * 1.8, 12, 8);
+      const outerMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: intensity * 0.15,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.DoubleSide,
+      });
+      const outerGlow = new THREE.Mesh(outerGeo, outerMat);
+      outerGlow.position.copy(worldPos);
+      outerGlow.renderOrder = 996;
+      outerGlow.userData.isChainHighlight = true;
+      scene.add(outerGlow);
+      chainHighlightOverlaysRef.current.push(outerGlow);
+    }
+  }, [highlightBoneNames]);
 
   useEffect(() => {
     if (!sceneRef.current) return;

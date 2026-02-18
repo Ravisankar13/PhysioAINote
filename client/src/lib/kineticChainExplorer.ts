@@ -274,6 +274,68 @@ export const KINETIC_CHAINS: KineticChainDefinition[] = [
   },
 ];
 
+export const CHAIN_BONE_MAPPING: Record<string, { left: string[]; right: string[]; midline: string[] }> = {
+  posterior_chain: {
+    left: ['Ankle_L', 'Toes_L', 'Knee_L', 'Hip_L', 'HipPart1_L'],
+    right: ['Ankle_R', 'Toes_R', 'Knee_R', 'Hip_R', 'HipPart1_R'],
+    midline: ['Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Spine1Part2_M', 'Chest_M', 'Neck_M', 'NeckPart1_M', 'NeckPart2_M', 'Head_M'],
+  },
+  anterior_chain: {
+    left: ['Toes_L', 'Ankle_L', 'Knee_L', 'Hip_L', 'HipPart1_L'],
+    right: ['Toes_R', 'Ankle_R', 'Knee_R', 'Hip_R', 'HipPart1_R'],
+    midline: ['Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Chest_M', 'Neck_M', 'NeckPart1_M', 'NeckPart2_M'],
+  },
+  lateral_chain: {
+    left: ['Ankle_L', 'Knee_L', 'Hip_L', 'HipPart1_L', 'Shoulder_L'],
+    right: ['Ankle_R', 'Knee_R', 'Hip_R', 'HipPart1_R', 'Shoulder_R'],
+    midline: ['Root_M', 'RootPart1_M', 'Spine1_M', 'Chest_M', 'Neck_M', 'NeckPart1_M'],
+  },
+  spiral_chain: {
+    left: ['Ankle_L', 'Toes_L', 'Knee_L', 'Hip_L', 'HipPart1_L', 'Shoulder_L', 'ShoulderPart1_L'],
+    right: ['Ankle_R', 'Toes_R', 'Knee_R', 'Hip_R', 'HipPart1_R', 'Shoulder_R', 'ShoulderPart1_R'],
+    midline: ['Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Chest_M', 'Neck_M', 'NeckPart1_M', 'NeckPart2_M'],
+  },
+  deep_longitudinal: {
+    left: ['Ankle_L', 'Knee_L', 'Hip_L', 'HipPart1_L'],
+    right: ['Ankle_R', 'Knee_R', 'Hip_R', 'HipPart1_R'],
+    midline: ['Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Spine1Part2_M', 'Chest_M', 'Neck_M', 'NeckPart1_M', 'NeckPart2_M'],
+  },
+  posterior_oblique_sling: {
+    left: ['Hip_L', 'HipPart1_L', 'Shoulder_R', 'ShoulderPart1_R', 'Elbow_R'],
+    right: ['Hip_R', 'HipPart1_R', 'Shoulder_L', 'ShoulderPart1_L', 'Elbow_L'],
+    midline: ['Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Spine1Part2_M', 'Chest_M'],
+  },
+  anterior_oblique_sling: {
+    left: ['Hip_L', 'HipPart1_L', 'Shoulder_R'],
+    right: ['Hip_R', 'HipPart1_R', 'Shoulder_L'],
+    midline: ['Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Chest_M'],
+  },
+  lateral_subsystem: {
+    left: ['Hip_L', 'HipPart1_L', 'Knee_L'],
+    right: ['Hip_R', 'HipPart1_R', 'Knee_R'],
+    midline: ['Root_M', 'RootPart1_M', 'Spine1_M'],
+  },
+  upper_extremity_chain: {
+    left: ['Shoulder_L', 'ShoulderPart1_L', 'Elbow_L', 'ElbowPart1_L', 'Wrist_L'],
+    right: ['Shoulder_R', 'ShoulderPart1_R', 'Elbow_R', 'ElbowPart1_R', 'Wrist_R'],
+    midline: ['Chest_M', 'Spine1Part2_M', 'Spine1Part1_M', 'Spine1_M'],
+  },
+  lower_extremity_chain: {
+    left: ['Toes_L', 'Ankle_L', 'Knee_L', 'Hip_L', 'HipPart1_L'],
+    right: ['Toes_R', 'Ankle_R', 'Knee_R', 'Hip_R', 'HipPart1_R'],
+    midline: ['Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M'],
+  },
+};
+
+export function getChainBoneNames(chainId: string, side?: 'left' | 'right' | 'both'): string[] {
+  const mapping = CHAIN_BONE_MAPPING[chainId];
+  if (!mapping) return [];
+  const s = side || 'both';
+  if (s === 'left') return [...mapping.left, ...mapping.midline];
+  if (s === 'right') return [...mapping.right, ...mapping.midline];
+  return [...mapping.left, ...mapping.right, ...mapping.midline];
+}
+
 export function getChainById(id: string): KineticChainDefinition | undefined {
   return KINETIC_CHAINS.find(c => c.id === id);
 }

@@ -84,6 +84,7 @@ import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWa
 import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority } from "@/lib/muscleBiomechanicsEngine";
 import { KINETIC_CHAINS, type KineticChainDefinition } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
+import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade } from "@/lib/treatmentPathwayEngine";
 
 const BODY_REGIONS = {
   cervical: {
@@ -402,6 +403,9 @@ export default function PhysioGPT() {
   const [correlationTab, setCorrelationTab] = useState<'overview' | 'chains' | 'muscles' | 'root_cause'>('overview');
   const [chainIntegrityMode, setChainIntegrityMode] = useState(false);
   const [expandedChainIntegrity, setExpandedChainIntegrity] = useState<string | null>(null);
+  const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment'>('chat');
+  const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
+  const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
   const skeletonContainerRef = useRef<HTMLDivElement>(null);
   const controllerSmootherRef = useRef(new ControllerSmoother(0.35, 0.015));
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
@@ -1313,6 +1317,31 @@ ${ddxList}`;
     }
     return scores;
   }, [modelConfig, chainExplorerMode, chainIntegrityMode]);
+
+  const treatmentPlan = useMemo(() => {
+    if (rightPanelTab !== 'treatment') return null;
+    const forces = calculatePosturalForces(modelConfig);
+    const muscles = computeFullMuscleAnalysis(modelConfig);
+    const corr = computeCrossSystemCorrelation({
+      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description })),
+      forces: forces.joints,
+      muscles: muscles.allMuscles,
+      muscleGroups: muscles.groups,
+      syndromes: muscles.syndromes,
+      kineticChains: KINETIC_CHAINS,
+      bodyWeightKg,
+    });
+    return generateTreatmentPlan({
+      correlationResult: corr,
+      muscles: muscles.allMuscles,
+      forces: forces.joints,
+      painMarkers: painMarkers.map(pm => ({ id: pm.id, label: pm.anatomicalLabel || pm.nearestBone, severity: (pm as any).severity ?? 5, region: '', type: pm.type })),
+      chainIntegrityScores,
+      bodyWeightKg,
+    });
+  }, [modelConfig, painMarkers, bodyWeightKg, rightPanelTab, chainIntegrityScores]);
+
+  const getEvidenceGradeColor = (grade: EvidenceGrade) => grade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : grade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : grade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
 
   const getIntegrityColor = (score: number) => score >= 80 ? '#22c55e' : score >= 60 ? '#eab308' : score >= 40 ? '#f97316' : '#ef4444';
   const getIntegrityLabel = (score: number) => score >= 80 ? 'Good' : score >= 60 ? 'Fair' : score >= 40 ? 'Poor' : 'Critical';
@@ -3389,20 +3418,378 @@ ${ddxList}`;
         </div>
       </div>
 
-      {/* Chat Panel - collapsible floating overlay inside skeleton */}
+      {/* Right Panel - Chat & Treatment tabs */}
       <div className={`absolute top-0 right-0 h-full z-30 transition-all duration-300 ${chatPanelOpen ? 'w-[380px]' : 'w-0'} overflow-hidden`}>
         <div className="w-[380px] h-full bg-white/95 backdrop-blur-md border-l border-gray-200 shadow-2xl flex flex-col">
-          <div className="flex items-center justify-between px-3 py-2 border-b bg-white">
-            <div className="flex items-center gap-2">
-              <div className="p-1 bg-gradient-to-br from-teal-500 to-teal-600 rounded">
-                <Bot className="h-3.5 w-3.5 text-white" />
-              </div>
-              <span className="font-semibold text-gray-800 text-xs">PhysioGPT Chat</span>
+          <div className="flex items-center justify-between px-2 py-1.5 border-b bg-white">
+            <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${rightPanelTab === 'chat' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setRightPanelTab('chat')}
+              >
+                <MessageCircle className="h-3 w-3" />
+                Chat
+              </button>
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${rightPanelTab === 'treatment' ? 'bg-white text-violet-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setRightPanelTab('treatment')}
+              >
+                <Stethoscope className="h-3 w-3" />
+                Treatment
+              </button>
             </div>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setChatPanelOpen(false)}>
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
+
+          {/* Treatment Panel */}
+          {rightPanelTab === 'treatment' && (
+            <ScrollArea className="flex-1">
+              <div className="p-3">
+                {treatmentPlan ? (
+                  <div className="space-y-3">
+                    {/* Clinical Reasoning Header */}
+                    <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-lg p-3 border border-violet-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="p-1 bg-violet-500 rounded">
+                          <Brain className="h-3.5 w-3.5 text-white" />
+                        </div>
+                        <span className="font-semibold text-violet-900 text-xs">Clinical Reasoning</span>
+                      </div>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">{treatmentPlan.clinicalReasoning.summary}</p>
+                      <div className="bg-white/70 rounded px-2 py-1.5 mb-2">
+                        <span className="text-[10px] font-semibold text-violet-800">Primary Diagnosis</span>
+                        <p className="text-[11px] text-gray-800 font-medium">{treatmentPlan.clinicalReasoning.primaryDiagnosis}</p>
+                      </div>
+                      {treatmentPlan.clinicalReasoning.differentials.length > 0 && (
+                        <div className="mb-2">
+                          <span className="text-[10px] font-semibold text-gray-600">Differential Diagnoses</span>
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {treatmentPlan.clinicalReasoning.differentials.map((d, i) => (
+                              <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-white/80 text-gray-600 border border-gray-200">{d}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <button className="text-[10px] text-violet-600 font-medium flex items-center gap-1" onClick={() => setExpandedTreatmentSection(prev => prev === 'findings' ? null : 'findings')}>
+                        <ChevronDown className={`h-2.5 w-2.5 transition-transform ${expandedTreatmentSection === 'findings' ? '' : '-rotate-90'}`} />
+                        Key Findings ({treatmentPlan.clinicalReasoning.keyFindings.length})
+                      </button>
+                      {expandedTreatmentSection === 'findings' && (
+                        <div className="mt-1 space-y-1 ml-3">
+                          {treatmentPlan.clinicalReasoning.keyFindings.map((kf, i) => (
+                            <div key={i} className="bg-white/60 rounded px-2 py-1 border-l-2 border-violet-300">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-violet-100 text-violet-600">{kf.source}</span>
+                                <span className="text-[10px] text-gray-800 font-medium">{kf.finding}</span>
+                              </div>
+                              <p className="text-[9px] text-gray-500 mt-0.5">{kf.significance}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <button className="text-[10px] text-violet-600 font-medium flex items-center gap-1 mt-1" onClick={() => setExpandedTreatmentSection(prev => prev === 'mechanism' ? null : 'mechanism')}>
+                        <ChevronDown className={`h-2.5 w-2.5 transition-transform ${expandedTreatmentSection === 'mechanism' ? '' : '-rotate-90'}`} />
+                        Mechanism & Prognosis
+                      </button>
+                      {expandedTreatmentSection === 'mechanism' && (
+                        <div className="mt-1 ml-3 space-y-1.5">
+                          <div className="bg-white/60 rounded px-2 py-1.5">
+                            <span className="text-[9px] font-semibold text-gray-600">Mechanism</span>
+                            <p className="text-[10px] text-gray-700 mt-0.5">{treatmentPlan.clinicalReasoning.mechanismOfInjury}</p>
+                          </div>
+                          <div className="bg-white/60 rounded px-2 py-1.5">
+                            <span className="text-[9px] font-semibold text-gray-600">Prognostic Factors</span>
+                            <div className="mt-0.5 space-y-0.5">
+                              {treatmentPlan.clinicalReasoning.prognosticFactors.map((pf, i) => (
+                                <div key={i} className="flex items-center gap-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${pf.impact === 'positive' ? 'bg-green-500' : pf.impact === 'negative' ? 'bg-red-500' : 'bg-gray-400'}`} />
+                                  <span className="text-[9px] text-gray-600">{pf.factor}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Timeline Overview */}
+                    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-gray-700">Expected Timeline</span>
+                        <span className="text-[10px] font-bold text-violet-600">{treatmentPlan.overallTimeline}</span>
+                      </div>
+                      <div className="flex gap-0.5 mt-1.5">
+                        {treatmentPlan.phases.map((p, i) => (
+                          <div key={i} className="flex-1">
+                            <div className={`h-1.5 rounded-full ${p.phase === 'acute' ? 'bg-red-400' : p.phase === 'subacute' ? 'bg-orange-400' : 'bg-green-400'}`} />
+                            <span className="text-[7px] text-gray-500 mt-0.5 block">{p.timeframe}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Phase Blocks */}
+                    {treatmentPlan.phases.map((phase) => {
+                      const isExpanded = expandedPhase === phase.phase;
+                      const phaseColor = phase.phase === 'acute' ? { bg: 'from-red-50 to-orange-50', border: 'border-red-200', text: 'text-red-800', badge: 'bg-red-100 text-red-700', icon: 'bg-red-500' } : phase.phase === 'subacute' ? { bg: 'from-orange-50 to-amber-50', border: 'border-orange-200', text: 'text-orange-800', badge: 'bg-orange-100 text-orange-700', icon: 'bg-orange-500' } : { bg: 'from-green-50 to-emerald-50', border: 'border-green-200', text: 'text-green-800', badge: 'bg-green-100 text-green-700', icon: 'bg-green-500' };
+                      return (
+                        <div key={phase.phase} className={`rounded-lg border ${phaseColor.border} overflow-hidden`}>
+                          <button
+                            className={`w-full flex items-center gap-2 px-3 py-2 bg-gradient-to-r ${phaseColor.bg} text-left`}
+                            onClick={() => setExpandedPhase(prev => prev === phase.phase ? null : phase.phase)}
+                          >
+                            <div className={`w-5 h-5 rounded-full ${phaseColor.icon} flex items-center justify-center`}>
+                              <span className="text-[8px] font-bold text-white">{phase.phase === 'acute' ? '1' : phase.phase === 'subacute' ? '2' : '3'}</span>
+                            </div>
+                            <div className="flex-1">
+                              <span className={`text-[11px] font-semibold ${phaseColor.text}`}>{phase.label}</span>
+                              <span className={`text-[9px] ml-2 px-1.5 py-0.5 rounded ${phaseColor.badge}`}>{phase.timeframe}</span>
+                            </div>
+                            <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                          </button>
+
+                          {isExpanded && (
+                            <div className="px-3 py-2 space-y-2 bg-white">
+                              {/* Goals */}
+                              <div>
+                                <span className="text-[10px] font-semibold text-gray-700 flex items-center gap-1"><Target className="h-2.5 w-2.5 text-teal-500" /> Goals</span>
+                                <div className="mt-0.5 space-y-0.5 ml-3.5">
+                                  {phase.goals.map((g, gi) => (
+                                    <div key={gi} className="flex items-start gap-1">
+                                      <Check className="h-2.5 w-2.5 text-teal-500 flex-shrink-0 mt-0.5" />
+                                      <span className="text-[9px] text-gray-600">{g}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Manual Therapy */}
+                              {phase.manualTherapy.length > 0 && (
+                                <div>
+                                  <button className="text-[10px] font-semibold text-gray-700 flex items-center gap-1 w-full text-left" onClick={() => setExpandedTreatmentSection(prev => prev === `mt_${phase.phase}` ? null : `mt_${phase.phase}`)}>
+                                    <Activity className="h-2.5 w-2.5 text-blue-500" />
+                                    Manual Therapy ({phase.manualTherapy.length})
+                                    <ChevronDown className={`h-2 w-2 ml-auto transition-transform ${expandedTreatmentSection === `mt_${phase.phase}` ? '' : '-rotate-90'}`} />
+                                  </button>
+                                  {expandedTreatmentSection === `mt_${phase.phase}` && (
+                                    <div className="mt-1 space-y-1.5 ml-3.5">
+                                      {phase.manualTherapy.map((mt, mi) => (
+                                        <div key={mi} className="bg-blue-50/50 rounded-lg px-2.5 py-2 border border-blue-100">
+                                          <div className="flex items-center gap-1 mb-1">
+                                            <span className="text-[10px] font-semibold text-blue-800">{mt.name}</span>
+                                            <span className={`text-[7px] px-1 py-0.5 rounded border ${getEvidenceGradeColor(mt.grade)}`}>Grade {mt.grade}</span>
+                                          </div>
+                                          <div className="text-[8px] text-blue-600 font-medium mb-0.5">Target: {mt.targetTissue}</div>
+                                          <p className="text-[9px] text-gray-600 mb-1">{mt.description}</p>
+                                          <div className="flex items-center gap-2 text-[8px]">
+                                            <span className="text-gray-500"><strong className="text-gray-700">Dosage:</strong> {mt.dosage}</span>
+                                          </div>
+                                          {mt.rationale && (
+                                            <div className="mt-1 pt-1 border-t border-blue-100">
+                                              <span className="text-[8px] text-violet-600 font-medium">Clinical Rationale: </span>
+                                              <span className="text-[8px] text-gray-500">{mt.rationale}</span>
+                                            </div>
+                                          )}
+                                          <div className="mt-1 pt-1 border-t border-blue-100">
+                                            <span className="text-[7px] text-gray-400">{mt.evidence.authors} ({mt.evidence.year}). {mt.evidence.title}. <em>{mt.evidence.journal}</em></span>
+                                          </div>
+                                          {mt.contraindications.length > 0 && (
+                                            <div className="mt-0.5 flex flex-wrap gap-0.5">
+                                              {mt.contraindications.map((c, ci) => (
+                                                <span key={ci} className="text-[7px] px-1 py-0.5 rounded bg-red-50 text-red-500 border border-red-100">CI: {c}</span>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Exercises */}
+                              {phase.exercises.length > 0 && (
+                                <div>
+                                  <button className="text-[10px] font-semibold text-gray-700 flex items-center gap-1 w-full text-left" onClick={() => setExpandedTreatmentSection(prev => prev === `ex_${phase.phase}` ? null : `ex_${phase.phase}`)}>
+                                    <Dumbbell className="h-2.5 w-2.5 text-emerald-500" />
+                                    Exercise Prescription ({phase.exercises.length})
+                                    <ChevronDown className={`h-2 w-2 ml-auto transition-transform ${expandedTreatmentSection === `ex_${phase.phase}` ? '' : '-rotate-90'}`} />
+                                  </button>
+                                  {expandedTreatmentSection === `ex_${phase.phase}` && (
+                                    <div className="mt-1 space-y-1.5 ml-3.5">
+                                      {phase.exercises.map((ex, ei) => (
+                                        <div key={ei} className="bg-emerald-50/50 rounded-lg px-2.5 py-2 border border-emerald-100">
+                                          <div className="flex items-center gap-1 mb-1">
+                                            <span className="text-[10px] font-semibold text-emerald-800">{ex.name}</span>
+                                            <span className={`text-[7px] px-1 py-0.5 rounded border ${getEvidenceGradeColor(ex.grade)}`}>Grade {ex.grade}</span>
+                                          </div>
+                                          <div className="flex items-center gap-2 text-[8px] mb-0.5">
+                                            <span className="px-1 py-0.5 rounded bg-emerald-100 text-emerald-700">{ex.type}</span>
+                                            <span className="text-gray-500">for {ex.targetMuscle} ({ex.muscleIssue})</span>
+                                          </div>
+                                          <div className="grid grid-cols-4 gap-1 my-1">
+                                            <div className="bg-white rounded px-1.5 py-1 text-center border border-emerald-100">
+                                              <div className="text-[7px] text-gray-400">Sets</div>
+                                              <div className="text-[9px] font-bold text-gray-800">{ex.sets}</div>
+                                            </div>
+                                            <div className="bg-white rounded px-1.5 py-1 text-center border border-emerald-100">
+                                              <div className="text-[7px] text-gray-400">Reps</div>
+                                              <div className="text-[9px] font-bold text-gray-800">{ex.reps}</div>
+                                            </div>
+                                            <div className="bg-white rounded px-1.5 py-1 text-center border border-emerald-100">
+                                              <div className="text-[7px] text-gray-400">Hold</div>
+                                              <div className="text-[9px] font-bold text-gray-800">{ex.hold}</div>
+                                            </div>
+                                            <div className="bg-white rounded px-1.5 py-1 text-center border border-emerald-100">
+                                              <div className="text-[7px] text-gray-400">Freq</div>
+                                              <div className="text-[9px] font-bold text-gray-800">{ex.frequency}</div>
+                                            </div>
+                                          </div>
+                                          <div className="text-[8px] text-gray-500">
+                                            <strong className="text-gray-700">Progression:</strong> {ex.progression}
+                                          </div>
+                                          {ex.rationale && (
+                                            <div className="mt-1 pt-1 border-t border-emerald-100">
+                                              <span className="text-[8px] text-violet-600 font-medium">Clinical Rationale: </span>
+                                              <span className="text-[8px] text-gray-500">{ex.rationale}</span>
+                                            </div>
+                                          )}
+                                          <div className="mt-1 pt-1 border-t border-emerald-100">
+                                            <span className="text-[7px] text-gray-400">{ex.evidence.authors} ({ex.evidence.year}). <em>{ex.evidence.journal}</em></span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Milestones */}
+                              {phase.milestones.length > 0 && (
+                                <div>
+                                  <button className="text-[10px] font-semibold text-gray-700 flex items-center gap-1 w-full text-left" onClick={() => setExpandedTreatmentSection(prev => prev === `ms_${phase.phase}` ? null : `ms_${phase.phase}`)}>
+                                    <TrendingUp className="h-2.5 w-2.5 text-violet-500" />
+                                    Recovery Milestones ({phase.milestones.length})
+                                    <ChevronDown className={`h-2 w-2 ml-auto transition-transform ${expandedTreatmentSection === `ms_${phase.phase}` ? '' : '-rotate-90'}`} />
+                                  </button>
+                                  {expandedTreatmentSection === `ms_${phase.phase}` && (
+                                    <div className="mt-1 space-y-1.5 ml-3.5">
+                                      {phase.milestones.map((ms, msi) => (
+                                        <div key={msi} className="bg-violet-50/50 rounded-lg px-2.5 py-2 border border-violet-100">
+                                          <div className="flex items-center gap-1.5">
+                                            <div className="w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center">
+                                              <span className="text-[8px] font-bold text-white">W{ms.week}</span>
+                                            </div>
+                                            <span className="text-[10px] font-semibold text-violet-800">{ms.title}</span>
+                                          </div>
+                                          <div className="mt-1 ml-6.5">
+                                            <span className="text-[8px] font-medium text-gray-600">Criteria:</span>
+                                            <div className="space-y-0.5 mt-0.5">
+                                              {ms.criteria.map((c, ci) => (
+                                                <div key={ci} className="flex items-start gap-1 text-[8px] text-gray-500">
+                                                  <Check className="h-2 w-2 text-violet-400 flex-shrink-0 mt-0.5" />
+                                                  {c}
+                                                </div>
+                                              ))}
+                                            </div>
+                                            <span className="text-[8px] font-medium text-gray-600 mt-1 block">Expected Outcomes:</span>
+                                            <div className="space-y-0.5 mt-0.5">
+                                              {ms.expectedOutcomes.map((eo, eoi) => (
+                                                <div key={eoi} className="flex items-start gap-1 text-[8px] text-gray-500">
+                                                  <TrendingUp className="h-2 w-2 text-green-400 flex-shrink-0 mt-0.5" />
+                                                  {eo}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Precautions */}
+                              {phase.precautions.length > 0 && (
+                                <div className="bg-amber-50/50 rounded px-2 py-1.5 border border-amber-100">
+                                  <span className="text-[9px] font-semibold text-amber-700 flex items-center gap-1"><AlertTriangle className="h-2.5 w-2.5" /> Precautions</span>
+                                  <div className="mt-0.5 space-y-0.5 ml-3.5">
+                                    {phase.precautions.map((pc, pci) => (
+                                      <div key={pci} className="text-[8px] text-amber-600">{pc}</div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Red Flags */}
+                    <div className="bg-red-50 rounded-lg px-3 py-2 border border-red-200">
+                      <button className="text-[10px] font-semibold text-red-700 flex items-center gap-1 w-full text-left" onClick={() => setExpandedTreatmentSection(prev => prev === 'redflags' ? null : 'redflags')}>
+                        <AlertTriangle className="h-3 w-3 text-red-500" />
+                        Red Flags — Screen & Monitor
+                        <ChevronDown className={`h-2.5 w-2.5 ml-auto transition-transform ${expandedTreatmentSection === 'redflags' ? '' : '-rotate-90'}`} />
+                      </button>
+                      {expandedTreatmentSection === 'redflags' && (
+                        <div className="mt-1 space-y-0.5 ml-4">
+                          {treatmentPlan.redFlags.map((rf, rfi) => (
+                            <div key={rfi} className="flex items-start gap-1 text-[9px] text-red-600">
+                              <span className="text-red-400 flex-shrink-0">!</span>
+                              {rf}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Outcome Measures */}
+                    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                      <button className="text-[10px] font-semibold text-gray-700 flex items-center gap-1 w-full text-left" onClick={() => setExpandedTreatmentSection(prev => prev === 'outcomes' ? null : 'outcomes')}>
+                        <Scale className="h-2.5 w-2.5 text-gray-500" />
+                        Outcome Measures
+                        <ChevronDown className={`h-2.5 w-2.5 ml-auto transition-transform ${expandedTreatmentSection === 'outcomes' ? '' : '-rotate-90'}`} />
+                      </button>
+                      {expandedTreatmentSection === 'outcomes' && (
+                        <div className="mt-1 space-y-0.5 ml-3.5">
+                          {treatmentPlan.outcomesMeasures.map((om, omi) => (
+                            <div key={omi} className="flex items-start gap-1 text-[9px] text-gray-600">
+                              <Check className="h-2.5 w-2.5 text-teal-400 flex-shrink-0 mt-0.5" />
+                              {om}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-center text-[8px] text-gray-400 pt-2 pb-1">
+                      Auto-updates with posture, pain markers, and muscle changes
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center min-h-[400px]">
+                    <div className="text-center max-w-xs mx-auto">
+                      <div className="w-14 h-14 mx-auto bg-gradient-to-br from-violet-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg mb-4">
+                        <Stethoscope className="h-7 w-7 text-white" />
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-800 mb-1">Treatment Pathway</h3>
+                      <p className="text-sm text-gray-500 mb-4">Evidence-based treatment plans that adapt to your clinical findings in real-time.</p>
+                      <p className="text-xs text-gray-400">Loading treatment analysis...</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          )}
+
+          {/* Chat Panel Content */}
+          {rightPanelTab === 'chat' && (
           <ScrollArea className="flex-1">
             <div className="p-3">
               {!selectedConversationId && !isStreaming ? (
@@ -3834,6 +4221,7 @@ ${ddxList}`;
               </form>
             </div>
           </div>
+          )}
         </div>
       </div>
 

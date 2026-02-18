@@ -4571,19 +4571,28 @@ export default function PureThreeGLBViewer({
       const state = muscleStates[groupId];
       if (!state) return;
 
-      const color = getMuscleColor(state);
+      const hasIssue = state.state !== 'neutral' ||
+        state.tension > 50 || state.activationPercent > 60;
 
       group.meshes.forEach((mesh) => {
         if (mesh instanceof THREE.SkinnedMesh || mesh instanceof THREE.Mesh) {
           if (!originalMaterialsRef.current.has(mesh)) {
             originalMaterialsRef.current.set(mesh, (mesh.material as THREE.Material).clone());
           }
-          const mat = mesh.material as THREE.MeshStandardMaterial;
-          if (mat.color) {
-            mat.color.setRGB(color.r, color.g, color.b);
-            mat.emissive?.setRGB(color.r * 0.15, color.g * 0.15, color.b * 0.15);
-            mat.needsUpdate = true;
+          if (!hasIssue) {
+            const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
+            if (orig) {
+              mesh.material = orig.clone();
+            }
+            return;
           }
+          const color = getMuscleColor(state);
+          const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
+          const mat = orig ? orig.clone() as THREE.MeshStandardMaterial : (mesh.material as THREE.MeshStandardMaterial);
+          mat.color.setRGB(color.r, color.g, color.b);
+          if (mat.emissive) mat.emissive.setRGB(color.r * 0.15, color.g * 0.15, color.b * 0.15);
+          mat.needsUpdate = true;
+          mesh.material = mat;
         }
       });
     });

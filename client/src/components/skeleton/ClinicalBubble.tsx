@@ -65,6 +65,7 @@ interface ClinicalBubbleProps {
   onClearConnectionHighlights?: () => void;
   onConnectionClick?: (region: AnatomicalRegion, label: string) => void;
   onTestChain?: (connection: KineticChainConnection, region: string) => void;
+  onDataLoaded?: (markerId: string, data: ClinicalBubbleData, severity: string) => void;
 }
 
 type TabType = "ddx" | "questions" | "assessment" | "treatment" | "exercises";
@@ -90,6 +91,7 @@ export default function ClinicalBubble({
   onClearConnectionHighlights,
   onConnectionClick,
   onTestChain,
+  onDataLoaded,
 }: ClinicalBubbleProps) {
   const [activeTab, setActiveTab] = useState<TabType>("ddx");
   const [data, setData] = useState<ClinicalBubbleData | null>(null);
@@ -138,6 +140,7 @@ export default function ClinicalBubble({
 
       const result = await response.json();
       setData(result);
+      onDataLoaded?.(markerId, result, severity);
     } catch (err: any) {
       setError(err.message || "Failed to analyze");
     } finally {

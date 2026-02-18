@@ -49,6 +49,30 @@ export interface RecoveryMilestone {
   expectedOutcomes: string[];
 }
 
+export interface AITreatmentItem {
+  name: string;
+  description: string;
+  frequency?: string;
+  sourceRegion: string;
+  sourceSeverity: string;
+}
+
+export interface AIExerciseItem {
+  name: string;
+  description: string;
+  sets?: string;
+  reps?: string;
+  sourceRegion: string;
+  sourceSeverity: string;
+}
+
+export interface AIAssessmentItem {
+  test: string;
+  purpose: string;
+  technique?: string;
+  sourceRegion: string;
+}
+
 export interface PhaseBlock {
   phase: TreatmentPhase;
   label: string;
@@ -58,12 +82,23 @@ export interface PhaseBlock {
   exercises: ExercisePrescription[];
   milestones: RecoveryMilestone[];
   precautions: string[];
+  aiTreatments: AITreatmentItem[];
+  aiExercises: AIExerciseItem[];
+  aiAssessments: AIAssessmentItem[];
+}
+
+export interface AIDifferential {
+  name: string;
+  likelihood: string;
+  reasoning: string;
+  sourceRegion: string;
 }
 
 export interface ClinicalReasoning {
   summary: string;
   primaryDiagnosis: string;
   differentials: string[];
+  aiDifferentials: AIDifferential[];
   keyFindings: { finding: string; significance: string; source: string }[];
   mechanismOfInjury: string;
   prognosticFactors: { factor: string; impact: 'positive' | 'negative' | 'neutral' }[];
@@ -77,6 +112,17 @@ export interface TreatmentPlan {
   outcomesMeasures: string[];
 }
 
+export interface ClinicalBubbleAIData {
+  markerId: string;
+  region: string;
+  severity: string;
+  differentials: { name: string; likelihood: string; reasoning: string }[];
+  treatments: { name: string; description: string; frequency?: string }[];
+  exercises: { name: string; description: string; sets?: string; reps?: string }[];
+  assessments: { test: string; purpose: string; technique?: string }[];
+  redFlags: string[];
+}
+
 export interface TreatmentInput {
   correlationResult: CrossSystemCorrelationResult | null;
   muscles: IndividualMuscle[];
@@ -84,6 +130,7 @@ export interface TreatmentInput {
   painMarkers: { id: string; label: string; severity: number; region: string; type: string }[];
   chainIntegrityScores: Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>;
   bodyWeightKg: number;
+  clinicalBubbleData?: ClinicalBubbleAIData[];
 }
 
 const EVIDENCE_DB: Record<string, EvidenceReference[]> = {
@@ -396,11 +443,34 @@ function buildClinicalReasoning(input: TreatmentInput): ClinicalReasoning {
   if (painMarkers.length <= 1) prognosticFactors.push({ factor: 'Localized complaint — targeted treatment likely effective', impact: 'positive' });
   prognosticFactors.push({ factor: 'Active engagement in exercise program', impact: 'positive' });
 
+  const aiDifferentials: AIDifferential[] = [];
+  if (input.clinicalBubbleData && input.clinicalBubbleData.length > 0) {
+    for (const cbd of input.clinicalBubbleData) {
+      for (const diff of cbd.differentials) {
+        if (!aiDifferentials.some(d => d.name === diff.name)) {
+          aiDifferentials.push({ name: diff.name, likelihood: diff.likelihood, reasoning: diff.reasoning, sourceRegion: cbd.region });
+        }
+      }
+      for (const rf of cbd.redFlags) {
+        keyFindings.push({ finding: rf, significance: 'AI-identified red flag requiring screening', source: `AI Clinical Bubble (${cbd.region})` });
+      }
+    }
+    const hasBubbleData = input.clinicalBubbleData.length > 0;
+    if (hasBubbleData) {
+      prognosticFactors.push({ factor: `AI clinical analysis available for ${input.clinicalBubbleData.length} pain region(s) — enhanced diagnostic precision`, impact: 'positive' });
+    }
+  }
+
+  const aiEnhancedSummary = aiDifferentials.length > 0
+    ? ` AI clinical bubble analysis identified ${aiDifferentials.length} differential diagnoses across ${input.clinicalBubbleData?.length || 0} assessed region(s).`
+    : '';
+
   return {
-    summary: `Clinical assessment reveals ${painMarkers.length > 0 ? `${painMarkers.length} pain region(s)` : 'postural dysfunction'} with ${abnormalMuscles.length} muscles showing clinical abnormalities and ${highForces.length} joints under elevated loading. ${correlationResult?.globalCompensations.length ? `${correlationResult.globalCompensations.length} compensation pattern(s) identified.` : ''} Root cause analysis suggests ${mechanism.substring(0, 200)}.`,
+    summary: `Clinical assessment reveals ${painMarkers.length > 0 ? `${painMarkers.length} pain region(s)` : 'postural dysfunction'} with ${abnormalMuscles.length} muscles showing clinical abnormalities and ${highForces.length} joints under elevated loading. ${correlationResult?.globalCompensations.length ? `${correlationResult.globalCompensations.length} compensation pattern(s) identified.` : ''} Root cause analysis suggests ${mechanism.substring(0, 200)}.${aiEnhancedSummary}`,
     primaryDiagnosis,
     differentials,
-    keyFindings: keyFindings.slice(0, 12),
+    aiDifferentials,
+    keyFindings: keyFindings.slice(0, 16),
     mechanismOfInjury: mechanism,
     prognosticFactors,
   };
@@ -484,6 +554,38 @@ export function generateTreatmentPlan(input: TreatmentInput): TreatmentPlan {
   const painSeverity = input.painMarkers.length > 0 ? Math.max(...input.painMarkers.map(pm => pm.severity)) : 3;
   const riskScore = input.correlationResult?.overallRiskScore || 0;
 
+  const aiTreatmentsAcute: AITreatmentItem[] = [];
+  const aiTreatmentsSubacute: AITreatmentItem[] = [];
+  const aiExercisesAcute: AIExerciseItem[] = [];
+  const aiExercisesSubacute: AIExerciseItem[] = [];
+  const aiExercisesMaintenance: AIExerciseItem[] = [];
+  const aiAssessments: AIAssessmentItem[] = [];
+  const aiRedFlags: string[] = [];
+
+  if (input.clinicalBubbleData) {
+    for (const cbd of input.clinicalBubbleData) {
+      for (const tx of cbd.treatments) {
+        const item: AITreatmentItem = { name: tx.name, description: tx.description, frequency: tx.frequency, sourceRegion: cbd.region, sourceSeverity: cbd.severity };
+        aiTreatmentsAcute.push(item);
+        aiTreatmentsSubacute.push(item);
+      }
+      for (const ex of cbd.exercises) {
+        const item: AIExerciseItem = { name: ex.name, description: ex.description, sets: ex.sets, reps: ex.reps, sourceRegion: cbd.region, sourceSeverity: cbd.severity };
+        aiExercisesAcute.push(item);
+        aiExercisesSubacute.push(item);
+        aiExercisesMaintenance.push(item);
+      }
+      for (const asmt of cbd.assessments) {
+        if (!aiAssessments.some(a => a.test === asmt.test)) {
+          aiAssessments.push({ test: asmt.test, purpose: asmt.purpose, technique: asmt.technique, sourceRegion: cbd.region });
+        }
+      }
+      for (const rf of cbd.redFlags) {
+        if (!aiRedFlags.includes(rf)) aiRedFlags.push(rf);
+      }
+    }
+  }
+
   phases.push({
     phase: 'acute',
     label: 'Phase 1: Acute Management',
@@ -497,6 +599,9 @@ export function generateTreatmentPlan(input: TreatmentInput): TreatmentPlan {
     ],
     manualTherapy: acuteManual.slice(0, 6),
     exercises: acuteExercises.slice(0, 8),
+    aiTreatments: aiTreatmentsAcute,
+    aiExercises: aiExercisesAcute,
+    aiAssessments,
     milestones: [
       { week: 1, phase: 'acute', title: 'Initial Response', criteria: ['Pain reduced by 20-30% from baseline', 'Able to perform basic ADLs with modified activities', 'Understanding of diagnosis and management plan'], expectedOutcomes: ['Reduced resting pain', 'Improved sleep quality', 'Compliance with home exercise program'] },
       { week: painSeverity >= 7 ? 3 : 2, phase: 'acute', title: 'Acute Phase Completion', criteria: ['Pain at rest < 3/10', 'ROM within 80% of expected', 'Able to perform all Phase 1 exercises correctly'], expectedOutcomes: ['Resolved muscle spasm', 'Basic motor control established', 'Ready for progressive loading'] },
@@ -522,6 +627,9 @@ export function generateTreatmentPlan(input: TreatmentInput): TreatmentPlan {
     ],
     manualTherapy: subacuteManual.slice(0, 5),
     exercises: subacuteExercises.slice(0, 10),
+    aiTreatments: aiTreatmentsSubacute,
+    aiExercises: aiExercisesSubacute,
+    aiAssessments: [],
     milestones: [
       { week: painSeverity >= 7 ? 5 : 4, phase: 'subacute', title: 'Mid-Phase Check', criteria: ['Pain during activity < 3/10', 'ROM within 90% of expected', 'Able to perform loaded exercises with correct form'], expectedOutcomes: ['Measurable strength improvement', 'Improved postural alignment', 'Reduced compensation patterns'] },
       { week: painSeverity >= 7 ? 8 : 6, phase: 'subacute', title: 'Restoration Complete', criteria: ['Full pain-free ROM', 'Strength within 80% of contralateral/expected', 'Normal movement patterns during functional tasks', 'Resolved compensation patterns'], expectedOutcomes: ['Functional capacity restored', 'Able to tolerate sustained activities', 'Independent with full exercise program'] },
@@ -546,6 +654,9 @@ export function generateTreatmentPlan(input: TreatmentInput): TreatmentPlan {
     ],
     manualTherapy: [],
     exercises: maintenanceExercises.slice(0, 8),
+    aiTreatments: [],
+    aiExercises: aiExercisesMaintenance,
+    aiAssessments: [],
     milestones: [
       { week: painSeverity >= 7 ? 10 : 8, phase: 'maintenance', title: 'Functional Return', criteria: ['Pain-free during all activities', 'Full strength and endurance', 'Normal biomechanics under load', 'Confident with self-management'], expectedOutcomes: ['Full return to activities', 'Independent exercise maintenance', 'Understanding of prevention strategies'] },
       { week: painSeverity >= 7 ? 12 : 10, phase: 'maintenance', title: 'Discharge', criteria: ['All functional goals met', 'Independent with maintenance program', 'No recurrence of symptoms for 2+ weeks'], expectedOutcomes: ['Discharged with home program', 'Follow-up PRN or at 3 months', 'Long-term self-management'] },
@@ -565,6 +676,12 @@ export function generateTreatmentPlan(input: TreatmentInput): TreatmentPlan {
     'History of cancer with new onset pain',
     'Signs of vertebral artery insufficiency (5D\'s: dizziness, diplopia, dysarthria, dysphagia, drop attacks)',
   ];
+
+  for (const rf of aiRedFlags) {
+    if (!redFlags.some(existing => existing.toLowerCase() === rf.toLowerCase())) {
+      redFlags.push(`[AI] ${rf}`);
+    }
+  }
 
   const outcomesMeasures = [
     'Numeric Pain Rating Scale (NPRS) — target 50% reduction by Phase 2',

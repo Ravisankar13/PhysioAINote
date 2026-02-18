@@ -84,7 +84,7 @@ import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWa
 import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority } from "@/lib/muscleBiomechanicsEngine";
 import { KINETIC_CHAINS, type KineticChainDefinition } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
-import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade } from "@/lib/treatmentPathwayEngine";
+import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential } from "@/lib/treatmentPathwayEngine";
 
 const BODY_REGIONS = {
   cervical: {
@@ -394,6 +394,7 @@ export default function PhysioGPT() {
   const [shoulderAssessmentSide, setShoulderAssessmentSide] = useState<'left' | 'right'>('right');
   const [clinicalBubbleMarker, setClinicalBubbleMarker] = useState<PainMarker | null>(null);
   const [clinicalBubbleSeverity, setClinicalBubbleSeverity] = useState<string>("moderate");
+  const [clinicalBubbleResults, setClinicalBubbleResults] = useState<Record<string, { data: ClinicalBubbleData; severity: string; region: string }>>({});
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
@@ -1331,6 +1332,17 @@ ${ddxList}`;
       kineticChains: KINETIC_CHAINS,
       bodyWeightKg,
     });
+    const clinicalBubbleDataArr = Object.entries(clinicalBubbleResults).map(([markerId, entry]) => ({
+      markerId,
+      region: entry.region,
+      severity: entry.severity,
+      differentials: entry.data.differentials || [],
+      treatments: entry.data.treatments || [],
+      exercises: entry.data.exercises || [],
+      assessments: entry.data.assessment || [],
+      redFlags: entry.data.redFlags || [],
+    }));
+
     return generateTreatmentPlan({
       correlationResult: corr,
       muscles: muscles.allMuscles,
@@ -1338,8 +1350,9 @@ ${ddxList}`;
       painMarkers: painMarkers.map(pm => ({ id: pm.id, label: pm.anatomicalLabel || pm.nearestBone, severity: (pm as any).severity ?? 5, region: '', type: pm.type })),
       chainIntegrityScores,
       bodyWeightKg,
+      clinicalBubbleData: clinicalBubbleDataArr.length > 0 ? clinicalBubbleDataArr : undefined,
     });
-  }, [modelConfig, painMarkers, bodyWeightKg, rightPanelTab, chainIntegrityScores]);
+  }, [modelConfig, painMarkers, bodyWeightKg, rightPanelTab, chainIntegrityScores, clinicalBubbleResults]);
 
   const getEvidenceGradeColor = (grade: EvidenceGrade) => grade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : grade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : grade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
 
@@ -2876,6 +2889,13 @@ ${ddxList}`;
                 onDeepDive={handleClinicalBubbleDeepDive}
                 severity={clinicalBubbleSeverity}
                 onSeverityChange={setClinicalBubbleSeverity}
+                onDataLoaded={(mId, bubbleData, sev) => {
+                  const marker = painMarkers.find(m => m.id === mId);
+                  setClinicalBubbleResults(prev => ({
+                    ...prev,
+                    [mId]: { data: bubbleData, severity: sev, region: marker?.anatomicalLabel || marker?.nearestBone || '' }
+                  }));
+                }}
                 onHighlightConnections={(regions) => setConnectionHighlights(regions)}
                 onClearConnectionHighlights={() => setConnectionHighlights([])}
                 onConnectionClick={(connRegion, label) => {
@@ -3473,6 +3493,30 @@ ${ddxList}`;
                         </div>
                       )}
 
+                      {treatmentPlan.clinicalReasoning.aiDifferentials.length > 0 && (
+                        <div className="mb-2">
+                          <button className="text-[10px] text-amber-600 font-medium flex items-center gap-1" onClick={() => setExpandedTreatmentSection(prev => prev === 'ai_ddx' ? null : 'ai_ddx')}>
+                            <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+                            AI Differential Diagnoses ({treatmentPlan.clinicalReasoning.aiDifferentials.length})
+                            <ChevronDown className={`h-2 w-2 ml-1 transition-transform ${expandedTreatmentSection === 'ai_ddx' ? '' : '-rotate-90'}`} />
+                          </button>
+                          {expandedTreatmentSection === 'ai_ddx' && (
+                            <div className="mt-1 space-y-1 ml-3">
+                              {treatmentPlan.clinicalReasoning.aiDifferentials.map((ad, i) => (
+                                <div key={i} className="bg-amber-50/60 rounded px-2 py-1.5 border-l-2 border-amber-400">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-semibold text-amber-800">{ad.name}</span>
+                                    <span className={`text-[7px] px-1 py-0.5 rounded ${ad.likelihood === 'high' ? 'bg-red-100 text-red-600' : ad.likelihood === 'moderate' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-600'}`}>{ad.likelihood}</span>
+                                  </div>
+                                  <p className="text-[8px] text-gray-600 mt-0.5">{ad.reasoning}</p>
+                                  <span className="text-[7px] text-amber-500 mt-0.5 block">Source: AI Clinical Bubble — {ad.sourceRegion}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <button className="text-[10px] text-violet-600 font-medium flex items-center gap-1" onClick={() => setExpandedTreatmentSection(prev => prev === 'findings' ? null : 'findings')}>
                         <ChevronDown className={`h-2.5 w-2.5 transition-transform ${expandedTreatmentSection === 'findings' ? '' : '-rotate-90'}`} />
                         Key Findings ({treatmentPlan.clinicalReasoning.keyFindings.length})
@@ -3660,6 +3704,91 @@ ${ddxList}`;
                                           )}
                                           <div className="mt-1 pt-1 border-t border-emerald-100">
                                             <span className="text-[7px] text-gray-400">{ex.evidence.authors} ({ex.evidence.year}). <em>{ex.evidence.journal}</em></span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* AI Treatments */}
+                              {phase.aiTreatments && phase.aiTreatments.length > 0 && (
+                                <div>
+                                  <button className="text-[10px] font-semibold text-amber-700 flex items-center gap-1 w-full text-left" onClick={() => setExpandedTreatmentSection(prev => prev === `ait_${phase.phase}` ? null : `ait_${phase.phase}`)}>
+                                    <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+                                    AI-Recommended Treatments ({phase.aiTreatments.length})
+                                    <ChevronDown className={`h-2 w-2 ml-auto transition-transform ${expandedTreatmentSection === `ait_${phase.phase}` ? '' : '-rotate-90'}`} />
+                                  </button>
+                                  {expandedTreatmentSection === `ait_${phase.phase}` && (
+                                    <div className="mt-1 space-y-1.5 ml-3.5">
+                                      {phase.aiTreatments.map((at, ati) => (
+                                        <div key={ati} className="bg-amber-50/50 rounded-lg px-2.5 py-2 border border-amber-200">
+                                          <div className="flex items-center gap-1.5">
+                                            <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+                                            <span className="text-[10px] font-semibold text-amber-800">{at.name}</span>
+                                          </div>
+                                          <p className="text-[8px] text-gray-600 mt-0.5 ml-4">{at.description}</p>
+                                          <div className="flex items-center gap-2 mt-1 ml-4">
+                                            <span className="text-[7px] px-1 py-0.5 rounded bg-amber-100 text-amber-600">From: {at.sourceRegion}</span>
+                                            <span className="text-[7px] px-1 py-0.5 rounded bg-gray-100 text-gray-500">Severity {at.sourceSeverity}/10</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* AI Exercises */}
+                              {phase.aiExercises && phase.aiExercises.length > 0 && (
+                                <div>
+                                  <button className="text-[10px] font-semibold text-amber-700 flex items-center gap-1 w-full text-left" onClick={() => setExpandedTreatmentSection(prev => prev === `aie_${phase.phase}` ? null : `aie_${phase.phase}`)}>
+                                    <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+                                    AI-Recommended Exercises ({phase.aiExercises.length})
+                                    <ChevronDown className={`h-2 w-2 ml-auto transition-transform ${expandedTreatmentSection === `aie_${phase.phase}` ? '' : '-rotate-90'}`} />
+                                  </button>
+                                  {expandedTreatmentSection === `aie_${phase.phase}` && (
+                                    <div className="mt-1 space-y-1.5 ml-3.5">
+                                      {phase.aiExercises.map((ae, aei) => (
+                                        <div key={aei} className="bg-amber-50/50 rounded-lg px-2.5 py-2 border border-amber-200">
+                                          <div className="flex items-center gap-1.5">
+                                            <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+                                            <span className="text-[10px] font-semibold text-amber-800">{ae.name}</span>
+                                          </div>
+                                          <p className="text-[8px] text-gray-600 mt-0.5 ml-4">{ae.description}</p>
+                                          {ae.dosage && <p className="text-[8px] text-emerald-600 mt-0.5 ml-4 font-medium">{ae.dosage}</p>}
+                                          <div className="flex items-center gap-2 mt-1 ml-4">
+                                            <span className="text-[7px] px-1 py-0.5 rounded bg-amber-100 text-amber-600">From: {ae.sourceRegion}</span>
+                                            <span className="text-[7px] px-1 py-0.5 rounded bg-gray-100 text-gray-500">Severity {ae.sourceSeverity}/10</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* AI Assessments */}
+                              {phase.aiAssessments && phase.aiAssessments.length > 0 && (
+                                <div>
+                                  <button className="text-[10px] font-semibold text-amber-700 flex items-center gap-1 w-full text-left" onClick={() => setExpandedTreatmentSection(prev => prev === `aia_${phase.phase}` ? null : `aia_${phase.phase}`)}>
+                                    <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+                                    AI-Recommended Assessments ({phase.aiAssessments.length})
+                                    <ChevronDown className={`h-2 w-2 ml-auto transition-transform ${expandedTreatmentSection === `aia_${phase.phase}` ? '' : '-rotate-90'}`} />
+                                  </button>
+                                  {expandedTreatmentSection === `aia_${phase.phase}` && (
+                                    <div className="mt-1 space-y-1.5 ml-3.5">
+                                      {phase.aiAssessments.map((aa, aai) => (
+                                        <div key={aai} className="bg-amber-50/50 rounded-lg px-2.5 py-2 border border-amber-200">
+                                          <div className="flex items-center gap-1.5">
+                                            <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+                                            <span className="text-[10px] font-semibold text-amber-800">{aa.name}</span>
+                                          </div>
+                                          <p className="text-[8px] text-gray-600 mt-0.5 ml-4">{aa.description}</p>
+                                          {aa.purpose && <p className="text-[8px] text-blue-600 mt-0.5 ml-4 italic">{aa.purpose}</p>}
+                                          <div className="flex items-center gap-2 mt-1 ml-4">
+                                            <span className="text-[7px] px-1 py-0.5 rounded bg-amber-100 text-amber-600">From: {aa.sourceRegion}</span>
                                           </div>
                                         </div>
                                       ))}

@@ -55,7 +55,8 @@ import {
   Pause,
   Sparkles,
   Zap,
-  Search
+  Search,
+  Check
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -73,7 +74,7 @@ import type { Skeleton3DPose } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
-import { calculatePosturalForces, forceToNewtons, getStatusColor, type ForceAnalysisResult, type JointForceResult } from "@/lib/posturalForceEngine";
+import { calculatePosturalForces, forceToNewtons, getStatusColor, type ForceAnalysisResult, type JointSurfaceForce } from "@/lib/posturalForceEngine";
 
 const BODY_REGIONS = {
   cervical: {
@@ -357,6 +358,8 @@ export default function PhysioGPT() {
   const [forceMode, setForceMode] = useState(false);
   const [selectedForceJoint, setSelectedForceJoint] = useState<string | null>(null);
   const [bodyWeightKg, setBodyWeightKg] = useState(70);
+  const [enabledForceJoints, setEnabledForceJoints] = useState<Set<string>>(new Set());
+  const [collapsedForceCategories, setCollapsedForceCategories] = useState<Set<string>>(new Set());
   const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
@@ -1133,7 +1136,7 @@ ${ddxList}`;
     const forces = calculatePosturalForces(modelConfig);
     const highForces = forces.joints.filter(j => j.status === 'high' || j.status === 'very_high');
     const forceLines = forces.joints.map(j =>
-      `- ${j.label}: ${(j.forceBW * 100).toFixed(0)}% BW (${forceToNewtons(j.forceBW, bodyWeightKg)}N) — ${j.status}`
+      `- ${j.label}: C=${(j.compression * 100).toFixed(0)}% T=${(j.tension * 100).toFixed(0)}% S=${(j.shear * 100).toFixed(0)}% BW (${forceToNewtons(j.totalForce, bodyWeightKg)}N) — ${j.status}`
     );
     sections.push(`**Estimated Joint Forces (Body Weight: ${bodyWeightKg}kg):**\n${forceLines.join('\n')}`);
     if (highForces.length > 0) {
@@ -1212,7 +1215,12 @@ ${ddxList}`;
 
   const forceAnalysis = useMemo(() => {
     if (!forceMode) return null;
-    return calculatePosturalForces(modelConfig);
+    const result = calculatePosturalForces(modelConfig);
+    if (enabledForceJoints.size === 0 && result.joints.length > 0) {
+      const defaultEnabled = new Set(result.joints.map(j => j.id));
+      setEnabledForceJoints(defaultEnabled);
+    }
+    return result;
   }, [modelConfig, forceMode]);
 
   return (
@@ -1276,7 +1284,7 @@ ${ddxList}`;
               onModelConfigChange={updateModelConfig}
               enableZoomTool={zoomToolMode}
               onLandmarkSelect={handleLandmarkSelect}
-              forceOverlay={forceMode && forceAnalysis ? forceAnalysis.joints : null}
+              forceOverlay={forceMode && forceAnalysis ? forceAnalysis.joints.filter(j => enabledForceJoints.has(j.id)) : null}
               bodyWeightKg={bodyWeightKg}
               selectedForceJoint={selectedForceJoint}
               onForceJointSelect={(joint) => setSelectedForceJoint(prev => prev === joint ? null : joint)}
@@ -1486,11 +1494,11 @@ ${ddxList}`;
 
             {/* Force Analysis Overlay */}
             {forceMode && forceAnalysis && (
-              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[220px] max-h-[calc(100%-60px)] overflow-y-auto">
+              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[260px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
                     <Activity className="h-3.5 w-3.5 text-amber-400" />
-                    <span className="text-[11px] font-semibold text-white">Joint Forces</span>
+                    <span className="text-[11px] font-semibold text-white">Joint Forces ({forceAnalysis.joints.length} surfaces)</span>
                   </div>
                   <button
                     className="text-[10px] text-gray-400 hover:text-white"
@@ -1512,42 +1520,114 @@ ${ddxList}`;
                   <span className="text-[10px] text-gray-400">kg</span>
                 </div>
 
-                <div className="space-y-0.5">
-                  {forceAnalysis.joints.map((j) => (
-                    <div key={j.joint}>
-                      <button
-                        onClick={() => setSelectedForceJoint(prev => prev === j.joint ? null : j.joint)}
-                        className={`w-full flex items-center gap-1.5 py-1 px-1 rounded transition-colors ${selectedForceJoint === j.joint ? 'bg-white/10 ring-1 ring-white/20' : 'hover:bg-white/5'}`}
-                      >
-                        <div
-                          className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: getStatusColor(j.status), boxShadow: `0 0 4px ${getStatusColor(j.status)}` }}
-                        />
-                        <span className="text-[10px] text-gray-300 flex-1 truncate text-left">{j.label}</span>
-                        <span className="text-[11px] font-bold text-white tabular-nums" style={{ color: getStatusColor(j.status) }}>
-                          {(j.forceBW * 100).toFixed(0)}%
-                        </span>
-                        <span className="text-[9px] text-gray-500 w-[38px] text-right tabular-nums">
-                          {forceToNewtons(j.forceBW, bodyWeightKg)}N
-                        </span>
-                      </button>
-                      {selectedForceJoint === j.joint && (
-                        <div className="ml-3.5 mt-0.5 mb-1 px-2 py-1.5 bg-white/5 rounded border-l-2 space-y-1" style={{ borderColor: getStatusColor(j.status) }}>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] text-gray-400">Compression</span>
-                            <span className="text-[10px] text-white font-medium">{(j.compressionBW * 100).toFixed(0)}% BW ({forceToNewtons(j.compressionBW, bodyWeightKg)}N)</span>
-                          </div>
-                          {j.shearBW > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] text-gray-400">Shear</span>
-                              <span className="text-[10px] text-white font-medium">{(j.shearBW * 100).toFixed(0)}% BW ({forceToNewtons(j.shearBW, bodyWeightKg)}N)</span>
-                            </div>
+                <div className="flex items-center gap-1 mb-2">
+                  <button
+                    className="text-[9px] text-amber-400 hover:text-amber-300 px-1.5 py-0.5 bg-white/5 rounded"
+                    onClick={() => setEnabledForceJoints(new Set(forceAnalysis.joints.map(j => j.id)))}
+                  >All On</button>
+                  <button
+                    className="text-[9px] text-gray-400 hover:text-white px-1.5 py-0.5 bg-white/5 rounded"
+                    onClick={() => setEnabledForceJoints(new Set())}
+                  >All Off</button>
+                  <button
+                    className="text-[9px] text-gray-400 hover:text-white px-1.5 py-0.5 bg-white/5 rounded ml-auto"
+                    onClick={() => setCollapsedForceCategories(new Set())}
+                  >Expand</button>
+                  <button
+                    className="text-[9px] text-gray-400 hover:text-white px-1.5 py-0.5 bg-white/5 rounded"
+                    onClick={() => setCollapsedForceCategories(new Set(forceAnalysis.categories.map(c => c.id)))}
+                  >Collapse</button>
+                </div>
+
+                <div className="space-y-1">
+                  {forceAnalysis.categories.map((cat) => {
+                    const isCollapsed = collapsedForceCategories.has(cat.id);
+                    const enabledCount = cat.joints.filter(j => enabledForceJoints.has(j.id)).length;
+                    const highCount = cat.joints.filter(j => j.status === 'high' || j.status === 'very_high').length;
+                    const maxForce = Math.max(...cat.joints.map(j => j.totalForce));
+                    const maxStatus = maxForce >= 3.0 ? 'very_high' : maxForce >= 1.5 ? 'high' : maxForce >= 0.8 ? 'moderate' : 'low';
+                    return (
+                      <div key={cat.id} className="bg-white/3 rounded">
+                        <button
+                          className="w-full flex items-center gap-1.5 py-1.5 px-2 rounded hover:bg-white/5 transition-colors"
+                          onClick={() => setCollapsedForceCategories(prev => {
+                            const next = new Set(prev);
+                            if (next.has(cat.id)) next.delete(cat.id); else next.add(cat.id);
+                            return next;
+                          })}
+                        >
+                          <ChevronDown className={`h-3 w-3 text-gray-500 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getStatusColor(maxStatus as any) }} />
+                          <span className="text-[10px] font-medium text-gray-200 flex-1 text-left">{cat.label}</span>
+                          {highCount > 0 && (
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-red-500/20 text-red-400">{highCount}</span>
                           )}
-                          <p className="text-[9px] text-gray-400 leading-relaxed">{j.clinical}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                          <span className="text-[9px] text-gray-500">{enabledCount}/{cat.joints.length}</span>
+                        </button>
+                        {!isCollapsed && (
+                          <div className="pl-3 pr-1 pb-1.5 space-y-0.5">
+                            {cat.joints.map((j) => {
+                              const isEnabled = enabledForceJoints.has(j.id);
+                              const isSelected = selectedForceJoint === j.id;
+                              return (
+                                <div key={j.id}>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${isEnabled ? 'bg-amber-500/30 border-amber-500' : 'bg-white/5 border-gray-600'}`}
+                                      onClick={() => setEnabledForceJoints(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(j.id)) next.delete(j.id); else next.add(j.id);
+                                        return next;
+                                      })}
+                                    >
+                                      {isEnabled && <Check className="h-2.5 w-2.5 text-amber-400" />}
+                                    </button>
+                                    <button
+                                      onClick={() => setSelectedForceJoint(prev => prev === j.id ? null : j.id)}
+                                      className={`flex-1 flex items-center gap-1 py-0.5 px-1 rounded transition-colors ${isSelected ? 'bg-white/10 ring-1 ring-white/20' : 'hover:bg-white/5'}`}
+                                    >
+                                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: getStatusColor(j.status) }} />
+                                      <span className="text-[9px] text-gray-300 flex-1 truncate text-left">{j.label.replace(/^(Left |Right )/, '').replace(cat.label.replace(/^(Left |Right )/, '').split(' ')[0], '').trim() || j.label}</span>
+                                      <span className="text-[10px] font-bold tabular-nums" style={{ color: getStatusColor(j.status) }}>
+                                        {(j.totalForce * 100).toFixed(0)}%
+                                      </span>
+                                      <span className="text-[8px] text-gray-500 w-[32px] text-right tabular-nums">
+                                        {forceToNewtons(j.totalForce, bodyWeightKg)}N
+                                      </span>
+                                    </button>
+                                  </div>
+                                  {isSelected && (
+                                    <div className="ml-5 mt-0.5 mb-1 px-2 py-1.5 bg-white/5 rounded border-l-2 space-y-0.5" style={{ borderColor: getStatusColor(j.status) }}>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[8px] text-blue-400 font-medium">Compression</span>
+                                        <span className="text-[9px] text-white tabular-nums">{(j.compression * 100).toFixed(0)}% ({forceToNewtons(j.compression, bodyWeightKg)}N)</span>
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[8px] text-red-400 font-medium">Tension</span>
+                                        <span className="text-[9px] text-white tabular-nums">{(j.tension * 100).toFixed(0)}% ({forceToNewtons(j.tension, bodyWeightKg)}N)</span>
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[8px] text-yellow-400 font-medium">Shear</span>
+                                        <span className="text-[9px] text-white tabular-nums">{(j.shear * 100).toFixed(0)}% ({forceToNewtons(j.shear, bodyWeightKg)}N)</span>
+                                      </div>
+                                      <div className="w-full bg-gray-700 rounded-full h-1 mt-1">
+                                        <div className="flex h-1 rounded-full overflow-hidden">
+                                          <div className="bg-blue-500 h-full" style={{ width: `${Math.min(100, (j.compression / (j.compression + j.tension + j.shear + 0.001)) * 100)}%` }} />
+                                          <div className="bg-red-500 h-full" style={{ width: `${Math.min(100, (j.tension / (j.compression + j.tension + j.shear + 0.001)) * 100)}%` }} />
+                                          <div className="bg-yellow-500 h-full" style={{ width: `${Math.min(100, (j.shear / (j.compression + j.tension + j.shear + 0.001)) * 100)}%` }} />
+                                        </div>
+                                      </div>
+                                      <p className="text-[8px] text-gray-400 leading-relaxed mt-0.5">{j.clinical}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {forceAnalysis.baseSupportShift > 0.02 && (
@@ -1560,23 +1640,28 @@ ${ddxList}`;
                 )}
 
                 <div className="mt-2 pt-2 border-t border-white/10">
-                  <div className="flex items-center gap-3 text-[9px]">
-                    <div className="flex items-center gap-1">
+                  <div className="flex flex-wrap items-center gap-2 text-[8px]">
+                    <div className="flex items-center gap-0.5">
                       <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#22c55e' }} />
                       <span className="text-gray-400">&lt;80%</span>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#eab308' }} />
                       <span className="text-gray-400">80-150%</span>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#f97316' }} />
                       <span className="text-gray-400">150-300%</span>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />
                       <span className="text-gray-400">&gt;300%</span>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-[8px]">
+                    <div className="flex items-center gap-0.5"><div className="w-2 h-1 bg-blue-500 rounded" /><span className="text-gray-500">Comp</span></div>
+                    <div className="flex items-center gap-0.5"><div className="w-2 h-1 bg-red-500 rounded" /><span className="text-gray-500">Tension</span></div>
+                    <div className="flex items-center gap-0.5"><div className="w-2 h-1 bg-yellow-500 rounded" /><span className="text-gray-500">Shear</span></div>
                   </div>
                 </div>
               </div>

@@ -1108,7 +1108,7 @@ interface PureThreeGLBViewerProps {
   onModelConfigChange?: (path: string, value: number) => void;
   enableZoomTool?: boolean;
   onLandmarkSelect?: (landmark: { label: string; boneName: string; position: { x: number; y: number; z: number } }) => void;
-  forceOverlay?: { joint: string; label: string; forceBW: number; status: 'low' | 'moderate' | 'high' | 'very_high'; clinical: string }[] | null;
+  forceOverlay?: { id: string; label: string; boneName: string; compression: number; tension: number; shear: number; totalForce: number; status: 'low' | 'moderate' | 'high' | 'very_high'; clinical: string }[] | null;
   bodyWeightKg?: number;
   selectedForceJoint?: string | null;
   onForceJointSelect?: (joint: string) => void;
@@ -1545,7 +1545,7 @@ export default function PureThreeGLBViewer({
   const activePainMarkerTypeRef = useRef(activePainMarkerType);
   activePainMarkerTypeRef.current = activePainMarkerType;
   const [landmarkLabels, setLandmarkLabels] = useState<Array<{ label: string; boneName: string; screenX: number; screenY: number; worldPos: { x: number; y: number; z: number }; distance: number }>>([]);
-  const [forceLabels, setForceLabels] = useState<Array<{ joint: string; label: string; forceBW: number; status: string; screenX: number; screenY: number }>>([]);
+  const [forceLabels, setForceLabels] = useState<Array<{ joint: string; label: string; totalForce: number; status: string; screenX: number; screenY: number }>>([]);
   const forceOverlayRef = useRef(forceOverlay);
   forceOverlayRef.current = forceOverlay;
   const onForceJointSelectRef = useRef(onForceJointSelect);
@@ -3552,13 +3552,16 @@ export default function PureThreeGLBViewer({
             const bones = bonesRef.current;
             const cam = sceneRef.current.camera;
             const rect = containerRef.current.getBoundingClientRect();
-            const projectedForces: Array<{ joint: string; label: string; forceBW: number; status: string; screenX: number; screenY: number }> = [];
+            const projectedForces: Array<{ joint: string; label: string; totalForce: number; status: string; screenX: number; screenY: number }> = [];
             const tmpVec = new THREE.Vector3();
             const projV = new THREE.Vector3();
+            const seenBones = new Set<string>();
 
             for (const fj of forceOverlayRef.current) {
-              const boneName = FORCE_JOINT_TO_BONE[fj.joint];
+              const boneName = fj.boneName || FORCE_JOINT_TO_BONE[fj.id];
               if (!boneName) continue;
+              if (seenBones.has(boneName + fj.id)) continue;
+              seenBones.add(boneName + fj.id);
               const bone = bones[boneName];
               if (!bone) continue;
               bone.getWorldPosition(tmpVec);
@@ -3567,9 +3570,9 @@ export default function PureThreeGLBViewer({
               const sy = (-projV.y * 0.5 + 0.5) * rect.height;
               if (projV.z > 0 && projV.z < 1 && sx > -20 && sx < rect.width + 20 && sy > -20 && sy < rect.height + 20) {
                 projectedForces.push({
-                  joint: fj.joint,
+                  joint: fj.id,
                   label: fj.label,
-                  forceBW: fj.forceBW,
+                  totalForce: fj.totalForce,
                   status: fj.status,
                   screenX: sx,
                   screenY: sy,
@@ -4748,7 +4751,7 @@ export default function PureThreeGLBViewer({
       {forceLabels.length > 0 && (
         <>
           {forceLabels.map((fl) => {
-            const pct = (fl.forceBW * 100).toFixed(0);
+            const pct = (fl.totalForce * 100).toFixed(0);
             const isSelected = selectedForceJoint === fl.joint;
             const statusColor = fl.status === 'very_high' ? '#ef4444' : fl.status === 'high' ? '#f97316' : fl.status === 'moderate' ? '#eab308' : '#22c55e';
             const bgOpacity = isSelected ? '95' : '80';

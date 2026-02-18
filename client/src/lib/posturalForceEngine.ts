@@ -1,17 +1,22 @@
 interface JointAngles {
-  spine?: { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number; forwardHead?: number; lateralShift?: number };
-  neck?: { flexion?: number; extension?: number; lateralFlexion?: number };
-  pelvis?: { tilt?: number; obliquity?: number };
-  leftHip?: { flexion?: number; abduction?: number };
-  rightHip?: { flexion?: number; abduction?: number };
-  leftKnee?: { flexion?: number; varus?: number };
-  rightKnee?: { flexion?: number; varus?: number };
-  leftAnkle?: { dorsiflexion?: number; plantarflexion?: number };
-  rightAnkle?: { dorsiflexion?: number; plantarflexion?: number };
-  leftShoulder?: { flexion?: number; abduction?: number };
-  rightShoulder?: { flexion?: number; abduction?: number };
-  leftElbow?: { flexion?: number };
-  rightElbow?: { flexion?: number };
+  spine?: { cervicalLordosis?: number; thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number; forwardHead?: number; lateralShift?: number; cervicalRotation?: number; cervicalLateralFlexion?: number; thoracicRotation?: number; lumbarRotation?: number; flexion?: number; lateralFlexion?: number; lumbarScoliosis?: number; thoracicScoliosis?: number; cervicalScoliosis?: number };
+  neck?: { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number };
+  pelvis?: { tilt?: number; obliquity?: number; rotation?: number; drop?: number; leftInnominateRotation?: number; rightInnominateRotation?: number };
+  sacrum?: { nutation?: number; counternutation?: number; torsion?: number; lateralFlexion?: number };
+  leftHip?: { flexion?: number; extension?: number; abduction?: number; adduction?: number; internalRotation?: number; externalRotation?: number; anteversion?: number; neckShaftAngle?: number };
+  rightHip?: { flexion?: number; extension?: number; abduction?: number; adduction?: number; internalRotation?: number; externalRotation?: number; anteversion?: number; neckShaftAngle?: number };
+  leftKnee?: { flexion?: number; varus?: number; tibialTorsion?: number; recurvatum?: number; tibialSlope?: number };
+  rightKnee?: { flexion?: number; varus?: number; tibialTorsion?: number; recurvatum?: number; tibialSlope?: number };
+  leftAnkle?: { dorsiflexion?: number; plantarflexion?: number; inversion?: number; eversion?: number; forefootVarus?: number; toeExtension?: number };
+  rightAnkle?: { dorsiflexion?: number; plantarflexion?: number; inversion?: number; eversion?: number; forefootVarus?: number; toeExtension?: number };
+  leftShoulder?: { flexion?: number; extension?: number; abduction?: number; internalRotation?: number; externalRotation?: number; horizontalAdduction?: number };
+  rightShoulder?: { flexion?: number; extension?: number; abduction?: number; internalRotation?: number; externalRotation?: number; horizontalAdduction?: number };
+  leftScapula?: { protraction?: number; elevation?: number; upwardRotation?: number; anteriorTilt?: number; winging?: number };
+  rightScapula?: { protraction?: number; elevation?: number; upwardRotation?: number; anteriorTilt?: number; winging?: number };
+  leftElbow?: { flexion?: number; pronation?: number; supination?: number; valgus?: number };
+  rightElbow?: { flexion?: number; pronation?: number; supination?: number; valgus?: number };
+  leftWrist?: { flexion?: number; extension?: number; radialDeviation?: number; ulnarDeviation?: number; pronation?: number };
+  rightWrist?: { flexion?: number; extension?: number; radialDeviation?: number; ulnarDeviation?: number; pronation?: number };
   [key: string]: any;
 }
 
@@ -28,51 +33,42 @@ const SEGMENT_MASS_PCT: Record<string, number> = {
   foot: 0.015,
 };
 
-const SEGMENT_LENGTH_RATIO: Record<string, number> = {
-  head: 0.13,
-  trunk: 0.30,
-  upperTrunk: 0.17,
-  lowerTrunk: 0.13,
-  upperArm: 0.19,
-  forearm: 0.15,
-  hand: 0.05,
-  thigh: 0.25,
-  shank: 0.25,
-  foot: 0.04,
-};
+const deg2rad = (d: number) => (d * Math.PI) / 180;
+function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
 
-const SEGMENT_COM_RATIO: Record<string, number> = {
-  head: 0.50,
-  trunk: 0.50,
-  upperTrunk: 0.50,
-  lowerTrunk: 0.50,
-  upperArm: 0.436,
-  forearm: 0.430,
-  hand: 0.506,
-  thigh: 0.433,
-  shank: 0.433,
-  foot: 0.500,
-};
+const MAX_FORCE_BW = 12.0;
+const MIN_FORCE_BW = 0;
+function clampForce(v: number): number { return clamp(Math.abs(v), MIN_FORCE_BW, MAX_FORCE_BW); }
 
-export interface JointForceResult {
-  joint: string;
+export type ForceType = 'compression' | 'tension' | 'shear';
+
+export interface JointSurfaceForce {
+  id: string;
   label: string;
-  forceBW: number;
-  compressionBW: number;
-  shearBW: number;
+  category: string;
+  boneName: string;
+  compression: number;
+  tension: number;
+  shear: number;
+  totalForce: number;
   status: 'low' | 'moderate' | 'high' | 'very_high';
   clinical: string;
+  enabled: boolean;
+}
+
+export interface ForceCategory {
+  id: string;
+  label: string;
+  joints: JointSurfaceForce[];
+  collapsed: boolean;
 }
 
 export interface ForceAnalysisResult {
-  joints: JointForceResult[];
+  categories: ForceCategory[];
+  joints: JointSurfaceForce[];
   totalBodyCOM: { x: number; y: number };
   baseSupportShift: number;
 }
-
-const deg2rad = (d: number) => (d * Math.PI) / 180;
-
-function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
 
 function getStatus(bw: number): 'low' | 'moderate' | 'high' | 'very_high' {
   if (bw < 0.8) return 'low';
@@ -81,130 +77,607 @@ function getStatus(bw: number): 'low' | 'moderate' | 'high' | 'very_high' {
   return 'very_high';
 }
 
-function getClinicalNote(joint: string, bw: number): string {
-  if (bw < 0.5) return 'Minimal loading';
-  if (bw < 1.0) return 'Normal standing load';
-  if (bw < 2.0) return 'Moderate load — typical functional range';
-  if (bw < 3.0) return 'Elevated load — monitor for symptom reproduction';
-  return 'High load — potential tissue stress risk';
+function getClinicalNote(bw: number, jointType: string): string {
+  const notes: Record<string, Record<string, string>> = {
+    facet: {
+      low: 'Minimal facet loading — normal unloaded position',
+      moderate: 'Normal standing facet load — within physiological range',
+      high: 'Elevated facet compression — potential for facet irritation and referral pain',
+      very_high: 'High facet loading — risk of facet arthrosis, may reproduce concordant pain',
+    },
+    disc: {
+      low: 'Minimal disc pressure — favorable intradiscal environment',
+      moderate: 'Normal disc loading — hydrostatic pressure within disc tolerance',
+      high: 'Elevated intradiscal pressure — increased annular stress, monitor for discogenic symptoms',
+      very_high: 'High disc compression — risk of annular disruption, nuclear migration if pre-existing pathology',
+    },
+    hip: {
+      low: 'Minimal hip joint reaction force',
+      moderate: 'Normal standing hip load — within cartilage tolerance',
+      high: 'Elevated hip loading — potential labral/cartilage stress',
+      very_high: 'High hip force — risk of labral damage, FAI symptoms, cartilage degeneration',
+    },
+    patellofemoral: {
+      low: 'Minimal PFJ contact force',
+      moderate: 'Normal PFJ loading — physiological contact stress',
+      high: 'Elevated PFJ force — potential anterior knee pain, chondromalacia risk',
+      very_high: 'Very high PFJ stress — significant risk of patellofemoral pain syndrome',
+    },
+    tibiofemoral: {
+      low: 'Minimal tibiofemoral load',
+      moderate: 'Normal TFJ compression — within meniscal tolerance',
+      high: 'Elevated TFJ load — increased meniscal and cartilage stress',
+      very_high: 'High TFJ force — risk of meniscal damage, OA progression',
+    },
+    ankle: {
+      low: 'Minimal talocrural loading',
+      moderate: 'Normal ankle joint reaction force',
+      high: 'Elevated ankle load — monitor for osteochondral stress',
+      very_high: 'High talocrural force — risk of cartilage damage, impingement',
+    },
+    shoulder: {
+      low: 'Minimal GH joint load — favorable rotator cuff environment',
+      moderate: 'Normal GH loading — rotator cuff working within capacity',
+      high: 'Elevated GH force — increased rotator cuff demand, impingement risk',
+      very_high: 'High GH loading — significant supraspinatus/infraspinatus stress',
+    },
+    generic: {
+      low: 'Minimal loading',
+      moderate: 'Normal functional loading',
+      high: 'Elevated load — monitor for symptom reproduction',
+      very_high: 'High load — potential tissue stress risk',
+    },
+  };
+  const status = getStatus(bw);
+  return (notes[jointType] || notes.generic)[status];
+}
+
+function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
+  const joints: JointSurfaceForce[] = [];
+  const headMass = SEGMENT_MASS_PCT.head;
+  const armMass = (SEGMENT_MASS_PCT.upperArm + SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand) * 2;
+  const upperTrunkMass = SEGMENT_MASS_PCT.upperTrunk;
+  const lowerTrunkMass = SEGMENT_MASS_PCT.lowerTrunk;
+
+  const neckFlex = Math.abs(config.neck?.flexion ?? 0);
+  const neckExt = Math.abs(config.neck?.extension ?? 0);
+  const neckRot = Math.abs(config.neck?.rotation ?? 0);
+  const neckLat = Math.abs(config.neck?.lateralFlexion ?? 0);
+  const forwardHead = Math.abs(config.spine?.forwardHead ?? config.neck?.forwardHead ?? 0);
+  const cervLord = Math.abs(config.spine?.cervicalLordosis ?? 0);
+  const thorKyph = Math.abs(config.spine?.thoracicKyphosis ?? 0);
+  const lumLord = Math.abs(config.spine?.lumbarLordosis ?? 0);
+  const scoliosis = Math.abs(config.spine?.scoliosis ?? 0);
+  const lumbarScol = Math.abs(config.spine?.lumbarScoliosis ?? 0);
+  const thorScol = Math.abs(config.spine?.thoracicScoliosis ?? 0);
+  const cervScol = Math.abs(config.spine?.cervicalScoliosis ?? 0);
+  const latShift = Math.abs(config.spine?.lateralShift ?? 0);
+  const spineFlexion = Math.abs(config.spine?.flexion ?? 0);
+  const spineLat = Math.abs(config.spine?.lateralFlexion ?? 0);
+  const thorRot = Math.abs(config.spine?.thoracicRotation ?? 0);
+  const lumRot = Math.abs(config.spine?.lumbarRotation ?? 0);
+  const cervRot = Math.abs(config.spine?.cervicalRotation ?? 0);
+  const pelvisTilt = config.pelvis?.tilt ?? 0;
+  const sacrumNut = Math.abs(config.sacrum?.nutation ?? 0);
+
+  const cervFlexAngle = neckFlex + cervLord * 0.3 + forwardHead * 0.8;
+  const cervLeverArm = Math.sin(deg2rad(clamp(cervFlexAngle, 0, 60)));
+  const cervMomentMult = 1 + cervLeverArm * 4.0;
+
+  const c01Comp = headMass * cervMomentMult * (1 + 0.02 * cervScol);
+  const c01Shear = headMass * cervLeverArm * 0.5;
+  const c01Tension = headMass * 0.3 * (1 + 0.01 * neckExt + 0.01 * forwardHead);
+  joints.push({ id: 'c0c1_facet', label: 'C0-C1 (Atlanto-occipital)', category: 'cervical_spine', boneName: 'Neck_M', compression: c01Comp, tension: c01Tension, shear: c01Shear, totalForce: c01Comp + c01Shear, status: getStatus(c01Comp), clinical: getClinicalNote(c01Comp, 'facet'), enabled: true });
+
+  const c12Comp = headMass * cervMomentMult * 1.05 * (1 + 0.03 * neckRot + 0.02 * cervRot);
+  const c12Shear = headMass * cervLeverArm * 0.55 + headMass * 0.02 * neckRot;
+  const c12Tension = headMass * 0.35 * (1 + 0.015 * neckRot);
+  joints.push({ id: 'c1c2_facet', label: 'C1-C2 (Atlanto-axial)', category: 'cervical_spine', boneName: 'Neck_M', compression: c12Comp, tension: c12Tension, shear: c12Shear, totalForce: c12Comp + c12Shear, status: getStatus(c12Comp), clinical: getClinicalNote(c12Comp, 'facet'), enabled: true });
+
+  const midCervComp = headMass * cervMomentMult * 1.15 * (1 + 0.01 * neckLat + 0.02 * cervScol);
+  const midCervShear = headMass * cervLeverArm * 0.6;
+  const midCervTension = headMass * 0.25 * (1 + 0.02 * forwardHead);
+  joints.push({ id: 'c3c5_facet', label: 'C3-C5 Mid-Cervical Facets', category: 'cervical_spine', boneName: 'Neck_M', compression: midCervComp, tension: midCervTension, shear: midCervShear, totalForce: midCervComp + midCervShear, status: getStatus(midCervComp), clinical: getClinicalNote(midCervComp, 'facet'), enabled: true });
+
+  const midCervDiscComp = headMass * cervMomentMult * 1.2;
+  const midCervDiscShear = headMass * cervLeverArm * 0.45;
+  const midCervDiscTension = headMass * 0.15 * (1 + 0.01 * neckExt);
+  joints.push({ id: 'c3c5_disc', label: 'C3-C5 Intervertebral Discs', category: 'cervical_spine', boneName: 'Neck_M', compression: midCervDiscComp, tension: midCervDiscTension, shear: midCervDiscShear, totalForce: midCervDiscComp + midCervDiscShear, status: getStatus(midCervDiscComp), clinical: getClinicalNote(midCervDiscComp, 'disc'), enabled: true });
+
+  const lowCervAbove = headMass + upperTrunkMass * 0.1;
+  const lowCervComp = lowCervAbove * cervMomentMult * 1.25 * (1 + 0.015 * cervScol + 0.01 * thorKyph * 0.3);
+  const lowCervShear = lowCervAbove * cervLeverArm * 0.65;
+  const lowCervTension = lowCervAbove * 0.2 * (1 + 0.02 * forwardHead + 0.01 * cervLord);
+  joints.push({ id: 'c5c7_facet', label: 'C5-C7 Lower Cervical Facets', category: 'cervical_spine', boneName: 'Neck_M', compression: lowCervComp, tension: lowCervTension, shear: lowCervShear, totalForce: lowCervComp + lowCervShear, status: getStatus(lowCervComp), clinical: getClinicalNote(lowCervComp, 'facet'), enabled: true });
+
+  const lowCervDiscComp = lowCervAbove * cervMomentMult * 1.3;
+  const lowCervDiscShear = lowCervAbove * cervLeverArm * 0.5;
+  joints.push({ id: 'c5c7_disc', label: 'C5-C7 Intervertebral Discs', category: 'cervical_spine', boneName: 'Neck_M', compression: lowCervDiscComp, tension: lowCervAbove * 0.15, shear: lowCervDiscShear, totalForce: lowCervDiscComp + lowCervDiscShear, status: getStatus(lowCervDiscComp), clinical: getClinicalNote(lowCervDiscComp, 'disc'), enabled: true });
+
+  const thorAbove = headMass + upperTrunkMass * 0.3 + armMass * 0.5;
+  const thorFlexAngle = thorKyph + spineFlexion * 0.4;
+  const thorLeverArm = Math.sin(deg2rad(clamp(thorFlexAngle, 0, 80)));
+  const thorMomentMult = 1 + thorLeverArm * 3.0;
+
+  const ctjComp = thorAbove * thorMomentMult * 1.15 * (1 + 0.01 * thorScol);
+  const ctjShear = thorAbove * thorLeverArm * 0.5;
+  joints.push({ id: 'ctj_facet', label: 'Cervicothoracic Junction (C7-T1)', category: 'thoracic_spine', boneName: 'Spine2Part2_M', compression: ctjComp, tension: thorAbove * 0.2, shear: ctjShear, totalForce: ctjComp + ctjShear, status: getStatus(ctjComp), clinical: getClinicalNote(ctjComp, 'facet'), enabled: true });
+
+  const upperThorAbove = headMass + upperTrunkMass * 0.5 + armMass;
+  const upperThorComp = upperThorAbove * thorMomentMult * 1.1 * (1 + 0.015 * thorScol + 0.01 * thorRot);
+  const upperThorShear = upperThorAbove * thorLeverArm * 0.45;
+  joints.push({ id: 't1t4_facet', label: 'T1-T4 Upper Thoracic Facets', category: 'thoracic_spine', boneName: 'Spine2Part2_M', compression: upperThorComp, tension: upperThorAbove * 0.15, shear: upperThorShear, totalForce: upperThorComp + upperThorShear, status: getStatus(upperThorComp), clinical: getClinicalNote(upperThorComp, 'facet'), enabled: true });
+
+  const costotransComp = upperThorAbove * 0.15 * (1 + 0.02 * thorRot + 0.02 * thorKyph);
+  const costotransShear = upperThorAbove * 0.05 * (1 + 0.03 * thorRot);
+  joints.push({ id: 'costotrans', label: 'Costovertebral/Costotransverse', category: 'thoracic_spine', boneName: 'Spine2_M', compression: costotransComp, tension: upperThorAbove * 0.08, shear: costotransShear, totalForce: costotransComp + costotransShear, status: getStatus(costotransComp), clinical: getClinicalNote(costotransComp, 'generic'), enabled: true });
+
+  const midThorAbove = headMass + upperTrunkMass + armMass;
+  const midThorComp = midThorAbove * thorMomentMult * 1.15 * (1 + 0.02 * thorScol);
+  const midThorShear = midThorAbove * thorLeverArm * 0.5;
+  const midThorDiscComp = midThorAbove * thorMomentMult * 1.2;
+  joints.push({ id: 't5t8_facet', label: 'T5-T8 Mid-Thoracic Facets', category: 'thoracic_spine', boneName: 'Spine2_M', compression: midThorComp, tension: midThorAbove * 0.12, shear: midThorShear, totalForce: midThorComp + midThorShear, status: getStatus(midThorComp), clinical: getClinicalNote(midThorComp, 'facet'), enabled: true });
+  joints.push({ id: 't5t8_disc', label: 'T5-T8 Intervertebral Discs', category: 'thoracic_spine', boneName: 'Spine2_M', compression: midThorDiscComp, tension: midThorAbove * 0.1, shear: midThorShear * 0.8, totalForce: midThorDiscComp + midThorShear * 0.8, status: getStatus(midThorDiscComp), clinical: getClinicalNote(midThorDiscComp, 'disc'), enabled: true });
+
+  const lowThorAbove = headMass + SEGMENT_MASS_PCT.trunk * 0.7 + armMass;
+  const lowThorComp = lowThorAbove * thorMomentMult * 1.2 * (1 + 0.02 * thorScol + 0.01 * lumbarScol * 0.5);
+  const lowThorShear = lowThorAbove * thorLeverArm * 0.55;
+  joints.push({ id: 't9t12_facet', label: 'T9-T12 Lower Thoracic Facets', category: 'thoracic_spine', boneName: 'Spine1Part2_M', compression: lowThorComp, tension: lowThorAbove * 0.1, shear: lowThorShear, totalForce: lowThorComp + lowThorShear, status: getStatus(lowThorComp), clinical: getClinicalNote(lowThorComp, 'facet'), enabled: true });
+
+  const tljAbove = headMass + SEGMENT_MASS_PCT.trunk * 0.75 + armMass;
+  const tljComp = tljAbove * thorMomentMult * 1.25;
+  const tljShear = tljAbove * thorLeverArm * 0.6;
+  joints.push({ id: 'tlj_facet', label: 'Thoracolumbar Junction (T12-L1)', category: 'thoracic_spine', boneName: 'Spine1Part2_M', compression: tljComp, tension: tljAbove * 0.12, shear: tljShear, totalForce: tljComp + tljShear, status: getStatus(tljComp), clinical: getClinicalNote(tljComp, 'facet'), enabled: true });
+
+  const lumAbove = headMass + SEGMENT_MASS_PCT.trunk * 0.6 + armMass;
+  const lumFlexAngle = lumLord + spineFlexion * 0.6 + Math.abs(pelvisTilt) * 0.5;
+  const lumLeverArm = Math.sin(deg2rad(clamp(lumFlexAngle, 0, 90)));
+  const lumMomentMult = 1 + lumLeverArm * 3.5;
+  const lumLatFactor = 1 + 0.02 * latShift + 0.015 * scoliosis + 0.02 * lumbarScol + 0.01 * spineLat;
+
+  const l1l2Comp = lumAbove * lumMomentMult * 0.9 * lumLatFactor;
+  const l1l2Shear = lumAbove * lumLeverArm * 0.5;
+  const l1l2Tension = lumAbove * 0.15 * (1 + 0.01 * lumLord);
+  joints.push({ id: 'l1l2_facet', label: 'L1-L2 Facet Joint', category: 'lumbar_spine', boneName: 'Spine1Part1_M', compression: l1l2Comp, tension: l1l2Tension, shear: l1l2Shear, totalForce: l1l2Comp + l1l2Shear, status: getStatus(l1l2Comp), clinical: getClinicalNote(l1l2Comp, 'facet'), enabled: true });
+  joints.push({ id: 'l1l2_disc', label: 'L1-L2 Intervertebral Disc', category: 'lumbar_spine', boneName: 'Spine1Part1_M', compression: l1l2Comp * 1.1, tension: l1l2Tension * 0.8, shear: l1l2Shear * 0.9, totalForce: l1l2Comp * 1.1 + l1l2Shear * 0.9, status: getStatus(l1l2Comp * 1.1), clinical: getClinicalNote(l1l2Comp * 1.1, 'disc'), enabled: true });
+
+  const l3l4Above = headMass + SEGMENT_MASS_PCT.trunk * 0.55 + armMass;
+  const l3l4Comp = l3l4Above * lumMomentMult * 1.05 * lumLatFactor * (1 + 0.01 * lumRot);
+  const l3l4Shear = l3l4Above * lumLeverArm * 0.55;
+  joints.push({ id: 'l3l4_facet', label: 'L3-L4 Facet Joint', category: 'lumbar_spine', boneName: 'Spine1_M', compression: l3l4Comp, tension: l3l4Above * 0.12, shear: l3l4Shear, totalForce: l3l4Comp + l3l4Shear, status: getStatus(l3l4Comp), clinical: getClinicalNote(l3l4Comp, 'facet'), enabled: true });
+  joints.push({ id: 'l3l4_disc', label: 'L3-L4 Intervertebral Disc', category: 'lumbar_spine', boneName: 'Spine1_M', compression: l3l4Comp * 1.15, tension: l3l4Above * 0.1, shear: l3l4Shear * 0.85, totalForce: l3l4Comp * 1.15 + l3l4Shear * 0.85, status: getStatus(l3l4Comp * 1.15), clinical: getClinicalNote(l3l4Comp * 1.15, 'disc'), enabled: true });
+
+  const l45Above = headMass + SEGMENT_MASS_PCT.trunk * 0.5 + armMass;
+  const l45Comp = l45Above * lumMomentMult * 1.2 * lumLatFactor * (1 + 0.015 * lumRot + 0.01 * sacrumNut);
+  const l45Shear = l45Above * lumLeverArm * 0.6 + l45Above * Math.abs(pelvisTilt) * 0.012;
+  const l45Tension = l45Above * 0.18 * (1 + 0.015 * lumLord);
+  joints.push({ id: 'l4l5_facet', label: 'L4-L5 Facet Joint', category: 'lumbar_spine', boneName: 'RootPart2_M', compression: l45Comp, tension: l45Tension, shear: l45Shear, totalForce: l45Comp + l45Shear, status: getStatus(l45Comp), clinical: getClinicalNote(l45Comp, 'facet'), enabled: true });
+  joints.push({ id: 'l4l5_disc', label: 'L4-L5 Intervertebral Disc', category: 'lumbar_spine', boneName: 'RootPart2_M', compression: l45Comp * 1.2, tension: l45Tension * 0.8, shear: l45Shear * 0.9, totalForce: l45Comp * 1.2 + l45Shear * 0.9, status: getStatus(l45Comp * 1.2), clinical: getClinicalNote(l45Comp * 1.2, 'disc'), enabled: true });
+
+  const l5s1Above = headMass + SEGMENT_MASS_PCT.trunk * 0.45 + armMass;
+  const sacralAngle = Math.abs(pelvisTilt) + lumLord * 0.4 + sacrumNut;
+  const l5s1SacralShearFactor = Math.sin(deg2rad(clamp(sacralAngle, 0, 60)));
+  const l5s1Comp = l5s1Above * lumMomentMult * 1.35 * lumLatFactor * (1 + 0.02 * sacrumNut);
+  const l5s1Shear = l5s1Above * (lumLeverArm * 0.65 + l5s1SacralShearFactor * 0.4) + l5s1Above * Math.abs(pelvisTilt) * 0.015;
+  const l5s1Tension = l5s1Above * 0.22 * (1 + 0.02 * lumLord + 0.015 * sacrumNut);
+  joints.push({ id: 'l5s1_facet', label: 'L5-S1 Facet Joint', category: 'lumbar_spine', boneName: 'RootPart1_M', compression: l5s1Comp, tension: l5s1Tension, shear: l5s1Shear, totalForce: l5s1Comp + l5s1Shear, status: getStatus(l5s1Comp), clinical: getClinicalNote(l5s1Comp, 'facet'), enabled: true });
+  joints.push({ id: 'l5s1_disc', label: 'L5-S1 Intervertebral Disc', category: 'lumbar_spine', boneName: 'RootPart1_M', compression: l5s1Comp * 1.25, tension: l5s1Tension * 0.75, shear: l5s1Shear * 1.1, totalForce: l5s1Comp * 1.25 + l5s1Shear * 1.1, status: getStatus(l5s1Comp * 1.25), clinical: getClinicalNote(l5s1Comp * 1.25, 'disc'), enabled: true });
+
+  const siAbove = headMass + SEGMENT_MASS_PCT.trunk + armMass;
+  const siTorsion = Math.abs(config.sacrum?.torsion ?? 0);
+  const siLat = Math.abs(config.sacrum?.lateralFlexion ?? 0);
+  const pelvisObliquity = Math.abs(config.pelvis?.obliquity ?? 0);
+  const siComp = siAbove * 0.5 * (1 + 0.02 * sacrumNut + 0.015 * Math.abs(pelvisTilt) + 0.01 * pelvisObliquity);
+  const siShear = siAbove * 0.15 * (1 + 0.03 * siTorsion + 0.02 * siLat + 0.015 * pelvisObliquity);
+  const siTension = siAbove * 0.1 * (1 + 0.02 * sacrumNut + 0.01 * siTorsion);
+  joints.push({ id: 'si_left', label: 'Left Sacroiliac Joint', category: 'pelvis_sacrum', boneName: 'Hip_L', compression: siComp * (1 + 0.01 * pelvisObliquity), tension: siTension, shear: siShear, totalForce: siComp + siShear, status: getStatus(siComp), clinical: getClinicalNote(siComp, 'generic'), enabled: true });
+  joints.push({ id: 'si_right', label: 'Right Sacroiliac Joint', category: 'pelvis_sacrum', boneName: 'Hip_R', compression: siComp * (1 + 0.01 * pelvisObliquity), tension: siTension, shear: siShear, totalForce: siComp + siShear, status: getStatus(siComp), clinical: getClinicalNote(siComp, 'generic'), enabled: true });
+
+  const pubSymComp = siAbove * 0.08 * (1 + 0.02 * pelvisObliquity + 0.01 * siTorsion);
+  const pubSymShear = siAbove * 0.04 * (1 + 0.03 * pelvisObliquity);
+  joints.push({ id: 'pubic_symphysis', label: 'Pubic Symphysis', category: 'pelvis_sacrum', boneName: 'Root_M', compression: pubSymComp, tension: pubSymComp * 0.5, shear: pubSymShear, totalForce: pubSymComp + pubSymShear, status: getStatus(pubSymComp), clinical: getClinicalNote(pubSymComp, 'generic'), enabled: true });
+
+  return joints;
+}
+
+function computeHipForces(config: JointAngles, side: 'left' | 'right'): JointSurfaceForce[] {
+  const joints: JointSurfaceForce[] = [];
+  const prefix = side === 'left' ? 'leftHip' : 'rightHip';
+  const hip = config[prefix] || {};
+  const boneNameHip = side === 'left' ? 'Hip_L' : 'Hip_R';
+  const boneNameKnee = side === 'left' ? 'Knee_L' : 'Knee_R';
+  const sideLabel = side === 'left' ? 'Left' : 'Right';
+
+  const aboveHip = SEGMENT_MASS_PCT.head + SEGMENT_MASS_PCT.trunk + (SEGMENT_MASS_PCT.upperArm + SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand) * 2;
+  const thighMass = SEGMENT_MASS_PCT.thigh;
+
+  const flex = Math.abs(hip.flexion ?? 0);
+  const ext = Math.abs(hip.extension ?? 0);
+  const abd = Math.abs(hip.abduction ?? 0);
+  const add = Math.abs(hip.adduction ?? 0);
+  const intRot = Math.abs(hip.internalRotation ?? 0);
+  const extRot = Math.abs(hip.externalRotation ?? 0);
+  const antev = Math.abs(hip.anteversion ?? 0);
+  const neckShaft = Math.abs(hip.neckShaftAngle ?? 0);
+
+  const pelvisTilt = Math.abs(config.pelvis?.tilt ?? 0);
+  const pelvisObl = Math.abs(config.pelvis?.obliquity ?? 0);
+  const sacrumNut = Math.abs(config.sacrum?.nutation ?? 0);
+
+  const hipFlexAngle = flex + ext + pelvisTilt * 0.3 + sacrumNut * 0.2;
+  const sinFlex = Math.sin(deg2rad(clamp(hipFlexAngle, 0, 120)));
+  const abdFactor = 1 + 0.02 * abd + 0.02 * add;
+  const rotFactor = 1 + 0.01 * intRot + 0.01 * extRot + 0.015 * antev;
+
+  const fhComp = aboveHip * 0.5 * (1 + sinFlex * 2.5) * abdFactor * rotFactor + thighMass * 0.5;
+  const fhShear = aboveHip * 0.5 * sinFlex * 0.3 * rotFactor;
+  const fhTension = aboveHip * 0.1 * (1 + 0.01 * abd + 0.015 * antev);
+  joints.push({ id: `${side}_femoral_head`, label: `${sideLabel} Femoral Head`, category: `${side}_hip`, boneName: boneNameHip, compression: fhComp, tension: fhTension, shear: fhShear, totalForce: fhComp + fhShear, status: getStatus(fhComp), clinical: getClinicalNote(fhComp, 'hip'), enabled: true });
+
+  const labralComp = fhComp * 0.2 * (1 + 0.03 * antev + 0.02 * intRot);
+  const labralShear = fhComp * 0.15 * (1 + 0.04 * antev + 0.03 * flex * 0.01);
+  const labralTension = fhComp * 0.08 * (1 + 0.02 * abd + 0.02 * extRot);
+  joints.push({ id: `${side}_labrum`, label: `${sideLabel} Acetabular Labrum`, category: `${side}_hip`, boneName: boneNameHip, compression: labralComp, tension: labralTension, shear: labralShear, totalForce: labralComp + labralShear, status: getStatus(labralShear > labralComp ? labralShear : labralComp), clinical: getClinicalNote(labralShear, 'hip'), enabled: true });
+
+  const capsComp = fhComp * 0.1;
+  const capsTension = fhComp * 0.15 * (1 + 0.02 * ext + 0.015 * extRot + 0.01 * abd);
+  joints.push({ id: `${side}_hip_capsule`, label: `${sideLabel} Hip Capsule/Ligaments`, category: `${side}_hip`, boneName: boneNameHip, compression: capsComp, tension: capsTension, shear: fhShear * 0.3, totalForce: capsComp + capsTension, status: getStatus(capsTension), clinical: getClinicalNote(capsTension, 'generic'), enabled: true });
+
+  const neckShaftFactor = 1 + 0.02 * neckShaft;
+  const femoralNeckComp = fhComp * 0.8 * neckShaftFactor;
+  const femoralNeckShear = fhComp * 0.2 * neckShaftFactor;
+  const femoralNeckTension = fhComp * 0.1 * neckShaftFactor;
+  joints.push({ id: `${side}_femoral_neck`, label: `${sideLabel} Femoral Neck`, category: `${side}_hip`, boneName: boneNameHip, compression: femoralNeckComp, tension: femoralNeckTension, shear: femoralNeckShear, totalForce: femoralNeckComp + femoralNeckShear, status: getStatus(femoralNeckComp), clinical: getClinicalNote(femoralNeckComp, 'hip'), enabled: true });
+
+  return joints;
+}
+
+function computeKneeForces(config: JointAngles, side: 'left' | 'right'): JointSurfaceForce[] {
+  const joints: JointSurfaceForce[] = [];
+  const kneeKey = side === 'left' ? 'leftKnee' : 'rightKnee';
+  const hipKey = side === 'left' ? 'leftHip' : 'rightHip';
+  const ankleKey = side === 'left' ? 'leftAnkle' : 'rightAnkle';
+  const knee = config[kneeKey] || {};
+  const hip = config[hipKey] || {};
+  const ankle = config[ankleKey] || {};
+  const boneName = side === 'left' ? 'Knee_L' : 'Knee_R';
+  const ankleBone = side === 'left' ? 'Ankle_L' : 'Ankle_R';
+  const sideLabel = side === 'left' ? 'Left' : 'Right';
+
+  const aboveKnee = (SEGMENT_MASS_PCT.head + SEGMENT_MASS_PCT.trunk + (SEGMENT_MASS_PCT.upperArm + SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand) * 2) * 0.5 + SEGMENT_MASS_PCT.thigh;
+  const hipFlex = Math.abs(hip.flexion ?? 0);
+  const hipAntev = Math.abs(hip.anteversion ?? 0);
+  const hipIntRot = Math.abs(hip.internalRotation ?? 0);
+
+  const kneeFlex = Math.abs(knee.flexion ?? 0);
+  const kneeVarus = Math.abs(knee.varus ?? 0);
+  const tibTorsion = Math.abs(knee.tibialTorsion ?? 0);
+  const recurvatum = Math.abs(knee.recurvatum ?? 0);
+  const tibSlope = Math.abs(knee.tibialSlope ?? 0);
+  const ankleDF = Math.abs(ankle.dorsiflexion ?? 0);
+
+  const kneeFlexRad = deg2rad(clamp(kneeFlex, 0, 140));
+  const hipFlexContrib = 1 + Math.sin(deg2rad(clamp(hipFlex, 0, 120))) * 0.5;
+  const valgusFromHip = hipAntev * 0.3 + hipIntRot * 0.2;
+  const totalVarusValgus = kneeVarus + valgusFromHip;
+
+  const pfMultiplier = 1 + Math.sin(kneeFlexRad) * 4.0;
+  const pfComp = aboveKnee * pfMultiplier * hipFlexContrib * 0.5;
+  const pfShear = pfComp * Math.sin(kneeFlexRad) * 0.12;
+  const pfTension = aboveKnee * 0.3 * (1 + Math.sin(kneeFlexRad) * 2.0);
+  joints.push({ id: `${side}_patellofemoral`, label: `${sideLabel} Patellofemoral Joint`, category: `${side}_knee`, boneName, compression: pfComp, tension: pfTension, shear: pfShear, totalForce: pfComp + pfShear, status: getStatus(pfComp), clinical: getClinicalNote(pfComp, 'patellofemoral'), enabled: true });
+
+  const tfComp = aboveKnee * (1 + Math.sin(kneeFlexRad) * 2.0) * hipFlexContrib * 0.5;
+  const tfShear = tfComp * Math.sin(kneeFlexRad) * 0.15 + aboveKnee * tibSlope * 0.005;
+  const tfTension = aboveKnee * 0.08 * (1 + 0.01 * recurvatum);
+  const varusFactor = 1 + 0.03 * totalVarusValgus;
+  const medComp = tfComp * varusFactor * (kneeVarus > 0 ? 1.15 : 0.85);
+  const latComp = tfComp * varusFactor * (kneeVarus > 0 ? 0.85 : 1.15);
+  joints.push({ id: `${side}_tf_medial`, label: `${sideLabel} Medial Tibiofemoral`, category: `${side}_knee`, boneName, compression: medComp, tension: tfTension, shear: tfShear, totalForce: medComp + tfShear, status: getStatus(medComp), clinical: getClinicalNote(medComp, 'tibiofemoral'), enabled: true });
+  joints.push({ id: `${side}_tf_lateral`, label: `${sideLabel} Lateral Tibiofemoral`, category: `${side}_knee`, boneName, compression: latComp, tension: tfTension * 0.9, shear: tfShear * 0.9, totalForce: latComp + tfShear * 0.9, status: getStatus(latComp), clinical: getClinicalNote(latComp, 'tibiofemoral'), enabled: true });
+
+  const medMeniscus = medComp * 0.5;
+  const latMeniscus = latComp * 0.45;
+  joints.push({ id: `${side}_medial_meniscus`, label: `${sideLabel} Medial Meniscus`, category: `${side}_knee`, boneName, compression: medMeniscus, tension: medMeniscus * 0.3, shear: medMeniscus * 0.15, totalForce: medMeniscus, status: getStatus(medMeniscus), clinical: getClinicalNote(medMeniscus, 'tibiofemoral'), enabled: true });
+  joints.push({ id: `${side}_lateral_meniscus`, label: `${sideLabel} Lateral Meniscus`, category: `${side}_knee`, boneName, compression: latMeniscus, tension: latMeniscus * 0.25, shear: latMeniscus * 0.12, totalForce: latMeniscus, status: getStatus(latMeniscus), clinical: getClinicalNote(latMeniscus, 'tibiofemoral'), enabled: true });
+
+  const aclTension = aboveKnee * 0.15 * (1 + 0.02 * tibSlope) * (kneeFlex < 30 ? 1.5 : 1.0) * (1 + 0.01 * recurvatum);
+  const pclTension = aboveKnee * 0.1 * (1 + Math.sin(kneeFlexRad) * 1.5) * (kneeFlex > 60 ? 1.3 : 1.0);
+  joints.push({ id: `${side}_acl`, label: `${sideLabel} ACL`, category: `${side}_knee`, boneName, compression: 0, tension: aclTension, shear: 0, totalForce: aclTension, status: getStatus(aclTension), clinical: getClinicalNote(aclTension, 'generic'), enabled: true });
+  joints.push({ id: `${side}_pcl`, label: `${sideLabel} PCL`, category: `${side}_knee`, boneName, compression: 0, tension: pclTension, shear: 0, totalForce: pclTension, status: getStatus(pclTension), clinical: getClinicalNote(pclTension, 'generic'), enabled: true });
+
+  const tibFibComp = tfComp * 0.08 * (1 + 0.02 * tibTorsion + 0.01 * ankleDF);
+  const tibFibShear = tibFibComp * 0.4 * (1 + 0.03 * tibTorsion);
+  joints.push({ id: `${side}_prox_tibfib`, label: `${sideLabel} Proximal Tibiofibular`, category: `${side}_knee`, boneName, compression: tibFibComp, tension: tibFibComp * 0.2, shear: tibFibShear, totalForce: tibFibComp + tibFibShear, status: getStatus(tibFibComp), clinical: getClinicalNote(tibFibComp, 'generic'), enabled: true });
+
+  return joints;
+}
+
+function computeAnkleForces(config: JointAngles, side: 'left' | 'right'): JointSurfaceForce[] {
+  const joints: JointSurfaceForce[] = [];
+  const ankleKey = side === 'left' ? 'leftAnkle' : 'rightAnkle';
+  const kneeKey = side === 'left' ? 'leftKnee' : 'rightKnee';
+  const hipKey = side === 'left' ? 'leftHip' : 'rightHip';
+  const ankle = config[ankleKey] || {};
+  const knee = config[kneeKey] || {};
+  const hip = config[hipKey] || {};
+  const boneName = side === 'left' ? 'Ankle_L' : 'Ankle_R';
+  const toeBone = side === 'left' ? 'Toes_L' : 'Toes_R';
+  const sideLabel = side === 'left' ? 'Left' : 'Right';
+
+  const aboveAnkle = (SEGMENT_MASS_PCT.head + SEGMENT_MASS_PCT.trunk + (SEGMENT_MASS_PCT.upperArm + SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand) * 2) * 0.5 + SEGMENT_MASS_PCT.thigh + SEGMENT_MASS_PCT.shank;
+
+  const df = Math.abs(ankle.dorsiflexion ?? 0);
+  const pf = Math.abs(ankle.plantarflexion ?? 0);
+  const inv = Math.abs(ankle.inversion ?? 0);
+  const ev = Math.abs(ankle.eversion ?? 0);
+  const ffVarus = Math.abs(ankle.forefootVarus ?? 0);
+  const toeExt = Math.abs(ankle.toeExtension ?? 0);
+  const kneeFlex = Math.abs(knee.flexion ?? 0);
+  const kneeVarus = Math.abs(knee.varus ?? 0);
+  const tibTorsion = Math.abs(knee.tibialTorsion ?? 0);
+  const hipIntRot = Math.abs(hip.internalRotation ?? 0);
+
+  const ankleAngle = Math.max(df, pf);
+  const ankleMoment = Math.sin(deg2rad(clamp(ankleAngle, 0, 50)));
+
+  const chainFromAbove = 1 + 0.005 * tibTorsion + 0.003 * kneeVarus + 0.002 * hipIntRot;
+
+  const tcComp = aboveAnkle * (1 + ankleMoment * 1.5) * 0.5 * chainFromAbove;
+  const tcShear = aboveAnkle * ankleMoment * 0.2 * chainFromAbove;
+  const tcTension = aboveAnkle * 0.08 * (1 + 0.01 * df);
+  joints.push({ id: `${side}_talocrural`, label: `${sideLabel} Talocrural (Ankle Mortise)`, category: `${side}_ankle`, boneName, compression: tcComp, tension: tcTension, shear: tcShear, totalForce: tcComp + tcShear, status: getStatus(tcComp), clinical: getClinicalNote(tcComp, 'ankle'), enabled: true });
+
+  const invEvFactor = 1 + 0.03 * inv + 0.02 * ev + 0.02 * ffVarus;
+  const stComp = aboveAnkle * 0.35 * invEvFactor * chainFromAbove;
+  const stShear = aboveAnkle * 0.12 * invEvFactor;
+  const stTension = aboveAnkle * 0.05 * (1 + 0.02 * inv);
+  joints.push({ id: `${side}_subtalar`, label: `${sideLabel} Subtalar Joint`, category: `${side}_ankle`, boneName, compression: stComp, tension: stTension, shear: stShear, totalForce: stComp + stShear, status: getStatus(stComp), clinical: getClinicalNote(stComp, 'ankle'), enabled: true });
+
+  const distTfComp = aboveAnkle * 0.06 * (1 + 0.02 * df + 0.01 * ev);
+  const distTfShear = distTfComp * 0.5;
+  joints.push({ id: `${side}_dist_tibfib`, label: `${sideLabel} Distal Tibiofibular (Syndesmosis)`, category: `${side}_ankle`, boneName, compression: distTfComp, tension: distTfComp * 0.3, shear: distTfShear, totalForce: distTfComp + distTfShear, status: getStatus(distTfComp), clinical: getClinicalNote(distTfComp, 'generic'), enabled: true });
+
+  const mtComp = aboveAnkle * 0.2 * (1 + 0.03 * ffVarus + 0.02 * inv + 0.01 * ev) * chainFromAbove;
+  const mtShear = mtComp * 0.25;
+  joints.push({ id: `${side}_midtarsal`, label: `${sideLabel} Midtarsal (Chopart's)`, category: `${side}_ankle`, boneName, compression: mtComp, tension: mtComp * 0.15, shear: mtShear, totalForce: mtComp + mtShear, status: getStatus(mtComp), clinical: getClinicalNote(mtComp, 'generic'), enabled: true });
+
+  const tmtComp = aboveAnkle * 0.12 * (1 + 0.04 * ffVarus + 0.02 * toeExt * 0.5);
+  joints.push({ id: `${side}_tmt`, label: `${sideLabel} Tarsometatarsal (Lisfranc)`, category: `${side}_ankle`, boneName, compression: tmtComp, tension: tmtComp * 0.2, shear: tmtComp * 0.15, totalForce: tmtComp, status: getStatus(tmtComp), clinical: getClinicalNote(tmtComp, 'generic'), enabled: true });
+
+  const pfTension = aboveAnkle * 0.08 * (1 + 0.03 * toeExt + 0.02 * df + 0.02 * ffVarus);
+  joints.push({ id: `${side}_plantar_fascia`, label: `${sideLabel} Plantar Fascia`, category: `${side}_ankle`, boneName: toeBone, compression: 0, tension: pfTension, shear: 0, totalForce: pfTension, status: getStatus(pfTension), clinical: getClinicalNote(pfTension, 'generic'), enabled: true });
+
+  const mtpComp = aboveAnkle * 0.08 * (1 + 0.04 * toeExt + 0.02 * ffVarus);
+  joints.push({ id: `${side}_1st_mtp`, label: `${sideLabel} 1st MTP Joint`, category: `${side}_ankle`, boneName: toeBone, compression: mtpComp, tension: mtpComp * 0.15, shear: mtpComp * 0.1, totalForce: mtpComp, status: getStatus(mtpComp), clinical: getClinicalNote(mtpComp, 'generic'), enabled: true });
+
+  return joints;
+}
+
+function computeShoulderForces(config: JointAngles, side: 'left' | 'right'): JointSurfaceForce[] {
+  const joints: JointSurfaceForce[] = [];
+  const shoulderKey = side === 'left' ? 'leftShoulder' : 'rightShoulder';
+  const scapKey = side === 'left' ? 'leftScapula' : 'rightScapula';
+  const elbowKey = side === 'left' ? 'leftElbow' : 'rightElbow';
+  const shoulder = config[shoulderKey] || {};
+  const scap = config[scapKey] || {};
+  const elbow = config[elbowKey] || {};
+  const boneName = side === 'left' ? 'Shoulder_L' : 'Shoulder_R';
+  const scapBone = side === 'left' ? 'Scapula_L' : 'Scapula_R';
+  const sideLabel = side === 'left' ? 'Left' : 'Right';
+
+  const armMass = SEGMENT_MASS_PCT.upperArm + SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand;
+
+  const flex = Math.abs(shoulder.flexion ?? 0);
+  const ext = Math.abs(shoulder.extension ?? 0);
+  const abd = Math.abs(shoulder.abduction ?? 0);
+  const intRot = Math.abs(shoulder.internalRotation ?? 0);
+  const extRot = Math.abs(shoulder.externalRotation ?? 0);
+  const horizAdd = Math.abs(shoulder.horizontalAdduction ?? 0);
+  const elbFlex = Math.abs(elbow.flexion ?? 0);
+  const scapProt = Math.abs(scap.protraction ?? 0);
+  const scapElev = Math.abs(scap.elevation ?? 0);
+  const scapUpRot = Math.abs(scap.upwardRotation ?? 0);
+  const scapAntTilt = Math.abs(scap.anteriorTilt ?? 0);
+  const scapWing = Math.abs(scap.winging ?? 0);
+
+  const thorKyph = Math.abs(config.spine?.thoracicKyphosis ?? 0);
+
+  const leverAngle = Math.max(flex, abd);
+  const leverArm = Math.sin(deg2rad(clamp(leverAngle, 0, 180)));
+  const ghComp = armMass * (1 + leverArm * 5.0) + armMass * Math.sin(deg2rad(clamp(elbFlex, 0, 150))) * 0.3;
+  const ghShear = ghComp * 0.15 * (1 + 0.02 * intRot + 0.02 * extRot + 0.01 * horizAdd);
+  const ghTension = armMass * 0.5 * leverArm * (1 + 0.01 * ext);
+
+  const kyphFactor = 1 + 0.01 * thorKyph;
+  const scapDyskFactor = 1 + 0.02 * scapWing + 0.015 * scapAntTilt + 0.01 * scapProt;
+
+  joints.push({ id: `${side}_gh`, label: `${sideLabel} Glenohumeral (GH)`, category: `${side}_shoulder`, boneName, compression: ghComp * kyphFactor * scapDyskFactor, tension: ghTension * scapDyskFactor, shear: ghShear * kyphFactor * scapDyskFactor, totalForce: ghComp * kyphFactor + ghShear, status: getStatus(ghComp * kyphFactor * scapDyskFactor), clinical: getClinicalNote(ghComp * kyphFactor * scapDyskFactor, 'shoulder'), enabled: true });
+
+  const rcTension = ghComp * 0.6 * scapDyskFactor * (1 + 0.015 * intRot + 0.015 * extRot);
+  const rcComp = ghComp * 0.1;
+  joints.push({ id: `${side}_rotator_cuff`, label: `${sideLabel} Rotator Cuff Complex`, category: `${side}_shoulder`, boneName, compression: rcComp, tension: rcTension, shear: rcTension * 0.15, totalForce: rcTension, status: getStatus(rcTension), clinical: getClinicalNote(rcTension, 'shoulder'), enabled: true });
+
+  const subacromialComp = armMass * leverArm * 2.0 * scapDyskFactor * kyphFactor;
+  const isImpingementZone = leverAngle > 60 && leverAngle < 120;
+  const impingementFactor = isImpingementZone ? 1.5 : 1.0;
+  joints.push({ id: `${side}_subacromial`, label: `${sideLabel} Subacromial Space`, category: `${side}_shoulder`, boneName, compression: subacromialComp * impingementFactor, tension: 0, shear: subacromialComp * 0.2 * impingementFactor, totalForce: subacromialComp * impingementFactor, status: getStatus(subacromialComp * impingementFactor), clinical: getClinicalNote(subacromialComp * impingementFactor, 'shoulder'), enabled: true });
+
+  const acComp = armMass * 0.3 * (1 + leverArm * 1.5 + 0.02 * horizAdd + 0.02 * scapProt);
+  const acShear = acComp * 0.3;
+  joints.push({ id: `${side}_ac`, label: `${sideLabel} Acromioclavicular (AC)`, category: `${side}_shoulder`, boneName: scapBone, compression: acComp, tension: acComp * 0.2, shear: acShear, totalForce: acComp + acShear, status: getStatus(acComp), clinical: getClinicalNote(acComp, 'generic'), enabled: true });
+
+  const scComp = armMass * 0.2 * (1 + leverArm * 1.0 + 0.02 * scapElev + 0.01 * scapProt);
+  const scShear = scComp * 0.25;
+  joints.push({ id: `${side}_sc`, label: `${sideLabel} Sternoclavicular (SC)`, category: `${side}_shoulder`, boneName: scapBone, compression: scComp, tension: scComp * 0.15, shear: scShear, totalForce: scComp + scShear, status: getStatus(scComp), clinical: getClinicalNote(scComp, 'generic'), enabled: true });
+
+  const stComp = armMass * 0.15 * (1 + 0.02 * scapWing + 0.02 * scapAntTilt + 0.01 * scapUpRot);
+  joints.push({ id: `${side}_scapthor`, label: `${sideLabel} Scapulothoracic`, category: `${side}_shoulder`, boneName: scapBone, compression: stComp, tension: stComp * 0.5, shear: stComp * 0.2, totalForce: stComp, status: getStatus(stComp), clinical: getClinicalNote(stComp, 'generic'), enabled: true });
+
+  return joints;
+}
+
+function computeElbowForces(config: JointAngles, side: 'left' | 'right'): JointSurfaceForce[] {
+  const joints: JointSurfaceForce[] = [];
+  const elbowKey = side === 'left' ? 'leftElbow' : 'rightElbow';
+  const shoulderKey = side === 'left' ? 'leftShoulder' : 'rightShoulder';
+  const elbow = config[elbowKey] || {};
+  const shoulder = config[shoulderKey] || {};
+  const boneName = side === 'left' ? 'Elbow_L' : 'Elbow_R';
+  const sideLabel = side === 'left' ? 'Left' : 'Right';
+
+  const forearmMass = SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand;
+
+  const flex = Math.abs(elbow.flexion ?? 0);
+  const pro = Math.abs(elbow.pronation ?? 0);
+  const sup = Math.abs(elbow.supination ?? 0);
+  const valgus = Math.abs(elbow.valgus ?? 0);
+  const shoulderFlex = Math.abs(shoulder.flexion ?? 0);
+  const shoulderAbd = Math.abs(shoulder.abduction ?? 0);
+
+  const flexRad = deg2rad(clamp(flex, 0, 150));
+  const leverAngle = Math.max(shoulderFlex, shoulderAbd);
+  const shoulderFactor = 1 + Math.sin(deg2rad(clamp(leverAngle, 0, 180))) * 0.3;
+
+  const huComp = forearmMass * (1 + Math.sin(flexRad) * 3.5) * shoulderFactor;
+  const huShear = huComp * 0.12 * (1 + 0.02 * valgus);
+  const huTension = forearmMass * 0.2 * (1 + Math.sin(flexRad) * 1.5);
+  joints.push({ id: `${side}_humeroulnar`, label: `${sideLabel} Humeroulnar`, category: `${side}_elbow`, boneName, compression: huComp, tension: huTension, shear: huShear, totalForce: huComp + huShear, status: getStatus(huComp), clinical: getClinicalNote(huComp, 'generic'), enabled: true });
+
+  const hrComp = forearmMass * (1 + Math.sin(flexRad) * 2.0) * (1 + 0.02 * pro + 0.02 * sup) * shoulderFactor;
+  const hrShear = hrComp * 0.1;
+  joints.push({ id: `${side}_humeroradial`, label: `${sideLabel} Humeroradial`, category: `${side}_elbow`, boneName, compression: hrComp, tension: hrComp * 0.15, shear: hrShear, totalForce: hrComp + hrShear, status: getStatus(hrComp), clinical: getClinicalNote(hrComp, 'generic'), enabled: true });
+
+  const pruComp = forearmMass * 0.3 * (1 + 0.03 * pro + 0.03 * sup);
+  const pruShear = pruComp * 0.35 * (1 + 0.02 * pro + 0.02 * sup);
+  joints.push({ id: `${side}_prox_radioulnar`, label: `${sideLabel} Proximal Radioulnar`, category: `${side}_elbow`, boneName, compression: pruComp, tension: pruComp * 0.2, shear: pruShear, totalForce: pruComp + pruShear, status: getStatus(pruComp), clinical: getClinicalNote(pruComp, 'generic'), enabled: true });
+
+  const uclTension = forearmMass * 0.1 * (1 + 0.04 * valgus + Math.sin(flexRad) * 0.5);
+  joints.push({ id: `${side}_ucl`, label: `${sideLabel} UCL (Medial Collateral)`, category: `${side}_elbow`, boneName, compression: 0, tension: uclTension, shear: 0, totalForce: uclTension, status: getStatus(uclTension), clinical: getClinicalNote(uclTension, 'generic'), enabled: true });
+
+  const cepTension = forearmMass * 0.15 * (1 + Math.sin(flexRad) * 1.0 + 0.02 * pro);
+  joints.push({ id: `${side}_common_extensor`, label: `${sideLabel} Common Extensor (Lateral Epicondyle)`, category: `${side}_elbow`, boneName, compression: 0, tension: cepTension, shear: 0, totalForce: cepTension, status: getStatus(cepTension), clinical: getClinicalNote(cepTension, 'generic'), enabled: true });
+
+  const cfpTension = forearmMass * 0.12 * (1 + Math.sin(flexRad) * 1.2 + 0.02 * sup);
+  joints.push({ id: `${side}_common_flexor`, label: `${sideLabel} Common Flexor (Medial Epicondyle)`, category: `${side}_elbow`, boneName, compression: 0, tension: cfpTension, shear: 0, totalForce: cfpTension, status: getStatus(cfpTension), clinical: getClinicalNote(cfpTension, 'generic'), enabled: true });
+
+  return joints;
+}
+
+function computeWristForces(config: JointAngles, side: 'left' | 'right'): JointSurfaceForce[] {
+  const joints: JointSurfaceForce[] = [];
+  const wristKey = side === 'left' ? 'leftWrist' : 'rightWrist';
+  const elbowKey = side === 'left' ? 'leftElbow' : 'rightElbow';
+  const wrist = config[wristKey] || {};
+  const elbow = config[elbowKey] || {};
+  const boneName = side === 'left' ? 'Wrist_L' : 'Wrist_R';
+  const sideLabel = side === 'left' ? 'Left' : 'Right';
+
+  const handMass = SEGMENT_MASS_PCT.hand;
+
+  const wFlex = Math.abs(wrist.flexion ?? 0);
+  const wExt = Math.abs(wrist.extension ?? 0);
+  const radDev = Math.abs(wrist.radialDeviation ?? 0);
+  const ulnDev = Math.abs(wrist.ulnarDeviation ?? 0);
+  const wPro = Math.abs(wrist.pronation ?? 0);
+  const elbFlex = Math.abs(elbow.flexion ?? 0);
+
+  const wristAngle = Math.max(wFlex, wExt);
+  const wristMoment = Math.sin(deg2rad(clamp(wristAngle, 0, 80)));
+  const elbowFactor = 1 + Math.sin(deg2rad(clamp(elbFlex, 0, 150))) * 0.2;
+
+  const rcComp = handMass * (1 + wristMoment * 3.0) * elbowFactor;
+  const rcShear = rcComp * 0.15 * (1 + 0.02 * radDev + 0.02 * ulnDev);
+  joints.push({ id: `${side}_radiocarpal`, label: `${sideLabel} Radiocarpal`, category: `${side}_wrist`, boneName, compression: rcComp, tension: rcComp * 0.2, shear: rcShear, totalForce: rcComp + rcShear, status: getStatus(rcComp), clinical: getClinicalNote(rcComp, 'generic'), enabled: true });
+
+  const mcComp = handMass * (1 + wristMoment * 2.0) * elbowFactor;
+  const mcShear = mcComp * 0.12;
+  joints.push({ id: `${side}_midcarpal`, label: `${sideLabel} Midcarpal`, category: `${side}_wrist`, boneName, compression: mcComp, tension: mcComp * 0.15, shear: mcShear, totalForce: mcComp + mcShear, status: getStatus(mcComp), clinical: getClinicalNote(mcComp, 'generic'), enabled: true });
+
+  const drujComp = handMass * 0.4 * (1 + 0.03 * wPro + 0.02 * ulnDev);
+  const drujShear = drujComp * 0.4 * (1 + 0.03 * wPro);
+  joints.push({ id: `${side}_druj`, label: `${sideLabel} DRUJ (Distal Radioulnar)`, category: `${side}_wrist`, boneName, compression: drujComp, tension: drujComp * 0.2, shear: drujShear, totalForce: drujComp + drujShear, status: getStatus(drujComp), clinical: getClinicalNote(drujComp, 'generic'), enabled: true });
+
+  const tfccComp = handMass * 0.15 * (1 + 0.04 * ulnDev + 0.02 * wPro);
+  const tfccTension = handMass * 0.1 * (1 + 0.03 * ulnDev + 0.02 * wPro);
+  joints.push({ id: `${side}_tfcc`, label: `${sideLabel} TFCC`, category: `${side}_wrist`, boneName, compression: tfccComp, tension: tfccTension, shear: tfccComp * 0.2, totalForce: tfccComp + tfccTension, status: getStatus(Math.max(tfccComp, tfccTension)), clinical: getClinicalNote(Math.max(tfccComp, tfccTension), 'generic'), enabled: true });
+
+  return joints;
 }
 
 export function calculatePosturalForces(config: JointAngles): ForceAnalysisResult {
+  const allJoints: JointSurfaceForce[] = [
+    ...computeSpineForces(config),
+    ...computeHipForces(config, 'left'),
+    ...computeHipForces(config, 'right'),
+    ...computeKneeForces(config, 'left'),
+    ...computeKneeForces(config, 'right'),
+    ...computeAnkleForces(config, 'left'),
+    ...computeAnkleForces(config, 'right'),
+    ...computeShoulderForces(config, 'left'),
+    ...computeShoulderForces(config, 'right'),
+    ...computeElbowForces(config, 'left'),
+    ...computeElbowForces(config, 'right'),
+    ...computeWristForces(config, 'left'),
+    ...computeWristForces(config, 'right'),
+  ];
+
+  const categoryMap: Record<string, { label: string; order: number }> = {
+    cervical_spine: { label: 'Cervical Spine', order: 0 },
+    thoracic_spine: { label: 'Thoracic Spine', order: 1 },
+    lumbar_spine: { label: 'Lumbar Spine', order: 2 },
+    pelvis_sacrum: { label: 'Pelvis & Sacrum', order: 3 },
+    left_hip: { label: 'Left Hip', order: 4 },
+    right_hip: { label: 'Right Hip', order: 5 },
+    left_knee: { label: 'Left Knee', order: 6 },
+    right_knee: { label: 'Right Knee', order: 7 },
+    left_ankle: { label: 'Left Ankle & Foot', order: 8 },
+    right_ankle: { label: 'Right Ankle & Foot', order: 9 },
+    left_shoulder: { label: 'Left Shoulder', order: 10 },
+    right_shoulder: { label: 'Right Shoulder', order: 11 },
+    left_elbow: { label: 'Left Elbow', order: 12 },
+    right_elbow: { label: 'Right Elbow', order: 13 },
+    left_wrist: { label: 'Left Wrist & Hand', order: 14 },
+    right_wrist: { label: 'Right Wrist & Hand', order: 15 },
+  };
+
+  for (const j of allJoints) {
+    j.compression = clampForce(j.compression);
+    j.tension = clampForce(j.tension);
+    j.shear = clampForce(j.shear);
+    j.totalForce = clampForce(j.compression + j.shear);
+    j.status = getStatus(Math.max(j.compression, j.tension));
+  }
+
+  const grouped: Record<string, JointSurfaceForce[]> = {};
+  for (const j of allJoints) {
+    if (!grouped[j.category]) grouped[j.category] = [];
+    grouped[j.category].push(j);
+  }
+
+  const categories: ForceCategory[] = Object.entries(grouped)
+    .sort((a, b) => (categoryMap[a[0]]?.order ?? 99) - (categoryMap[b[0]]?.order ?? 99))
+    .map(([catId, catJoints]) => ({
+      id: catId,
+      label: categoryMap[catId]?.label ?? catId,
+      joints: catJoints,
+      collapsed: true,
+    }));
+
   const spineFlexion = Math.abs(config.spine?.thoracicKyphosis ?? 0) + Math.abs(config.spine?.lumbarLordosis ?? 0);
   const forwardHead = Math.abs(config.spine?.forwardHead ?? 0);
   const lateralShift = Math.abs(config.spine?.lateralShift ?? 0);
   const scoliosis = Math.abs(config.spine?.scoliosis ?? 0);
-  const neckFlexion = Math.abs(config.neck?.flexion ?? 0);
-  const neckExtension = Math.abs(config.neck?.extension ?? 0);
-  const neckLateral = Math.abs(config.neck?.lateralFlexion ?? 0);
-  const pelvisTilt = config.pelvis?.tilt ?? 0;
   const pelvisObliquity = Math.abs(config.pelvis?.obliquity ?? 0);
-
   const lHipFlex = Math.abs(config.leftHip?.flexion ?? 0);
   const rHipFlex = Math.abs(config.rightHip?.flexion ?? 0);
-  const lHipAbd = Math.abs(config.leftHip?.abduction ?? 0);
-  const rHipAbd = Math.abs(config.rightHip?.abduction ?? 0);
-  const lKneeFlex = Math.abs(config.leftKnee?.flexion ?? 0);
-  const rKneeFlex = Math.abs(config.rightKnee?.flexion ?? 0);
-  const lKneeVarus = Math.abs(config.leftKnee?.varus ?? 0);
-  const rKneeVarus = Math.abs(config.rightKnee?.varus ?? 0);
-  const lAnkleDF = Math.abs(config.leftAnkle?.dorsiflexion ?? 0);
-  const rAnkleDF = Math.abs(config.rightAnkle?.dorsiflexion ?? 0);
-  const lAnklePF = Math.abs(config.leftAnkle?.plantarflexion ?? 0);
-  const rAnklePF = Math.abs(config.rightAnkle?.plantarflexion ?? 0);
-  const lShoulderFlex = Math.abs(config.leftShoulder?.flexion ?? 0);
-  const rShoulderFlex = Math.abs(config.rightShoulder?.flexion ?? 0);
-  const lShoulderAbd = Math.abs(config.leftShoulder?.abduction ?? 0);
-  const rShoulderAbd = Math.abs(config.rightShoulder?.abduction ?? 0);
-  const lElbowFlex = Math.abs(config.leftElbow?.flexion ?? 0);
-  const rElbowFlex = Math.abs(config.rightElbow?.flexion ?? 0);
-
-  const aboveMassHead = SEGMENT_MASS_PCT.head;
-  const aboveMassTrunk = SEGMENT_MASS_PCT.trunk;
-  const aboveMassArms = (SEGMENT_MASS_PCT.upperArm + SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand) * 2;
-  const aboveLumbar = aboveMassHead + aboveMassTrunk * 0.6 + aboveMassArms;
-  const aboveHip = aboveMassHead + aboveMassTrunk + aboveMassArms;
-  const thighMass = SEGMENT_MASS_PCT.thigh;
-  const shankMass = SEGMENT_MASS_PCT.shank;
-  const footMass = SEGMENT_MASS_PCT.foot;
-  const legMass = thighMass + shankMass + footMass;
-
-  const cervicalCompression = aboveMassHead * (1 + 0.015 * neckFlexion + 0.01 * neckExtension + 0.008 * forwardHead + 0.005 * neckLateral);
-  const cervicalShear = aboveMassHead * (0.01 * neckFlexion + 0.005 * forwardHead);
-
-  const trunkLeverArm = Math.sin(deg2rad(clamp(spineFlexion, 0, 90)));
-  const lumbarMomentMultiplier = 1 + trunkLeverArm * 3.5;
-  const lumbarLateralFactor = 1 + 0.02 * lateralShift + 0.015 * scoliosis + 0.01 * pelvisObliquity;
-  const lumbarCompression = aboveLumbar * lumbarMomentMultiplier * lumbarLateralFactor;
-  const lumbarShear = aboveLumbar * (Math.sin(deg2rad(clamp(spineFlexion, 0, 90))) * 0.6 + Math.abs(pelvisTilt) * 0.01);
-
-  const hipBaseFlex = (flexAngle: number) => {
-    const sinFlex = Math.sin(deg2rad(clamp(flexAngle, 0, 120)));
-    return aboveHip * 0.5 * (1 + sinFlex * 2.5);
-  };
-  const abdFactor = (abd: number) => 1 + 0.02 * abd;
-  const lHipForce = hipBaseFlex(lHipFlex) * abdFactor(lHipAbd) + thighMass * 0.5;
-  const rHipForce = hipBaseFlex(rHipFlex) * abdFactor(rHipAbd) + thighMass * 0.5;
-  const lHipShear = aboveHip * 0.5 * Math.sin(deg2rad(clamp(lHipFlex, 0, 120))) * 0.3;
-  const rHipShear = aboveHip * 0.5 * Math.sin(deg2rad(clamp(rHipFlex, 0, 120))) * 0.3;
-
-  const kneeBase = (hipFlex: number, kneeFlex: number) => {
-    const aboveKnee = aboveHip * 0.5 + thighMass;
-    const kneeFlexRad = deg2rad(clamp(kneeFlex, 0, 140));
-    const patelloFemoralMultiplier = 1 + Math.sin(kneeFlexRad) * 4.0;
-    const hipFlexContribution = 1 + Math.sin(deg2rad(clamp(hipFlex, 0, 120))) * 0.5;
-    return aboveKnee * patelloFemoralMultiplier * hipFlexContribution * 0.5;
-  };
-  const varusFactor = (v: number) => 1 + 0.03 * v;
-  const lKneeForce = kneeBase(lHipFlex, lKneeFlex) * varusFactor(lKneeVarus);
-  const rKneeForce = kneeBase(rHipFlex, rKneeFlex) * varusFactor(rKneeVarus);
-  const lKneeShear = lKneeForce * Math.sin(deg2rad(clamp(lKneeFlex, 0, 140))) * 0.15;
-  const rKneeShear = rKneeForce * Math.sin(deg2rad(clamp(rKneeFlex, 0, 140))) * 0.15;
-
-  const ankleBase = (kneeFlex: number, df: number, pf: number) => {
-    const aboveAnkle = aboveHip * 0.5 + thighMass + shankMass;
-    const ankleMoment = Math.max(df, pf);
-    return aboveAnkle * (1 + Math.sin(deg2rad(clamp(ankleMoment, 0, 50))) * 1.5) * 0.5;
-  };
-  const lAnkleForce = ankleBase(lKneeFlex, lAnkleDF, lAnklePF);
-  const rAnkleForce = ankleBase(rKneeFlex, rAnkleDF, rAnklePF);
-
-  const shoulderBase = (flex: number, abd: number, elbowFlex: number) => {
-    const armMass = SEGMENT_MASS_PCT.upperArm + SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand;
-    const leverAngle = Math.max(flex, abd);
-    const leverArm = Math.sin(deg2rad(clamp(leverAngle, 0, 180)));
-    return armMass * (1 + leverArm * 5.0) + armMass * Math.sin(deg2rad(clamp(elbowFlex, 0, 150))) * 0.3;
-  };
-  const lShoulderForce = shoulderBase(lShoulderFlex, lShoulderAbd, lElbowFlex);
-  const rShoulderForce = shoulderBase(rShoulderFlex, rShoulderAbd, rElbowFlex);
-
-  const elbowBase = (flex: number) => {
-    const forearmMass = SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand;
-    return forearmMass * (1 + Math.sin(deg2rad(clamp(flex, 0, 150))) * 3.5);
-  };
-  const lElbowForce = elbowBase(lElbowFlex);
-  const rElbowForce = elbowBase(rElbowFlex);
 
   const comX = lateralShift * 0.01 + scoliosis * 0.005 + pelvisObliquity * 0.005;
   const comY = spineFlexion * 0.005 + forwardHead * 0.003 + Math.max(lHipFlex, rHipFlex) * 0.002;
 
-  const joints: JointForceResult[] = [
-    { joint: 'cervical', label: 'Cervical Spine', forceBW: cervicalCompression, compressionBW: cervicalCompression, shearBW: cervicalShear, status: getStatus(cervicalCompression), clinical: getClinicalNote('cervical', cervicalCompression) },
-    { joint: 'lumbar', label: 'L4/L5 Lumbar', forceBW: lumbarCompression, compressionBW: lumbarCompression, shearBW: lumbarShear, status: getStatus(lumbarCompression), clinical: getClinicalNote('lumbar', lumbarCompression) },
-    { joint: 'leftHip', label: 'Left Hip', forceBW: lHipForce, compressionBW: lHipForce, shearBW: lHipShear, status: getStatus(lHipForce), clinical: getClinicalNote('hip', lHipForce) },
-    { joint: 'rightHip', label: 'Right Hip', forceBW: rHipForce, compressionBW: rHipForce, shearBW: rHipShear, status: getStatus(rHipForce), clinical: getClinicalNote('hip', rHipForce) },
-    { joint: 'leftKnee', label: 'Left Knee', forceBW: lKneeForce, compressionBW: lKneeForce, shearBW: lKneeShear, status: getStatus(lKneeForce), clinical: getClinicalNote('knee', lKneeForce) },
-    { joint: 'rightKnee', label: 'Right Knee', forceBW: rKneeForce, compressionBW: rKneeForce, shearBW: rKneeShear, status: getStatus(rKneeForce), clinical: getClinicalNote('knee', rKneeForce) },
-    { joint: 'leftAnkle', label: 'Left Ankle', forceBW: lAnkleForce, compressionBW: lAnkleForce, shearBW: 0, status: getStatus(lAnkleForce), clinical: getClinicalNote('ankle', lAnkleForce) },
-    { joint: 'rightAnkle', label: 'Right Ankle', forceBW: rAnkleForce, compressionBW: rAnkleForce, shearBW: 0, status: getStatus(rAnkleForce), clinical: getClinicalNote('ankle', rAnkleForce) },
-    { joint: 'leftShoulder', label: 'Left Shoulder', forceBW: lShoulderForce, compressionBW: lShoulderForce, shearBW: 0, status: getStatus(lShoulderForce), clinical: getClinicalNote('shoulder', lShoulderForce) },
-    { joint: 'rightShoulder', label: 'Right Shoulder', forceBW: rShoulderForce, compressionBW: rShoulderForce, shearBW: 0, status: getStatus(rShoulderForce), clinical: getClinicalNote('shoulder', rShoulderForce) },
-    { joint: 'leftElbow', label: 'Left Elbow', forceBW: lElbowForce, compressionBW: lElbowForce, shearBW: 0, status: getStatus(lElbowForce), clinical: getClinicalNote('elbow', lElbowForce) },
-    { joint: 'rightElbow', label: 'Right Elbow', forceBW: rElbowForce, compressionBW: rElbowForce, shearBW: 0, status: getStatus(rElbowForce), clinical: getClinicalNote('elbow', rElbowForce) },
-  ];
-
   return {
-    joints,
+    categories,
+    joints: allJoints,
     totalBodyCOM: { x: comX, y: comY },
     baseSupportShift: Math.sqrt(comX * comX + comY * comY),
   };

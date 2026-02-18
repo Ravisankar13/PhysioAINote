@@ -58,8 +58,7 @@ import {
   Search,
   Check,
   Scale,
-  GitBranch,
-  Brain
+  GitBranch
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";

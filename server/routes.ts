@@ -6132,6 +6132,36 @@ Guidelines:
     }
   });
 
+  // PhysioGPT Quick Analysis (for AI posture corrections, muscle suggestions, etc.)
+  app.post("/api/physio-gpt/quick-analysis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { prompt } = req.body;
+      if (!prompt || typeof prompt !== 'string') {
+        return res.status(400).json({ error: "Prompt is required" });
+      }
+
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert physiotherapy biomechanics specialist. Provide concise, evidence-based clinical suggestions. Use bullet points. Be specific about which posture corrections to make and why. Keep responses under 200 words."
+          },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.3
+      });
+
+      const response = completion.choices[0]?.message?.content || "Unable to generate analysis.";
+      res.json({ response });
+    } catch (error: any) {
+      console.error("Quick analysis error:", error);
+      res.status(500).json({ error: "Unable to process analysis request" });
+    }
+  });
+
   // AI Treatment Planner Routes
   app.post("/api/treatment-planner/start", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

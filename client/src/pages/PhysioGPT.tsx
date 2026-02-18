@@ -84,7 +84,7 @@ import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWa
 import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority } from "@/lib/muscleBiomechanicsEngine";
 import { KINETIC_CHAINS, type KineticChainDefinition } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
-import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential } from "@/lib/treatmentPathwayEngine";
+import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
 
 const BODY_REGIONS = {
   cervical: {
@@ -3757,7 +3757,7 @@ ${ddxList}`;
                                             <span className="text-[10px] font-semibold text-amber-800">{ae.name}</span>
                                           </div>
                                           <p className="text-[8px] text-gray-600 mt-0.5 ml-4">{ae.description}</p>
-                                          {ae.dosage && <p className="text-[8px] text-emerald-600 mt-0.5 ml-4 font-medium">{ae.dosage}</p>}
+                                          {ae.sets && ae.reps && <p className="text-[8px] text-emerald-600 mt-0.5 ml-4 font-medium">{ae.sets} × {ae.reps}</p>}
                                           <div className="flex items-center gap-2 mt-1 ml-4">
                                             <span className="text-[7px] px-1 py-0.5 rounded bg-amber-100 text-amber-600">From: {ae.sourceRegion}</span>
                                             <span className="text-[7px] px-1 py-0.5 rounded bg-gray-100 text-gray-500">Severity {ae.sourceSeverity}/10</span>
@@ -3783,9 +3783,9 @@ ${ddxList}`;
                                         <div key={aai} className="bg-amber-50/50 rounded-lg px-2.5 py-2 border border-amber-200">
                                           <div className="flex items-center gap-1.5">
                                             <Sparkles className="h-2.5 w-2.5 text-amber-500" />
-                                            <span className="text-[10px] font-semibold text-amber-800">{aa.name}</span>
+                                            <span className="text-[10px] font-semibold text-amber-800">{aa.test}</span>
                                           </div>
-                                          <p className="text-[8px] text-gray-600 mt-0.5 ml-4">{aa.description}</p>
+                                          <p className="text-[8px] text-gray-600 mt-0.5 ml-4">{aa.technique || ''}</p>
                                           {aa.purpose && <p className="text-[8px] text-blue-600 mt-0.5 ml-4 italic">{aa.purpose}</p>}
                                           <div className="flex items-center gap-2 mt-1 ml-4">
                                             <span className="text-[7px] px-1 py-0.5 rounded bg-amber-100 text-amber-600">From: {aa.sourceRegion}</span>
@@ -3858,6 +3858,133 @@ ${ddxList}`;
                         </div>
                       );
                     })}
+
+                    {/* Root Cause Treatments */}
+                    {treatmentPlan.rootCauseTreatments.length > 0 && (
+                      <div className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-xl px-3 py-3 border border-indigo-200 shadow-sm">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+                            <GitBranch className="h-3 w-3 text-white" />
+                          </div>
+                          <span className="font-bold text-indigo-900 text-xs">Root Cause Treatment Plans</span>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-600 font-medium">{treatmentPlan.rootCauseTreatments.length} chain(s)</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {treatmentPlan.rootCauseTreatments.map((rct, rctIdx) => (
+                            <div key={rctIdx} className="bg-white/70 rounded-lg px-2.5 py-2 border border-indigo-100">
+                              <button
+                                className="w-full text-left flex items-center gap-2"
+                                onClick={() => setExpandedTreatmentSection(prev => prev === `rct_${rctIdx}` ? null : `rct_${rctIdx}`)}
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[11px] font-bold text-indigo-800">{rct.region}</span>
+                                    <span className={`text-[7px] px-1.5 py-0.5 rounded-full font-semibold ${rct.severity >= 7 ? 'bg-red-100 text-red-600' : rct.severity >= 4 ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
+                                      {rct.severity}/10
+                                    </span>
+                                  </div>
+                                  <div className="text-[8px] text-indigo-600 mt-0.5 font-mono">
+                                    {rct.chainSummary}
+                                  </div>
+                                </div>
+                                <ChevronDown className={`h-3 w-3 text-indigo-400 transition-transform flex-shrink-0 ${expandedTreatmentSection === `rct_${rctIdx}` ? '' : '-rotate-90'}`} />
+                              </button>
+
+                              {expandedTreatmentSection === `rct_${rctIdx}` && (
+                                <div className="mt-2 space-y-2">
+                                  <p className="text-[9px] text-gray-600 leading-relaxed bg-indigo-50/50 rounded px-2 py-1.5 border-l-2 border-indigo-300">{rct.clinicalReasoning}</p>
+
+                                  {rct.downstreamEffects.length > 0 && (
+                                    <div className="bg-orange-50/50 rounded px-2 py-1.5 border border-orange-100">
+                                      <span className="text-[9px] font-semibold text-orange-700">Downstream Effects (resolved by treating root cause)</span>
+                                      <div className="mt-0.5 space-y-0.5">
+                                        {rct.downstreamEffects.map((de, dei) => (
+                                          <div key={dei} className="text-[8px] text-orange-600 flex items-start gap-1">
+                                            <ArrowRight className="h-2 w-2 text-orange-400 flex-shrink-0 mt-0.5" />
+                                            {de}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {rct.steps.map((step, si) => (
+                                    <div key={si} className="border border-indigo-100 rounded-lg overflow-hidden">
+                                      <div className="bg-indigo-50 px-2.5 py-1.5 flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0">
+                                          <span className="text-[8px] font-bold text-white">{si + 1}</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="text-[10px] font-bold text-indigo-800">{step.structure}</span>
+                                          <p className="text-[8px] text-indigo-600 truncate">{step.finding}</p>
+                                        </div>
+                                      </div>
+
+                                      <div className="px-2.5 py-2 space-y-2">
+                                        <p className="text-[8px] text-gray-500 italic">{step.mechanism}</p>
+
+                                        {step.treatments.length > 0 && (
+                                          <div>
+                                            <span className="text-[9px] font-semibold text-teal-700 flex items-center gap-1">
+                                              <Stethoscope className="h-2.5 w-2.5" />
+                                              Manual Therapy / Interventions
+                                            </span>
+                                            <div className="mt-1 space-y-1.5">
+                                              {step.treatments.map((tx, txi) => (
+                                                <div key={txi} className="bg-teal-50/50 rounded px-2 py-1.5 border-l-2 border-teal-400">
+                                                  <div className="text-[9px] font-semibold text-teal-800">{tx.name}</div>
+                                                  <p className="text-[8px] text-gray-600 mt-0.5">{tx.technique}</p>
+                                                  <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[7px] px-1 py-0.5 rounded bg-teal-100 text-teal-600 font-medium">{tx.dosage}</span>
+                                                  </div>
+                                                  <p className="text-[7px] text-violet-500 mt-0.5 italic">{tx.rationale}</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {step.exercises.length > 0 && (
+                                          <div>
+                                            <span className="text-[9px] font-semibold text-emerald-700 flex items-center gap-1">
+                                              <Activity className="h-2.5 w-2.5" />
+                                              Corrective Exercises
+                                            </span>
+                                            <div className="mt-1 space-y-1.5">
+                                              {step.exercises.map((ex, exi) => (
+                                                <div key={exi} className="bg-emerald-50/50 rounded px-2 py-1.5 border-l-2 border-emerald-400">
+                                                  <div className="flex items-center gap-1.5">
+                                                    <span className="text-[9px] font-semibold text-emerald-800">{ex.name}</span>
+                                                    <span className="text-[7px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-600">{ex.type}</span>
+                                                  </div>
+                                                  <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[7px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-600 font-medium">{ex.dosage}</span>
+                                                  </div>
+                                                  <p className="text-[7px] text-violet-500 mt-0.5 italic">{ex.rationale}</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+
+                                  <div className="bg-green-50/60 rounded px-2 py-1.5 border border-green-200">
+                                    <span className="text-[9px] font-semibold text-green-700 flex items-center gap-1">
+                                      <TrendingUp className="h-2.5 w-2.5" />
+                                      Expected Outcome
+                                    </span>
+                                    <p className="text-[8px] text-green-600 mt-0.5">{rct.expectedOutcome}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Red Flags */}
                     <div className="bg-red-50 rounded-lg px-3 py-2 border border-red-200">

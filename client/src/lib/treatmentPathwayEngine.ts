@@ -104,12 +104,31 @@ export interface ClinicalReasoning {
   prognosticFactors: { factor: string; impact: 'positive' | 'negative' | 'neutral' }[];
 }
 
+export interface RootCauseTreatmentStep {
+  structure: string;
+  finding: string;
+  mechanism: string;
+  treatments: { name: string; technique: string; dosage: string; rationale: string }[];
+  exercises: { name: string; type: string; dosage: string; rationale: string }[];
+}
+
+export interface RootCauseTreatmentPlan {
+  region: string;
+  severity: number;
+  chainSummary: string;
+  steps: RootCauseTreatmentStep[];
+  clinicalReasoning: string;
+  downstreamEffects: string[];
+  expectedOutcome: string;
+}
+
 export interface TreatmentPlan {
   clinicalReasoning: ClinicalReasoning;
   phases: PhaseBlock[];
   overallTimeline: string;
   redFlags: string[];
   outcomesMeasures: string[];
+  rootCauseTreatments: RootCauseTreatmentPlan[];
 }
 
 export interface ClinicalBubbleAIData {
@@ -702,5 +721,258 @@ export function generateTreatmentPlan(input: TreatmentInput): TreatmentPlan {
     ? '8-10 weeks (moderate complexity — some concurrent findings)'
     : '6-8 weeks (straightforward — localized findings)';
 
-  return { clinicalReasoning, phases, overallTimeline, redFlags, outcomesMeasures };
+  const rootCauseTreatments = generateRootCauseTreatments(input);
+
+  return { clinicalReasoning, phases, overallTimeline, redFlags, outcomesMeasures, rootCauseTreatments };
+}
+
+const ROOT_CAUSE_TREATMENTS: Record<string, { treatments: { name: string; technique: string; dosage: string; rationale: string }[]; exercises: { name: string; type: string; dosage: string; rationale: string }[] }> = {
+  overactive: {
+    treatments: [
+      { name: 'Soft tissue release', technique: 'Sustained pressure on trigger points and along muscle fibres, 30-90 sec per point', dosage: '5-8 min per muscle, 2-3x/week', rationale: 'Reduces myofascial tension and resets resting tone via autogenic inhibition' },
+      { name: 'Dry needling / Acupuncture', technique: 'Insert fine needle into taut band, elicit local twitch response', dosage: '1-2 sessions/week for 4-6 weeks', rationale: 'Disrupts motor endplate dysfunction and releases sustained sarcomere contraction' },
+      { name: 'Reciprocal inhibition mobilisation', technique: 'Activate antagonist muscle with isometric contraction to reflexively inhibit overactive agonist', dosage: '5 sec hold × 10 reps, 2x/day', rationale: 'Uses Sherrington\'s law of reciprocal inhibition to neurally downregulate overactive muscle' },
+    ],
+    exercises: [
+      { name: 'Static stretch', type: 'stretch', dosage: '30 sec hold × 3 reps, 2x/day', rationale: 'Restores optimal resting length and reduces passive tension' },
+      { name: 'Foam rolling / self-myofascial release', type: 'mobility', dosage: '1-2 min per area, daily', rationale: 'Mechanoreceptor stimulation reduces sympathetic tone and muscle guarding' },
+      { name: 'Eccentric loading', type: 'strengthening', dosage: '3 × 10-15 slow eccentric reps, 3x/week', rationale: 'Promotes tendon remodelling and lengthened muscle adaptation under load' },
+    ],
+  },
+  spasm: {
+    treatments: [
+      { name: 'Gentle sustained pressure', technique: 'Apply broad hand contact with sustained gentle compression until tissue relaxation is felt', dosage: '2-5 min hold, repeat 2-3 areas', rationale: 'Activates parasympathetic response and mechanoreceptors to reduce protective spasm' },
+      { name: 'Positional release (Strain-Counterstrain)', technique: 'Position limb to maximally shorten spasming muscle, hold 90 sec, slowly return', dosage: '90 sec hold per tender point, 3-5 points', rationale: 'Resets gamma motor neuron discharge reducing involuntary contraction' },
+      { name: 'Heat application', technique: 'Moist heat pack wrapped in towel applied over spasming area', dosage: '15-20 min, before manual therapy', rationale: 'Increases blood flow, reduces pain gate activation, and improves tissue extensibility' },
+    ],
+    exercises: [
+      { name: 'Gentle active range of motion', type: 'mobility', dosage: '10-15 reps through pain-free range, 3x/day', rationale: 'Maintains joint nutrition and prevents adaptive shortening without provocation' },
+      { name: 'Diaphragmatic breathing', type: 'neuromuscular', dosage: '5 min, 4-6 breaths/min, 3x/day', rationale: 'Parasympathetic activation reduces global muscle tone and central sensitisation' },
+      { name: 'Contract-relax stretching', type: 'stretch', dosage: '5 sec contract, 15 sec relax × 5 reps', rationale: 'Post-isometric relaxation exploits the Golgi tendon organ reflex to reduce spasm' },
+    ],
+  },
+  inhibited: {
+    treatments: [
+      { name: 'Neuromuscular facilitation tapping', technique: 'Quick tapping or brushing over muscle belly to stimulate alpha motor neurons', dosage: '20-30 taps, before activation exercises', rationale: 'Increases motor unit recruitment threshold awareness and facilitates voluntary contraction' },
+      { name: 'Joint mobilisation (adjacent joint)', technique: 'Grade III-IV PA or AP glides to the joint the muscle crosses', dosage: '3 × 30 sec oscillations, 2-3x/week', rationale: 'Restores arthrokinematic motion reducing arthrogenic muscle inhibition' },
+      { name: 'Muscle energy technique', technique: 'Isometric contraction against resistance in shortened range, 5-10 sec', dosage: '5 × 5-10 sec contractions, 2x/day', rationale: 'Enhances proprioceptive awareness and facilitates motor recruitment of inhibited fibres' },
+    ],
+    exercises: [
+      { name: 'Isolated isometric activation', type: 'activation', dosage: '10 sec hold × 10 reps, 3x/day', rationale: 'Re-establishes neuromuscular control and motor engram for the inhibited muscle' },
+      { name: 'Biofeedback-guided contraction', type: 'neuromuscular', dosage: 'Palpate muscle during contraction, 3 × 10 reps', rationale: 'Visual/tactile feedback improves cortical motor map representation' },
+      { name: 'Progressive resistance training', type: 'strengthening', dosage: '3 × 8-12 reps, 3x/week, progress 10%/week', rationale: 'Progressive overload drives neural adaptation then hypertrophy for sustained strength gains' },
+    ],
+  },
+  weak: {
+    treatments: [
+      { name: 'Functional taping', technique: 'Kinesiology tape applied origin-to-insertion with 25% stretch to facilitate contraction', dosage: 'Apply for 24-48 hours, replace as needed', rationale: 'Provides proprioceptive cue and mechanical support while muscle strengthening progresses' },
+      { name: 'Neuromuscular electrical stimulation (NMES)', technique: 'Surface electrodes over motor point, sufficient intensity for visible contraction', dosage: '15 min, 2-3x/week during exercise', rationale: 'Augments voluntary contraction strength and reverses disuse atrophy' },
+    ],
+    exercises: [
+      { name: 'Gravity-eliminated activation', type: 'activation', dosage: '3 × 10 reps, daily', rationale: 'Reduces load demand allowing successful muscle activation when strength is minimal' },
+      { name: 'Closed kinetic chain strengthening', type: 'strengthening', dosage: '3 × 10-15 reps, 3x/week', rationale: 'Co-contraction in functional patterns improves joint stability and muscle synergy' },
+      { name: 'Functional integration exercises', type: 'stabilization', dosage: '3 × 8-12 reps progressing complexity, 3x/week', rationale: 'Transfers isolated strength gains into functional movement patterns' },
+    ],
+  },
+  tight: {
+    treatments: [
+      { name: 'Mulligan sustained natural apophyseal glides (SNAGs)', technique: 'Passive accessory glide combined with active physiological movement', dosage: '6-10 reps per direction, 2-3x/week', rationale: 'Restores joint glide allowing full physiological range and reducing muscle guarding' },
+      { name: 'Instrument-assisted soft tissue mobilisation (IASTM)', technique: 'Scan tissue with tool, apply strokes along fibre direction at restricted areas', dosage: '5-8 min per area, 1-2x/week', rationale: 'Breaks fascial adhesions and stimulates fibroblast healing response' },
+    ],
+    exercises: [
+      { name: 'PNF stretching (hold-relax)', type: 'stretch', dosage: '10 sec contract, 30 sec stretch × 4 reps, daily', rationale: 'Combines neurological inhibition with mechanical tissue lengthening for superior ROM gains' },
+      { name: 'Dynamic warm-up mobility drills', type: 'mobility', dosage: '10 reps each direction, pre-activity', rationale: 'Increases tissue temperature and viscoelastic properties for immediate ROM improvement' },
+      { name: 'Loaded progressive stretching', type: 'stretch', dosage: '3 × 30 sec with light resistance, 3x/week', rationale: 'Eccentric loading during stretch stimulates sarcomere addition at the musculotendinous junction' },
+    ],
+  },
+};
+
+const FORCE_TREATMENTS: Record<string, { treatments: { name: string; technique: string; dosage: string; rationale: string }[]; exercises: { name: string; type: string; dosage: string; rationale: string }[] }> = {
+  compression: {
+    treatments: [
+      { name: 'Joint distraction mobilisation', technique: 'Grade II-III long-axis distraction to offload articular surfaces', dosage: '3 × 30 sec, 2-3x/week', rationale: 'Reduces intra-articular pressure and stimulates synovial fluid production' },
+      { name: 'Manual traction', technique: 'Sustained or intermittent traction along joint axis', dosage: '10-15 sec holds × 10 reps', rationale: 'Decompresses articular surfaces and reduces compressive nociceptor activation' },
+    ],
+    exercises: [
+      { name: 'Axial unloading exercises', type: 'mobility', dosage: '3 × 10 reps, 2x/day', rationale: 'Reduces sustained compressive load through active joint decompression' },
+      { name: 'Postural correction and ergonomic training', type: 'stabilization', dosage: 'Ongoing, every 30-60 min during sustained postures', rationale: 'Redistributes load away from peak compression areas by optimising joint alignment' },
+    ],
+  },
+  shear: {
+    treatments: [
+      { name: 'Stabilisation taping', technique: 'Rigid or semi-rigid tape applied to limit excessive translational movement', dosage: 'Apply during activity, reassess weekly', rationale: 'Extrinsic support reduces shear force while intrinsic stabilisers are retrained' },
+      { name: 'Joint mobilisation with stabilisation', technique: 'PA/AP glide at affected segment with co-contraction cuing', dosage: '3 × 30 sec oscillations, 2x/week', rationale: 'Restores accessory motion while training dynamic muscular stabilisation' },
+    ],
+    exercises: [
+      { name: 'Deep stabiliser co-contraction', type: 'stabilization', dosage: '10 sec hold × 10 reps, 3x/day', rationale: 'Activates deep segmental muscles to counteract translational shear forces' },
+      { name: 'Proprioceptive training', type: 'neuromuscular', dosage: '3 × 1-2 min holds, progress surfaces, 3x/week', rationale: 'Improves feed-forward motor control to dynamically resist shear during functional tasks' },
+    ],
+  },
+};
+
+const CHAIN_TREATMENTS: Record<string, { treatments: { name: string; technique: string; dosage: string; rationale: string }[]; exercises: { name: string; type: string; dosage: string; rationale: string }[] }> = {
+  default: {
+    treatments: [
+      { name: 'Regional interdependence assessment', technique: 'Assess joints above and below the symptomatic region for contributing dysfunction', dosage: 'Comprehensive assessment, reassess each session', rationale: 'Address remote contributions to local dysfunction through the kinetic chain' },
+      { name: 'Fascial chain release', technique: 'Sustained myofascial release along the identified kinetic chain pathway', dosage: '3-5 min per chain segment, 1-2x/week', rationale: 'Restores fascial gliding and force transmission efficiency through the chain' },
+    ],
+    exercises: [
+      { name: 'Integrated chain movement patterns', type: 'neuromuscular', dosage: '3 × 8-10 reps, 3x/week', rationale: 'Retrains coordinated multi-joint movement to restore efficient force transmission' },
+      { name: 'Anti-rotation / anti-lateral flexion stability', type: 'stabilization', dosage: '3 × 10 sec holds, 3x/week', rationale: 'Builds core-to-extremity force transfer stability through the chain' },
+    ],
+  },
+};
+
+function generateRootCauseTreatments(input: TreatmentInput): RootCauseTreatmentPlan[] {
+  const { correlationResult, painMarkers } = input;
+  if (!correlationResult || correlationResult.painCorrelations.length === 0) return [];
+
+  const results: RootCauseTreatmentPlan[] = [];
+
+  for (const pc of correlationResult.painCorrelations) {
+    if (pc.rootCauseChain.length === 0) continue;
+
+    const pm = painMarkers.find(p => p.label.toLowerCase().includes(pc.region.toLowerCase()) || pc.region.toLowerCase().includes(p.label.toLowerCase()));
+    const severity = pm?.severity ?? 5;
+
+    const chainSummary = pc.rootCauseChain.map(s => s.structure).join(' → ');
+
+    const steps: RootCauseTreatmentStep[] = [];
+
+    for (const step of pc.rootCauseChain) {
+      const stepTreatments: RootCauseTreatmentStep['treatments'] = [];
+      const stepExercises: RootCauseTreatmentStep['exercises'] = [];
+
+      if (step.arrow === '(root cause)') {
+        stepTreatments.push({
+          name: 'Postural awareness and correction training',
+          technique: 'Identify and correct habitual postures contributing to the dysfunction — use mirror feedback, postural cues, and workspace ergonomic assessment',
+          dosage: 'Hourly postural checks during sustained activities, ongoing',
+          rationale: 'Addressing the root postural driver prevents recurrence after symptomatic treatment resolves the acute presentation',
+        });
+        stepTreatments.push({
+          name: 'Ergonomic workstation assessment',
+          technique: 'Evaluate and modify work/daily activity setup to reduce sustained tissue loading in provocative positions',
+          dosage: 'Initial assessment with 2-week follow-up, then monthly review',
+          rationale: 'Environmental modification reduces the mechanical stimulus perpetuating the root cause',
+        });
+        stepExercises.push({
+          name: 'Postural endurance training',
+          type: 'stabilization',
+          dosage: '3 × 30-60 sec holds in corrected posture, 3x/day',
+          rationale: 'Builds muscular endurance to maintain optimal alignment throughout the day',
+        });
+        stepExercises.push({
+          name: 'Movement variability breaks',
+          type: 'mobility',
+          dosage: '5 min every 45-60 min of sustained posture',
+          rationale: 'Tissue creep from sustained loading is reversed by regular movement, preventing adaptive tissue changes',
+        });
+        steps.push({
+          structure: step.structure,
+          finding: step.finding,
+          mechanism: step.mechanism,
+          treatments: stepTreatments,
+          exercises: stepExercises,
+        });
+        continue;
+      }
+
+      const findingLower = step.finding.toLowerCase();
+      const mechanismLower = step.mechanism.toLowerCase();
+
+      let matchedStatus: string | null = null;
+      if (findingLower.includes('overactive') || findingLower.includes('excessive muscle tension')) matchedStatus = 'overactive';
+      else if (findingLower.includes('spasm')) matchedStatus = 'spasm';
+      else if (findingLower.includes('inhibited') || findingLower.includes('reduced muscular support')) matchedStatus = 'inhibited';
+      else if (findingLower.includes('weak')) matchedStatus = 'weak';
+      else if (findingLower.includes('tight') || findingLower.includes('altered muscle length')) matchedStatus = 'tight';
+
+      if (matchedStatus && ROOT_CAUSE_TREATMENTS[matchedStatus]) {
+        const data = ROOT_CAUSE_TREATMENTS[matchedStatus];
+        const maxT = severity >= 7 ? 3 : 2;
+        stepTreatments.push(...data.treatments.slice(0, maxT));
+        stepExercises.push(...data.exercises.slice(0, maxT));
+      }
+
+      if (findingLower.includes('compressive') || findingLower.includes('compression') || mechanismLower.includes('compressive')) {
+        const data = FORCE_TREATMENTS.compression;
+        stepTreatments.push(...data.treatments);
+        stepExercises.push(...data.exercises);
+      } else if (findingLower.includes('shear') || mechanismLower.includes('shear')) {
+        const data = FORCE_TREATMENTS.shear;
+        stepTreatments.push(...data.treatments);
+        stepExercises.push(...data.exercises);
+      } else if ((findingLower.includes('elevated') || findingLower.includes('very high') || findingLower.includes('high')) && mechanismLower.includes('loading')) {
+        const data = FORCE_TREATMENTS.compression;
+        stepTreatments.push(...data.treatments.slice(0, 1));
+        stepExercises.push(...data.exercises);
+      }
+
+      if (findingLower.includes('chain integrity') || mechanismLower.includes('force transmission')) {
+        const data = CHAIN_TREATMENTS.default;
+        stepTreatments.push(...data.treatments);
+        stepExercises.push(...data.exercises);
+      }
+
+      if (findingLower.includes('compensatory') || mechanismLower.includes('compensation')) {
+        stepTreatments.push({
+          name: 'Address primary dysfunction first',
+          technique: 'Treat the original dysfunction driving the compensatory pattern before addressing the compensation itself',
+          dosage: 'Prioritise in treatment sequencing',
+          rationale: 'Compensations resolve when the primary driver is corrected — treating compensations alone leads to recurrence',
+        });
+        stepExercises.push({
+          name: 'Motor pattern retraining',
+          type: 'neuromuscular',
+          dosage: '3 × 10 reps with mirror/video feedback, 3x/week',
+          rationale: 'Correct aberrant movement patterns that developed as compensatory strategies',
+        });
+      }
+
+      if (stepTreatments.length > 0 || stepExercises.length > 0) {
+        steps.push({
+          structure: step.structure,
+          finding: step.finding,
+          mechanism: step.mechanism,
+          treatments: stepTreatments,
+          exercises: stepExercises,
+        });
+      }
+    }
+
+    if (steps.length === 0) continue;
+
+    const downstreamEffects: string[] = [];
+    for (const comp of pc.compensationPatterns) {
+      downstreamEffects.push(`${comp.pattern} (${comp.severity})`);
+    }
+    if (pc.relatedMuscles.filter(m => m.contributionType === 'compensatory').length > 0) {
+      downstreamEffects.push(`${pc.relatedMuscles.filter(m => m.contributionType === 'compensatory').length} compensatory muscle adaptation(s)`);
+    }
+    if (pc.relatedForces.filter(f => f.status === 'high' || f.status === 'very_high').length > 0) {
+      downstreamEffects.push(`Elevated joint loading at ${pc.relatedForces.filter(f => f.status === 'high' || f.status === 'very_high').map(f => f.jointLabel).join(', ')}`);
+    }
+
+    const rootStep = pc.rootCauseChain[pc.rootCauseChain.length - 1];
+    const clinicalReasoning = `The root cause chain for ${pc.region} begins with ${pc.rootCauseChain[0]?.structure || 'unknown'} (${pc.rootCauseChain[0]?.finding || ''}) and traces through ${steps.length} treatable step(s). ${rootStep?.arrow === '(root cause)' ? `The underlying driver is ${rootStep.mechanism.toLowerCase()}.` : ''} Treating each step in sequence from the root cause outward addresses the primary dysfunction before downstream compensations, ensuring lasting resolution rather than symptomatic relief.`;
+
+    const expectedOutcome = severity >= 7
+      ? 'With consistent treatment of the root cause chain, expect significant pain reduction (50%+) within 4-6 weeks and functional restoration by 8-12 weeks'
+      : severity >= 4
+      ? 'Addressing the root cause should yield noticeable improvement within 2-4 weeks with full resolution expected by 6-8 weeks'
+      : 'Root cause correction should resolve symptoms within 2-4 weeks with preventive maintenance ongoing';
+
+    results.push({
+      region: pc.region,
+      severity,
+      chainSummary,
+      steps,
+      clinicalReasoning,
+      downstreamEffects,
+      expectedOutcome,
+    });
+  }
+
+  return results;
 }

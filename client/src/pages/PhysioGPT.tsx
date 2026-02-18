@@ -75,6 +75,7 @@ import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/s
 import { pdfGenerator } from "@/services/pdfGenerator";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, type ForceAnalysisResult, type JointSurfaceForce } from "@/lib/posturalForceEngine";
+import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis } from "@/lib/muscleBiomechanicsEngine";
 
 const BODY_REGIONS = {
   cervical: {
@@ -360,6 +361,10 @@ export default function PhysioGPT() {
   const [bodyWeightKg, setBodyWeightKg] = useState(70);
   const [enabledForceJoints, setEnabledForceJoints] = useState<Set<string>>(new Set());
   const [collapsedForceCategories, setCollapsedForceCategories] = useState<Set<string>>(new Set());
+  const [muscleMode, setMuscleMode] = useState(false);
+  const [collapsedMuscleGroups, setCollapsedMuscleGroups] = useState<Set<string>>(new Set());
+  const [selectedMuscleId, setSelectedMuscleId] = useState<string | null>(null);
+  const [enabledMuscleGroups, setEnabledMuscleGroups] = useState<Set<string>>(new Set());
   const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
@@ -1223,6 +1228,15 @@ ${ddxList}`;
     return result;
   }, [modelConfig, forceMode]);
 
+  const muscleAnalysis = useMemo(() => {
+    if (!muscleMode) return null;
+    const result = computeFullMuscleAnalysis(modelConfig);
+    if (enabledMuscleGroups.size === 0 && result.groups.length > 0) {
+      setEnabledMuscleGroups(new Set(result.groups.map(g => g.id)));
+    }
+    return result;
+  }, [modelConfig, muscleMode]);
+
   return (
     <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 relative overflow-hidden">
       {/* Full-Page Skeleton Viewer */}
@@ -1288,6 +1302,7 @@ ${ddxList}`;
               bodyWeightKg={bodyWeightKg}
               selectedForceJoint={selectedForceJoint}
               onForceJointSelect={(joint) => setSelectedForceJoint(prev => prev === joint ? null : joint)}
+              muscleStates={muscleMode && muscleAnalysis ? muscleAnalysis.groupStates : undefined}
             />
 
             {/* Joint Controls Overlay */}
@@ -1662,6 +1677,176 @@ ${ddxList}`;
                     <div className="flex items-center gap-0.5"><div className="w-2 h-1 bg-blue-500 rounded" /><span className="text-gray-500">Comp</span></div>
                     <div className="flex items-center gap-0.5"><div className="w-2 h-1 bg-red-500 rounded" /><span className="text-gray-500">Tension</span></div>
                     <div className="flex items-center gap-0.5"><div className="w-2 h-1 bg-yellow-500 rounded" /><span className="text-gray-500">Shear</span></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Muscle Analysis Overlay */}
+            {muscleMode && muscleAnalysis && (
+              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[270px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Dumbbell className="h-3.5 w-3.5 text-rose-400" />
+                    <span className="text-[11px] font-semibold text-white">Muscle Analysis ({muscleAnalysis.allMuscles.length} muscles)</span>
+                  </div>
+                  <button className="text-gray-400 hover:text-white" onClick={() => setMuscleMode(false)}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+
+                {muscleAnalysis.syndromes.filter(s => s.detected).length > 0 && (
+                  <div className="mb-2 space-y-1">
+                    {muscleAnalysis.syndromes.filter(s => s.detected).map(s => (
+                      <div key={s.id} className="bg-red-500/20 border border-red-500/30 rounded px-2 py-1">
+                        <div className="flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3 text-red-400 flex-shrink-0" />
+                          <span className="text-[10px] font-medium text-red-300">{s.label}</span>
+                          <span className="text-[8px] text-red-400 ml-auto">{(s.severity * 100).toFixed(0)}%</span>
+                        </div>
+                        <p className="text-[8px] text-red-300/80 mt-0.5 leading-relaxed">{s.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[9px] text-gray-400">{muscleAnalysis.groups.length} muscle groups</span>
+                  <div className="flex gap-1">
+                    <button
+                      className="text-[8px] px-1.5 py-0.5 rounded bg-rose-500/30 text-rose-300 hover:bg-rose-500/50"
+                      onClick={() => setEnabledMuscleGroups(new Set(muscleAnalysis.groups.map(g => g.id)))}
+                    >All On</button>
+                    <button
+                      className="text-[8px] px-1.5 py-0.5 rounded bg-gray-600/50 text-gray-300 hover:bg-gray-600/80"
+                      onClick={() => setEnabledMuscleGroups(new Set())}
+                    >All Off</button>
+                  </div>
+                </div>
+
+                <div className="space-y-0.5">
+                  {muscleAnalysis.groups.map(group => {
+                    const isCollapsed = collapsedMuscleGroups.has(group.id);
+                    const isEnabled = enabledMuscleGroups.has(group.id);
+                    const statusColor = getClinicalStatusColor(group.dominantStatus);
+                    return (
+                      <div key={group.id} className="rounded bg-white/5">
+                        <div className="flex items-center gap-1 px-1.5 py-1 cursor-pointer hover:bg-white/10 rounded"
+                          onClick={() => {
+                            setCollapsedMuscleGroups(prev => {
+                              const next = new Set(prev);
+                              if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
+                              return next;
+                            });
+                          }}
+                        >
+                          <ChevronDown className={`h-2.5 w-2.5 text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor }} />
+                          <span className="text-[10px] text-white font-medium flex-1 truncate">{group.label}</span>
+                          <span className="text-[8px] px-1 py-0 rounded" style={{ color: statusColor }}>
+                            {getClinicalStatusLabel(group.dominantStatus)}
+                          </span>
+                          <button
+                            className={`w-4 h-3 rounded-full flex items-center transition-colors ${isEnabled ? 'bg-rose-500' : 'bg-gray-600'}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEnabledMuscleGroups(prev => {
+                                const next = new Set(prev);
+                                if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
+                                return next;
+                              });
+                            }}
+                          >
+                            <div className={`w-2 h-2 rounded-full bg-white shadow transition-transform ${isEnabled ? 'translate-x-2' : 'translate-x-0.5'}`} />
+                          </button>
+                        </div>
+                        {!isCollapsed && (
+                          <div className="px-2 pb-1.5 space-y-1">
+                            <div className="flex gap-2 text-[8px] text-gray-500 mb-0.5">
+                              <span>Avg Act: {(group.avgActivation).toFixed(0)}%</span>
+                              <span>Tight: {(group.avgTightness).toFixed(0)}%</span>
+                              <span>Inhib: {(group.avgInhibition).toFixed(0)}%</span>
+                            </div>
+                            {group.muscles.map(m => {
+                              const mStatusColor = getClinicalStatusColor(m.clinicalStatus);
+                              const isSelected = selectedMuscleId === m.id;
+                              return (
+                                <div key={m.id}
+                                  className={`rounded px-1.5 py-1 cursor-pointer transition-colors ${isSelected ? 'bg-rose-500/20 ring-1 ring-rose-500/40' : 'bg-white/5 hover:bg-white/10'}`}
+                                  onClick={() => setSelectedMuscleId(prev => prev === m.id ? null : m.id)}
+                                >
+                                  <div className="flex items-center gap-1 mb-0.5">
+                                    <div className="w-1 h-1 rounded-full" style={{ backgroundColor: mStatusColor }} />
+                                    <span className="text-[9px] text-white flex-1 truncate">{m.label}</span>
+                                    <span className="text-[7px] px-1 rounded" style={{ color: mStatusColor, backgroundColor: `${mStatusColor}20` }}>
+                                      {getClinicalStatusLabel(m.clinicalStatus)}
+                                    </span>
+                                  </div>
+                                  <div className="space-y-0.5">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[7px] text-blue-400 w-8">Length</span>
+                                      <div className="flex-1 bg-gray-700 rounded-full h-1">
+                                        <div className="bg-blue-400 h-1 rounded-full" style={{ width: `${Math.min(100, m.lengthPercent)}%` }} />
+                                      </div>
+                                      <span className="text-[7px] text-gray-400 w-7 text-right tabular-nums">{m.lengthPercent.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[7px] text-green-400 w-8">Activ</span>
+                                      <div className="flex-1 bg-gray-700 rounded-full h-1">
+                                        <div className="bg-green-400 h-1 rounded-full" style={{ width: `${Math.min(100, m.activationPercent)}%` }} />
+                                      </div>
+                                      <span className="text-[7px] text-gray-400 w-7 text-right tabular-nums">{m.activationPercent.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[7px] text-orange-400 w-8">Tight</span>
+                                      <div className="flex-1 bg-gray-700 rounded-full h-1">
+                                        <div className="bg-orange-400 h-1 rounded-full" style={{ width: `${Math.min(100, m.tightnessPercent)}%` }} />
+                                      </div>
+                                      <span className="text-[7px] text-gray-400 w-7 text-right tabular-nums">{m.tightnessPercent.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[7px] text-purple-400 w-8">Inhib</span>
+                                      <div className="flex-1 bg-gray-700 rounded-full h-1">
+                                        <div className="bg-purple-400 h-1 rounded-full" style={{ width: `${Math.min(100, m.inhibitionPercent)}%` }} />
+                                      </div>
+                                      <span className="text-[7px] text-gray-400 w-7 text-right tabular-nums">{m.inhibitionPercent.toFixed(0)}%</span>
+                                    </div>
+                                  </div>
+                                  {isSelected && (
+                                    <div className="mt-1 pt-1 border-t border-white/10 space-y-0.5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[7px] text-gray-400">Tone</span>
+                                        <span className={`text-[8px] font-medium ${m.tone === 'hypertonic' ? 'text-red-400' : m.tone === 'hypotonic' ? 'text-blue-400' : 'text-green-400'}`}>
+                                          {getToneLabel(m.tone)}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[7px] text-gray-400">Fatigue Risk</span>
+                                        <span className={`text-[8px] font-medium ${m.fatigueRisk > 60 ? 'text-red-400' : m.fatigueRisk > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
+                                          {m.fatigueRisk.toFixed(0)}%
+                                        </span>
+                                      </div>
+                                      <p className="text-[7px] text-gray-400 leading-relaxed">{m.clinicalNote}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-white/10">
+                  <div className="flex flex-wrap items-center gap-1.5 text-[7px]">
+                    {(['normal', 'shortened', 'lengthened', 'overactive', 'inhibited', 'spasm', 'weak'] as const).map(status => (
+                      <div key={status} className="flex items-center gap-0.5">
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getClinicalStatusColor(status) }} />
+                        <span className="text-gray-400">{getClinicalStatusLabel(status)}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -2230,6 +2415,21 @@ ${ddxList}`;
               >
                 <Activity className="h-3 w-3 mr-1" />
                 {forceMode ? 'Forces On' : 'Forces'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${muscleMode ? 'bg-rose-500 text-white hover:bg-rose-600' : 'bg-white/90 hover:bg-white'}`}
+                onClick={() => {
+                  const newMode = !muscleMode;
+                  setMuscleMode(newMode);
+                  if (newMode) {
+                    toast({ title: "Muscle Analysis", description: "Showing muscle length, activation, tightness, and inhibition. Adjust posture to see muscle responses." });
+                  }
+                }}
+              >
+                <Dumbbell className="h-3 w-3 mr-1" />
+                {muscleMode ? 'Muscles On' : 'Muscles'}
               </Button>
               <Button
                 variant="secondary"

@@ -1187,3 +1187,935 @@ export function getToneLabel(tone: ToneLevel): string {
     case 'hypertonic': return 'Hypertonic';
   }
 }
+
+export interface ExerciseRecommendation {
+  type: 'stretch' | 'strengthen' | 'activate' | 'release';
+  name: string;
+  description: string;
+  duration: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+const EXERCISE_DATABASE: Record<string, Record<string, ExerciseRecommendation[]>> = {
+  glut_max: {
+    inhibited: [
+      { type: 'activate', name: 'Clamshell', description: 'Side-lying hip external rotation with knees bent to activate gluteus maximus', duration: '3x15 reps', priority: 'high' },
+      { type: 'activate', name: 'Glute Bridge', description: 'Supine bridge focusing on glute contraction at top of movement', duration: '3x12 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Single Leg Deadlift', description: 'Unilateral hip hinge emphasizing glute max activation and hip stability', duration: '3x10 each side', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'activate', name: 'Glute Bridge', description: 'Supine bridge focusing on glute contraction at top of movement', duration: '3x12 reps', priority: 'high' },
+      { type: 'activate', name: 'Side-lying Hip Abduction', description: 'Side-lying leg raise targeting gluteal activation', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Single Leg Deadlift', description: 'Unilateral hip hinge emphasizing glute max activation and hip stability', duration: '3x10 each side', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Pigeon Stretch', description: 'Deep hip external rotation stretch targeting gluteus maximus and piriformis', duration: '30-60s each side', priority: 'high' },
+      { type: 'stretch', name: 'Figure-4 Stretch', description: 'Supine figure-4 position stretching the posterior hip', duration: '30-45s each side', priority: 'medium' },
+      { type: 'stretch', name: 'Supine Hip Flexion', description: 'Pulling knee to chest to lengthen gluteus maximus', duration: '30s each side', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll Glutes', description: 'Self-myofascial release of gluteal muscles using foam roller', duration: '60-90s each side', priority: 'high' },
+      { type: 'release', name: 'Tennis Ball Release', description: 'Targeted trigger point release using tennis ball on glute max', duration: '30-60s per spot', priority: 'high' },
+      { type: 'strengthen', name: 'Supported Squat', description: 'Assisted squat to promote balanced muscle recruitment', duration: '3x10 reps', priority: 'medium' },
+    ],
+  },
+  glut_med: {
+    inhibited: [
+      { type: 'activate', name: 'Clamshell', description: 'Side-lying hip external rotation targeting gluteus medius activation', duration: '3x15 reps', priority: 'high' },
+      { type: 'activate', name: 'Side-lying Hip Abduction', description: 'Side-lying leg raise targeting gluteus medius', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Single Leg Deadlift', description: 'Unilateral balance exercise challenging hip abductor stability', duration: '3x10 each side', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'activate', name: 'Clamshell', description: 'Side-lying hip external rotation targeting gluteus medius activation', duration: '3x15 reps', priority: 'high' },
+      { type: 'activate', name: 'Side-lying Hip Abduction', description: 'Side-lying leg raise targeting gluteus medius', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Glute Bridge', description: 'Bridge with focus on pelvic stability from gluteus medius', duration: '3x12 reps', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Pigeon Stretch', description: 'Deep hip stretch targeting gluteal complex', duration: '30-60s each side', priority: 'high' },
+      { type: 'stretch', name: 'Figure-4 Stretch', description: 'Supine figure-4 position to stretch hip abductors', duration: '30-45s each side', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll Glutes', description: 'Self-myofascial release of gluteal muscles', duration: '60-90s each side', priority: 'high' },
+      { type: 'release', name: 'Tennis Ball Release', description: 'Targeted release of gluteus medius trigger points', duration: '30-60s per spot', priority: 'high' },
+    ],
+  },
+  glut_min: {
+    inhibited: [
+      { type: 'activate', name: 'Clamshell', description: 'Side-lying exercise to activate deep hip abductors', duration: '3x15 reps', priority: 'high' },
+      { type: 'activate', name: 'Side-lying Hip Abduction', description: 'Targeted activation of gluteus minimus', duration: '3x15 reps', priority: 'high' },
+    ],
+    weak: [
+      { type: 'activate', name: 'Side-lying Hip Abduction', description: 'Targeted strengthening of deep hip abductor', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Glute Bridge', description: 'Bridge variation focusing on hip stability', duration: '3x12 reps', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Pigeon Stretch', description: 'Deep hip stretch targeting gluteus minimus', duration: '30-60s each side', priority: 'high' },
+      { type: 'stretch', name: 'Supine Hip Flexion', description: 'Knee-to-chest stretch for deep gluteals', duration: '30s each side', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll Glutes', description: 'Foam rolling lateral hip to release gluteus minimus', duration: '60-90s each side', priority: 'high' },
+      { type: 'release', name: 'Tennis Ball Release', description: 'Deep pressure release on lateral hip', duration: '30-60s per spot', priority: 'medium' },
+    ],
+  },
+  rect_fem: {
+    shortened: [
+      { type: 'stretch', name: 'Standing Quad Stretch', description: 'Standing single-leg quad stretch pulling heel to buttock', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Couch Stretch', description: 'Deep rectus femoris stretch with rear foot elevated against wall', duration: '60-90s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll Quads', description: 'Self-myofascial release of quadriceps using foam roller', duration: '60-90s each side', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Standing Quad Stretch', description: 'Standing quad stretch to reduce overactivity', duration: '30-45s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll Quads', description: 'Foam rolling anterior thigh to decrease tone', duration: '60-90s each side', priority: 'high' },
+      { type: 'stretch', name: 'Couch Stretch', description: 'Deep hip flexor and quad stretch', duration: '60-90s each side', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Terminal Knee Extension', description: 'Short-range knee extension to activate quadriceps', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Wall Sit', description: 'Isometric wall sit to build quad endurance', duration: '3x30s holds', priority: 'medium' },
+      { type: 'strengthen', name: 'Step-ups', description: 'Step-up exercise for functional quad strengthening', duration: '3x10 each side', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Terminal Knee Extension', description: 'Short-range extension to re-activate inhibited quads', duration: '3x15 reps', priority: 'high' },
+      { type: 'activate', name: 'Wall Sit', description: 'Isometric hold to re-establish neuromuscular connection', duration: '3x20s holds', priority: 'high' },
+    ],
+    lengthened: [
+      { type: 'strengthen', name: 'Isometric Quad Sets', description: 'Isometric quadriceps contraction in shortened position', duration: '3x10 with 5s holds', priority: 'high' },
+      { type: 'strengthen', name: 'Short Arc Quad', description: 'Small range knee extension from bolster to strengthen in inner range', duration: '3x15 reps', priority: 'high' },
+    ],
+  },
+  vast_lat: {
+    shortened: [
+      { type: 'stretch', name: 'Standing Quad Stretch', description: 'Standing quad stretch targeting vastus lateralis', duration: '30-45s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll Quads', description: 'Foam rolling lateral quadriceps', duration: '60-90s each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll Quads', description: 'Foam rolling lateral thigh to reduce VL dominance', duration: '60-90s each side', priority: 'high' },
+      { type: 'stretch', name: 'Couch Stretch', description: 'Deep quad stretch to reduce overactivity', duration: '60-90s each side', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Terminal Knee Extension', description: 'Targeted knee extension for vastus lateralis', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Step-ups', description: 'Functional strengthening for lateral quad', duration: '3x10 each side', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Terminal Knee Extension', description: 'Short-range extension to re-activate quads', duration: '3x15 reps', priority: 'high' },
+      { type: 'activate', name: 'Wall Sit', description: 'Isometric quad activation', duration: '3x20s holds', priority: 'medium' },
+    ],
+    lengthened: [
+      { type: 'strengthen', name: 'Isometric Quad Sets', description: 'Isometric contraction to shorten lengthened vastus lateralis', duration: '3x10 with 5s holds', priority: 'high' },
+      { type: 'strengthen', name: 'Short Arc Quad', description: 'Inner range knee extension', duration: '3x15 reps', priority: 'high' },
+    ],
+  },
+  vast_med: {
+    shortened: [
+      { type: 'stretch', name: 'Standing Quad Stretch', description: 'Standing quad stretch targeting VMO', duration: '30-45s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll Quads', description: 'Foam rolling medial quadriceps', duration: '60-90s each side', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll Quads', description: 'Self-myofascial release of medial quad', duration: '60-90s each side', priority: 'high' },
+      { type: 'stretch', name: 'Standing Quad Stretch', description: 'Quad stretch to reduce VMO overactivity', duration: '30-45s each side', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Terminal Knee Extension', description: 'Last 30 degrees of extension to target VMO', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Wall Sit', description: 'Isometric wall sit for VMO strengthening', duration: '3x30s holds', priority: 'medium' },
+      { type: 'strengthen', name: 'Step-ups', description: 'Step-up with focus on knee tracking for VMO', duration: '3x10 each side', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Terminal Knee Extension', description: 'VMO activation in terminal extension', duration: '3x15 reps', priority: 'high' },
+      { type: 'activate', name: 'Wall Sit', description: 'Isometric VMO activation', duration: '3x20s holds', priority: 'high' },
+    ],
+    lengthened: [
+      { type: 'strengthen', name: 'Isometric Quad Sets', description: 'Isometric VMO contraction in shortened position', duration: '3x10 with 5s holds', priority: 'high' },
+      { type: 'strengthen', name: 'Short Arc Quad', description: 'Small arc extension for VMO inner range strengthening', duration: '3x15 reps', priority: 'high' },
+    ],
+  },
+  hamstrings: {
+    shortened: [
+      { type: 'stretch', name: 'Supine Hamstring Stretch', description: 'Supine straight leg raise with strap for hamstring lengthening', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Nordic Curl Eccentric', description: 'Slow eccentric Nordic curl to lengthen hamstrings under load', duration: '3x6 reps', priority: 'high' },
+      { type: 'stretch', name: 'Sciatic Nerve Slider', description: 'Neural mobilization technique to differentiate nerve from muscle tightness', duration: '10-15 reps each side', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Romanian Deadlift', description: 'Hip hinge pattern emphasizing eccentric hamstring loading', duration: '3x10 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Prone Hamstring Curl', description: 'Isolated prone knee flexion for hamstring strengthening', duration: '3x12 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Swiss Ball Curl', description: 'Supine hip bridge with ball curl for hamstring co-contraction', duration: '3x10 reps', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll Hamstrings', description: 'Self-myofascial release of posterior thigh', duration: '60-90s each side', priority: 'high' },
+      { type: 'stretch', name: 'Active Stretch in Doorway', description: 'Active hamstring stretch using doorway for support', duration: '30-45s each side', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Prone Hamstring Curl', description: 'Light prone curl to re-activate inhibited hamstrings', duration: '3x15 reps', priority: 'high' },
+      { type: 'activate', name: 'Swiss Ball Curl', description: 'Ball curl for neuromuscular re-activation', duration: '3x10 reps', priority: 'medium' },
+    ],
+  },
+  iliopsoas: {
+    shortened: [
+      { type: 'stretch', name: 'Half-kneeling Hip Flexor Stretch', description: 'Lunge position stretch targeting iliopsoas with posterior pelvic tilt', duration: '30-60s each side', priority: 'high' },
+      { type: 'stretch', name: 'Thomas Stretch Position', description: 'Edge of table hip flexor stretch for iliopsoas lengthening', duration: '30-45s each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Half-kneeling Hip Flexor Stretch', description: 'Deep hip flexor stretch to reduce overactivity', duration: '30-60s each side', priority: 'high' },
+      { type: 'stretch', name: 'Thomas Stretch Position', description: 'Sustained stretch to down-regulate hip flexor tone', duration: '30-45s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll TFL', description: 'Self-myofascial release of tensor fasciae latae and lateral hip', duration: '60s each side', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Standing Hip Flexion', description: 'Standing march with resistance for hip flexor strengthening', duration: '3x12 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Supine Marching', description: 'Supine alternating hip flexion maintaining neutral spine', duration: '3x10 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Psoas March', description: 'Seated or standing psoas activation with controlled flexion', duration: '3x10 each side', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Supine Marching', description: 'Gentle supine hip flexion to re-activate iliopsoas', duration: '3x10 each side', priority: 'high' },
+      { type: 'activate', name: 'Psoas March', description: 'Controlled hip flexion activation drill', duration: '3x10 each side', priority: 'high' },
+    ],
+  },
+  TFL: {
+    shortened: [
+      { type: 'stretch', name: 'Half-kneeling Hip Flexor Stretch', description: 'Lunge stretch with lateral lean to target TFL', duration: '30-60s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll TFL', description: 'Self-myofascial release of TFL and IT band', duration: '60-90s each side', priority: 'high' },
+      { type: 'stretch', name: 'Thomas Stretch Position', description: 'Table edge stretch with abduction bias for TFL', duration: '30-45s each side', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll TFL', description: 'Foam rolling anterior-lateral hip to reduce TFL overactivity', duration: '60-90s each side', priority: 'high' },
+      { type: 'stretch', name: 'Half-kneeling Hip Flexor Stretch', description: 'Hip flexor stretch to decrease TFL tone', duration: '30-60s each side', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Standing Hip Flexion', description: 'Standing hip flexion with internal rotation bias for TFL', duration: '3x12 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Supine Marching', description: 'Supine hip flexion for TFL activation', duration: '3x10 each side', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Standing Hip Flexion', description: 'Standing march to re-activate TFL', duration: '3x10 each side', priority: 'high' },
+    ],
+  },
+  gastroc: {
+    shortened: [
+      { type: 'stretch', name: 'Wall Calf Stretch (Straight Knee)', description: 'Wall stretch with knee straight to target gastrocnemius specifically', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Eccentric Heel Drops', description: 'Slow eccentric calf lowering off step for gastrocnemius lengthening', duration: '3x15 reps', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Heel Raises', description: 'Standing bilateral calf raises with straight knees for gastrocnemius', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Single Leg Calf Raise', description: 'Unilateral calf raise for gastrocnemius strength and endurance', duration: '3x12 each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll Calves', description: 'Self-myofascial release of gastrocnemius', duration: '60-90s each side', priority: 'high' },
+      { type: 'stretch', name: 'Wall Calf Stretch (Straight Knee)', description: 'Sustained stretch to reduce gastrocnemius overactivity', duration: '30-45s each side', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Heel Raises', description: 'Gentle calf raises to re-activate gastrocnemius', duration: '3x15 reps', priority: 'high' },
+    ],
+  },
+  soleus: {
+    shortened: [
+      { type: 'stretch', name: 'Wall Calf Stretch (Bent Knee)', description: 'Wall stretch with knee bent to isolate soleus', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Eccentric Heel Drops', description: 'Slow eccentric heel drops with bent knee for soleus', duration: '3x15 reps', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Heel Raises', description: 'Seated or bent-knee calf raises targeting soleus', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Single Leg Calf Raise', description: 'Single leg raise with slight knee bend for soleus focus', duration: '3x12 each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll Calves', description: 'Deep foam rolling of soleus muscle', duration: '60-90s each side', priority: 'high' },
+      { type: 'stretch', name: 'Wall Calf Stretch (Bent Knee)', description: 'Bent knee wall stretch to reduce soleus tone', duration: '30-45s each side', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Heel Raises', description: 'Seated calf raises to re-activate soleus', duration: '3x15 reps', priority: 'high' },
+    ],
+  },
+  upper_trap: {
+    overactive: [
+      { type: 'stretch', name: 'Upper Trap Stretch', description: 'Lateral cervical flexion stretch targeting upper trapezius', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Levator Scapulae Stretch', description: 'Diagonal neck stretch to release levator scapulae and upper trapezius', duration: '30-45s each side', priority: 'high' },
+      { type: 'activate', name: 'Chin Tucks', description: 'Cervical retraction to inhibit upper trap and activate deep neck flexors', duration: '3x10 with 5s holds', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Upper Trap Stretch', description: 'Sustained lateral flexion stretch for shortened upper trapezius', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Levator Scapulae Stretch', description: 'Diagonal stretch targeting shortened upper trap fibers', duration: '30-45s each side', priority: 'high' },
+      { type: 'activate', name: 'Chin Tucks', description: 'Cervical retraction to reciprocally inhibit upper trap', duration: '3x10 with 5s holds', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Shoulder Shrugs', description: 'Controlled shoulder shrugs for upper trapezius strengthening (rarely needed)', duration: '3x10 reps', priority: 'low' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Shoulder Shrugs', description: 'Light shrugs to re-activate upper trapezius', duration: '3x10 reps', priority: 'low' },
+    ],
+  },
+  lower_trap: {
+    weak: [
+      { type: 'strengthen', name: 'Prone Y Raises', description: 'Prone arm raise in Y position targeting lower trapezius', duration: '3x12 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Wall Slides', description: 'Wall angel exercise for lower trap activation and scapular control', duration: '3x10 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Scapular Retraction', description: 'Scapular squeeze targeting lower trap and rhomboid activation', duration: '3x10 with 5s holds', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Prone Y Raises', description: 'Light prone Y raise to re-activate inhibited lower trapezius', duration: '3x10 reps', priority: 'high' },
+      { type: 'activate', name: 'Wall Slides', description: 'Wall slides for lower trap neuromuscular re-education', duration: '3x10 reps', priority: 'high' },
+      { type: 'activate', name: 'Scapular Retraction', description: 'Gentle scapular retraction to re-establish lower trap activation', duration: '3x10 with 5s holds', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Pec Stretching', description: 'Doorway pec stretch to reduce compensatory demand on lower trapezius', duration: '30-45s each side', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Pec Stretching', description: 'Pec stretch to rebalance scapular muscle length-tension', duration: '30-45s each side', priority: 'medium' },
+    ],
+  },
+  rhomboids: {
+    weak: [
+      { type: 'strengthen', name: 'Rows', description: 'Seated or bent-over rows for rhomboid strengthening', duration: '3x12 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Band Pull-aparts', description: 'Resistance band horizontal abduction for rhomboid activation', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Prone T Raises', description: 'Prone horizontal abduction targeting rhomboids and middle traps', duration: '3x12 reps', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Band Pull-aparts', description: 'Light band pull-aparts to re-activate inhibited rhomboids', duration: '3x15 reps', priority: 'high' },
+      { type: 'activate', name: 'Rows', description: 'Light rowing to re-establish rhomboid activation', duration: '3x12 reps', priority: 'high' },
+      { type: 'activate', name: 'Prone T Raises', description: 'Prone T raise for rhomboid neuromuscular re-education', duration: '3x10 reps', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Doorway Pec Stretch', description: 'Doorway pec stretch to indirectly address rhomboid shortening by rebalancing anterior-posterior chain', duration: '30-45s each side', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Doorway Pec Stretch', description: 'Pec stretch to reduce compensatory rhomboid overactivity', duration: '30-45s each side', priority: 'medium' },
+    ],
+  },
+  pec_major: {
+    shortened: [
+      { type: 'stretch', name: 'Doorway Stretch', description: 'Doorway pec stretch at 90 degrees to lengthen pectoralis major', duration: '30-45s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll Pecs', description: 'Self-myofascial release of pectoralis major against wall with ball', duration: '60s each side', priority: 'high' },
+      { type: 'stretch', name: 'Supine Pec Stretch', description: 'Supine arm abduction stretch on foam roller for pec major', duration: '30-60s', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Doorway Stretch', description: 'Sustained doorway stretch to reduce pec major overactivity', duration: '30-45s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll Pecs', description: 'Foam rolling pectoralis major to reduce tone', duration: '60s each side', priority: 'high' },
+      { type: 'stretch', name: 'Supine Pec Stretch', description: 'Supine stretch to down-regulate pec major tone', duration: '30-60s', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Push-ups', description: 'Push-ups for pectoralis major strengthening', duration: '3x10-15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Chest Press', description: 'Dumbbell or machine chest press for pec major strength', duration: '3x10 reps', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Push-ups', description: 'Modified push-ups to re-activate pectoralis major', duration: '3x8 reps', priority: 'high' },
+    ],
+  },
+  pec_minor: {
+    shortened: [
+      { type: 'stretch', name: 'Doorway Stretch', description: 'Doorway stretch with arm elevated above 90 degrees to target pec minor', duration: '30-45s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll Pecs', description: 'Ball release against wall targeting pec minor insertion', duration: '60s each side', priority: 'high' },
+      { type: 'stretch', name: 'Supine Pec Stretch', description: 'Supine stretch on foam roller targeting pec minor', duration: '30-60s', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Doorway Stretch', description: 'Elevated arm doorway stretch to reduce pec minor overactivity', duration: '30-45s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll Pecs', description: 'Targeted release of pec minor trigger points', duration: '60s each side', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Push-ups', description: 'Push-up plus for pec minor and serratus anterior activation', duration: '3x10 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Chest Press', description: 'Chest press with protraction emphasis', duration: '3x10 reps', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Push-ups', description: 'Push-up plus to activate pec minor', duration: '3x8 reps', priority: 'high' },
+    ],
+  },
+  deep_neck_flex: {
+    weak: [
+      { type: 'strengthen', name: 'Chin Tucks', description: 'Cervical retraction exercise for deep neck flexor strengthening', duration: '3x10 with 10s holds', priority: 'high' },
+      { type: 'strengthen', name: 'Cranio-cervical Flexion', description: 'Controlled nodding movement targeting deep cervical flexors', duration: '3x10 reps', priority: 'high' },
+      { type: 'strengthen', name: 'DNF Endurance Holds', description: 'Sustained chin tuck holds for deep neck flexor endurance', duration: '3x15-30s holds', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Chin Tucks', description: 'Gentle chin tucks to re-activate deep neck flexors', duration: '3x10 with 5s holds', priority: 'high' },
+      { type: 'activate', name: 'Cranio-cervical Flexion', description: 'Pressure biofeedback exercise for DNF activation', duration: '3x10 reps', priority: 'high' },
+      { type: 'activate', name: 'DNF Endurance Holds', description: 'Short duration holds to re-establish DNF endurance', duration: '3x10s holds', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Cervical Extension Mobility', description: 'Gentle cervical extension to reduce deep neck flexor overactivity', duration: '10-15 reps', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Cervical Extension Mobility', description: 'Cervical extension mobility to lengthen shortened deep neck flexors', duration: '10-15 reps', priority: 'medium' },
+    ],
+  },
+  scm: {
+    shortened: [
+      { type: 'stretch', name: 'SCM Stretch', description: 'Lateral flexion and rotation stretch targeting sternocleidomastoid', duration: '30s each side', priority: 'high' },
+      { type: 'stretch', name: 'Cervical Rotation Stretch', description: 'Gentle rotation stretch to lengthen shortened SCM', duration: '30s each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'SCM Stretch', description: 'Sustained SCM stretch to reduce overactivity', duration: '30s each side', priority: 'high' },
+      { type: 'stretch', name: 'Cervical Rotation Stretch', description: 'Cervical rotation to down-regulate SCM tone', duration: '30s each side', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Isometric Cervical Flexion', description: 'Hand-resisted isometric cervical flexion for SCM strengthening', duration: '3x5 with 5s holds', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Isometric Cervical Flexion', description: 'Gentle isometric cervical flexion to re-activate SCM', duration: '3x5 with 5s holds', priority: 'medium' },
+    ],
+  },
+  erector_spinae_lumbar: {
+    overactive: [
+      { type: 'stretch', name: "Child's Pose", description: 'Kneeling forward fold to lengthen lumbar erector spinae', duration: '30-60s', priority: 'high' },
+      { type: 'stretch', name: 'Cat-Cow', description: 'Spinal flexion-extension mobility to reduce lumbar extensor overactivity', duration: '10-15 reps', priority: 'high' },
+      { type: 'stretch', name: 'Lumbar Flexion Stretch', description: 'Supine double knee-to-chest for lumbar flexion and erector release', duration: '30-45s', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Bird-Dog', description: 'Quadruped alternating arm-leg raise for lumbar extensor strengthening', duration: '3x10 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Superman', description: 'Prone back extension for lumbar erector spinae strengthening', duration: '3x10 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Back Extension', description: 'Controlled back extension for spinal extensor endurance', duration: '3x10 reps', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: "Child's Pose", description: 'Sustained kneeling stretch for shortened lumbar extensors', duration: '30-60s', priority: 'high' },
+      { type: 'stretch', name: 'Cat-Cow', description: 'Flexion-extension mobilization for shortened erectors', duration: '10-15 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Bird-Dog', description: 'Quadruped exercise to re-activate lumbar extensors', duration: '3x10 each side', priority: 'high' },
+      { type: 'activate', name: 'Superman', description: 'Prone extension to re-establish extensor activation', duration: '3x8 reps', priority: 'medium' },
+    ],
+  },
+  erector_spinae_thoracic: {
+    weak: [
+      { type: 'strengthen', name: 'Thoracic Extension Over Foam Roll', description: 'Foam roller thoracic extension for mid-back extensor strengthening', duration: '3x10 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Prone Extension', description: 'Prone thoracic extension for upper back extensor strength', duration: '3x10 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Thoracic Extension Over Foam Roll', description: 'Foam roller extension to re-activate thoracic extensors', duration: '3x8 reps', priority: 'high' },
+      { type: 'activate', name: 'Prone Extension', description: 'Gentle prone extension for thoracic extensor activation', duration: '3x8 reps', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'stretch', name: "Child's Pose", description: 'Forward fold stretch for overactive thoracic extensors', duration: '30-60s', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Cat-Cow', description: 'Spinal flexion mobilization for shortened thoracic extensors', duration: '10-15 reps', priority: 'medium' },
+    ],
+  },
+  rectus_abdominis: {
+    weak: [
+      { type: 'strengthen', name: 'Dead Bugs', description: 'Supine alternating arm-leg lowering for core stability', duration: '3x10 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Pallof Press', description: 'Anti-rotation press for deep core activation', duration: '3x10 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Plank Progressions', description: 'Forearm plank progressing to longer holds for core endurance', duration: '3x20-60s holds', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Dead Bugs', description: 'Gentle dead bugs to re-activate core musculature', duration: '3x8 each side', priority: 'high' },
+      { type: 'activate', name: 'Pallof Press', description: 'Light Pallof press for core re-activation', duration: '3x8 each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Breathing Exercises', description: 'Diaphragmatic breathing to reduce rectus abdominis overactivity', duration: '5-10 minutes', priority: 'medium' },
+      { type: 'release', name: 'Diaphragmatic Relaxation', description: 'Supine relaxation focusing on releasing abdominal bracing', duration: '5-10 minutes', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Prone Press-up', description: 'Prone extension to lengthen shortened rectus abdominis', duration: '10-15 reps', priority: 'medium' },
+    ],
+  },
+  obliques: {
+    weak: [
+      { type: 'strengthen', name: 'Dead Bugs', description: 'Dead bugs with rotational component for oblique activation', duration: '3x10 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Pallof Press', description: 'Anti-rotation exercise challenging obliques', duration: '3x10 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Plank Progressions', description: 'Side plank progressions for oblique strengthening', duration: '3x20-45s each side', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Pallof Press', description: 'Light anti-rotation press to re-activate obliques', duration: '3x8 each side', priority: 'high' },
+      { type: 'activate', name: 'Dead Bugs', description: 'Rotational dead bugs for oblique re-activation', duration: '3x8 each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Breathing Exercises', description: 'Diaphragmatic breathing to reduce oblique overactivity', duration: '5-10 minutes', priority: 'medium' },
+      { type: 'release', name: 'Diaphragmatic Relaxation', description: 'Relaxation techniques to release oblique bracing', duration: '5-10 minutes', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Side-lying Rotation Stretch', description: 'Gentle trunk rotation to lengthen shortened obliques', duration: '30s each side', priority: 'medium' },
+    ],
+  },
+  transverse_abd: {
+    weak: [
+      { type: 'strengthen', name: 'Dead Bugs', description: 'Dead bugs with transverse abdominis pre-activation', duration: '3x10 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Pallof Press', description: 'Anti-rotation press emphasizing deep core engagement', duration: '3x10 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Plank Progressions', description: 'Plank with focus on drawing in maneuver', duration: '3x20-60s holds', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Dead Bugs', description: 'Gentle dead bugs with abdominal drawing-in for TrA activation', duration: '3x8 each side', priority: 'high' },
+      { type: 'activate', name: 'Plank Progressions', description: 'Modified plank focusing on deep core engagement', duration: '3x15s holds', priority: 'medium' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Breathing Exercises', description: 'Diaphragmatic breathing to reduce TrA overactivity', duration: '5-10 minutes', priority: 'medium' },
+      { type: 'release', name: 'Diaphragmatic Relaxation', description: 'Conscious relaxation of deep core bracing patterns', duration: '5-10 minutes', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'release', name: 'Breathing Exercises', description: 'Breath work to release shortened transverse abdominis', duration: '5-10 minutes', priority: 'medium' },
+    ],
+  },
+  adductors: {
+    shortened: [
+      { type: 'stretch', name: 'Side-lying Adductor Stretch', description: 'Side-lying bottom leg stretch targeting adductor group', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Butterfly Stretch', description: 'Seated butterfly position for adductor lengthening', duration: '30-60s', priority: 'high' },
+      { type: 'stretch', name: 'Frog Stretch', description: 'Prone wide-knee stretch for deep adductor lengthening', duration: '30-60s', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Side-lying Adduction', description: 'Side-lying bottom leg lift for adductor strengthening', duration: '3x15 each side', priority: 'high' },
+      { type: 'strengthen', name: 'Copenhagen Plank', description: 'Side plank with top foot on bench for advanced adductor strengthening', duration: '3x15-30s each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'release', name: 'Foam Roll Adductors', description: 'Foam rolling inner thigh to release overactive adductors', duration: '60-90s each side', priority: 'high' },
+      { type: 'stretch', name: 'Butterfly Stretch', description: 'Butterfly stretch to reduce adductor overactivity', duration: '30-60s', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Side-lying Adduction', description: 'Gentle adduction to re-activate inhibited adductors', duration: '3x12 each side', priority: 'high' },
+    ],
+  },
+  tib_ant: {
+    weak: [
+      { type: 'strengthen', name: 'Toe Raises', description: 'Standing toe raises for tibialis anterior strengthening', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Resisted Dorsiflexion', description: 'Band-resisted ankle dorsiflexion for tibialis anterior', duration: '3x12 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Toe Raises', description: 'Gentle toe raises to re-activate tibialis anterior', duration: '3x12 reps', priority: 'high' },
+      { type: 'activate', name: 'Resisted Dorsiflexion', description: 'Light band dorsiflexion for neuromuscular re-activation', duration: '3x10 reps', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Ankle Plantar Flexion Mobility', description: 'Gentle plantarflexion stretching to reduce tibialis anterior overactivity', duration: '30s each side', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Ankle Plantar Flexion Mobility', description: 'Plantarflexion mobility to lengthen shortened tibialis anterior', duration: '30s each side', priority: 'medium' },
+    ],
+  },
+  peroneals: {
+    weak: [
+      { type: 'strengthen', name: 'Eversion with Band', description: 'Resisted ankle eversion with resistance band', duration: '3x15 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Eversion with Band', description: 'Light band eversion to re-activate peroneal muscles', duration: '3x12 reps', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Inversion Stretching', description: 'Gentle ankle inversion stretch to reduce peroneal overactivity', duration: '30s each side', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Inversion Stretching', description: 'Inversion mobilization to lengthen shortened peroneals', duration: '30s each side', priority: 'medium' },
+    ],
+  },
+  ant_deltoid: {
+    overactive: [
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body arm stretch for anterior deltoid release', duration: '30s each side', priority: 'high' },
+      { type: 'stretch', name: 'Sleeper Stretch', description: 'Side-lying internal rotation stretch for anterior shoulder', duration: '30-45s each side', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Doorway Stretch', description: 'Doorway stretch targeting anterior deltoid and pec', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body stretch for shortened anterior deltoid', duration: '30s each side', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Front Raises', description: 'Dumbbell front raises for anterior deltoid strengthening', duration: '3x12 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Front Raises', description: 'Light front raises to re-activate anterior deltoid', duration: '3x10 reps', priority: 'high' },
+    ],
+  },
+  mid_deltoid: {
+    overactive: [
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body arm stretch for middle deltoid release', duration: '30s each side', priority: 'high' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body stretch for shortened middle deltoid', duration: '30s each side', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Lateral Raises', description: 'Dumbbell lateral raises for middle deltoid strengthening', duration: '3x12 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Lateral Raises', description: 'Light lateral raises to re-activate middle deltoid', duration: '3x10 reps', priority: 'high' },
+    ],
+  },
+  post_deltoid: {
+    overactive: [
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body stretch for posterior deltoid release', duration: '30s each side', priority: 'high' },
+      { type: 'stretch', name: 'Sleeper Stretch', description: 'Side-lying stretch targeting posterior deltoid and infraspinatus', duration: '30-45s each side', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body arm adduction stretch for shortened posterior deltoid', duration: '30s each side', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Reverse Flyes', description: 'Bent-over reverse flyes for posterior deltoid strengthening', duration: '3x12 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Reverse Flyes', description: 'Light reverse flyes to re-activate posterior deltoid', duration: '3x10 reps', priority: 'high' },
+    ],
+  },
+  infraspinatus: {
+    weak: [
+      { type: 'strengthen', name: 'External Rotation with Band', description: 'Standing or side-lying external rotation with resistance band', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Side-lying ER', description: 'Side-lying shoulder external rotation with light dumbbell', duration: '3x12 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Prone ER', description: 'Prone external rotation at 90 degrees abduction', duration: '3x10 reps', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Side-lying ER', description: 'Light side-lying external rotation to re-activate infraspinatus', duration: '3x12 reps', priority: 'high' },
+      { type: 'activate', name: 'External Rotation with Band', description: 'Band ER for infraspinatus neuromuscular re-education', duration: '3x15 reps', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Sleeper Stretch', description: 'Side-lying internal rotation stretch to reduce infraspinatus overactivity', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body adduction stretch for posterior cuff release', duration: '30s each side', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Sleeper Stretch', description: 'Sleeper stretch to lengthen shortened infraspinatus', duration: '30-45s each side', priority: 'high' },
+    ],
+  },
+  supraspinatus: {
+    weak: [
+      { type: 'strengthen', name: 'External Rotation with Band', description: 'Band external rotation for rotator cuff strengthening', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Side-lying ER', description: 'Side-lying ER targeting supraspinatus and infraspinatus', duration: '3x12 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Prone ER', description: 'Prone shoulder rotation for supraspinatus activation', duration: '3x10 reps', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Side-lying ER', description: 'Light ER exercise to re-activate supraspinatus', duration: '3x12 reps', priority: 'high' },
+      { type: 'activate', name: 'External Rotation with Band', description: 'Band exercise for supraspinatus neuromuscular re-education', duration: '3x12 reps', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Sleeper Stretch', description: 'Sleeper stretch to reduce supraspinatus overactivity', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body stretch for rotator cuff release', duration: '30s each side', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body adduction to lengthen shortened supraspinatus', duration: '30s each side', priority: 'high' },
+    ],
+  },
+  subscapularis: {
+    weak: [
+      { type: 'strengthen', name: 'External Rotation with Band', description: 'Band exercise for overall rotator cuff balance including subscapularis', duration: '3x15 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Side-lying ER', description: 'Side-lying rotation work for subscapularis integration', duration: '3x12 reps', priority: 'high' },
+      { type: 'strengthen', name: 'Prone ER', description: 'Prone rotator cuff exercise to strengthen subscapularis', duration: '3x10 reps', priority: 'medium' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Side-lying ER', description: 'Gentle rotation to re-activate subscapularis', duration: '3x10 reps', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Sleeper Stretch', description: 'Sleeper stretch to reduce subscapularis overactivity', duration: '30-45s each side', priority: 'high' },
+      { type: 'stretch', name: 'Cross-body Stretch', description: 'Cross-body stretch for subscapularis release', duration: '30s each side', priority: 'medium' },
+    ],
+    shortened: [
+      { type: 'stretch', name: 'Sleeper Stretch', description: 'Sleeper stretch to lengthen shortened subscapularis', duration: '30-45s each side', priority: 'high' },
+    ],
+  },
+  biceps: {
+    shortened: [
+      { type: 'stretch', name: 'Doorway Bicep Stretch', description: 'Arm extended behind in doorway to stretch biceps brachii', duration: '30s each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Doorway Bicep Stretch', description: 'Sustained bicep stretch to reduce overactivity', duration: '30s each side', priority: 'high' },
+      { type: 'release', name: 'Foam Roll Biceps', description: 'Self-myofascial release of biceps brachii', duration: '60s each side', priority: 'medium' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Curls', description: 'Dumbbell or barbell bicep curls for strengthening', duration: '3x12 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Curls', description: 'Light curls to re-activate inhibited biceps', duration: '3x10 reps', priority: 'high' },
+    ],
+  },
+  triceps: {
+    shortened: [
+      { type: 'stretch', name: 'Overhead Tricep Stretch', description: 'Overhead arm stretch targeting triceps brachii', duration: '30s each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Overhead Tricep Stretch', description: 'Sustained tricep stretch to reduce overactivity', duration: '30s each side', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Tricep Extensions', description: 'Overhead or cable tricep extensions for strengthening', duration: '3x12 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Tricep Extensions', description: 'Light extensions to re-activate inhibited triceps', duration: '3x10 reps', priority: 'high' },
+    ],
+  },
+  wrist_flex: {
+    shortened: [
+      { type: 'stretch', name: 'Wrist Flexor Stretch', description: 'Arm extended with palm up, gently pulling fingers back to stretch wrist flexors', duration: '30s each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Wrist Flexor Stretch', description: 'Sustained wrist flexor stretch to reduce overactivity', duration: '30s each side', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Wrist Curls', description: 'Dumbbell wrist curls for flexor strengthening', duration: '3x15 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Wrist Curls', description: 'Light wrist curls to re-activate wrist flexors', duration: '3x12 reps', priority: 'high' },
+    ],
+  },
+  wrist_ext: {
+    shortened: [
+      { type: 'stretch', name: 'Wrist Extensor Stretch (Prayer Position)', description: 'Reverse prayer position or palm-down finger pull to stretch wrist extensors', duration: '30s each side', priority: 'high' },
+    ],
+    overactive: [
+      { type: 'stretch', name: 'Wrist Extensor Stretch (Prayer Position)', description: 'Sustained extensor stretch to reduce overactivity', duration: '30s each side', priority: 'high' },
+    ],
+    weak: [
+      { type: 'strengthen', name: 'Reverse Wrist Curls', description: 'Dumbbell reverse wrist curls for extensor strengthening', duration: '3x15 reps', priority: 'high' },
+    ],
+    inhibited: [
+      { type: 'activate', name: 'Reverse Wrist Curls', description: 'Light reverse curls to re-activate wrist extensors', duration: '3x12 reps', priority: 'high' },
+    ],
+  },
+};
+
+function stripSidePrefix(muscleId: string): string {
+  return muscleId.replace(/^[lr]_/, '');
+}
+
+export function getExerciseRecommendations(muscle: IndividualMuscle): ExerciseRecommendation[] {
+  const baseId = stripSidePrefix(muscle.id);
+  const muscleExercises = EXERCISE_DATABASE[baseId];
+  if (!muscleExercises) return [];
+
+  const status = muscle.clinicalStatus;
+  const exercises = muscleExercises[status];
+  if (exercises && exercises.length > 0) {
+    return exercises.slice(0, 4);
+  }
+
+  if (status === 'spasm') {
+    const overactiveEx = muscleExercises['overactive'] || [];
+    const shortenedEx = muscleExercises['shortened'] || [];
+    const combined = [...overactiveEx, ...shortenedEx];
+    return combined.slice(0, 4);
+  }
+
+  if (status === 'normal') {
+    return [];
+  }
+
+  const fallbackKeys = Object.keys(muscleExercises);
+  if (fallbackKeys.length > 0) {
+    return (muscleExercises[fallbackKeys[0]] || []).slice(0, 2);
+  }
+
+  return [];
+}
+
+export interface MuscleBalanceRatio {
+  id: string;
+  label: string;
+  agonist: { muscles: string[]; label: string; avgActivation: number };
+  antagonist: { muscles: string[]; label: string; avgActivation: number };
+  ratio: number;
+  idealRange: [number, number];
+  status: 'balanced' | 'agonist_dominant' | 'antagonist_dominant';
+  clinical: string;
+}
+
+interface BalancePairDef {
+  id: string;
+  label: string;
+  agonistPatterns: string[];
+  agonistLabel: string;
+  antagonistPatterns: string[];
+  antagonistLabel: string;
+  idealRange: [number, number];
+  clinicalBalanced: string;
+  clinicalAgonist: string;
+  clinicalAntagonist: string;
+}
+
+const BALANCE_PAIRS: BalancePairDef[] = [
+  {
+    id: 'quad_hamstring',
+    label: 'Quad:Hamstring Ratio',
+    agonistPatterns: ['rect_fem', 'vast_lat', 'vast_med'],
+    agonistLabel: 'Quadriceps',
+    antagonistPatterns: ['hamstrings'],
+    antagonistLabel: 'Hamstrings',
+    idealRange: [0.5, 0.7],
+    clinicalBalanced: 'Healthy hamstring-to-quad ratio supporting knee joint stability',
+    clinicalAgonist: 'Quad-dominant pattern — increased ACL injury risk; strengthen hamstrings',
+    clinicalAntagonist: 'Hamstring-dominant pattern — may indicate quad inhibition; assess for patellofemoral dysfunction',
+  },
+  {
+    id: 'glute_hip_flexor',
+    label: 'Glute:Hip Flexor Ratio',
+    agonistPatterns: ['glut_max', 'glut_med', 'glut_min'],
+    agonistLabel: 'Gluteals',
+    antagonistPatterns: ['iliopsoas', 'rect_fem'],
+    antagonistLabel: 'Hip Flexors',
+    idealRange: [0.8, 1.2],
+    clinicalBalanced: 'Balanced hip extensor-flexor relationship supporting pelvic stability',
+    clinicalAgonist: 'Glute-dominant pattern — uncommon; assess for hip flexor weakness',
+    clinicalAntagonist: 'Hip flexor dominant pattern — gluteal inhibition likely; assess for anterior pelvic tilt',
+  },
+  {
+    id: 'upper_lower_trap',
+    label: 'Upper Trap:Lower Trap Ratio',
+    agonistPatterns: ['upper_trap'],
+    agonistLabel: 'Upper Trapezius',
+    antagonistPatterns: ['lower_trap'],
+    antagonistLabel: 'Lower Trapezius',
+    idealRange: [0.6, 0.9],
+    clinicalBalanced: 'Balanced upper-lower trap ratio supporting scapular mechanics',
+    clinicalAgonist: 'Upper trap dominant — scapular elevation pattern; risk of impingement and neck tension',
+    clinicalAntagonist: 'Lower trap dominant — uncommon pattern; assess scapular positioning',
+  },
+  {
+    id: 'pec_rhomboid',
+    label: 'Pec:Rhomboid Ratio',
+    agonistPatterns: ['pec_major', 'pec_minor'],
+    agonistLabel: 'Pectorals',
+    antagonistPatterns: ['rhomboids'],
+    antagonistLabel: 'Rhomboids',
+    idealRange: [0.8, 1.0],
+    clinicalBalanced: 'Balanced anterior-posterior shoulder girdle mechanics',
+    clinicalAgonist: 'Pec-dominant pattern — rounded shoulders likely; stretch pecs and strengthen rhomboids',
+    clinicalAntagonist: 'Rhomboid-dominant pattern — uncommon; assess for pec weakness or hypomobility',
+  },
+  {
+    id: 'bicep_tricep',
+    label: 'Bicep:Tricep Ratio',
+    agonistPatterns: ['biceps'],
+    agonistLabel: 'Biceps',
+    antagonistPatterns: ['triceps'],
+    antagonistLabel: 'Triceps',
+    idealRange: [0.6, 0.8],
+    clinicalBalanced: 'Balanced elbow flexor-extensor ratio',
+    clinicalAgonist: 'Bicep-dominant pattern — may contribute to elbow flexion contracture',
+    clinicalAntagonist: 'Tricep-dominant pattern — uncommon; assess bicep integrity',
+  },
+  {
+    id: 'ant_post_deltoid',
+    label: 'Anterior:Posterior Deltoid Ratio',
+    agonistPatterns: ['ant_deltoid'],
+    agonistLabel: 'Anterior Deltoid',
+    antagonistPatterns: ['post_deltoid'],
+    antagonistLabel: 'Posterior Deltoid',
+    idealRange: [0.8, 1.0],
+    clinicalBalanced: 'Balanced anterior-posterior deltoid activation',
+    clinicalAgonist: 'Anterior deltoid dominant — forward shoulder posture risk; strengthen posterior chain',
+    clinicalAntagonist: 'Posterior deltoid dominant — uncommon; assess anterior deltoid function',
+  },
+  {
+    id: 'adductor_abductor',
+    label: 'Hip Adductor:Abductor Ratio',
+    agonistPatterns: ['adductors'],
+    agonistLabel: 'Hip Adductors',
+    antagonistPatterns: ['glut_med', 'glut_min'],
+    antagonistLabel: 'Hip Abductors',
+    idealRange: [0.7, 0.9],
+    clinicalBalanced: 'Balanced hip adductor-abductor ratio supporting frontal plane stability',
+    clinicalAgonist: 'Adductor-dominant pattern — groin strain risk; strengthen abductors',
+    clinicalAntagonist: 'Abductor-dominant pattern — may indicate adductor weakness; assess groin function',
+  },
+  {
+    id: 'gastroc_tib_ant',
+    label: 'Gastroc:Tibialis Anterior Ratio',
+    agonistPatterns: ['gastroc'],
+    agonistLabel: 'Gastrocnemius',
+    antagonistPatterns: ['tib_ant'],
+    antagonistLabel: 'Tibialis Anterior',
+    idealRange: [0.3, 0.5],
+    clinicalBalanced: 'Balanced ankle plantarflexor-dorsiflexor ratio',
+    clinicalAgonist: 'Gastroc-dominant pattern — may limit dorsiflexion; stretch calves',
+    clinicalAntagonist: 'Tibialis anterior dominant — uncommon; assess calf function',
+  },
+];
+
+function getAvgActivation(allMuscles: IndividualMuscle[], patterns: string[]): { muscles: string[]; avg: number } {
+  const matched: IndividualMuscle[] = [];
+  for (const m of allMuscles) {
+    const baseId = stripSidePrefix(m.id);
+    if (patterns.includes(baseId)) {
+      matched.push(m);
+    }
+  }
+  if (matched.length === 0) return { muscles: [], avg: 0 };
+  const avg = matched.reduce((sum, m) => sum + m.activationPercent, 0) / matched.length;
+  return { muscles: matched.map(m => m.id), avg };
+}
+
+export function computeMuscleBalanceRatios(allMuscles: IndividualMuscle[]): MuscleBalanceRatio[] {
+  const results: MuscleBalanceRatio[] = [];
+
+  for (const pair of BALANCE_PAIRS) {
+    const agonistData = getAvgActivation(allMuscles, pair.agonistPatterns);
+    const antagonistData = getAvgActivation(allMuscles, pair.antagonistPatterns);
+
+    const agonistAvg = agonistData.avg;
+    const antagonistAvg = antagonistData.avg;
+    const ratio = agonistAvg > 0 ? antagonistAvg / agonistAvg : 0;
+
+    let status: 'balanced' | 'agonist_dominant' | 'antagonist_dominant' = 'balanced';
+    let clinical = pair.clinicalBalanced;
+
+    if (ratio < pair.idealRange[0]) {
+      status = 'agonist_dominant';
+      clinical = pair.clinicalAgonist;
+    } else if (ratio > pair.idealRange[1]) {
+      status = 'antagonist_dominant';
+      clinical = pair.clinicalAntagonist;
+    }
+
+    results.push({
+      id: pair.id,
+      label: pair.label,
+      agonist: { muscles: agonistData.muscles, label: pair.agonistLabel, avgActivation: Math.round(agonistAvg * 10) / 10 },
+      antagonist: { muscles: antagonistData.muscles, label: pair.antagonistLabel, avgActivation: Math.round(antagonistAvg * 10) / 10 },
+      ratio: Math.round(ratio * 100) / 100,
+      idealRange: pair.idealRange,
+      status,
+      clinical,
+    });
+  }
+
+  return results;
+}
+
+export interface TreatmentPriority {
+  muscleId: string;
+  muscleLabel: string;
+  score: number;
+  urgency: 'critical' | 'high' | 'moderate' | 'low';
+  factors: string[];
+  recommendedApproach: string;
+}
+
+const CLINICAL_SEVERITY: Record<ClinicalStatus, number> = {
+  spasm: 100,
+  overactive: 80,
+  inhibited: 70,
+  shortened: 60,
+  weak: 50,
+  lengthened: 40,
+  normal: 0,
+};
+
+function getUrgency(score: number): 'critical' | 'high' | 'moderate' | 'low' {
+  if (score > 70) return 'critical';
+  if (score > 50) return 'high';
+  if (score > 30) return 'moderate';
+  return 'low';
+}
+
+function getRecommendedApproach(status: ClinicalStatus): string {
+  switch (status) {
+    case 'overactive':
+    case 'shortened':
+      return 'Release and stretch';
+    case 'inhibited':
+    case 'weak':
+      return 'Activate and strengthen';
+    case 'spasm':
+      return 'Manual therapy and monitoring';
+    case 'lengthened':
+      return 'Activate and strengthen';
+    case 'normal':
+      return 'Maintain current';
+  }
+}
+
+export function computeTreatmentPriorities(allMuscles: IndividualMuscle[]): TreatmentPriority[] {
+  const priorities: TreatmentPriority[] = [];
+
+  for (const muscle of allMuscles) {
+    const tightnessScore = muscle.tightnessPercent * 0.30;
+    const inhibitionScore = muscle.inhibitionPercent * 0.25;
+    const fatigueScore = muscle.fatigueRisk * 0.20;
+    const severityScore = CLINICAL_SEVERITY[muscle.clinicalStatus] * 0.25;
+
+    const totalScore = Math.round(Math.min(100, tightnessScore + inhibitionScore + fatigueScore + severityScore));
+
+    const factors: string[] = [];
+    if (muscle.tightnessPercent > 40) factors.push(`Elevated tightness (${Math.round(muscle.tightnessPercent)}%)`);
+    if (muscle.inhibitionPercent > 30) factors.push(`Significant inhibition (${Math.round(muscle.inhibitionPercent)}%)`);
+    if (muscle.fatigueRisk > 40) factors.push(`Fatigue risk elevated (${Math.round(muscle.fatigueRisk)}%)`);
+    if (muscle.clinicalStatus !== 'normal') factors.push(`Clinical status: ${muscle.clinicalStatus}`);
+
+    priorities.push({
+      muscleId: muscle.id,
+      muscleLabel: muscle.label,
+      score: totalScore,
+      urgency: getUrgency(totalScore),
+      factors,
+      recommendedApproach: getRecommendedApproach(muscle.clinicalStatus),
+    });
+  }
+
+  priorities.sort((a, b) => b.score - a.score);
+  return priorities;
+}

@@ -704,3 +704,152 @@ export function getStatusHex(status: 'low' | 'moderate' | 'high' | 'very_high'):
     case 'very_high': return 0xef4444;
   }
 }
+
+export interface ClinicalThreshold {
+  jointPattern: string;
+  label: string;
+  thresholdBW: number;
+  injuryType: string;
+  reference: string;
+}
+
+export const CLINICAL_THRESHOLDS: ClinicalThreshold[] = [
+  { jointPattern: 'l4l5_disc|l5s1_disc', label: 'L4-L5 / L5-S1 Disc Compression', thresholdBW: 3.4, injuryType: 'Disc herniation / annular disruption', reference: 'NIOSH Action Limit ~3400N (Waters et al. 1993)' },
+  { jointPattern: 'l3l4_disc', label: 'L3-L4 Disc Compression', thresholdBW: 3.0, injuryType: 'Disc degeneration / protrusion', reference: 'Nachemson & Morris 1964; McGill 1997' },
+  { jointPattern: 'l1l2_disc', label: 'L1-L2 Disc Compression', thresholdBW: 2.8, injuryType: 'Upper lumbar disc injury', reference: 'Adams & Hutton 1985' },
+  { jointPattern: 'l\\d+.*_facet|l4l5_facet|l5s1_facet|l3l4_facet|l1l2_facet', label: 'Lumbar Facet Compression', thresholdBW: 2.0, injuryType: 'Facet arthrosis / hypertrophy', reference: 'Dunlop et al. 1984; Cavanaugh et al. 1996' },
+  { jointPattern: 'c\\d+.*_disc|c3c5_disc|c5c7_disc', label: 'Cervical Disc Compression', thresholdBW: 1.5, injuryType: 'Cervical disc degeneration / radiculopathy', reference: 'Moroney et al. 1988; Nightingale et al. 1997' },
+  { jointPattern: 'c\\d+.*_facet|c0c1_facet|c1c2_facet|c3c5_facet|c5c7_facet', label: 'Cervical Facet Compression', thresholdBW: 1.2, injuryType: 'Cervical facet arthropathy / referral pain', reference: 'Winkelstein et al. 2000; Bogduk & Marsland 1988' },
+  { jointPattern: 't\\d+.*_disc|t5t8_disc', label: 'Thoracic Disc Compression', thresholdBW: 2.5, injuryType: 'Thoracic disc degeneration', reference: 'Wilke et al. 1999' },
+  { jointPattern: 'patellofemoral', label: 'Patellofemoral Compression', thresholdBW: 3.5, injuryType: 'Chondromalacia / PFPS', reference: 'Besier et al. 2005; Powers 2003' },
+  { jointPattern: 'tf_medial|tf_lateral', label: 'Tibiofemoral Compression', thresholdBW: 4.0, injuryType: 'Meniscal / articular cartilage damage', reference: 'Kutzner et al. 2010; D\'Lima et al. 2006' },
+  { jointPattern: 'femoral_head|labrum', label: 'Hip Joint Compression', thresholdBW: 4.5, injuryType: 'Labral tear / cartilage degeneration', reference: 'Bergmann et al. 2001; Tackson et al. 2011' },
+  { jointPattern: 'talocrural', label: 'Talocrural Compression', thresholdBW: 5.0, injuryType: 'Osteochondral lesion / ankle OA', reference: 'Stauffer et al. 1977; Valderrabano et al. 2009' },
+  { jointPattern: '_gh$|_gh\\b', label: 'Glenohumeral Compression', thresholdBW: 1.5, injuryType: 'Rotator cuff overload / impingement', reference: 'Poppen & Walker 1978; Veeger & van der Helm 2007' },
+  { jointPattern: '_ac$|_ac\\b', label: 'AC Joint Compression', thresholdBW: 1.0, injuryType: 'AC joint degeneration / osteolysis', reference: 'Cahill 1992; Buttaci et al. 2004' },
+  { jointPattern: 'si_left|si_right', label: 'Sacroiliac Shear', thresholdBW: 1.0, injuryType: 'SI joint dysfunction / inflammation', reference: 'Vleeming et al. 2012; Laslett 2008' },
+  { jointPattern: 'pubic_symphysis', label: 'Pubic Symphysis Shear', thresholdBW: 0.5, injuryType: 'Pubic symphysis instability / osteitis pubis', reference: 'Meyers et al. 2000; Robinson et al. 2007' },
+  { jointPattern: 'l5s1_facet|l5s1_disc', label: 'Sacral Base Compression', thresholdBW: 2.0, injuryType: 'Sacral stress / spondylolisthesis risk', reference: 'Meyerding 1932; Kalichman et al. 2009' },
+];
+
+export function getThresholdWarnings(joint: JointSurfaceForce): { exceeded: boolean; warnings: { label: string; threshold: number; actual: number; injuryType: string; reference: string; forceType: 'compression' | 'tension' | 'shear' }[] } {
+  const warnings: { label: string; threshold: number; actual: number; injuryType: string; reference: string; forceType: 'compression' | 'tension' | 'shear' }[] = [];
+
+  for (const threshold of CLINICAL_THRESHOLDS) {
+    const regex = new RegExp(threshold.jointPattern);
+    if (!regex.test(joint.id)) continue;
+
+    const isShearThreshold = threshold.label.toLowerCase().includes('shear');
+
+    if (isShearThreshold) {
+      if (joint.shear >= threshold.thresholdBW) {
+        warnings.push({
+          label: threshold.label,
+          threshold: threshold.thresholdBW,
+          actual: joint.shear,
+          injuryType: threshold.injuryType,
+          reference: threshold.reference,
+          forceType: 'shear',
+        });
+      }
+    } else {
+      if (joint.compression >= threshold.thresholdBW) {
+        warnings.push({
+          label: threshold.label,
+          threshold: threshold.thresholdBW,
+          actual: joint.compression,
+          injuryType: threshold.injuryType,
+          reference: threshold.reference,
+          forceType: 'compression',
+        });
+      }
+    }
+  }
+
+  return { exceeded: warnings.length > 0, warnings };
+}
+
+export interface WeightDistribution {
+  leftPercent: number;
+  rightPercent: number;
+  asymmetryPercent: number;
+  dominantSide: 'left' | 'right' | 'balanced';
+  clinical: string;
+}
+
+export function computeWeightDistribution(config: any, bodyWeightKg: number): WeightDistribution {
+  const leftHipForces = computeHipForces(config, 'left');
+  const rightHipForces = computeHipForces(config, 'right');
+  const leftKneeForces = computeKneeForces(config, 'left');
+  const rightKneeForces = computeKneeForces(config, 'right');
+  const leftAnkleForces = computeAnkleForces(config, 'left');
+  const rightAnkleForces = computeAnkleForces(config, 'right');
+
+  const sumForces = (joints: JointSurfaceForce[]) =>
+    joints.reduce((sum, j) => sum + j.compression + j.shear, 0);
+
+  let leftTotal = sumForces(leftHipForces) + sumForces(leftKneeForces) + sumForces(leftAnkleForces);
+  let rightTotal = sumForces(rightHipForces) + sumForces(rightKneeForces) + sumForces(rightAnkleForces);
+
+  const pelvisObliquity = Math.abs(config.pelvis?.obliquity ?? 0);
+  const lateralShift = Math.abs(config.spine?.lateralShift ?? 0);
+  const scoliosis = Math.abs(config.spine?.scoliosis ?? 0);
+
+  const pelvisOblDir = (config.pelvis?.obliquity ?? 0);
+  const latShiftDir = (config.spine?.lateralShift ?? 0);
+  const scolDir = (config.spine?.scoliosis ?? 0);
+
+  const asymmetryBias = pelvisOblDir * 0.3 + latShiftDir * 0.2 + scolDir * 0.1;
+  if (asymmetryBias > 0) {
+    rightTotal *= (1 + Math.abs(asymmetryBias) * 0.01);
+  } else if (asymmetryBias < 0) {
+    leftTotal *= (1 + Math.abs(asymmetryBias) * 0.01);
+  }
+
+  const total = leftTotal + rightTotal;
+  if (total === 0) {
+    return {
+      leftPercent: 50,
+      rightPercent: 50,
+      asymmetryPercent: 0,
+      dominantSide: 'balanced',
+      clinical: 'No lower extremity loading detected — unable to assess weight distribution.',
+    };
+  }
+
+  const leftPercent = (leftTotal / total) * 100;
+  const rightPercent = (rightTotal / total) * 100;
+  const asymmetryPercent = Math.abs(leftPercent - rightPercent);
+
+  let dominantSide: 'left' | 'right' | 'balanced';
+  if (asymmetryPercent <= 5) {
+    dominantSide = 'balanced';
+  } else {
+    dominantSide = leftPercent > rightPercent ? 'left' : 'right';
+  }
+
+  let clinical: string;
+  const factors: string[] = [];
+  if (pelvisObliquity > 3) factors.push(`pelvis obliquity ${pelvisObliquity.toFixed(1)}°`);
+  if (lateralShift > 5) factors.push(`lateral trunk shift ${lateralShift.toFixed(1)}mm`);
+  if (scoliosis > 5) factors.push(`scoliosis ${scoliosis.toFixed(1)}°`);
+  const factorStr = factors.length > 0 ? ` Contributing factors: ${factors.join(', ')}.` : '';
+
+  if (asymmetryPercent <= 5) {
+    clinical = `Balanced weight distribution (${leftPercent.toFixed(1)}% L / ${rightPercent.toFixed(1)}% R). Within normal symmetry limits.${factorStr}`;
+  } else if (asymmetryPercent <= 10) {
+    clinical = `Mild asymmetry detected (${leftPercent.toFixed(1)}% L / ${rightPercent.toFixed(1)}% R) — ${dominantSide} side dominant. Monitor for compensatory patterns.${factorStr}`;
+  } else if (asymmetryPercent <= 15) {
+    clinical = `Moderate asymmetry (${leftPercent.toFixed(1)}% L / ${rightPercent.toFixed(1)}% R) — ${dominantSide} side dominant. Likely compensatory loading; assess for pain avoidance or structural cause.${factorStr}`;
+  } else {
+    clinical = `Significant asymmetry (${leftPercent.toFixed(1)}% L / ${rightPercent.toFixed(1)}% R) — ${dominantSide} side dominant. High risk of overload injury on dominant side. Investigate underlying pathology.${factorStr}`;
+  }
+
+  return {
+    leftPercent: Math.round(leftPercent * 10) / 10,
+    rightPercent: Math.round(rightPercent * 10) / 10,
+    asymmetryPercent: Math.round(asymmetryPercent * 10) / 10,
+    dominantSide,
+    clinical,
+  };
+}

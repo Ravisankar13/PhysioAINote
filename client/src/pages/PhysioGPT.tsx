@@ -56,7 +56,10 @@ import {
   Sparkles,
   Zap,
   Search,
-  Check
+  Check,
+  Scale,
+  GitBranch,
+  Brain
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -74,8 +77,9 @@ import type { Skeleton3DPose } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
-import { calculatePosturalForces, forceToNewtons, getStatusColor, type ForceAnalysisResult, type JointSurfaceForce } from "@/lib/posturalForceEngine";
-import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis } from "@/lib/muscleBiomechanicsEngine";
+import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
+import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority } from "@/lib/muscleBiomechanicsEngine";
+import { KINETIC_CHAINS, type KineticChainDefinition } from "@/lib/kineticChainExplorer";
 
 const BODY_REGIONS = {
   cervical: {
@@ -365,6 +369,15 @@ export default function PhysioGPT() {
   const [collapsedMuscleGroups, setCollapsedMuscleGroups] = useState<Set<string>>(new Set());
   const [selectedMuscleId, setSelectedMuscleId] = useState<string | null>(null);
   const [enabledMuscleGroups, setEnabledMuscleGroups] = useState<Set<string>>(new Set());
+  const [muscleStatusFilter, setMuscleStatusFilter] = useState<string | null>(null);
+  const [showMuscleExercises, setShowMuscleExercises] = useState<string | null>(null);
+  const [showBalanceRatios, setShowBalanceRatios] = useState(false);
+  const [showTreatmentPriority, setShowTreatmentPriority] = useState(false);
+  const [chainExplorerMode, setChainExplorerMode] = useState(false);
+  const [selectedChainId, setSelectedChainId] = useState<string | null>(null);
+  const [expandedChainLink, setExpandedChainLink] = useState<string | null>(null);
+  const [forceAiSuggestions, setForceAiSuggestions] = useState<string | null>(null);
+  const [forceAiLoading, setForceAiLoading] = useState(false);
   const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
@@ -1237,6 +1250,11 @@ ${ddxList}`;
     return result;
   }, [modelConfig, muscleMode]);
 
+  const weightDistribution = useMemo(() => {
+    if (!forceMode) return null;
+    return computeWeightDistribution(modelConfig, bodyWeightKg);
+  }, [modelConfig, forceMode, bodyWeightKg]);
+
   return (
     <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 relative overflow-hidden">
       {/* Full-Page Skeleton Viewer */}
@@ -1535,6 +1553,32 @@ ${ddxList}`;
                   <span className="text-[10px] text-gray-400">kg</span>
                 </div>
 
+                {weightDistribution && (
+                  <div className="mb-2 bg-white/5 rounded px-2 py-1.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] text-gray-400 font-medium">Weight Distribution</span>
+                      <span className={`text-[8px] px-1 py-0.5 rounded ${weightDistribution.asymmetryPercent > 15 ? 'bg-red-500/20 text-red-400' : weightDistribution.asymmetryPercent > 10 ? 'bg-orange-500/20 text-orange-400' : weightDistribution.asymmetryPercent > 5 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'}`}>
+                        {weightDistribution.dominantSide === 'balanced' ? 'Balanced' : `${weightDistribution.asymmetryPercent.toFixed(1)}% asymmetry`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[8px] text-blue-400 w-6">L</span>
+                      <div className="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
+                        <div className="flex h-full">
+                          <div className="bg-blue-500 h-full transition-all" style={{ width: `${weightDistribution.leftPercent}%` }} />
+                          <div className="bg-orange-500 h-full transition-all" style={{ width: `${weightDistribution.rightPercent}%` }} />
+                        </div>
+                      </div>
+                      <span className="text-[8px] text-orange-400 w-6 text-right">R</span>
+                    </div>
+                    <div className="flex justify-between mt-0.5">
+                      <span className="text-[8px] text-blue-400 tabular-nums">{weightDistribution.leftPercent.toFixed(1)}%</span>
+                      <span className="text-[8px] text-orange-400 tabular-nums">{weightDistribution.rightPercent.toFixed(1)}%</span>
+                    </div>
+                    <p className="text-[7px] text-gray-500 mt-0.5">{weightDistribution.clinical}</p>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-1 mb-2">
                   <button
                     className="text-[9px] text-amber-400 hover:text-amber-300 px-1.5 py-0.5 bg-white/5 rounded"
@@ -1603,6 +1647,7 @@ ${ddxList}`;
                                     >
                                       <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: getStatusColor(j.status) }} />
                                       <span className="text-[9px] text-gray-300 flex-1 truncate text-left">{j.label.replace(/^(Left |Right )/, '').replace(cat.label.replace(/^(Left |Right )/, '').split(' ')[0], '').trim() || j.label}</span>
+                                      {getThresholdWarnings(j).exceeded && <AlertTriangle className="h-2 w-2 text-red-400 flex-shrink-0" />}
                                       <span className="text-[10px] font-bold tabular-nums" style={{ color: getStatusColor(j.status) }}>
                                         {(j.totalForce * 100).toFixed(0)}%
                                       </span>
@@ -1633,6 +1678,25 @@ ${ddxList}`;
                                         </div>
                                       </div>
                                       <p className="text-[8px] text-gray-400 leading-relaxed mt-0.5">{j.clinical}</p>
+                                      {(() => {
+                                        const tw = getThresholdWarnings(j);
+                                        if (!tw.exceeded) return null;
+                                        return (
+                                          <div className="mt-1 pt-1 border-t border-red-500/20 space-y-0.5">
+                                            {tw.warnings.map((w, wi) => (
+                                              <div key={wi} className="flex items-start gap-1">
+                                                <AlertTriangle className="h-2.5 w-2.5 text-red-400 flex-shrink-0 mt-0.5" />
+                                                <div>
+                                                  <span className="text-[8px] text-red-300 font-medium">{w.label}</span>
+                                                  <span className="text-[7px] text-red-400 ml-1">({(w.actual * 100).toFixed(0)}% vs {(w.threshold * 100).toFixed(0)}% limit)</span>
+                                                  <p className="text-[7px] text-red-400/70">{w.injuryType}</p>
+                                                  <p className="text-[7px] text-gray-500 italic">{w.reference}</p>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   )}
                                 </div>
@@ -1653,6 +1717,49 @@ ${ddxList}`;
                     </div>
                   </div>
                 )}
+
+                <div className="mt-2 pt-2 border-t border-white/10">
+                  <button
+                    className={`w-full text-[9px] px-2 py-1.5 rounded flex items-center gap-1.5 mb-2 transition-colors ${forceAiLoading ? 'bg-purple-500/20 text-purple-300 cursor-wait' : forceAiSuggestions ? 'bg-purple-500/20 text-purple-300' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                    onClick={async () => {
+                      if (forceAiLoading) return;
+                      if (forceAiSuggestions) { setForceAiSuggestions(null); return; }
+                      setForceAiLoading(true);
+                      try {
+                        const elevated = forceAnalysis.joints.filter(j => j.status === 'high' || j.status === 'very_high');
+                        const summary = elevated.length > 0
+                          ? elevated.map(j => `${j.label}: ${(j.totalForce * 100).toFixed(0)}% BW (${j.status}) - ${j.clinical}`).join('\n')
+                          : 'No significantly elevated forces detected.';
+                        const response = await fetch('/api/physio-gpt/quick-analysis', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            prompt: `As a physiotherapy biomechanics expert, analyze these elevated joint forces and provide 3-5 specific posture correction suggestions to reduce loading. For each suggestion, specify which joint/slider to adjust and why.\n\nElevated Forces:\n${summary}\n\nBody weight: ${bodyWeightKg}kg\nWeight distribution: ${weightDistribution ? `Left ${weightDistribution.leftPercent.toFixed(1)}% / Right ${weightDistribution.rightPercent.toFixed(1)}%` : 'Not assessed'}\n\nProvide brief, actionable suggestions in bullet points.`
+                          })
+                        });
+                        const data = await response.json();
+                        setForceAiSuggestions(data.response || data.message || 'Unable to generate suggestions.');
+                      } catch {
+                        setForceAiSuggestions('Unable to connect to AI service. Please try again.');
+                      } finally {
+                        setForceAiLoading(false);
+                      }
+                    }}
+                  >
+                    <Brain className="h-3 w-3" />
+                    {forceAiLoading ? 'Analyzing...' : forceAiSuggestions ? 'Hide AI Suggestions' : 'AI Posture Corrections'}
+                    {forceAiLoading && <div className="w-3 h-3 border border-purple-400 border-t-transparent rounded-full animate-spin ml-auto" />}
+                  </button>
+                  {forceAiSuggestions && (
+                    <div className="bg-purple-500/10 border border-purple-500/20 rounded px-2 py-1.5 mb-2">
+                      <div className="flex items-center gap-1 mb-1">
+                        <Sparkles className="h-3 w-3 text-purple-400" />
+                        <span className="text-[9px] text-purple-300 font-medium">AI Posture Corrections</span>
+                      </div>
+                      <div className="text-[8px] text-gray-300 whitespace-pre-wrap leading-relaxed">{forceAiSuggestions}</div>
+                    </div>
+                  )}
+                </div>
 
                 <div className="mt-2 pt-2 border-t border-white/10">
                   <div className="flex flex-wrap items-center gap-2 text-[8px]">
@@ -1724,8 +1831,27 @@ ${ddxList}`;
                   </div>
                 </div>
 
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  <button
+                    className={`text-[7px] px-1.5 py-0.5 rounded ${!muscleStatusFilter ? 'bg-rose-500/30 text-rose-300' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                    onClick={() => setMuscleStatusFilter(null)}
+                  >All</button>
+                  {(['shortened', 'overactive', 'inhibited', 'lengthened', 'weak', 'spasm'] as const).map(status => (
+                    <button
+                      key={status}
+                      className={`text-[7px] px-1.5 py-0.5 rounded ${muscleStatusFilter === status ? 'text-white' : 'text-gray-400 hover:bg-white/10'}`}
+                      style={muscleStatusFilter === status ? { backgroundColor: getClinicalStatusColor(status) + '40', color: getClinicalStatusColor(status) } : {}}
+                      onClick={() => setMuscleStatusFilter(prev => prev === status ? null : status)}
+                    >
+                      {getClinicalStatusLabel(status)} ({muscleAnalysis.allMuscles.filter(m => m.clinicalStatus === status).length})
+                    </button>
+                  ))}
+                </div>
+
                 <div className="space-y-0.5">
-                  {muscleAnalysis.groups.map(group => {
+                  {muscleAnalysis.groups
+                  .filter(group => !muscleStatusFilter || group.muscles.some(m => m.clinicalStatus === muscleStatusFilter))
+                  .map(group => {
                     const isCollapsed = collapsedMuscleGroups.has(group.id);
                     const isEnabled = enabledMuscleGroups.has(group.id);
                     const statusColor = getClinicalStatusColor(group.dominantStatus);
@@ -1767,7 +1893,7 @@ ${ddxList}`;
                               <span>Tight: {(group.avgTightness).toFixed(0)}%</span>
                               <span>Inhib: {(group.avgInhibition).toFixed(0)}%</span>
                             </div>
-                            {group.muscles.map(m => {
+                            {group.muscles.filter(m => !muscleStatusFilter || m.clinicalStatus === muscleStatusFilter).map(m => {
                               const mStatusColor = getClinicalStatusColor(m.clinicalStatus);
                               const isSelected = selectedMuscleId === m.id;
                               return (
@@ -1827,6 +1953,31 @@ ${ddxList}`;
                                         </span>
                                       </div>
                                       <p className="text-[7px] text-gray-400 leading-relaxed">{m.clinicalNote}</p>
+                                      <div className="mt-1 pt-1 border-t border-white/10">
+                                        <button
+                                          className="text-[7px] text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5"
+                                          onClick={(e) => { e.stopPropagation(); setShowMuscleExercises(prev => prev === m.id ? null : m.id); }}
+                                        >
+                                          <Dumbbell className="h-2 w-2" />
+                                          {showMuscleExercises === m.id ? 'Hide Exercises' : 'Show Exercises'}
+                                        </button>
+                                        {showMuscleExercises === m.id && (
+                                          <div className="mt-1 space-y-1">
+                                            {getExerciseRecommendations(m).map((ex, ei) => (
+                                              <div key={ei} className={`rounded px-1.5 py-1 ${ex.priority === 'high' ? 'bg-cyan-500/10 border border-cyan-500/20' : 'bg-white/5'}`}>
+                                                <div className="flex items-center gap-1">
+                                                  <span className={`text-[7px] px-1 rounded ${ex.type === 'stretch' ? 'bg-blue-500/20 text-blue-400' : ex.type === 'strengthen' ? 'bg-green-500/20 text-green-400' : ex.type === 'release' ? 'bg-purple-500/20 text-purple-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                                    {ex.type}
+                                                  </span>
+                                                  <span className="text-[8px] text-white flex-1">{ex.name}</span>
+                                                  <span className="text-[7px] text-gray-500">{ex.duration}</span>
+                                                </div>
+                                                <p className="text-[7px] text-gray-400 mt-0.5">{ex.description}</p>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   )}
                                 </div>
@@ -1839,6 +1990,71 @@ ${ddxList}`;
                   })}
                 </div>
 
+                <div className="mt-2 pt-2 border-t border-white/10 space-y-1">
+                  <button
+                    className={`w-full text-[9px] px-2 py-1.5 rounded flex items-center gap-1.5 transition-colors ${showBalanceRatios ? 'bg-cyan-500/20 text-cyan-300' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                    onClick={() => setShowBalanceRatios(prev => !prev)}
+                  >
+                    <Scale className="h-3 w-3" />
+                    Muscle Balance Ratios
+                    <ChevronDown className={`h-2.5 w-2.5 ml-auto transition-transform ${showBalanceRatios ? '' : '-rotate-90'}`} />
+                  </button>
+                  {showBalanceRatios && muscleAnalysis && (
+                    <div className="space-y-1 pl-1">
+                      {computeMuscleBalanceRatios(muscleAnalysis.allMuscles).map(ratio => (
+                        <div key={ratio.id} className="bg-white/5 rounded px-2 py-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[8px] text-white">{ratio.label}</span>
+                            <span className={`text-[9px] font-bold tabular-nums ${ratio.status === 'balanced' ? 'text-green-400' : 'text-orange-400'}`}>
+                              {ratio.ratio.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-[7px] text-gray-500">{ratio.agonist.label}: {ratio.agonist.avgActivation.toFixed(0)}%</span>
+                            <span className="text-[7px] text-gray-600">vs</span>
+                            <span className="text-[7px] text-gray-500">{ratio.antagonist.label}: {ratio.antagonist.avgActivation.toFixed(0)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-700 rounded-full h-1 mt-0.5">
+                            <div className={`h-1 rounded-full ${ratio.status === 'balanced' ? 'bg-green-500' : ratio.status === 'agonist_dominant' ? 'bg-orange-500' : 'bg-blue-500'}`}
+                              style={{ width: `${Math.min(100, ratio.ratio * 100)}%` }} />
+                          </div>
+                          <p className="text-[7px] text-gray-500 mt-0.5">{ratio.clinical}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    className={`w-full text-[9px] px-2 py-1.5 rounded flex items-center gap-1.5 transition-colors ${showTreatmentPriority ? 'bg-red-500/20 text-red-300' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                    onClick={() => setShowTreatmentPriority(prev => !prev)}
+                  >
+                    <AlertTriangle className="h-3 w-3" />
+                    Treatment Priorities
+                    <ChevronDown className={`h-2.5 w-2.5 ml-auto transition-transform ${showTreatmentPriority ? '' : '-rotate-90'}`} />
+                  </button>
+                  {showTreatmentPriority && muscleAnalysis && (
+                    <div className="space-y-0.5 pl-1">
+                      {computeTreatmentPriorities(muscleAnalysis.allMuscles).slice(0, 15).map(tp => (
+                        <div key={tp.muscleId} className={`rounded px-2 py-1 ${tp.urgency === 'critical' ? 'bg-red-500/10 border-l-2 border-red-500' : tp.urgency === 'high' ? 'bg-orange-500/10 border-l-2 border-orange-500' : 'bg-white/5'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[8px] text-white truncate flex-1">{tp.muscleLabel}</span>
+                            <span className={`text-[8px] font-bold tabular-nums ${tp.urgency === 'critical' ? 'text-red-400' : tp.urgency === 'high' ? 'text-orange-400' : tp.urgency === 'moderate' ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {tp.score.toFixed(0)}
+                            </span>
+                            <span className={`text-[7px] ml-1 px-1 rounded ${tp.urgency === 'critical' ? 'bg-red-500/20 text-red-400' : tp.urgency === 'high' ? 'bg-orange-500/20 text-orange-400' : tp.urgency === 'moderate' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'}`}>
+                              {tp.urgency}
+                            </span>
+                          </div>
+                          <p className="text-[7px] text-gray-500">{tp.recommendedApproach}</p>
+                          {tp.factors.length > 0 && (
+                            <p className="text-[7px] text-gray-600">Factors: {tp.factors.join(', ')}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="mt-2 pt-2 border-t border-white/10">
                   <div className="flex flex-wrap items-center gap-1.5 text-[7px]">
                     {(['normal', 'shortened', 'lengthened', 'overactive', 'inhibited', 'spasm', 'weak'] as const).map(status => (
@@ -1847,6 +2063,139 @@ ${ddxList}`;
                         <span className="text-gray-400">{getClinicalStatusLabel(status)}</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Kinetic Chain Explorer Overlay */}
+            {chainExplorerMode && (
+              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[280px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <GitBranch className="h-3.5 w-3.5 text-emerald-400" />
+                    <span className="text-[11px] font-semibold text-white">Kinetic Chain Explorer</span>
+                  </div>
+                  <button className="text-gray-400 hover:text-white" onClick={() => setChainExplorerMode(false)}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+                <p className="text-[8px] text-gray-400 mb-2">Evidence-based kinetic chains from biomechanical literature. Select a chain to explore its pathway.</p>
+
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {(['myofascial', 'functional', 'biomechanical'] as const).map(cat => (
+                    <span key={cat} className="text-[7px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400">
+                      {cat === 'myofascial' ? 'Myofascial Lines' : cat === 'functional' ? 'Functional Slings' : 'Biomechanical'}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="space-y-1">
+                  {KINETIC_CHAINS.map(chain => {
+                    const isSelected = selectedChainId === chain.id;
+                    return (
+                      <div key={chain.id} className={`rounded transition-colors ${isSelected ? 'bg-white/10 ring-1 ring-white/20' : 'bg-white/3'}`}>
+                        <button
+                          className="w-full flex items-center gap-1.5 py-1.5 px-2 rounded hover:bg-white/5 transition-colors"
+                          onClick={() => {
+                            setSelectedChainId(prev => prev === chain.id ? null : chain.id);
+                            setExpandedChainLink(null);
+                          }}
+                        >
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 border-2" style={{ borderColor: chain.color, backgroundColor: isSelected ? chain.color : 'transparent' }} />
+                          <span className="text-[10px] font-medium text-gray-200 flex-1 text-left">{chain.label}</span>
+                          <span className={`text-[7px] px-1 py-0.5 rounded ${chain.category === 'myofascial' ? 'bg-blue-500/20 text-blue-400' : chain.category === 'functional' ? 'bg-orange-500/20 text-orange-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                            {chain.category}
+                          </span>
+                          <ChevronDown className={`h-2.5 w-2.5 text-gray-500 transition-transform ${isSelected ? '' : '-rotate-90'}`} />
+                        </button>
+
+                        {isSelected && (
+                          <div className="px-2 pb-2 space-y-1.5">
+                            <p className="text-[8px] text-gray-400 leading-relaxed">{chain.description}</p>
+
+                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-1">
+                              <span className="text-[8px] text-emerald-400 font-medium">Clinical Relevance</span>
+                              <p className="text-[7px] text-emerald-300/80 mt-0.5 leading-relaxed">{chain.clinicalRelevance}</p>
+                            </div>
+
+                            <div>
+                              <span className="text-[8px] text-gray-300 font-medium">Chain Pathway ({chain.links.length} links)</span>
+                              <div className="mt-1 space-y-0.5">
+                                {chain.links.map((link, li) => {
+                                  const isExpanded = expandedChainLink === `${chain.id}_${li}`;
+                                  return (
+                                    <div key={li}>
+                                      <button
+                                        className={`w-full flex items-center gap-1 px-1.5 py-1 rounded text-left transition-colors ${isExpanded ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                                        onClick={() => setExpandedChainLink(prev => prev === `${chain.id}_${li}` ? null : `${chain.id}_${li}`)}
+                                      >
+                                        <div className="flex flex-col items-center flex-shrink-0 w-3">
+                                          <div className="w-2 h-2 rounded-full border" style={{ borderColor: chain.color, backgroundColor: link.role === 'primary' ? chain.color : 'transparent' }} />
+                                          {li < chain.links.length - 1 && <div className="w-0.5 h-3 mt-0.5" style={{ backgroundColor: chain.color + '60' }} />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="text-[9px] text-white truncate block">{link.label}</span>
+                                          <span className="text-[7px] text-gray-500">{link.region}</span>
+                                        </div>
+                                        <span className={`text-[6px] px-1 rounded ${link.role === 'primary' ? 'bg-white/10 text-gray-300' : 'bg-white/5 text-gray-500'}`}>
+                                          {link.role}
+                                        </span>
+                                      </button>
+                                      {isExpanded && (
+                                        <div className="ml-5 px-2 py-1 bg-white/5 rounded mb-0.5 border-l-2" style={{ borderColor: chain.color }}>
+                                          <div className="text-[7px] text-gray-400 mb-0.5">
+                                            <span className="text-gray-300 font-medium">Muscles: </span>
+                                            {link.muscles.join(', ')}
+                                          </div>
+                                          <div className="text-[7px] text-gray-400">
+                                            <span className="text-gray-300 font-medium">Force Role: </span>
+                                            {link.forceContribution}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="text-[8px] text-red-400 font-medium">Common Dysfunctions</span>
+                              <div className="mt-0.5 space-y-0.5">
+                                {chain.commonDysfunctions.map((d, di) => (
+                                  <div key={di} className="flex items-start gap-1">
+                                    <AlertTriangle className="h-2 w-2 text-red-400/60 flex-shrink-0 mt-0.5" />
+                                    <span className="text-[7px] text-gray-400 leading-relaxed">{d}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="text-[8px] text-cyan-400 font-medium">Assessment Tests</span>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {chain.assessmentTests.map((t, ti) => (
+                                  <span key={ti} className="text-[7px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400/80">{t}</span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-white/10">
+                  <div className="flex flex-wrap items-center gap-1 text-[7px]">
+                    <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full bg-blue-500/50 border border-blue-500" /><span className="text-gray-400">Myofascial</span></div>
+                    <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full bg-orange-500/50 border border-orange-500" /><span className="text-gray-400">Functional</span></div>
+                    <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full bg-purple-500/50 border border-purple-500" /><span className="text-gray-400">Biomechanical</span></div>
+                  </div>
+                  <div className="flex items-center gap-1 mt-1 text-[7px]">
+                    <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /><span className="text-gray-500">Primary link</span></div>
+                    <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full border border-emerald-500" /><span className="text-gray-500">Secondary link</span></div>
                   </div>
                 </div>
               </div>
@@ -2430,6 +2779,21 @@ ${ddxList}`;
               >
                 <Dumbbell className="h-3 w-3 mr-1" />
                 {muscleMode ? 'Muscles On' : 'Muscles'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${chainExplorerMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-white/90 hover:bg-white'}`}
+                onClick={() => {
+                  const newMode = !chainExplorerMode;
+                  setChainExplorerMode(newMode);
+                  if (newMode) {
+                    toast({ title: "Kinetic Chain Explorer", description: "Explore evidence-based kinetic chains. Select a chain to trace its pathway through the body." });
+                  }
+                }}
+              >
+                <GitBranch className="h-3 w-3 mr-1" />
+                {chainExplorerMode ? 'Chains On' : 'Chains'}
               </Button>
               <Button
                 variant="secondary"

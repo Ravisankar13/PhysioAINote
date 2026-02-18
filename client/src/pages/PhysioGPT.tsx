@@ -58,7 +58,11 @@ import {
   Search,
   Check,
   Scale,
-  GitBranch
+  GitBranch,
+  TrendingUp,
+  Shield,
+  Layers,
+  Network
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -79,6 +83,7 @@ import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighli
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority } from "@/lib/muscleBiomechanicsEngine";
 import { KINETIC_CHAINS, type KineticChainDefinition } from "@/lib/kineticChainExplorer";
+import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 
 const BODY_REGIONS = {
   cervical: {
@@ -392,6 +397,11 @@ export default function PhysioGPT() {
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
   const [expandedZoomRegion, setExpandedZoomRegion] = useState<string | null>(null);
+  const [correlationMode, setCorrelationMode] = useState(false);
+  const [expandedCorrelation, setExpandedCorrelation] = useState<string | null>(null);
+  const [correlationTab, setCorrelationTab] = useState<'overview' | 'chains' | 'muscles' | 'root_cause'>('overview');
+  const [chainIntegrityMode, setChainIntegrityMode] = useState(false);
+  const [expandedChainIntegrity, setExpandedChainIntegrity] = useState<string | null>(null);
   const skeletonContainerRef = useRef<HTMLDivElement>(null);
   const controllerSmootherRef = useRef(new ControllerSmoother(0.35, 0.015));
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
@@ -1254,6 +1264,60 @@ ${ddxList}`;
     return computeWeightDistribution(modelConfig, bodyWeightKg);
   }, [modelConfig, forceMode, bodyWeightKg]);
 
+  const correlationResult = useMemo(() => {
+    if (!correlationMode && !chainIntegrityMode && !chainExplorerMode) return null;
+    const forces = calculatePosturalForces(modelConfig);
+    const muscles = computeFullMuscleAnalysis(modelConfig);
+    return computeCrossSystemCorrelation({
+      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description })),
+      forces: forces.joints,
+      muscles: muscles.allMuscles,
+      muscleGroups: muscles.groups,
+      syndromes: muscles.syndromes,
+      kineticChains: KINETIC_CHAINS,
+      bodyWeightKg,
+    });
+  }, [modelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode]);
+
+  const chainIntegrityScores = useMemo(() => {
+    if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
+    const muscles = computeFullMuscleAnalysis(modelConfig);
+    const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
+    for (const chain of KINETIC_CHAINS) {
+      let totalScore = 100;
+      const issues: string[] = [];
+      const problematicLinks: string[] = [];
+      const exercises: string[] = [];
+      for (const link of chain.links) {
+        for (const muscName of link.muscles) {
+          const muscLower = muscName.toLowerCase();
+          const matchedMuscle = muscles.allMuscles.find(m => {
+            const mLabel = m.label.toLowerCase();
+            const mId = m.id.toLowerCase();
+            return mLabel.includes(muscLower) || muscLower.includes(mLabel.replace(/^[lr] /, '')) || mId.includes(muscLower.replace(/ /g, '_')) || muscLower.replace(/ /g, '_').includes(mId.replace(/^[lr]_/, ''));
+          });
+          if (matchedMuscle && matchedMuscle.clinicalStatus !== 'normal') {
+            const penalty = matchedMuscle.clinicalStatus === 'spasm' ? 15 : matchedMuscle.clinicalStatus === 'inhibited' ? 12 : matchedMuscle.clinicalStatus === 'overactive' ? 10 : matchedMuscle.clinicalStatus === 'shortened' ? 8 : matchedMuscle.clinicalStatus === 'weak' ? 10 : matchedMuscle.clinicalStatus === 'lengthened' ? 6 : 3;
+            totalScore -= penalty;
+            issues.push(`${matchedMuscle.label}: ${matchedMuscle.clinicalStatus}`);
+            if (!problematicLinks.includes(link.label)) problematicLinks.push(link.label);
+            if (matchedMuscle.clinicalStatus === 'shortened' || matchedMuscle.clinicalStatus === 'overactive') exercises.push(`Stretch/release ${muscName}`);
+            else if (matchedMuscle.clinicalStatus === 'inhibited' || matchedMuscle.clinicalStatus === 'weak') exercises.push(`Strengthen/activate ${muscName}`);
+            else if (matchedMuscle.clinicalStatus === 'spasm') exercises.push(`Release/manual therapy for ${muscName}`);
+          }
+          if (matchedMuscle && matchedMuscle.tightnessPercent > 50) totalScore -= 3;
+          if (matchedMuscle && matchedMuscle.inhibitionPercent > 40) totalScore -= 4;
+        }
+      }
+      scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
+    }
+    return scores;
+  }, [modelConfig, chainExplorerMode, chainIntegrityMode]);
+
+  const getIntegrityColor = (score: number) => score >= 80 ? '#22c55e' : score >= 60 ? '#eab308' : score >= 40 ? '#f97316' : '#ef4444';
+  const getIntegrityLabel = (score: number) => score >= 80 ? 'Good' : score >= 60 ? 'Fair' : score >= 40 ? 'Poor' : 'Critical';
+  const getSeverityColor = (severity: 'mild' | 'moderate' | 'severe') => severity === 'severe' ? 'text-red-400' : severity === 'moderate' ? 'text-orange-400' : 'text-yellow-400';
+
   return (
     <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 relative overflow-hidden">
       {/* Full-Page Skeleton Viewer */}
@@ -2069,17 +2133,26 @@ ${ddxList}`;
 
             {/* Kinetic Chain Explorer Overlay */}
             {chainExplorerMode && (
-              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[280px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[300px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
                     <GitBranch className="h-3.5 w-3.5 text-emerald-400" />
                     <span className="text-[11px] font-semibold text-white">Kinetic Chain Explorer</span>
                   </div>
-                  <button className="text-gray-400 hover:text-white" onClick={() => setChainExplorerMode(false)}>
-                    <X className="h-3 w-3" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      className={`text-[7px] px-1.5 py-0.5 rounded transition-colors ${chainIntegrityMode ? 'bg-emerald-500/30 text-emerald-300' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+                      onClick={() => setChainIntegrityMode(!chainIntegrityMode)}
+                    >
+                      <Shield className="h-2.5 w-2.5 inline mr-0.5" />
+                      Integrity
+                    </button>
+                    <button className="text-gray-400 hover:text-white" onClick={() => setChainExplorerMode(false)}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[8px] text-gray-400 mb-2">Evidence-based kinetic chains from biomechanical literature. Select a chain to explore its pathway.</p>
+                <p className="text-[8px] text-gray-400 mb-2">{chainIntegrityMode ? 'Showing chain health scores based on current posture.' : 'Evidence-based kinetic chains. Select a chain to explore its pathway.'}</p>
 
                 <div className="flex flex-wrap gap-1 mb-2">
                   {(['myofascial', 'functional', 'biomechanical'] as const).map(cat => (
@@ -2092,6 +2165,9 @@ ${ddxList}`;
                 <div className="space-y-1">
                   {KINETIC_CHAINS.map(chain => {
                     const isSelected = selectedChainId === chain.id;
+                    const integrity = chainIntegrityScores.get(chain.id);
+                    const integrityScore = integrity?.score ?? 100;
+                    const isIntegrityExpanded = expandedChainIntegrity === chain.id;
                     return (
                       <div key={chain.id} className={`rounded transition-colors ${isSelected ? 'bg-white/10 ring-1 ring-white/20' : 'bg-white/3'}`}>
                         <button
@@ -2103,14 +2179,82 @@ ${ddxList}`;
                         >
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 border-2" style={{ borderColor: chain.color, backgroundColor: isSelected ? chain.color : 'transparent' }} />
                           <span className="text-[10px] font-medium text-gray-200 flex-1 text-left">{chain.label}</span>
-                          <span className={`text-[7px] px-1 py-0.5 rounded ${chain.category === 'myofascial' ? 'bg-blue-500/20 text-blue-400' : chain.category === 'functional' ? 'bg-orange-500/20 text-orange-400' : 'bg-purple-500/20 text-purple-400'}`}>
-                            {chain.category}
-                          </span>
+                          {chainIntegrityMode ? (
+                            <div className="flex items-center gap-1">
+                              <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all" style={{ width: `${integrityScore}%`, backgroundColor: getIntegrityColor(integrityScore) }} />
+                              </div>
+                              <span className="text-[7px] font-bold" style={{ color: getIntegrityColor(integrityScore) }}>{integrityScore}%</span>
+                            </div>
+                          ) : (
+                            <span className={`text-[7px] px-1 py-0.5 rounded ${chain.category === 'myofascial' ? 'bg-blue-500/20 text-blue-400' : chain.category === 'functional' ? 'bg-orange-500/20 text-orange-400' : 'bg-purple-500/20 text-purple-400'}`}>
+                              {chain.category}
+                            </span>
+                          )}
                           <ChevronDown className={`h-2.5 w-2.5 text-gray-500 transition-transform ${isSelected ? '' : '-rotate-90'}`} />
                         </button>
 
                         {isSelected && (
                           <div className="px-2 pb-2 space-y-1.5">
+                            {chainIntegrityMode && integrity && (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2 p-1.5 rounded-lg" style={{ backgroundColor: getIntegrityColor(integrityScore) + '15', border: `1px solid ${getIntegrityColor(integrityScore)}30` }}>
+                                  <Shield className="h-3 w-3" style={{ color: getIntegrityColor(integrityScore) }} />
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[9px] font-bold" style={{ color: getIntegrityColor(integrityScore) }}>Chain Integrity: {getIntegrityLabel(integrityScore)}</span>
+                                      <span className="text-[8px] font-bold" style={{ color: getIntegrityColor(integrityScore) }}>{integrityScore}%</span>
+                                    </div>
+                                    <div className="w-full h-1 bg-gray-700 rounded-full mt-0.5">
+                                      <div className="h-full rounded-full transition-all" style={{ width: `${integrityScore}%`, backgroundColor: getIntegrityColor(integrityScore) }} />
+                                    </div>
+                                  </div>
+                                </div>
+                                {integrity.problematicLinks.length > 0 && (
+                                  <div>
+                                    <span className="text-[8px] text-red-400 font-medium">Problematic Links ({integrity.problematicLinks.length})</span>
+                                    <div className="mt-0.5 space-y-0.5">
+                                      {integrity.problematicLinks.map((link, i) => (
+                                        <div key={i} className="flex items-center gap-1 text-[7px] text-red-300/80 bg-red-500/10 px-1.5 py-0.5 rounded">
+                                          <AlertTriangle className="h-2 w-2 text-red-400 flex-shrink-0" />
+                                          {link}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {integrity.issues.length > 0 && (
+                                  <div>
+                                    <button className="text-[8px] text-orange-400 font-medium flex items-center gap-1" onClick={(e) => { e.stopPropagation(); setExpandedChainIntegrity(prev => prev === chain.id ? null : chain.id); }}>
+                                      <Activity className="h-2.5 w-2.5" />
+                                      Muscle Issues ({integrity.issues.length})
+                                      <ChevronDown className={`h-2 w-2 transition-transform ${isIntegrityExpanded ? '' : '-rotate-90'}`} />
+                                    </button>
+                                    {isIntegrityExpanded && (
+                                      <div className="mt-0.5 space-y-0.5 ml-1">
+                                        {integrity.issues.map((issue, i) => (
+                                          <div key={i} className="text-[7px] text-orange-300/70 bg-orange-500/10 px-1.5 py-0.5 rounded">{issue}</div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                {integrity.exercises.length > 0 && (
+                                  <div>
+                                    <span className="text-[8px] text-cyan-400 font-medium">Recommended Exercises</span>
+                                    <div className="mt-0.5 space-y-0.5">
+                                      {integrity.exercises.map((ex, i) => (
+                                        <div key={i} className="flex items-center gap-1 text-[7px] text-cyan-300/80 bg-cyan-500/10 px-1.5 py-0.5 rounded">
+                                          <Dumbbell className="h-2 w-2 text-cyan-400 flex-shrink-0" />
+                                          {ex}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             <p className="text-[8px] text-gray-400 leading-relaxed">{chain.description}</p>
 
                             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-1">
@@ -2118,25 +2262,49 @@ ${ddxList}`;
                               <p className="text-[7px] text-emerald-300/80 mt-0.5 leading-relaxed">{chain.clinicalRelevance}</p>
                             </div>
 
+                            {correlationResult && correlationResult.painCorrelations.length > 0 && (() => {
+                              const chainCorrelations = correlationResult.painCorrelations.filter(pc => pc.relatedChains.some(rc => rc.chainId === chain.id));
+                              if (chainCorrelations.length === 0) return null;
+                              return (
+                                <div className="bg-red-500/10 border border-red-500/20 rounded px-2 py-1">
+                                  <span className="text-[8px] text-red-400 font-medium">Pain Markers on This Chain ({chainCorrelations.length})</span>
+                                  <div className="mt-0.5 space-y-0.5">
+                                    {chainCorrelations.map((pc) => {
+                                      const chainData = pc.relatedChains.find(rc => rc.chainId === chain.id);
+                                      return (
+                                        <div key={pc.markerId} className="text-[7px] text-red-300/80">
+                                          <span className="text-red-300">{pc.markerLabel}</span>
+                                          <span className="text-gray-500 ml-1">(severity {pc.severity}/10)</span>
+                                          {chainData && <span className="text-gray-500 ml-1">- {chainData.relevanceReason}</span>}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
                             <div>
                               <span className="text-[8px] text-gray-300 font-medium">Chain Pathway ({chain.links.length} links)</span>
                               <div className="mt-1 space-y-0.5">
                                 {chain.links.map((link, li) => {
                                   const isExpanded = expandedChainLink === `${chain.id}_${li}`;
+                                  const isProblematic = integrity?.problematicLinks.includes(link.label);
                                   return (
                                     <div key={li}>
                                       <button
-                                        className={`w-full flex items-center gap-1 px-1.5 py-1 rounded text-left transition-colors ${isExpanded ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                                        className={`w-full flex items-center gap-1 px-1.5 py-1 rounded text-left transition-colors ${isExpanded ? 'bg-white/10' : 'hover:bg-white/5'} ${isProblematic ? 'ring-1 ring-red-500/30' : ''}`}
                                         onClick={() => setExpandedChainLink(prev => prev === `${chain.id}_${li}` ? null : `${chain.id}_${li}`)}
                                       >
                                         <div className="flex flex-col items-center flex-shrink-0 w-3">
-                                          <div className="w-2 h-2 rounded-full border" style={{ borderColor: chain.color, backgroundColor: link.role === 'primary' ? chain.color : 'transparent' }} />
+                                          <div className="w-2 h-2 rounded-full border" style={{ borderColor: isProblematic ? '#ef4444' : chain.color, backgroundColor: isProblematic ? '#ef444480' : (link.role === 'primary' ? chain.color : 'transparent') }} />
                                           {li < chain.links.length - 1 && <div className="w-0.5 h-3 mt-0.5" style={{ backgroundColor: chain.color + '60' }} />}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                          <span className="text-[9px] text-white truncate block">{link.label}</span>
+                                          <span className={`text-[9px] truncate block ${isProblematic ? 'text-red-300' : 'text-white'}`}>{link.label}</span>
                                           <span className="text-[7px] text-gray-500">{link.region}</span>
                                         </div>
+                                        {isProblematic && <AlertTriangle className="h-2.5 w-2.5 text-red-400 flex-shrink-0" />}
                                         <span className={`text-[6px] px-1 rounded ${link.role === 'primary' ? 'bg-white/10 text-gray-300' : 'bg-white/5 text-gray-500'}`}>
                                           {link.role}
                                         </span>
@@ -2151,6 +2319,18 @@ ${ddxList}`;
                                             <span className="text-gray-300 font-medium">Force Role: </span>
                                             {link.forceContribution}
                                           </div>
+                                          {chainIntegrityMode && (() => {
+                                            const linkIssues = integrity?.issues.filter(issue => link.muscles.some(m => issue.toLowerCase().includes(m.toLowerCase().substring(0, 6)))) || [];
+                                            if (linkIssues.length === 0) return null;
+                                            return (
+                                              <div className="mt-1 pt-1 border-t border-white/5">
+                                                <span className="text-[7px] text-red-400 font-medium">Issues at this link:</span>
+                                                {linkIssues.map((issue, i) => (
+                                                  <div key={i} className="text-[6px] text-red-300/70 mt-0.5">{issue}</div>
+                                                ))}
+                                              </div>
+                                            );
+                                          })()}
                                         </div>
                                       )}
                                     </div>
@@ -2192,11 +2372,248 @@ ${ddxList}`;
                     <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full bg-orange-500/50 border border-orange-500" /><span className="text-gray-400">Functional</span></div>
                     <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full bg-purple-500/50 border border-purple-500" /><span className="text-gray-400">Biomechanical</span></div>
                   </div>
-                  <div className="flex items-center gap-1 mt-1 text-[7px]">
-                    <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /><span className="text-gray-500">Primary link</span></div>
-                    <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full border border-emerald-500" /><span className="text-gray-500">Secondary link</span></div>
+                  {chainIntegrityMode ? (
+                    <div className="flex items-center gap-2 mt-1 text-[7px]">
+                      <div className="flex items-center gap-0.5"><div className="w-2 h-1 rounded bg-green-500" /><span className="text-gray-500">Good</span></div>
+                      <div className="flex items-center gap-0.5"><div className="w-2 h-1 rounded bg-yellow-500" /><span className="text-gray-500">Fair</span></div>
+                      <div className="flex items-center gap-0.5"><div className="w-2 h-1 rounded bg-orange-500" /><span className="text-gray-500">Poor</span></div>
+                      <div className="flex items-center gap-0.5"><div className="w-2 h-1 rounded bg-red-500" /><span className="text-gray-500">Critical</span></div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 mt-1 text-[7px]">
+                      <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /><span className="text-gray-500">Primary link</span></div>
+                      <div className="flex items-center gap-0.5"><div className="w-2 h-2 rounded-full border border-emerald-500" /><span className="text-gray-500">Secondary link</span></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Cross-System Correlation Dashboard */}
+            {correlationMode && correlationResult && (
+              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[310px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Network className="h-3.5 w-3.5 text-violet-400" />
+                    <span className="text-[11px] font-semibold text-white">Clinical Correlation</span>
+                  </div>
+                  <button className="text-gray-400 hover:text-white" onClick={() => setCorrelationMode(false)}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 mb-2 p-1.5 rounded-lg" style={{ backgroundColor: correlationResult.overallRiskScore > 60 ? '#ef444420' : correlationResult.overallRiskScore > 30 ? '#f9731620' : '#22c55e15' }}>
+                  <div className="relative w-10 h-10">
+                    <svg viewBox="0 0 36 36" className="w-10 h-10 -rotate-90">
+                      <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831a15.9155 15.9155 0 0 1 0-31.831" fill="none" stroke="#374151" strokeWidth="3" />
+                      <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831a15.9155 15.9155 0 0 1 0-31.831" fill="none" stroke={correlationResult.overallRiskScore > 60 ? '#ef4444' : correlationResult.overallRiskScore > 30 ? '#f97316' : '#22c55e'} strokeWidth="3" strokeDasharray={`${correlationResult.overallRiskScore}, 100`} strokeLinecap="round" />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">{correlationResult.overallRiskScore}</span>
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[9px] font-medium text-white">Clinical Risk Score</span>
+                    <p className="text-[7px] text-gray-400">{correlationResult.overallRiskScore > 60 ? 'High risk — multiple clinical findings' : correlationResult.overallRiskScore > 30 ? 'Moderate risk — some concerns' : 'Low risk — minimal findings'}</p>
                   </div>
                 </div>
+
+                {correlationResult.summaryFindings.length > 0 && (
+                  <div className="mb-2">
+                    <span className="text-[8px] text-gray-300 font-medium">Key Findings</span>
+                    <div className="mt-0.5 space-y-0.5">
+                      {correlationResult.summaryFindings.slice(0, 5).map((f, i) => (
+                        <div key={i} className="flex items-start gap-1 text-[7px] text-gray-400">
+                          <TrendingUp className="h-2 w-2 text-violet-400 flex-shrink-0 mt-0.5" />
+                          <span>{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-0.5 mb-2 bg-white/5 rounded p-0.5">
+                  {(['overview', 'chains', 'muscles', 'root_cause'] as const).map(tab => (
+                    <button key={tab} className={`flex-1 text-[7px] py-1 px-1 rounded transition-colors ${correlationTab === tab ? 'bg-violet-500/30 text-violet-300' : 'text-gray-400 hover:text-white'}`} onClick={() => setCorrelationTab(tab)}>
+                      {tab === 'overview' ? 'Overview' : tab === 'chains' ? 'Chains' : tab === 'muscles' ? 'Muscles' : 'Root Cause'}
+                    </button>
+                  ))}
+                </div>
+
+                {correlationResult.painCorrelations.length === 0 && (
+                  <div className="text-center py-4">
+                    <Target className="h-6 w-6 text-gray-600 mx-auto mb-1" />
+                    <p className="text-[9px] text-gray-400">Place pain markers on the skeleton to see cross-system correlations</p>
+                  </div>
+                )}
+
+                {correlationResult.painCorrelations.map((pc) => {
+                  const isExpanded = expandedCorrelation === pc.markerId;
+                  return (
+                    <div key={pc.markerId} className="mb-1.5 rounded bg-white/5 overflow-hidden">
+                      <button className="w-full flex items-center gap-1.5 p-2 text-left hover:bg-white/5 transition-colors" onClick={() => setExpandedCorrelation(prev => prev === pc.markerId ? null : pc.markerId)}>
+                        <div className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[9px] font-medium text-white truncate block">{pc.markerLabel}</span>
+                          <span className="text-[7px] text-gray-500">{pc.region} • severity {pc.severity}/10</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[7px]">
+                          {pc.relatedChains.length > 0 && <span className="px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400">{pc.relatedChains.length} chains</span>}
+                          {pc.relatedMuscles.length > 0 && <span className="px-1 py-0.5 rounded bg-rose-500/15 text-rose-400">{pc.relatedMuscles.length} muscles</span>}
+                        </div>
+                        <ChevronDown className={`h-2.5 w-2.5 text-gray-500 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      </button>
+                      {isExpanded && (
+                        <div className="px-2 pb-2 space-y-1.5">
+                          {correlationTab === 'overview' && (
+                            <>
+                              {pc.compensationPatterns.length > 0 && (
+                                <div>
+                                  <span className="text-[8px] text-orange-400 font-medium">Compensation Patterns</span>
+                                  <div className="mt-0.5 space-y-0.5">
+                                    {pc.compensationPatterns.map((cp, i) => (
+                                      <div key={i} className="bg-orange-500/10 rounded px-1.5 py-1">
+                                        <div className="flex items-center gap-1">
+                                          <span className={`text-[8px] font-medium ${getSeverityColor(cp.severity)}`}>{cp.pattern}</span>
+                                          <span className={`text-[6px] px-1 rounded ${cp.severity === 'severe' ? 'bg-red-500/20 text-red-400' : cp.severity === 'moderate' ? 'bg-orange-500/20 text-orange-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{cp.severity}</span>
+                                        </div>
+                                        <p className="text-[7px] text-gray-400 mt-0.5">{cp.description}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {pc.relatedForces.length > 0 && (
+                                <div>
+                                  <span className="text-[8px] text-blue-400 font-medium">Related Joint Forces ({pc.relatedForces.length})</span>
+                                  <div className="mt-0.5 space-y-0.5">
+                                    {pc.relatedForces.slice(0, 5).map((f, i) => (
+                                      <div key={i} className="flex items-center gap-1 text-[7px] bg-blue-500/10 px-1.5 py-0.5 rounded">
+                                        <span className={`w-1.5 h-1.5 rounded-full ${f.status === 'very_high' ? 'bg-red-500' : f.status === 'high' ? 'bg-orange-500' : 'bg-yellow-500'}`} />
+                                        <span className="text-gray-300 flex-1 truncate">{f.jointLabel}</span>
+                                        <span className="text-gray-500">{f.status.replace('_', ' ')}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {correlationTab === 'chains' && (
+                            <div>
+                              <span className="text-[8px] text-emerald-400 font-medium">Kinetic Chains Through Pain Region</span>
+                              {pc.relatedChains.length === 0 && <p className="text-[7px] text-gray-500 mt-0.5">No kinetic chains directly associated</p>}
+                              <div className="mt-0.5 space-y-1">
+                                {pc.relatedChains.sort((a, b) => b.relevanceScore - a.relevanceScore).map((rc, i) => (
+                                  <div key={i} className="bg-white/5 rounded px-1.5 py-1">
+                                    <div className="flex items-center gap-1">
+                                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: rc.chainColor }} />
+                                      <span className="text-[8px] text-white font-medium flex-1">{rc.chainLabel}</span>
+                                      <div className="w-8 h-1 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full rounded-full" style={{ width: `${rc.relevanceScore}%`, backgroundColor: rc.chainColor }} />
+                                      </div>
+                                      <span className="text-[7px] text-gray-400">{rc.relevanceScore}%</span>
+                                    </div>
+                                    <p className="text-[6px] text-gray-500 mt-0.5">{rc.relevanceReason}</p>
+                                    {rc.relevantLinks.length > 0 && (
+                                      <div className="mt-0.5">
+                                        {rc.relevantLinks.slice(0, 3).map((rl, j) => (
+                                          <div key={j} className="text-[6px] text-gray-400 flex items-center gap-0.5">
+                                            <ArrowRight className="h-1.5 w-1.5 text-gray-600" />
+                                            {rl.linkLabel}: {rl.muscles.slice(0, 2).join(', ')}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {correlationTab === 'muscles' && (
+                            <div>
+                              <span className="text-[8px] text-rose-400 font-medium">Contributing Muscles</span>
+                              {pc.relatedMuscles.length === 0 && <p className="text-[7px] text-gray-500 mt-0.5">No abnormal muscles in this region</p>}
+                              <div className="mt-0.5 space-y-0.5">
+                                {pc.relatedMuscles.slice(0, 8).map((rm, i) => (
+                                  <div key={i} className="bg-white/5 rounded px-1.5 py-1">
+                                    <div className="flex items-center gap-1">
+                                      <span className={`text-[7px] px-1 rounded ${rm.contributionType === 'direct' ? 'bg-red-500/20 text-red-400' : rm.contributionType === 'referred' ? 'bg-purple-500/20 text-purple-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{rm.contributionType}</span>
+                                      <span className="text-[8px] text-white flex-1 truncate">{rm.muscleLabel}</span>
+                                      <span className="text-[7px] px-1 rounded bg-white/10 text-gray-300">{rm.clinicalStatus}</span>
+                                    </div>
+                                    <p className="text-[6px] text-gray-500 mt-0.5">{rm.explanation}</p>
+                                    <div className="flex gap-2 mt-0.5 text-[6px] text-gray-500">
+                                      <span>Tight: {rm.tightness.toFixed(0)}%</span>
+                                      <span>Active: {rm.activation.toFixed(0)}%</span>
+                                      <span>Inhibited: {rm.inhibition.toFixed(0)}%</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {correlationTab === 'root_cause' && (
+                            <div>
+                              <span className="text-[8px] text-violet-400 font-medium">Root Cause Analysis</span>
+                              {pc.rootCauseChain.length === 0 && <p className="text-[7px] text-gray-500 mt-0.5">Insufficient data for root cause analysis</p>}
+                              <div className="mt-1 space-y-0">
+                                {pc.rootCauseChain.map((step, i) => (
+                                  <div key={i} className="flex items-start gap-1.5">
+                                    <div className="flex flex-col items-center flex-shrink-0">
+                                      <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold ${i === 0 ? 'bg-red-500 text-white' : i === pc.rootCauseChain.length - 1 ? 'bg-violet-500 text-white' : 'bg-white/10 text-gray-300'}`}>{step.step}</div>
+                                      {i < pc.rootCauseChain.length - 1 && <div className="w-0.5 h-4 bg-violet-500/30" />}
+                                    </div>
+                                    <div className="flex-1 pb-1">
+                                      <span className="text-[8px] text-white font-medium">{step.structure}</span>
+                                      <p className="text-[7px] text-gray-400">{step.finding}</p>
+                                      <p className="text-[6px] text-violet-400/60">{step.mechanism}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {correlationResult.globalCompensations.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-white/10">
+                    <span className="text-[9px] text-orange-400 font-semibold">Global Compensation Patterns</span>
+                    <div className="mt-1 space-y-1">
+                      {correlationResult.globalCompensations.map((comp) => (
+                        <div key={comp.id} className="bg-orange-500/10 border border-orange-500/15 rounded px-2 py-1.5">
+                          <div className="flex items-center gap-1">
+                            <Layers className="h-2.5 w-2.5 text-orange-400" />
+                            <span className={`text-[8px] font-medium ${getSeverityColor(comp.severity)}`}>{comp.label}</span>
+                            <span className={`text-[6px] px-1 rounded ${comp.severity === 'severe' ? 'bg-red-500/20 text-red-400' : comp.severity === 'moderate' ? 'bg-orange-500/20 text-orange-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{comp.severity}</span>
+                          </div>
+                          <p className="text-[7px] text-gray-400 mt-0.5">{comp.description}</p>
+                          <p className="text-[6px] text-orange-300/60 mt-0.5">{comp.clinicalSignificance}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {correlationResult.clinicalPriorities.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-white/10">
+                    <span className="text-[9px] text-cyan-400 font-semibold">Clinical Priorities</span>
+                    <div className="mt-1 space-y-0.5">
+                      {correlationResult.clinicalPriorities.slice(0, 6).map((cp, i) => (
+                        <div key={i} className="flex items-start gap-1.5 text-[7px]">
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold flex-shrink-0 ${cp.priority === 1 ? 'bg-red-500 text-white' : cp.priority === 2 ? 'bg-orange-500 text-white' : 'bg-blue-500 text-white'}`}>{cp.priority}</span>
+                          <div className="flex-1">
+                            <span className="text-gray-300 font-medium">{cp.area}</span>
+                            <p className="text-gray-500">{cp.finding}</p>
+                            <p className="text-cyan-400/60">{cp.action}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2793,6 +3210,21 @@ ${ddxList}`;
               >
                 <GitBranch className="h-3 w-3 mr-1" />
                 {chainExplorerMode ? 'Chains On' : 'Chains'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${correlationMode ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-white/90 hover:bg-white'}`}
+                onClick={() => {
+                  const newMode = !correlationMode;
+                  setCorrelationMode(newMode);
+                  if (newMode) {
+                    toast({ title: "Clinical Correlation", description: "Cross-system analysis active. Place pain markers to see correlated chains, muscles, forces, and root cause analysis." });
+                  }
+                }}
+              >
+                <Network className="h-3 w-3 mr-1" />
+                {correlationMode ? 'Correlate On' : 'Correlate'}
               </Button>
               <Button
                 variant="secondary"

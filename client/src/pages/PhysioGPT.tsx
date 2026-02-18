@@ -3789,7 +3789,7 @@ ${ddxList}`;
           )}
 
           {/* Chat Panel Content */}
-          {rightPanelTab === 'chat' && (
+          {rightPanelTab === 'chat' && (<>
           <ScrollArea className="flex-1">
             <div className="p-3">
               {!selectedConversationId && !isStreaming ? (
@@ -4221,7 +4221,7 @@ ${ddxList}`;
               </form>
             </div>
           </div>
-          )}
+          </>)}
         </div>
       </div>
 

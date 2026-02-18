@@ -55,10 +55,13 @@ interface ModelConfig {
   rightScapula?: ScapulaConfig;
   leftElbow?: JointConfig;
   rightElbow?: JointConfig;
-  pelvis?: { tilt?: number; obliquity?: number; rotation?: number };
-  spine?: { cervicalLordosis?: number; thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number };
+  leftWrist?: JointConfig;
+  rightWrist?: JointConfig;
+  pelvis?: { tilt?: number; obliquity?: number; rotation?: number; drop?: number; leftInnominateRotation?: number; rightInnominateRotation?: number };
+  sacrum?: { nutation?: number; counternutation?: number; torsion?: number; lateralFlexion?: number };
+  spine?: { cervicalLordosis?: number; thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number; forwardHead?: number; lateralShift?: number; cervicalRotation?: number; cervicalLateralFlexion?: number; thoracicRotation?: number; lumbarRotation?: number; flexion?: number; lateralFlexion?: number; lumbarScoliosis?: number; thoracicScoliosis?: number; cervicalScoliosis?: number };
   neck?: { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number };
-  [key: string]: JointConfig | ScapulaConfig | { tilt?: number; obliquity?: number; rotation?: number } | { thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number } | { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number } | undefined;
+  [key: string]: JointConfig | ScapulaConfig | Record<string, number | undefined> | undefined;
 }
 
 export interface AnimationState {
@@ -1140,6 +1143,10 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightHip.internalRotation': [{ boneName: 'Hip_R', axis: 'y', scale: -1 }],
   'rightHip.anteversion': [{ boneName: 'Hip_R', axis: 'y', scale: -1 }], // Femoral anteversion - causes internal rotation
   'rightHip.neckShaftAngle': [{ boneName: 'Hip_R', axis: 'z', scale: -0.5 }], // Coxa vara/valga
+  'leftHip.adduction': [{ boneName: 'Hip_L', axis: 'z', scale: 1 }],
+  'leftHip.externalRotation': [{ boneName: 'Hip_L', axis: 'y', scale: -1 }],
+  'rightHip.adduction': [{ boneName: 'Hip_R', axis: 'z', scale: -1 }],
+  'rightHip.externalRotation': [{ boneName: 'Hip_R', axis: 'y', scale: 1 }],
   
   // === KNEE / TIBIA ===
   'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'x', scale: 1 }],
@@ -1162,6 +1169,10 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightAnkle.plantarflexion': [{ boneName: 'Ankle_R', axis: 'x', scale: 1 }],
   'rightAnkle.inversion': [{ boneName: 'Ankle_R', axis: 'z', scale: -1 }],
   'rightAnkle.eversion': [{ boneName: 'Ankle_R', axis: 'z', scale: 1 }],
+  'leftAnkle.forefootVarus': [{ boneName: 'Toes_L', axis: 'z', scale: 0.5 }],
+  'leftAnkle.toeExtension': [{ boneName: 'Toes_L', axis: 'x', scale: -1 }],
+  'rightAnkle.forefootVarus': [{ boneName: 'Toes_R', axis: 'z', scale: -0.5 }],
+  'rightAnkle.toeExtension': [{ boneName: 'Toes_R', axis: 'x', scale: -1 }],
   
   // === SHOULDER ===
   // In T-pose, arms point laterally. Flexion rotates arm forward (sagittal plane).
@@ -1266,6 +1277,39 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'pelvis.rotation': [{ boneName: 'Root_M', axis: 'y', scale: 1 }],
   'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }], // Vertical translation for closed-chain movements
   
+  // === SACRUM / SI JOINT ===
+  // Sacrum sits between pelvis and lumbar spine - uses Root_M and RootPart bones
+  // Nutation: sacral base tilts anteriorly (top of sacrum tips forward)
+  'sacrum.nutation': [
+    { boneName: 'RootPart1_M', axis: 'x', scale: 0.4 },
+    { boneName: 'RootPart2_M', axis: 'x', scale: 0.3 },
+  ],
+  // Counternutation: sacral base tilts posteriorly (top of sacrum tips backward)
+  'sacrum.counternutation': [
+    { boneName: 'RootPart1_M', axis: 'x', scale: -0.4 },
+    { boneName: 'RootPart2_M', axis: 'x', scale: -0.3 },
+  ],
+  // Sacral torsion: rotation of sacrum on oblique axis
+  'sacrum.torsion': [
+    { boneName: 'RootPart1_M', axis: 'y', scale: 0.3 },
+    { boneName: 'RootPart2_M', axis: 'y', scale: 0.2 },
+  ],
+  // Sacral lateral flexion (sidebending)
+  'sacrum.lateralFlexion': [
+    { boneName: 'RootPart1_M', axis: 'z', scale: 0.3 },
+    { boneName: 'RootPart2_M', axis: 'z', scale: 0.2 },
+  ],
+
+  // === INNOMINATE ===
+  // Innominate anterior/posterior rotation (relative to sacrum)
+  // Uses Hip bones since they're children of Root_M (pelvis)
+  'pelvis.leftInnominateRotation': [
+    { boneName: 'Hip_L', axis: 'z', scale: 0.3 },
+  ],
+  'pelvis.rightInnominateRotation': [
+    { boneName: 'Hip_R', axis: 'z', scale: -0.3 },
+  ],
+  
   // === SPINE (Sagittal plane curves) ===
   // Axis convention for midline spine bones: X = sagittal (flexion/extension), Y = transverse (rotation), Z = frontal (lateral flexion)
   // Lordosis = extension (backward curve), Kyphosis = flexion (forward curve)
@@ -1327,6 +1371,21 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Spine1Part1_M', axis: 'z', scale: 0.08 },
     { boneName: 'Spine1Part2_M', axis: 'z', scale: 0.06 },
     { boneName: 'Chest_M', axis: 'z', scale: 0.04 },
+  ],
+  'spine.lumbarScoliosis': [
+    { boneName: 'RootPart1_M', axis: 'z', scale: 0.15 },
+    { boneName: 'RootPart2_M', axis: 'z', scale: 0.2 },
+    { boneName: 'Spine1_M', axis: 'z', scale: 0.15 },
+  ],
+  'spine.thoracicScoliosis': [
+    { boneName: 'Spine1Part1_M', axis: 'z', scale: 0.15 },
+    { boneName: 'Spine1Part2_M', axis: 'z', scale: 0.2 },
+    { boneName: 'Chest_M', axis: 'z', scale: 0.15 },
+  ],
+  'spine.cervicalScoliosis': [
+    { boneName: 'Neck_M', axis: 'z', scale: 0.2 },
+    { boneName: 'NeckPart1_M', axis: 'z', scale: 0.15 },
+    { boneName: 'NeckPart2_M', axis: 'z', scale: 0.1 },
   ],
 
   // === HEAD & NECK (Cervical Spine) ===

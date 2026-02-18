@@ -263,15 +263,16 @@ const PHYSIO_QUICK_ACTIONS = [
 
 interface ModelConfig {
   limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
-  spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number; cervicalRotation: number; cervicalLateralFlexion: number; thoracicRotation: number; lumbarRotation: number };
+  spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number; cervicalRotation: number; cervicalLateralFlexion: number; thoracicRotation: number; lumbarRotation: number; flexion: number; lateralFlexion: number; lumbarScoliosis: number; thoracicScoliosis: number; cervicalScoliosis: number };
   neck: { flexion: number; extension: number; rotation: number; lateralFlexion: number; forwardHead: number };
-  pelvis: { tilt: number; obliquity: number; rotation: number; drop: number };
-  leftHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
-  rightHip: { flexion: number; extension: number; abduction: number; internalRotation: number; anteversion: number; neckShaftAngle: number };
+  pelvis: { tilt: number; obliquity: number; rotation: number; drop: number; leftInnominateRotation: number; rightInnominateRotation: number };
+  sacrum: { nutation: number; counternutation: number; torsion: number; lateralFlexion: number };
+  leftHip: { flexion: number; extension: number; abduction: number; adduction: number; internalRotation: number; externalRotation: number; anteversion: number; neckShaftAngle: number };
+  rightHip: { flexion: number; extension: number; abduction: number; adduction: number; internalRotation: number; externalRotation: number; anteversion: number; neckShaftAngle: number };
   leftKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
   rightKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
-  leftAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
-  rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; archHeight: number };
+  leftAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; forefootVarus: number; toeExtension: number; archHeight: number };
+  rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; forefootVarus: number; toeExtension: number; archHeight: number };
   leftShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
   rightShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
   leftScapula: { protraction: number; retraction: number; elevation: number; depression: number; upwardRotation: number; downwardRotation: number; anteriorTilt: number; posteriorTilt: number; winging: number; clavicleRotation: number };
@@ -284,15 +285,16 @@ interface ModelConfig {
 
 const DEFAULT_MODEL_CONFIG: ModelConfig = {
   limbScales: { upperArm: 0, forearm: 0, thigh: 0, shin: 0, overall: 1 },
-  spine: { cervicalLordosis: 0, thoracicKyphosis: 0, lumbarLordosis: 0, scoliosis: 0, forwardHead: 0, lateralShift: 0, cervicalRotation: 0, cervicalLateralFlexion: 0, thoracicRotation: 0, lumbarRotation: 0 },
+  spine: { cervicalLordosis: 0, thoracicKyphosis: 0, lumbarLordosis: 0, scoliosis: 0, forwardHead: 0, lateralShift: 0, cervicalRotation: 0, cervicalLateralFlexion: 0, thoracicRotation: 0, lumbarRotation: 0, flexion: 0, lateralFlexion: 0, lumbarScoliosis: 0, thoracicScoliosis: 0, cervicalScoliosis: 0 },
   neck: { flexion: 0, extension: 0, rotation: 0, lateralFlexion: 0, forwardHead: 0 },
-  pelvis: { tilt: 0, obliquity: 0, rotation: 0, drop: 0 },
-  leftHip: { flexion: 0, extension: 0, abduction: 0, internalRotation: 0, anteversion: 0, neckShaftAngle: 0 },
-  rightHip: { flexion: 0, extension: 0, abduction: 0, internalRotation: 0, anteversion: 0, neckShaftAngle: 0 },
+  pelvis: { tilt: 0, obliquity: 0, rotation: 0, drop: 0, leftInnominateRotation: 0, rightInnominateRotation: 0 },
+  sacrum: { nutation: 0, counternutation: 0, torsion: 0, lateralFlexion: 0 },
+  leftHip: { flexion: 0, extension: 0, abduction: 0, adduction: 0, internalRotation: 0, externalRotation: 0, anteversion: 0, neckShaftAngle: 0 },
+  rightHip: { flexion: 0, extension: 0, abduction: 0, adduction: 0, internalRotation: 0, externalRotation: 0, anteversion: 0, neckShaftAngle: 0 },
   leftKnee: { flexion: 0, varus: 0, tibialTorsion: 0, recurvatum: 0, tibialSlope: 0, patellaAlta: 0 },
   rightKnee: { flexion: 0, varus: 0, tibialTorsion: 0, recurvatum: 0, tibialSlope: 0, patellaAlta: 0 },
-  leftAnkle: { dorsiflexion: 0, plantarflexion: 0, inversion: 0, eversion: 0, archHeight: 0 },
-  rightAnkle: { dorsiflexion: 0, plantarflexion: 0, inversion: 0, eversion: 0, archHeight: 0 },
+  leftAnkle: { dorsiflexion: 0, plantarflexion: 0, inversion: 0, eversion: 0, forefootVarus: 0, toeExtension: 0, archHeight: 0 },
+  rightAnkle: { dorsiflexion: 0, plantarflexion: 0, inversion: 0, eversion: 0, forefootVarus: 0, toeExtension: 0, archHeight: 0 },
   leftShoulder: { flexion: 0, abduction: 0, internalRotation: 0, externalRotation: 0, retroversion: 0, elevation: 0, protraction: 0, winging: 0, clavicleLength: 0 },
   rightShoulder: { flexion: 0, abduction: 0, internalRotation: 0, externalRotation: 0, retroversion: 0, elevation: 0, protraction: 0, winging: 0, clavicleLength: 0 },
   leftScapula: { protraction: 0, retraction: 0, elevation: 0, depression: 0, upwardRotation: 0, downwardRotation: 0, anteriorTilt: 0, posteriorTilt: 0, winging: 0, clavicleRotation: 0 },
@@ -343,6 +345,7 @@ export default function PhysioGPT() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatPanelOpen, setChatPanelOpen] = useState(true);
   const [showJointControls, setShowJointControls] = useState(false);
+  const [openControlSections, setOpenControlSections] = useState<Set<string>>(new Set());
 
   const [selectedRegion, setSelectedRegion] = useState<keyof typeof BODY_REGIONS | null>(null);
   const [showSpecialTests, setShowSpecialTests] = useState(false);
@@ -1280,63 +1283,206 @@ ${ddxList}`;
             />
 
             {/* Joint Controls Overlay */}
-            {showJointControls && (
-              <div className="absolute top-2 right-2 w-56 bg-white/95 backdrop-blur rounded-lg shadow-lg p-3 max-h-[calc(100%-16px)] overflow-y-auto z-10">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-gray-700">Joint Controls</span>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowJointControls(false)}>
-                    <X className="h-3 w-3" />
-                  </Button>
+            {showJointControls && (() => {
+              const toggleSection = (id: string) => {
+                setOpenControlSections(prev => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id); else next.add(id);
+                  return next;
+                });
+              };
+              const isOpen = (id: string) => openControlSections.has(id);
+              const S = ({ label, configPath, min, max, step = 1 }: { label: string; configPath: string; min: number; max: number; step?: number }) => {
+                const [group, prop] = configPath.split('.');
+                const val = (modelConfig as any)[group]?.[prop] ?? 0;
+                return (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-500 w-[90px] flex-shrink-0 truncate" title={label}>{label}</span>
+                    <Slider min={min} max={max} step={step} value={[val]}
+                      onValueChange={([v]) => updateModelConfig(configPath, v)} className="flex-1" />
+                    <span className="text-[10px] text-gray-400 w-6 text-right">{val}</span>
+                  </div>
+                );
+              };
+              const Section = ({ id, title, children }: { id: string; title: string; children: any }) => (
+                <div className="border-b border-gray-100 last:border-0">
+                  <button onClick={() => toggleSection(id)} className="w-full flex items-center justify-between py-1.5 px-1 hover:bg-gray-50 rounded transition-colors">
+                    <span className="text-[11px] font-semibold text-gray-700">{title}</span>
+                    <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform ${isOpen(id) ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isOpen(id) && <div className="space-y-1.5 pb-2 px-1">{children}</div>}
                 </div>
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <label className="text-gray-600">Spine Kyphosis</label>
-                    <Slider min={-30} max={30} step={1} value={[modelConfig.spine.thoracicKyphosis]}
-                      onValueChange={([v]) => updateModelConfig('spine.thoracicKyphosis', v)} className="mt-1" />
+              );
+              return (
+              <div className="absolute top-2 right-2 w-64 bg-white/95 backdrop-blur rounded-lg shadow-lg max-h-[calc(100%-16px)] overflow-y-auto z-10">
+                <div className="sticky top-0 bg-white/95 backdrop-blur rounded-t-lg px-3 py-2 border-b border-gray-200 flex items-center justify-between z-10">
+                  <span className="text-xs font-bold text-gray-800">Posture Controls</span>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setOpenControlSections(new Set(['pelvis','sacrum','hip','knee','ankle','lumbar','thoracic','cervical','shoulder','scapula','elbow','wrist']))} className="text-[9px] text-blue-500 hover:text-blue-700 px-1">All</button>
+                    <button onClick={() => setOpenControlSections(new Set())} className="text-[9px] text-gray-400 hover:text-gray-600 px-1">None</button>
+                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowJointControls(false)}>
+                      <X className="h-3 w-3" />
+                    </Button>
                   </div>
-                  <div>
-                    <label className="text-gray-600">Lumbar Lordosis</label>
-                    <Slider min={-30} max={30} step={1} value={[modelConfig.spine.lumbarLordosis]}
-                      onValueChange={([v]) => updateModelConfig('spine.lumbarLordosis', v)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-gray-600">L Shoulder Flexion</label>
-                    <Slider min={0} max={180} step={1} value={[modelConfig.leftShoulder.flexion]}
-                      onValueChange={([v]) => updateModelConfig('leftShoulder.flexion', v)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-gray-600">R Shoulder Flexion</label>
-                    <Slider min={0} max={180} step={1} value={[modelConfig.rightShoulder.flexion]}
-                      onValueChange={([v]) => updateModelConfig('rightShoulder.flexion', v)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-gray-600">L Hip Flexion</label>
-                    <Slider min={0} max={120} step={1} value={[modelConfig.leftHip.flexion]}
-                      onValueChange={([v]) => updateModelConfig('leftHip.flexion', v)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-gray-600">R Hip Flexion</label>
-                    <Slider min={0} max={120} step={1} value={[modelConfig.rightHip.flexion]}
-                      onValueChange={([v]) => updateModelConfig('rightHip.flexion', v)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-gray-600">L Knee Flexion</label>
-                    <Slider min={0} max={140} step={1} value={[modelConfig.leftKnee.flexion]}
-                      onValueChange={([v]) => updateModelConfig('leftKnee.flexion', v)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-gray-600">R Knee Flexion</label>
-                    <Slider min={0} max={140} step={1} value={[modelConfig.rightKnee.flexion]}
-                      onValueChange={([v]) => updateModelConfig('rightKnee.flexion', v)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-gray-600">Pelvis Tilt</label>
-                    <Slider min={-20} max={20} step={1} value={[modelConfig.pelvis.tilt]}
-                      onValueChange={([v]) => updateModelConfig('pelvis.tilt', v)} className="mt-1" />
-                  </div>
+                </div>
+                <div className="px-2 py-1">
+
+                  <Section id="pelvis" title="Pelvis / Innominate">
+                    <S label="Anterior/Post Tilt" configPath="pelvis.tilt" min={-20} max={20} />
+                    <S label="Lateral Tilt" configPath="pelvis.obliquity" min={-15} max={15} />
+                    <S label="Rotation" configPath="pelvis.rotation" min={-20} max={20} />
+                    <S label="L Innominate Rot" configPath="pelvis.leftInnominateRotation" min={-15} max={15} />
+                    <S label="R Innominate Rot" configPath="pelvis.rightInnominateRotation" min={-15} max={15} />
+                  </Section>
+
+                  <Section id="sacrum" title="Sacrum / SI Joint">
+                    <S label="Nutation" configPath="sacrum.nutation" min={0} max={20} />
+                    <S label="Counternutation" configPath="sacrum.counternutation" min={0} max={20} />
+                    <S label="Torsion" configPath="sacrum.torsion" min={-15} max={15} />
+                    <S label="Lateral Flexion" configPath="sacrum.lateralFlexion" min={-15} max={15} />
+                  </Section>
+
+                  <Section id="hip" title="Hip">
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-1 mb-0.5">Left</div>
+                    <S label="Flexion" configPath="leftHip.flexion" min={0} max={120} />
+                    <S label="Extension" configPath="leftHip.extension" min={0} max={30} />
+                    <S label="Abduction" configPath="leftHip.abduction" min={0} max={45} />
+                    <S label="Adduction" configPath="leftHip.adduction" min={0} max={30} />
+                    <S label="Internal Rot" configPath="leftHip.internalRotation" min={0} max={45} />
+                    <S label="External Rot" configPath="leftHip.externalRotation" min={0} max={45} />
+                    <S label="Anteversion" configPath="leftHip.anteversion" min={-15} max={30} />
+                    <S label="Neck-Shaft Angle" configPath="leftHip.neckShaftAngle" min={-15} max={15} />
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-2 mb-0.5">Right</div>
+                    <S label="Flexion" configPath="rightHip.flexion" min={0} max={120} />
+                    <S label="Extension" configPath="rightHip.extension" min={0} max={30} />
+                    <S label="Abduction" configPath="rightHip.abduction" min={0} max={45} />
+                    <S label="Adduction" configPath="rightHip.adduction" min={0} max={30} />
+                    <S label="Internal Rot" configPath="rightHip.internalRotation" min={0} max={45} />
+                    <S label="External Rot" configPath="rightHip.externalRotation" min={0} max={45} />
+                    <S label="Anteversion" configPath="rightHip.anteversion" min={-15} max={30} />
+                    <S label="Neck-Shaft Angle" configPath="rightHip.neckShaftAngle" min={-15} max={15} />
+                  </Section>
+
+                  <Section id="knee" title="Knee">
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-1 mb-0.5">Left</div>
+                    <S label="Flexion" configPath="leftKnee.flexion" min={0} max={140} />
+                    <S label="Varus/Valgum" configPath="leftKnee.varus" min={-15} max={15} />
+                    <S label="Tibial Torsion" configPath="leftKnee.tibialTorsion" min={-20} max={20} />
+                    <S label="Recurvatum" configPath="leftKnee.recurvatum" min={0} max={15} />
+                    <S label="Tibial Slope" configPath="leftKnee.tibialSlope" min={0} max={15} />
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-2 mb-0.5">Right</div>
+                    <S label="Flexion" configPath="rightKnee.flexion" min={0} max={140} />
+                    <S label="Varus/Valgum" configPath="rightKnee.varus" min={-15} max={15} />
+                    <S label="Tibial Torsion" configPath="rightKnee.tibialTorsion" min={-20} max={20} />
+                    <S label="Recurvatum" configPath="rightKnee.recurvatum" min={0} max={15} />
+                    <S label="Tibial Slope" configPath="rightKnee.tibialSlope" min={0} max={15} />
+                  </Section>
+
+                  <Section id="ankle" title="Ankle & Foot">
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-1 mb-0.5">Left</div>
+                    <S label="Dorsiflexion" configPath="leftAnkle.dorsiflexion" min={0} max={30} />
+                    <S label="Plantarflexion" configPath="leftAnkle.plantarflexion" min={0} max={50} />
+                    <S label="Inversion" configPath="leftAnkle.inversion" min={0} max={35} />
+                    <S label="Eversion" configPath="leftAnkle.eversion" min={0} max={20} />
+                    <S label="Forefoot Varus" configPath="leftAnkle.forefootVarus" min={-15} max={15} />
+                    <S label="Toe Extension" configPath="leftAnkle.toeExtension" min={0} max={45} />
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-2 mb-0.5">Right</div>
+                    <S label="Dorsiflexion" configPath="rightAnkle.dorsiflexion" min={0} max={30} />
+                    <S label="Plantarflexion" configPath="rightAnkle.plantarflexion" min={0} max={50} />
+                    <S label="Inversion" configPath="rightAnkle.inversion" min={0} max={35} />
+                    <S label="Eversion" configPath="rightAnkle.eversion" min={0} max={20} />
+                    <S label="Forefoot Varus" configPath="rightAnkle.forefootVarus" min={-15} max={15} />
+                    <S label="Toe Extension" configPath="rightAnkle.toeExtension" min={0} max={45} />
+                  </Section>
+
+                  <Section id="lumbar" title="Lumbar Spine">
+                    <S label="Lordosis" configPath="spine.lumbarLordosis" min={-30} max={30} />
+                    <S label="Flexion" configPath="spine.flexion" min={0} max={60} />
+                    <S label="Lateral Flexion" configPath="spine.lateralFlexion" min={-30} max={30} />
+                    <S label="Rotation" configPath="spine.lumbarRotation" min={-20} max={20} />
+                    <S label="Scoliosis" configPath="spine.lumbarScoliosis" min={-20} max={20} />
+                  </Section>
+
+                  <Section id="thoracic" title="Thoracic Spine">
+                    <S label="Kyphosis" configPath="spine.thoracicKyphosis" min={-30} max={30} />
+                    <S label="Rotation" configPath="spine.thoracicRotation" min={-20} max={20} />
+                    <S label="Scoliosis" configPath="spine.thoracicScoliosis" min={-20} max={20} />
+                  </Section>
+
+                  <Section id="cervical" title="Cervical Spine">
+                    <S label="Lordosis" configPath="spine.cervicalLordosis" min={-20} max={20} />
+                    <S label="Flexion" configPath="neck.flexion" min={0} max={50} />
+                    <S label="Extension" configPath="neck.extension" min={0} max={60} />
+                    <S label="Rotation" configPath="neck.rotation" min={-80} max={80} />
+                    <S label="Lateral Flexion" configPath="neck.lateralFlexion" min={-45} max={45} />
+                    <S label="Forward Head" configPath="neck.forwardHead" min={0} max={30} />
+                    <S label="Scoliosis" configPath="spine.cervicalScoliosis" min={-15} max={15} />
+                  </Section>
+
+                  <Section id="shoulder" title="Shoulder">
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-1 mb-0.5">Left</div>
+                    <S label="Flexion" configPath="leftShoulder.flexion" min={0} max={180} />
+                    <S label="Abduction" configPath="leftShoulder.abduction" min={0} max={180} />
+                    <S label="Internal Rot" configPath="leftShoulder.internalRotation" min={0} max={90} />
+                    <S label="External Rot" configPath="leftShoulder.externalRotation" min={0} max={90} />
+                    <S label="Retroversion" configPath="leftShoulder.retroversion" min={-20} max={20} />
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-2 mb-0.5">Right</div>
+                    <S label="Flexion" configPath="rightShoulder.flexion" min={0} max={180} />
+                    <S label="Abduction" configPath="rightShoulder.abduction" min={0} max={180} />
+                    <S label="Internal Rot" configPath="rightShoulder.internalRotation" min={0} max={90} />
+                    <S label="External Rot" configPath="rightShoulder.externalRotation" min={0} max={90} />
+                    <S label="Retroversion" configPath="rightShoulder.retroversion" min={-20} max={20} />
+                  </Section>
+
+                  <Section id="scapula" title="Scapula">
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-1 mb-0.5">Left</div>
+                    <S label="Protraction" configPath="leftScapula.protraction" min={0} max={20} />
+                    <S label="Retraction" configPath="leftScapula.retraction" min={0} max={20} />
+                    <S label="Elevation" configPath="leftScapula.elevation" min={0} max={20} />
+                    <S label="Depression" configPath="leftScapula.depression" min={0} max={15} />
+                    <S label="Upward Rot" configPath="leftScapula.upwardRotation" min={0} max={30} />
+                    <S label="Downward Rot" configPath="leftScapula.downwardRotation" min={0} max={20} />
+                    <S label="Anterior Tilt" configPath="leftScapula.anteriorTilt" min={0} max={20} />
+                    <S label="Posterior Tilt" configPath="leftScapula.posteriorTilt" min={0} max={20} />
+                    <S label="Winging" configPath="leftScapula.winging" min={0} max={20} />
+                    <S label="Clavicle Rot" configPath="leftScapula.clavicleRotation" min={-15} max={15} />
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-2 mb-0.5">Right</div>
+                    <S label="Protraction" configPath="rightScapula.protraction" min={0} max={20} />
+                    <S label="Retraction" configPath="rightScapula.retraction" min={0} max={20} />
+                    <S label="Elevation" configPath="rightScapula.elevation" min={0} max={20} />
+                    <S label="Depression" configPath="rightScapula.depression" min={0} max={15} />
+                    <S label="Upward Rot" configPath="rightScapula.upwardRotation" min={0} max={30} />
+                    <S label="Downward Rot" configPath="rightScapula.downwardRotation" min={0} max={20} />
+                    <S label="Anterior Tilt" configPath="rightScapula.anteriorTilt" min={0} max={20} />
+                    <S label="Posterior Tilt" configPath="rightScapula.posteriorTilt" min={0} max={20} />
+                    <S label="Winging" configPath="rightScapula.winging" min={0} max={20} />
+                    <S label="Clavicle Rot" configPath="rightScapula.clavicleRotation" min={-15} max={15} />
+                  </Section>
+
+                  <Section id="elbow" title="Elbow">
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-1 mb-0.5">Left</div>
+                    <S label="Flexion" configPath="leftElbow.flexion" min={0} max={145} />
+                    <S label="Pronation/Sup" configPath="leftElbow.pronation" min={-90} max={90} />
+                    <S label="Carrying Angle" configPath="leftElbow.carryingAngle" min={-15} max={25} />
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-2 mb-0.5">Right</div>
+                    <S label="Flexion" configPath="rightElbow.flexion" min={0} max={145} />
+                    <S label="Pronation/Sup" configPath="rightElbow.pronation" min={-90} max={90} />
+                    <S label="Carrying Angle" configPath="rightElbow.carryingAngle" min={-15} max={25} />
+                  </Section>
+
+                  <Section id="wrist" title="Wrist & Hand">
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-1 mb-0.5">Left</div>
+                    <S label="Flexion/Ext" configPath="leftWrist.flexion" min={-80} max={80} />
+                    <S label="Ulnar/Radial Dev" configPath="leftWrist.deviation" min={-30} max={30} />
+                    <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mt-2 mb-0.5">Right</div>
+                    <S label="Flexion/Ext" configPath="rightWrist.flexion" min={-80} max={80} />
+                    <S label="Ulnar/Radial Dev" configPath="rightWrist.deviation" min={-30} max={30} />
+                  </Section>
+
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Force Analysis Overlay */}
             {forceMode && forceAnalysis && (

@@ -919,6 +919,10 @@ export default function PhysioGPT() {
 **Initial Differential Diagnosis:**
 ${ddxList}`;
 
+    if (marker.subjectiveHistory) {
+      prompt += `\n\n**Patient Subjective History (free-text notes):**\n${marker.subjectiveHistory}`;
+    }
+
     if (answeredQs) {
       prompt += `\n\n**Subjective History Gathered:**\n${answeredQs}`;
     }
@@ -1055,9 +1059,10 @@ ${ddxList}`;
       if (m.type === 'referred' && m.referralTargetLabel) extra = ` → refers to ${m.referralTargetLabel}`;
       if (m.type === 'line' && m.linePoints) extra = ` (${m.linePoints.length + 1} points along path)`;
       if (m.type === 'area' && m.radius) extra = ` (radius ~${Math.round(m.radius * 100)}mm)`;
-      return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${extra}${desc}`;
+      const subjHx = m.subjectiveHistory ? ` | Subjective Hx: "${m.subjectiveHistory}"` : '';
+      return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${extra}${desc}${subjHx}`;
     }).join('\n');
-    const prompt = `The patient has indicated pain in the following areas on the anatomical skeleton:\n${markerDescriptions}\n\nPlease provide a clinical assessment considering these pain locations, types, and patterns. What could be the differential diagnoses? What assessment approach would you recommend? Are there any patterns suggesting a specific condition? Pay special attention to any referred pain patterns and pain distributions.`;
+    const prompt = `The patient has indicated pain in the following areas on the anatomical skeleton:\n${markerDescriptions}\n\nPlease provide a clinical assessment considering these pain locations, types, and patterns. What could be the differential diagnoses? What assessment approach would you recommend? Are there any patterns suggesting a specific condition? Pay special attention to any referred pain patterns, pain distributions, and any subjective history provided.`;
     sendMessageStreaming(prompt);
   }, [painMarkers]);
 
@@ -1160,7 +1165,8 @@ ${ddxList}`;
         if (m.type === 'referred' && m.referralTargetLabel) extra = ` → refers to ${m.referralTargetLabel}`;
         if (m.type === 'line' && m.linePoints) extra = ` (${m.linePoints.length + 1} points along path)`;
         if (m.type === 'area' && m.radius) extra = ` (radius ~${Math.round(m.radius * 100)}mm)`;
-        return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${extra}${desc}`;
+        const subjHx = m.subjectiveHistory ? ` | Subjective Hx: "${m.subjectiveHistory}"` : '';
+        return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${extra}${desc}${subjHx}`;
       });
       sections.push(`**Pain Markers (${painMarkers.length}):**\n${markerLines.join('\n')}`);
     }
@@ -1274,7 +1280,7 @@ ${ddxList}`;
     const forces = calculatePosturalForces(modelConfig);
     const muscles = computeFullMuscleAnalysis(modelConfig);
     return computeCrossSystemCorrelation({
-      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description })),
+      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
       forces: forces.joints,
       muscles: muscles.allMuscles,
       muscleGroups: muscles.groups,
@@ -1324,7 +1330,7 @@ ${ddxList}`;
     const forces = calculatePosturalForces(modelConfig);
     const muscles = computeFullMuscleAnalysis(modelConfig);
     const corr = computeCrossSystemCorrelation({
-      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description })),
+      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
       forces: forces.joints,
       muscles: muscles.allMuscles,
       muscleGroups: muscles.groups,
@@ -1364,7 +1370,7 @@ ${ddxList}`;
     if (!chain) return undefined;
     const colorHex = parseInt(chain.color.replace('#', ''), 16);
     const boneNames = getChainBoneNames(selectedChainId, 'both');
-    const uniqueBones = [...new Set(boneNames)];
+    const uniqueBones = Array.from(new Set(boneNames));
     return uniqueBones.map(boneName => ({
       boneName,
       color: colorHex,
@@ -2945,6 +2951,10 @@ ${ddxList}`;
                   setZoomToRegion(connection.region);
                   setPoseMode(true);
                   setForceMode(true);
+                }}
+                subjectiveHistory={clinicalBubbleMarker ? (painMarkers.find(m => m.id === clinicalBubbleMarker.id)?.subjectiveHistory || '') : ''}
+                onSubjectiveHistoryChange={(mId, history) => {
+                  setPainMarkers(prev => prev.map(m => m.id === mId ? { ...m, subjectiveHistory: history } : m));
                 }}
               />
             )}

@@ -5954,7 +5954,7 @@ Respond with only a number between 1-100 representing the relevance score.`;
   // Clinical Bubble AI endpoint - returns structured clinical data for pain marker regions
   app.post("/api/physiogpt/clinical-bubble", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { region, markerType, severity, answeredQuestions } = req.body;
+      const { region, markerType, severity, answeredQuestions, subjectiveHistory } = req.body;
       if (!region) return res.status(400).json({ error: "Region is required" });
 
       const OpenAI = (await import("openai")).default;
@@ -5966,7 +5966,11 @@ Respond with only a number between 1-100 representing the relevance score.`;
         ? `\n\nThe clinician has gathered the following subjective history:\n${Object.entries(answeredQuestions).map(([q, a]) => `- ${q}: ${a}`).join('\n')}\n\nRefine your differential diagnosis and recommendations based on these answers.`
         : '';
 
-      const prompt = `You are a clinical physiotherapy expert. A clinician has placed a ${markerType} pain marker on the "${region}" of a patient's body. The reported severity is "${severity || 'moderate'}".${answersContext}
+      const subjectiveContext = subjectiveHistory && subjectiveHistory.trim()
+        ? `\n\nThe clinician has documented the following subjective patient history:\n"${subjectiveHistory.trim()}"\n\nCRITICAL: Integrate this subjective history deeply into ALL your analysis. Use it to:\n- Adjust differential diagnosis likelihoods based on history, onset pattern, aggravating/easing factors\n- Tailor clinical questions to explore gaps in the subjective history\n- Recommend assessments that are most relevant given the reported history\n- Customize treatment approaches based on patient context (occupation, lifestyle, prior injuries)\n- Prescribe exercises appropriate for the patient's functional level and goals`
+        : '';
+
+      const prompt = `You are a clinical physiotherapy expert. A clinician has placed a ${markerType} pain marker on the "${region}" of a patient's body. The reported severity is "${severity || 'moderate'}".${answersContext}${subjectiveContext}
 
 IMPORTANT: The anatomical location "${region}" is a PRECISE bony landmark or anatomical structure identified on a 3D skeleton model. Provide your clinical analysis specific to this EXACT structure, not just the general region. For example:
 - If the location is "L4-L5 Disc", focus on disc pathology at that specific level

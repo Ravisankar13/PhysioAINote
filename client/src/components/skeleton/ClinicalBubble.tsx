@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   X,
   Stethoscope,
@@ -18,6 +18,8 @@ import {
   SlidersHorizontal,
   ArrowRight,
   Zap,
+  FileText,
+  Save,
 } from "lucide-react";
 import { getKineticChainConnections, type KineticChainConnection } from "@/lib/kineticChainMap";
 import type { AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
@@ -66,13 +68,16 @@ interface ClinicalBubbleProps {
   onConnectionClick?: (region: AnatomicalRegion, label: string) => void;
   onTestChain?: (connection: KineticChainConnection, region: string) => void;
   onDataLoaded?: (markerId: string, data: ClinicalBubbleData, severity: string) => void;
+  subjectiveHistory?: string;
+  onSubjectiveHistoryChange?: (markerId: string, history: string) => void;
 }
 
-type TabType = "ddx" | "questions" | "assessment" | "treatment" | "exercises";
+type TabType = "ddx" | "questions" | "subjective" | "assessment" | "treatment" | "exercises";
 
 const TABS: { id: TabType; label: string; icon: any }[] = [
   { id: "ddx", label: "DDx", icon: Stethoscope },
   { id: "questions", label: "Hx", icon: HelpCircle },
+  { id: "subjective", label: "Subj", icon: FileText },
   { id: "assessment", label: "Obj", icon: ClipboardCheck },
   { id: "treatment", label: "Tx", icon: Pill },
   { id: "exercises", label: "Ex", icon: Dumbbell },
@@ -92,15 +97,25 @@ export default function ClinicalBubble({
   onConnectionClick,
   onTestChain,
   onDataLoaded,
+  subjectiveHistory,
+  onSubjectiveHistoryChange,
 }: ClinicalBubbleProps) {
   const [activeTab, setActiveTab] = useState<TabType>("ddx");
   const [data, setData] = useState<ClinicalBubbleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [localHistory, setLocalHistory] = useState(subjectiveHistory || '');
+  const [historySaved, setHistorySaved] = useState(false);
   const [refining, setRefining] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [expandedConnection, setExpandedConnection] = useState<string | null>(null);
+  const localHistoryRef = useRef(localHistory);
+  localHistoryRef.current = localHistory;
+
+  useEffect(() => {
+    setLocalHistory(subjectiveHistory || '');
+  }, [markerId, subjectiveHistory]);
 
   const connections = getKineticChainConnections(region);
 
@@ -133,6 +148,7 @@ export default function ClinicalBubble({
           markerType,
           severity,
           answeredQuestions: answeredQuestions || {},
+          subjectiveHistory: localHistoryRef.current.trim() || undefined,
         }),
       });
 
@@ -147,7 +163,7 @@ export default function ClinicalBubble({
       setLoading(false);
       setRefining(false);
     }
-  }, [region, markerType, severity]);
+  }, [region, markerType, severity, markerId]);
 
   useEffect(() => {
     fetchClinicalData();
@@ -333,6 +349,63 @@ export default function ClinicalBubble({
                       <Sparkles className="h-3 w-3" />
                       Refine with {Object.keys(answers).length} Answer{Object.keys(answers).length > 1 ? 's' : ''}
                     </button>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "subjective" && (
+                <div className="space-y-2">
+                  <div className="bg-white/5 rounded-lg p-2">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <FileText className="h-3 w-3 text-amber-400" />
+                      <span className="text-[11px] text-white font-medium">Patient Subjective History</span>
+                    </div>
+                    <p className="text-[9px] text-gray-500 mb-2 leading-relaxed">
+                      Write any relevant patient history, symptoms, onset details, aggravating/easing factors, or other subjective information. AI will integrate this into all analyses.
+                    </p>
+                    <textarea
+                      value={localHistory}
+                      onChange={(e) => { setLocalHistory(e.target.value); setHistorySaved(false); }}
+                      placeholder="e.g. Patient reports gradual onset of pain over 3 weeks. Worse with overhead reaching. History of rotator cuff repair 2 years ago. Desk worker, sedentary lifestyle..."
+                      className="w-full bg-gray-800/80 border border-gray-600/50 rounded-lg text-[11px] text-gray-200 placeholder-gray-600 px-2.5 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
+                      rows={5}
+                    />
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={() => {
+                          onSubjectiveHistoryChange?.(markerId, localHistory.trim());
+                          setHistorySaved(true);
+                          setTimeout(() => setHistorySaved(false), 2000);
+                        }}
+                        className="flex items-center gap-1 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-[10px] font-medium rounded-md px-2.5 py-1.5 transition-colors"
+                      >
+                        <Save className="h-3 w-3" />
+                        Save Notes
+                      </button>
+                      {localHistory.trim() && (
+                        <button
+                          onClick={() => {
+                            onSubjectiveHistoryChange?.(markerId, localHistory.trim());
+                            fetchClinicalData(Object.keys(answers).length > 0 ? answers : undefined);
+                          }}
+                          className="flex items-center gap-1 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 text-[10px] font-medium rounded-md px-2.5 py-1.5 transition-colors"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          Re-analyze with History
+                        </button>
+                      )}
+                      {historySaved && (
+                        <span className="text-[9px] text-green-400 animate-in fade-in duration-200">Saved</span>
+                      )}
+                    </div>
+                  </div>
+                  {localHistory.trim() && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                      <span className="text-[9px] text-amber-400 font-medium">AI Integration Active</span>
+                      <p className="text-[8px] text-amber-300/70 mt-0.5 leading-relaxed">
+                        Your subjective notes will be factored into differential diagnoses, assessments, treatments, and exercise recommendations when you re-analyze.
+                      </p>
+                    </div>
                   )}
                 </div>
               )}

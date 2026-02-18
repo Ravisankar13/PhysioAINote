@@ -560,6 +560,7 @@ export interface PainMarker {
   nearestBone: string;
   anatomicalLabel: string;
   description?: string;
+  subjectiveHistory?: string;
   radius?: number;
   referralTarget?: { x: number; y: number; z: number };
   referralTargetBone?: string;

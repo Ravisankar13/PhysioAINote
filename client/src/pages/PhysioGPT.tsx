@@ -3578,40 +3578,6 @@ ${ddxList}`;
                 <Scan className="h-3 w-3 mr-1" />
                 Analyze Skeleton
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${showShoulderAssessment ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gradient-to-r from-cyan-500 to-teal-500 text-white hover:from-cyan-600 hover:to-teal-600'}`}
-                onClick={() => {
-                  if (showShoulderAssessment) {
-                    setShowShoulderAssessment(false);
-                  } else {
-                    setShowShoulderAssessment(true);
-                    setZoomToRegion(shoulderAssessmentSide === 'left' ? 'left_shoulder' : 'right_shoulder');
-                  }
-                }}
-              >
-                <Stethoscope className="h-3 w-3 mr-1" />
-                Shoulder Assess
-              </Button>
-              {showShoulderAssessment && (
-                <div className="flex bg-cyan-500/90 rounded-md overflow-hidden h-7 items-center">
-                  {(['left', 'right'] as const).map(s => (
-                    <button
-                      key={s}
-                      className={`px-2 h-full text-[10px] font-medium transition-colors ${
-                        shoulderAssessmentSide === s ? 'bg-white text-cyan-600' : 'text-white/80 hover:text-white hover:bg-cyan-600'
-                      }`}
-                      onClick={() => {
-                        setShoulderAssessmentSide(s);
-                        setZoomToRegion(s === 'left' ? 'left_shoulder' : 'right_shoulder');
-                      }}
-                    >
-                      {s === 'left' ? 'L' : 'R'}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {showShoulderAssessment && (

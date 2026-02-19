@@ -3359,7 +3359,7 @@ ${ddxList}`;
                 <Button
                   variant="secondary"
                   size="sm"
-                  className={`h-7 text-xs shadow-sm rounded-r-none ${painMarkerMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white/90 hover:bg-white'}`}
+                  className={`h-7 text-xs shadow-sm rounded-r-none ${painMarkerMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                   onClick={() => {
                     const newMode = !painMarkerMode;
                     setPainMarkerMode(newMode);
@@ -3419,7 +3419,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${romMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white/90 hover:bg-white'}`}
+                className={`h-7 text-xs shadow-sm ${romMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   const newMode = !romMode;
                   setRomMode(newMode);
@@ -3441,7 +3441,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${poseMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-white/90 hover:bg-white'}`}
+                className={`h-7 text-xs shadow-sm ${poseMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   const newMode = !poseMode;
                   setPoseMode(newMode);
@@ -3461,7 +3461,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${cameraMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white/90 hover:bg-white'}`}
+                className={`h-7 text-xs shadow-sm ${cameraMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={toggleCameraMode}
               >
                 {cameraMode ? <CameraOff className="h-3 w-3 mr-1" /> : <Camera className="h-3 w-3 mr-1" />}
@@ -3470,7 +3470,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${zoomToolMode ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-white/90 hover:bg-white'}`}
+                className={`h-7 text-xs shadow-sm ${zoomToolMode ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   const newMode = !zoomToolMode;
                   setZoomToolMode(newMode);
@@ -3490,7 +3490,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${forceMode ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-white/90 hover:bg-white'}`}
+                className={`h-7 text-xs shadow-sm ${forceMode ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   const newMode = !forceMode;
                   setForceMode(newMode);
@@ -3505,7 +3505,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${muscleMode ? 'bg-rose-500 text-white hover:bg-rose-600' : 'bg-white/90 hover:bg-white'}`}
+                className={`h-7 text-xs shadow-sm ${muscleMode ? 'bg-rose-500 text-white hover:bg-rose-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   const newMode = !muscleMode;
                   setMuscleMode(newMode);
@@ -3520,7 +3520,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${chainExplorerMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-white/90 hover:bg-white'}`}
+                className={`h-7 text-xs shadow-sm ${chainExplorerMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   const newMode = !chainExplorerMode;
                   setChainExplorerMode(newMode);
@@ -3535,7 +3535,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${correlationMode ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-white/90 hover:bg-white'}`}
+                className={`h-7 text-xs shadow-sm ${correlationMode ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   const newMode = !correlationMode;
                   setCorrelationMode(newMode);
@@ -3550,7 +3550,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className="h-7 text-xs bg-white/90 hover:bg-white shadow-sm"
+                className="h-7 text-xs bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50 shadow-sm"
                 onClick={() => setShowJointControls(!showJointControls)}
               >
                 <SlidersHorizontal className="h-3 w-3 mr-1" />
@@ -3559,7 +3559,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className="h-7 text-xs bg-white/90 hover:bg-white shadow-sm"
+                className="h-7 text-xs bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50 shadow-sm"
                 onClick={() => { setZoomToRegion('full_body'); }}
               >
                 Reset View
@@ -3567,7 +3567,7 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className="h-7 text-xs bg-white/90 hover:bg-white shadow-sm"
+                className="h-7 text-xs bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50 shadow-sm"
                 onClick={() => {
                   setModelConfig({ ...DEFAULT_MODEL_CONFIG });
                   setPainMarkers([]);

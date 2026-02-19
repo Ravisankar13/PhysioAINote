@@ -3574,21 +3574,6 @@ ${ddxList}`;
                   ))}
                 </div>
               )}
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${voiceSessionActive ? 'bg-purple-500 text-white hover:bg-purple-600 animate-pulse' : 'bg-white/90 hover:bg-white'}`}
-                onClick={() => {
-                  if (voiceSessionActive) {
-                    stopVoiceSession();
-                  } else {
-                    startVoiceSession();
-                  }
-                }}
-              >
-                {voiceSessionActive ? <MicOff className="h-3 w-3 mr-1" /> : <Mic className="h-3 w-3 mr-1" />}
-                {voiceSessionActive ? 'Stop Voice' : 'Voice'}
-              </Button>
             </div>
 
             {showShoulderAssessment && (
@@ -4796,13 +4781,28 @@ ${ddxList}`;
         </button>
       )}
       {!sidebarOpen && (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="absolute top-3 left-3 z-30 flex items-center gap-1.5 px-3 py-2 bg-black/70 hover:bg-black/80 text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
-        >
-          <Clock className="h-3.5 w-3.5" />
-          History
-        </button>
+        <div className="absolute top-3 left-3 z-30 flex items-center gap-2">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-black/70 hover:bg-black/80 text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
+          >
+            <Clock className="h-3.5 w-3.5" />
+            History
+          </button>
+          <button
+            onClick={() => {
+              if (voiceSessionActive) {
+                stopVoiceSession();
+              } else {
+                startVoiceSession();
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${voiceSessionActive ? 'bg-purple-500 hover:bg-purple-600 text-white animate-pulse' : 'bg-black/70 hover:bg-black/80 text-white'}`}
+          >
+            {voiceSessionActive ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+            {voiceSessionActive ? 'Stop Voice' : 'Voice'}
+          </button>
+        </div>
       )}
     </div>
   );

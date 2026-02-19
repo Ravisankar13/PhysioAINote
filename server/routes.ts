@@ -5989,6 +5989,12 @@ BODY PART TO REGION MAPPING (use these exact region values):
 - "left elbow" → region: "left_elbow", label: "Left Elbow"
 - "right elbow" → region: "right_elbow", label: "Right Elbow"
 - "elbow" (no side) → region: "left_elbow", label: "Left Elbow"
+- "left scapula" / "left shoulder blade" → region: "left_scapula", label: "Left Scapula"
+- "right scapula" / "right shoulder blade" → region: "right_scapula", label: "Right Scapula"
+- "scapula" / "shoulder blade" (no side) → region: "left_scapula", label: "Left Scapula"
+- "left wrist" → region: "left_wrist", label: "Left Wrist"
+- "right wrist" → region: "right_wrist", label: "Right Wrist"
+- "wrist" / "hand" (no side) → region: "left_wrist", label: "Left Wrist"
 
 POSTURE OBSERVATION PATHS (only include if posture is mentioned):
 - Forward head posture → "spine.forwardHead" (0-30)

@@ -105,6 +105,10 @@ export type AnatomicalRegion =
   | 'pelvis'
   | 'left_elbow'
   | 'right_elbow'
+  | 'left_scapula'
+  | 'right_scapula'
+  | 'left_wrist'
+  | 'right_wrist'
   // Lumbar segment pairs
   | 'L1_L2'
   | 'L2_L3'
@@ -243,6 +247,34 @@ export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegio
     label: 'Right Elbow',
     icon: '➡️',
     description: 'Humeroulnar, radioulnar joints'
+  },
+  left_scapula: {
+    position: { x: -1.2, y: 1.7, z: -1.2 },
+    lookAt: { x: -0.4, y: 1.7, z: 0 },
+    label: 'Left Scapula',
+    icon: '⬅️',
+    description: 'Left shoulder blade'
+  },
+  right_scapula: {
+    position: { x: 1.2, y: 1.7, z: -1.2 },
+    lookAt: { x: 0.4, y: 1.7, z: 0 },
+    label: 'Right Scapula',
+    icon: '➡️',
+    description: 'Right shoulder blade'
+  },
+  left_wrist: {
+    position: { x: -2.2, y: 1.0, z: 1.2 },
+    lookAt: { x: -1.2, y: 1.0, z: 0 },
+    label: 'Left Wrist',
+    icon: '⬅️',
+    description: 'Left wrist and hand'
+  },
+  right_wrist: {
+    position: { x: 2.2, y: 1.0, z: 1.2 },
+    lookAt: { x: 1.2, y: 1.0, z: 0 },
+    label: 'Right Wrist',
+    icon: '➡️',
+    description: 'Right wrist and hand'
   },
   // Lumbar segment pairs - each segment is ~3cm apart, L1 at ~y=1.0, L5 at ~y=0.5
   L1_L2: { position: { x: 0.3, y: 0.95, z: 0.4 }, lookAt: { x: 0, y: 0.95, z: 0 }, label: 'L1/L2', icon: '🔹', description: 'L1-L2 motion segment' },
@@ -434,6 +466,10 @@ export const REGION_BONE_MAPPING: Record<AnatomicalRegion, string[]> = {
   right_ankle: ['Ankle_R'],
   left_elbow: ['Elbow_L', 'ElbowPart1_L'],
   right_elbow: ['Elbow_R', 'ElbowPart1_R'],
+  left_scapula: ['Scapula_L'],
+  right_scapula: ['Scapula_R'],
+  left_wrist: ['Wrist_L'],
+  right_wrist: ['Wrist_R'],
   L1_L2: ['Spine1Part1_M'],
   L2_L3: ['Spine1_M'],
   L3_L4: ['RootPart2_M'],
@@ -2165,18 +2201,22 @@ export default function PureThreeGLBViewer({
 
     for (const marker of painMarkers) {
       let pos = new THREE.Vector3(marker.position.x, marker.position.y, marker.position.z);
-      if (pos.lengthSq() < 0.0001 && marker.nearestBone && marker.nearestBone.startsWith('virt_')) {
-        const vp = ANATOMICAL_VIRTUAL_POINTS.find(v => v.boneName === marker.nearestBone);
+      if (pos.lengthSq() < 0.0001 && marker.nearestBone) {
         const bRef = bonesRef.current;
-        if (vp && bRef[vp.boneA] && bRef[vp.boneB]) {
-          const pA = new THREE.Vector3();
-          const pB = new THREE.Vector3();
-          bRef[vp.boneA].getWorldPosition(pA);
-          bRef[vp.boneB].getWorldPosition(pB);
-          pos.lerpVectors(pA, pB, vp.t);
-          if (vp.offsetX) pos.x += vp.offsetX;
-          if (vp.offsetY) pos.y += vp.offsetY;
-          if (vp.offsetZ) pos.z += vp.offsetZ;
+        if (marker.nearestBone.startsWith('virt_')) {
+          const vp = ANATOMICAL_VIRTUAL_POINTS.find(v => v.boneName === marker.nearestBone);
+          if (vp && bRef[vp.boneA] && bRef[vp.boneB]) {
+            const pA = new THREE.Vector3();
+            const pB = new THREE.Vector3();
+            bRef[vp.boneA].getWorldPosition(pA);
+            bRef[vp.boneB].getWorldPosition(pB);
+            pos.lerpVectors(pA, pB, vp.t);
+            if (vp.offsetX) pos.x += vp.offsetX;
+            if (vp.offsetY) pos.y += vp.offsetY;
+            if (vp.offsetZ) pos.z += vp.offsetZ;
+          }
+        } else if (bRef[marker.nearestBone]) {
+          bRef[marker.nearestBone].getWorldPosition(pos);
         }
       }
       const markerType = marker.type || 'point';

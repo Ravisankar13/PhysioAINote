@@ -420,7 +420,6 @@ export default function PhysioGPT() {
   const [voiceFindings, setVoiceFindings] = useState<any[]>([]);
   const [voiceProcessing, setVoiceProcessing] = useState(false);
   const [voicePanelOpen, setVoicePanelOpen] = useState(true);
-  const voiceRecorderRef = useRef<MediaRecorder | null>(null);
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const voiceSpeechRecRef = useRef<any>(null);
   const voiceTranscriptRef = useRef('');
@@ -1376,6 +1375,8 @@ ${ddxList}`;
     }
   }, [applyVoiceFindings]);
 
+  const voiceExtractionTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const startVoiceSession = useCallback(async () => {
     const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
@@ -1399,32 +1400,21 @@ ${ddxList}`;
       recognition.maxAlternatives = 1;
       voiceSpeechRecRef.current = recognition;
 
-      let lastFinalLength = 0;
+      let recognitionResultIndex = 0;
 
       recognition.onresult = (event: any) => {
-        let finalText = '';
         let interimText = '';
-        for (let i = 0; i < event.results.length; i++) {
+        for (let i = recognitionResultIndex; i < event.results.length; i++) {
           const result = event.results[i];
           if (result.isFinal) {
-            finalText += result[0].transcript + ' ';
+            voiceTranscriptRef.current += result[0].transcript + ' ';
+            recognitionResultIndex = i + 1;
           } else {
             interimText += result[0].transcript;
           }
         }
-
-        const newTranscript = finalText.trim();
-        if (newTranscript) {
-          voiceTranscriptRef.current = newTranscript;
-          setVoiceTranscript(newTranscript + (interimText ? ' ' + interimText : ''));
-        } else if (interimText) {
-          setVoiceTranscript(voiceTranscriptRef.current + (voiceTranscriptRef.current ? ' ' : '') + interimText);
-        }
-
-        if (newTranscript.length > lastFinalLength + 30) {
-          lastFinalLength = newTranscript.length;
-          triggerVoiceExtraction();
-        }
+        const display = voiceTranscriptRef.current.trim() + (interimText ? ' ' + interimText : '');
+        setVoiceTranscript(display);
       };
 
       recognition.onerror = (event: any) => {
@@ -1435,11 +1425,17 @@ ${ddxList}`;
 
       recognition.onend = () => {
         if (voiceSpeechRecRef.current === recognition) {
+          recognitionResultIndex = 0;
           try { recognition.start(); } catch {}
         }
       };
 
       recognition.start();
+
+      voiceExtractionTimerRef.current = setInterval(() => {
+        triggerVoiceExtraction();
+      }, 5000);
+
       setVoiceSessionActive(true);
       toast({ title: "Voice Session Started", description: "Speak naturally — clinical findings will be extracted automatically." });
     } catch (error) {
@@ -1449,6 +1445,10 @@ ${ddxList}`;
   }, [triggerVoiceExtraction, toast]);
 
   const stopVoiceSession = useCallback(() => {
+    if (voiceExtractionTimerRef.current) {
+      clearInterval(voiceExtractionTimerRef.current);
+      voiceExtractionTimerRef.current = null;
+    }
     if (voiceSpeechRecRef.current) {
       const rec = voiceSpeechRecRef.current;
       voiceSpeechRecRef.current = null;
@@ -1456,9 +1456,8 @@ ${ddxList}`;
     }
     if (voiceStreamRef.current) {
       voiceStreamRef.current.getTracks().forEach(t => t.stop());
+      voiceStreamRef.current = null;
     }
-    voiceRecorderRef.current = null;
-    voiceStreamRef.current = null;
     voiceExtractingRef.current = false;
     setVoiceSessionActive(false);
 
@@ -1471,18 +1470,18 @@ ${ddxList}`;
 
   useEffect(() => {
     return () => {
+      if (voiceExtractionTimerRef.current) {
+        clearInterval(voiceExtractionTimerRef.current);
+        voiceExtractionTimerRef.current = null;
+      }
       if (voiceSpeechRecRef.current) {
         try { voiceSpeechRecRef.current.stop(); } catch {}
         voiceSpeechRecRef.current = null;
       }
-      if (voiceRecorderRef.current && voiceRecorderRef.current.state !== 'inactive') {
-        voiceRecorderRef.current.stop();
-      }
       if (voiceStreamRef.current) {
         voiceStreamRef.current.getTracks().forEach(t => t.stop());
+        voiceStreamRef.current = null;
       }
-      voiceRecorderRef.current = null;
-      voiceStreamRef.current = null;
     };
   }, []);
 

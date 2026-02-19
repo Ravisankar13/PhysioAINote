@@ -227,11 +227,22 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       
       // Create or fetch conversation
       if (!conversationId) {
-        const conversation = await physioGptStorage.createConversation({
-          userId: request.userId,
-          title: this.generateConversationTitle(request.message)
-        });
-        conversationId = conversation.id;
+        try {
+          const conversation = await physioGptStorage.createConversation({
+            userId: request.userId,
+            title: this.generateConversationTitle(request.message)
+          });
+          if (!conversation || !conversation.id) {
+            console.error("createConversation returned empty result for userId:", request.userId);
+            throw new Error("Failed to create conversation");
+          }
+          conversationId = conversation.id;
+        } catch (createErr) {
+          console.error("Error creating conversation:", createErr);
+          res.write(`data: ${JSON.stringify({ type: 'error', data: 'Failed to create conversation. Please try again.' })}\n\n`);
+          res.end();
+          return;
+        }
         
         // Send conversation ID immediately
         res.write(`data: ${JSON.stringify({ type: 'conversationId', data: conversationId })}\n\n`);
@@ -256,6 +267,13 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         }
       }
       
+      if (!conversationId || typeof conversationId !== 'number') {
+        console.error("Invalid conversationId after creation/lookup:", conversationId);
+        res.write(`data: ${JSON.stringify({ type: 'error', data: 'Invalid conversation. Please try again.' })}\n\n`);
+        res.end();
+        return;
+      }
+
       // Save user message
       await physioGptStorage.addMessage({
         conversationId,
@@ -273,13 +291,21 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       
       const isVoiceSession = request.isVoiceSession || request.message.includes('[CLINICAL SESSION RECORDING');
       const isInterim = request.isInterimAnalysis;
-      const stream = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: openaiMessages as any,
-        max_tokens: isInterim ? 1500 : (isVoiceSession ? 4096 : 2500),
-        temperature: isVoiceSession ? 0.4 : 0.7,
-        stream: true,
-      });
+      let stream;
+      try {
+        stream = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: openaiMessages as any,
+          max_tokens: isInterim ? 1500 : (isVoiceSession ? 4096 : 2500),
+          temperature: isVoiceSession ? 0.4 : 0.7,
+          stream: true,
+        });
+      } catch (openaiErr) {
+        console.error("OpenAI stream creation failed:", openaiErr);
+        res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI service temporarily unavailable. Please try again.' })}\n\n`);
+        res.end();
+        return;
+      }
       
       let fullResponse = '';
       

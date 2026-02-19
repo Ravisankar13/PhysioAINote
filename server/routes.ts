@@ -6169,6 +6169,11 @@ Guidelines:
         return res.status(400).json({ error: "Message is required" });
       }
 
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
       await physioGptStreamService.streamResponse({
         message,
         conversationId,
@@ -6177,12 +6182,19 @@ Guidelines:
         clinicalContext,
         isVoiceSession: !!isVoiceSession,
         isInterimAnalysis: !!isInterimAnalysis,
-        userId: req.user!.id
+        userId
       }, res);
       
     } catch (error: any) {
       console.error("PhysioGPT streaming error:", error);
-      res.status(500).json({ error: "Unable to process your streaming request" });
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Unable to process your streaming request" });
+      } else {
+        try {
+          res.write(`data: ${JSON.stringify({ type: 'error', data: 'An error occurred during streaming.' })}\n\n`);
+          res.end();
+        } catch (e) {}
+      }
     }
   });
 

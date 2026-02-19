@@ -81,6 +81,7 @@ import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToContro
 import type { Skeleton3DPose } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
+import ClinicalReasoningPanel, { type ClinicalReasoningData } from "@/components/skeleton/ClinicalReasoningPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority } from "@/lib/muscleBiomechanicsEngine";
@@ -420,6 +421,8 @@ export default function PhysioGPT() {
   const [voiceFindings, setVoiceFindings] = useState<any[]>([]);
   const [voiceProcessing, setVoiceProcessing] = useState(false);
   const [voicePanelOpen, setVoicePanelOpen] = useState(true);
+  const [clinicalReasoningData, setClinicalReasoningData] = useState<ClinicalReasoningData | null>(null);
+  const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const voiceSpeechRecRef = useRef<any>(null);
   const voiceTranscriptRef = useRef('');
@@ -1327,7 +1330,74 @@ ${ddxList}`;
     if (newFindings.length > 0) {
       setVoiceFindings(prev => [...prev, ...newFindings]);
     }
-  }, []);
+
+    if (data.clinicalReasoning) {
+      const cr = data.clinicalReasoning;
+      const hasSubstantiveData = (cr.hypotheses?.length > 0) ||
+        (cr.findings?.length > 0) ||
+        (cr.flags?.length > 0) ||
+        (cr.reasoningChain?.length > 0) ||
+        (cr.biomechanicalLinks?.length > 0);
+
+      if (!hasSubstantiveData) return;
+
+      setClinicalReasoningData(prev => {
+        const existing = prev || {
+          hypotheses: [], findings: [], flags: [],
+          biomechanicalLinks: [], reasoningChain: [],
+          clinicalSummary: '', assessmentPriorities: [],
+        };
+
+        const normalize = (s: string) => s.toLowerCase().trim();
+
+        const mergedHypotheses = cr.hypotheses && cr.hypotheses.length > 0
+          ? cr.hypotheses
+          : existing.hypotheses;
+
+        const existingFindingTexts = new Set(existing.findings.map((f: any) => normalize(f.text)));
+        const newCrFindings = (cr.findings || [])
+          .filter((f: any) => f.text && !existingFindingTexts.has(normalize(f.text)))
+          .map((f: any) => ({ ...f, isNew: true }));
+        const mergedFindings = [
+          ...existing.findings.map((f: any) => ({ ...f, isNew: false })),
+          ...newCrFindings,
+        ];
+
+        const existingFlagTexts = new Set(existing.flags.map((f: any) => normalize(f.text)));
+        const newFlags = (cr.flags || []).filter((f: any) => f.text && !existingFlagTexts.has(normalize(f.text)));
+        const mergedFlags = [...existing.flags, ...newFlags];
+
+        const existingBioKeys = new Set(existing.biomechanicalLinks.map((b: any) => `${normalize(b.primaryRegion)}-${normalize(b.connectedRegion)}`));
+        const newBio = (cr.biomechanicalLinks || []).filter((b: any) => !existingBioKeys.has(`${normalize(b.primaryRegion)}-${normalize(b.connectedRegion)}`));
+        const mergedBio = [...existing.biomechanicalLinks, ...newBio];
+
+        const existingThoughts = new Set(existing.reasoningChain.map((r: any) => normalize(r.thought)));
+        const newReasoning = (cr.reasoningChain || [])
+          .filter((r: any) => r.thought && !existingThoughts.has(normalize(r.thought)))
+          .map((r: any, i: number) => ({ ...r, step: existing.reasoningChain.length + i + 1, isNew: true }));
+        const mergedReasoning = [
+          ...existing.reasoningChain.map((r: any) => ({ ...r, isNew: false })),
+          ...newReasoning,
+        ];
+
+        return {
+          hypotheses: mergedHypotheses,
+          findings: mergedFindings,
+          flags: mergedFlags,
+          biomechanicalLinks: mergedBio,
+          reasoningChain: mergedReasoning,
+          clinicalSummary: cr.clinicalSummary || existing.clinicalSummary,
+          assessmentPriorities: cr.assessmentPriorities && cr.assessmentPriorities.length > 0
+            ? cr.assessmentPriorities
+            : existing.assessmentPriorities,
+        };
+      });
+
+      if (!clinicalReasoningOpen) {
+        setClinicalReasoningOpen(true);
+      }
+    }
+  }, [clinicalReasoningOpen]);
 
   const undoVoiceFinding = useCallback((findingId: string) => {
     setVoiceFindings(prev => {
@@ -1392,6 +1462,8 @@ ${ddxList}`;
       setVoiceTranscript('');
       setVoiceFindings([]);
       setVoicePanelOpen(true);
+      setClinicalReasoningData(null);
+      setClinicalReasoningOpen(false);
 
       const recognition = new SpeechRecognitionAPI();
       recognition.continuous = true;
@@ -1465,6 +1537,7 @@ ${ddxList}`;
       triggerVoiceExtraction();
     }
 
+    setClinicalReasoningOpen(false);
     toast({ title: "Voice Session Ended", description: `Extracted ${voiceFindingsRef.current.length} findings from session.` });
   }, [toast, triggerVoiceExtraction]);
 
@@ -3595,7 +3668,7 @@ ${ddxList}`;
             )}
 
             {voiceSessionActive && (
-              <div className="absolute bottom-12 left-2 right-2 z-40 animate-in slide-in-from-bottom-2 duration-200">
+              <div className={`absolute bottom-12 left-2 z-40 animate-in slide-in-from-bottom-2 duration-200 ${clinicalReasoningOpen ? 'right-[330px]' : 'right-2'} transition-all`}>
                 <div className="bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-purple-500/30 overflow-hidden">
                   <button
                     onClick={() => setVoicePanelOpen(!voicePanelOpen)}
@@ -4813,8 +4886,28 @@ ${ddxList}`;
             {cameraMode ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
             {cameraMode ? 'Stop Camera' : 'Camera'}
           </button>
+          {voiceSessionActive && (
+            <button
+              onClick={() => setClinicalReasoningOpen(!clinicalReasoningOpen)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${clinicalReasoningOpen ? 'bg-cyan-500 hover:bg-cyan-600 text-white' : 'bg-black/70 hover:bg-black/80 text-white'}`}
+            >
+              <Brain className="h-3.5 w-3.5" />
+              {clinicalReasoningOpen ? 'Hide Reasoning' : 'AI Reasoning'}
+              {clinicalReasoningData && (clinicalReasoningData.hypotheses.length > 0 || clinicalReasoningData.findings.length > 0) && !clinicalReasoningOpen && (
+                <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+              )}
+            </button>
+          )}
         </div>
       )}
+
+      <ClinicalReasoningPanel
+        data={clinicalReasoningData}
+        isProcessing={voiceProcessing}
+        isOpen={clinicalReasoningOpen && voiceSessionActive}
+        onToggle={() => setClinicalReasoningOpen(!clinicalReasoningOpen)}
+        onClose={() => setClinicalReasoningOpen(false)}
+      />
     </div>
   );
 }

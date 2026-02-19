@@ -6019,10 +6019,45 @@ Return ONLY valid JSON with this structure:
   "postureObservations": { "spine.forwardHead": 30 },
   "severity": "moderate",
   "redFlags": [],
-  "additionalNotes": "Patient is a desk worker..."
+  "additionalNotes": "Patient is a desk worker...",
+  "clinicalReasoning": {
+    "hypotheses": [
+      { "condition": "Lumbar disc herniation L4/L5", "confidence": 65, "supportingEvidence": ["Radiating pain to left leg", "Worse with sitting"], "rulingOutFactors": ["No bowel/bladder changes"], "status": "active" }
+    ],
+    "findings": [
+      { "category": "symptom", "text": "Sharp lower back pain radiating to left leg" },
+      { "category": "aggravating", "text": "Prolonged sitting worsens pain" },
+      { "category": "easing", "text": "Walking provides some relief" },
+      { "category": "history", "text": "Gradual onset over 3 weeks" },
+      { "category": "functional", "text": "Unable to sit >30 minutes" }
+    ],
+    "flags": [
+      { "type": "yellow", "text": "Progressive neurological symptoms", "action": "Monitor for worsening - consider imaging if no improvement in 6 weeks" }
+    ],
+    "biomechanicalLinks": [
+      { "primaryRegion": "Lumbar Spine", "connectedRegion": "Hip", "mechanism": "Psoas tightness from prolonged sitting", "clinicalRelevance": "May contribute to increased lumbar lordosis and disc loading" }
+    ],
+    "reasoningChain": [
+      { "step": 1, "thought": "Patient reports lower back pain with leg radiation - suggests possible nerve root involvement", "type": "observation" },
+      { "step": 2, "thought": "Pattern of dermatomal radiation and sitting aggravation points toward disc pathology", "type": "hypothesis" },
+      { "step": 3, "thought": "Absence of red flags (no cauda equina signs) allows conservative approach", "type": "deduction" },
+      { "step": 4, "thought": "Recommend SLR test and neurological screening to confirm nerve involvement", "type": "recommendation" }
+    ],
+    "clinicalSummary": "Presentation consistent with lumbar radiculopathy, likely L4/L5 disc involvement. Conservative management appropriate at this stage.",
+    "assessmentPriorities": ["Neurological screening (myotomes, dermatomes, reflexes)", "SLR and slump test", "Lumbar ROM assessment", "Hip flexor length test"]
+  }
 }
 
-If nothing new can be extracted, return: { "painLocations": [], "subjectiveHistory": "", "diagnoses": [], "postureObservations": {}, "severity": "", "redFlags": [], "additionalNotes": "" }`;
+IMPORTANT for clinicalReasoning:
+- "hypotheses": Rank differential diagnoses by confidence (0-100%). Include supporting evidence and ruling out factors. Status: "active", "ruled_out", or "confirmed".
+- "findings": Categorize as "symptom", "sign", "history", "aggravating", "easing", or "functional". Only include clearly stated findings.
+- "flags": Type is "red" (urgent/dangerous), "yellow" (caution/monitor), or "green" (positive indicator). Include recommended action.
+- "biomechanicalLinks": Connect related body regions with mechanism and clinical relevance.
+- "reasoningChain": Show step-by-step clinical thought process. Type: "observation", "hypothesis", "deduction", or "recommendation".
+- "clinicalSummary": One-liner summarizing current clinical picture.
+- "assessmentPriorities": Ordered list of next assessment steps.
+
+If nothing new can be extracted, return: { "painLocations": [], "subjectiveHistory": "", "diagnoses": [], "postureObservations": {}, "severity": "", "redFlags": [], "additionalNotes": "", "clinicalReasoning": { "hypotheses": [], "findings": [], "flags": [], "biomechanicalLinks": [], "reasoningChain": [], "clinicalSummary": "", "assessmentPriorities": [] } }`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -6032,11 +6067,13 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
         ],
         response_format: { type: "json_object" },
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 3500,
       });
 
       const content = completion.choices[0]?.message?.content || '{}';
       const parsed = JSON.parse(content);
+
+      const reasoning = parsed.clinicalReasoning || {};
 
       res.json({
         painLocations: parsed.painLocations || [],
@@ -6046,6 +6083,46 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
         severity: parsed.severity || '',
         redFlags: parsed.redFlags || [],
         additionalNotes: parsed.additionalNotes || '',
+        clinicalReasoning: {
+          hypotheses: (reasoning.hypotheses || []).map((h: any, i: number) => ({
+            id: `hyp_${Date.now()}_${i}`,
+            condition: h.condition || '',
+            confidence: h.confidence || 0,
+            supportingEvidence: h.supportingEvidence || [],
+            rulingOutFactors: h.rulingOutFactors || [],
+            status: h.status || 'active',
+          })),
+          findings: (reasoning.findings || []).map((f: any, i: number) => ({
+            id: `find_${Date.now()}_${i}`,
+            category: f.category || 'symptom',
+            text: f.text || '',
+            timestamp: Date.now(),
+            isNew: true,
+          })),
+          flags: (reasoning.flags || []).map((f: any, i: number) => ({
+            id: `flag_${Date.now()}_${i}`,
+            type: f.type || 'yellow',
+            text: f.text || '',
+            action: f.action || '',
+          })),
+          biomechanicalLinks: (reasoning.biomechanicalLinks || []).map((b: any, i: number) => ({
+            id: `bio_${Date.now()}_${i}`,
+            primaryRegion: b.primaryRegion || '',
+            connectedRegion: b.connectedRegion || '',
+            mechanism: b.mechanism || '',
+            clinicalRelevance: b.clinicalRelevance || '',
+          })),
+          reasoningChain: (reasoning.reasoningChain || []).map((r: any, i: number) => ({
+            id: `reas_${Date.now()}_${i}`,
+            step: r.step || i + 1,
+            thought: r.thought || '',
+            type: r.type || 'observation',
+            timestamp: Date.now(),
+            isNew: true,
+          })),
+          clinicalSummary: reasoning.clinicalSummary || '',
+          assessmentPriorities: reasoning.assessmentPriorities || [],
+        },
       });
     } catch (error: any) {
       console.error("Voice clinical extract error:", error);

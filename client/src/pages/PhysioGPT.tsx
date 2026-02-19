@@ -62,7 +62,8 @@ import {
   TrendingUp,
   Shield,
   Layers,
-  Network
+  Network,
+  Radio
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -71,6 +72,7 @@ import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDispl
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement } from "@/components/skeleton/PureThreeGLBViewer";
+import { REGION_BONE_MAPPING } from "@/components/skeleton/PureThreeGLBViewer";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
 import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
@@ -412,6 +414,20 @@ export default function PhysioGPT() {
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
   const [romValues, setRomValues] = useState<Record<string, number>>({});
   const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
+
+  const [voiceSessionActive, setVoiceSessionActive] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceFindings, setVoiceFindings] = useState<any[]>([]);
+  const [voiceProcessing, setVoiceProcessing] = useState(false);
+  const [voicePanelOpen, setVoicePanelOpen] = useState(true);
+  const voiceRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceStreamRef = useRef<MediaStream | null>(null);
+  const voiceTranscriptRef = useRef('');
+  const painMarkersRef = useRef(painMarkers);
+  painMarkersRef.current = painMarkers;
+  const voiceFindingsRef = useRef(voiceFindings);
+  voiceFindingsRef.current = voiceFindings;
+  const voiceExtractingRef = useRef(false);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -1250,6 +1266,177 @@ ${ddxList}`;
       return next;
     });
   };
+
+  const applyVoiceFindings = useCallback((data: any) => {
+    const newFindings: any[] = [];
+
+    if (data.painLocations && data.painLocations.length > 0) {
+      const newMarkers: PainMarker[] = data.painLocations.map((loc: any, index: number) => {
+        const regionBones = (REGION_BONE_MAPPING as any)[loc.region];
+        const nearestBone = regionBones && regionBones.length > 0 ? regionBones[0] : '';
+        const marker: PainMarker = {
+          id: `pm_voice_${Date.now()}_${index}`,
+          type: loc.type || 'point',
+          position: { x: 0, y: 0, z: 0 },
+          nearestBone,
+          anatomicalLabel: loc.anatomicalLabel || loc.region,
+          subjectiveHistory: data.subjectiveHistory || '',
+          description: loc.description || '',
+        };
+        newFindings.push({ id: marker.id, type: 'pain', label: loc.anatomicalLabel || loc.region, region: loc.region, severity: loc.severity });
+        return marker;
+      });
+      setPainMarkers(prev => [...prev, ...newMarkers]);
+
+      if (data.painLocations[0]?.region) {
+        setZoomToRegion(data.painLocations[0].region);
+      }
+    }
+
+    if (data.postureObservations && Object.keys(data.postureObservations).length > 0) {
+      setModelConfig(prevConfig => {
+        const updatedConfig = { ...prevConfig };
+        Object.entries(data.postureObservations).forEach(([path, value]) => {
+          const parts = path.split('.');
+          if (parts.length === 2) {
+            const [group, prop] = parts;
+            const groupObj = (updatedConfig as any)[group];
+            if (groupObj && prop in groupObj) {
+              const previousValue = groupObj[prop];
+              newFindings.push({ id: `posture_${path}_${Date.now()}`, type: 'posture', label: path, value, previousValue });
+              (updatedConfig as any)[group] = { ...groupObj, [prop]: value };
+            }
+          }
+        });
+        return updatedConfig;
+      });
+    }
+
+    if (data.diagnoses && data.diagnoses.length > 0) {
+      data.diagnoses.forEach((d: string, i: number) => {
+        newFindings.push({ id: `dx_${Date.now()}_${i}`, type: 'diagnosis', label: d });
+      });
+    }
+
+    if (data.redFlags && data.redFlags.length > 0) {
+      data.redFlags.forEach((rf: string, i: number) => {
+        newFindings.push({ id: `rf_${Date.now()}_${i}`, type: 'redFlag', label: rf });
+      });
+    }
+
+    if (newFindings.length > 0) {
+      setVoiceFindings(prev => [...prev, ...newFindings]);
+    }
+  }, []);
+
+  const undoVoiceFinding = useCallback((findingId: string) => {
+    setVoiceFindings(prev => {
+      const finding = prev.find(f => f.id === findingId);
+      if (finding?.type === 'pain') {
+        setPainMarkers(markers => markers.filter(m => m.id !== findingId));
+      }
+      if (finding?.type === 'posture' && finding.label) {
+        updateModelConfig(finding.label, finding.previousValue ?? 0);
+      }
+      return prev.filter(f => f.id !== findingId);
+    });
+  }, []);
+
+  const startVoiceSession = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceStreamRef.current = stream;
+      voiceTranscriptRef.current = '';
+      voiceExtractingRef.current = false;
+      setVoiceTranscript('');
+      setVoiceFindings([]);
+      setVoicePanelOpen(true);
+
+      const recorder = new MediaRecorder(stream);
+      voiceRecorderRef.current = recorder;
+
+      recorder.ondataavailable = async (e) => {
+        if (e.data.size === 0) return;
+
+        const formData = new FormData();
+        formData.append('audio', new Blob([e.data], { type: 'audio/webm' }), 'chunk.webm');
+
+        try {
+          const transcribeRes = await fetch('/api/transcribe-chunk', { method: 'POST', body: formData });
+          if (!transcribeRes.ok) return;
+          const { transcription } = await transcribeRes.json();
+          if (!transcription || !transcription.trim()) return;
+
+          voiceTranscriptRef.current += (voiceTranscriptRef.current ? ' ' : '') + transcription.trim();
+          setVoiceTranscript(voiceTranscriptRef.current);
+
+          if (voiceExtractingRef.current) return;
+          voiceExtractingRef.current = true;
+          setVoiceProcessing(true);
+          try {
+            const currentMarkers = painMarkersRef.current;
+            const currentFindings = voiceFindingsRef.current;
+            const extractRes = await fetch('/api/physiogpt/voice-clinical-extract', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                transcript: voiceTranscriptRef.current,
+                previousFindings: {
+                  painLocations: currentMarkers.map(m => m.anatomicalLabel),
+                  diagnoses: currentFindings.filter(f => f.type === 'diagnosis').map(f => f.label)
+                }
+              })
+            });
+            if (extractRes.ok) {
+              const extractData = await extractRes.json();
+              applyVoiceFindings(extractData);
+            }
+          } catch (err) {
+            console.error('Voice extraction error:', err);
+          } finally {
+            voiceExtractingRef.current = false;
+            setVoiceProcessing(false);
+          }
+        } catch (err) {
+          console.error('Transcription error:', err);
+        }
+      };
+
+      recorder.start(5000);
+      setVoiceSessionActive(true);
+      toast({ title: "Voice Session Started", description: "Speak naturally — clinical findings will be extracted automatically." });
+    } catch (error) {
+      console.error('Mic access error:', error);
+      toast({ title: "Microphone Access Denied", description: "Please allow microphone access to use voice extraction.", variant: "destructive" });
+    }
+  }, [applyVoiceFindings, toast]);
+
+  const stopVoiceSession = useCallback(() => {
+    if (voiceRecorderRef.current && voiceRecorderRef.current.state !== 'inactive') {
+      voiceRecorderRef.current.stop();
+    }
+    if (voiceStreamRef.current) {
+      voiceStreamRef.current.getTracks().forEach(t => t.stop());
+    }
+    voiceRecorderRef.current = null;
+    voiceStreamRef.current = null;
+    voiceExtractingRef.current = false;
+    setVoiceSessionActive(false);
+    toast({ title: "Voice Session Ended", description: `Extracted ${voiceFindingsRef.current.length} findings from session.` });
+  }, [toast]);
+
+  useEffect(() => {
+    return () => {
+      if (voiceRecorderRef.current && voiceRecorderRef.current.state !== 'inactive') {
+        voiceRecorderRef.current.stop();
+      }
+      if (voiceStreamRef.current) {
+        voiceStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      voiceRecorderRef.current = null;
+      voiceStreamRef.current = null;
+    };
+  }, []);
 
   const forceAnalysis = useMemo(() => {
     if (!forceMode) return null;
@@ -3387,6 +3574,21 @@ ${ddxList}`;
                   ))}
                 </div>
               )}
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${voiceSessionActive ? 'bg-purple-500 text-white hover:bg-purple-600 animate-pulse' : 'bg-white/90 hover:bg-white'}`}
+                onClick={() => {
+                  if (voiceSessionActive) {
+                    stopVoiceSession();
+                  } else {
+                    startVoiceSession();
+                  }
+                }}
+              >
+                {voiceSessionActive ? <MicOff className="h-3 w-3 mr-1" /> : <Mic className="h-3 w-3 mr-1" />}
+                {voiceSessionActive ? 'Stop Voice' : 'Voice'}
+              </Button>
             </div>
 
             {showShoulderAssessment && (
@@ -3400,6 +3602,70 @@ ${ddxList}`;
                     handleSendMessage(msg);
                   }}
                 />
+              </div>
+            )}
+
+            {voiceSessionActive && (
+              <div className="absolute bottom-12 left-2 right-2 z-40 animate-in slide-in-from-bottom-2 duration-200">
+                <div className="bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-purple-500/30 overflow-hidden">
+                  <button
+                    onClick={() => setVoicePanelOpen(!voicePanelOpen)}
+                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-800/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="animate-pulse h-2 w-2 rounded-full bg-purple-400" />
+                      <Radio className="h-3.5 w-3.5 text-purple-400" />
+                      <span className="text-xs font-semibold text-purple-300">Voice Extraction</span>
+                      {voiceProcessing && <Loader2 className="h-3 w-3 animate-spin text-purple-400" />}
+                      {voiceFindings.length > 0 && (
+                        <span className="text-[10px] bg-purple-500/30 text-purple-300 px-1.5 py-0.5 rounded-full">{voiceFindings.length} findings</span>
+                      )}
+                    </div>
+                    <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${voicePanelOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {voicePanelOpen && (
+                    <div className="px-3 pb-3 space-y-2 max-h-48 overflow-y-auto">
+                      {voiceTranscript && (
+                        <div className="bg-gray-800/60 rounded-lg p-2">
+                          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Transcript</p>
+                          <p className="text-[11px] text-gray-300 leading-relaxed max-h-16 overflow-y-auto">{voiceTranscript}</p>
+                        </div>
+                      )}
+
+                      {!voiceTranscript && (
+                        <div className="flex items-center justify-center py-3 gap-2">
+                          <span className="animate-pulse h-2 w-2 rounded-full bg-purple-400" />
+                          <span className="text-[11px] text-gray-400">Listening...</span>
+                        </div>
+                      )}
+
+                      {voiceFindings.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Applied Findings</p>
+                          {voiceFindings.map(f => (
+                            <div key={f.id} className="flex items-center justify-between bg-gray-800/40 rounded px-2 py-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {f.type === 'pain' && <MapPin className="h-3 w-3 text-red-400 flex-shrink-0" />}
+                                {f.type === 'posture' && <SlidersHorizontal className="h-3 w-3 text-blue-400 flex-shrink-0" />}
+                                {f.type === 'diagnosis' && <Stethoscope className="h-3 w-3 text-teal-400 flex-shrink-0" />}
+                                {f.type === 'redFlag' && <AlertTriangle className="h-3 w-3 text-amber-400 flex-shrink-0" />}
+                                <span className="text-[10px] text-gray-300 truncate">{f.label}</span>
+                                {f.severity && <span className="text-[9px] text-gray-500">({f.severity}/10)</span>}
+                              </div>
+                              <button
+                                onClick={() => undoVoiceFinding(f.id)}
+                                className="text-gray-500 hover:text-red-400 ml-1 flex-shrink-0"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

@@ -5951,6 +5951,102 @@ Respond with only a number between 1-100 representing the relevance score.`;
     }
   });
 
+  app.post("/api/physiogpt/voice-clinical-extract", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { transcript, previousFindings } = req.body;
+      if (!transcript || typeof transcript !== 'string') {
+        return res.status(400).json({ error: "Transcript is required" });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const openai = new OpenAI({ apiKey, baseURL });
+
+      const previousContext = previousFindings && Object.keys(previousFindings).length > 0
+        ? `\n\nPREVIOUSLY EXTRACTED FINDINGS (do NOT repeat these — only return NEW findings):\n${JSON.stringify(previousFindings, null, 2)}`
+        : '';
+
+      const prompt = `You are analyzing a REAL-TIME clinical consultation transcript. Extract clinical information as it's spoken. Be conservative - only extract clearly stated clinical information, not speculative content.
+
+BODY PART TO REGION MAPPING (use these exact region values):
+- "lower back" / "lumbar" / "low back" → region: "lumbar_spine", label: "Lower Back / Lumbar Spine"
+- "upper back" / "thoracic" / "mid back" → region: "thoracic_spine", label: "Upper Back / Thoracic Spine"
+- "neck" / "cervical" / "C-spine" → region: "cervical_spine", label: "Neck / Cervical Spine"
+- "left shoulder" → region: "left_shoulder", label: "Left Shoulder"
+- "right shoulder" → region: "right_shoulder", label: "Right Shoulder"
+- "shoulder" (no side) → region: "left_shoulder", label: "Left Shoulder"
+- "left hip" → region: "left_hip", label: "Left Hip"
+- "right hip" → region: "right_hip", label: "Right Hip"
+- "hip" (no side) → region: "left_hip", label: "Left Hip"
+- "left knee" → region: "left_knee", label: "Left Knee"
+- "right knee" → region: "right_knee", label: "Right Knee"
+- "knee" (no side) → region: "left_knee", label: "Left Knee"
+- "left ankle" / "left foot" → region: "left_ankle", label: "Left Ankle"
+- "right ankle" / "right foot" → region: "right_ankle", label: "Right Ankle"
+- "ankle" / "foot" (no side) → region: "left_ankle", label: "Left Ankle"
+- "pelvis" / "sacroiliac" / "SI joint" / "sacrum" → region: "pelvis", label: "Pelvis / Sacroiliac"
+- "left elbow" → region: "left_elbow", label: "Left Elbow"
+- "right elbow" → region: "right_elbow", label: "Right Elbow"
+- "elbow" (no side) → region: "left_elbow", label: "Left Elbow"
+
+POSTURE OBSERVATION PATHS (only include if posture is mentioned):
+- Forward head posture → "spine.forwardHead" (0-30)
+- Thoracic kyphosis / rounded upper back → "spine.thoracicKyphosis" (0-30)
+- Lumbar lordosis increased/decreased → "spine.lumbarLordosis" (-30 to 30)
+- Scoliosis → "spine.scoliosis" (-20 to 20)
+- Lateral shift → "spine.lateralShift" (-20 to 20)
+- Anterior pelvic tilt → "pelvis.tilt" (-20 to 20, positive = anterior)
+- Pelvic obliquity / drop → "pelvis.obliquity" (-15 to 15)
+- Rounded shoulders → "leftShoulder.protraction" and "rightShoulder.protraction" (0-20)
+
+SEVERITY MAPPING: Use 1-10 scale. Mild=1-3, Moderate=4-6, Severe=7-9, Extreme=10.
+PAIN TYPE: "point" for localized, "area" for diffuse, "referred" for radiating, "line" for along a path.
+SIDE: "left", "right", or "bilateral".
+${previousContext}
+
+Return ONLY valid JSON with this structure:
+{
+  "painLocations": [{ "region": "lumbar_spine", "anatomicalLabel": "Lower Back / Lumbar Spine", "severity": 7, "type": "point", "description": "dull ache", "side": "bilateral" }],
+  "subjectiveHistory": "Patient reports gradual onset...",
+  "diagnoses": ["Suspected lumbar disc herniation"],
+  "postureObservations": { "spine.forwardHead": 30 },
+  "severity": "moderate",
+  "redFlags": [],
+  "additionalNotes": "Patient is a desk worker..."
+}
+
+If nothing new can be extracted, return: { "painLocations": [], "subjectiveHistory": "", "diagnoses": [], "postureObservations": {}, "severity": "", "redFlags": [], "additionalNotes": "" }`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: prompt },
+          { role: "user", content: `Extract clinical findings from this real-time transcript:\n\n${transcript}` }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        max_tokens: 2000,
+      });
+
+      const content = completion.choices[0]?.message?.content || '{}';
+      const parsed = JSON.parse(content);
+
+      res.json({
+        painLocations: parsed.painLocations || [],
+        subjectiveHistory: parsed.subjectiveHistory || '',
+        diagnoses: parsed.diagnoses || [],
+        postureObservations: parsed.postureObservations || {},
+        severity: parsed.severity || '',
+        redFlags: parsed.redFlags || [],
+        additionalNotes: parsed.additionalNotes || '',
+      });
+    } catch (error: any) {
+      console.error("Voice clinical extract error:", error);
+      res.status(500).json({ error: "Failed to extract clinical data from transcript" });
+    }
+  });
+
   // Clinical Bubble AI endpoint - returns structured clinical data for pain marker regions
   app.post("/api/physiogpt/clinical-bubble", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

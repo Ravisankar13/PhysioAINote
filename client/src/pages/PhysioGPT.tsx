@@ -422,6 +422,7 @@ export default function PhysioGPT() {
   const [voicePanelOpen, setVoicePanelOpen] = useState(true);
   const voiceRecorderRef = useRef<MediaRecorder | null>(null);
   const voiceStreamRef = useRef<MediaStream | null>(null);
+  const voiceSpeechRecRef = useRef<any>(null);
   const voiceTranscriptRef = useRef('');
   const painMarkersRef = useRef(painMarkers);
   painMarkersRef.current = painMarkers;
@@ -1342,7 +1343,46 @@ ${ddxList}`;
     });
   }, []);
 
+  const triggerVoiceExtraction = useCallback(async () => {
+    if (voiceExtractingRef.current) return;
+    const transcript = voiceTranscriptRef.current;
+    if (!transcript || transcript.trim().length < 10) return;
+
+    voiceExtractingRef.current = true;
+    setVoiceProcessing(true);
+    try {
+      const currentMarkers = painMarkersRef.current;
+      const currentFindings = voiceFindingsRef.current;
+      const extractRes = await fetch('/api/physiogpt/voice-clinical-extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript,
+          previousFindings: {
+            painLocations: currentMarkers.map(m => m.anatomicalLabel),
+            diagnoses: currentFindings.filter(f => f.type === 'diagnosis').map(f => f.label)
+          }
+        })
+      });
+      if (extractRes.ok) {
+        const extractData = await extractRes.json();
+        applyVoiceFindings(extractData);
+      }
+    } catch (err) {
+      console.error('Voice extraction error:', err);
+    } finally {
+      voiceExtractingRef.current = false;
+      setVoiceProcessing(false);
+    }
+  }, [applyVoiceFindings]);
+
   const startVoiceSession = useCallback(async () => {
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      toast({ title: "Not Supported", description: "Your browser doesn't support speech recognition. Please use Chrome or Edge.", variant: "destructive" });
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       voiceStreamRef.current = stream;
@@ -1352,68 +1392,67 @@ ${ddxList}`;
       setVoiceFindings([]);
       setVoicePanelOpen(true);
 
-      const recorder = new MediaRecorder(stream);
-      voiceRecorderRef.current = recorder;
+      const recognition = new SpeechRecognitionAPI();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
+      voiceSpeechRecRef.current = recognition;
 
-      recorder.ondataavailable = async (e) => {
-        if (e.data.size === 0) return;
+      let lastFinalLength = 0;
 
-        const formData = new FormData();
-        formData.append('audio', new Blob([e.data], { type: 'audio/webm' }), 'chunk.webm');
-
-        try {
-          const transcribeRes = await fetch('/api/transcribe-chunk', { method: 'POST', body: formData });
-          if (!transcribeRes.ok) return;
-          const { transcription } = await transcribeRes.json();
-          if (!transcription || !transcription.trim()) return;
-
-          voiceTranscriptRef.current += (voiceTranscriptRef.current ? ' ' : '') + transcription.trim();
-          setVoiceTranscript(voiceTranscriptRef.current);
-
-          if (voiceExtractingRef.current) return;
-          voiceExtractingRef.current = true;
-          setVoiceProcessing(true);
-          try {
-            const currentMarkers = painMarkersRef.current;
-            const currentFindings = voiceFindingsRef.current;
-            const extractRes = await fetch('/api/physiogpt/voice-clinical-extract', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                transcript: voiceTranscriptRef.current,
-                previousFindings: {
-                  painLocations: currentMarkers.map(m => m.anatomicalLabel),
-                  diagnoses: currentFindings.filter(f => f.type === 'diagnosis').map(f => f.label)
-                }
-              })
-            });
-            if (extractRes.ok) {
-              const extractData = await extractRes.json();
-              applyVoiceFindings(extractData);
-            }
-          } catch (err) {
-            console.error('Voice extraction error:', err);
-          } finally {
-            voiceExtractingRef.current = false;
-            setVoiceProcessing(false);
+      recognition.onresult = (event: any) => {
+        let finalText = '';
+        let interimText = '';
+        for (let i = 0; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalText += result[0].transcript + ' ';
+          } else {
+            interimText += result[0].transcript;
           }
-        } catch (err) {
-          console.error('Transcription error:', err);
+        }
+
+        const newTranscript = finalText.trim();
+        if (newTranscript) {
+          voiceTranscriptRef.current = newTranscript;
+          setVoiceTranscript(newTranscript + (interimText ? ' ' + interimText : ''));
+        } else if (interimText) {
+          setVoiceTranscript(voiceTranscriptRef.current + (voiceTranscriptRef.current ? ' ' : '') + interimText);
+        }
+
+        if (newTranscript.length > lastFinalLength + 30) {
+          lastFinalLength = newTranscript.length;
+          triggerVoiceExtraction();
         }
       };
 
-      recorder.start(5000);
+      recognition.onerror = (event: any) => {
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          console.error("Voice session speech recognition error:", event.error);
+        }
+      };
+
+      recognition.onend = () => {
+        if (voiceSpeechRecRef.current === recognition) {
+          try { recognition.start(); } catch {}
+        }
+      };
+
+      recognition.start();
       setVoiceSessionActive(true);
       toast({ title: "Voice Session Started", description: "Speak naturally — clinical findings will be extracted automatically." });
     } catch (error) {
       console.error('Mic access error:', error);
       toast({ title: "Microphone Access Denied", description: "Please allow microphone access to use voice extraction.", variant: "destructive" });
     }
-  }, [applyVoiceFindings, toast]);
+  }, [triggerVoiceExtraction, toast]);
 
   const stopVoiceSession = useCallback(() => {
-    if (voiceRecorderRef.current && voiceRecorderRef.current.state !== 'inactive') {
-      voiceRecorderRef.current.stop();
+    if (voiceSpeechRecRef.current) {
+      const rec = voiceSpeechRecRef.current;
+      voiceSpeechRecRef.current = null;
+      try { rec.stop(); } catch {}
     }
     if (voiceStreamRef.current) {
       voiceStreamRef.current.getTracks().forEach(t => t.stop());
@@ -1422,11 +1461,20 @@ ${ddxList}`;
     voiceStreamRef.current = null;
     voiceExtractingRef.current = false;
     setVoiceSessionActive(false);
+
+    if (voiceTranscriptRef.current.trim().length > 10) {
+      triggerVoiceExtraction();
+    }
+
     toast({ title: "Voice Session Ended", description: `Extracted ${voiceFindingsRef.current.length} findings from session.` });
-  }, [toast]);
+  }, [toast, triggerVoiceExtraction]);
 
   useEffect(() => {
     return () => {
+      if (voiceSpeechRecRef.current) {
+        try { voiceSpeechRecRef.current.stop(); } catch {}
+        voiceSpeechRecRef.current = null;
+      }
       if (voiceRecorderRef.current && voiceRecorderRef.current.state !== 'inactive') {
         voiceRecorderRef.current.stop();
       }

@@ -1641,17 +1641,6 @@ ${ddxList}`;
               </div>
             )}
             <div ref={skeletonContainerRef} className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
-            <div className="absolute top-3 left-3 z-20">
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-8 text-xs shadow-lg ${cameraMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={toggleCameraMode}
-              >
-                {cameraMode ? <CameraOff className="h-3.5 w-3.5 mr-1.5" /> : <Camera className="h-3.5 w-3.5 mr-1.5" />}
-                {cameraMode ? 'Stop Camera' : 'Camera'}
-              </Button>
-            </div>
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
               modelConfig={modelConfig as any}
@@ -4850,6 +4839,13 @@ ${ddxList}`;
           >
             {voiceSessionActive ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
             {voiceSessionActive ? 'Stop Voice' : 'Voice'}
+          </button>
+          <button
+            onClick={toggleCameraMode}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${cameraMode ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-black/70 hover:bg-black/80 text-white'}`}
+          >
+            {cameraMode ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
+            {cameraMode ? 'Stop Camera' : 'Camera'}
           </button>
         </div>
       )}

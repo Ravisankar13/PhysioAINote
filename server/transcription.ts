@@ -6,17 +6,12 @@ import FormData from "form-data";
 import { config } from 'dotenv';
 config();
 
-// For Whisper transcription, we MUST use the direct OpenAI API key
-// Replit AI Integrations do NOT support the /audio/transcriptions endpoint
-const directOpenAIKey = process.env.OPENAI_API_KEY;
-
-// For chat completions, prefer Replit AI Integrations if available
-const chatApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-const chatBaseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+const whisperApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const whisperBaseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || 'https://api.openai.com';
 
 const openai = new OpenAI({ 
-  apiKey: chatApiKey,
-  baseURL: chatBaseURL
+  apiKey: whisperApiKey,
+  baseURL: whisperBaseURL
 });
 
 // Helper function to implement sleep/delay
@@ -24,13 +19,12 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Use form-data package for Node.js multipart uploads to Whisper API
 async function callWhisperAPI(filePath: string): Promise<string> {
-  if (!directOpenAIKey) {
-    throw new Error('OPENAI_API_KEY not found');
+  if (!whisperApiKey) {
+    throw new Error('No OpenAI API key found for Whisper transcription');
   }
 
   const fileName = path.basename(filePath);
   
-  // Create FormData using the form-data package (Node.js compatible)
   const formData = new FormData();
   formData.append('file', fs.createReadStream(filePath), {
     filename: fileName,
@@ -40,16 +34,22 @@ async function callWhisperAPI(filePath: string): Promise<string> {
   formData.append('language', 'en');
   formData.append('response_format', 'json');
 
-  console.log('Calling OpenAI Whisper API via form-data...');
+  console.log('Calling Whisper API via form-data...');
   
-  // Use form-data's submit method which handles multipart properly
+  const parsedURL = new URL(whisperBaseURL);
+  const apiHost = parsedURL.hostname;
+  const apiPort = parsedURL.port ? parseInt(parsedURL.port) : (parsedURL.protocol === 'https:' ? 443 : 80);
+  const apiPath = (parsedURL.pathname === '/' ? '' : parsedURL.pathname) + '/v1/audio/transcriptions';
+  const apiProtocol = parsedURL.protocol as 'https:' | 'http:';
+
   return new Promise((resolve, reject) => {
     formData.submit({
-      host: 'api.openai.com',
-      path: '/v1/audio/transcriptions',
-      protocol: 'https:',
+      host: apiHost,
+      port: apiPort,
+      path: apiPath,
+      protocol: apiProtocol,
       headers: {
-        'Authorization': `Bearer ${directOpenAIKey}`,
+        'Authorization': `Bearer ${whisperApiKey}`,
       },
     }, (err, res) => {
       if (err) {
@@ -103,13 +103,12 @@ export async function transcribeAudio(filePath: string): Promise<string> {
     
     console.log(`Original audio file size: ${stats.size} bytes`);
     
-    // Verify we have OpenAI API key for Whisper
-    if (!directOpenAIKey) {
-      console.error('No direct OpenAI API key available for Whisper transcription');
-      throw new Error('OPENAI_API_KEY not found. Whisper transcription requires a direct OpenAI API key.');
+    if (!whisperApiKey) {
+      console.error('No OpenAI API key available for Whisper transcription');
+      throw new Error('No OpenAI API key found for Whisper transcription.');
     }
     
-    console.log('Using direct OpenAI Whisper API via native fetch');
+    console.log('Using Whisper API for transcription');
     
     // Set up retry parameters
     const maxRetries = 3;

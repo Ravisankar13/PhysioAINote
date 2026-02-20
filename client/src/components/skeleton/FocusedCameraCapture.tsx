@@ -6,10 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity } from 'lucide-react';
+import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
 import { convertMediaPipeTo3D, Posesmoother, Skeleton3DPose } from '@/utils/mediapipeTo3D';
+import { QRCodeSVG } from 'qrcode.react';
 
 export interface FocusedRegion {
   id: string;
@@ -209,6 +210,181 @@ export default function FocusedCameraCapture({
   const [showDetails, setShowDetails] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [computedAngles, setComputedAngles] = useState<Record<string, number>>({});
+
+  const [phoneMode, setPhoneMode] = useState(false);
+  const [phoneRoomId, setPhoneRoomId] = useState('');
+  const [phoneConnected, setPhoneConnected] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+  const [phoneWsConnected, setPhoneWsConnected] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const phoneWsRef = useRef<WebSocket | null>(null);
+  const phoneCanvasRef = useRef<HTMLCanvasElement>(null);
+  const latestPhoneFrameRef = useRef<string | null>(null);
+  const phoneFrameCountRef = useRef(0);
+  const [phoneFrameCount, setPhoneFrameCount] = useState(0);
+
+  const connectPhoneRelay = useCallback((roomId: string) => {
+    if (phoneWsRef.current) {
+      phoneWsRef.current.close();
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/phone-camera?room=${roomId}&role=desktop`);
+
+    ws.onopen = () => {
+      setPhoneWsConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'phone-connected') {
+          setPhoneConnected(true);
+        } else if (msg.type === 'phone-disconnected') {
+          setPhoneConnected(false);
+          latestPhoneFrameRef.current = null;
+        } else if (msg.type === 'frame' && msg.image) {
+          latestPhoneFrameRef.current = msg.image;
+          phoneFrameCountRef.current++;
+          if (phoneFrameCountRef.current % 5 === 0) {
+            setPhoneFrameCount(phoneFrameCountRef.current);
+          }
+
+          if (phoneCanvasRef.current) {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = phoneCanvasRef.current;
+              if (!canvas) return;
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+              }
+            };
+            img.src = msg.image;
+          }
+        }
+      } catch {}
+    };
+
+    ws.onclose = () => {
+      setPhoneWsConnected(false);
+      setPhoneConnected(false);
+    };
+
+    phoneWsRef.current = ws;
+  }, []);
+
+  const createPhoneRoom = useCallback(async () => {
+    try {
+      const res = await fetch('/api/phone-camera/create-room', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to create room');
+      const data = await res.json();
+      setPhoneRoomId(data.roomId);
+      setShowQR(true);
+      setPhoneMode(true);
+      connectPhoneRelay(data.roomId);
+    } catch (err: any) {
+      setError(err.message || 'Failed to create phone connection');
+    }
+  }, [connectPhoneRelay]);
+
+  const disconnectPhone = useCallback(() => {
+    if (phoneWsRef.current) {
+      phoneWsRef.current.close();
+      phoneWsRef.current = null;
+    }
+    setPhoneMode(false);
+    setPhoneRoomId('');
+    setPhoneConnected(false);
+    setShowQR(false);
+    setPhoneWsConnected(false);
+    latestPhoneFrameRef.current = null;
+    phoneFrameCountRef.current = 0;
+    setPhoneFrameCount(0);
+  }, []);
+
+  const capturePhoneFrameForAnalysis = useCallback(async () => {
+    if (!latestPhoneFrameRef.current || isAnalyzing) return;
+    if (Date.now() - lastAnalysisRef.current < 5000) return;
+
+    setIsAnalyzing(true);
+    lastAnalysisRef.current = Date.now();
+
+    try {
+      const response = await fetch('/api/physiogpt/focused-camera-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          image: latestPhoneFrameRef.current,
+          region: selectedRegion,
+          computedAngles: {},
+          cameraType: 'focused',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Analysis failed');
+      const data = await response.json();
+
+      const result: FocusedCameraResult = {
+        region: selectedRegion,
+        findings: data.findings || [],
+        jointAngles: data.jointAngles || {},
+        overallAssessment: data.overallAssessment || '',
+        suggestedMarkers: data.suggestedMarkers || [],
+        suggestedPostureAdjustments: data.suggestedPostureAdjustments || {},
+        timestamp: Date.now(),
+      };
+
+      setAnalysisResults(result);
+      setShowDetails(true);
+
+      if (onFocusedAnalysisComplete) {
+        onFocusedAnalysisComplete(result);
+      }
+    } catch (err: any) {
+      console.error('Phone frame analysis error:', err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [isAnalyzing, selectedRegion, onFocusedAnalysisComplete]);
+
+  useEffect(() => {
+    if (phoneMode && phoneConnected && autoAnalyze && selectedRegion.id !== 'full_body') {
+      const interval = setInterval(() => {
+        if (latestPhoneFrameRef.current && Date.now() - lastAnalysisRef.current > 8000) {
+          capturePhoneFrameForAnalysis();
+        }
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [phoneMode, phoneConnected, autoAnalyze, selectedRegion, capturePhoneFrameForAnalysis]);
+
+  useEffect(() => {
+    if (phoneWsRef.current && phoneWsRef.current.readyState === WebSocket.OPEN) {
+      phoneWsRef.current.send(JSON.stringify({ type: 'region-change', region: selectedRegion.id }));
+    }
+  }, [selectedRegion]);
+
+  const copyRoomLink = useCallback(() => {
+    const url = `${window.location.origin}/phone-camera/${phoneRoomId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [phoneRoomId]);
+
+  useEffect(() => {
+    return () => {
+      if (phoneWsRef.current) {
+        phoneWsRef.current.close();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (onRegionChange) {
@@ -606,7 +782,14 @@ export default function FocusedCameraCapture({
           </div>
         </div>
 
-        <Tabs value={cameraType} onValueChange={(v) => setCameraType(v as any)} className="w-full">
+        <Tabs value={phoneMode ? 'phone' : cameraType} onValueChange={(v) => {
+          if (v === 'phone') {
+            if (!phoneMode) createPhoneRoom();
+          } else {
+            if (phoneMode) disconnectPhone();
+            setCameraType(v as any);
+          }
+        }} className="w-full">
           <TabsList className="w-full h-7 bg-slate-800">
             <TabsTrigger value="full_body" className="text-xs flex-1 h-6">
               <User className="h-3 w-3 mr-1" />
@@ -616,10 +799,14 @@ export default function FocusedCameraCapture({
               <Crosshair className="h-3 w-3 mr-1" />
               Focused
             </TabsTrigger>
+            <TabsTrigger value="phone" className="text-xs flex-1 h-6">
+              <Smartphone className="h-3 w-3 mr-1" />
+              Phone
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {cameraType === 'focused' && (
+        {(cameraType === 'focused' || phoneMode) && (
           <div className="mt-2">
             <Select
               value={selectedRegion.id}
@@ -663,6 +850,56 @@ export default function FocusedCameraCapture({
           </div>
         )}
 
+        {phoneMode ? (
+          <div className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden flex-shrink-0">
+            {phoneConnected ? (
+              <>
+                <canvas ref={phoneCanvasRef} className="absolute inset-0 w-full h-full object-cover" />
+                <div className="absolute top-2 left-2 bg-black/60 rounded-lg px-2.5 py-1 flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-[11px] text-white">Phone Live</span>
+                  <span className="text-[10px] text-slate-400">{phoneFrameCount} frames</span>
+                </div>
+                {selectedRegion.id !== 'full_body' && (
+                  <div className="absolute top-2 right-2 bg-cyan-500/20 border border-cyan-500/50 rounded px-2 py-1">
+                    <span className="text-xs text-cyan-300 font-medium">{selectedRegion.icon} {selectedRegion.label}</span>
+                  </div>
+                )}
+              </>
+            ) : showQR && phoneRoomId ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 p-4">
+                <div className="bg-white p-3 rounded-xl mb-3">
+                  <QRCodeSVG
+                    value={`${window.location.origin}/phone-camera/${phoneRoomId}`}
+                    size={140}
+                    level="M"
+                  />
+                </div>
+                <p className="text-sm font-medium text-white mb-1">Scan with your phone</p>
+                <p className="text-[11px] text-slate-400 text-center mb-2">
+                  Open this QR code on your phone to use it as a remote camera
+                </p>
+                <div className="flex items-center gap-2 bg-slate-800 rounded-lg px-3 py-1.5 border border-slate-600">
+                  <span className="text-xs text-cyan-400 font-mono font-bold tracking-wider">{phoneRoomId}</span>
+                  <button onClick={copyRoomLink} className="text-slate-400 hover:text-white transition-colors">
+                    {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+                {phoneWsConnected && (
+                  <div className="flex items-center gap-1.5 mt-2 text-[11px] text-green-400">
+                    <Wifi className="h-3 w-3" />
+                    <span>Room ready, waiting for phone...</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                <p className="text-sm">Creating connection...</p>
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden flex-shrink-0">
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-0" playsInline muted />
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
@@ -699,7 +936,32 @@ export default function FocusedCameraCapture({
             </div>
           )}
         </div>
+        )}
 
+        {phoneMode ? (
+          <div className="flex items-center justify-between gap-2 flex-shrink-0">
+            {phoneConnected && (
+              <Button
+                size="sm"
+                className="h-8 text-xs bg-purple-600 hover:bg-purple-700"
+                onClick={capturePhoneFrameForAnalysis}
+                disabled={isAnalyzing || !latestPhoneFrameRef.current}
+              >
+                {isAnalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
+                AI Analyze
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs border-red-600 text-red-400 hover:bg-red-900/30"
+              onClick={disconnectPhone}
+            >
+              <X className="h-3 w-3 mr-1" />
+              Disconnect
+            </Button>
+          </div>
+        ) : (
         <div className="flex items-center justify-between gap-2 flex-shrink-0">
           <Button
             onClick={toggleCamera}
@@ -729,17 +991,20 @@ export default function FocusedCameraCapture({
             )}
           </div>
         </div>
+        )}
 
-        {cameraType === 'focused' && (
+        {(cameraType === 'focused' || phoneMode) && (
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="flex items-center gap-1.5">
               <Switch id="auto-analyze" checked={autoAnalyze} onCheckedChange={setAutoAnalyze} className="scale-75" />
               <Label htmlFor="auto-analyze" className="text-[11px] text-slate-400">Auto-analyze</Label>
             </div>
+            {!phoneMode && (
             <div className="flex items-center gap-1.5">
               <Switch id="mirror-cam" checked={mirrorVideo} onCheckedChange={setMirrorVideo} className="scale-75" />
               <Label htmlFor="mirror-cam" className="text-[11px] text-slate-400">Mirror</Label>
             </div>
+            )}
           </div>
         )}
 

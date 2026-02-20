@@ -9734,6 +9734,127 @@ Important:
 
   console.log('⚔️ Tournament WebSocket server started on /ws/tournaments');
 
+  // Phone Camera Relay WebSocket Server
+  const phoneCameraRooms = new Map<string, { desktop: WebSocket | null; phone: WebSocket | null; region: string; createdAt: number }>();
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [roomId, room] of phoneCameraRooms.entries()) {
+      if (now - room.createdAt > 3600000) {
+        if (room.desktop) room.desktop.close();
+        if (room.phone) room.phone.close();
+        phoneCameraRooms.delete(roomId);
+      }
+    }
+  }, 300000);
+
+  const phoneCameraWss = new WebSocketServer({ server: httpServer, path: '/ws/phone-camera' });
+
+  phoneCameraWss.on('connection', (ws: WebSocket, req) => {
+    const url = new URL(req.url!, `http://${req.headers.host}`);
+    const roomId = url.searchParams.get('room');
+    const role = url.searchParams.get('role');
+
+    if (!roomId || !role || !['desktop', 'phone'].includes(role)) {
+      ws.close(1008, 'Missing room or role parameter');
+      return;
+    }
+
+    if (!phoneCameraRooms.has(roomId) && role === 'phone') {
+      ws.close(1008, 'Room does not exist');
+      return;
+    }
+
+    if (!phoneCameraRooms.has(roomId)) {
+      phoneCameraRooms.set(roomId, { desktop: null, phone: null, region: 'full_body', createdAt: Date.now() });
+    }
+
+    const room = phoneCameraRooms.get(roomId)!;
+
+    if (role === 'desktop') {
+      if (room.desktop) room.desktop.close();
+      room.desktop = ws;
+      ws.send(JSON.stringify({ type: 'connected', role: 'desktop', roomId }));
+      if (room.phone) {
+        ws.send(JSON.stringify({ type: 'phone-connected' }));
+        room.phone.send(JSON.stringify({ type: 'desktop-connected' }));
+      }
+    } else {
+      if (room.phone) room.phone.close();
+      room.phone = ws;
+      ws.send(JSON.stringify({ type: 'connected', role: 'phone', roomId }));
+      if (room.desktop) {
+        ws.send(JSON.stringify({ type: 'desktop-connected' }));
+        room.desktop.send(JSON.stringify({ type: 'phone-connected' }));
+      }
+    }
+
+    ws.on('message', (data: any) => {
+      try {
+        const isBinary = data instanceof Buffer || data instanceof ArrayBuffer;
+        if (isBinary) {
+          if (role === 'phone' && room.desktop && room.desktop.readyState === WebSocket.OPEN) {
+            room.desktop.send(data);
+          }
+          return;
+        }
+        const msg = JSON.parse(data.toString());
+
+        if (msg.type === 'frame' && role === 'phone') {
+          if (room.desktop && room.desktop.readyState === WebSocket.OPEN) {
+            room.desktop.send(data.toString());
+          }
+        } else if (msg.type === 'region-change') {
+          room.region = msg.region || 'full_body';
+          const target = role === 'desktop' ? room.phone : room.desktop;
+          if (target && target.readyState === WebSocket.OPEN) {
+            target.send(JSON.stringify({ type: 'region-change', region: msg.region }));
+          }
+        } else if (msg.type === 'ping') {
+          ws.send(JSON.stringify({ type: 'pong' }));
+        } else {
+          const target = role === 'desktop' ? room.phone : room.desktop;
+          if (target && target.readyState === WebSocket.OPEN) {
+            target.send(data.toString());
+          }
+        }
+      } catch (e) {
+        // ignore malformed messages
+      }
+    });
+
+    ws.on('close', () => {
+      if (room.desktop === ws) {
+        room.desktop = null;
+        if (room.phone && room.phone.readyState === WebSocket.OPEN) {
+          room.phone.send(JSON.stringify({ type: 'desktop-disconnected' }));
+        }
+      } else if (room.phone === ws) {
+        room.phone = null;
+        if (room.desktop && room.desktop.readyState === WebSocket.OPEN) {
+          room.desktop.send(JSON.stringify({ type: 'phone-disconnected' }));
+        }
+      }
+      if (!room.desktop && !room.phone) {
+        phoneCameraRooms.delete(roomId);
+      }
+    });
+  });
+
+  app.post("/api/phone-camera/create-room", ensureAuthenticated, (req, res) => {
+    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    phoneCameraRooms.set(roomId, { desktop: null, phone: null, region: 'full_body', createdAt: Date.now() });
+    res.json({ roomId });
+  });
+
+  app.get("/api/phone-camera/room/:roomId", (req, res) => {
+    const room = phoneCameraRooms.get(req.params.roomId);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    res.json({ exists: true, hasPhone: !!room.phone, hasDesktop: !!room.desktop, region: room.region });
+  });
+
+  console.log('📱 Phone Camera Relay WebSocket server started on /ws/phone-camera');
+
   // Competition System Routes
   
   // Get active competitions

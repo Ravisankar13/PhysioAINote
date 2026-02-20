@@ -64,6 +64,7 @@ import GameCompetitionPage from "@/pages/GameCompetitionPage";
 import ExerciseProgramBuilder from "@/pages/ExerciseProgramBuilder";
 import MovementAnalysis from "@/pages/MovementAnalysis";
 import CameraTest from "@/pages/CameraTest";
+import PhoneCameraPage from "@/pages/PhoneCameraPage";
 
 import TournamentWaitingRoom from "@/pages/TournamentWaitingRoom";
 import TournamentMatchPage from "@/pages/TournamentMatchPage";
@@ -257,7 +258,12 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
-            <Router />
+            <Switch>
+              <Route path="/phone-camera/:roomId" component={PhoneCameraPage} />
+              <Route>
+                <Router />
+              </Route>
+            </Switch>
           </TooltipProvider>
         </AuthProvider>
       </ThemeProvider>

@@ -73,7 +73,7 @@ import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
-import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
+import FocusedCameraCapture, { type FocusedCameraResult, type FocusedRegion, FOCUSED_REGIONS } from "@/components/skeleton/FocusedCameraCapture";
 import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
 import ShoulderAssessmentPanel from "@/components/shoulder/ShoulderAssessmentPanel";
@@ -394,6 +394,8 @@ export default function PhysioGPT() {
   const [poseMode, setPoseMode] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
   const [cameraPoseActive, setCameraPoseActive] = useState(false);
+  const [focusedCameraResult, setFocusedCameraResult] = useState<FocusedCameraResult | null>(null);
+  const [focusedRegion, setFocusedRegion] = useState<FocusedRegion>(FOCUSED_REGIONS[0]);
   const [showShoulderAssessment, setShowShoulderAssessment] = useState(false);
   const [shoulderAssessmentSide, setShoulderAssessmentSide] = useState<'left' | 'right'>('right');
   const [clinicalBubbleMarker, setClinicalBubbleMarker] = useState<PainMarker | null>(null);
@@ -1141,6 +1143,105 @@ ${ddxList}`;
     toast({ title: "Pose Captured", description: "Patient posture has been captured on the skeleton. You can now analyze it or add pain markers." });
   }, [toast]);
 
+  const pendingCameraAnalysisRef = useRef<FocusedCameraResult | null>(null);
+
+  const handleFocusedAnalysisComplete = useCallback((result: FocusedCameraResult) => {
+    setFocusedCameraResult(result);
+    pendingCameraAnalysisRef.current = result;
+
+    const REGION_BONE_POSITIONS: Record<string, { bone: string; position: { x: number; y: number; z: number } }> = {
+      'right ankle': { bone: 'Ankle_R', position: { x: -0.65, y: 0.49, z: -0.15 } },
+      'left ankle': { bone: 'Ankle_L', position: { x: 0.65, y: 0.49, z: -0.15 } },
+      'right knee': { bone: 'Knee_R', position: { x: -0.55, y: 2.6, z: 0.1 } },
+      'left knee': { bone: 'Knee_L', position: { x: 0.55, y: 2.6, z: 0.1 } },
+      'right hip': { bone: 'Hip_R', position: { x: -0.5, y: 4.8, z: 0 } },
+      'left hip': { bone: 'Hip_L', position: { x: 0.5, y: 4.8, z: 0 } },
+      'right shoulder': { bone: 'Shoulder_R', position: { x: -1.2, y: 8.2, z: 0 } },
+      'left shoulder': { bone: 'Shoulder_L', position: { x: 1.2, y: 8.2, z: 0 } },
+      'right elbow': { bone: 'Elbow_R', position: { x: -1.8, y: 7.0, z: 0 } },
+      'left elbow': { bone: 'Elbow_L', position: { x: 1.8, y: 7.0, z: 0 } },
+      'right wrist': { bone: 'Wrist_R', position: { x: -2.2, y: 5.8, z: 0 } },
+      'left wrist': { bone: 'Wrist_L', position: { x: 2.2, y: 5.8, z: 0 } },
+      'neck': { bone: 'Neck_M', position: { x: 0, y: 8.8, z: 0 } },
+      'cervical': { bone: 'Neck_M', position: { x: 0, y: 8.8, z: 0 } },
+      'lumbar': { bone: 'Spine1_M', position: { x: 0, y: 5.5, z: -0.2 } },
+      'lower back': { bone: 'Spine1_M', position: { x: 0, y: 5.5, z: -0.2 } },
+      'low back': { bone: 'Spine1_M', position: { x: 0, y: 5.5, z: -0.2 } },
+      'thoracic': { bone: 'Chest_M', position: { x: 0, y: 7.2, z: -0.1 } },
+      'upper back': { bone: 'Chest_M', position: { x: 0, y: 7.2, z: -0.1 } },
+      'pelvis': { bone: 'Root_M', position: { x: 0, y: 4.8, z: 0 } },
+      'sacroiliac': { bone: 'Root_M', position: { x: 0.2, y: 4.6, z: -0.2 } },
+      'posterior knee': { bone: 'Knee_R', position: { x: -0.55, y: 2.6, z: -0.3 } },
+      'popliteal': { bone: 'Knee_R', position: { x: -0.55, y: 2.6, z: -0.3 } },
+      'patella': { bone: 'Knee_R', position: { x: -0.55, y: 2.7, z: 0.3 } },
+      'achilles': { bone: 'Ankle_R', position: { x: -0.65, y: 0.8, z: -0.2 } },
+      'calf': { bone: 'Knee_R', position: { x: -0.55, y: 1.8, z: -0.15 } },
+      'quadriceps': { bone: 'HipPart2_R', position: { x: -0.5, y: 3.5, z: 0.2 } },
+      'hamstring': { bone: 'HipPart2_R', position: { x: -0.5, y: 3.5, z: -0.2 } },
+    };
+
+    if (result.suggestedMarkers && result.suggestedMarkers.length > 0) {
+      const symptomTypeMap: Record<string, SymptomType> = {
+        pain: 'pain', swelling: 'swelling', stiffness: 'stiffness',
+        weakness: 'weakness', numbness: 'numbness', instability: 'instability',
+        burning: 'burning', tightness: 'tightness', spasm: 'spasm',
+      };
+
+      const newMarkers: PainMarker[] = result.suggestedMarkers.map((sm, idx) => {
+        const regionLower = sm.region.toLowerCase();
+        let nearestBone = 'Root_M';
+        let position = { x: 0, y: 5, z: 0 };
+        for (const [key, mapping] of Object.entries(REGION_BONE_POSITIONS)) {
+          if (regionLower.includes(key)) {
+            nearestBone = mapping.bone;
+            position = { ...mapping.position };
+            break;
+          }
+        }
+        const symptomType = symptomTypeMap[sm.symptomType] || 'pain';
+        return {
+          id: `cam_${Date.now()}_${idx}`,
+          position,
+          nearestBone,
+          anatomicalLabel: sm.region,
+          type: 'point' as PainMarkerType,
+          symptomType,
+          description: `[Camera] ${sm.description}`,
+        };
+      });
+
+      if (newMarkers.length > 0) {
+        setPainMarkers(prev => [...prev, ...newMarkers]);
+        toast({
+          title: "Camera Findings Mapped",
+          description: `${newMarkers.length} finding(s) auto-placed on skeleton from camera analysis.`,
+        });
+      }
+    }
+
+    if (result.suggestedPostureAdjustments && Object.keys(result.suggestedPostureAdjustments).length > 0) {
+      setModelConfig(prev => {
+        const updated = { ...prev };
+        for (const [key, value] of Object.entries(result.suggestedPostureAdjustments)) {
+          const parts = key.split('.');
+          if (parts.length === 2) {
+            const [joint, param] = parts;
+            if ((updated as any)[joint]) {
+              (updated as any)[joint] = { ...(updated as any)[joint], [param]: value };
+            }
+          }
+        }
+        return updated;
+      });
+    }
+
+    const cameraContext = `CAMERA ANALYSIS - ${result.region.label}:\n${result.overallAssessment}\n\nFindings:\n${result.findings.map((f, i) => `${i+1}. [${f.type}] ${f.region}: ${f.description} (${f.severity}, confidence: ${Math.round(f.confidence * 100)}%)`).join('\n')}`;
+    subjectiveHistoryRef.current = subjectiveHistoryRef.current
+      ? `${subjectiveHistoryRef.current}\n\n${cameraContext}`
+      : cameraContext;
+    lastReasoningTriggerRef.current = '';
+  }, [toast]);
+
   const handleAnalyzeSkeleton = useCallback(() => {
     const sections: string[] = [];
 
@@ -1702,6 +1803,13 @@ ${ddxList}`;
     };
   }, [painMarkers, modelConfig, triggerClinicalReasoningAnalysis, voiceSessionActive]);
 
+  useEffect(() => {
+    if (pendingCameraAnalysisRef.current && focusedCameraResult) {
+      pendingCameraAnalysisRef.current = null;
+      triggerClinicalReasoningAnalysis(true);
+    }
+  }, [focusedCameraResult, triggerClinicalReasoningAnalysis]);
+
   const handleSubjectiveHistorySubmit = useCallback(() => {
     subjectiveHistoryRef.current = subjectiveHistoryInput;
     lastReasoningTriggerRef.current = '';
@@ -1844,10 +1952,12 @@ ${ddxList}`;
       <div className="h-full w-full relative flex">
             {cameraMode && (
               <div className="w-[40%] h-full flex-shrink-0 relative border-r border-gray-700">
-                <CameraPoseCapture
+                <FocusedCameraCapture
                   onPoseUpdate={handleCameraPoseUpdate}
                   isActive={cameraMode}
-                  className="h-full border-0 rounded-none [&_.aspect-video]:!aspect-auto [&_.aspect-video]:!h-full"
+                  onFocusedAnalysisComplete={handleFocusedAnalysisComplete}
+                  onRegionChange={(region) => setFocusedRegion(region)}
+                  className="h-full border-0 rounded-none"
                 />
                 {cameraPoseActive && (
                   <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-10">

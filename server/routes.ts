@@ -6334,6 +6334,107 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/physiogpt/focused-camera-analyze", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { image, region, computedAngles, cameraType } = req.body;
+      if (!image || !region) {
+        return res.status(400).json({ error: "Image and region are required" });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const openai = new OpenAI({ apiKey, baseURL });
+
+      const anglesContext = computedAngles && Object.keys(computedAngles).length > 0
+        ? `\n\nMEASURED JOINT ANGLES FROM POSE DETECTION:\n${Object.entries(computedAngles).map(([k, v]) => `- ${k}: ${v}°`).join('\n')}`
+        : '';
+
+      const prompt = `You are an expert musculoskeletal physiotherapist analyzing a clinical camera image of a patient's ${region.label} (${region.description}).
+
+FOCUSED REGION: ${region.label}
+CLINICAL FOCUS AREAS: ${region.clinicalFocus.join(', ')}
+${anglesContext}
+
+Analyze the image carefully for:
+1. VISIBLE CLINICAL SIGNS: swelling, bruising, skin changes, deformity, muscle wasting, erythema
+2. ALIGNMENT: valgus/varus, rotation, tilt, shift deviations
+3. POSTURE/POSITIONING: how the region is held/positioned, guarding patterns
+4. MOVEMENT QUALITY: if movement is visible, assess quality, compensations
+5. COMPARATIVE ASSESSMENT: bilateral symmetry if both sides visible
+
+Return ONLY valid JSON:
+{
+  "findings": [
+    {
+      "type": "swelling|alignment|movement|rom|skin|deformity|muscle|gait|posture",
+      "region": "Specific anatomical region",
+      "description": "Clear clinical description",
+      "severity": "mild|moderate|severe",
+      "confidence": 0.8,
+      "clinicalSignificance": "Why this matters clinically",
+      "suggestedActions": ["Assessment or treatment action"]
+    }
+  ],
+  "jointAngles": {},
+  "overallAssessment": "Brief overall clinical impression of what the camera shows",
+  "suggestedMarkers": [
+    {
+      "region": "Anatomical region name for marker",
+      "symptomType": "pain|swelling|stiffness|weakness|numbness|instability",
+      "description": "Why this marker should be placed"
+    }
+  ],
+  "suggestedPostureAdjustments": {}
+}
+
+IMPORTANT:
+- Only report what you can actually observe in the image
+- Be honest about confidence levels
+- If the image quality is poor or region is unclear, say so
+- Do not fabricate findings - if nothing abnormal is visible, report normal findings
+- Focus on the ${region.label} region specifically`;
+
+      const messages: any[] = [
+        { role: "user", content: [
+          { type: "text", text: "Analyze this clinical image of the patient and provide structured findings." },
+          { type: "image_url", image_url: { url: image, detail: "high" } }
+        ]}
+      ];
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: prompt },
+          ...messages
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        max_tokens: 3000,
+      });
+
+      const content = completion.choices[0]?.message?.content || '{}';
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(content);
+      } catch (parseErr) {
+        console.error("Failed to parse focused camera response:", content?.substring(0, 200));
+        parsed = { findings: [], overallAssessment: "Analysis completed but response format was unexpected. Please try again." };
+      }
+
+      res.json({
+        findings: Array.isArray(parsed.findings) ? parsed.findings : [],
+        jointAngles: parsed.jointAngles && typeof parsed.jointAngles === 'object' ? parsed.jointAngles : {},
+        overallAssessment: typeof parsed.overallAssessment === 'string' ? parsed.overallAssessment : '',
+        suggestedMarkers: Array.isArray(parsed.suggestedMarkers) ? parsed.suggestedMarkers : [],
+        suggestedPostureAdjustments: parsed.suggestedPostureAdjustments && typeof parsed.suggestedPostureAdjustments === 'object' ? parsed.suggestedPostureAdjustments : {},
+      });
+    } catch (error: any) {
+      console.error("Focused camera analyze error:", error);
+      res.status(500).json({ error: "Failed to analyze camera image", details: error.message || "Unknown error" });
+    }
+  });
+
   // Clinical Bubble AI endpoint - returns structured clinical data for pain marker regions
   app.post("/api/physiogpt/clinical-bubble", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

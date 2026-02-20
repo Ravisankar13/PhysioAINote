@@ -1338,11 +1338,12 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   ],
   
   // === ELBOW ===
-  'leftElbow.flexion': [{ boneName: 'Elbow_L', axis: 'x', scale: -1 }],
-  'leftElbow.pronation': [{ boneName: 'Elbow_L', axis: 'y', scale: 1 }],
+  // Verified axes: Y = flexion/extension (bending), X = pronation/supination (forearm rotation)
+  'leftElbow.flexion': [{ boneName: 'Elbow_L', axis: 'y', scale: 1 }],
+  'leftElbow.pronation': [{ boneName: 'Elbow_L', axis: 'x', scale: -1 }],
   'leftElbow.carryingAngle': [{ boneName: 'Elbow_L', axis: 'z', scale: -1 }], // Cubitus valgus/varus
-  'rightElbow.flexion': [{ boneName: 'Elbow_R', axis: 'x', scale: -1 }],
-  'rightElbow.pronation': [{ boneName: 'Elbow_R', axis: 'y', scale: -1 }],
+  'rightElbow.flexion': [{ boneName: 'Elbow_R', axis: 'y', scale: -1 }],
+  'rightElbow.pronation': [{ boneName: 'Elbow_R', axis: 'x', scale: -1 }],
   'rightElbow.carryingAngle': [{ boneName: 'Elbow_R', axis: 'z', scale: 1 }], // Cubitus valgus/varus
   
   // === WRIST ===
@@ -1525,8 +1526,8 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'ShoulderPart1_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
   'Shoulder_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
   'ShoulderPart1_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'Elbow_L': { configKey: 'leftElbow.flexion', label: 'L Elbow Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
-  'Elbow_R': { configKey: 'rightElbow.flexion', label: 'R Elbow Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
+  'Elbow_L': { configKey: 'leftElbow.flexion', label: 'L Elbow Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
+  'Elbow_R': { configKey: 'rightElbow.flexion', label: 'R Elbow Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
   'Wrist_L': { configKey: 'leftWrist.flexion', label: 'L Wrist Flexion', axis: 'x', scale: 1, minValue: -80, maxValue: 80, sensitivity: 0.3 },
   'Wrist_R': { configKey: 'rightWrist.flexion', label: 'R Wrist Flexion', axis: 'x', scale: 1, minValue: -80, maxValue: 80, sensitivity: 0.3 },
   'Root_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },

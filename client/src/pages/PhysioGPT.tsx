@@ -3577,12 +3577,62 @@ ${ddxList}`;
             )}
 
             {/* Skeleton controls bar */}
-            <div className="absolute bottom-2 left-2 flex gap-1 z-10">
+            <div className="absolute bottom-2 left-2 flex flex-col gap-1 z-10">
+              {painMarkerMode && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <div className="flex items-center bg-red-500/90 rounded-md overflow-hidden h-7">
+                    {([
+                      { type: 'point' as PainMarkerType, icon: '•', tip: 'Point' },
+                      { type: 'area' as PainMarkerType, icon: '◉', tip: 'Area' },
+                      { type: 'referred' as PainMarkerType, icon: '→', tip: 'Referred' },
+                      { type: 'line' as PainMarkerType, icon: '⁓', tip: 'Line' },
+                      { type: 'paint' as PainMarkerType, icon: '✎', tip: 'Paint' },
+                    ]).map(({ type, icon, tip }) => (
+                      <button
+                        key={type}
+                        title={tip}
+                        className={`px-2 h-full text-xs font-bold transition-colors ${
+                          activePainMarkerType === type
+                            ? 'bg-white text-red-600'
+                            : 'text-white/80 hover:text-white hover:bg-red-600'
+                        }`}
+                        onClick={() => {
+                          setActivePainMarkerType(type);
+                          const tips: Record<PainMarkerType, string> = {
+                            point: "Click to place a point marker. Drag to reposition.",
+                            area: "Click and drag to draw a pain area.",
+                            referred: "Click origin, then click referral target.",
+                            line: "Click to place points along path. Double-click to finish.",
+                            paint: "Click and drag to free-draw symptom areas.",
+                          };
+                          toast({ title: `${tip} Mode`, description: tips[type] });
+                        }}
+                      >
+                        <span className="text-sm">{icon}</span>
+                        <span className="ml-0.5 text-[10px]">{tip}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <select
+                    value={activeSymptomType}
+                    onChange={(e) => setActiveSymptomType(e.target.value as SymptomType)}
+                    className="h-7 text-xs bg-gray-800/90 text-gray-200 border border-gray-600/50 rounded-md px-1.5 cursor-pointer max-w-[140px]"
+                    title="Symptom Type"
+                  >
+                    {Object.entries(SYMPTOM_TYPES).map(([key, info]) => (
+                      <option key={key} value={key} style={{ color: info.hexColor }}>
+                        {info.icon} {info.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="flex gap-1">
               <div className="relative flex items-center">
                 <Button
                   variant="secondary"
                   size="sm"
-                  className={`h-7 text-xs shadow-sm rounded-r-none ${painMarkerMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                  className={`h-7 text-xs shadow-sm ${painMarkerMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                   onClick={() => {
                     const newMode = !painMarkerMode;
                     setPainMarkerMode(newMode);
@@ -3607,54 +3657,6 @@ ${ddxList}`;
                   <MapPin className="h-3 w-3 mr-1" />
                   {painMarkerMode ? 'Marking...' : 'Mark Pain'}
                 </Button>
-                {painMarkerMode && (
-                  <>
-                    <div className="flex items-center bg-red-500/90 rounded-r-md overflow-hidden h-7">
-                      {([
-                        { type: 'point' as PainMarkerType, icon: '•', tip: 'Point' },
-                        { type: 'area' as PainMarkerType, icon: '◉', tip: 'Area' },
-                        { type: 'referred' as PainMarkerType, icon: '→', tip: 'Referred' },
-                        { type: 'line' as PainMarkerType, icon: '⁓', tip: 'Line' },
-                        { type: 'paint' as PainMarkerType, icon: '✎', tip: 'Paint' },
-                      ]).map(({ type, icon, tip }) => (
-                        <button
-                          key={type}
-                          title={tip}
-                          className={`px-1.5 h-full text-xs font-bold transition-colors ${
-                            activePainMarkerType === type
-                              ? 'bg-white text-red-600'
-                              : 'text-white/80 hover:text-white hover:bg-red-600'
-                          }`}
-                          onClick={() => {
-                            setActivePainMarkerType(type);
-                            const tips: Record<PainMarkerType, string> = {
-                              point: "Click to place a point marker. Drag to reposition.",
-                              area: "Click and drag to draw a pain area.",
-                              referred: "Click origin, then click referral target.",
-                              line: "Click to place points along path. Double-click to finish.",
-                              paint: "Click and drag to free-draw symptom areas.",
-                            };
-                            toast({ title: `${tip} Pain`, description: tips[type] });
-                          }}
-                        >
-                          {icon}
-                        </button>
-                      ))}
-                    </div>
-                    <select
-                      value={activeSymptomType}
-                      onChange={(e) => setActiveSymptomType(e.target.value as SymptomType)}
-                      className="h-7 text-xs bg-gray-800/90 text-gray-200 border border-gray-600/50 rounded-md px-1.5 cursor-pointer"
-                      title="Symptom Type"
-                    >
-                      {Object.entries(SYMPTOM_TYPES).map(([key, info]) => (
-                        <option key={key} value={key} style={{ color: info.hexColor }}>
-                          {info.icon} {info.label}
-                        </option>
-                      ))}
-                    </select>
-                  </>
-                )}
               </div>
               <Button
                 variant="secondary"
@@ -3818,6 +3820,7 @@ ${ddxList}`;
                 <Scan className="h-3 w-3 mr-1" />
                 Analyze Skeleton
               </Button>
+              </div>
             </div>
 
             {showShoulderAssessment && (

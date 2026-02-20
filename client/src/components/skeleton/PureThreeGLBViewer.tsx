@@ -1401,9 +1401,9 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'NeckPart2_M', axis: 'x', scale: 0.2 },
   ],
   'spine.thoracicKyphosis': [
-    { boneName: 'Chest_M', axis: 'x', scale: 0.3 },
-    { boneName: 'Spine1Part2_M', axis: 'x', scale: 0.2 },
-    { boneName: 'Spine1Part1_M', axis: 'x', scale: 0.2 },
+    { boneName: 'Chest_M', axis: 'z', scale: 0.3 },
+    { boneName: 'Spine1Part2_M', axis: 'z', scale: 0.2 },
+    { boneName: 'Spine1Part1_M', axis: 'z', scale: 0.2 },
   ],
   'spine.lumbarLordosis': [
     { boneName: 'Spine1_M', axis: 'z', scale: -0.3 },
@@ -1414,9 +1414,9 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'RootPart1_M', axis: 'y', scale: 0.15 },
     { boneName: 'RootPart2_M', axis: 'y', scale: 0.2 },
     { boneName: 'Spine1_M', axis: 'y', scale: 0.15 },
-    { boneName: 'Spine1Part1_M', axis: 'z', scale: -0.15 },
-    { boneName: 'Spine1Part2_M', axis: 'z', scale: -0.2 },
-    { boneName: 'Chest_M', axis: 'z', scale: -0.15 },
+    { boneName: 'Spine1Part1_M', axis: 'y', scale: -0.15 },
+    { boneName: 'Spine1Part2_M', axis: 'y', scale: -0.2 },
+    { boneName: 'Chest_M', axis: 'y', scale: -0.15 },
   ],
   'spine.cervicalRotation': [
     { boneName: 'Neck_M', axis: 'y', scale: 0.3 },
@@ -1429,9 +1429,9 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'NeckPart2_M', axis: 'z', scale: 0.2 },
   ],
   'spine.thoracicRotation': [
-    { boneName: 'Chest_M', axis: 'y', scale: 0.2 },
-    { boneName: 'Spine1Part2_M', axis: 'y', scale: 0.15 },
-    { boneName: 'Spine1Part1_M', axis: 'y', scale: 0.15 },
+    { boneName: 'Chest_M', axis: 'x', scale: 0.2 },
+    { boneName: 'Spine1Part2_M', axis: 'x', scale: 0.15 },
+    { boneName: 'Spine1Part1_M', axis: 'x', scale: 0.15 },
   ],
   'spine.lumbarRotation': [
     { boneName: 'Spine1_M', axis: 'x', scale: 0.2 },
@@ -1444,7 +1444,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Spine1_M', axis: 'z', scale: 0.12 },
     { boneName: 'Spine1Part1_M', axis: 'z', scale: 0.1 },
     { boneName: 'Spine1Part2_M', axis: 'z', scale: 0.08 },
-    { boneName: 'Chest_M', axis: 'x', scale: 0.05 },
+    { boneName: 'Chest_M', axis: 'z', scale: 0.05 },
   ],
   'spine.lateralFlexion': [
     { boneName: 'RootPart1_M', axis: 'y', scale: 0.12 },
@@ -1452,7 +1452,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Spine1_M', axis: 'y', scale: 0.1 },
     { boneName: 'Spine1Part1_M', axis: 'y', scale: 0.08 },
     { boneName: 'Spine1Part2_M', axis: 'y', scale: 0.06 },
-    { boneName: 'Chest_M', axis: 'z', scale: 0.04 },
+    { boneName: 'Chest_M', axis: 'y', scale: 0.04 },
   ],
   'spine.lumbarScoliosis': [
     { boneName: 'RootPart1_M', axis: 'y', scale: 0.15 },
@@ -1460,9 +1460,9 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Spine1_M', axis: 'y', scale: 0.15 },
   ],
   'spine.thoracicScoliosis': [
-    { boneName: 'Spine1Part1_M', axis: 'z', scale: 0.15 },
-    { boneName: 'Spine1Part2_M', axis: 'z', scale: 0.2 },
-    { boneName: 'Chest_M', axis: 'z', scale: 0.15 },
+    { boneName: 'Spine1Part1_M', axis: 'y', scale: 0.15 },
+    { boneName: 'Spine1Part2_M', axis: 'y', scale: 0.2 },
+    { boneName: 'Chest_M', axis: 'y', scale: 0.15 },
   ],
   'spine.cervicalScoliosis': [
     { boneName: 'Neck_M', axis: 'z', scale: 0.2 },
@@ -1536,8 +1536,8 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'RootPart2_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
   'Spine1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'z', scale: -1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
   'Spine1Part1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'z', scale: -1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
-  'Spine1Part2_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'x', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
-  'Chest_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'x', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Spine1Part2_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'z', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
+  'Chest_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'z', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
   'Neck_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
   'NeckPart1_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
   'NeckPart2_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
@@ -4313,7 +4313,7 @@ export default function PureThreeGLBViewer({
     scoliosisThoracicMappings.forEach(({ boneName, scale }) => {
       if (boneRotations[boneName]) {
         const angleInRadians = (derivedScoliosis * Math.PI) / 180;
-        boneRotations[boneName].z += angleInRadians * scale;
+        boneRotations[boneName].y += angleInRadians * scale;
       }
     });
     

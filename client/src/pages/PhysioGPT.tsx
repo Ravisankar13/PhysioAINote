@@ -428,6 +428,7 @@ export default function PhysioGPT() {
   const [clinicalReasoningData, setClinicalReasoningData] = useState<ClinicalReasoningData | null>(null);
   const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
   const [clinicalReasoningProcessing, setClinicalReasoningProcessing] = useState(false);
+  const [clinicalReasoningPaused, setClinicalReasoningPaused] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1703,6 +1704,7 @@ ${ddxList}`;
 
   const triggerClinicalReasoningAnalysis = useCallback(async (forceRefresh = false) => {
     if (clinicalReasoningProcessing) return;
+    if (clinicalReasoningPaused) return;
 
     const markerData = painMarkersRef.current.map(pm => ({
       label: pm.anatomicalLabel || pm.nearestBone,
@@ -1779,7 +1781,7 @@ ${ddxList}`;
     } finally {
       setClinicalReasoningProcessing(false);
     }
-  }, [clinicalReasoningProcessing, modelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations]);
+  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations]);
 
   useEffect(() => {
     const hasPostureChanges = Object.entries(modelConfig).some(([key, val]: [string, any]) => {
@@ -5305,8 +5307,10 @@ ${ddxList}`;
         data={clinicalReasoningData}
         isProcessing={voiceProcessing || clinicalReasoningProcessing}
         isOpen={clinicalReasoningOpen}
+        isPaused={clinicalReasoningPaused}
         onToggle={() => setClinicalReasoningOpen(!clinicalReasoningOpen)}
         onClose={() => setClinicalReasoningOpen(false)}
+        onPauseToggle={() => setClinicalReasoningPaused(prev => !prev)}
         subjectiveHistory={subjectiveHistoryInput}
         onSubjectiveHistoryChange={setSubjectiveHistoryInput}
         onSubjectiveHistorySubmit={handleSubjectiveHistorySubmit}

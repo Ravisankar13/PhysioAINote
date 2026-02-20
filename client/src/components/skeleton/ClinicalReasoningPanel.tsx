@@ -26,6 +26,8 @@ import {
   Crosshair,
   ArrowRight,
   ArrowDownRight,
+  Pause,
+  Play,
 } from "lucide-react";
 
 export interface ClinicalHypothesis {
@@ -151,8 +153,10 @@ interface ClinicalReasoningPanelProps {
   data: ClinicalReasoningData | null;
   isProcessing: boolean;
   isOpen: boolean;
+  isPaused: boolean;
   onToggle: () => void;
   onClose: () => void;
+  onPauseToggle: () => void;
   subjectiveHistory: string;
   onSubjectiveHistoryChange: (text: string) => void;
   onSubjectiveHistorySubmit: () => void;
@@ -315,8 +319,10 @@ export default function ClinicalReasoningPanel({
   data,
   isProcessing,
   isOpen,
+  isPaused,
   onToggle,
   onClose,
+  onPauseToggle,
   subjectiveHistory,
   onSubjectiveHistoryChange,
   onSubjectiveHistorySubmit,
@@ -384,12 +390,25 @@ export default function ClinicalReasoningPanel({
             </div>
           </div>
           <div className="flex items-center gap-1">
-            {isProcessing && (
+            {isPaused && (
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+                <Pause className="h-2.5 w-2.5 text-amber-400" />
+                <span className="text-[9px] text-amber-400">Paused</span>
+              </div>
+            )}
+            {isProcessing && !isPaused && (
               <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
                 <Loader2 className="h-2.5 w-2.5 animate-spin text-cyan-400" />
                 <span className="text-[9px] text-cyan-400">Analyzing</span>
               </div>
             )}
+            <button
+              onClick={onPauseToggle}
+              className={`p-1 rounded hover:bg-white/10 transition-colors ${isPaused ? 'text-amber-400 hover:text-amber-300' : 'text-gray-500 hover:text-white'}`}
+              title={isPaused ? 'Resume AI analysis' : 'Pause AI analysis'}
+            >
+              {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+            </button>
             <button
               onClick={onClose}
               className="p-1 rounded hover:bg-white/10 text-gray-500 hover:text-white transition-colors"

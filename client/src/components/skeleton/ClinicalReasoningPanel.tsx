@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Brain,
   AlertTriangle,
@@ -15,6 +15,14 @@ import {
   X,
   Sparkles,
   Zap,
+  Send,
+  Dumbbell,
+  Hand,
+  Clock,
+  ChevronRight,
+  FileText,
+  Home,
+  AlertCircle,
 } from "lucide-react";
 
 export interface ClinicalHypothesis {
@@ -58,6 +66,54 @@ export interface ReasoningStep {
   isNew?: boolean;
 }
 
+export interface ManualTherapyTechnique {
+  technique: string;
+  target: string;
+  dosage: string;
+  reasoning: string;
+  precautions?: string[];
+}
+
+export interface ExercisePrescription {
+  name: string;
+  target: string;
+  dosage: string;
+  progression: string;
+  reasoning: string;
+}
+
+export interface TreatmentPhase {
+  name: string;
+  timeframe: string;
+  goals: string[];
+  manualTherapy: ManualTherapyTechnique[];
+  exercises: ExercisePrescription[];
+}
+
+export interface RootCauseTreatment {
+  primaryCause: string;
+  contributingFactors: string[];
+  targetedInterventions: {
+    intervention: string;
+    target: string;
+    reasoning: string;
+    frequency: string;
+  }[];
+}
+
+export interface TreatmentPlan {
+  phases: TreatmentPhase[];
+  rootCauseTreatment: RootCauseTreatment;
+  treatmentReasoning: string;
+  prognosis: string;
+  contraindications: string[];
+  homeProgram: {
+    exercise: string;
+    dosage: string;
+    instructions: string;
+  }[];
+}
+
 export interface ClinicalReasoningData {
   hypotheses: ClinicalHypothesis[];
   findings: ClinicalFinding[];
@@ -66,6 +122,7 @@ export interface ClinicalReasoningData {
   reasoningChain: ReasoningStep[];
   clinicalSummary: string;
   assessmentPriorities: string[];
+  treatmentPlan?: TreatmentPlan | null;
 }
 
 interface ClinicalReasoningPanelProps {
@@ -74,6 +131,9 @@ interface ClinicalReasoningPanelProps {
   isOpen: boolean;
   onToggle: () => void;
   onClose: () => void;
+  subjectiveHistory: string;
+  onSubjectiveHistoryChange: (text: string) => void;
+  onSubjectiveHistorySubmit: () => void;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -84,6 +144,7 @@ const EMPTY_DATA: ClinicalReasoningData = {
   reasoningChain: [],
   clinicalSummary: "",
   assessmentPriorities: [],
+  treatmentPlan: null,
 };
 
 function ConfidenceBar({ value }: { value: number }) {
@@ -148,12 +209,94 @@ function SectionHeader({
   );
 }
 
+function TreatmentPhaseCard({ phase, idx }: { phase: TreatmentPhase; idx: number }) {
+  const [expanded, setExpanded] = useState(idx === 0);
+  const phaseColors = ["from-teal-500/10 to-teal-600/5 border-teal-500/20", "from-blue-500/10 to-blue-600/5 border-blue-500/20", "from-purple-500/10 to-purple-600/5 border-purple-500/20"];
+  const colorSet = phaseColors[idx % phaseColors.length];
+
+  return (
+    <div className={`rounded-lg border bg-gradient-to-br ${colorSet} overflow-hidden`}>
+      <button onClick={() => setExpanded(!expanded)} className="w-full flex items-center justify-between px-2.5 py-2 hover:bg-white/5 transition-colors">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center h-5 w-5 rounded-full bg-white/10 text-[9px] font-bold text-white">{idx + 1}</div>
+          <div className="text-left">
+            <p className="text-[10px] font-semibold text-white">{phase.name}</p>
+            <p className="text-[9px] text-gray-400 flex items-center gap-1"><Clock className="h-2.5 w-2.5" />{phase.timeframe}</p>
+          </div>
+        </div>
+        <ChevronRight className={`h-3 w-3 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="px-2.5 pb-2.5 space-y-2">
+          {phase.goals.length > 0 && (
+            <div>
+              <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Goals</p>
+              <div className="space-y-0.5">
+                {phase.goals.map((g, i) => (
+                  <div key={i} className="flex items-start gap-1">
+                    <Target className="h-2.5 w-2.5 text-teal-400 mt-0.5 flex-shrink-0" />
+                    <span className="text-[10px] text-gray-300">{g}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {phase.manualTherapy.length > 0 && (
+            <div>
+              <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1"><Hand className="h-2.5 w-2.5" />Manual Therapy</p>
+              <div className="space-y-1.5">
+                {phase.manualTherapy.map((mt, i) => (
+                  <div key={i} className="bg-black/20 rounded p-2 border border-white/5">
+                    <p className="text-[10px] font-medium text-cyan-300">{mt.technique}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[9px] text-gray-500">Target: <span className="text-gray-400">{mt.target}</span></span>
+                      <span className="text-[9px] text-gray-500">Dose: <span className="text-gray-400">{mt.dosage}</span></span>
+                    </div>
+                    <p className="text-[9px] text-gray-500 mt-1 italic">{mt.reasoning}</p>
+                    {mt.precautions && mt.precautions.length > 0 && (
+                      <div className="mt-1 flex items-start gap-1">
+                        <AlertCircle className="h-2.5 w-2.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-[9px] text-amber-400/80">{mt.precautions.join('; ')}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {phase.exercises.length > 0 && (
+            <div>
+              <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1"><Dumbbell className="h-2.5 w-2.5" />Exercises</p>
+              <div className="space-y-1.5">
+                {phase.exercises.map((ex, i) => (
+                  <div key={i} className="bg-black/20 rounded p-2 border border-white/5">
+                    <p className="text-[10px] font-medium text-green-300">{ex.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[9px] text-gray-500">Target: <span className="text-gray-400">{ex.target}</span></span>
+                      <span className="text-[9px] text-gray-500">Dose: <span className="text-gray-400">{ex.dosage}</span></span>
+                    </div>
+                    <p className="text-[9px] text-gray-500 mt-1 italic">{ex.reasoning}</p>
+                    {ex.progression && <p className="text-[9px] text-teal-400/70 mt-0.5">Progression: {ex.progression}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ClinicalReasoningPanel({
   data,
   isProcessing,
   isOpen,
   onToggle,
   onClose,
+  subjectiveHistory,
+  onSubjectiveHistoryChange,
+  onSubjectiveHistorySubmit,
 }: ClinicalReasoningPanelProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
@@ -162,19 +305,31 @@ export default function ClinicalReasoningPanel({
     biomechanical: false,
     reasoning: true,
     priorities: false,
+    treatment: true,
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const d = data || EMPTY_DATA;
   const hasContent =
     d.hypotheses.length > 0 ||
     d.findings.length > 0 ||
     d.flags.length > 0 ||
-    d.reasoningChain.length > 0;
+    d.reasoningChain.length > 0 ||
+    d.treatmentPlan !== null && d.treatmentPlan !== undefined;
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (subjectiveHistory.trim()) {
+        onSubjectiveHistorySubmit();
+      }
+    }
+  }, [subjectiveHistory, onSubjectiveHistorySubmit]);
 
   useEffect(() => {
     if (scrollRef.current && hasContent) {
@@ -188,8 +343,10 @@ export default function ClinicalReasoningPanel({
 
   if (!isOpen) return null;
 
+  const tp = d.treatmentPlan;
+
   return (
-    <div className="absolute top-0 right-0 h-full z-30 w-[320px] animate-in slide-in-from-right-2 duration-300">
+    <div className="absolute top-0 right-0 h-full z-30 w-[340px] animate-in slide-in-from-right-2 duration-300">
       <div className="h-full bg-gray-950/95 backdrop-blur-xl border-l border-cyan-500/20 flex flex-col shadow-2xl shadow-cyan-500/5">
         <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/10 bg-gradient-to-r from-cyan-900/20 to-transparent">
           <div className="flex items-center gap-2">
@@ -198,7 +355,7 @@ export default function ClinicalReasoningPanel({
             </div>
             <div>
               <span className="font-semibold text-white text-xs">Clinical Reasoning</span>
-              <p className="text-[9px] text-gray-500">AI real-time analysis</p>
+              <p className="text-[9px] text-gray-500">AI-powered analysis</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -217,6 +374,28 @@ export default function ClinicalReasoningPanel({
           </div>
         </div>
 
+        <div className="px-2 py-2 border-b border-white/5">
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={subjectiveHistory}
+              onChange={(e) => onSubjectiveHistoryChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Add subjective history... (e.g., 'Patient is 45yo desk worker, pain worse in morning, history of diabetes')"
+              className="w-full bg-gray-800/60 border border-gray-700/50 rounded-lg px-2.5 py-2 pr-8 text-[10px] text-gray-300 placeholder-gray-600 resize-none focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20 transition-all"
+              rows={2}
+            />
+            <button
+              onClick={() => { if (subjectiveHistory.trim()) onSubjectiveHistorySubmit(); }}
+              disabled={!subjectiveHistory.trim() || isProcessing}
+              className="absolute bottom-2.5 right-2 p-1 rounded bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="h-3 w-3" />
+            </button>
+          </div>
+          <p className="text-[8px] text-gray-600 mt-1 px-1">Press Enter to submit, Shift+Enter for new line</p>
+        </div>
+
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">
           {!hasContent && !isProcessing && (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -225,7 +404,7 @@ export default function ClinicalReasoningPanel({
               </div>
               <p className="text-xs text-gray-400 mb-1">Waiting for clinical data</p>
               <p className="text-[10px] text-gray-600 leading-relaxed">
-                Start speaking about the patient and the AI will analyze the clinical reasoning in real-time
+                Place pain markers, adjust the skeleton, or add subjective history above to trigger AI analysis
               </p>
             </div>
           )}
@@ -233,7 +412,7 @@ export default function ClinicalReasoningPanel({
           {!hasContent && isProcessing && (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
               <Loader2 className="h-6 w-6 animate-spin text-cyan-400 mb-3" />
-              <p className="text-xs text-gray-400">Processing clinical input...</p>
+              <p className="text-xs text-gray-400">Analyzing clinical data...</p>
             </div>
           )}
 
@@ -473,6 +652,108 @@ export default function ClinicalReasoningPanel({
                       );
                     })}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tp && (
+            <div>
+              <SectionHeader
+                icon={FileText}
+                title="Treatment Plan"
+                count={tp.phases?.length || 0}
+                color="text-emerald-400"
+                isOpen={expandedSections.treatment}
+                onToggle={() => toggleSection("treatment")}
+              />
+              {expandedSections.treatment && (
+                <div className="space-y-2 mt-1 ml-1">
+                  {tp.treatmentReasoning && (
+                    <div className="bg-emerald-500/5 rounded-lg p-2 border border-emerald-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Treatment Rationale</p>
+                      <p className="text-[10px] text-gray-300 leading-relaxed">{tp.treatmentReasoning}</p>
+                    </div>
+                  )}
+
+                  {tp.rootCauseTreatment && (
+                    <div className="bg-orange-500/5 rounded-lg p-2 border border-orange-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Zap className="h-2.5 w-2.5 text-orange-400" />Root Cause
+                      </p>
+                      <p className="text-[10px] font-medium text-orange-300">{tp.rootCauseTreatment.primaryCause}</p>
+                      {tp.rootCauseTreatment.contributingFactors.length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {tp.rootCauseTreatment.contributingFactors.map((f, i) => (
+                            <div key={i} className="flex items-start gap-1">
+                              <span className="text-orange-500 text-[8px] mt-0.5">+</span>
+                              <span className="text-[9px] text-gray-400">{f}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {tp.rootCauseTreatment.targetedInterventions.length > 0 && (
+                        <div className="mt-1.5 space-y-1">
+                          {tp.rootCauseTreatment.targetedInterventions.map((ti, i) => (
+                            <div key={i} className="bg-black/20 rounded p-1.5 border border-white/5">
+                              <p className="text-[10px] font-medium text-orange-200">{ti.intervention}</p>
+                              <p className="text-[9px] text-gray-500">Target: {ti.target} | {ti.frequency}</p>
+                              <p className="text-[9px] text-gray-500 italic mt-0.5">{ti.reasoning}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {tp.phases && tp.phases.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Phase-Based Plan</p>
+                      {tp.phases.map((phase, idx) => (
+                        <TreatmentPhaseCard key={idx} phase={phase} idx={idx} />
+                      ))}
+                    </div>
+                  )}
+
+                  {tp.homeProgram && tp.homeProgram.length > 0 && (
+                    <div className="bg-blue-500/5 rounded-lg p-2 border border-blue-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Home className="h-2.5 w-2.5 text-blue-400" />Home Program
+                      </p>
+                      <div className="space-y-1">
+                        {tp.homeProgram.map((hp, i) => (
+                          <div key={i} className="bg-black/20 rounded p-1.5">
+                            <p className="text-[10px] font-medium text-blue-300">{hp.exercise}</p>
+                            <p className="text-[9px] text-gray-400">{hp.dosage}</p>
+                            <p className="text-[9px] text-gray-500 italic">{hp.instructions}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {tp.prognosis && (
+                    <div className="bg-teal-500/5 rounded-lg p-2 border border-teal-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Prognosis</p>
+                      <p className="text-[10px] text-gray-300">{tp.prognosis}</p>
+                    </div>
+                  )}
+
+                  {tp.contraindications && tp.contraindications.length > 0 && (
+                    <div className="bg-red-500/5 rounded-lg p-2 border border-red-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <AlertCircle className="h-2.5 w-2.5 text-red-400" />Contraindications
+                      </p>
+                      <div className="space-y-0.5">
+                        {tp.contraindications.map((c, i) => (
+                          <div key={i} className="flex items-start gap-1">
+                            <span className="text-red-500 text-[8px] mt-0.5">!</span>
+                            <span className="text-[9px] text-red-300/80">{c}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

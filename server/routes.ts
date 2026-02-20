@@ -6130,6 +6130,160 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
     }
   });
 
+  app.post("/api/physiogpt/clinical-reasoning-analyze", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements } = req.body;
+      if (!painMarkers && !skeletonConfig && !subjectiveHistory) {
+        return res.status(400).json({ error: "At least one clinical input is required" });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const openai = new OpenAI({ apiKey, baseURL });
+
+      const markerContext = painMarkers && painMarkers.length > 0
+        ? `\n\nPAIN MARKERS (${painMarkers.length}):\n${painMarkers.map((m: any, i: number) => `${i+1}. Region: ${m.label || m.nearestBone || 'unknown'}, Type: ${m.type || 'point'}, Severity: ${m.severity || 5}/10${m.description ? ', Description: ' + m.description : ''}${m.subjectiveHistory ? ', History: ' + m.subjectiveHistory : ''}`).join('\n')}`
+        : '';
+
+      const skeletonContext = skeletonConfig && Object.keys(skeletonConfig).length > 0
+        ? `\n\nSKELETON/POSTURE CONFIGURATION:\n${JSON.stringify(skeletonConfig, null, 2)}`
+        : '';
+
+      const historyContext = subjectiveHistory && subjectiveHistory.trim()
+        ? `\n\nADDITIONAL SUBJECTIVE HISTORY:\n${subjectiveHistory}`
+        : '';
+
+      const romContext = romMeasurements && Object.keys(romMeasurements).length > 0
+        ? `\n\nROM MEASUREMENTS:\n${JSON.stringify(romMeasurements, null, 2)}`
+        : '';
+
+      const prompt = `You are an expert musculoskeletal physiotherapist performing a comprehensive clinical reasoning analysis. Analyze ALL provided clinical data and produce a complete assessment with treatment plan.
+
+${markerContext}${skeletonContext}${historyContext}${romContext}
+
+Return ONLY valid JSON with this structure:
+{
+  "hypotheses": [
+    { "condition": "Specific diagnosis name", "confidence": 75, "supportingEvidence": ["Evidence 1", "Evidence 2"], "rulingOutFactors": ["Factor to rule out"], "status": "active" }
+  ],
+  "findings": [
+    { "category": "symptom|sign|history|aggravating|easing|functional", "text": "Clinical finding description" }
+  ],
+  "flags": [
+    { "type": "red|yellow|green", "text": "Flag description", "action": "Recommended action" }
+  ],
+  "biomechanicalLinks": [
+    { "primaryRegion": "Region A", "connectedRegion": "Region B", "mechanism": "How they connect", "clinicalRelevance": "Why it matters" }
+  ],
+  "reasoningChain": [
+    { "step": 1, "thought": "Clinical reasoning step", "type": "observation|hypothesis|deduction|recommendation" }
+  ],
+  "clinicalSummary": "Overall clinical picture summary",
+  "assessmentPriorities": ["Priority 1", "Priority 2"],
+  "treatmentPlan": {
+    "phases": [
+      {
+        "name": "Acute Phase",
+        "timeframe": "Week 1-2",
+        "goals": ["Reduce pain", "Restore basic ROM"],
+        "manualTherapy": [
+          { "technique": "Posterior glenohumeral glide Grade III", "target": "Glenohumeral joint", "dosage": "3x30s, 3 sets", "reasoning": "Restore posterior glide to improve flexion and reduce impingement", "precautions": ["Avoid if acute inflammation present"] }
+        ],
+        "exercises": [
+          { "name": "Pendulum exercises", "target": "Shoulder complex", "dosage": "10 circles each direction, 3x/day", "progression": "Progress to active-assisted ROM when pain <4/10", "reasoning": "Gentle traction and movement to maintain capsular mobility" }
+        ]
+      }
+    ],
+    "rootCauseTreatment": {
+      "primaryCause": "The underlying biomechanical or pathological cause",
+      "contributingFactors": ["Factor 1", "Factor 2"],
+      "targetedInterventions": [
+        { "intervention": "Specific technique or approach", "target": "What it addresses", "reasoning": "Why this targets the root cause", "frequency": "How often" }
+      ]
+    },
+    "treatmentReasoning": "Comprehensive explanation of why this treatment approach was chosen, linking the assessment findings to the treatment selection",
+    "prognosis": "Expected outcome and timeline",
+    "contraindications": ["Things to avoid"],
+    "homeProgram": [
+      { "exercise": "Exercise name", "dosage": "Sets x reps x frequency", "instructions": "Key points for patient" }
+    ]
+  }
+}
+
+GUIDELINES:
+- "hypotheses": Rank differential diagnoses by confidence (0-100%). Be specific with anatomical diagnoses.
+- "findings": Only include clearly supported findings from the provided data.
+- "flags": Red = urgent/dangerous, Yellow = caution, Green = positive indicator.
+- "treatmentPlan.phases": Include 2-3 phases (Acute, Subacute, Remodeling/Return to Function). Each phase must have specific manual therapy techniques with exact grades, dosages, and reasoning.
+- "treatmentPlan.exercises": Include specific exercises with progressions, not generic advice.
+- "treatmentPlan.rootCauseTreatment": Identify and address the underlying cause, not just symptoms.
+- "treatmentPlan.treatmentReasoning": Explain the clinical reasoning behind treatment choices.
+- Be specific about manual therapy (e.g., "Maitland Grade III PA glide L4/5" not just "mobilization").
+- Include exact dosage parameters for exercises (sets, reps, hold times, frequency).`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: prompt },
+          { role: "user", content: "Analyze the provided clinical data and generate a comprehensive clinical reasoning assessment with treatment plan." }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        max_tokens: 4500,
+      });
+
+      const content = completion.choices[0]?.message?.content || '{}';
+      const parsed = JSON.parse(content);
+      const ts = Date.now();
+
+      res.json({
+        hypotheses: (parsed.hypotheses || []).map((h: any, i: number) => ({
+          id: `hyp_${ts}_${i}`,
+          condition: h.condition || '',
+          confidence: h.confidence || 0,
+          supportingEvidence: h.supportingEvidence || [],
+          rulingOutFactors: h.rulingOutFactors || [],
+          status: h.status || 'active',
+        })),
+        findings: (parsed.findings || []).map((f: any, i: number) => ({
+          id: `find_${ts}_${i}`,
+          category: f.category || 'symptom',
+          text: f.text || '',
+          timestamp: ts,
+          isNew: true,
+        })),
+        flags: (parsed.flags || []).map((f: any, i: number) => ({
+          id: `flag_${ts}_${i}`,
+          type: f.type || 'yellow',
+          text: f.text || '',
+          action: f.action || '',
+        })),
+        biomechanicalLinks: (parsed.biomechanicalLinks || []).map((b: any, i: number) => ({
+          id: `bio_${ts}_${i}`,
+          primaryRegion: b.primaryRegion || '',
+          connectedRegion: b.connectedRegion || '',
+          mechanism: b.mechanism || '',
+          clinicalRelevance: b.clinicalRelevance || '',
+        })),
+        reasoningChain: (parsed.reasoningChain || []).map((r: any, i: number) => ({
+          id: `reas_${ts}_${i}`,
+          step: r.step || i + 1,
+          thought: r.thought || '',
+          type: r.type || 'observation',
+          timestamp: ts,
+          isNew: true,
+        })),
+        clinicalSummary: parsed.clinicalSummary || '',
+        assessmentPriorities: parsed.assessmentPriorities || [],
+        treatmentPlan: parsed.treatmentPlan || null,
+      });
+    } catch (error: any) {
+      console.error("Clinical reasoning analyze error:", error);
+      res.status(500).json({ error: "Failed to analyze clinical data" });
+    }
+  });
+
   // Clinical Bubble AI endpoint - returns structured clinical data for pain marker regions
   app.post("/api/physiogpt/clinical-bubble", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

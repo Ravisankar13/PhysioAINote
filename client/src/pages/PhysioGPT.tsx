@@ -423,6 +423,11 @@ export default function PhysioGPT() {
   const [voicePanelOpen, setVoicePanelOpen] = useState(true);
   const [clinicalReasoningData, setClinicalReasoningData] = useState<ClinicalReasoningData | null>(null);
   const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
+  const [clinicalReasoningProcessing, setClinicalReasoningProcessing] = useState(false);
+  const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
+  const subjectiveHistoryRef = useRef('');
+  const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastReasoningTriggerRef = useRef<string>('');
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const voiceSpeechRecRef = useRef<any>(null);
   const voiceTranscriptRef = useRef('');
@@ -1462,8 +1467,6 @@ ${ddxList}`;
       setVoiceTranscript('');
       setVoiceFindings([]);
       setVoicePanelOpen(true);
-      setClinicalReasoningData(null);
-      setClinicalReasoningOpen(false);
 
       const recognition = new SpeechRecognitionAPI();
       recognition.continuous = true;
@@ -1537,8 +1540,9 @@ ${ddxList}`;
       triggerVoiceExtraction();
     }
 
-    setClinicalReasoningOpen(false);
     toast({ title: "Voice Session Ended", description: `Extracted ${voiceFindingsRef.current.length} findings from session.` });
+
+    lastReasoningTriggerRef.current = '';
   }, [toast, triggerVoiceExtraction]);
 
   useEffect(() => {
@@ -1557,6 +1561,85 @@ ${ddxList}`;
       }
     };
   }, []);
+
+  const triggerClinicalReasoningAnalysis = useCallback(async (forceRefresh = false) => {
+    if (clinicalReasoningProcessing) return;
+
+    const markerData = painMarkersRef.current.map(pm => ({
+      label: pm.anatomicalLabel || pm.nearestBone,
+      type: pm.type,
+      severity: (pm as any).severity ?? 5,
+      description: pm.description || '',
+      subjectiveHistory: pm.subjectiveHistory || '',
+    }));
+
+    const triggerKey = JSON.stringify({ markers: markerData, history: subjectiveHistoryRef.current });
+    if (!forceRefresh && triggerKey === lastReasoningTriggerRef.current) return;
+    if (markerData.length === 0 && !subjectiveHistoryRef.current.trim()) return;
+
+    lastReasoningTriggerRef.current = triggerKey;
+    setClinicalReasoningProcessing(true);
+
+    try {
+      const response = await fetch('/api/physiogpt/clinical-reasoning-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          painMarkers: markerData,
+          skeletonConfig: modelConfig,
+          subjectiveHistory: subjectiveHistoryRef.current,
+          romMeasurements: romMeasurements || {},
+        }),
+      });
+
+      if (!response.ok) throw new Error('Analysis failed');
+      const data = await response.json();
+
+      setClinicalReasoningData({
+        hypotheses: data.hypotheses || [],
+        findings: data.findings || [],
+        flags: data.flags || [],
+        biomechanicalLinks: data.biomechanicalLinks || [],
+        reasoningChain: data.reasoningChain || [],
+        clinicalSummary: data.clinicalSummary || '',
+        assessmentPriorities: data.assessmentPriorities || [],
+        treatmentPlan: data.treatmentPlan || null,
+      });
+
+      if (!clinicalReasoningOpen) {
+        setClinicalReasoningOpen(true);
+      }
+    } catch (error) {
+      console.error('Clinical reasoning analysis error:', error);
+    } finally {
+      setClinicalReasoningProcessing(false);
+    }
+  }, [clinicalReasoningProcessing, modelConfig, romMeasurements, clinicalReasoningOpen]);
+
+  useEffect(() => {
+    if (painMarkers.length === 0) return;
+    if (voiceSessionActive) return;
+
+    if (clinicalReasoningTimerRef.current) {
+      clearTimeout(clinicalReasoningTimerRef.current);
+    }
+    clinicalReasoningTimerRef.current = setTimeout(() => {
+      triggerClinicalReasoningAnalysis();
+    }, 1500);
+
+    return () => {
+      if (clinicalReasoningTimerRef.current) {
+        clearTimeout(clinicalReasoningTimerRef.current);
+      }
+    };
+  }, [painMarkers, triggerClinicalReasoningAnalysis, voiceSessionActive]);
+
+  const handleSubjectiveHistorySubmit = useCallback(() => {
+    subjectiveHistoryRef.current = subjectiveHistoryInput;
+    lastReasoningTriggerRef.current = '';
+    triggerClinicalReasoningAnalysis(true);
+  }, [subjectiveHistoryInput, triggerClinicalReasoningAnalysis]);
 
   const forceAnalysis = useMemo(() => {
     if (!forceMode) return null;
@@ -4886,27 +4969,31 @@ ${ddxList}`;
             {cameraMode ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
             {cameraMode ? 'Stop Camera' : 'Camera'}
           </button>
-          {voiceSessionActive && (
-            <button
-              onClick={() => setClinicalReasoningOpen(!clinicalReasoningOpen)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${clinicalReasoningOpen ? 'bg-cyan-500 hover:bg-cyan-600 text-white' : 'bg-black/70 hover:bg-black/80 text-white'}`}
-            >
-              <Brain className="h-3.5 w-3.5" />
-              {clinicalReasoningOpen ? 'Hide Reasoning' : 'AI Reasoning'}
-              {clinicalReasoningData && (clinicalReasoningData.hypotheses.length > 0 || clinicalReasoningData.findings.length > 0) && !clinicalReasoningOpen && (
-                <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
-              )}
-            </button>
-          )}
+          <button
+            onClick={() => setClinicalReasoningOpen(!clinicalReasoningOpen)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${clinicalReasoningOpen ? 'bg-cyan-500 hover:bg-cyan-600 text-white' : 'bg-black/70 hover:bg-black/80 text-white'}`}
+          >
+            <Brain className="h-3.5 w-3.5" />
+            {clinicalReasoningOpen ? 'Hide Reasoning' : 'AI Reasoning'}
+            {clinicalReasoningData && (clinicalReasoningData.hypotheses.length > 0 || clinicalReasoningData.findings.length > 0) && !clinicalReasoningOpen && (
+              <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+            )}
+            {clinicalReasoningProcessing && !clinicalReasoningOpen && (
+              <Loader2 className="h-3 w-3 animate-spin text-cyan-300" />
+            )}
+          </button>
         </div>
       )}
 
       <ClinicalReasoningPanel
         data={clinicalReasoningData}
-        isProcessing={voiceProcessing}
-        isOpen={clinicalReasoningOpen && voiceSessionActive}
+        isProcessing={voiceProcessing || clinicalReasoningProcessing}
+        isOpen={clinicalReasoningOpen}
         onToggle={() => setClinicalReasoningOpen(!clinicalReasoningOpen)}
         onClose={() => setClinicalReasoningOpen(false)}
+        subjectiveHistory={subjectiveHistoryInput}
+        onSubjectiveHistoryChange={setSubjectiveHistoryInput}
+        onSubjectiveHistorySubmit={handleSubjectiveHistorySubmit}
       />
     </div>
   );

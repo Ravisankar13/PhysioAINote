@@ -49,7 +49,10 @@ Preferred communication style: Simple, everyday language.
 - **Comprehensive Shoulder Assessment System**: A deep clinical shoulder assessment system with AI-powered differential diagnosis, including 21 special tests, muscle tests, ROM norms, differential diagnoses, and kinetic chain contributors. Features a guided assessment wizard, capsular pattern detection, and differential diagnosis scoring.
 - **Interactive Skeleton-to-Text System**: The skeleton viewer reacts to clinical conversation content by highlighting body regions, pain types, pathologies, and severity with color-coded emissive glows.
 - **Direct Bone Manipulation (Pose Mode)**: Enables click-and-drag skeleton posing without sliders, allowing manipulation of joints with real-time feedback and a reset function.
-- **Extended Pain Marker Types**: Supports four types of pain markers: Point, Area, Referred, and Line, for comprehensive pain documentation.
+- **Extended Pain Marker Types**: Supports five types of pain markers: Point, Area, Referred, Line, and Paint (free-draw), for comprehensive pain and symptom documentation.
+- **15 Symptom Types System**: Beyond pain, supports Numbness, Pins & Needles, Stiffness, Tightness, Weakness, Instability, Clicking/Crepitus, Locking, Swelling, Burning, Heaviness, Spasm/Cramping, Radiating, and Catching - each with unique colors and icons for visual distinction on the 3D skeleton.
+- **Free-Draw Paint Mode**: Click and drag to paint irregular symptom patterns directly on the 3D skeleton surface, capturing real-world symptom distributions that don't conform to point/area shapes.
+- **Postural-Pain Correlation System**: Auto-triggers when posture sliders change (≥3° deviation), computes force/muscle impacts, and sends to AI for biomechanical analysis showing causal chains from posture deviation to force impact to muscle effect to pain link.
 - **Real-Time Postural Force Analysis**: Calculates joint loading as a percentage of body weight based on skeleton pose, providing real-time updates and color-coded status for 12 joints.
 
 ## External Dependencies

@@ -587,11 +587,47 @@ export const SUB_STRUCTURE_OVERLAYS: Record<SubStructure, SubStructureOverlay> =
   }
 };
 
-export type PainMarkerType = 'point' | 'area' | 'referred' | 'line';
+export type PainMarkerType = 'point' | 'area' | 'referred' | 'line' | 'paint';
+
+export type SymptomType =
+  | 'pain'
+  | 'pins_needles'
+  | 'numbness'
+  | 'stiffness'
+  | 'tightness'
+  | 'weakness'
+  | 'instability'
+  | 'clicking'
+  | 'locking'
+  | 'swelling'
+  | 'burning'
+  | 'heaviness'
+  | 'spasm'
+  | 'radiating'
+  | 'catching';
+
+export const SYMPTOM_TYPES: Record<SymptomType, { label: string; color: number; hexColor: string; icon: string; description: string }> = {
+  pain: { label: 'Pain', color: 0xff2222, hexColor: '#ff2222', icon: '🔴', description: 'Sharp, dull, aching pain' },
+  pins_needles: { label: 'Pins & Needles', color: 0xffaa00, hexColor: '#ffaa00', icon: '⚡', description: 'Tingling / paresthesia' },
+  numbness: { label: 'Numbness', color: 0x8888ff, hexColor: '#8888ff', icon: '🔵', description: 'Loss of sensation' },
+  stiffness: { label: 'Stiffness', color: 0x44aaff, hexColor: '#44aaff', icon: '🧊', description: 'Restricted movement / rigidity' },
+  tightness: { label: 'Tightness', color: 0xff8844, hexColor: '#ff8844', icon: '🔶', description: 'Muscular tension / pulling' },
+  weakness: { label: 'Weakness', color: 0xaaaa44, hexColor: '#aaaa44', icon: '💤', description: 'Lack of strength / activation' },
+  instability: { label: 'Instability', color: 0xff44ff, hexColor: '#ff44ff', icon: '⚠️', description: 'Giving way / unreliable joint' },
+  clicking: { label: 'Clicking / Crepitus', color: 0x88ddaa, hexColor: '#88ddaa', icon: '🔊', description: 'Popping, grinding, snapping' },
+  locking: { label: 'Locking', color: 0xdd4488, hexColor: '#dd4488', icon: '🔒', description: 'Joint gets stuck mid-range' },
+  swelling: { label: 'Swelling', color: 0x44dddd, hexColor: '#44dddd', icon: '💧', description: 'Localized or diffuse swelling' },
+  burning: { label: 'Burning', color: 0xff6600, hexColor: '#ff6600', icon: '🔥', description: 'Burning / hot sensation' },
+  heaviness: { label: 'Heaviness', color: 0x8866aa, hexColor: '#8866aa', icon: '⬇️', description: 'Limb heaviness / fatigue' },
+  spasm: { label: 'Spasm / Cramping', color: 0xee4444, hexColor: '#ee4444', icon: '💥', description: 'Involuntary muscle contraction' },
+  radiating: { label: 'Radiating', color: 0x9933ff, hexColor: '#9933ff', icon: '↗️', description: 'Symptoms traveling along a path' },
+  catching: { label: 'Catching', color: 0xddaa44, hexColor: '#ddaa44', icon: '⏸️', description: 'Brief catch during movement' },
+};
 
 export interface PainMarker {
   id: string;
   type: PainMarkerType;
+  symptomType?: SymptomType;
   position: { x: number; y: number; z: number };
   nearestBone: string;
   anatomicalLabel: string;
@@ -602,6 +638,7 @@ export interface PainMarker {
   referralTargetBone?: string;
   referralTargetLabel?: string;
   linePoints?: Array<{ x: number; y: number; z: number }>;
+  paintPoints?: Array<{ x: number; y: number; z: number }>;
 }
 
 export interface RomMovement {
@@ -1609,6 +1646,7 @@ export default function PureThreeGLBViewer({
   const pendingReferralRef = useRef<PainMarker | null>(null);
   const pendingLineRef = useRef<PainMarker | null>(null);
   const areaDragRef = useRef<{ startPoint: THREE.Vector3; markerId: string } | null>(null);
+  const paintingRef = useRef<{ id: string; points: Array<{ x: number; y: number; z: number }>; lastSampleTime: number } | null>(null);
 
   useEffect(() => {
     pendingReferralRef.current = null;
@@ -2258,16 +2296,56 @@ export default function PureThreeGLBViewer({
             }
           });
         }
+
+        if (markerType === 'paint' && marker.paintPoints && marker.paintPoints.length > 0) {
+          const pts = [pos, ...marker.paintPoints.map(p => new THREE.Vector3(p.x, p.y, p.z))];
+          const symptomClr = marker.symptomType ? SYMPTOM_TYPES[marker.symptomType]?.color : null;
+          const clr = symptomClr || 0xff2222;
+
+          if (!meshes.extra) meshes.extra = [];
+          let lineObj = meshes.extra.find(o => o instanceof THREE.Line) as THREE.Line | undefined;
+          if (lineObj) {
+            lineObj.geometry.dispose();
+            lineObj.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+          } else if (sceneRef.current) {
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+            const lineMat = new THREE.LineBasicMaterial({ color: clr, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false, linewidth: 3 });
+            lineObj = new THREE.Line(lineGeo, lineMat);
+            lineObj.renderOrder = 999;
+            sceneRef.current.scene.add(lineObj);
+            meshes.extra.push(lineObj);
+          }
+
+          const existingDotCount = meshes.extra.filter(o => o instanceof THREE.Mesh).length;
+          const currentPointCount = marker.paintPoints.length;
+          const neededDots = Math.floor(currentPointCount / 2) + 1;
+          if (neededDots > existingDotCount && sceneRef.current) {
+            for (let i = existingDotCount; i < neededDots && i * 2 < marker.paintPoints.length; i++) {
+              const pp = marker.paintPoints[i * 2];
+              const dotGeo = new THREE.SphereGeometry(0.025, 6, 4);
+              const dotMat = new THREE.MeshBasicMaterial({ color: clr, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+              const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+              dotMesh.position.set(pp.x, pp.y, pp.z);
+              dotMesh.renderOrder = 1000;
+              dotMesh.userData.isPainMarker = true;
+              dotMesh.userData.markerId = marker.id;
+              sceneRef.current.scene.add(dotMesh);
+              meshes.extra.push(dotMesh);
+            }
+          }
+        }
         continue;
       }
 
-      const COLORS = {
+      const MARKER_TYPE_COLORS: Record<string, number> = {
         point: 0xff2222,
         area: 0xff6600,
         referred: 0x9933ff,
         line: 0xff4488,
+        paint: 0xff2222,
       };
-      const color = COLORS[markerType] || COLORS.point;
+      const symptomColor = marker.symptomType ? SYMPTOM_TYPES[marker.symptomType]?.color : null;
+      const color = symptomColor || MARKER_TYPE_COLORS[markerType] || MARKER_TYPE_COLORS.point;
 
       const innerGeo = new THREE.SphereGeometry(0.06, 16, 12);
       const innerMat = new THREE.MeshBasicMaterial({
@@ -2356,6 +2434,29 @@ export default function PureThreeGLBViewer({
           const dotMesh = new THREE.Mesh(dotGeo, dotMat);
           dotMesh.position.set(lp.x, lp.y, lp.z);
           dotMesh.renderOrder = 1001;
+          dotMesh.userData.isPainMarker = true;
+          dotMesh.userData.markerId = marker.id;
+          scene.add(dotMesh);
+          extraObjects.push(dotMesh);
+        }
+      }
+
+      if (markerType === 'paint' && marker.paintPoints && marker.paintPoints.length > 0) {
+        const pts = [pos, ...marker.paintPoints.map(p => new THREE.Vector3(p.x, p.y, p.z))];
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false, linewidth: 3 });
+        const line = new THREE.Line(lineGeo, lineMat);
+        line.renderOrder = 999;
+        scene.add(line);
+        extraObjects.push(line);
+
+        const tubePts = pts.filter((_, i) => i % 2 === 0 || i === pts.length - 1);
+        for (const tp of tubePts) {
+          const dotGeo = new THREE.SphereGeometry(0.025, 6, 4);
+          const dotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+          const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+          dotMesh.position.copy(tp);
+          dotMesh.renderOrder = 1000;
           dotMesh.userData.isPainMarker = true;
           dotMesh.userData.markerId = marker.id;
           scene.add(dotMesh);
@@ -2749,6 +2850,27 @@ export default function PureThreeGLBViewer({
             e.preventDefault();
           }
         }
+
+        if (activePainMarkerTypeRef.current === 'paint') {
+          const hitPoint = raycastModel(ndc);
+          if (hitPoint) {
+            const boneInfo = findNearestBone(hitPoint);
+            const id = `pm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            paintingRef.current = { id, points: [], lastSampleTime: Date.now() };
+            controls.enabled = false;
+            const marker: PainMarker = {
+              id,
+              type: 'paint',
+              position: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
+              nearestBone: boneInfo.boneName,
+              anatomicalLabel: boneInfo.label,
+              paintPoints: [],
+            };
+            painMarkerCallbacksRef.current.onPainMarkerAdd?.(marker);
+            domElement.style.cursor = 'crosshair';
+            e.preventDefault();
+          }
+        }
       }
     };
 
@@ -2792,6 +2914,24 @@ export default function PureThreeGLBViewer({
         return;
       }
 
+      if (paintingRef.current) {
+        const now = Date.now();
+        if (now - paintingRef.current.lastSampleTime < 40) return;
+        const ndc = getMouseNDC(e);
+        const hitPoint = raycastModel(ndc, true);
+        if (hitPoint) {
+          paintingRef.current.lastSampleTime = now;
+          paintingRef.current.points.push({ x: hitPoint.x, y: hitPoint.y, z: hitPoint.z });
+          if (paintingRef.current.points.length % 3 === 0) {
+            painMarkerCallbacksRef.current.onPainMarkerUpdate?.(paintingRef.current.id, {
+              paintPoints: [...paintingRef.current.points],
+            });
+          }
+        }
+        e.preventDefault();
+        return;
+      }
+
       if (!enablePainMarkersRef.current) return;
       const ndc = getMouseNDC(e);
       const markerId = raycastPainMarkers(ndc);
@@ -2814,6 +2954,19 @@ export default function PureThreeGLBViewer({
       if (areaDragRef.current) {
         areaDragRef.current = null;
         controls.enabled = true;
+        mouseDownPosRef.current = null;
+        return;
+      }
+
+      if (paintingRef.current) {
+        if (paintingRef.current.points.length > 0) {
+          painMarkerCallbacksRef.current.onPainMarkerUpdate?.(paintingRef.current.id, {
+            paintPoints: [...paintingRef.current.points],
+          });
+        }
+        paintingRef.current = null;
+        controls.enabled = true;
+        domElement.style.cursor = '';
         mouseDownPosRef.current = null;
         return;
       }
@@ -2863,7 +3016,7 @@ export default function PureThreeGLBViewer({
             return;
           }
 
-          if (!existingMarker && mType !== 'area') {
+          if (!existingMarker && mType !== 'area' && mType !== 'paint') {
             const hitPoint = raycastModel(ndc);
             if (hitPoint) {
               const boneInfo = findNearestBone(hitPoint);
@@ -2913,11 +3066,36 @@ export default function PureThreeGLBViewer({
       }
     };
 
+    const cleanupPaintDrag = () => {
+      if (paintingRef.current) {
+        if (paintingRef.current.points.length > 0) {
+          painMarkerCallbacksRef.current.onPainMarkerUpdate?.(paintingRef.current.id, {
+            paintPoints: [...paintingRef.current.points],
+          });
+        }
+        paintingRef.current = null;
+        controls.enabled = true;
+        domElement.style.cursor = '';
+      }
+      if (areaDragRef.current) {
+        areaDragRef.current = null;
+        controls.enabled = true;
+      }
+    };
+
+    const onMouseLeave = () => {
+      cleanupPaintDrag();
+      if (draggingMarkerRef.current) {
+        finishDrag();
+      }
+    };
+
     domElement.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onWindowMouseUp);
     domElement.addEventListener('dblclick', onDblClick);
     domElement.addEventListener('contextmenu', onContextMenu);
+    domElement.addEventListener('mouseleave', onMouseLeave);
 
     return () => {
       domElement.removeEventListener('mousedown', onMouseDown);
@@ -2925,12 +3103,14 @@ export default function PureThreeGLBViewer({
       window.removeEventListener('mouseup', onWindowMouseUp);
       domElement.removeEventListener('dblclick', onDblClick);
       domElement.removeEventListener('contextmenu', onContextMenu);
+      domElement.removeEventListener('mouseleave', onMouseLeave);
       if (draggingMarkerRef.current) {
         draggingMarkerRef.current = null;
         controls.enabled = true;
         domElement.style.cursor = '';
       }
       areaDragRef.current = null;
+      paintingRef.current = null;
       pendingReferralRef.current = null;
       pendingLineRef.current = null;
     };

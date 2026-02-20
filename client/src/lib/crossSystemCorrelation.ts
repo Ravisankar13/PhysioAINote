@@ -6,7 +6,7 @@ interface PainMarker {
   id: string;
   position: { x: number; y: number; z: number };
   label: string;
-  type: 'point' | 'area' | 'referred' | 'line';
+  type: 'point' | 'area' | 'referred' | 'line' | 'paint';
   severity?: number;
   description?: string;
 }

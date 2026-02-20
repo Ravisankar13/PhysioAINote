@@ -71,8 +71,8 @@ import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
-import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement } from "@/components/skeleton/PureThreeGLBViewer";
-import { REGION_BONE_MAPPING } from "@/components/skeleton/PureThreeGLBViewer";
+import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType } from "@/components/skeleton/PureThreeGLBViewer";
+import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
 import CameraPoseCapture from "@/components/skeleton/CameraPoseCapture";
 import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
@@ -387,6 +387,7 @@ export default function PhysioGPT() {
   const [forceAiSuggestions, setForceAiSuggestions] = useState<string | null>(null);
   const [forceAiLoading, setForceAiLoading] = useState(false);
   const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
+  const [activeSymptomType, setActiveSymptomType] = useState<SymptomType>('pain');
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
   const [romMode, setRomMode] = useState(false);
@@ -905,9 +906,13 @@ export default function PhysioGPT() {
     toast({ title: "Landmark Marked", description: `Pain marker placed at ${landmark.label}` });
   }, [toast]);
 
+  const activeSymptomTypeRef = useRef(activeSymptomType);
+  activeSymptomTypeRef.current = activeSymptomType;
+
   const handlePainMarkerAdd = useCallback((marker: PainMarker) => {
-    setPainMarkers(prev => [...prev, marker]);
-    setClinicalBubbleMarker(marker);
+    const markerWithSymptom = { ...marker, symptomType: activeSymptomTypeRef.current };
+    setPainMarkers(prev => [...prev, markerWithSymptom]);
+    setClinicalBubbleMarker(markerWithSymptom);
     setClinicalBubbleSeverity("moderate");
   }, []);
 
@@ -984,7 +989,7 @@ ${ddxList}`;
     let markerInfo = '';
     const targetMarker = painMarkers.find(m => m.id === markerId);
     if (targetMarker) {
-      const typeLabels: Record<string, string> = { point: 'focal point of', area: 'broad area of', referred: 'referred', line: 'pain along a line near' };
+      const typeLabels: Record<string, string> = { point: 'focal point of', area: 'broad area of', referred: 'referred', line: 'pain along a line near', paint: 'painted region of' };
       markerInfo = typeLabels[targetMarker.type || 'point'] || 'focal point of';
       if (targetMarker.type === 'referred' && targetMarker.referralTargetLabel) {
         markerInfo += ` pain at ${label} referring to ${targetMarker.referralTargetLabel}`;
@@ -1075,7 +1080,7 @@ ${ddxList}`;
 
   const handleAskAboutPainMarkers = useCallback(() => {
     if (painMarkers.length === 0) return;
-    const typeLabels: Record<string, string> = { point: 'focal point', area: 'broad area', referred: 'referred pain pattern', line: 'pain along a line/path' };
+    const typeLabels: Record<string, string> = { point: 'focal point', area: 'broad area', referred: 'referred pain pattern', line: 'pain along a line/path', paint: 'painted symptom region' };
     const markerDescriptions = painMarkers.map((m, i) => {
       const desc = m.description ? ` - "${m.description}"` : '';
       const typeInfo = typeLabels[m.type || 'point'] || 'focal point';
@@ -1083,10 +1088,12 @@ ${ddxList}`;
       if (m.type === 'referred' && m.referralTargetLabel) extra = ` → refers to ${m.referralTargetLabel}`;
       if (m.type === 'line' && m.linePoints) extra = ` (${m.linePoints.length + 1} points along path)`;
       if (m.type === 'area' && m.radius) extra = ` (radius ~${Math.round(m.radius * 100)}mm)`;
+      if (m.type === 'paint' && m.paintPoints) extra = ` (free-drawn region with ${m.paintPoints.length} points)`;
+      const symptomInfo = m.symptomType && SYMPTOM_TYPES[m.symptomType] ? ` {${SYMPTOM_TYPES[m.symptomType].label}}` : '';
       const subjHx = m.subjectiveHistory ? ` | Subjective Hx: "${m.subjectiveHistory}"` : '';
-      return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${extra}${desc}${subjHx}`;
+      return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${symptomInfo}${extra}${desc}${subjHx}`;
     }).join('\n');
-    const prompt = `The patient has indicated pain in the following areas on the anatomical skeleton:\n${markerDescriptions}\n\nPlease provide a clinical assessment considering these pain locations, types, and patterns. What could be the differential diagnoses? What assessment approach would you recommend? Are there any patterns suggesting a specific condition? Pay special attention to any referred pain patterns, pain distributions, and any subjective history provided.`;
+    const prompt = `The patient has indicated symptoms in the following areas on the anatomical skeleton:\n${markerDescriptions}\n\nPlease provide a clinical assessment considering these symptom locations, types, and patterns. What could be the differential diagnoses? What assessment approach would you recommend? Are there any patterns suggesting a specific condition? Pay special attention to any referred pain patterns, symptom distributions (including non-pain symptoms like numbness, tingling, weakness), and any subjective history provided.`;
     sendMessageStreaming(prompt);
   }, [painMarkers]);
 
@@ -1181,7 +1188,7 @@ ${ddxList}`;
     }
 
     if (painMarkers.length > 0) {
-      const typeLabels: Record<string, string> = { point: 'focal point', area: 'broad area', referred: 'referred pain pattern', line: 'pain along a line/path' };
+      const typeLabels: Record<string, string> = { point: 'focal point', area: 'broad area', referred: 'referred pain pattern', line: 'pain along a line/path', paint: 'painted symptom region' };
       const markerLines = painMarkers.map((m, i) => {
         const desc = m.description ? ` - "${m.description}"` : '';
         const typeInfo = typeLabels[m.type || 'point'] || 'focal point';
@@ -1189,10 +1196,12 @@ ${ddxList}`;
         if (m.type === 'referred' && m.referralTargetLabel) extra = ` → refers to ${m.referralTargetLabel}`;
         if (m.type === 'line' && m.linePoints) extra = ` (${m.linePoints.length + 1} points along path)`;
         if (m.type === 'area' && m.radius) extra = ` (radius ~${Math.round(m.radius * 100)}mm)`;
+        if (m.type === 'paint' && m.paintPoints) extra = ` (free-drawn region with ${m.paintPoints.length} points)`;
+        const symptomInfo = m.symptomType && SYMPTOM_TYPES[m.symptomType] ? ` {${SYMPTOM_TYPES[m.symptomType].label}}` : '';
         const subjHx = m.subjectiveHistory ? ` | Subjective Hx: "${m.subjectiveHistory}"` : '';
-        return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${extra}${desc}${subjHx}`;
+        return `${i + 1}. ${m.anatomicalLabel} [${typeInfo}]${symptomInfo}${extra}${desc}${subjHx}`;
       });
-      sections.push(`**Pain Markers (${painMarkers.length}):**\n${markerLines.join('\n')}`);
+      sections.push(`**Symptom Markers (${painMarkers.length}):**\n${markerLines.join('\n')}`);
     }
 
     const forces = calculatePosturalForces(modelConfig);
@@ -3589,6 +3598,7 @@ ${ddxList}`;
                         area: "Click and drag to draw a pain area. Right-click to remove.",
                         referred: "Click to place origin, then click again for referral target. Right-click to cancel/remove.",
                         line: "Click to place points along the pain path. Double-click to finish. Right-click to cancel/remove.",
+                        paint: "Click and drag to free-draw symptom areas on the body. Right-click to remove.",
                       };
                       toast({ title: "Pain Marker Mode", description: tips[activePainMarkerType] });
                     }
@@ -3598,36 +3608,52 @@ ${ddxList}`;
                   {painMarkerMode ? 'Marking...' : 'Mark Pain'}
                 </Button>
                 {painMarkerMode && (
-                  <div className="flex items-center bg-red-500/90 rounded-r-md overflow-hidden h-7">
-                    {([
-                      { type: 'point' as PainMarkerType, icon: '•', tip: 'Point' },
-                      { type: 'area' as PainMarkerType, icon: '◉', tip: 'Area' },
-                      { type: 'referred' as PainMarkerType, icon: '→', tip: 'Referred' },
-                      { type: 'line' as PainMarkerType, icon: '⁓', tip: 'Line' },
-                    ]).map(({ type, icon, tip }) => (
-                      <button
-                        key={type}
-                        title={tip}
-                        className={`px-1.5 h-full text-xs font-bold transition-colors ${
-                          activePainMarkerType === type
-                            ? 'bg-white text-red-600'
-                            : 'text-white/80 hover:text-white hover:bg-red-600'
-                        }`}
-                        onClick={() => {
-                          setActivePainMarkerType(type);
-                          const tips: Record<PainMarkerType, string> = {
-                            point: "Click to place a point marker. Drag to reposition.",
-                            area: "Click and drag to draw a pain area.",
-                            referred: "Click origin, then click referral target.",
-                            line: "Click to place points along path. Double-click to finish.",
-                          };
-                          toast({ title: `${tip} Pain`, description: tips[type] });
-                        }}
-                      >
-                        {icon}
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    <div className="flex items-center bg-red-500/90 rounded-r-md overflow-hidden h-7">
+                      {([
+                        { type: 'point' as PainMarkerType, icon: '•', tip: 'Point' },
+                        { type: 'area' as PainMarkerType, icon: '◉', tip: 'Area' },
+                        { type: 'referred' as PainMarkerType, icon: '→', tip: 'Referred' },
+                        { type: 'line' as PainMarkerType, icon: '⁓', tip: 'Line' },
+                        { type: 'paint' as PainMarkerType, icon: '✎', tip: 'Paint' },
+                      ]).map(({ type, icon, tip }) => (
+                        <button
+                          key={type}
+                          title={tip}
+                          className={`px-1.5 h-full text-xs font-bold transition-colors ${
+                            activePainMarkerType === type
+                              ? 'bg-white text-red-600'
+                              : 'text-white/80 hover:text-white hover:bg-red-600'
+                          }`}
+                          onClick={() => {
+                            setActivePainMarkerType(type);
+                            const tips: Record<PainMarkerType, string> = {
+                              point: "Click to place a point marker. Drag to reposition.",
+                              area: "Click and drag to draw a pain area.",
+                              referred: "Click origin, then click referral target.",
+                              line: "Click to place points along path. Double-click to finish.",
+                              paint: "Click and drag to free-draw symptom areas.",
+                            };
+                            toast({ title: `${tip} Pain`, description: tips[type] });
+                          }}
+                        >
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
+                    <select
+                      value={activeSymptomType}
+                      onChange={(e) => setActiveSymptomType(e.target.value as SymptomType)}
+                      className="h-7 text-xs bg-gray-800/90 text-gray-200 border border-gray-600/50 rounded-md px-1.5 cursor-pointer"
+                      title="Symptom Type"
+                    >
+                      {Object.entries(SYMPTOM_TYPES).map(([key, info]) => (
+                        <option key={key} value={key} style={{ color: info.hexColor }}>
+                          {info.icon} {info.label}
+                        </option>
+                      ))}
+                    </select>
+                  </>
                 )}
               </div>
               <Button

@@ -6334,6 +6334,135 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/clinical-notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { reasoningData, subjectiveHistory } = req.body;
+      if (!reasoningData) {
+        return res.status(400).json({ error: "Clinical reasoning data is required" });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const openai = new OpenAI({ apiKey, baseURL });
+
+      const d = reasoningData;
+      let contextParts: string[] = [];
+
+      if (subjectiveHistory?.trim()) {
+        contextParts.push(`SUBJECTIVE HISTORY PROVIDED:\n${subjectiveHistory}`);
+      }
+
+      if (d.hypotheses?.length > 0) {
+        contextParts.push(`DIFFERENTIAL DIAGNOSES (${d.hypotheses.length}):\n${d.hypotheses.map((h: any) => `- ${h.condition} (Confidence: ${h.confidence}%, Status: ${h.status})\n  Supporting: ${(h.supportingEvidence || []).join('; ')}\n  Ruling out: ${(h.rulingOutFactors || []).join('; ')}`).join('\n')}`);
+      }
+
+      if (d.findings?.length > 0) {
+        contextParts.push(`CLINICAL FINDINGS (${d.findings.length}):\n${d.findings.map((f: any) => `- [${f.category}] ${f.text}`).join('\n')}`);
+      }
+
+      if (d.flags?.length > 0) {
+        contextParts.push(`CLINICAL FLAGS:\n${d.flags.map((f: any) => `- [${f.type?.toUpperCase()}] ${f.text} → Action: ${f.action}`).join('\n')}`);
+      }
+
+      if (d.biomechanicalLinks?.length > 0) {
+        contextParts.push(`BIOMECHANICAL LINKS:\n${d.biomechanicalLinks.map((b: any) => `- ${b.primaryRegion} → ${b.connectedRegion}: ${b.mechanism} (${b.clinicalRelevance})`).join('\n')}`);
+      }
+
+      if (d.reasoningChain?.length > 0) {
+        contextParts.push(`CLINICAL REASONING CHAIN:\n${d.reasoningChain.map((r: any) => `${r.step}. [${r.type}] ${r.thought}`).join('\n')}`);
+      }
+
+      if (d.clinicalSummary) {
+        contextParts.push(`CLINICAL SUMMARY:\n${d.clinicalSummary}`);
+      }
+
+      if (d.assessmentPriorities?.length > 0) {
+        contextParts.push(`ASSESSMENT PRIORITIES:\n${d.assessmentPriorities.map((p: any, i: number) => `${i+1}. ${p}`).join('\n')}`);
+      }
+
+      if (d.treatmentPlan) {
+        const tp = d.treatmentPlan;
+        let tpParts = [];
+        if (tp.treatmentReasoning) tpParts.push(`Rationale: ${tp.treatmentReasoning}`);
+        if (tp.rootCauseTreatment?.primaryCause) tpParts.push(`Root Cause: ${tp.rootCauseTreatment.primaryCause}`);
+        if (tp.prognosis) tpParts.push(`Prognosis: ${tp.prognosis}`);
+        if (tp.phases?.length > 0) {
+          tpParts.push(`Phases:\n${tp.phases.map((p: any) => `- ${p.name} (${p.timeframe}): Goals: ${(p.goals || []).join(', ')}`).join('\n')}`);
+        }
+        if (tp.homeProgram?.length > 0) {
+          tpParts.push(`Home Program:\n${tp.homeProgram.map((h: any) => `- ${h.exercise}: ${h.dosage} — ${h.instructions}`).join('\n')}`);
+        }
+        if (tp.contraindications?.length > 0) {
+          tpParts.push(`Contraindications: ${tp.contraindications.join('; ')}`);
+        }
+        contextParts.push(`TREATMENT PLAN:\n${tpParts.join('\n')}`);
+      }
+
+      if (d.posturalAnalysis) {
+        const pa = d.posturalAnalysis;
+        let paParts = [];
+        if (pa.primaryPosturalDysfunction) paParts.push(`Primary Dysfunction: ${pa.primaryPosturalDysfunction}`);
+        if (pa.summary) paParts.push(`Summary: ${pa.summary}`);
+        if (pa.correlations?.length > 0) {
+          paParts.push(`Correlations:\n${pa.correlations.map((c: any) => `- ${c.deviation} (${c.severity}): ${c.forceImpact} → ${c.muscleEffect} → ${c.painLink}`).join('\n')}`);
+        }
+        if (pa.compensatoryPatterns?.length > 0) {
+          paParts.push(`Compensatory Patterns: ${pa.compensatoryPatterns.join('; ')}`);
+        }
+        contextParts.push(`POSTURAL ANALYSIS:\n${paParts.join('\n')}`);
+      }
+
+      const prompt = `You are an expert physiotherapist generating professional clinical documentation. Based on the AI clinical reasoning analysis data provided below, create comprehensive clinical notes in SOAP format. These notes should be ready for clinical records.
+
+CLINICAL REASONING DATA:
+${contextParts.join('\n\n')}
+
+Generate clinical notes with the following structure. Return ONLY valid JSON:
+{
+  "subjective": "Patient-reported symptoms, history, mechanism of injury, aggravating/easing factors, functional limitations, and relevant medical history. Write in professional clinical narrative format.",
+  "objective": "Observable and measurable findings including posture assessment, ROM, strength, special tests, palpation findings, gait/movement analysis, and neurological screening. Write in professional clinical format with specific measurements where available.",
+  "assessment": "Clinical interpretation including primary diagnosis with ICD-10 code, differential diagnoses, clinical reasoning summary, severity/irritability/nature/stage (SINS), contributing factors, and prognosis.",
+  "plan": "Treatment plan including short-term and long-term goals, planned interventions with frequency/duration, home exercise program, patient education, referrals if needed, and follow-up schedule.",
+  "additionalNotes": "Any red/yellow flags, precautions, contraindications, or special considerations for ongoing management."
+}
+
+GUIDELINES:
+- Write in professional, concise clinical language suitable for medical records
+- Use standard physiotherapy terminology and abbreviations where appropriate
+- Include specific measurements, grades, and clinical scales when data is available
+- Structure each section with clear paragraphs
+- Include ICD-10 codes in the assessment where applicable
+- Make the notes comprehensive but not verbose`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: prompt },
+          { role: "user", content: "Generate comprehensive SOAP clinical notes from the provided clinical reasoning data." }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        max_tokens: 4000,
+      });
+
+      const content = completion.choices[0]?.message?.content || '{}';
+      const parsed = JSON.parse(content);
+
+      res.json({
+        subjective: parsed.subjective || '',
+        objective: parsed.objective || '',
+        assessment: parsed.assessment || '',
+        plan: parsed.plan || '',
+        additionalNotes: parsed.additionalNotes || '',
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error("Clinical notes generation error:", error);
+      res.status(500).json({ error: "Failed to generate clinical notes" });
+    }
+  });
+
   app.post("/api/physiogpt/focused-camera-analyze", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { image, region, computedAngles, cameraType } = req.body;

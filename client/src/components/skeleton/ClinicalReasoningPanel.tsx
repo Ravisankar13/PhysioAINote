@@ -28,7 +28,11 @@ import {
   ArrowDownRight,
   Pause,
   Play,
+  Copy,
+  ClipboardCheck,
+  ScrollText,
 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
 export interface ClinicalHypothesis {
   id: string;
@@ -336,7 +340,19 @@ export default function ClinicalReasoningPanel({
     priorities: false,
     treatment: true,
     postural: true,
+    clinicalNotes: true,
   });
+
+  const [clinicalNotes, setClinicalNotes] = useState<{
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+    additionalNotes: string;
+    generatedAt: string;
+  } | null>(null);
+  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
+  const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -360,6 +376,39 @@ export default function ClinicalReasoningPanel({
       }
     }
   }, [subjectiveHistory, onSubjectiveHistorySubmit]);
+
+  const generateClinicalNotes = useCallback(async () => {
+    if (!hasContent || isGeneratingNotes) return;
+    setIsGeneratingNotes(true);
+    try {
+      const res = await apiRequest("POST", "/api/clinical-notes/generate", {
+        reasoningData: d,
+        subjectiveHistory,
+      });
+      const notes = await res.json();
+      setClinicalNotes(notes);
+    } catch (err) {
+      console.error("Failed to generate clinical notes:", err);
+    } finally {
+      setIsGeneratingNotes(false);
+    }
+  }, [d, subjectiveHistory, hasContent, isGeneratingNotes]);
+
+  const copySection = useCallback((sectionName: string, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedSection(sectionName);
+      setTimeout(() => setCopiedSection(null), 2000);
+    });
+  }, []);
+
+  const copyAllNotes = useCallback(() => {
+    if (!clinicalNotes) return;
+    const fullText = `SUBJECTIVE:\n${clinicalNotes.subjective}\n\nOBJECTIVE:\n${clinicalNotes.objective}\n\nASSESSMENT:\n${clinicalNotes.assessment}\n\nPLAN:\n${clinicalNotes.plan}${clinicalNotes.additionalNotes ? `\n\nADDITIONAL NOTES:\n${clinicalNotes.additionalNotes}` : ''}`;
+    navigator.clipboard.writeText(fullText).then(() => {
+      setCopiedSection('all');
+      setTimeout(() => setCopiedSection(null), 2000);
+    });
+  }, [clinicalNotes]);
 
   useEffect(() => {
     if (scrollRef.current && hasContent) {
@@ -953,6 +1002,99 @@ export default function ClinicalReasoningPanel({
                 <span className="text-[10px] font-semibold text-cyan-300">Clinical Summary</span>
               </div>
               <p className="text-[10px] text-gray-400 leading-relaxed">{d.clinicalSummary}</p>
+            </div>
+          )}
+
+          {hasContent && (
+            <div className="mt-2">
+              <SectionHeader
+                icon={ScrollText}
+                title="Clinical Notes"
+                count={clinicalNotes ? 4 : 0}
+                color="text-indigo-400"
+                isOpen={expandedSections.clinicalNotes}
+                onToggle={() => toggleSection("clinicalNotes")}
+              />
+              {expandedSections.clinicalNotes && (
+                <div className="space-y-2 mt-1 ml-1">
+                  {!clinicalNotes && (
+                    <div className="bg-indigo-500/5 rounded-lg p-3 border border-indigo-500/10 text-center">
+                      <ScrollText className="h-5 w-5 text-indigo-400/50 mx-auto mb-2" />
+                      <p className="text-[10px] text-gray-400 mb-2">
+                        Generate structured SOAP clinical notes from all the AI reasoning data above
+                      </p>
+                      <button
+                        onClick={generateClinicalNotes}
+                        disabled={isGeneratingNotes || !hasContent}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 rounded-lg text-[10px] font-medium text-indigo-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isGeneratingNotes ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Generating Notes...
+                          </>
+                        ) : (
+                          <>
+                            <ScrollText className="h-3 w-3" />
+                            Generate Clinical Notes
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {clinicalNotes && (
+                    <>
+                      <div className="flex items-center justify-between px-1">
+                        <p className="text-[8px] text-gray-600">
+                          Generated {new Date(clinicalNotes.generatedAt).toLocaleTimeString()}
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={copyAllNotes}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-500/10 hover:bg-indigo-500/20 rounded text-[9px] text-indigo-300 transition-colors"
+                          >
+                            {copiedSection === 'all' ? <ClipboardCheck className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+                            {copiedSection === 'all' ? 'Copied!' : 'Copy All'}
+                          </button>
+                          <button
+                            onClick={generateClinicalNotes}
+                            disabled={isGeneratingNotes}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700/50 hover:bg-gray-700 rounded text-[9px] text-gray-400 hover:text-gray-300 disabled:opacity-40 transition-colors"
+                          >
+                            {isGeneratingNotes ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <ScrollText className="h-2.5 w-2.5" />}
+                            Regenerate
+                          </button>
+                        </div>
+                      </div>
+
+                      {([
+                        { key: 'subjective', label: 'Subjective', bgClass: 'bg-blue-500/5', borderClass: 'border-blue-500/10', textClass: 'text-blue-300' },
+                        { key: 'objective', label: 'Objective', bgClass: 'bg-green-500/5', borderClass: 'border-green-500/10', textClass: 'text-green-300' },
+                        { key: 'assessment', label: 'Assessment', bgClass: 'bg-amber-500/5', borderClass: 'border-amber-500/10', textClass: 'text-amber-300' },
+                        { key: 'plan', label: 'Plan', bgClass: 'bg-purple-500/5', borderClass: 'border-purple-500/10', textClass: 'text-purple-300' },
+                        ...(clinicalNotes.additionalNotes ? [{ key: 'additionalNotes', label: 'Additional Notes', bgClass: 'bg-rose-500/5', borderClass: 'border-rose-500/10', textClass: 'text-rose-300' }] : []),
+                      ]).map(({ key, label, bgClass, borderClass, textClass }) => (
+                        <div key={key} className={`${bgClass} rounded-lg border ${borderClass} overflow-hidden`}>
+                          <div className="flex items-center justify-between px-2.5 py-1.5 bg-white/[0.02]">
+                            <span className={`text-[10px] font-semibold ${textClass} uppercase tracking-wider`}>{label}</span>
+                            <button
+                              onClick={() => copySection(key, (clinicalNotes as any)[key])}
+                              className="p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-gray-300 transition-colors"
+                              title={`Copy ${label}`}
+                            >
+                              {copiedSection === key ? <ClipboardCheck className="h-2.5 w-2.5 text-green-400" /> : <Copy className="h-2.5 w-2.5" />}
+                            </button>
+                          </div>
+                          <div className="px-2.5 py-2">
+                            <p className="text-[10px] text-gray-300 leading-relaxed whitespace-pre-wrap">{(clinicalNotes as any)[key]}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

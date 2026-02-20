@@ -1393,12 +1393,12 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   ],
   
   // === SPINE (Sagittal plane curves) ===
-  // Axis convention for midline spine bones: X = sagittal (flexion/extension), Y = transverse (rotation), Z = frontal (lateral flexion)
+  // Axis convention for midline spine bones: Z = sagittal (flexion/extension), X = transverse (rotation), Y = frontal (lateral flexion)
   // Lordosis = extension (backward curve), Kyphosis = flexion (forward curve)
   'spine.cervicalLordosis': [
-    { boneName: 'Neck_M', axis: 'x', scale: 0.3 },
-    { boneName: 'NeckPart1_M', axis: 'x', scale: 0.2 },
-    { boneName: 'NeckPart2_M', axis: 'x', scale: 0.2 },
+    { boneName: 'Neck_M', axis: 'z', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'z', scale: 0.2 },
+    { boneName: 'NeckPart2_M', axis: 'z', scale: 0.2 },
   ],
   'spine.thoracicKyphosis': [
     { boneName: 'Chest_M', axis: 'z', scale: 0.3 },
@@ -1419,14 +1419,14 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Chest_M', axis: 'y', scale: -0.15 },
   ],
   'spine.cervicalRotation': [
-    { boneName: 'Neck_M', axis: 'y', scale: 0.3 },
-    { boneName: 'NeckPart1_M', axis: 'y', scale: 0.2 },
-    { boneName: 'NeckPart2_M', axis: 'y', scale: 0.2 },
+    { boneName: 'Neck_M', axis: 'x', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'x', scale: 0.2 },
+    { boneName: 'NeckPart2_M', axis: 'x', scale: 0.2 },
   ],
   'spine.cervicalLateralFlexion': [
-    { boneName: 'Neck_M', axis: 'z', scale: 0.3 },
-    { boneName: 'NeckPart1_M', axis: 'z', scale: 0.25 },
-    { boneName: 'NeckPart2_M', axis: 'z', scale: 0.2 },
+    { boneName: 'Neck_M', axis: 'y', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'y', scale: 0.25 },
+    { boneName: 'NeckPart2_M', axis: 'y', scale: 0.2 },
   ],
   'spine.thoracicRotation': [
     { boneName: 'Chest_M', axis: 'x', scale: 0.2 },
@@ -1465,42 +1465,42 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Chest_M', axis: 'y', scale: 0.15 },
   ],
   'spine.cervicalScoliosis': [
-    { boneName: 'Neck_M', axis: 'z', scale: 0.2 },
-    { boneName: 'NeckPart1_M', axis: 'z', scale: 0.15 },
-    { boneName: 'NeckPart2_M', axis: 'z', scale: 0.1 },
+    { boneName: 'Neck_M', axis: 'y', scale: 0.2 },
+    { boneName: 'NeckPart1_M', axis: 'y', scale: 0.15 },
+    { boneName: 'NeckPart2_M', axis: 'y', scale: 0.1 },
   ],
 
   // === HEAD & NECK (Cervical Spine) ===
   'neck.flexion': [
-    { boneName: 'Neck_M', axis: 'x', scale: -0.3 },
-    { boneName: 'NeckPart1_M', axis: 'x', scale: -0.25 },
-    { boneName: 'NeckPart2_M', axis: 'x', scale: -0.2 },
-    { boneName: 'Head_M', axis: 'x', scale: -0.15 },
+    { boneName: 'Neck_M', axis: 'z', scale: -0.3 },
+    { boneName: 'NeckPart1_M', axis: 'z', scale: -0.25 },
+    { boneName: 'NeckPart2_M', axis: 'z', scale: -0.2 },
+    { boneName: 'Head_M', axis: 'z', scale: -0.15 },
   ],
   'neck.extension': [
-    { boneName: 'Neck_M', axis: 'x', scale: 0.3 },
-    { boneName: 'NeckPart1_M', axis: 'x', scale: 0.25 },
-    { boneName: 'NeckPart2_M', axis: 'x', scale: 0.2 },
-    { boneName: 'Head_M', axis: 'x', scale: 0.15 },
+    { boneName: 'Neck_M', axis: 'z', scale: 0.3 },
+    { boneName: 'NeckPart1_M', axis: 'z', scale: 0.25 },
+    { boneName: 'NeckPart2_M', axis: 'z', scale: 0.2 },
+    { boneName: 'Head_M', axis: 'z', scale: 0.15 },
   ],
   'neck.rotation': [
+    { boneName: 'Neck_M', axis: 'x', scale: 0.25 },
+    { boneName: 'NeckPart1_M', axis: 'x', scale: 0.3 },
+    { boneName: 'NeckPart2_M', axis: 'x', scale: 0.25 },
+    { boneName: 'Head_M', axis: 'x', scale: 0.2 },
+  ],
+  'neck.lateralFlexion': [
     { boneName: 'Neck_M', axis: 'y', scale: 0.25 },
     { boneName: 'NeckPart1_M', axis: 'y', scale: 0.3 },
     { boneName: 'NeckPart2_M', axis: 'y', scale: 0.25 },
     { boneName: 'Head_M', axis: 'y', scale: 0.2 },
   ],
-  'neck.lateralFlexion': [
-    { boneName: 'Neck_M', axis: 'z', scale: 0.25 },
-    { boneName: 'NeckPart1_M', axis: 'z', scale: 0.3 },
-    { boneName: 'NeckPart2_M', axis: 'z', scale: 0.25 },
-    { boneName: 'Head_M', axis: 'z', scale: 0.2 },
-  ],
   'neck.forwardHead': [
-    { boneName: 'Chest_M', axis: 'x', scale: 0.15 },
-    { boneName: 'Neck_M', axis: 'x', scale: -0.25 },
-    { boneName: 'NeckPart1_M', axis: 'x', scale: -0.2 },
-    { boneName: 'NeckPart2_M', axis: 'x', scale: -0.15 },
-    { boneName: 'Head_M', axis: 'x', scale: -0.1 },
+    { boneName: 'Chest_M', axis: 'z', scale: 0.15 },
+    { boneName: 'Neck_M', axis: 'z', scale: -0.25 },
+    { boneName: 'NeckPart1_M', axis: 'z', scale: -0.2 },
+    { boneName: 'NeckPart2_M', axis: 'z', scale: -0.15 },
+    { boneName: 'Head_M', axis: 'z', scale: -0.1 },
   ],
 };
 
@@ -1538,10 +1538,10 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'Spine1Part1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'z', scale: -1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
   'Spine1Part2_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'z', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
   'Chest_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'z', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
-  'Neck_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
-  'NeckPart1_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
-  'NeckPart2_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
-  'Head_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
+  'Neck_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
+  'NeckPart1_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
+  'NeckPart2_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
+  'Head_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
   'Scapula_L': { configKey: 'leftShoulder.abduction', label: 'L Shoulder Abduction', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
   'Scapula_R': { configKey: 'rightShoulder.abduction', label: 'R Shoulder Abduction', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
 };

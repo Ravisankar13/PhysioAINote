@@ -379,6 +379,7 @@ export default function PhysioGPT() {
   const [enabledMuscleGroups, setEnabledMuscleGroups] = useState<Set<string>>(new Set());
   const [muscleStatusFilter, setMuscleStatusFilter] = useState<string | null>(null);
   const [showMuscleExercises, setShowMuscleExercises] = useState<string | null>(null);
+  const [clickedMusclePopup, setClickedMusclePopup] = useState<{ groupId: string; screenX: number; screenY: number } | null>(null);
   const [showBalanceRatios, setShowBalanceRatios] = useState(false);
   const [showTreatmentPriority, setShowTreatmentPriority] = useState(false);
   const [chainExplorerMode, setChainExplorerMode] = useState(false);
@@ -2015,6 +2016,10 @@ ${ddxList}`;
               selectedForceJoint={selectedForceJoint}
               onForceJointSelect={(joint) => setSelectedForceJoint(prev => prev === joint ? null : joint)}
               muscleStates={muscleMode && muscleAnalysis ? muscleAnalysis.groupStates : undefined}
+              enableMuscleInteraction={muscleMode}
+              onMuscleGroupClick={(groupId, screenX, screenY) => {
+                setClickedMusclePopup(prev => prev?.groupId === groupId ? null : { groupId, screenX, screenY });
+              }}
             />
 
             {/* Joint Controls Overlay */}
@@ -2216,6 +2221,120 @@ ${ddxList}`;
 
                 </div>
               </div>
+              );
+            })()}
+
+            {clickedMusclePopup && muscleMode && muscleAnalysis && (() => {
+              const group = muscleAnalysis.groups.find(g => g.meshGroup === clickedMusclePopup.groupId || g.id === clickedMusclePopup.groupId);
+              if (!group) return null;
+              const containerRect = skeletonContainerRef.current?.getBoundingClientRect();
+              const popupX = containerRect ? clickedMusclePopup.screenX - containerRect.left : clickedMusclePopup.screenX;
+              const popupY = containerRect ? clickedMusclePopup.screenY - containerRect.top : clickedMusclePopup.screenY;
+              const clampedX = Math.min(Math.max(popupX, 10), (containerRect?.width || 600) - 290);
+              const clampedY = Math.min(Math.max(popupY, 10), (containerRect?.height || 400) - 200);
+              return (
+                <div
+                  className="absolute z-30 w-[280px] max-h-[380px] overflow-y-auto bg-slate-900/95 backdrop-blur-md border border-cyan-500/40 rounded-xl shadow-2xl"
+                  style={{ left: clampedX, top: clampedY }}
+                >
+                  <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md px-3 py-2 border-b border-white/10 flex items-center justify-between rounded-t-xl z-10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getClinicalStatusColor(group.dominantStatus) }} />
+                      <span className="text-xs font-bold text-white">{group.label}</span>
+                      <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ color: getClinicalStatusColor(group.dominantStatus), backgroundColor: getClinicalStatusColor(group.dominantStatus) + '25' }}>
+                        {getClinicalStatusLabel(group.dominantStatus)}
+                      </span>
+                    </div>
+                    <button onClick={() => setClickedMusclePopup(null)} className="text-gray-400 hover:text-white p-0.5">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="px-3 py-2 space-y-1 border-b border-white/5">
+                    <div className="flex gap-3 text-[9px] text-gray-400">
+                      <span>Avg Activation: <span className="text-green-400 font-medium">{group.avgActivation.toFixed(0)}%</span></span>
+                      <span>Tightness: <span className="text-orange-400 font-medium">{group.avgTightness.toFixed(0)}%</span></span>
+                      <span>Inhibition: <span className="text-purple-400 font-medium">{group.avgInhibition.toFixed(0)}%</span></span>
+                    </div>
+                  </div>
+                  <div className="px-2 py-1.5 space-y-1">
+                    {group.muscles.map(m => {
+                      const mColor = getClinicalStatusColor(m.clinicalStatus);
+                      const isExpanded = selectedMuscleId === m.id;
+                      return (
+                        <div key={m.id}
+                          className={`rounded-lg px-2 py-1.5 cursor-pointer transition-all ${isExpanded ? 'bg-cyan-500/15 ring-1 ring-cyan-500/30' : 'bg-white/5 hover:bg-white/10'}`}
+                          onClick={() => setSelectedMuscleId(prev => prev === m.id ? null : m.id)}
+                        >
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: mColor }} />
+                            <span className="text-[10px] text-white font-medium flex-1 truncate">{m.label}</span>
+                            <span className="text-[7px] px-1.5 py-0.5 rounded-full" style={{ color: mColor, backgroundColor: mColor + '20' }}>
+                              {getClinicalStatusLabel(m.clinicalStatus)}
+                            </span>
+                          </div>
+                          <div className="space-y-0.5">
+                            {[
+                              { label: 'Length', value: m.lengthPercent, color: 'bg-blue-400', textColor: 'text-blue-400' },
+                              { label: 'Activ', value: m.activationPercent, color: 'bg-green-400', textColor: 'text-green-400' },
+                              { label: 'Tight', value: m.tightnessPercent, color: 'bg-orange-400', textColor: 'text-orange-400' },
+                              { label: 'Inhib', value: m.inhibitionPercent, color: 'bg-purple-400', textColor: 'text-purple-400' },
+                            ].map(bar => (
+                              <div key={bar.label} className="flex items-center gap-1">
+                                <span className={`text-[7px] ${bar.textColor} w-7`}>{bar.label}</span>
+                                <div className="flex-1 bg-gray-700 rounded-full h-1">
+                                  <div className={`${bar.color} h-1 rounded-full`} style={{ width: `${Math.min(100, bar.value)}%` }} />
+                                </div>
+                                <span className="text-[7px] text-gray-400 w-7 text-right tabular-nums">{bar.value.toFixed(0)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                          {isExpanded && (
+                            <div className="mt-1.5 pt-1.5 border-t border-white/10 space-y-1">
+                              <div className="flex justify-between">
+                                <span className="text-[8px] text-gray-400">Tone</span>
+                                <span className={`text-[8px] font-medium ${m.tone === 'hypertonic' ? 'text-red-400' : m.tone === 'hypotonic' ? 'text-blue-400' : 'text-green-400'}`}>
+                                  {getToneLabel(m.tone)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-[8px] text-gray-400">Fatigue Risk</span>
+                                <span className={`text-[8px] font-medium ${m.fatigueRisk > 60 ? 'text-red-400' : m.fatigueRisk > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
+                                  {m.fatigueRisk.toFixed(0)}%
+                                </span>
+                              </div>
+                              <p className="text-[8px] text-gray-400 leading-relaxed">{m.clinicalNote}</p>
+                              <div className="mt-1 pt-1 border-t border-white/10">
+                                <button
+                                  className="text-[8px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                                  onClick={(e) => { e.stopPropagation(); setShowMuscleExercises(prev => prev === m.id ? null : m.id); }}
+                                >
+                                  <Dumbbell className="h-2.5 w-2.5" />
+                                  {showMuscleExercises === m.id ? 'Hide Exercises' : 'Show Exercises'}
+                                </button>
+                                {showMuscleExercises === m.id && (
+                                  <div className="mt-1 space-y-1">
+                                    {getExerciseRecommendations(m).map((ex, ei) => (
+                                      <div key={ei} className={`rounded px-1.5 py-1 ${ex.priority === 'high' ? 'bg-cyan-500/10 border border-cyan-500/20' : 'bg-white/5'}`}>
+                                        <div className="flex items-center gap-1">
+                                          <span className={`text-[7px] px-1 rounded ${ex.type === 'stretch' ? 'bg-blue-500/20 text-blue-400' : ex.type === 'strengthen' ? 'bg-green-500/20 text-green-400' : ex.type === 'release' ? 'bg-purple-500/20 text-purple-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                            {ex.type}
+                                          </span>
+                                          <span className="text-[8px] text-white flex-1">{ex.name}</span>
+                                          <span className="text-[7px] text-gray-500">{ex.duration}</span>
+                                        </div>
+                                        <p className="text-[7px] text-gray-400 mt-0.5">{ex.description}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })()}
 

@@ -1192,6 +1192,8 @@ interface PureThreeGLBViewerProps {
   bodyWeightKg?: number;
   selectedForceJoint?: string | null;
   onForceJointSelect?: (joint: string) => void;
+  enableMuscleInteraction?: boolean;
+  onMuscleGroupClick?: (groupId: string, screenX: number, screenY: number) => void;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -1591,6 +1593,8 @@ export default function PureThreeGLBViewer({
   bodyWeightKg = 70,
   selectedForceJoint = null,
   onForceJointSelect,
+  enableMuscleInteraction = false,
+  onMuscleGroupClick,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1679,6 +1683,13 @@ export default function PureThreeGLBViewer({
   } | null>(null);
   const poseSelectedBoneRef = useRef<string | null>(null);
   const poseHighlightMeshRef = useRef<THREE.Mesh | null>(null);
+  const [muscleHoverInfo, setMuscleHoverInfo] = useState<{ groupId: string; label: string; screenX: number; screenY: number } | null>(null);
+  const enableMuscleInteractionRef = useRef(enableMuscleInteraction);
+  enableMuscleInteractionRef.current = enableMuscleInteraction;
+  const onMuscleGroupClickRef = useRef(onMuscleGroupClick);
+  onMuscleGroupClickRef.current = onMuscleGroupClick;
+  const muscleHoverMeshRef = useRef<THREE.Object3D | null>(null);
+  const muscleOriginalEmissiveRef = useRef<Map<THREE.Mesh, { color: THREE.Color; intensity: number }>>(new Map());
 
   const findNearestBone = useCallback((position: THREE.Vector3): { boneName: string; label: string } => {
     const bones = bonesRef.current;
@@ -4936,6 +4947,134 @@ export default function PureThreeGLBViewer({
     };
   }, []);
 
+  useEffect(() => {
+    if (!containerRef.current || status !== 'ready') return;
+    const container = containerRef.current;
+    const canvas = container.querySelector('canvas');
+    if (!canvas) return;
+
+    let hoveredGroupId: string | null = null;
+
+    const clearMuscleHover = () => {
+      muscleOriginalEmissiveRef.current.forEach((orig, mesh) => {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat && mat.emissive) {
+          mat.emissive.copy(orig.color);
+          mat.emissiveIntensity = orig.intensity;
+          mat.needsUpdate = true;
+        }
+      });
+      muscleOriginalEmissiveRef.current.clear();
+      hoveredGroupId = null;
+    };
+
+    const findMuscleGroupForMesh = (hitMesh: THREE.Object3D): { groupId: string; label: string } | null => {
+      const groups = splitMuscleGroupsRef.current;
+      const entries = Array.from(groups.entries());
+      for (let i = 0; i < entries.length; i++) {
+        const [id, group] = entries[i];
+        for (let j = 0; j < group.meshes.length; j++) {
+          const mesh = group.meshes[j];
+          if (mesh === hitMesh || mesh.uuid === hitMesh.uuid) {
+            return { groupId: id, label: group.label };
+          }
+        }
+      }
+      return null;
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      const otherToolActive = enablePainMarkersRef.current || enableRomModeRef.current || enablePoseModeRef.current || enableZoomToolRef.current;
+      if (!enableMuscleInteractionRef.current || otherToolActive) {
+        if (hoveredGroupId) {
+          clearMuscleHover();
+          setMuscleHoverInfo(null);
+          canvas.style.cursor = '';
+        }
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      const allMuscleMeshes = muscleMeshesRef.current.filter(m => m.visible);
+      if (allMuscleMeshes.length === 0) {
+        if (hoveredGroupId) { clearMuscleHover(); setMuscleHoverInfo(null); canvas.style.cursor = ''; }
+        return;
+      }
+      if (!sceneRef.current) return;
+      const cam = sceneRef.current.camera;
+      raycasterRef.current.setFromCamera(ndc, cam);
+      const hits = raycasterRef.current.intersectObjects(allMuscleMeshes, true);
+      if (hits.length > 0) {
+        const hit = hits[0];
+        const info = findMuscleGroupForMesh(hit.object);
+        if (info && info.groupId !== hoveredGroupId) {
+          clearMuscleHover();
+          hoveredGroupId = info.groupId;
+          const group = splitMuscleGroupsRef.current.get(info.groupId);
+          if (group) {
+            for (const mesh of group.meshes) {
+              if (mesh instanceof THREE.Mesh) {
+                const mat = mesh.material as THREE.MeshStandardMaterial;
+                if (mat && mat.emissive) {
+                  muscleOriginalEmissiveRef.current.set(mesh, {
+                    color: mat.emissive.clone(),
+                    intensity: mat.emissiveIntensity,
+                  });
+                  mat.emissive.set(0x00ffff);
+                  mat.emissiveIntensity = 0.4;
+                  mat.needsUpdate = true;
+                }
+              }
+            }
+          }
+          setMuscleHoverInfo({ groupId: info.groupId, label: info.label, screenX: e.clientX, screenY: e.clientY });
+          canvas.style.cursor = 'pointer';
+        } else if (info) {
+          setMuscleHoverInfo(prev => prev ? { ...prev, screenX: e.clientX, screenY: e.clientY } : null);
+        }
+      } else {
+        if (hoveredGroupId) {
+          clearMuscleHover();
+          setMuscleHoverInfo(null);
+          canvas.style.cursor = '';
+        }
+      }
+    };
+
+    const onClick = (e: MouseEvent) => {
+      const otherToolActive = enablePainMarkersRef.current || enableRomModeRef.current || enablePoseModeRef.current || enableZoomToolRef.current;
+      if (!enableMuscleInteractionRef.current || otherToolActive) return;
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      const allMuscleMeshes = muscleMeshesRef.current.filter(m => m.visible);
+      if (allMuscleMeshes.length === 0) return;
+      if (!sceneRef.current) return;
+      const cam = sceneRef.current.camera;
+      raycasterRef.current.setFromCamera(ndc, cam);
+      const hits = raycasterRef.current.intersectObjects(allMuscleMeshes, true);
+      if (hits.length > 0) {
+        const info = findMuscleGroupForMesh(hits[0].object);
+        if (info && onMuscleGroupClickRef.current) {
+          onMuscleGroupClickRef.current(info.groupId, e.clientX, e.clientY);
+        }
+      }
+    };
+
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('click', onClick);
+    return () => {
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('click', onClick);
+      clearMuscleHover();
+    };
+  }, [status]);
+
   const handleRetry = () => {
     setStatus('checking');
     setErrorMessage('');
@@ -5116,6 +5255,20 @@ export default function PureThreeGLBViewer({
               {hoverData.value.toFixed(0)} {hoverData.unit}
             </div>
             <div className="text-xs opacity-80 capitalize">{hoverData.status}</div>
+          </div>
+        </div>
+      )}
+      {muscleHoverInfo && enableMuscleInteraction && (
+        <div
+          className="absolute pointer-events-none z-20"
+          style={{
+            left: muscleHoverInfo.screenX - (containerRef.current?.getBoundingClientRect().left || 0) + 15,
+            top: muscleHoverInfo.screenY - (containerRef.current?.getBoundingClientRect().top || 0) - 10,
+          }}
+        >
+          <div className="px-3 py-1.5 rounded-lg shadow-lg bg-cyan-600/90 backdrop-blur text-white text-sm font-medium whitespace-nowrap">
+            {muscleHoverInfo.label}
+            <div className="text-[9px] text-cyan-200">Click for details</div>
           </div>
         </div>
       )}

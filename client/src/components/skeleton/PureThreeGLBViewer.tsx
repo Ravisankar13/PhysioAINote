@@ -3610,7 +3610,13 @@ export default function PureThreeGLBViewer({
                 if (isMuscle) {
                   muscleMeshes.push(child);
                   child.visible = showMuscles;
-                  console.log('Found muscle mesh:', child.name);
+                  if (child.geometry) {
+                    child.geometry.computeBoundingSphere();
+                    child.geometry.computeBoundingBox();
+                    if (child.geometry.boundingSphere) {
+                      child.geometry.boundingSphere.radius = Math.max(child.geometry.boundingSphere.radius * 5, 10);
+                    }
+                  }
                 }
                 
                 if (lowerName.includes('skull') || lowerName.includes('head') || lowerName.includes('cranium')) {
@@ -4979,14 +4985,18 @@ export default function PureThreeGLBViewer({
     const findMuscleGroupForMesh = (hitMesh: THREE.Object3D): { groupId: string; label: string } | null => {
       const groups = splitMuscleGroupsRef.current;
       const entries = Array.from(groups.entries());
-      for (let i = 0; i < entries.length; i++) {
-        const [id, group] = entries[i];
-        for (let j = 0; j < group.meshes.length; j++) {
-          const mesh = group.meshes[j];
-          if (mesh === hitMesh || mesh.uuid === hitMesh.uuid) {
-            return { groupId: id, label: group.label };
+      let current: THREE.Object3D | null = hitMesh;
+      while (current) {
+        for (let i = 0; i < entries.length; i++) {
+          const [id, group] = entries[i];
+          for (let j = 0; j < group.meshes.length; j++) {
+            const mesh = group.meshes[j];
+            if (mesh === current || mesh.uuid === current.uuid) {
+              return { groupId: id, label: group.label };
+            }
           }
         }
+        current = current.parent;
       }
       return null;
     };

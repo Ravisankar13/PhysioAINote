@@ -1562,6 +1562,34 @@ ${ddxList}`;
     };
   }, []);
 
+  const computePostureDeviations = useCallback((config: typeof modelConfig) => {
+    const deviations: { region: string; parameter: string; value: number; direction: string; severity: string }[] = [];
+    const defaultCfg = DEFAULT_MODEL_CONFIG;
+    const regionLabels: Record<string, string> = {
+      spine: 'Spine', neck: 'Neck', pelvis: 'Pelvis', sacrum: 'Sacrum',
+      leftHip: 'Left Hip', rightHip: 'Right Hip', leftKnee: 'Left Knee', rightKnee: 'Right Knee',
+      leftAnkle: 'Left Ankle', rightAnkle: 'Right Ankle', leftShoulder: 'Left Shoulder', rightShoulder: 'Right Shoulder',
+      leftScapula: 'Left Scapula', rightScapula: 'Right Scapula', leftElbow: 'Left Elbow', rightElbow: 'Right Elbow',
+      leftWrist: 'Left Wrist', rightWrist: 'Right Wrist',
+    };
+    for (const [regionKey, regionLabel] of Object.entries(regionLabels)) {
+      const current = (config as any)[regionKey];
+      const defaults = (defaultCfg as any)[regionKey];
+      if (!current || !defaults) continue;
+      for (const [param, val] of Object.entries(current)) {
+        const numVal = val as number;
+        const defaultVal = (defaults[param] as number) || 0;
+        const diff = Math.abs(numVal - defaultVal);
+        if (diff >= 3) {
+          const severity = diff >= 20 ? 'significant' : diff >= 10 ? 'moderate' : 'mild';
+          const direction = numVal > defaultVal ? 'increased' : 'decreased';
+          deviations.push({ region: regionLabel, parameter: param, value: numVal, direction, severity });
+        }
+      }
+    }
+    return deviations;
+  }, []);
+
   const triggerClinicalReasoningAnalysis = useCallback(async (forceRefresh = false) => {
     if (clinicalReasoningProcessing) return;
 
@@ -1573,9 +1601,29 @@ ${ddxList}`;
       subjectiveHistory: pm.subjectiveHistory || '',
     }));
 
-    const triggerKey = JSON.stringify({ markers: markerData, history: subjectiveHistoryRef.current });
+    const postureDeviations = computePostureDeviations(modelConfig);
+    const forces = calculatePosturalForces(modelConfig);
+    const muscles = computeFullMuscleAnalysis(modelConfig);
+
+    const forcesSummary = forces.joints
+      .filter(j => j.status === 'high' || j.status === 'very_high')
+      .map(j => ({ joint: j.label, totalForce: Math.round(j.totalForce), status: j.status, compression: Math.round(j.compression), shear: Math.round(j.shear) }));
+
+    const muscleSummary = muscles.allMuscles
+      .filter(m => m.clinicalStatus !== 'normal')
+      .map(m => ({ muscle: m.label, status: m.clinicalStatus, activation: m.activationPercent, tightness: m.tightnessPercent }));
+
+    const syndromeSummary = muscles.syndromes
+      .filter((s: any) => s.detected)
+      .map((s: any) => ({ name: s.name, description: s.description }));
+
+    const triggerKey = JSON.stringify({
+      markers: markerData,
+      history: subjectiveHistoryRef.current,
+      posture: postureDeviations.map(d => `${d.region}.${d.parameter}:${d.value}`).join(','),
+    });
     if (!forceRefresh && triggerKey === lastReasoningTriggerRef.current) return;
-    if (markerData.length === 0 && !subjectiveHistoryRef.current.trim()) return;
+    if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0) return;
 
     lastReasoningTriggerRef.current = triggerKey;
     setClinicalReasoningProcessing(true);
@@ -1590,6 +1638,10 @@ ${ddxList}`;
           skeletonConfig: modelConfig,
           subjectiveHistory: subjectiveHistoryRef.current,
           romMeasurements: romMeasurements || {},
+          postureDeviations,
+          forceAnalysis: forcesSummary,
+          muscleAnalysis: muscleSummary,
+          detectedSyndromes: syndromeSummary,
         }),
       });
 
@@ -1605,6 +1657,7 @@ ${ddxList}`;
         clinicalSummary: data.clinicalSummary || '',
         assessmentPriorities: data.assessmentPriorities || [],
         treatmentPlan: data.treatmentPlan || null,
+        posturalAnalysis: data.posturalAnalysis || null,
       });
 
       if (!clinicalReasoningOpen) {
@@ -1615,10 +1668,15 @@ ${ddxList}`;
     } finally {
       setClinicalReasoningProcessing(false);
     }
-  }, [clinicalReasoningProcessing, modelConfig, romMeasurements, clinicalReasoningOpen]);
+  }, [clinicalReasoningProcessing, modelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations]);
 
   useEffect(() => {
-    if (painMarkers.length === 0) return;
+    const hasPostureChanges = Object.entries(modelConfig).some(([key, val]: [string, any]) => {
+      const def = (DEFAULT_MODEL_CONFIG as any)[key];
+      if (!def || typeof val !== 'object') return false;
+      return Object.entries(val).some(([k, v]) => Math.abs((v as number) - ((def[k] as number) || 0)) >= 3);
+    });
+    if (painMarkers.length === 0 && !hasPostureChanges) return;
     if (voiceSessionActive) return;
 
     if (clinicalReasoningTimerRef.current) {
@@ -1626,14 +1684,14 @@ ${ddxList}`;
     }
     clinicalReasoningTimerRef.current = setTimeout(() => {
       triggerClinicalReasoningAnalysis();
-    }, 1500);
+    }, 2000);
 
     return () => {
       if (clinicalReasoningTimerRef.current) {
         clearTimeout(clinicalReasoningTimerRef.current);
       }
     };
-  }, [painMarkers, triggerClinicalReasoningAnalysis, voiceSessionActive]);
+  }, [painMarkers, modelConfig, triggerClinicalReasoningAnalysis, voiceSessionActive]);
 
   const handleSubjectiveHistorySubmit = useCallback(() => {
     subjectiveHistoryRef.current = subjectiveHistoryInput;

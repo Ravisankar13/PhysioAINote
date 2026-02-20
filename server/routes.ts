@@ -6132,8 +6132,8 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
 
   app.post("/api/physiogpt/clinical-reasoning-analyze", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements } = req.body;
-      if (!painMarkers && !skeletonConfig && !subjectiveHistory) {
+      const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements, postureDeviations, forceAnalysis, muscleAnalysis, detectedSyndromes } = req.body;
+      if (!painMarkers && !skeletonConfig && !subjectiveHistory && !postureDeviations) {
         return res.status(400).json({ error: "At least one clinical input is required" });
       }
 
@@ -6158,9 +6158,25 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
         ? `\n\nROM MEASUREMENTS:\n${JSON.stringify(romMeasurements, null, 2)}`
         : '';
 
-      const prompt = `You are an expert musculoskeletal physiotherapist performing a comprehensive clinical reasoning analysis. Analyze ALL provided clinical data and produce a complete assessment with treatment plan.
+      const postureContext = postureDeviations && postureDeviations.length > 0
+        ? `\n\nPOSTURE DEVIATIONS FROM NEUTRAL (${postureDeviations.length} deviations detected):\n${postureDeviations.map((d: any, i: number) => `${i+1}. ${d.region} - ${d.parameter}: ${d.value}° (${d.direction}, ${d.severity})`).join('\n')}`
+        : '';
 
-${markerContext}${skeletonContext}${historyContext}${romContext}
+      const forceContext = forceAnalysis && forceAnalysis.length > 0
+        ? `\n\nELEVATED JOINT FORCES (${forceAnalysis.length} joints with high loading):\n${forceAnalysis.map((f: any, i: number) => `${i+1}. ${f.joint}: Total ${f.totalForce}N, Compression ${f.compression}N, Shear ${f.shear}N (Status: ${f.status})`).join('\n')}`
+        : '';
+
+      const muscleContext = muscleAnalysis && muscleAnalysis.length > 0
+        ? `\n\nABNORMAL MUSCLE STATES (${muscleAnalysis.length} muscles with clinical findings):\n${muscleAnalysis.map((m: any, i: number) => `${i+1}. ${m.muscle}: ${m.status} (Activation: ${m.activation}%, Tightness: ${m.tightness}%)`).join('\n')}`
+        : '';
+
+      const syndromeContext = detectedSyndromes && detectedSyndromes.length > 0
+        ? `\n\nDETECTED SYNDROMES:\n${detectedSyndromes.map((s: any) => `- ${s.name}: ${s.description}`).join('\n')}`
+        : '';
+
+      const prompt = `You are an expert musculoskeletal physiotherapist performing a comprehensive clinical reasoning analysis. Analyze ALL provided clinical data and produce a complete assessment with treatment plan. Pay special attention to posture deviations and their biomechanical consequences.
+
+${markerContext}${skeletonContext}${historyContext}${romContext}${postureContext}${forceContext}${muscleContext}${syndromeContext}
 
 Return ONLY valid JSON with this structure:
 {
@@ -6208,6 +6224,23 @@ Return ONLY valid JSON with this structure:
     "homeProgram": [
       { "exercise": "Exercise name", "dosage": "Sets x reps x frequency", "instructions": "Key points for patient" }
     ]
+  },
+  "posturalAnalysis": {
+    "summary": "A comprehensive narrative explaining how the patient's current posture creates biomechanical stress, altered force distribution, and muscle imbalances that contribute to their symptoms",
+    "primaryPosturalDysfunction": "The main postural dysfunction pattern identified (e.g., Upper Crossed Syndrome, Forward Head Posture with Thoracic Kyphosis)",
+    "correlations": [
+      {
+        "deviation": "Specific postural deviation name (e.g., Forward Head Posture 15°)",
+        "region": "Body region affected",
+        "forceImpact": "How this deviation changes joint forces (e.g., Increases cervical compressive load by ~30N per cm of forward displacement)",
+        "muscleEffect": "Which muscles become tight/weak/overactive as a result (e.g., Deep cervical flexors inhibited, suboccipitals shortened and overactive)",
+        "painLink": "Direct connection to patient's reported pain (e.g., Increased suboccipital tension refers pain to the temporal region, matching the patient's headache pattern)",
+        "severity": "mild|moderate|significant",
+        "mechanism": "The biomechanical chain explaining cause to effect (e.g., Forward head → increased cervical lordosis → facet joint compression → posterior cervical muscle hypertonicity → tension headache)"
+      }
+    ],
+    "compensatoryPatterns": ["Description of compensatory movement or postural patterns the body adopts due to the primary dysfunction"],
+    "recommendedCorrections": ["Specific postural correction strategies with clinical reasoning"]
   }
 }
 
@@ -6220,7 +6253,9 @@ GUIDELINES:
 - "treatmentPlan.rootCauseTreatment": Identify and address the underlying cause, not just symptoms.
 - "treatmentPlan.treatmentReasoning": Explain the clinical reasoning behind treatment choices.
 - Be specific about manual therapy (e.g., "Maitland Grade III PA glide L4/5" not just "mobilization").
-- Include exact dosage parameters for exercises (sets, reps, hold times, frequency).`;
+- Include exact dosage parameters for exercises (sets, reps, hold times, frequency).
+- "posturalAnalysis": CRITICAL - If posture deviations, force data, or muscle analysis data is provided, you MUST analyze how these postural changes create biomechanical stress. For EACH significant posture deviation, explain the force impact on joints, the muscle adaptation, and how it connects to the patient's pain. Think like a biomechanist - trace the kinetic chain from the postural fault to the symptomatic region.
+- "posturalAnalysis.correlations": Create one correlation entry for each significant posture deviation. Even if there are no pain markers, explain the potential clinical consequences of the posture. If pain markers exist, explicitly connect posture to pain.`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -6230,7 +6265,7 @@ GUIDELINES:
         ],
         response_format: { type: "json_object" },
         temperature: 0.3,
-        max_tokens: 4500,
+        max_tokens: 6000,
       });
 
       const content = completion.choices[0]?.message?.content || '{}';
@@ -6277,6 +6312,21 @@ GUIDELINES:
         clinicalSummary: parsed.clinicalSummary || '',
         assessmentPriorities: parsed.assessmentPriorities || [],
         treatmentPlan: parsed.treatmentPlan || null,
+        posturalAnalysis: parsed.posturalAnalysis ? {
+          summary: parsed.posturalAnalysis.summary || '',
+          primaryPosturalDysfunction: parsed.posturalAnalysis.primaryPosturalDysfunction || '',
+          correlations: (parsed.posturalAnalysis.correlations || []).map((c: any) => ({
+            deviation: c.deviation || '',
+            region: c.region || '',
+            forceImpact: c.forceImpact || '',
+            muscleEffect: c.muscleEffect || '',
+            painLink: c.painLink || '',
+            severity: ['mild', 'moderate', 'significant'].includes(c.severity) ? c.severity : 'moderate',
+            mechanism: c.mechanism || '',
+          })),
+          compensatoryPatterns: parsed.posturalAnalysis.compensatoryPatterns || [],
+          recommendedCorrections: parsed.posturalAnalysis.recommendedCorrections || [],
+        } : null,
       });
     } catch (error: any) {
       console.error("Clinical reasoning analyze error:", error);

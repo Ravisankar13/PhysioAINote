@@ -23,6 +23,9 @@ import {
   FileText,
   Home,
   AlertCircle,
+  Crosshair,
+  ArrowRight,
+  ArrowDownRight,
 } from "lucide-react";
 
 export interface ClinicalHypothesis {
@@ -114,6 +117,24 @@ export interface TreatmentPlan {
   }[];
 }
 
+export interface PosturalPainCorrelation {
+  deviation: string;
+  region: string;
+  forceImpact: string;
+  muscleEffect: string;
+  painLink: string;
+  severity: 'mild' | 'moderate' | 'significant';
+  mechanism: string;
+}
+
+export interface PosturalAnalysis {
+  summary: string;
+  correlations: PosturalPainCorrelation[];
+  compensatoryPatterns: string[];
+  primaryPosturalDysfunction: string;
+  recommendedCorrections: string[];
+}
+
 export interface ClinicalReasoningData {
   hypotheses: ClinicalHypothesis[];
   findings: ClinicalFinding[];
@@ -123,6 +144,7 @@ export interface ClinicalReasoningData {
   clinicalSummary: string;
   assessmentPriorities: string[];
   treatmentPlan?: TreatmentPlan | null;
+  posturalAnalysis?: PosturalAnalysis | null;
 }
 
 interface ClinicalReasoningPanelProps {
@@ -145,6 +167,7 @@ const EMPTY_DATA: ClinicalReasoningData = {
   clinicalSummary: "",
   assessmentPriorities: [],
   treatmentPlan: null,
+  posturalAnalysis: null,
 };
 
 function ConfidenceBar({ value }: { value: number }) {
@@ -306,6 +329,7 @@ export default function ClinicalReasoningPanel({
     reasoning: true,
     priorities: false,
     treatment: true,
+    postural: true,
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -344,6 +368,7 @@ export default function ClinicalReasoningPanel({
   if (!isOpen) return null;
 
   const tp = d.treatmentPlan;
+  const pa = d.posturalAnalysis;
 
   return (
     <div className="absolute top-0 right-0 h-full z-30 w-[340px] animate-in slide-in-from-right-2 duration-300">
@@ -652,6 +677,124 @@ export default function ClinicalReasoningPanel({
                       );
                     })}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {pa && (pa.correlations?.length > 0 || pa.summary) && (
+            <div>
+              <SectionHeader
+                icon={Crosshair}
+                title="Postural-Pain Correlation"
+                count={pa.correlations?.length || 0}
+                color="text-rose-400"
+                isOpen={expandedSections.postural}
+                onToggle={() => toggleSection("postural")}
+              />
+              {expandedSections.postural && (
+                <div className="space-y-2 mt-1 ml-1">
+                  {pa.primaryPosturalDysfunction && (
+                    <div className="bg-rose-500/5 rounded-lg p-2 border border-rose-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Primary Dysfunction</p>
+                      <p className="text-[10px] font-medium text-rose-300">{pa.primaryPosturalDysfunction}</p>
+                    </div>
+                  )}
+
+                  {pa.summary && (
+                    <div className="bg-rose-500/5 rounded-lg p-2 border border-rose-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Postural Analysis</p>
+                      <p className="text-[10px] text-gray-300 leading-relaxed">{pa.summary}</p>
+                    </div>
+                  )}
+
+                  {pa.correlations && pa.correlations.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Cause &rarr; Effect Chain</p>
+                      {pa.correlations.map((corr, idx) => {
+                        const severityColors = {
+                          mild: 'border-yellow-500/20 bg-yellow-500/5',
+                          moderate: 'border-orange-500/20 bg-orange-500/5',
+                          significant: 'border-red-500/20 bg-red-500/5',
+                        };
+                        const severityBadge = {
+                          mild: 'text-yellow-400 bg-yellow-500/15',
+                          moderate: 'text-orange-400 bg-orange-500/15',
+                          significant: 'text-red-400 bg-red-500/15',
+                        };
+                        return (
+                          <div key={idx} className={`rounded-lg p-2 border ${severityColors[corr.severity] || severityColors.moderate}`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1">
+                                <Crosshair className="h-2.5 w-2.5 text-rose-400" />
+                                <span className="text-[10px] font-medium text-rose-300">{corr.deviation}</span>
+                              </div>
+                              <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${severityBadge[corr.severity] || severityBadge.moderate}`}>
+                                {corr.severity}
+                              </span>
+                            </div>
+                            <div className="space-y-1 mt-1.5">
+                              <div className="flex items-start gap-1.5">
+                                <ArrowRight className="h-2.5 w-2.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="text-[8px] text-amber-500 uppercase">Force Impact</span>
+                                  <p className="text-[9px] text-gray-300">{corr.forceImpact}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-start gap-1.5">
+                                <ArrowDownRight className="h-2.5 w-2.5 text-purple-400 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="text-[8px] text-purple-500 uppercase">Muscle Effect</span>
+                                  <p className="text-[9px] text-gray-300">{corr.muscleEffect}</p>
+                                </div>
+                              </div>
+                              {corr.painLink && (
+                                <div className="flex items-start gap-1.5">
+                                  <Zap className="h-2.5 w-2.5 text-red-400 flex-shrink-0 mt-0.5" />
+                                  <div>
+                                    <span className="text-[8px] text-red-500 uppercase">Pain Connection</span>
+                                    <p className="text-[9px] text-gray-300">{corr.painLink}</p>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="bg-black/20 rounded p-1 mt-0.5">
+                                <span className="text-[8px] text-gray-500 uppercase">Mechanism</span>
+                                <p className="text-[9px] text-gray-400 italic">{corr.mechanism}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {pa.compensatoryPatterns && pa.compensatoryPatterns.length > 0 && (
+                    <div className="bg-violet-500/5 rounded-lg p-2 border border-violet-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Compensatory Patterns</p>
+                      <div className="space-y-0.5">
+                        {pa.compensatoryPatterns.map((pattern, i) => (
+                          <div key={i} className="flex items-start gap-1">
+                            <span className="text-violet-500 text-[8px] mt-0.5">&bull;</span>
+                            <span className="text-[9px] text-gray-400">{pattern}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {pa.recommendedCorrections && pa.recommendedCorrections.length > 0 && (
+                    <div className="bg-teal-500/5 rounded-lg p-2 border border-teal-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Postural Corrections</p>
+                      <div className="space-y-0.5">
+                        {pa.recommendedCorrections.map((corr, i) => (
+                          <div key={i} className="flex items-start gap-1">
+                            <span className="text-teal-500 text-[8px] mt-0.5">{i + 1}.</span>
+                            <span className="text-[9px] text-gray-300">{corr}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

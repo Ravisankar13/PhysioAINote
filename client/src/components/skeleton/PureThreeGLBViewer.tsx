@@ -1258,21 +1258,21 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   
   // === SHOULDER ===
   // In T-pose, arms point laterally. Flexion rotates arm forward (sagittal plane).
-  // For left arm pointing left (-X), flexion uses Y-axis rotation
-  'leftShoulder.flexion': [{ boneName: 'Shoulder_L', axis: 'y', scale: -1 }], // Forward flexion - Y rotation brings arm forward (negative for correct direction)
-  'leftShoulder.abduction': [{ boneName: 'Shoulder_L', axis: 'z', scale: 1 }], // Abduction - Z rotation for lateral elevation (positive for live pose)
-  'leftShoulder.internalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: 1 }], // Internal rotation around humerus long axis
-  'leftShoulder.externalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: -1 }], // External rotation around humerus long axis
+  // For left arm pointing left (-X), flexion uses Z-axis rotation, abduction uses Y-axis rotation
+  'leftShoulder.flexion': [{ boneName: 'Shoulder_L', axis: 'z', scale: 1 }], // Forward flexion - Z rotation brings arm forward
+  'leftShoulder.abduction': [{ boneName: 'Shoulder_L', axis: 'y', scale: -1 }], // Abduction - Y rotation for lateral elevation
+  'leftShoulder.internalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: -1 }], // Internal rotation around humerus long axis
+  'leftShoulder.externalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: 1 }], // External rotation around humerus long axis
   'leftShoulder.retroversion': [{ boneName: 'ShoulderPart1_L', axis: 'y', scale: 1 }], // Humeral head retroversion
   'leftShoulder.elevation': [
     { boneName: 'Chest_M', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
     { boneName: 'Shoulder_L', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
   ],
-  // For right arm pointing right (+X), flexion uses Y-axis rotation (opposite sign)
-  'rightShoulder.flexion': [{ boneName: 'Shoulder_R', axis: 'y', scale: 1 }], // Forward flexion - Y rotation brings arm forward (positive for live pose)
-  'rightShoulder.abduction': [{ boneName: 'Shoulder_R', axis: 'z', scale: 1 }], // Abduction - Z rotation for lateral elevation
-  'rightShoulder.internalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: -1 }], // Internal rotation around humerus long axis
-  'rightShoulder.externalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: 1 }], // External rotation around humerus long axis
+  // For right arm pointing right (+X), flexion uses Z-axis rotation, abduction uses Y-axis rotation
+  'rightShoulder.flexion': [{ boneName: 'Shoulder_R', axis: 'z', scale: 1 }], // Forward flexion - Z rotation brings arm forward
+  'rightShoulder.abduction': [{ boneName: 'Shoulder_R', axis: 'y', scale: 1 }], // Abduction - Y rotation for lateral elevation
+  'rightShoulder.internalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: 1 }], // Internal rotation around humerus long axis
+  'rightShoulder.externalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: -1 }], // External rotation around humerus long axis
   'rightShoulder.retroversion': [{ boneName: 'ShoulderPart1_R', axis: 'y', scale: -1 }], // Humeral head retroversion
   'rightShoulder.elevation': [
     { boneName: 'Chest_M', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
@@ -1523,10 +1523,10 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'Knee_R': { configKey: 'rightKnee.flexion', label: 'R Knee Flexion', axis: 'x', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
   'Ankle_L': { configKey: 'leftAnkle.dorsiflexion', label: 'L Ankle Dorsiflexion', axis: 'x', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
   'Ankle_R': { configKey: 'rightAnkle.dorsiflexion', label: 'R Ankle Dorsiflexion', axis: 'x', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
-  'Shoulder_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'ShoulderPart1_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'Shoulder_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'ShoulderPart1_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'Shoulder_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'ShoulderPart1_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'Shoulder_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'ShoulderPart1_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
   'Elbow_L': { configKey: 'leftElbow.flexion', label: 'L Elbow Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
   'Elbow_R': { configKey: 'rightElbow.flexion', label: 'R Elbow Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
   'Wrist_L': { configKey: 'leftWrist.flexion', label: 'L Wrist Flexion', axis: 'x', scale: 1, minValue: -80, maxValue: 80, sensitivity: 0.3 },
@@ -1542,8 +1542,8 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'NeckPart1_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
   'NeckPart2_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
   'Head_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
-  'Scapula_L': { configKey: 'leftShoulder.abduction', label: 'L Shoulder Abduction', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
-  'Scapula_R': { configKey: 'rightShoulder.abduction', label: 'R Shoulder Abduction', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
+  'Scapula_L': { configKey: 'leftShoulder.abduction', label: 'L Shoulder Abduction', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
+  'Scapula_R': { configKey: 'rightShoulder.abduction', label: 'R Shoulder Abduction', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
 };
 
 export default function PureThreeGLBViewer({ 

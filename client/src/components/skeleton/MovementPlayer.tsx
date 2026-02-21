@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { Play, Pause, Square, Repeat, ChevronDown, ChevronUp, Activity, Gauge } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical } from 'lucide-react';
 import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, type MovementSequence } from '@/lib/movementSequences';
 import type { AnimationState } from './PureThreeGLBViewer';
 
@@ -11,10 +11,55 @@ interface MovementPlayerProps {
 export default function MovementPlayer({ animationState, onAnimationStateChange }: MovementPlayerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const currentMovement = animationState.currentMovement
     ? MOVEMENT_SEQUENCES.find(m => m.id === animationState.currentMovement)
     : null;
+
+  const handleDragStart = useCallback((clientX: number, clientY: number) => {
+    dragRef.current = { startX: clientX, startY: clientY, origX: position.x, origY: position.y };
+    setIsDragging(true);
+  }, [position]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMove = (clientX: number, clientY: number) => {
+      if (!dragRef.current) return;
+      const dx = clientX - dragRef.current.startX;
+      const dy = clientY - dragRef.current.startY;
+      setPosition({ x: dragRef.current.origX + dx, y: dragRef.current.origY + dy });
+    };
+
+    const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleEnd = () => {
+      setIsDragging(false);
+      dragRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [isDragging]);
 
   const handleSelectMovement = useCallback((movement: MovementSequence) => {
     onAnimationStateChange({
@@ -53,8 +98,27 @@ export default function MovementPlayer({ animationState, onAnimationStateChange 
   const speedPresets = [0.25, 0.5, 1, 1.5, 2];
 
   return (
-    <div className="absolute top-14 right-3 z-20 pointer-events-none w-72">
-      <div className="bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl overflow-hidden pointer-events-auto">
+    <div
+      ref={containerRef}
+      className="absolute z-20 w-72"
+      style={{
+        top: `calc(3.5rem + ${position.y}px)`,
+        right: `calc(0.75rem - ${position.x}px)`,
+        cursor: isDragging ? 'grabbing' : undefined,
+        userSelect: isDragging ? 'none' : undefined,
+      }}
+    >
+      <div className="bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl overflow-hidden">
+        <div
+          className="flex items-center justify-center gap-1 py-1 cursor-grab active:cursor-grabbing bg-gray-800/50 border-b border-gray-700/30 select-none"
+          onMouseDown={(e) => { e.preventDefault(); handleDragStart(e.clientX, e.clientY); }}
+          onTouchStart={(e) => { if (e.touches.length === 1) handleDragStart(e.touches[0].clientX, e.touches[0].clientY); }}
+        >
+          <GripVertical className="w-3 h-3 text-gray-600" />
+          <span className="text-[9px] text-gray-600 uppercase tracking-wider font-medium">Drag to move</span>
+          <GripVertical className="w-3 h-3 text-gray-600" />
+        </div>
+
         {isExpanded && (
           <div className="max-h-[320px] overflow-y-auto p-3 border-b border-gray-700/50">
             <div className="flex gap-2 mb-3 flex-wrap">

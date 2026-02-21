@@ -1266,26 +1266,27 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightAnkle.toeExtension': [{ boneName: 'Toes_R', axis: 'z', scale: -1 }],
   
   // === SHOULDER ===
-  // Empirically verified: Shoulder_L/R Y+30 = DOWN (both same direction)
-  // Shoulder flexion = arm forward/up = negative Y (both sides same sign)
-  // Shoulder_L Z+30 = FORWARD, Z-30 = LEFT+UP+BACKWARD (abduction-like for left)
-  'leftShoulder.flexion': [{ boneName: 'Shoulder_L', axis: 'y', scale: -1 }],
-  'leftShoulder.abduction': [{ boneName: 'Shoulder_L', axis: 'z', scale: -1 }],
+  // Shoulder axes empirically verified via child displacement tests
+  // Empirically verified: Shoulder_L/R Z+30 = FORWARD, Y-30 = UP
+  // Flexion (forward/backward arm swing) = Z axis, scale 1 (Z+ = forward)
+  // Abduction (arm lifts away from body) = Y axis, scale -1 (Y- = up)
+  'leftShoulder.flexion': [{ boneName: 'Shoulder_L', axis: 'z', scale: 1 }],
+  'leftShoulder.abduction': [{ boneName: 'Shoulder_L', axis: 'y', scale: -1 }],
   'leftShoulder.internalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: -1 }],
   'leftShoulder.externalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: 1 }],
-  'leftShoulder.retroversion': [{ boneName: 'ShoulderPart1_L', axis: 'z', scale: 1 }],
+  'leftShoulder.retroversion': [{ boneName: 'ShoulderPart1_L', axis: 'z', scale: -1 }],
   'leftShoulder.elevation': [
     { boneName: 'Chest_M', axis: 'z', scale: -0.15 },
-    { boneName: 'Shoulder_L', axis: 'z', scale: -0.3 }
+    { boneName: 'Shoulder_L', axis: 'y', scale: 0.3 }
   ],
-  'rightShoulder.flexion': [{ boneName: 'Shoulder_R', axis: 'y', scale: -1 }],
-  'rightShoulder.abduction': [{ boneName: 'Shoulder_R', axis: 'z', scale: 1 }],
+  'rightShoulder.flexion': [{ boneName: 'Shoulder_R', axis: 'z', scale: 1 }],
+  'rightShoulder.abduction': [{ boneName: 'Shoulder_R', axis: 'y', scale: -1 }],
   'rightShoulder.internalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: 1 }],
   'rightShoulder.externalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: -1 }],
   'rightShoulder.retroversion': [{ boneName: 'ShoulderPart1_R', axis: 'z', scale: -1 }],
   'rightShoulder.elevation': [
     { boneName: 'Chest_M', axis: 'z', scale: -0.15 },
-    { boneName: 'Shoulder_R', axis: 'z', scale: 0.3 }
+    { boneName: 'Shoulder_R', axis: 'y', scale: -0.3 }
   ],
   
   // === SCAPULA ===
@@ -1543,10 +1544,10 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'Knee_R': { configKey: 'rightKnee.flexion', label: 'R Knee Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
   'Ankle_L': { configKey: 'leftAnkle.dorsiflexion', label: 'L Ankle Dorsiflexion', axis: 'z', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
   'Ankle_R': { configKey: 'rightAnkle.dorsiflexion', label: 'R Ankle Dorsiflexion', axis: 'z', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
-  'Shoulder_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'ShoulderPart1_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'Shoulder_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'ShoulderPart1_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'Shoulder_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'ShoulderPart1_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'Shoulder_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'ShoulderPart1_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
   'Elbow_L': { configKey: 'leftElbow.flexion', label: 'L Elbow Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
   'Elbow_R': { configKey: 'rightElbow.flexion', label: 'R Elbow Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
   'Wrist_L': { configKey: 'leftWrist.flexion', label: 'L Wrist Flexion', axis: 'z', scale: 1, minValue: -80, maxValue: 80, sensitivity: 0.3 },

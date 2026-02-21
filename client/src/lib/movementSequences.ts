@@ -387,18 +387,18 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         joint: 'leftElbow',
         property: 'flexion',
         keyframes: [
-          { time: 0, value: 30 },
-          { time: 0.5, value: 15 },
-          { time: 1, value: 30 },
+          { time: 0, value: 8 },
+          { time: 0.5, value: 3 },
+          { time: 1, value: 8 },
         ],
       },
       {
         joint: 'rightElbow',
         property: 'flexion',
         keyframes: [
-          { time: 0, value: 15 },
-          { time: 0.5, value: 30 },
-          { time: 1, value: 15 },
+          { time: 0, value: 3 },
+          { time: 0.5, value: 8 },
+          { time: 1, value: 3 },
         ],
       },
       {

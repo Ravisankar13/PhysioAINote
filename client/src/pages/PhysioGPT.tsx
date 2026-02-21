@@ -1199,12 +1199,19 @@ ${ddxList}`;
       if (BIOMECHANICAL_REGION_TO_MUSCLES[lower]) {
         return BIOMECHANICAL_REGION_TO_MUSCLES[lower];
       }
+      const words = lower.split(/\s+/);
+      let bestMatch: string[] | null = null;
+      let bestScore = 0;
       for (const [key, muscles] of Object.entries(BIOMECHANICAL_REGION_TO_MUSCLES)) {
-        if (lower.includes(key) || key.includes(lower)) {
-          return muscles;
+        const keyWords = key.split(/\s+/);
+        const matchingWords = keyWords.filter(w => words.includes(w));
+        const score = matchingWords.length / Math.max(keyWords.length, words.length);
+        if (score > bestScore && score >= 0.5) {
+          bestScore = score;
+          bestMatch = muscles;
         }
       }
-      return [];
+      return bestMatch || [];
     };
 
     const primaryMuscles = findMuscles(link.primaryRegion);

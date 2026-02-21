@@ -1619,7 +1619,7 @@ export default function PureThreeGLBViewer({
   const animationPlayingRef = useRef<boolean>(false);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
-  const biomechanicalHighlightRef = useRef<{ mesh: THREE.Mesh; origEmissive: THREE.Color; origIntensity: number }[]>([]);
+  const biomechanicalHighlightRef = useRef<{ mesh: THREE.Mesh; origMaterial: THREE.Material; wasVisible: boolean }[]>([]);
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const chainHighlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
@@ -4924,11 +4924,11 @@ export default function PureThreeGLBViewer({
 
   useEffect(() => {
     for (const entry of biomechanicalHighlightRef.current) {
-      const mat = entry.mesh.material as THREE.MeshStandardMaterial;
-      if (mat && mat.emissive) {
-        mat.emissive.copy(entry.origEmissive);
-        mat.emissiveIntensity = entry.origIntensity;
-        mat.needsUpdate = true;
+      const clonedMat = entry.mesh.material as THREE.Material;
+      entry.mesh.material = entry.origMaterial;
+      entry.mesh.visible = entry.wasVisible;
+      if (clonedMat !== entry.origMaterial) {
+        clonedMat.dispose();
       }
     }
     biomechanicalHighlightRef.current = [];
@@ -4940,19 +4940,23 @@ export default function PureThreeGLBViewer({
       if (!group) continue;
       for (const mesh of group.meshes) {
         if (mesh instanceof THREE.Mesh) {
-          const mat = mesh.material as THREE.MeshStandardMaterial;
-          if (mat && mat.emissive) {
+          const origMat = mesh.material as THREE.MeshStandardMaterial;
+          if (origMat) {
+            const clonedMat = origMat.clone() as THREE.MeshStandardMaterial;
+            clonedMat.emissive = new THREE.Color(0x00ffff);
+            clonedMat.emissiveIntensity = 0.5;
+            clonedMat.transparent = true;
+            clonedMat.opacity = 0.85;
+            clonedMat.needsUpdate = true;
+
             biomechanicalHighlightRef.current.push({
               mesh,
-              origEmissive: mat.emissive.clone(),
-              origIntensity: mat.emissiveIntensity,
+              origMaterial: origMat,
+              wasVisible: mesh.visible,
             });
-            mat.emissive.set(0x00ffff);
-            mat.emissiveIntensity = 0.5;
-            mat.needsUpdate = true;
-            if (!mesh.visible) {
-              mesh.visible = true;
-            }
+
+            mesh.material = clonedMat;
+            mesh.visible = true;
           }
         }
       }

@@ -3982,7 +3982,7 @@ ${ddxList}`;
             )}
 
             {/* Skeleton controls bar */}
-            <div className="absolute bottom-2 left-2 flex flex-col gap-1 z-10">
+            <div className="absolute bottom-2 left-2 right-2 flex flex-col gap-1 z-10 pointer-events-none [&>*]:pointer-events-auto">
               {painMarkerMode && (
                 <div className="flex items-center gap-1 flex-wrap">
                   <div className="flex items-center bg-red-500/90 rounded-md overflow-hidden h-7">
@@ -4032,7 +4032,7 @@ ${ddxList}`;
                   </select>
                 </div>
               )}
-              <div className="flex gap-1">
+              <div className="flex gap-1 flex-wrap">
               <div className="relative flex items-center">
                 <Button
                   variant="secondary"

@@ -1214,23 +1214,23 @@ const FORCE_JOINT_TO_BONE: Record<string, string> = {
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
   // === HIP / FEMUR ===
-  // Empirically verified: Hip_L/R Z+30 = FORWARD, Y+30(L)=LEFT, Y+30(R)=RIGHT
-  // Hip flexion = leg forward = positive Z; Hip extension = leg backward = negative Z
+  // Empirically verified: Hip_L/R Z+30 = FORWARD, Y+30 = INWARD (adduction) for both sides
+  // Hip flexion = leg forward = positive Z; Hip abduction = leg outward = scale -1 on Y
   'leftHip.flexion': [{ boneName: 'Hip_L', axis: 'z', scale: 1 }],
   'leftHip.extension': [{ boneName: 'Hip_L', axis: 'z', scale: -1 }],
-  'leftHip.abduction': [{ boneName: 'Hip_L', axis: 'y', scale: 1 }],
+  'leftHip.abduction': [{ boneName: 'Hip_L', axis: 'y', scale: -1 }],
   'leftHip.internalRotation': [{ boneName: 'Hip_L', axis: 'x', scale: 1 }],
   'leftHip.anteversion': [{ boneName: 'Hip_L', axis: 'x', scale: 1 }],
   'leftHip.neckShaftAngle': [{ boneName: 'Hip_L', axis: 'y', scale: -0.5 }],
   'rightHip.flexion': [{ boneName: 'Hip_R', axis: 'z', scale: 1 }],
   'rightHip.extension': [{ boneName: 'Hip_R', axis: 'z', scale: -1 }],
-  'rightHip.abduction': [{ boneName: 'Hip_R', axis: 'y', scale: 1 }],
+  'rightHip.abduction': [{ boneName: 'Hip_R', axis: 'y', scale: -1 }],
   'rightHip.internalRotation': [{ boneName: 'Hip_R', axis: 'x', scale: -1 }],
   'rightHip.anteversion': [{ boneName: 'Hip_R', axis: 'x', scale: -1 }],
   'rightHip.neckShaftAngle': [{ boneName: 'Hip_R', axis: 'y', scale: -0.5 }],
-  'leftHip.adduction': [{ boneName: 'Hip_L', axis: 'y', scale: -1 }],
+  'leftHip.adduction': [{ boneName: 'Hip_L', axis: 'y', scale: 1 }],
   'leftHip.externalRotation': [{ boneName: 'Hip_L', axis: 'x', scale: -1 }],
-  'rightHip.adduction': [{ boneName: 'Hip_R', axis: 'y', scale: -1 }],
+  'rightHip.adduction': [{ boneName: 'Hip_R', axis: 'y', scale: 1 }],
   'rightHip.externalRotation': [{ boneName: 'Hip_R', axis: 'x', scale: 1 }],
   
   // === KNEE / TIBIA ===

@@ -4667,9 +4667,18 @@ export default function PureThreeGLBViewer({
         );
         
         // Apply non-leg rotations (spine, shoulders, etc.) from FK animation
+        // Also apply ankle rotations (dorsiflexion) since IK only solves hip/knee
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
-          // Skip leg bones - they're controlled by IK
-          if (boneName.includes('Hip') || boneName.includes('Knee') || boneName.includes('Ankle') || boneName.includes('Toes')) {
+          if (boneName.includes('Hip') || boneName.includes('Knee') || boneName.includes('Toes')) {
+            return;
+          }
+          if (boneName.includes('Ankle')) {
+            const bone = bones[boneName];
+            if (bone) {
+              bone.rotation.x = rotation.x;
+              bone.rotation.y = rotation.y;
+              bone.rotation.z = rotation.z;
+            }
             return;
           }
           const bone = bones[boneName];

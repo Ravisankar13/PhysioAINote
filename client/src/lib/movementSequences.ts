@@ -148,48 +148,85 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'squat',
     name: 'Squat',
-    description: 'Closed-chain squat with IK - feet stay planted while body lowers',
-    duration: 3000,
+    description: 'Closed-chain parallel squat - feet planted, IK-driven hip/knee flexion',
+    duration: 4000,
     loop: true,
     joints: [
-      // Pelvis drop - PRIMARY driver for closed-chain squat
-      // IK solver calculates hip/knee angles to keep feet planted
       {
         joint: 'pelvis',
         property: 'drop',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 80 },
+          { time: 0.1, value: 5 },
+          { time: 0.35, value: 55 },
+          { time: 0.5, value: 65 },
+          { time: 0.65, value: 55 },
+          { time: 0.9, value: 5 },
           { time: 1, value: 0 },
         ],
       },
-      // Pelvis anterior tilt for trunk lean
       {
         joint: 'pelvis',
         property: 'tilt',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 15 },
+          { time: 0.1, value: 2 },
+          { time: 0.35, value: 18 },
+          { time: 0.5, value: 22 },
+          { time: 0.65, value: 18 },
+          { time: 0.9, value: 2 },
           { time: 1, value: 0 },
         ],
       },
-      // Spine forward flexion for trunk lean / balance
       {
         joint: 'spine',
-        property: 'thoracicKyphosis',
+        property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 25 },
+          { time: 0.1, value: 2 },
+          { time: 0.35, value: 15 },
+          { time: 0.5, value: 20 },
+          { time: 0.65, value: 15 },
+          { time: 0.9, value: 2 },
           { time: 1, value: 0 },
         ],
       },
-      // Arm counterbalance - arms reach forward
+      {
+        joint: 'leftAnkle',
+        property: 'dorsiflexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.1, value: 2 },
+          { time: 0.35, value: 15 },
+          { time: 0.5, value: 20 },
+          { time: 0.65, value: 15 },
+          { time: 0.9, value: 2 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightAnkle',
+        property: 'dorsiflexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.1, value: 2 },
+          { time: 0.35, value: 15 },
+          { time: 0.5, value: 20 },
+          { time: 0.65, value: 15 },
+          { time: 0.9, value: 2 },
+          { time: 1, value: 0 },
+        ],
+      },
       {
         joint: 'leftShoulder',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 90 },
+          { time: 0.1, value: 5 },
+          { time: 0.35, value: 55 },
+          { time: 0.5, value: 70 },
+          { time: 0.65, value: 55 },
+          { time: 0.9, value: 5 },
           { time: 1, value: 0 },
         ],
       },
@@ -198,7 +235,11 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.5, value: 90 },
+          { time: 0.1, value: 5 },
+          { time: 0.35, value: 55 },
+          { time: 0.5, value: 70 },
+          { time: 0.65, value: 55 },
+          { time: 0.9, value: 5 },
           { time: 1, value: 0 },
         ],
       },

@@ -53,8 +53,8 @@ export default function MovementPlayer({ animationState, onAnimationStateChange 
   const speedPresets = [0.25, 0.5, 1, 1.5, 2];
 
   return (
-    <div className="absolute bottom-4 left-4 right-4 z-20 pointer-events-none">
-      <div className="bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl overflow-hidden pointer-events-auto max-w-lg mx-auto">
+    <div className="absolute top-14 right-3 z-20 pointer-events-none w-72">
+      <div className="bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl overflow-hidden pointer-events-auto">
         {isExpanded && (
           <div className="max-h-[320px] overflow-y-auto p-3 border-b border-gray-700/50">
             <div className="flex gap-2 mb-3 flex-wrap">
@@ -73,7 +73,7 @@ export default function MovementPlayer({ animationState, onAnimationStateChange 
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-1.5">
               {(selectedCategory
                 ? MOVEMENT_SEQUENCES.filter(m => {
                     const cat = MOVEMENT_CATEGORIES.find(c => c.id === selectedCategory);

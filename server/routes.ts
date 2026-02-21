@@ -9889,11 +9889,6 @@ Important:
       return;
     }
 
-    if (!phoneCameraRooms.has(roomId) && role === 'phone') {
-      ws.close(1008, 'Room does not exist');
-      return;
-    }
-
     if (!phoneCameraRooms.has(roomId)) {
       phoneCameraRooms.set(roomId, { desktop: null, phone: null, region: 'full_body', createdAt: Date.now() });
     }

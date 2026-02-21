@@ -245,8 +245,7 @@ app.use((req, res, next) => {
       process.exit(0);
     });
 
-    const httpServer = app.listen(PORT, "0.0.0.0", () => {
-      // Enhanced startup logging for deployment verification
+    server.listen(PORT, "0.0.0.0", () => {
       console.log(`✅ PhysioGPT Server successfully started`);
       console.log(`🌐 Server running on http://0.0.0.0:${PORT}`);
       console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);

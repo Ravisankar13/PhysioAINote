@@ -1232,16 +1232,16 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightHip.externalRotation': [{ boneName: 'Hip_R', axis: 'y', scale: 1 }],
   
   // === KNEE / TIBIA ===
-  'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'x', scale: 1 }],
+  'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'y', scale: 1 }],
   'leftKnee.varus': [{ boneName: 'Knee_L', axis: 'z', scale: 1 }], // Genu varum (+) / valgum (-)
-  'leftKnee.tibialTorsion': [{ boneName: 'Knee_L', axis: 'y', scale: 1 }], // External/internal tibial rotation
-  'leftKnee.recurvatum': [{ boneName: 'Knee_L', axis: 'x', scale: -0.5 }], // Knee hyperextension
-  'leftKnee.tibialSlope': [{ boneName: 'Knee_L', axis: 'x', scale: 0.3 }], // Posterior tibial slope
-  'rightKnee.flexion': [{ boneName: 'Knee_R', axis: 'x', scale: 1 }],
+  'leftKnee.tibialTorsion': [{ boneName: 'Knee_L', axis: 'x', scale: 1 }], // External/internal tibial rotation
+  'leftKnee.recurvatum': [{ boneName: 'Knee_L', axis: 'y', scale: -0.5 }], // Knee hyperextension
+  'leftKnee.tibialSlope': [{ boneName: 'Knee_L', axis: 'y', scale: 0.3 }], // Posterior tibial slope
+  'rightKnee.flexion': [{ boneName: 'Knee_R', axis: 'y', scale: -1 }],
   'rightKnee.varus': [{ boneName: 'Knee_R', axis: 'z', scale: -1 }], // Genu varum (+) / valgum (-)
-  'rightKnee.tibialTorsion': [{ boneName: 'Knee_R', axis: 'y', scale: -1 }], // External/internal tibial rotation
-  'rightKnee.recurvatum': [{ boneName: 'Knee_R', axis: 'x', scale: -0.5 }], // Knee hyperextension
-  'rightKnee.tibialSlope': [{ boneName: 'Knee_R', axis: 'x', scale: 0.3 }], // Posterior tibial slope
+  'rightKnee.tibialTorsion': [{ boneName: 'Knee_R', axis: 'x', scale: -1 }], // External/internal tibial rotation
+  'rightKnee.recurvatum': [{ boneName: 'Knee_R', axis: 'y', scale: -0.5 }], // Knee hyperextension
+  'rightKnee.tibialSlope': [{ boneName: 'Knee_R', axis: 'y', scale: 0.3 }], // Posterior tibial slope
   
   // === ANKLE & FOOT ===
   'leftAnkle.dorsiflexion': [{ boneName: 'Ankle_L', axis: 'x', scale: -1 }],
@@ -1531,8 +1531,8 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'HipPart1_L': { configKey: 'leftHip.flexion', label: 'L Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
   'Hip_R': { configKey: 'rightHip.flexion', label: 'R Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
   'HipPart1_R': { configKey: 'rightHip.flexion', label: 'R Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
-  'Knee_L': { configKey: 'leftKnee.flexion', label: 'L Knee Flexion', axis: 'x', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
-  'Knee_R': { configKey: 'rightKnee.flexion', label: 'R Knee Flexion', axis: 'x', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
+  'Knee_L': { configKey: 'leftKnee.flexion', label: 'L Knee Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
+  'Knee_R': { configKey: 'rightKnee.flexion', label: 'R Knee Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
   'Ankle_L': { configKey: 'leftAnkle.dorsiflexion', label: 'L Ankle Dorsiflexion', axis: 'x', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
   'Ankle_R': { configKey: 'rightAnkle.dorsiflexion', label: 'R Ankle Dorsiflexion', axis: 'x', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
   'Shoulder_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },

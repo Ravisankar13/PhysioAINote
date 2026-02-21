@@ -1355,21 +1355,19 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightWrist.flexion': [{ boneName: 'Wrist_R', axis: 'z', scale: -1 }], // Flexion (+) / Extension (-)
   
   // === PELVIS ===
-  // Pelvis tilt rotates Root_M and its children (RootPart1_M, RootPart2_M = pelvis/sacral region)
-  // Counter-rotation at Spine1_M (first lumbar bone above pelvis) keeps the trunk upright
-  // Since Spine1_M is a child of RootPart2_M, applying -1 scale at Spine1_M cancels the inherited tilt
-  // for the entire trunk chain above it
+  // Pelvis tilt/obliquity/rotation use Hip bones (like innominate rotations but symmetrical)
+  // This isolates pelvis movement without moving the trunk or legs
   'pelvis.tilt': [
-    { boneName: 'Root_M', axis: 'x', scale: 1 },
-    { boneName: 'Spine1_M', axis: 'x', scale: -1 },
+    { boneName: 'Hip_L', axis: 'z', scale: 0.3 },
+    { boneName: 'Hip_R', axis: 'z', scale: -0.3 },
   ],
   'pelvis.obliquity': [
-    { boneName: 'Root_M', axis: 'z', scale: 1 },
-    { boneName: 'Spine1_M', axis: 'z', scale: -1 },
+    { boneName: 'Hip_L', axis: 'x', scale: 0.3 },
+    { boneName: 'Hip_R', axis: 'x', scale: 0.3 },
   ],
   'pelvis.rotation': [
-    { boneName: 'Root_M', axis: 'y', scale: 1 },
-    { boneName: 'Spine1_M', axis: 'y', scale: -1 },
+    { boneName: 'Hip_L', axis: 'y', scale: 0.3 },
+    { boneName: 'Hip_R', axis: 'y', scale: -0.3 },
   ],
   'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }],
   

@@ -222,6 +222,10 @@ export default function FocusedCameraCapture({
   const latestPhoneFrameRef = useRef<string | null>(null);
   const phoneFrameCountRef = useRef(0);
   const [phoneFrameCount, setPhoneFrameCount] = useState(0);
+  const phonePoseRef = useRef<any>(null);
+  const phonePoseInitializedRef = useRef(false);
+  const phonePoseProcessingRef = useRef(false);
+  const phonePoseSmootherRef = useRef<Posesmoother>(new Posesmoother(0.4));
 
   const connectPhoneRelay = useCallback((roomId: string) => {
     if (phoneWsRef.current) {
@@ -263,6 +267,10 @@ export default function FocusedCameraCapture({
             };
             img.src = msg.image;
           }
+
+          if (phoneFrameCountRef.current % 2 === 0) {
+            processPhoneFramePose(msg.image);
+          }
         }
       } catch {}
     };
@@ -297,6 +305,12 @@ export default function FocusedCameraCapture({
       phoneWsRef.current.close();
       phoneWsRef.current = null;
     }
+    if (phonePoseRef.current) {
+      phonePoseRef.current.close?.();
+      phonePoseRef.current = null;
+    }
+    phonePoseInitializedRef.current = false;
+    phonePoseProcessingRef.current = false;
     setPhoneMode(false);
     setPhoneRoomId('');
     setPhoneConnected(false);
@@ -305,6 +319,7 @@ export default function FocusedCameraCapture({
     latestPhoneFrameRef.current = null;
     phoneFrameCountRef.current = 0;
     setPhoneFrameCount(0);
+    setPoseDetected(false);
   }, []);
 
   const capturePhoneFrameForAnalysis = useCallback(async () => {
@@ -485,6 +500,76 @@ export default function FocusedCameraCapture({
 
     return angles;
   }, [selectedRegion]);
+
+  const initPhonePoseDetection = useCallback(async () => {
+    if (phonePoseInitializedRef.current || phonePoseRef.current) return;
+    try {
+      const loaded = await loadMediaPipeLibraries();
+      if (!loaded) return;
+
+      const pose = new window.Pose({
+        locateFile: MEDIAPIPE_CONFIG.pose.locateFile
+      });
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        minDetectionConfidence: 0.6,
+        minTrackingConfidence: 0.6
+      });
+
+      pose.onResults((results: any) => {
+        phonePoseProcessingRef.current = false;
+        if (results.poseLandmarks && results.poseLandmarks.length > 0) {
+          setPoseDetected(true);
+          const regionAngles = computeRegionAngles(results.poseLandmarks);
+          setComputedAngles(regionAngles);
+          if (onRawLandmarks) {
+            onRawLandmarks(results.poseLandmarks);
+          }
+          if (onPoseUpdate) {
+            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
+            const smoothedPose = phonePoseSmootherRef.current.smooth(pose3D);
+            onPoseUpdate(smoothedPose);
+          }
+        }
+      });
+
+      phonePoseRef.current = pose;
+      phonePoseInitializedRef.current = true;
+    } catch (err) {
+      console.error('Failed to init phone pose detection:', err);
+    }
+  }, [computeRegionAngles, onPoseUpdate, onRawLandmarks]);
+
+  const processPhoneFramePose = useCallback(async (imageDataUrl: string) => {
+    if (!phonePoseRef.current || phonePoseProcessingRef.current) return;
+    phonePoseProcessingRef.current = true;
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Image load failed'));
+        img.src = imageDataUrl;
+      });
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const ctx = tempCanvas.getContext('2d');
+      if (!ctx) { phonePoseProcessingRef.current = false; return; }
+      ctx.drawImage(img, 0, 0);
+      await phonePoseRef.current.send({ image: tempCanvas });
+    } catch {
+      phonePoseProcessingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (phoneMode && phoneConnected && onPoseUpdate) {
+      initPhonePoseDetection();
+    }
+  }, [phoneMode, phoneConnected, onPoseUpdate, initPhonePoseDetection]);
 
   const captureFrameForAnalysis = useCallback(async () => {
     if (!canvasRef.current || !videoRef.current || isAnalyzing) return;
@@ -859,6 +944,9 @@ export default function FocusedCameraCapture({
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                   <span className="text-[11px] text-white">Phone Live</span>
                   <span className="text-[10px] text-slate-400">{phoneFrameCount} frames</span>
+                  {poseDetected && (
+                    <span className="text-[10px] text-green-400 font-medium">Pose Tracking</span>
+                  )}
                 </div>
                 {selectedRegion.id !== 'full_body' && (
                   <div className="absolute top-2 right-2 bg-cyan-500/20 border border-cyan-500/50 rounded px-2 py-1">

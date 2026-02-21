@@ -159,15 +159,15 @@ export function applyLegIK(
   const shinInitial = initialRotations[config.shinBoneName];
 
   if (thighInitial) {
-    thighBone.rotation.x = thighInitial.x + ikResult.hipAngle;
+    thighBone.rotation.x = thighInitial.x;
     thighBone.rotation.y = thighInitial.y;
-    thighBone.rotation.z = thighInitial.z;
+    thighBone.rotation.z = thighInitial.z + ikResult.hipAngle;
   }
 
   if (shinInitial) {
-    shinBone.rotation.x = shinInitial.x + ikResult.kneeAngle;
+    shinBone.rotation.x = shinInitial.x;
     shinBone.rotation.y = shinInitial.y;
-    shinBone.rotation.z = shinInitial.z;
+    shinBone.rotation.z = shinInitial.z - ikResult.kneeAngle;
   }
 }
 

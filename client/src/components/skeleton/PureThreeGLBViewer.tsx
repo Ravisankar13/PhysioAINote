@@ -3697,6 +3697,44 @@ export default function PureThreeGLBViewer({
             });
             console.log('=================================');
             
+            // === BONE AXIS DIAGNOSTIC ===
+            // Log world-space directions of each bone's local X/Y/Z axes
+            // This tells us which local axis corresponds to which anatomical direction
+            const diagnosticBones = [
+              'Root_M', 'RootPart1_M', 'RootPart2_M',
+              'Hip_L', 'Hip_R', 'HipPart1_L', 'HipPart1_R', 'HipPart2_L', 'HipPart2_R',
+              'Knee_L', 'Knee_R', 'Ankle_L', 'Ankle_R', 'Toes_L', 'Toes_R',
+              'Spine1_M', 'Spine1Part1_M', 'Spine1Part2_M', 'Chest_M',
+              'Neck_M', 'NeckPart1_M', 'NeckPart2_M', 'Head_M',
+              'Scapula_L', 'Scapula_R',
+              'Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R',
+              'Elbow_L', 'Elbow_R', 'Wrist_L', 'Wrist_R',
+            ];
+            console.log('=== BONE AXIS DIAGNOSTIC (World-space directions) ===');
+            console.log('Format: boneName | localX→world | localY→world | localZ→world | initialRot(deg)');
+            diagnosticBones.forEach(boneName => {
+              const bone = bones[boneName];
+              if (!bone) return;
+              bone.updateWorldMatrix(true, false);
+              const wm = bone.matrixWorld;
+              // Extract local axis directions from world matrix columns
+              const xDir = new THREE.Vector3(wm.elements[0], wm.elements[1], wm.elements[2]).normalize();
+              const yDir = new THREE.Vector3(wm.elements[4], wm.elements[5], wm.elements[6]).normalize();
+              const zDir = new THREE.Vector3(wm.elements[8], wm.elements[9], wm.elements[10]).normalize();
+              const rot = bone.rotation;
+              const toDeg = (r: number) => (r * 180 / Math.PI).toFixed(1);
+              console.log(
+                `${boneName.padEnd(18)} | X:(${xDir.x.toFixed(3)},${xDir.y.toFixed(3)},${xDir.z.toFixed(3)}) | Y:(${yDir.x.toFixed(3)},${yDir.y.toFixed(3)},${yDir.z.toFixed(3)}) | Z:(${zDir.x.toFixed(3)},${zDir.y.toFixed(3)},${zDir.z.toFixed(3)}) | rot:(${toDeg(rot.x)},${toDeg(rot.y)},${toDeg(rot.z)})`
+              );
+            });
+            console.log('=== END BONE AXIS DIAGNOSTIC ===');
+            // World-space conventions: X=right, Y=up, Z=forward (toward viewer)
+            // Key interpretations:
+            // - If local Y points downward (0,-1,0): Y is bone's length axis (down the limb)
+            //   → Y rotation = axial rotation along limb
+            // - If local X points forward (0,0,1): X rotation = flexion/extension  
+            // - If local Z points right (1,0,0): Z rotation = abduction/adduction
+            
             // New skeleton model has proper bone parenting:
             // Chest_M → Scapula_L/R → Shoulder_L/R
             // Arms follow chest naturally through the bone hierarchy - no manual syncing needed

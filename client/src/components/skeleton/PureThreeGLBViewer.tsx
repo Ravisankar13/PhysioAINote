@@ -1355,10 +1355,23 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightWrist.flexion': [{ boneName: 'Wrist_R', axis: 'z', scale: -1 }], // Flexion (+) / Extension (-)
   
   // === PELVIS ===
-  'pelvis.tilt': [{ boneName: 'Root_M', axis: 'x', scale: 1 }],
-  'pelvis.obliquity': [{ boneName: 'Root_M', axis: 'z', scale: 1 }],
-  'pelvis.rotation': [{ boneName: 'Root_M', axis: 'y', scale: 1 }],
-  'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }], // Vertical translation for closed-chain movements
+  // Pelvis tilt rotates Root_M and its children (RootPart1_M, RootPart2_M = pelvis/sacral region)
+  // Counter-rotation at Spine1_M (first lumbar bone above pelvis) keeps the trunk upright
+  // Since Spine1_M is a child of RootPart2_M, applying -1 scale at Spine1_M cancels the inherited tilt
+  // for the entire trunk chain above it
+  'pelvis.tilt': [
+    { boneName: 'Root_M', axis: 'x', scale: 1 },
+    { boneName: 'Spine1_M', axis: 'x', scale: -1 },
+  ],
+  'pelvis.obliquity': [
+    { boneName: 'Root_M', axis: 'z', scale: 1 },
+    { boneName: 'Spine1_M', axis: 'z', scale: -1 },
+  ],
+  'pelvis.rotation': [
+    { boneName: 'Root_M', axis: 'y', scale: 1 },
+    { boneName: 'Spine1_M', axis: 'y', scale: -1 },
+  ],
+  'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }],
   
   // === SACRUM / SI JOINT ===
   // Sacrum sits between pelvis and lumbar spine - uses Root_M and RootPart bones

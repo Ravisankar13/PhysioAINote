@@ -381,11 +381,10 @@ export default function ClinicalReasoningPanel({
     if (!hasContent || isGeneratingNotes) return;
     setIsGeneratingNotes(true);
     try {
-      const res = await apiRequest("POST", "/api/clinical-notes/generate", {
+      const notes = await apiRequest("/api/clinical-notes/generate", "POST", {
         reasoningData: d,
         subjectiveHistory,
       });
-      const notes = await res.json();
       setClinicalNotes(notes);
     } catch (err) {
       console.error("Failed to generate clinical notes:", err);

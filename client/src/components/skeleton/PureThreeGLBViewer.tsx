@@ -1214,70 +1214,77 @@ const FORCE_JOINT_TO_BONE: Record<string, string> = {
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
   // === HIP / FEMUR ===
-  'leftHip.flexion': [{ boneName: 'Hip_L', axis: 'x', scale: -1 }],
-  'leftHip.extension': [{ boneName: 'Hip_L', axis: 'x', scale: 1 }],
-  'leftHip.abduction': [{ boneName: 'Hip_L', axis: 'z', scale: -1 }],
-  'leftHip.internalRotation': [{ boneName: 'Hip_L', axis: 'y', scale: 1 }],
-  'leftHip.anteversion': [{ boneName: 'Hip_L', axis: 'y', scale: 1 }], // Femoral anteversion - causes internal rotation
-  'leftHip.neckShaftAngle': [{ boneName: 'Hip_L', axis: 'z', scale: 0.5 }], // Coxa vara/valga
-  'rightHip.flexion': [{ boneName: 'Hip_R', axis: 'x', scale: -1 }],
-  'rightHip.extension': [{ boneName: 'Hip_R', axis: 'x', scale: 1 }],
-  'rightHip.abduction': [{ boneName: 'Hip_R', axis: 'z', scale: 1 }],
-  'rightHip.internalRotation': [{ boneName: 'Hip_R', axis: 'y', scale: -1 }],
-  'rightHip.anteversion': [{ boneName: 'Hip_R', axis: 'y', scale: -1 }], // Femoral anteversion - causes internal rotation
-  'rightHip.neckShaftAngle': [{ boneName: 'Hip_R', axis: 'z', scale: -0.5 }], // Coxa vara/valga
-  'leftHip.adduction': [{ boneName: 'Hip_L', axis: 'z', scale: 1 }],
-  'leftHip.externalRotation': [{ boneName: 'Hip_L', axis: 'y', scale: -1 }],
-  'rightHip.adduction': [{ boneName: 'Hip_R', axis: 'z', scale: -1 }],
-  'rightHip.externalRotation': [{ boneName: 'Hip_R', axis: 'y', scale: 1 }],
+  // Verified axes: LONG=x (bone length), FLEX=z (mediolateral), ABD=y (anteroposterior), ROT=x (longitudinal)
+  // Both Z axes point Left → same sign for bilateral flexion; positive Z = knee backward
+  // Hip flexion = knee moves forward = negative Z; Knee flexion = ankle moves backward = positive Z
+  'leftHip.flexion': [{ boneName: 'Hip_L', axis: 'z', scale: -1 }],
+  'leftHip.extension': [{ boneName: 'Hip_L', axis: 'z', scale: 1 }],
+  'leftHip.abduction': [{ boneName: 'Hip_L', axis: 'y', scale: -1 }],
+  'leftHip.internalRotation': [{ boneName: 'Hip_L', axis: 'x', scale: 1 }],
+  'leftHip.anteversion': [{ boneName: 'Hip_L', axis: 'x', scale: 1 }],
+  'leftHip.neckShaftAngle': [{ boneName: 'Hip_L', axis: 'y', scale: 0.5 }],
+  'rightHip.flexion': [{ boneName: 'Hip_R', axis: 'z', scale: -1 }],
+  'rightHip.extension': [{ boneName: 'Hip_R', axis: 'z', scale: 1 }],
+  'rightHip.abduction': [{ boneName: 'Hip_R', axis: 'y', scale: 1 }],
+  'rightHip.internalRotation': [{ boneName: 'Hip_R', axis: 'x', scale: -1 }],
+  'rightHip.anteversion': [{ boneName: 'Hip_R', axis: 'x', scale: -1 }],
+  'rightHip.neckShaftAngle': [{ boneName: 'Hip_R', axis: 'y', scale: -0.5 }],
+  'leftHip.adduction': [{ boneName: 'Hip_L', axis: 'y', scale: 1 }],
+  'leftHip.externalRotation': [{ boneName: 'Hip_L', axis: 'x', scale: -1 }],
+  'rightHip.adduction': [{ boneName: 'Hip_R', axis: 'y', scale: -1 }],
+  'rightHip.externalRotation': [{ boneName: 'Hip_R', axis: 'x', scale: 1 }],
   
   // === KNEE / TIBIA ===
-  'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'y', scale: 1 }],
-  'leftKnee.varus': [{ boneName: 'Knee_L', axis: 'z', scale: 1 }], // Genu varum (+) / valgum (-)
-  'leftKnee.tibialTorsion': [{ boneName: 'Knee_L', axis: 'x', scale: 1 }], // External/internal tibial rotation
-  'leftKnee.recurvatum': [{ boneName: 'Knee_L', axis: 'y', scale: -0.5 }], // Knee hyperextension
-  'leftKnee.tibialSlope': [{ boneName: 'Knee_L', axis: 'y', scale: 0.3 }], // Posterior tibial slope
-  'rightKnee.flexion': [{ boneName: 'Knee_R', axis: 'y', scale: -1 }],
-  'rightKnee.varus': [{ boneName: 'Knee_R', axis: 'z', scale: -1 }], // Genu varum (+) / valgum (-)
-  'rightKnee.tibialTorsion': [{ boneName: 'Knee_R', axis: 'x', scale: -1 }], // External/internal tibial rotation
-  'rightKnee.recurvatum': [{ boneName: 'Knee_R', axis: 'y', scale: -0.5 }], // Knee hyperextension
-  'rightKnee.tibialSlope': [{ boneName: 'Knee_R', axis: 'y', scale: 0.3 }], // Posterior tibial slope
+  // Verified axes: LONG=x, FLEX=z (mediolateral), ABD=y (anteroposterior), ROT=x (longitudinal)
+  // Knee flexion = ankle moves backward = positive Z (same sign for both sides)
+  'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'z', scale: 1 }],
+  'leftKnee.varus': [{ boneName: 'Knee_L', axis: 'y', scale: 1 }],
+  'leftKnee.tibialTorsion': [{ boneName: 'Knee_L', axis: 'x', scale: 1 }],
+  'leftKnee.recurvatum': [{ boneName: 'Knee_L', axis: 'z', scale: -0.5 }],
+  'leftKnee.tibialSlope': [{ boneName: 'Knee_L', axis: 'z', scale: 0.3 }],
+  'rightKnee.flexion': [{ boneName: 'Knee_R', axis: 'z', scale: 1 }],
+  'rightKnee.varus': [{ boneName: 'Knee_R', axis: 'y', scale: -1 }],
+  'rightKnee.tibialTorsion': [{ boneName: 'Knee_R', axis: 'x', scale: -1 }],
+  'rightKnee.recurvatum': [{ boneName: 'Knee_R', axis: 'z', scale: -0.5 }],
+  'rightKnee.tibialSlope': [{ boneName: 'Knee_R', axis: 'z', scale: 0.3 }],
   
   // === ANKLE & FOOT ===
-  'leftAnkle.dorsiflexion': [{ boneName: 'Ankle_L', axis: 'x', scale: -1 }],
-  'leftAnkle.plantarflexion': [{ boneName: 'Ankle_L', axis: 'x', scale: 1 }],
-  'leftAnkle.inversion': [{ boneName: 'Ankle_L', axis: 'z', scale: 1 }],
-  'leftAnkle.eversion': [{ boneName: 'Ankle_L', axis: 'z', scale: -1 }],
-  'rightAnkle.dorsiflexion': [{ boneName: 'Ankle_R', axis: 'x', scale: -1 }],
-  'rightAnkle.plantarflexion': [{ boneName: 'Ankle_R', axis: 'x', scale: 1 }],
-  'rightAnkle.inversion': [{ boneName: 'Ankle_R', axis: 'z', scale: -1 }],
-  'rightAnkle.eversion': [{ boneName: 'Ankle_R', axis: 'z', scale: 1 }],
-  'leftAnkle.forefootVarus': [{ boneName: 'Toes_L', axis: 'z', scale: 0.5 }],
-  'leftAnkle.toeExtension': [{ boneName: 'Toes_L', axis: 'x', scale: -1 }],
-  'rightAnkle.forefootVarus': [{ boneName: 'Toes_R', axis: 'z', scale: -0.5 }],
-  'rightAnkle.toeExtension': [{ boneName: 'Toes_R', axis: 'x', scale: -1 }],
+  // Verified axes: Ankle LONG=y (anteroposterior), FLEX=z (mediolateral), ABD=x (vertical)
+  // Toes: LONG=x (anteroposterior), FLEX=z (mediolateral), ABD=y
+  'leftAnkle.dorsiflexion': [{ boneName: 'Ankle_L', axis: 'z', scale: -1 }],
+  'leftAnkle.plantarflexion': [{ boneName: 'Ankle_L', axis: 'z', scale: 1 }],
+  'leftAnkle.inversion': [{ boneName: 'Ankle_L', axis: 'x', scale: 1 }],
+  'leftAnkle.eversion': [{ boneName: 'Ankle_L', axis: 'x', scale: -1 }],
+  'rightAnkle.dorsiflexion': [{ boneName: 'Ankle_R', axis: 'z', scale: -1 }],
+  'rightAnkle.plantarflexion': [{ boneName: 'Ankle_R', axis: 'z', scale: 1 }],
+  'rightAnkle.inversion': [{ boneName: 'Ankle_R', axis: 'x', scale: -1 }],
+  'rightAnkle.eversion': [{ boneName: 'Ankle_R', axis: 'x', scale: 1 }],
+  'leftAnkle.forefootVarus': [{ boneName: 'Toes_L', axis: 'y', scale: 0.5 }],
+  'leftAnkle.toeExtension': [{ boneName: 'Toes_L', axis: 'z', scale: -1 }],
+  'rightAnkle.forefootVarus': [{ boneName: 'Toes_R', axis: 'y', scale: -0.5 }],
+  'rightAnkle.toeExtension': [{ boneName: 'Toes_R', axis: 'z', scale: -1 }],
   
   // === SHOULDER ===
-  // In T-pose, arms point laterally. Flexion rotates arm forward (sagittal plane).
-  // For left arm pointing left (-X), flexion uses Z-axis rotation, abduction uses Y-axis rotation
-  'leftShoulder.flexion': [{ boneName: 'Shoulder_L', axis: 'z', scale: 1 }], // Forward flexion - Z rotation brings arm forward
-  'leftShoulder.abduction': [{ boneName: 'Shoulder_L', axis: 'y', scale: -1 }], // Abduction - Y rotation for lateral elevation
-  'leftShoulder.internalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: -1 }], // Internal rotation around humerus long axis
-  'leftShoulder.externalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: 1 }], // External rotation around humerus long axis
-  'leftShoulder.retroversion': [{ boneName: 'ShoulderPart1_L', axis: 'y', scale: 1 }], // Humeral head retroversion
+  // Verified axes: LONG=x (along humerus, pointing Left), FLEX=y (anteroposterior), ABD=z (vertical)
+  // L: Y=Back, R: Y=Forward → opposite signs for bilateral flexion
+  // L: Z=Down, R: Z=Up → opposite signs for bilateral abduction
+  'leftShoulder.flexion': [{ boneName: 'Shoulder_L', axis: 'y', scale: 1 }],
+  'leftShoulder.abduction': [{ boneName: 'Shoulder_L', axis: 'z', scale: -1 }],
+  'leftShoulder.internalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: -1 }],
+  'leftShoulder.externalRotation': [{ boneName: 'ShoulderPart1_L', axis: 'x', scale: 1 }],
+  'leftShoulder.retroversion': [{ boneName: 'ShoulderPart1_L', axis: 'z', scale: 1 }],
   'leftShoulder.elevation': [
-    { boneName: 'Chest_M', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
-    { boneName: 'Shoulder_L', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
+    { boneName: 'Chest_M', axis: 'z', scale: -0.15 },
+    { boneName: 'Shoulder_L', axis: 'z', scale: -0.3 }
   ],
-  // For right arm pointing right (+X), flexion uses Z-axis rotation, abduction uses Y-axis rotation
-  'rightShoulder.flexion': [{ boneName: 'Shoulder_R', axis: 'z', scale: 1 }], // Forward flexion - Z rotation brings arm forward
-  'rightShoulder.abduction': [{ boneName: 'Shoulder_R', axis: 'y', scale: 1 }], // Abduction - Y rotation for lateral elevation
-  'rightShoulder.internalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: 1 }], // Internal rotation around humerus long axis
-  'rightShoulder.externalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: -1 }], // External rotation around humerus long axis
-  'rightShoulder.retroversion': [{ boneName: 'ShoulderPart1_R', axis: 'y', scale: -1 }], // Humeral head retroversion
+  'rightShoulder.flexion': [{ boneName: 'Shoulder_R', axis: 'y', scale: -1 }],
+  'rightShoulder.abduction': [{ boneName: 'Shoulder_R', axis: 'z', scale: 1 }],
+  'rightShoulder.internalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: 1 }],
+  'rightShoulder.externalRotation': [{ boneName: 'ShoulderPart1_R', axis: 'x', scale: -1 }],
+  'rightShoulder.retroversion': [{ boneName: 'ShoulderPart1_R', axis: 'z', scale: -1 }],
   'rightShoulder.elevation': [
-    { boneName: 'Chest_M', axis: 'x', scale: -0.15 }, // Slight rib cage tilt
-    { boneName: 'Shoulder_R', axis: 'x', scale: 0.3 } // Counter-rotate to lift arm
+    { boneName: 'Chest_M', axis: 'z', scale: -0.15 },
+    { boneName: 'Shoulder_R', axis: 'z', scale: 0.3 }
   ],
   
   // === SCAPULA ===
@@ -1339,20 +1346,22 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   ],
   
   // === ELBOW ===
-  // Verified axes: Y = flexion/extension (bending), X = pronation/supination (forearm rotation)
-  'leftElbow.flexion': [{ boneName: 'Elbow_L', axis: 'y', scale: 1 }],
+  // Verified axes: LONG=x (along forearm, Left), FLEX=z (vertical), ABD=y (anteroposterior)
+  // L: Z=Down, R: Z=Up → opposite signs for bilateral flexion
+  'leftElbow.flexion': [{ boneName: 'Elbow_L', axis: 'z', scale: 1 }],
   'leftElbow.pronation': [{ boneName: 'Elbow_L', axis: 'x', scale: -1 }],
-  'leftElbow.carryingAngle': [{ boneName: 'Elbow_L', axis: 'z', scale: -1 }], // Cubitus valgus/varus
-  'rightElbow.flexion': [{ boneName: 'Elbow_R', axis: 'y', scale: -1 }],
+  'leftElbow.carryingAngle': [{ boneName: 'Elbow_L', axis: 'y', scale: -1 }],
+  'rightElbow.flexion': [{ boneName: 'Elbow_R', axis: 'z', scale: -1 }],
   'rightElbow.pronation': [{ boneName: 'Elbow_R', axis: 'x', scale: -1 }],
-  'rightElbow.carryingAngle': [{ boneName: 'Elbow_R', axis: 'z', scale: 1 }], // Cubitus valgus/varus
+  'rightElbow.carryingAngle': [{ boneName: 'Elbow_R', axis: 'y', scale: 1 }],
   
   // === WRIST ===
-  // Verified axes: Z = flexion/extension, X = ulnar/radial deviation
-  'leftWrist.deviation': [{ boneName: 'Wrist_L', axis: 'x', scale: 1 }], // Ulnar (+) / Radial (-) deviation
-  'leftWrist.flexion': [{ boneName: 'Wrist_L', axis: 'z', scale: 1 }], // Flexion (+) / Extension (-)
-  'rightWrist.deviation': [{ boneName: 'Wrist_R', axis: 'x', scale: 1 }], // Ulnar (+) / Radial (-) deviation
-  'rightWrist.flexion': [{ boneName: 'Wrist_R', axis: 'z', scale: -1 }], // Flexion (+) / Extension (-)
+  // Verified axes: LONG=x (along hand, Left), FLEX=z (vertical), ABD=y (anteroposterior)
+  // L: Z=Down, R: Z=Up → opposite signs for bilateral flexion
+  'leftWrist.deviation': [{ boneName: 'Wrist_L', axis: 'y', scale: 1 }],
+  'leftWrist.flexion': [{ boneName: 'Wrist_L', axis: 'z', scale: 1 }],
+  'rightWrist.deviation': [{ boneName: 'Wrist_R', axis: 'y', scale: -1 }],
+  'rightWrist.flexion': [{ boneName: 'Wrist_R', axis: 'z', scale: -1 }],
   
   // === PELVIS ===
   // Pelvis tilt/obliquity/rotation use Hip bones (like innominate rotations but symmetrical)
@@ -1362,36 +1371,35 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Hip_R', axis: 'z', scale: -0.3 },
   ],
   'pelvis.obliquity': [
-    { boneName: 'Hip_L', axis: 'x', scale: 0.3 },
-    { boneName: 'Hip_R', axis: 'x', scale: 0.3 },
+    { boneName: 'Hip_L', axis: 'y', scale: 0.3 },
+    { boneName: 'Hip_R', axis: 'y', scale: 0.3 },
   ],
   'pelvis.rotation': [
-    { boneName: 'Hip_L', axis: 'y', scale: 0.3 },
-    { boneName: 'Hip_R', axis: 'y', scale: -0.3 },
+    { boneName: 'Hip_L', axis: 'x', scale: 0.3 },
+    { boneName: 'Hip_R', axis: 'x', scale: -0.3 },
   ],
   'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }],
   
   // === SACRUM / SI JOINT ===
-  // Sacrum sits between pelvis and lumbar spine - uses Root_M and RootPart bones
-  // Nutation: sacral base tilts anteriorly (top of sacrum tips forward)
+  // Verified axes (midline bones): LONG=x(Up), FLEX=z(Right), ABD=y(Fwd), ROT=x
+  // Nutation: sacral base tilts anteriorly = sagittal plane = Z axis
   'sacrum.nutation': [
-    { boneName: 'RootPart1_M', axis: 'x', scale: 0.4 },
-    { boneName: 'RootPart2_M', axis: 'x', scale: 0.3 },
+    { boneName: 'RootPart1_M', axis: 'z', scale: 0.4 },
+    { boneName: 'RootPart2_M', axis: 'z', scale: 0.3 },
   ],
-  // Counternutation: sacral base tilts posteriorly (top of sacrum tips backward)
   'sacrum.counternutation': [
-    { boneName: 'RootPart1_M', axis: 'x', scale: -0.4 },
-    { boneName: 'RootPart2_M', axis: 'x', scale: -0.3 },
+    { boneName: 'RootPart1_M', axis: 'z', scale: -0.4 },
+    { boneName: 'RootPart2_M', axis: 'z', scale: -0.3 },
   ],
-  // Sacral torsion: rotation of sacrum on oblique axis
+  // Sacral torsion: rotation on oblique axis = transverse plane = X axis
   'sacrum.torsion': [
+    { boneName: 'RootPart1_M', axis: 'x', scale: 0.3 },
+    { boneName: 'RootPart2_M', axis: 'x', scale: 0.2 },
+  ],
+  // Sacral lateral flexion = frontal plane = Y axis
+  'sacrum.lateralFlexion': [
     { boneName: 'RootPart1_M', axis: 'y', scale: 0.3 },
     { boneName: 'RootPart2_M', axis: 'y', scale: 0.2 },
-  ],
-  // Sacral lateral flexion (sidebending)
-  'sacrum.lateralFlexion': [
-    { boneName: 'RootPart1_M', axis: 'z', scale: 0.3 },
-    { boneName: 'RootPart2_M', axis: 'z', scale: 0.2 },
   ],
 
   // === INNOMINATE ===
@@ -1527,25 +1535,25 @@ interface PoseBoneConfig {
 }
 
 const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
-  'Hip_L': { configKey: 'leftHip.flexion', label: 'L Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
-  'HipPart1_L': { configKey: 'leftHip.flexion', label: 'L Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
-  'Hip_R': { configKey: 'rightHip.flexion', label: 'R Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
-  'HipPart1_R': { configKey: 'rightHip.flexion', label: 'R Hip Flexion', axis: 'x', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
-  'Knee_L': { configKey: 'leftKnee.flexion', label: 'L Knee Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
-  'Knee_R': { configKey: 'rightKnee.flexion', label: 'R Knee Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
-  'Ankle_L': { configKey: 'leftAnkle.dorsiflexion', label: 'L Ankle Dorsiflexion', axis: 'x', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
-  'Ankle_R': { configKey: 'rightAnkle.dorsiflexion', label: 'R Ankle Dorsiflexion', axis: 'x', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
-  'Shoulder_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'ShoulderPart1_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'Shoulder_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'ShoulderPart1_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
-  'Elbow_L': { configKey: 'leftElbow.flexion', label: 'L Elbow Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
-  'Elbow_R': { configKey: 'rightElbow.flexion', label: 'R Elbow Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
+  'Hip_L': { configKey: 'leftHip.flexion', label: 'L Hip Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
+  'HipPart1_L': { configKey: 'leftHip.flexion', label: 'L Hip Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
+  'Hip_R': { configKey: 'rightHip.flexion', label: 'R Hip Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
+  'HipPart1_R': { configKey: 'rightHip.flexion', label: 'R Hip Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 120, sensitivity: 0.5 },
+  'Knee_L': { configKey: 'leftKnee.flexion', label: 'L Knee Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
+  'Knee_R': { configKey: 'rightKnee.flexion', label: 'R Knee Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 140, sensitivity: 0.5 },
+  'Ankle_L': { configKey: 'leftAnkle.dorsiflexion', label: 'L Ankle Dorsiflexion', axis: 'z', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
+  'Ankle_R': { configKey: 'rightAnkle.dorsiflexion', label: 'R Ankle Dorsiflexion', axis: 'z', scale: -1, minValue: 0, maxValue: 30, sensitivity: 0.3 },
+  'Shoulder_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'ShoulderPart1_L': { configKey: 'leftShoulder.flexion', label: 'L Shoulder Flexion', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'Shoulder_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'ShoulderPart1_R': { configKey: 'rightShoulder.flexion', label: 'R Shoulder Flexion', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.6 },
+  'Elbow_L': { configKey: 'leftElbow.flexion', label: 'L Elbow Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
+  'Elbow_R': { configKey: 'rightElbow.flexion', label: 'R Elbow Flexion', axis: 'z', scale: -1, minValue: 0, maxValue: 150, sensitivity: 0.5 },
   'Wrist_L': { configKey: 'leftWrist.flexion', label: 'L Wrist Flexion', axis: 'z', scale: 1, minValue: -80, maxValue: 80, sensitivity: 0.3 },
   'Wrist_R': { configKey: 'rightWrist.flexion', label: 'R Wrist Flexion', axis: 'z', scale: -1, minValue: -80, maxValue: 80, sensitivity: 0.3 },
-  'Root_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
-  'RootPart1_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
-  'RootPart2_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'x', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
+  'Root_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'z', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
+  'RootPart1_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'z', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
+  'RootPart2_M': { configKey: 'pelvis.tilt', label: 'Pelvis Tilt', axis: 'z', scale: 1, minValue: -20, maxValue: 20, sensitivity: 0.3 },
   'Spine1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'z', scale: -1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
   'Spine1Part1_M': { configKey: 'spine.lumbarLordosis', label: 'Lumbar Lordosis', axis: 'z', scale: -1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
   'Spine1Part2_M': { configKey: 'spine.thoracicKyphosis', label: 'Thoracic Kyphosis', axis: 'z', scale: 1, minValue: -30, maxValue: 30, sensitivity: 0.3 },
@@ -1554,8 +1562,8 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'NeckPart1_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
   'NeckPart2_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
   'Head_M': { configKey: 'neck.flexion', label: 'Neck Flexion', axis: 'z', scale: 1, minValue: 0, maxValue: 50, sensitivity: 0.3 },
-  'Scapula_L': { configKey: 'leftShoulder.abduction', label: 'L Shoulder Abduction', axis: 'y', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
-  'Scapula_R': { configKey: 'rightShoulder.abduction', label: 'R Shoulder Abduction', axis: 'y', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
+  'Scapula_L': { configKey: 'leftShoulder.abduction', label: 'L Shoulder Abduction', axis: 'z', scale: -1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
+  'Scapula_R': { configKey: 'rightShoulder.abduction', label: 'R Shoulder Abduction', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
 };
 
 export default function PureThreeGLBViewer({ 
@@ -3697,43 +3705,6 @@ export default function PureThreeGLBViewer({
             });
             console.log('=================================');
             
-            // === BONE AXIS DIAGNOSTIC ===
-            // Log world-space directions of each bone's local X/Y/Z axes
-            // This tells us which local axis corresponds to which anatomical direction
-            const diagnosticBones = [
-              'Root_M', 'RootPart1_M', 'RootPart2_M',
-              'Hip_L', 'Hip_R', 'HipPart1_L', 'HipPart1_R', 'HipPart2_L', 'HipPart2_R',
-              'Knee_L', 'Knee_R', 'Ankle_L', 'Ankle_R', 'Toes_L', 'Toes_R',
-              'Spine1_M', 'Spine1Part1_M', 'Spine1Part2_M', 'Chest_M',
-              'Neck_M', 'NeckPart1_M', 'NeckPart2_M', 'Head_M',
-              'Scapula_L', 'Scapula_R',
-              'Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R',
-              'Elbow_L', 'Elbow_R', 'Wrist_L', 'Wrist_R',
-            ];
-            console.log('=== BONE AXIS DIAGNOSTIC (World-space directions) ===');
-            console.log('Format: boneName | localX→world | localY→world | localZ→world | initialRot(deg)');
-            diagnosticBones.forEach(boneName => {
-              const bone = bones[boneName];
-              if (!bone) return;
-              bone.updateWorldMatrix(true, false);
-              const wm = bone.matrixWorld;
-              // Extract local axis directions from world matrix columns
-              const xDir = new THREE.Vector3(wm.elements[0], wm.elements[1], wm.elements[2]).normalize();
-              const yDir = new THREE.Vector3(wm.elements[4], wm.elements[5], wm.elements[6]).normalize();
-              const zDir = new THREE.Vector3(wm.elements[8], wm.elements[9], wm.elements[10]).normalize();
-              const rot = bone.rotation;
-              const toDeg = (r: number) => (r * 180 / Math.PI).toFixed(1);
-              console.log(
-                `${boneName.padEnd(18)} | X:(${xDir.x.toFixed(3)},${xDir.y.toFixed(3)},${xDir.z.toFixed(3)}) | Y:(${yDir.x.toFixed(3)},${yDir.y.toFixed(3)},${yDir.z.toFixed(3)}) | Z:(${zDir.x.toFixed(3)},${zDir.y.toFixed(3)},${zDir.z.toFixed(3)}) | rot:(${toDeg(rot.x)},${toDeg(rot.y)},${toDeg(rot.z)})`
-              );
-            });
-            console.log('=== END BONE AXIS DIAGNOSTIC ===');
-            // World-space conventions: X=right, Y=up, Z=forward (toward viewer)
-            // Key interpretations:
-            // - If local Y points downward (0,-1,0): Y is bone's length axis (down the limb)
-            //   → Y rotation = axial rotation along limb
-            // - If local X points forward (0,0,1): X rotation = flexion/extension  
-            // - If local Z points right (1,0,0): Z rotation = abduction/adduction
             
             // New skeleton model has proper bone parenting:
             // Chest_M → Scapula_L/R → Shoulder_L/R

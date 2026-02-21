@@ -742,32 +742,22 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         ],
       },
       {
-        joint: 'leftHip',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 70 },
-          { time: 0.6, value: 70 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'rightHip',
-        property: 'flexion',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 70 },
-          { time: 0.6, value: 70 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
         joint: 'neck',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
           { time: 0.4, value: 45 },
           { time: 0.6, value: 45 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'spine',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 60 },
+          { time: 0.6, value: 60 },
           { time: 1, value: 0 },
         ],
       },
@@ -802,7 +792,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
       },
       {
         joint: 'neck',
-        property: 'flexion',
+        property: 'extension',
         keyframes: [
           { time: 0, value: 0 },
           { time: 0.4, value: 25 },
@@ -880,22 +870,22 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     loop: true,
     joints: [
       {
-        joint: 'leftHip',
+        joint: 'spine',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 80 },
-          { time: 0.6, value: 80 },
+          { time: 0.4, value: 70 },
+          { time: 0.6, value: 70 },
           { time: 1, value: 0 },
         ],
       },
       {
-        joint: 'rightHip',
-        property: 'flexion',
+        joint: 'spine',
+        property: 'lumbarLordosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 80 },
-          { time: 0.6, value: 80 },
+          { time: 0.4, value: 15 },
+          { time: 0.6, value: 15 },
           { time: 1, value: 0 },
         ],
       },
@@ -916,26 +906,6 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 0, value: 0 },
           { time: 0.4, value: 15 },
           { time: 0.6, value: 15 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'spine',
-        property: 'lumbarLordosis',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 15 },
-          { time: 0.6, value: 15 },
-          { time: 1, value: 0 },
-        ],
-      },
-      {
-        joint: 'spine',
-        property: 'thoracicKyphosis',
-        keyframes: [
-          { time: 0, value: 0 },
-          { time: 0.4, value: 10 },
-          { time: 0.6, value: 10 },
           { time: 1, value: 0 },
         ],
       },
@@ -981,10 +951,10 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     joints: [
       {
         joint: 'rightHip',
-        property: 'flexion',
+        property: 'abduction',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.25, value: 60 },
+          { time: 0.25, value: 45 },
           { time: 0.5, value: 0 },
           { time: 0.75, value: 0 },
           { time: 1, value: 0 },
@@ -992,7 +962,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
       },
       {
         joint: 'rightHip',
-        property: 'abduction',
+        property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
           { time: 0.25, value: 30 },
@@ -1006,7 +976,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.25, value: 70 },
+          { time: 0.25, value: 60 },
           { time: 0.5, value: 0 },
           { time: 0.75, value: 0 },
           { time: 1, value: 0 },
@@ -1014,18 +984,18 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
       },
       {
         joint: 'leftHip',
-        property: 'flexion',
+        property: 'abduction',
         keyframes: [
           { time: 0, value: 0 },
           { time: 0.25, value: 0 },
           { time: 0.5, value: 0 },
-          { time: 0.75, value: 60 },
+          { time: 0.75, value: 45 },
           { time: 1, value: 0 },
         ],
       },
       {
         joint: 'leftHip',
-        property: 'abduction',
+        property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
           { time: 0.25, value: 0 },
@@ -1041,18 +1011,18 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 0, value: 0 },
           { time: 0.25, value: 0 },
           { time: 0.5, value: 0 },
-          { time: 0.75, value: 70 },
+          { time: 0.75, value: 60 },
           { time: 1, value: 0 },
         ],
       },
       {
-        joint: 'pelvis',
-        property: 'obliquity',
+        joint: 'spine',
+        property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.25, value: 5 },
+          { time: 0.25, value: 10 },
           { time: 0.5, value: 0 },
-          { time: 0.75, value: -5 },
+          { time: 0.75, value: 10 },
           { time: 1, value: 0 },
         ],
       },

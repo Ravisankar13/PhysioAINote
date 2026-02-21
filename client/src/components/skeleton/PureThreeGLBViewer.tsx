@@ -1194,6 +1194,7 @@ interface PureThreeGLBViewerProps {
   onForceJointSelect?: (joint: string) => void;
   enableMuscleInteraction?: boolean;
   onMuscleGroupClick?: (groupId: string, screenX: number, screenY: number) => void;
+  highlightMuscleGroups?: string[];
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -1595,6 +1596,7 @@ export default function PureThreeGLBViewer({
   onForceJointSelect,
   enableMuscleInteraction = false,
   onMuscleGroupClick,
+  highlightMuscleGroups,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');

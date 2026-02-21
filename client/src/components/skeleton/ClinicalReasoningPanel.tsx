@@ -164,6 +164,8 @@ interface ClinicalReasoningPanelProps {
   subjectiveHistory: string;
   onSubjectiveHistoryChange: (text: string) => void;
   onSubjectiveHistorySubmit: () => void;
+  onBiomechanicalLinkClick?: (link: BiomechanicalLink | null) => void;
+  activeBiomechanicalLinkId?: string | null;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -330,6 +332,8 @@ export default function ClinicalReasoningPanel({
   subjectiveHistory,
   onSubjectiveHistoryChange,
   onSubjectiveHistorySubmit,
+  onBiomechanicalLinkClick,
+  activeBiomechanicalLinkId,
 }: ClinicalReasoningPanelProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
@@ -683,20 +687,37 @@ export default function ClinicalReasoningPanel({
               />
               {expandedSections.biomechanical && (
                 <div className="space-y-1 mt-1 ml-1">
-                  {d.biomechanicalLinks.map((link) => (
-                    <div
-                      key={link.id}
-                      className="bg-gray-800/30 rounded-lg p-2 border border-purple-500/10 animate-in fade-in-0 duration-300"
-                    >
-                      <div className="flex items-center gap-1 text-[10px]">
-                        <span className="text-purple-300 font-medium">{link.primaryRegion}</span>
-                        <Zap className="h-2.5 w-2.5 text-purple-500" />
-                        <span className="text-purple-300 font-medium">{link.connectedRegion}</span>
+                  {d.biomechanicalLinks.map((link) => {
+                    const isActive = activeBiomechanicalLinkId === link.id;
+                    return (
+                      <div
+                        key={link.id}
+                        onClick={() => {
+                          if (onBiomechanicalLinkClick) {
+                            onBiomechanicalLinkClick(isActive ? null : link);
+                          }
+                        }}
+                        className={`rounded-lg p-2 border animate-in fade-in-0 duration-300 transition-all ${
+                          onBiomechanicalLinkClick ? 'cursor-pointer' : ''
+                        } ${
+                          isActive
+                            ? 'bg-cyan-500/15 border-cyan-500/40 ring-1 ring-cyan-500/30'
+                            : 'bg-gray-800/30 border-purple-500/10 hover:bg-purple-500/10 hover:border-purple-500/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1 text-[10px]">
+                          <span className={isActive ? 'text-cyan-300 font-medium' : 'text-purple-300 font-medium'}>{link.primaryRegion}</span>
+                          <Zap className={`h-2.5 w-2.5 ${isActive ? 'text-cyan-400' : 'text-purple-500'}`} />
+                          <span className={isActive ? 'text-cyan-300 font-medium' : 'text-purple-300 font-medium'}>{link.connectedRegion}</span>
+                          {isActive && (
+                            <span className="ml-auto text-[8px] text-cyan-400/70 uppercase tracking-wider">showing</span>
+                          )}
+                        </div>
+                        <p className="text-[9px] text-gray-500 mt-0.5">{link.mechanism}</p>
+                        <p className="text-[9px] text-gray-400 mt-0.5 italic">{link.clinicalRelevance}</p>
                       </div>
-                      <p className="text-[9px] text-gray-500 mt-0.5">{link.mechanism}</p>
-                      <p className="text-[9px] text-gray-400 mt-0.5 italic">{link.clinicalRelevance}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

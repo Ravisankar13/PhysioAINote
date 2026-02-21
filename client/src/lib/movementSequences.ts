@@ -124,6 +124,8 @@ export const DEFAULT_JOINT_LIMITS: JointLimits = {
     thoracicKyphosis: { min: -50, max: 50 },
     thoracicRotation: { min: -45, max: 45 },
     lumbarRotation: { min: -30, max: 30 },
+    flexion: { min: -30, max: 90 },
+    lateralFlexion: { min: -45, max: 45 },
   },
 };
 
@@ -719,18 +721,16 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     duration: 4000,
     loop: true,
     joints: [
-      // Lumbar spine maximal flexion (positive = forward)
       {
         joint: 'spine',
         property: 'lumbarLordosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: 70 },
-          { time: 0.6, value: 70 },
+          { time: 0.4, value: -70 },
+          { time: 0.6, value: -70 },
           { time: 1, value: 0 },
         ],
       },
-      // Thoracic spine maximal flexion (positive = increased kyphosis/forward)
       {
         joint: 'spine',
         property: 'thoracicKyphosis',
@@ -741,7 +741,6 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 1, value: 0 },
         ],
       },
-      // Pelvis maximal anterior tilt (negative = forward)
       {
         joint: 'pelvis',
         property: 'tilt',
@@ -752,7 +751,6 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 1, value: 0 },
         ],
       },
-      // Neck flexes to look down
       {
         joint: 'neck',
         property: 'flexion',
@@ -772,18 +770,16 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     duration: 4000,
     loop: true,
     joints: [
-      // Lumbar spine extension (negative = increased lordosis/backward)
       {
         joint: 'spine',
         property: 'lumbarLordosis',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: -50 },
-          { time: 0.6, value: -50 },
+          { time: 0.4, value: 50 },
+          { time: 0.6, value: 50 },
           { time: 1, value: 0 },
         ],
       },
-      // Thoracic spine extension (negative = reduced kyphosis/backward)
       {
         joint: 'spine',
         property: 'thoracicKyphosis',
@@ -794,7 +790,6 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 1, value: 0 },
         ],
       },
-      // Pelvis tilts posteriorly (positive = backward)
       {
         joint: 'pelvis',
         property: 'tilt',
@@ -805,7 +800,6 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 1, value: 0 },
         ],
       },
-      // Neck flexes to maintain gaze forward
       {
         joint: 'neck',
         property: 'flexion',
@@ -856,25 +850,23 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     duration: 3000,
     loop: true,
     joints: [
-      // Left shoulder flexion (negative = forward and up)
       {
         joint: 'leftShoulder',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: -180 },
-          { time: 0.6, value: -180 },
+          { time: 0.4, value: 180 },
+          { time: 0.6, value: 180 },
           { time: 1, value: 0 },
         ],
       },
-      // Right shoulder flexion (negative = forward and up)
       {
         joint: 'rightShoulder',
         property: 'flexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.4, value: -180 },
-          { time: 0.6, value: -180 },
+          { time: 0.4, value: 180 },
+          { time: 0.6, value: 180 },
           { time: 1, value: 0 },
         ],
       },
@@ -1139,12 +1131,12 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     joints: [
       {
         joint: 'spine',
-        property: 'lumbarLordosis',
+        property: 'lateralFlexion',
         keyframes: [
           { time: 0, value: 0 },
-          { time: 0.25, value: 0 },
+          { time: 0.25, value: 35 },
           { time: 0.5, value: 0 },
-          { time: 0.75, value: 0 },
+          { time: 0.75, value: -35 },
           { time: 1, value: 0 },
         ],
       },

@@ -8515,7 +8515,7 @@ Guidelines:
   const { realtimePainAnalysisService } = await import('./services/realtimePainAnalysisService');
 
   // Real-time AI WebSocket Server for SOAP Notes
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws/soap-ai' });
+  const wss = new WebSocketServer({ noServer: true });
   
   wss.on('connection', (ws: WebSocket, req) => {
     let clientId: string = '';
@@ -9772,7 +9772,7 @@ Important:
   });
 
   // Streaming Transcription WebSocket Server for long recordings
-  const streamingWss = new WebSocketServer({ server: httpServer, path: '/ws/streaming-transcription' });
+  const streamingWss = new WebSocketServer({ noServer: true });
   
   streamingWss.on('connection', async (ws: WebSocket, req) => {
     try {
@@ -9839,7 +9839,7 @@ Important:
   console.log('🎙️ Streaming Transcription WebSocket server started on /ws/streaming-transcription');
 
   // Tournament WebSocket Server for real-time 1v1 matches
-  const tournamentWss = new WebSocketServer({ server: httpServer, path: '/ws/tournaments' });
+  const tournamentWss = new WebSocketServer({ noServer: true });
   
   tournamentWss.on('connection', async (ws: WebSocket, req) => {
     const url = new URL(req.url!, `http://${req.headers.host}`);
@@ -9877,14 +9877,16 @@ Important:
     }
   }, 300000);
 
-  const phoneCameraWss = new WebSocketServer({ server: httpServer, path: '/ws/phone-camera' });
+  const phoneCameraWss = new WebSocketServer({ noServer: true });
 
   phoneCameraWss.on('connection', (ws: WebSocket, req) => {
     const url = new URL(req.url!, `http://${req.headers.host}`);
     const roomId = url.searchParams.get('room');
     const role = url.searchParams.get('role');
+    console.log(`📱 Phone camera WebSocket connection: role=${role}, room=${roomId}`);
 
     if (!roomId || !role || !['desktop', 'phone'].includes(role)) {
+      console.log(`📱 Phone camera WebSocket rejected: missing room or role`);
       ws.close(1008, 'Missing room or role parameter');
       return;
     }
@@ -18202,6 +18204,28 @@ If there are existing notes, seamlessly integrate the new content while maintain
       memory: process.memoryUsage(),
       uptime: process.uptime()
     });
+  });
+
+  httpServer.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url!, `http://${request.headers.host}`).pathname;
+
+    if (pathname === '/ws/soap-ai') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/ws/streaming-transcription') {
+      streamingWss.handleUpgrade(request, socket, head, (ws) => {
+        streamingWss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/ws/tournaments') {
+      tournamentWss.handleUpgrade(request, socket, head, (ws) => {
+        tournamentWss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/ws/phone-camera') {
+      phoneCameraWss.handleUpgrade(request, socket, head, (ws) => {
+        phoneCameraWss.emit('connection', ws, request);
+      });
+    }
   });
 
   return httpServer;

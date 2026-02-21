@@ -81,7 +81,7 @@ import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToContro
 import type { Skeleton3DPose, PartialSkeleton3DPose } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
-import ClinicalReasoningPanel, { type ClinicalReasoningData } from "@/components/skeleton/ClinicalReasoningPanel";
+import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink } from "@/components/skeleton/ClinicalReasoningPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority } from "@/lib/muscleBiomechanicsEngine";
@@ -432,6 +432,8 @@ export default function PhysioGPT() {
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
+  const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const lastReasoningTriggerRef = useRef<string>('');
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const voiceSpeechRecRef = useRef<any>(null);
@@ -1100,6 +1102,116 @@ ${ddxList}`;
     const prompt = `The patient has indicated symptoms in the following areas on the anatomical skeleton:\n${markerDescriptions}\n\nPlease provide a clinical assessment considering these symptom locations, types, and patterns. What could be the differential diagnoses? What assessment approach would you recommend? Are there any patterns suggesting a specific condition? Pay special attention to any referred pain patterns, symptom distributions (including non-pain symptoms like numbness, tingling, weakness), and any subjective history provided.`;
     sendMessageStreaming(prompt);
   }, [painMarkers]);
+
+  const BIOMECHANICAL_REGION_TO_MUSCLES: Record<string, string[]> = useMemo(() => ({
+    'right shoulder': ['deltoid_r', 'scapula_r'],
+    'left shoulder': ['deltoid_l', 'scapula_l'],
+    'shoulder': ['deltoid_r', 'deltoid_l', 'scapula_r', 'scapula_l'],
+    'right arm': ['deltoid_r', 'bicep_r'],
+    'left arm': ['deltoid_l', 'bicep_l'],
+    'right elbow': ['bicep_r'],
+    'left elbow': ['bicep_l'],
+    'right hip': ['glute_r', 'quad_r'],
+    'left hip': ['glute_l', 'quad_l'],
+    'hip': ['glute_r', 'glute_l', 'quad_r', 'quad_l'],
+    'pelvis': ['glute_r', 'glute_l', 'core'],
+    'right knee': ['quad_r', 'calf_r'],
+    'left knee': ['quad_l', 'calf_l'],
+    'knee': ['quad_r', 'quad_l', 'calf_r', 'calf_l'],
+    'right ankle': ['calf_r', 'shin_r'],
+    'left ankle': ['calf_l', 'shin_l'],
+    'ankle': ['calf_r', 'calf_l', 'shin_r', 'shin_l'],
+    'right foot': ['shin_r', 'foot_r'],
+    'left foot': ['shin_l', 'foot_l'],
+    'foot': ['shin_r', 'shin_l', 'foot_r', 'foot_l'],
+    'right thigh': ['quad_r'],
+    'left thigh': ['quad_l'],
+    'right calf': ['calf_r'],
+    'left calf': ['calf_l'],
+    'right leg': ['quad_r', 'calf_r', 'shin_r'],
+    'left leg': ['quad_l', 'calf_l', 'shin_l'],
+    'leg': ['quad_r', 'quad_l', 'calf_r', 'calf_l', 'shin_r', 'shin_l'],
+    'cervical spine': ['neck'],
+    'cervical': ['neck'],
+    'neck': ['neck'],
+    'thoracic spine': ['spine', 'chest'],
+    'thoracic': ['spine', 'chest'],
+    'lumbar spine': ['core', 'spine'],
+    'lumbar': ['core', 'spine'],
+    'lower back': ['core', 'spine'],
+    'upper back': ['spine', 'chest', 'scapula_r', 'scapula_l'],
+    'back': ['spine', 'core'],
+    'spine': ['spine', 'core', 'neck'],
+    'chest': ['chest'],
+    'core': ['core'],
+    'trunk': ['chest', 'spine', 'core'],
+    'abdomen': ['core'],
+    'gluteal': ['glute_r', 'glute_l'],
+    'right gluteal': ['glute_r'],
+    'left gluteal': ['glute_l'],
+    'hamstring': ['quad_r', 'quad_l'],
+    'right hamstring': ['quad_r'],
+    'left hamstring': ['quad_l'],
+    'quadriceps': ['quad_r', 'quad_l'],
+    'right quadriceps': ['quad_r'],
+    'left quadriceps': ['quad_l'],
+    'right rotator cuff': ['deltoid_r', 'scapula_r'],
+    'left rotator cuff': ['deltoid_l', 'scapula_l'],
+    'rotator cuff': ['deltoid_r', 'deltoid_l', 'scapula_r', 'scapula_l'],
+    'scapula': ['scapula_r', 'scapula_l'],
+    'right scapula': ['scapula_r'],
+    'left scapula': ['scapula_l'],
+    'right deltoid': ['deltoid_r'],
+    'left deltoid': ['deltoid_l'],
+    'right bicep': ['bicep_r'],
+    'left bicep': ['bicep_l'],
+    'right forearm': ['bicep_r'],
+    'left forearm': ['bicep_l'],
+    'wrist': ['bicep_r', 'bicep_l'],
+    'right wrist': ['bicep_r'],
+    'left wrist': ['bicep_l'],
+    'hand': ['bicep_r', 'bicep_l'],
+    'right hand': ['bicep_r'],
+    'left hand': ['bicep_l'],
+    'achilles': ['calf_r', 'calf_l'],
+    'right achilles': ['calf_r'],
+    'left achilles': ['calf_l'],
+    'plantar fascia': ['foot_r', 'foot_l'],
+    'right plantar': ['foot_r'],
+    'left plantar': ['foot_l'],
+    'it band': ['quad_r', 'quad_l', 'glute_r', 'glute_l'],
+    'right it band': ['quad_r', 'glute_r'],
+    'left it band': ['quad_l', 'glute_l'],
+    'sacroiliac': ['core', 'glute_r', 'glute_l'],
+    'si joint': ['core', 'glute_r', 'glute_l'],
+  }), []);
+
+  const handleBiomechanicalLinkClick = useCallback((link: BiomechanicalLink | null) => {
+    if (!link) {
+      setActiveBiomechanicalLink(null);
+      setBiomechanicalMuscleHighlights([]);
+      return;
+    }
+    setActiveBiomechanicalLink(link);
+
+    const findMuscles = (regionName: string): string[] => {
+      const lower = regionName.toLowerCase().trim();
+      if (BIOMECHANICAL_REGION_TO_MUSCLES[lower]) {
+        return BIOMECHANICAL_REGION_TO_MUSCLES[lower];
+      }
+      for (const [key, muscles] of Object.entries(BIOMECHANICAL_REGION_TO_MUSCLES)) {
+        if (lower.includes(key) || key.includes(lower)) {
+          return muscles;
+        }
+      }
+      return [];
+    };
+
+    const primaryMuscles = findMuscles(link.primaryRegion);
+    const connectedMuscles = findMuscles(link.connectedRegion);
+    const allMuscles = Array.from(new Set([...primaryMuscles, ...connectedMuscles]));
+    setBiomechanicalMuscleHighlights(allMuscles);
+  }, [BIOMECHANICAL_REGION_TO_MUSCLES]);
 
   const handleCameraPoseUpdate = useCallback((pose: Skeleton3DPose) => {
     if (!cameraPoseActive) return;
@@ -2063,6 +2175,7 @@ ${ddxList}`;
               onMuscleGroupClick={(groupId, screenX, screenY) => {
                 setClickedMusclePopup(prev => prev?.groupId === groupId ? null : { groupId, screenX, screenY });
               }}
+              highlightMuscleGroups={biomechanicalMuscleHighlights.length > 0 ? biomechanicalMuscleHighlights : undefined}
             />
 
             {/* Joint Controls Overlay */}
@@ -5355,6 +5468,8 @@ ${ddxList}`;
         subjectiveHistory={subjectiveHistoryInput}
         onSubjectiveHistoryChange={setSubjectiveHistoryInput}
         onSubjectiveHistorySubmit={handleSubjectiveHistorySubmit}
+        onBiomechanicalLinkClick={handleBiomechanicalLinkClick}
+        activeBiomechanicalLinkId={activeBiomechanicalLink?.id || null}
       />
     </div>
   );

@@ -1619,6 +1619,7 @@ export default function PureThreeGLBViewer({
   const animationPlayingRef = useRef<boolean>(false);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
+  const biomechanicalHighlightRef = useRef<{ mesh: THREE.Mesh; origEmissive: THREE.Color; origIntensity: number }[]>([]);
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const chainHighlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
@@ -4920,6 +4921,43 @@ export default function PureThreeGLBViewer({
       });
     });
   }, [muscleStates]);
+
+  useEffect(() => {
+    for (const entry of biomechanicalHighlightRef.current) {
+      const mat = entry.mesh.material as THREE.MeshStandardMaterial;
+      if (mat && mat.emissive) {
+        mat.emissive.copy(entry.origEmissive);
+        mat.emissiveIntensity = entry.origIntensity;
+        mat.needsUpdate = true;
+      }
+    }
+    biomechanicalHighlightRef.current = [];
+
+    if (!highlightMuscleGroups || highlightMuscleGroups.length === 0 || splitMuscleGroupsRef.current.size === 0) return;
+
+    for (const groupId of highlightMuscleGroups) {
+      const group = splitMuscleGroupsRef.current.get(groupId);
+      if (!group) continue;
+      for (const mesh of group.meshes) {
+        if (mesh instanceof THREE.Mesh) {
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          if (mat && mat.emissive) {
+            biomechanicalHighlightRef.current.push({
+              mesh,
+              origEmissive: mat.emissive.clone(),
+              origIntensity: mat.emissiveIntensity,
+            });
+            mat.emissive.set(0x00ffff);
+            mat.emissiveIntensity = 0.5;
+            mat.needsUpdate = true;
+            if (!mesh.visible) {
+              mesh.visible = true;
+            }
+          }
+        }
+      }
+    }
+  }, [highlightMuscleGroups]);
 
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {

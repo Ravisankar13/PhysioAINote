@@ -14,22 +14,19 @@ export interface IKResult {
   success: boolean;
 }
 
-// Bone names for the new 90-bone skeleton model
-// Hierarchy: Hip_L/R → HipPart1 → HipPart2 → Knee_L/R → Ankle_L/R → Toes
-// For IK: thigh rotation applied at Hip_L, shin rotation at Knee_L
 export const LEG_IK_CONFIG = {
   left: {
-    hipBoneName: 'Hip_L',      // Hip joint position (root of leg chain)
-    thighBoneName: 'Hip_L',    // Where thigh rotation is applied
-    shinBoneName: 'Knee_L',    // Where knee rotation is applied
-    footBoneName: 'Ankle_L',   // End effector (foot position)
+    hipBoneName: 'Hip_L',
+    thighBoneName: 'Hip_L',
+    shinBoneName: 'Knee_L',
+    footBoneName: 'Ankle_L',
     isLeft: true,
   },
   right: {
-    hipBoneName: 'Hip_R',      // Hip joint position (root of leg chain)
-    thighBoneName: 'Hip_R',    // Where thigh rotation is applied
-    shinBoneName: 'Knee_R',    // Where knee rotation is applied
-    footBoneName: 'Ankle_R',   // End effector (foot position)
+    hipBoneName: 'Hip_R',
+    thighBoneName: 'Hip_R',
+    shinBoneName: 'Knee_R',
+    footBoneName: 'Ankle_R',
     isLeft: false,
   },
 };
@@ -84,11 +81,10 @@ export function calculateLegLengths(
   config: LegIKConfig
 ): { thighLength: number; shinLength: number } | null {
   const hipBone = bones[config.hipBoneName];
-  const thighBone = bones[config.thighBoneName];
   const shinBone = bones[config.shinBoneName];
   const footBone = bones[config.footBoneName];
 
-  if (!hipBone || !thighBone || !shinBone || !footBone) {
+  if (!hipBone || !shinBone || !footBone) {
     console.warn('IK: Missing bones for leg IK', config);
     return null;
   }
@@ -119,28 +115,39 @@ export function getInitialFootPosition(
   return footWorldPos;
 }
 
+function computeStandingIKAngles(
+  bones: { [name: string]: THREE.Bone },
+  config: LegIKConfig,
+  legLengths: { thighLength: number; shinLength: number },
+  initialFootPos: THREE.Vector3
+): IKResult {
+  const hipBone = bones[config.hipBoneName];
+  if (!hipBone) return { hipAngle: 0, kneeAngle: 0, success: false };
+
+  const hipWorldPos = new THREE.Vector3();
+  hipBone.getWorldPosition(hipWorldPos);
+
+  return solveTwoBoneIK(hipWorldPos, initialFootPos, legLengths.thighLength, legLengths.shinLength);
+}
+
 export function applyLegIK(
   bones: { [name: string]: THREE.Bone },
   initialRotations: { [name: string]: { x: number; y: number; z: number } },
   config: LegIKConfig,
   initialFootPosition: THREE.Vector3,
-  legLengths: { thighLength: number; shinLength: number }
+  legLengths: { thighLength: number; shinLength: number },
+  standingAngles: IKResult
 ): void {
   const hipBone = bones[config.hipBoneName];
   const thighBone = bones[config.thighBoneName];
   const shinBone = bones[config.shinBoneName];
 
   if (!hipBone || !thighBone || !shinBone) {
-    console.warn('IK: Missing hip, thigh or shin bone');
     return;
   }
 
-  // Get the CURRENT hip world position (already includes pelvis translation)
-  // The pelvis has already been translated down, so hipWorldPos reflects the lowered position
   const hipWorldPos = new THREE.Vector3();
   hipBone.getWorldPosition(hipWorldPos);
-
-  // Target is the original foot position (feet stay planted)
   const targetFootPos = initialFootPosition.clone();
 
   const ikResult = solveTwoBoneIK(
@@ -154,20 +161,22 @@ export function applyLegIK(
     return;
   }
 
-  // Apply rotation to the hip bone (Hip_L/R) for thigh movement
+  const deltaHipAngle = ikResult.hipAngle - standingAngles.hipAngle;
+  const deltaKneeAngle = ikResult.kneeAngle - standingAngles.kneeAngle;
+
   const thighInitial = initialRotations[config.thighBoneName];
   const shinInitial = initialRotations[config.shinBoneName];
 
   if (thighInitial) {
     thighBone.rotation.x = thighInitial.x;
     thighBone.rotation.y = thighInitial.y;
-    thighBone.rotation.z = thighInitial.z + ikResult.hipAngle;
+    thighBone.rotation.z = thighInitial.z + deltaHipAngle;
   }
 
   if (shinInitial) {
     shinBone.rotation.x = shinInitial.x;
     shinBone.rotation.y = shinInitial.y;
-    shinBone.rotation.z = shinInitial.z - ikResult.kneeAngle;
+    shinBone.rotation.z = shinInitial.z - deltaKneeAngle;
   }
 }
 
@@ -176,6 +185,8 @@ export interface LegIKState {
   rightLegLengths: { thighLength: number; shinLength: number } | null;
   leftInitialFootPos: THREE.Vector3 | null;
   rightInitialFootPos: THREE.Vector3 | null;
+  leftStandingAngles: IKResult;
+  rightStandingAngles: IKResult;
   initialized: boolean;
 }
 
@@ -187,11 +198,24 @@ export function initializeLegIK(
   const leftInitialFootPos = getInitialFootPosition(bones, LEG_IK_CONFIG.left);
   const rightInitialFootPos = getInitialFootPosition(bones, LEG_IK_CONFIG.right);
 
+  const defaultAngles: IKResult = { hipAngle: 0, kneeAngle: 0, success: false };
+  let leftStandingAngles = defaultAngles;
+  let rightStandingAngles = defaultAngles;
+
+  if (leftLegLengths && leftInitialFootPos) {
+    leftStandingAngles = computeStandingIKAngles(bones, LEG_IK_CONFIG.left, leftLegLengths, leftInitialFootPos);
+  }
+  if (rightLegLengths && rightInitialFootPos) {
+    rightStandingAngles = computeStandingIKAngles(bones, LEG_IK_CONFIG.right, rightLegLengths, rightInitialFootPos);
+  }
+
   console.log('IK initialized:', {
     leftLegLengths,
     rightLegLengths,
     leftInitialFootPos: leftInitialFootPos?.toArray(),
     rightInitialFootPos: rightInitialFootPos?.toArray(),
+    leftStandingAngles,
+    rightStandingAngles,
   });
 
   return {
@@ -199,6 +223,8 @@ export function initializeLegIK(
     rightLegLengths,
     leftInitialFootPos,
     rightInitialFootPos,
+    leftStandingAngles,
+    rightStandingAngles,
     initialized: !!(leftLegLengths && rightLegLengths && leftInitialFootPos && rightInitialFootPos),
   };
 }
@@ -209,7 +235,6 @@ export function applySquatIK(
   ikState: LegIKState
 ): void {
   if (!ikState.initialized) {
-    console.warn('IK: Not initialized');
     return;
   }
 
@@ -219,7 +244,8 @@ export function applySquatIK(
       initialRotations,
       LEG_IK_CONFIG.left,
       ikState.leftInitialFootPos,
-      ikState.leftLegLengths
+      ikState.leftLegLengths,
+      ikState.leftStandingAngles
     );
   }
 
@@ -229,7 +255,8 @@ export function applySquatIK(
       initialRotations,
       LEG_IK_CONFIG.right,
       ikState.rightInitialFootPos,
-      ikState.rightLegLengths
+      ikState.rightLegLengths,
+      ikState.rightStandingAngles
     );
   }
 }

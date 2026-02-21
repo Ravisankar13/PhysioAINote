@@ -4670,12 +4670,29 @@ export default function PureThreeGLBViewer({
             (pelvisBone as any).initialPosition = pelvisBone.position.clone();
           }
           const initialPos = (pelvisBone as any).initialPosition as THREE.Vector3;
-          const dropAmount = pelvisDropValue * 0.01; // Convert degrees-like value to units
+          const totalLegLength = (legIKStateRef.current.leftLegLengths?.thighLength || 2) + 
+                                  (legIKStateRef.current.leftLegLengths?.shinLength || 2);
+          const dropFraction = pelvisDropValue / 100;
+          const dropAmount = dropFraction * totalLegLength * 0.55;
           pelvisBone.position.y = initialPos.y - dropAmount;
+        }
+        
+        const pelvisBoneNames = ['Root_M', 'RootPart1_M', 'RootPart2_M'];
+        Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
+          if (pelvisBoneNames.includes(boneName)) {
+            const bone = bones[boneName];
+            if (bone) {
+              bone.rotation.x = rotation.x;
+              bone.rotation.y = rotation.y;
+              bone.rotation.z = rotation.z;
+            }
+          }
+        });
+        
+        if (pelvisBone) {
           pelvisBone.updateMatrixWorld(true);
         }
         
-        // Apply IK to calculate leg angles that keep feet planted
         const ikInitialRotations: { [name: string]: { x: number; y: number; z: number } } = {};
         Object.entries(initialRotations).forEach(([name, euler]) => {
           ikInitialRotations[name] = { x: euler.x, y: euler.y, z: euler.z };
@@ -4687,19 +4704,11 @@ export default function PureThreeGLBViewer({
           legIKStateRef.current
         );
         
-        // Apply non-leg rotations (spine, shoulders, etc.) from FK animation
-        // Also apply ankle rotations (dorsiflexion) since IK only solves hip/knee
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
           if (boneName.includes('Hip') || boneName.includes('Knee') || boneName.includes('Toes')) {
             return;
           }
-          if (boneName.includes('Ankle')) {
-            const bone = bones[boneName];
-            if (bone) {
-              bone.rotation.x = rotation.x;
-              bone.rotation.y = rotation.y;
-              bone.rotation.z = rotation.z;
-            }
+          if (pelvisBoneNames.includes(boneName)) {
             return;
           }
           const bone = bones[boneName];

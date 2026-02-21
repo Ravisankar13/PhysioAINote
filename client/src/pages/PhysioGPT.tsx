@@ -71,8 +71,9 @@ import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
-import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType } from "@/components/skeleton/PureThreeGLBViewer";
+import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
+import MovementPlayer from "@/components/skeleton/MovementPlayer";
 import FocusedCameraCapture, { type FocusedCameraResult, type FocusedRegion, FOCUSED_REGIONS } from "@/components/skeleton/FocusedCameraCapture";
 import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
@@ -365,6 +366,12 @@ export default function PhysioGPT() {
   const [showSpecialTests, setShowSpecialTests] = useState(false);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [modelConfig, setModelConfig] = useState<ModelConfig>({ ...DEFAULT_MODEL_CONFIG });
+  const [animationState, setAnimationState] = useState<AnimationState>({
+    isPlaying: false,
+    currentMovement: null,
+    progress: 0,
+    speed: 1,
+  });
   const [clinicalHighlights, setClinicalHighlights] = useState<RegionHighlight[]>([]);
   const [painMarkers, setPainMarkers] = useState<PainMarker[]>([]);
   const [painMarkerMode, setPainMarkerMode] = useState(false);
@@ -2183,6 +2190,12 @@ ${ddxList}`;
                 setClickedMusclePopup(prev => prev?.groupId === groupId ? null : { groupId, screenX, screenY });
               }}
               highlightMuscleGroups={biomechanicalMuscleHighlights.length > 0 ? biomechanicalMuscleHighlights : undefined}
+              animationState={animationState}
+            />
+
+            <MovementPlayer
+              animationState={animationState}
+              onAnimationStateChange={setAnimationState}
             />
 
             {/* Joint Controls Overlay */}

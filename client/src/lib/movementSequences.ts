@@ -839,8 +839,417 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
       },
     ],
   },
+  {
+    id: 'hipHinge',
+    name: 'Hip Hinge',
+    description: 'Deadlift pattern - hinging at the hips with minimal knee bend',
+    duration: 4000,
+    loop: true,
+    joints: [
+      {
+        joint: 'leftHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 80 },
+          { time: 0.6, value: 80 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 80 },
+          { time: 0.6, value: 80 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 15 },
+          { time: 0.6, value: 15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 15 },
+          { time: 0.6, value: 15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'pelvis',
+        property: 'tilt',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 25 },
+          { time: 0.6, value: 25 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'spine',
+        property: 'thoracicKyphosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 10 },
+          { time: 0.6, value: 10 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'shoulderAbduction',
+    name: 'Shoulder Abduction',
+    description: 'Bilateral shoulder abduction - arms raise laterally to overhead',
+    duration: 3000,
+    loop: true,
+    joints: [
+      {
+        joint: 'leftShoulder',
+        property: 'abduction',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.35, value: 90 },
+          { time: 0.5, value: 170 },
+          { time: 0.65, value: 90 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightShoulder',
+        property: 'abduction',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.35, value: 90 },
+          { time: 0.5, value: 170 },
+          { time: 0.65, value: 90 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'lateralLunge',
+    name: 'Lateral Lunge',
+    description: 'Side lunge alternating left and right',
+    duration: 5000,
+    loop: true,
+    joints: [
+      {
+        joint: 'rightHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 60 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: 0 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightHip',
+        property: 'abduction',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 30 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: 0 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 70 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: 0 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 0 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: 60 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftHip',
+        property: 'abduction',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 0 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: 30 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 0 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: 70 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'pelvis',
+        property: 'obliquity',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 5 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: -5 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'trunkRotation',
+    name: 'Trunk Rotation',
+    description: 'Standing thoracolumbar rotation left and right',
+    duration: 4000,
+    loop: true,
+    joints: [
+      {
+        joint: 'spine',
+        property: 'thoracicRotation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 35 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: -35 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'spine',
+        property: 'lumbarRotation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 15 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: -15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'pelvis',
+        property: 'rotation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: -10 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: 10 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 15 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: -10 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: -10 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: 15 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'lateralFlexion',
+    name: 'Lateral Flexion',
+    description: 'Standing side bending left and right',
+    duration: 4000,
+    loop: true,
+    joints: [
+      {
+        joint: 'spine',
+        property: 'lumbarLordosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 0 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: 0 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'pelvis',
+        property: 'obliquity',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 15 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: -15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'neck',
+        property: 'lateralFlexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 10 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: -10 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'elbowFlexion',
+    name: 'Elbow Flexion',
+    description: 'Bilateral bicep curl movement pattern',
+    duration: 3000,
+    loop: true,
+    joints: [
+      {
+        joint: 'leftElbow',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 130 },
+          { time: 0.6, value: 130 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightElbow',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 130 },
+          { time: 0.6, value: 130 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'stepUp',
+    name: 'Step Up',
+    description: 'Alternating step-up pattern simulating stair climbing',
+    duration: 3000,
+    loop: true,
+    joints: [
+      {
+        joint: 'leftHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.2, value: 70 },
+          { time: 0.4, value: 40 },
+          { time: 0.5, value: 0 },
+          { time: 0.7, value: -10 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightHip',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.2, value: -10 },
+          { time: 0.5, value: 0 },
+          { time: 0.7, value: 70 },
+          { time: 0.9, value: 40 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.2, value: 80 },
+          { time: 0.4, value: 30 },
+          { time: 0.5, value: 0 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightKnee',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.5, value: 0 },
+          { time: 0.7, value: 80 },
+          { time: 0.9, value: 30 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.2, value: -20 },
+          { time: 0.5, value: 0 },
+          { time: 0.7, value: 20 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightShoulder',
+        property: 'flexion',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.2, value: 20 },
+          { time: 0.5, value: 0 },
+          { time: 0.7, value: -20 },
+          { time: 1, value: 0 },
+        ],
+      },
+    ],
+  },
+];
+
+export const MOVEMENT_CATEGORIES: { id: string; name: string; movements: string[] }[] = [
+  { id: 'lower', name: 'Lower Body', movements: ['squat', 'lunge', 'hipHinge', 'lateralLunge', 'calfRaises'] },
+  { id: 'upper', name: 'Upper Body', movements: ['armElevations', 'shoulderAbduction', 'shoulderCircles', 'elbowFlexion'] },
+  { id: 'spine', name: 'Spine & Core', movements: ['forwardBend', 'backwardBend', 'trunkRotation', 'lateralFlexion', 'neckMobility'] },
+  { id: 'functional', name: 'Functional', movements: ['walk', 'singleLegBalance', 'hipCircles', 'stepUp'] },
 ];
 
 export function getMovementById(id: string): MovementSequence | undefined {
   return MOVEMENT_SEQUENCES.find(m => m.id === id);
+}
+
+export function getMovementCategories(): typeof MOVEMENT_CATEGORIES {
+  return MOVEMENT_CATEGORIES;
 }

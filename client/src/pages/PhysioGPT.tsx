@@ -78,7 +78,7 @@ import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/C
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
 import ShoulderAssessmentPanel from "@/components/shoulder/ShoulderAssessmentPanel";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
-import type { Skeleton3DPose } from "@/utils/mediapipeTo3D";
+import type { Skeleton3DPose, PartialSkeleton3DPose } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import ClinicalReasoningPanel, { type ClinicalReasoningData } from "@/components/skeleton/ClinicalReasoningPanel";
@@ -1123,6 +1123,46 @@ ${ddxList}`;
     }));
   }, [cameraPoseActive]);
 
+  const handlePartialPoseUpdate = useCallback((partialPose: PartialSkeleton3DPose) => {
+    if (!cameraPoseActive) return;
+    const rad2deg = (r: number) => Math.round((r * 180) / Math.PI);
+
+    setModelConfig(prev => {
+      const next = { ...prev };
+      if (partialPose.leftShoulder) {
+        next.leftShoulder = { ...prev.leftShoulder, flexion: rad2deg(partialPose.leftShoulder.x), abduction: rad2deg(partialPose.leftShoulder.z) };
+      }
+      if (partialPose.rightShoulder) {
+        next.rightShoulder = { ...prev.rightShoulder, flexion: rad2deg(partialPose.rightShoulder.x), abduction: rad2deg(partialPose.rightShoulder.z) };
+      }
+      if (partialPose.leftElbow) {
+        next.leftElbow = { ...prev.leftElbow, flexion: rad2deg(partialPose.leftElbow.x) };
+      }
+      if (partialPose.rightElbow) {
+        next.rightElbow = { ...prev.rightElbow, flexion: rad2deg(partialPose.rightElbow.x) };
+      }
+      if (partialPose.leftHip) {
+        next.leftHip = { ...prev.leftHip, flexion: rad2deg(partialPose.leftHip.x), abduction: rad2deg(partialPose.leftHip.z) };
+      }
+      if (partialPose.rightHip) {
+        next.rightHip = { ...prev.rightHip, flexion: rad2deg(partialPose.rightHip.x), abduction: rad2deg(partialPose.rightHip.z) };
+      }
+      if (partialPose.leftKnee) {
+        next.leftKnee = { ...prev.leftKnee, flexion: rad2deg(partialPose.leftKnee.x) };
+      }
+      if (partialPose.rightKnee) {
+        next.rightKnee = { ...prev.rightKnee, flexion: rad2deg(partialPose.rightKnee.x) };
+      }
+      if (partialPose.spine) {
+        next.spine = { ...prev.spine, thoracicKyphosis: rad2deg(partialPose.spine.x), scoliosis: rad2deg(partialPose.spine.z) };
+      }
+      if (partialPose.neck) {
+        next.neck = { ...prev.neck, flexion: rad2deg(partialPose.neck.x), rotation: rad2deg(partialPose.neck.y), lateralFlexion: rad2deg(partialPose.neck.z) };
+      }
+      return next;
+    });
+  }, [cameraPoseActive]);
+
   const toggleCameraMode = useCallback(() => {
     const newMode = !cameraMode;
     setCameraMode(newMode);
@@ -1957,6 +1997,7 @@ ${ddxList}`;
               <div className="w-[40%] h-full flex-shrink-0 relative border-r border-gray-700">
                 <FocusedCameraCapture
                   onPoseUpdate={handleCameraPoseUpdate}
+                  onPartialPoseUpdate={handlePartialPoseUpdate}
                   isActive={cameraMode}
                   onFocusedAnalysisComplete={handleFocusedAnalysisComplete}
                   onRegionChange={(region) => setFocusedRegion(region)}

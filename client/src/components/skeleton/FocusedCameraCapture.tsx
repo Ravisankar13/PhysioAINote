@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, Posesmoother, Skeleton3DPose } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, Posesmoother, PartialPoseSmoother, Skeleton3DPose, PartialSkeleton3DPose } from '@/utils/mediapipeTo3D';
 import { QRCodeSVG } from 'qrcode.react';
 
 export interface FocusedRegion {
@@ -168,6 +168,7 @@ export interface FocusedCameraResult {
 
 interface FocusedCameraCaptureProps {
   onPoseUpdate?: (pose: Skeleton3DPose) => void;
+  onPartialPoseUpdate?: (pose: PartialSkeleton3DPose) => void;
   onRawLandmarks?: (landmarks: any[]) => void;
   onFocusedAnalysisComplete?: (result: FocusedCameraResult) => void;
   onRegionChange?: (region: FocusedRegion) => void;
@@ -177,6 +178,7 @@ interface FocusedCameraCaptureProps {
 
 export default function FocusedCameraCapture({
   onPoseUpdate,
+  onPartialPoseUpdate,
   onRawLandmarks,
   onFocusedAnalysisComplete,
   onRegionChange,
@@ -225,7 +227,9 @@ export default function FocusedCameraCapture({
   const phonePoseRef = useRef<any>(null);
   const phonePoseInitializedRef = useRef(false);
   const phonePoseProcessingRef = useRef(false);
-  const phonePoseSmootherRef = useRef<Posesmoother>(new Posesmoother(0.4));
+  const phonePoseSmootherRef = useRef<PartialPoseSmoother>(new PartialPoseSmoother(0.4));
+  const phoneFullPoseSmootherRef = useRef<Posesmoother>(new Posesmoother(0.4));
+  const [detectedJoints, setDetectedJoints] = useState<string[]>([]);
 
   const connectPhoneRelay = useCallback((roomId: string) => {
     if (phoneWsRef.current) {
@@ -311,6 +315,8 @@ export default function FocusedCameraCapture({
     }
     phonePoseInitializedRef.current = false;
     phonePoseProcessingRef.current = false;
+    phonePoseSmootherRef.current.reset();
+    phoneFullPoseSmootherRef.current.reset();
     setPhoneMode(false);
     setPhoneRoomId('');
     setPhoneConnected(false);
@@ -320,6 +326,7 @@ export default function FocusedCameraCapture({
     phoneFrameCountRef.current = 0;
     setPhoneFrameCount(0);
     setPoseDetected(false);
+    setDetectedJoints([]);
   }, []);
 
   const capturePhoneFrameForAnalysis = useCallback(async () => {
@@ -383,6 +390,8 @@ export default function FocusedCameraCapture({
     if (phoneWsRef.current && phoneWsRef.current.readyState === WebSocket.OPEN) {
       phoneWsRef.current.send(JSON.stringify({ type: 'region-change', region: selectedRegion.id }));
     }
+    phonePoseSmootherRef.current.reset();
+    setDetectedJoints([]);
   }, [selectedRegion]);
 
   const copyRoomLink = useCallback(() => {
@@ -501,6 +510,9 @@ export default function FocusedCameraCapture({
     return angles;
   }, [selectedRegion]);
 
+  const selectedRegionRef = useRef(selectedRegion);
+  selectedRegionRef.current = selectedRegion;
+
   const initPhonePoseDetection = useCallback(async () => {
     if (phonePoseInitializedRef.current || phonePoseRef.current) return;
     try {
@@ -514,24 +526,51 @@ export default function FocusedCameraCapture({
         modelComplexity: 1,
         smoothLandmarks: true,
         enableSegmentation: false,
-        minDetectionConfidence: 0.6,
-        minTrackingConfidence: 0.6
+        minDetectionConfidence: 0.3,
+        minTrackingConfidence: 0.3
       });
 
       pose.onResults((results: any) => {
         phonePoseProcessingRef.current = false;
         if (results.poseLandmarks && results.poseLandmarks.length > 0) {
-          setPoseDetected(true);
+          const regionId = selectedRegionRef.current.id;
           const regionAngles = computeRegionAngles(results.poseLandmarks);
           setComputedAngles(regionAngles);
           if (onRawLandmarks) {
             onRawLandmarks(results.poseLandmarks);
           }
-          if (onPoseUpdate) {
-            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
-            const smoothedPose = phonePoseSmootherRef.current.smooth(pose3D);
-            onPoseUpdate(smoothedPose);
+
+          if (regionId === 'full_body') {
+            const allVisible = results.poseLandmarks.filter((lm: any) =>
+              lm.visibility === undefined || lm.visibility >= 0.3
+            ).length;
+            if (allVisible >= 15) {
+              setPoseDetected(true);
+              if (onPoseUpdate) {
+                const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
+                const fullSmoothed = phoneFullPoseSmootherRef.current.smooth(pose3D);
+                onPoseUpdate(fullSmoothed);
+              }
+            }
+          } else {
+            const partialPose = convertPartialMediaPipeTo3D(results.poseLandmarks, regionId, false);
+            const visibleJoints = Object.entries(partialPose)
+              .filter(([_, val]) => val !== null)
+              .map(([key]) => key);
+            setDetectedJoints(visibleJoints);
+            if (visibleJoints.length > 0) {
+              setPoseDetected(true);
+              const smoothedPartial = phonePoseSmootherRef.current.smooth(partialPose);
+              if (onPartialPoseUpdate) {
+                onPartialPoseUpdate(smoothedPartial);
+              }
+            } else {
+              setPoseDetected(false);
+            }
           }
+        } else {
+          setPoseDetected(false);
+          setDetectedJoints([]);
         }
       });
 
@@ -540,7 +579,7 @@ export default function FocusedCameraCapture({
     } catch (err) {
       console.error('Failed to init phone pose detection:', err);
     }
-  }, [computeRegionAngles, onPoseUpdate, onRawLandmarks]);
+  }, [computeRegionAngles, onPoseUpdate, onPartialPoseUpdate, onRawLandmarks]);
 
   const processPhoneFramePose = useCallback(async (imageDataUrl: string) => {
     if (!phonePoseRef.current || phonePoseProcessingRef.current) return;
@@ -566,10 +605,10 @@ export default function FocusedCameraCapture({
   }, []);
 
   useEffect(() => {
-    if (phoneMode && phoneConnected && onPoseUpdate) {
+    if (phoneMode && phoneConnected && (onPoseUpdate || onPartialPoseUpdate)) {
       initPhonePoseDetection();
     }
-  }, [phoneMode, phoneConnected, onPoseUpdate, initPhonePoseDetection]);
+  }, [phoneMode, phoneConnected, onPoseUpdate, onPartialPoseUpdate, initPhonePoseDetection]);
 
   const captureFrameForAnalysis = useCallback(async () => {
     if (!canvasRef.current || !videoRef.current || isAnalyzing) return;
@@ -940,12 +979,25 @@ export default function FocusedCameraCapture({
             {phoneConnected ? (
               <>
                 <canvas ref={phoneCanvasRef} className="absolute inset-0 w-full h-full object-cover" />
-                <div className="absolute top-2 left-2 bg-black/60 rounded-lg px-2.5 py-1 flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-[11px] text-white">Phone Live</span>
-                  <span className="text-[10px] text-slate-400">{phoneFrameCount} frames</span>
-                  {poseDetected && (
-                    <span className="text-[10px] text-green-400 font-medium">Pose Tracking</span>
+                <div className="absolute top-2 left-2 bg-black/60 rounded-lg px-2.5 py-1 flex flex-col gap-0.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-[11px] text-white">Phone Live</span>
+                    <span className="text-[10px] text-slate-400">{phoneFrameCount} frames</span>
+                    {poseDetected && (
+                      <span className="text-[10px] text-green-400 font-medium">
+                        {selectedRegion.id === 'full_body' ? 'Full Body' : 'Partial'} Tracking
+                      </span>
+                    )}
+                  </div>
+                  {poseDetected && detectedJoints.length > 0 && selectedRegion.id !== 'full_body' && (
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {detectedJoints.map(j => (
+                        <span key={j} className="text-[9px] bg-green-500/20 text-green-300 px-1.5 py-0.5 rounded">
+                          {j.replace(/([A-Z])/g, ' $1').trim()}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
                 {selectedRegion.id !== 'full_body' && (

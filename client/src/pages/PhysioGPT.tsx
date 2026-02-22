@@ -311,7 +311,7 @@ const DEFAULT_MODEL_CONFIG: ModelConfig = {
   leftAnkle: { dorsiflexion: 0, plantarflexion: 0, inversion: 0, eversion: 0, forefootVarus: 0, toeExtension: 0, archHeight: 0 },
   rightAnkle: { dorsiflexion: 0, plantarflexion: 0, inversion: 0, eversion: 0, forefootVarus: 0, toeExtension: 0, archHeight: 0 },
   leftShoulder: { flexion: 0, abduction: -80, internalRotation: 0, externalRotation: 0, retroversion: 0, elevation: 0, protraction: 0, winging: 0, clavicleLength: 0 },
-  rightShoulder: { flexion: 0, abduction: 80, internalRotation: 0, externalRotation: 0, retroversion: 0, elevation: 0, protraction: 0, winging: 0, clavicleLength: 0 },
+  rightShoulder: { flexion: 0, abduction: -80, internalRotation: 0, externalRotation: 0, retroversion: 0, elevation: 0, protraction: 0, winging: 0, clavicleLength: 0 },
   leftScapula: { protraction: 0, retraction: 0, elevation: 0, depression: 0, upwardRotation: 0, downwardRotation: 0, anteriorTilt: 0, posteriorTilt: 0, winging: 0, clavicleRotation: 0 },
   rightScapula: { protraction: 0, retraction: 0, elevation: 0, depression: 0, upwardRotation: 0, downwardRotation: 0, anteriorTilt: 0, posteriorTilt: 0, winging: 0, clavicleRotation: 0 },
   leftElbow: { flexion: 0, carryingAngle: 0, pronation: 0 },

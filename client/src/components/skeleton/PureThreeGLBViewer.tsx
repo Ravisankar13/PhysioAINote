@@ -4661,10 +4661,12 @@ export default function PureThreeGLBViewer({
         });
       });
       
-      // Quaternion flexion fix for hips and knees: Use quaternion rotation  
+      // Quaternion flexion fix for hips only: Use quaternion rotation  
       // around parent -Z axis instead of Euler Z addition, to eliminate 
-      // lateral drift caused by parent chain rotations
-      ['Hip_L', 'Hip_R', 'Knee_L', 'Knee_R'].forEach(boneName => {
+      // lateral drift caused by extreme initial Euler angles (~±142° on X)
+      // Note: Knees don't need this fix - they have near-zero initial Euler 
+      // angles so simple Euler rotation works correctly with scale=-1
+      ['Hip_L', 'Hip_R'].forEach(boneName => {
         const initial = initialRotations[boneName];
         const anim = animBoneRotations[boneName];
         if (!initial || !anim) return;

@@ -3783,19 +3783,21 @@ export default function PureThreeGLBViewer({
           const currentBones = bonesRef.current;
           const initialRots = initialRotationsRef.current;
           
-          // Always apply stored rotations to shoulder bones (live pose effect stores values here too)
-          ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'].forEach(boneName => {
-            const bone = currentBones[boneName] as THREE.Bone;
-            const sliderRot = sliderRotations[boneName];
-            const initialRot = initialRots[boneName];
-            
-            if (bone && sliderRot && initialRot) {
-              // Apply rotation delta on top of initial rotation
-              bone.rotation.x = initialRot.x + sliderRot.x;
-              bone.rotation.y = initialRot.y + sliderRot.y;
-              bone.rotation.z = initialRot.z + sliderRot.z;
-            }
-          });
+          // Apply stored rotations to shoulder bones (live pose effect stores values here too)
+          // Skip when movement animation is playing - the animation loop handles shoulders directly
+          if (!animationPlayingRef.current) {
+            ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'].forEach(boneName => {
+              const bone = currentBones[boneName] as THREE.Bone;
+              const sliderRot = sliderRotations[boneName];
+              const initialRot = initialRots[boneName];
+              
+              if (bone && sliderRot && initialRot) {
+                bone.rotation.x = initialRot.x + sliderRot.x;
+                bone.rotation.y = initialRot.y + sliderRot.y;
+                bone.rotation.z = initialRot.z + sliderRot.z;
+              }
+            });
+          }
           
           // Update muscle visualization to follow skeleton movement
           if (muscleVisualizationRef.current) {
@@ -4500,8 +4502,10 @@ export default function PureThreeGLBViewer({
   useEffect(() => {
     if (!animationState || !animationState.isPlaying || !animationState.currentMovement) return;
     if (status !== 'ready') return;
-    // Disable animation playback when live pose is active
     if (livePose) return;
+    
+    // Set immediately so render loop doesn't override shoulder bones
+    animationPlayingRef.current = true;
     
     const movement = getMovementById(animationState.currentMovement);
     if (!movement) return;
@@ -4657,10 +4661,10 @@ export default function PureThreeGLBViewer({
         });
       });
       
-      // Hip flexion fix: Use quaternion rotation around parent -Z axis
-      // instead of Euler Z addition, to eliminate lateral drift caused by
-      // extreme initial Euler angles on hip bones (~±142° on X axis)
-      ['Hip_L', 'Hip_R'].forEach(boneName => {
+      // Quaternion flexion fix for hips and knees: Use quaternion rotation  
+      // around parent -Z axis instead of Euler Z addition, to eliminate 
+      // lateral drift caused by parent chain rotations
+      ['Hip_L', 'Hip_R', 'Knee_L', 'Knee_R'].forEach(boneName => {
         const initial = initialRotations[boneName];
         const anim = animBoneRotations[boneName];
         if (!initial || !anim) return;
@@ -4746,77 +4750,15 @@ export default function PureThreeGLBViewer({
         });
       } else {
         // OPEN-CHAIN: Standard FK animation (walking, lunges, etc.)
-        const shoulderBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);
-        const kneeBoneNames = new Set(['Knee_L', 'Knee_R']);
-
-        // Step 1: Apply all non-knee bone rotations first
+        // All bone rotations (including knees) are already corrected via 
+        // quaternion pre-processing above, so apply them directly
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
-          if (kneeBoneNames.has(boneName)) return;
           const bone = bones[boneName];
           if (bone) {
-            if (shoulderBones.has(boneName)) {
-              const initial = initialRotations[boneName];
-              if (initial) {
-                sliderRotationsRef.current[boneName] = {
-                  x: rotation.x - initial.x,
-                  y: rotation.y - initial.y,
-                  z: rotation.z - initial.z,
-                };
-              }
-            } else {
-              bone.rotation.x = rotation.x;
-              bone.rotation.y = rotation.y;
-              bone.rotation.z = rotation.z;
-            }
+            bone.rotation.x = rotation.x;
+            bone.rotation.y = rotation.y;
+            bone.rotation.z = rotation.z;
           }
-        });
-
-        // Step 2: Update hip chain matrices so knee parents have correct world transforms
-        ['Hip_L', 'HipPart1_L', 'HipPart2_L', 'Hip_R', 'HipPart1_R', 'HipPart2_R'].forEach(name => {
-          const b = bones[name] as THREE.Bone;
-          if (b) b.updateWorldMatrix(true, false);
-        });
-
-        // Step 3: Apply knee flexion using world-space axis quaternion
-        const KNEE_WORLD_AXES: { [key: string]: THREE.Vector3 } = {
-          'Knee_L': new THREE.Vector3(-0.207, -0.636, -0.743).normalize(),
-          'Knee_R': new THREE.Vector3(-0.247, -0.381, -0.891).normalize(),
-        };
-
-        kneeBoneNames.forEach(boneName => {
-          const initial = initialRotations[boneName];
-          const anim = animBoneRotations[boneName];
-          if (!initial || !anim) return;
-
-          const bone = bones[boneName] as THREE.Bone;
-          if (!bone || !bone.parent) return;
-
-          const zDelta = anim.z - initial.z;
-          if (Math.abs(zDelta) < 0.001) {
-            bone.rotation.x = anim.x;
-            bone.rotation.y = anim.y;
-            bone.rotation.z = anim.z;
-            return;
-          }
-
-          const parentWorldQ = new THREE.Quaternion();
-          bone.parent.getWorldQuaternion(parentWorldQ);
-          const parentWorldQInv = parentWorldQ.clone().invert();
-
-          const worldAxis = KNEE_WORLD_AXES[boneName];
-          if (!worldAxis) return;
-          const localAxis = worldAxis.clone().applyQuaternion(parentWorldQInv).normalize();
-
-          const baseQ = new THREE.Quaternion().setFromEuler(
-            new THREE.Euler(anim.x, anim.y, initial.z, 'XYZ')
-          );
-          const qFlex = new THREE.Quaternion().setFromAxisAngle(localAxis, zDelta);
-          const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, baseQ);
-          const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
-
-          bone.rotation.x = eulerResult.x;
-          bone.rotation.y = eulerResult.y;
-          bone.rotation.z = eulerResult.z;
         });
         
         // Apply positions to bones
@@ -4864,6 +4806,7 @@ export default function PureThreeGLBViewer({
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
+      animationPlayingRef.current = false;
     };
   }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame, jointLimits]);
 

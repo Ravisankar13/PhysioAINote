@@ -4772,7 +4772,7 @@ export default function PureThreeGLBViewer({
         });
 
         // Step 2: Update hip chain matrices so knee parents have correct world transforms
-        ['Hip_L', 'HipPart1_L', 'Hip_R', 'HipPart1_R'].forEach(name => {
+        ['Hip_L', 'HipPart1_L', 'HipPart2_L', 'Hip_R', 'HipPart1_R', 'HipPart2_R'].forEach(name => {
           const b = bones[name] as THREE.Bone;
           if (b) b.updateWorldMatrix(true, false);
         });

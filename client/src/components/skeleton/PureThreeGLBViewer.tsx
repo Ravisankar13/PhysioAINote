@@ -4661,11 +4661,10 @@ export default function PureThreeGLBViewer({
         });
       });
       
-      // Quaternion flexion fix for hips only: Use quaternion rotation  
-      // around parent -Z axis instead of Euler Z addition, to eliminate 
-      // lateral drift caused by extreme initial Euler angles (~±142° on X)
-      // Note: Knees don't need this fix - they have near-zero initial Euler 
-      // angles so simple Euler rotation works correctly with scale=-1
+      // Hip flexion fix: Use world mediolateral (X) axis for hip flexion
+      // to ensure pure sagittal plane movement at ALL angles (no lateral drift)
+      // The world X axis has zero lateral component, preventing leg crossing
+      // at large flexion angles (e.g., squat at 80°)
       ['Hip_L', 'Hip_R'].forEach(boneName => {
         const initial = initialRotations[boneName];
         const anim = animBoneRotations[boneName];
@@ -4674,12 +4673,21 @@ export default function PureThreeGLBViewer({
         const zDelta = anim.z - initial.z;
         if (Math.abs(zDelta) < 0.001) return;
         
+        const bone = bones[boneName] as THREE.Bone;
+        if (!bone || !bone.parent) return;
+        
+        bone.parent.updateWorldMatrix(true, false);
+        const parentWorldQ = new THREE.Quaternion();
+        bone.parent.getWorldQuaternion(parentWorldQ);
+        const parentWorldQInv = parentWorldQ.clone().invert();
+        
+        const worldFlexAxis = new THREE.Vector3(-1, 0, 0);
+        const localFlexAxis = worldFlexAxis.clone().applyQuaternion(parentWorldQInv).normalize();
+        
         const qInit = new THREE.Quaternion().setFromEuler(
           new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
         );
-        const qFlex = new THREE.Quaternion().setFromAxisAngle(
-          new THREE.Vector3(0, 0, -1), zDelta
-        );
+        const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexAxis, zDelta);
         const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
         const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
         
@@ -4752,15 +4760,60 @@ export default function PureThreeGLBViewer({
         });
       } else {
         // OPEN-CHAIN: Standard FK animation (walking, lunges, etc.)
-        // All bone rotations (including knees) are already corrected via 
-        // quaternion pre-processing above, so apply them directly
+        const kneeBoneNames = new Set(['Knee_L', 'Knee_R']);
+        
+        // Step 1: Apply all non-knee bone rotations
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
+          if (kneeBoneNames.has(boneName)) return;
           const bone = bones[boneName];
           if (bone) {
             bone.rotation.x = rotation.x;
             bone.rotation.y = rotation.y;
             bone.rotation.z = rotation.z;
           }
+        });
+        
+        // Step 2: Update hip chain matrices so knee parents have correct world transforms
+        ['Hip_L', 'HipPart1_L', 'HipPart2_L', 'Hip_R', 'HipPart1_R', 'HipPart2_R'].forEach(name => {
+          const b = bones[name] as THREE.Bone;
+          if (b) b.updateWorldMatrix(true, false);
+        });
+        
+        // Step 3: Apply knee flexion using world mediolateral (X) axis
+        // This ensures pure sagittal plane knee movement regardless of hip position
+        kneeBoneNames.forEach(boneName => {
+          const initial = initialRotations[boneName];
+          const anim = animBoneRotations[boneName];
+          if (!initial || !anim) return;
+          
+          const bone = bones[boneName] as THREE.Bone;
+          if (!bone || !bone.parent) return;
+          
+          const zDelta = anim.z - initial.z;
+          if (Math.abs(zDelta) < 0.001) {
+            bone.rotation.x = initial.x;
+            bone.rotation.y = initial.y;
+            bone.rotation.z = initial.z;
+            return;
+          }
+          
+          const parentWorldQ = new THREE.Quaternion();
+          bone.parent.getWorldQuaternion(parentWorldQ);
+          const parentWorldQInv = parentWorldQ.clone().invert();
+          
+          const worldFlexAxis = new THREE.Vector3(-1, 0, 0);
+          const localFlexAxis = worldFlexAxis.clone().applyQuaternion(parentWorldQInv).normalize();
+          
+          const qInit = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+          );
+          const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexAxis, zDelta);
+          const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
+          const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
+          
+          bone.rotation.x = eulerResult.x;
+          bone.rotation.y = eulerResult.y;
+          bone.rotation.z = eulerResult.z;
         });
         
         // Apply positions to bones

@@ -4657,6 +4657,31 @@ export default function PureThreeGLBViewer({
         });
       });
       
+      // Hip flexion fix: Use quaternion rotation around parent -Z axis
+      // instead of Euler Z addition, to eliminate lateral drift caused by
+      // extreme initial Euler angles on hip bones (~±142° on X axis)
+      ['Hip_L', 'Hip_R'].forEach(boneName => {
+        const initial = initialRotations[boneName];
+        const anim = animBoneRotations[boneName];
+        if (!initial || !anim) return;
+        
+        const zDelta = anim.z - initial.z;
+        if (Math.abs(zDelta) < 0.001) return;
+        
+        const qInit = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+        );
+        const qFlex = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(0, 0, -1), zDelta
+        );
+        const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
+        const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
+        
+        anim.x = eulerResult.x;
+        anim.y = eulerResult.y;
+        anim.z = eulerResult.z;
+      });
+      
       // Check if this is a closed-chain movement (squat) that needs IK
       const pelvisDropValue = jointValues['pelvis']?.['drop'] || 0;
       const hasPelvisDrop = jointValues['pelvis']?.['drop'] !== undefined;
@@ -4722,12 +4747,24 @@ export default function PureThreeGLBViewer({
       } else {
         // OPEN-CHAIN: Standard FK animation (walking, lunges, etc.)
         // Apply rotations to bones
+        const shoulderBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
           const bone = bones[boneName];
           if (bone) {
-            bone.rotation.x = rotation.x;
-            bone.rotation.y = rotation.y;
-            bone.rotation.z = rotation.z;
+            if (shoulderBones.has(boneName)) {
+              const initial = initialRotations[boneName];
+              if (initial) {
+                sliderRotationsRef.current[boneName] = {
+                  x: rotation.x - initial.x,
+                  y: rotation.y - initial.y,
+                  z: rotation.z - initial.z,
+                };
+              }
+            } else {
+              bone.rotation.x = rotation.x;
+              bone.rotation.y = rotation.y;
+              bone.rotation.z = rotation.z;
+            }
           }
         });
         

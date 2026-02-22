@@ -367,6 +367,22 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
       },
       {
         joint: 'leftShoulder',
+        property: 'abduction',
+        keyframes: [
+          { time: 0, value: -70 },
+          { time: 1, value: -70 },
+        ],
+      },
+      {
+        joint: 'rightShoulder',
+        property: 'abduction',
+        keyframes: [
+          { time: 0, value: -70 },
+          { time: 1, value: -70 },
+        ],
+      },
+      {
+        joint: 'leftShoulder',
         property: 'flexion',
         keyframes: [
           { time: 0, value: -20 },
@@ -387,18 +403,18 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         joint: 'leftElbow',
         property: 'flexion',
         keyframes: [
-          { time: 0, value: 8 },
-          { time: 0.5, value: 3 },
-          { time: 1, value: 8 },
+          { time: 0, value: 25 },
+          { time: 0.5, value: 15 },
+          { time: 1, value: 25 },
         ],
       },
       {
         joint: 'rightElbow',
         property: 'flexion',
         keyframes: [
-          { time: 0, value: 3 },
-          { time: 0.5, value: 8 },
-          { time: 1, value: 3 },
+          { time: 0, value: 15 },
+          { time: 0.5, value: 25 },
+          { time: 1, value: 15 },
         ],
       },
       {

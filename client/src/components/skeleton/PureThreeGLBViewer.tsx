@@ -4749,10 +4749,8 @@ export default function PureThreeGLBViewer({
         anim.z = eulerResult.z;
       });
       
-      // Check if this is a closed-chain movement (squat) that needs IK
       const pelvisDropValue = jointValues['pelvis']?.['drop'] || 0;
-      const hasPelvisDrop = jointValues['pelvis']?.['drop'] !== undefined;
-      const isClosedChainMovement = hasPelvisDrop && legIKStateRef.current?.initialized;
+      const isClosedChainMovement = movement.useIK === true && legIKStateRef.current?.initialized;
       
       if (isClosedChainMovement && legIKStateRef.current) {
         // CLOSED-CHAIN: Use IK to keep feet planted while pelvis drops

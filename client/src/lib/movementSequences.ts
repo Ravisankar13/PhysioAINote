@@ -108,6 +108,20 @@ export const DEFAULT_JOINT_LIMITS: JointLimits = {
     flexion: { min: 0, max: 150 },
     pronation: { min: -90, max: 90 },
   },
+  leftScapula: {
+    upwardRotation: { min: 0, max: 60 },
+    elevation: { min: 0, max: 30 },
+    clavicleRotation: { min: 0, max: 30 },
+    protraction: { min: 0, max: 30 },
+    posteriorTilt: { min: 0, max: 20 },
+  },
+  rightScapula: {
+    upwardRotation: { min: 0, max: 60 },
+    elevation: { min: 0, max: 30 },
+    clavicleRotation: { min: 0, max: 30 },
+    protraction: { min: 0, max: 30 },
+    posteriorTilt: { min: 0, max: 20 },
+  },
   pelvis: {
     tilt: { min: -90, max: 90 },
     obliquity: { min: -20, max: 20 },
@@ -552,7 +566,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'shoulderCircles',
     name: 'Shoulder Circles',
-    description: 'Shoulder circumduction exercise',
+    description: 'Shoulder circumduction exercise with scapulohumeral rhythm',
     duration: 3000,
     loop: true,
     joints: [
@@ -598,6 +612,72 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 0.5, value: 30 },
           { time: 0.75, value: 60 },
           { time: 1, value: 30 },
+        ],
+      },
+      {
+        joint: 'leftScapula',
+        property: 'upwardRotation',
+        keyframes: [
+          { time: 0, value: 5 },
+          { time: 0.25, value: 20 },
+          { time: 0.5, value: 5 },
+          { time: 0.75, value: 12 },
+          { time: 1, value: 5 },
+        ],
+      },
+      {
+        joint: 'rightScapula',
+        property: 'upwardRotation',
+        keyframes: [
+          { time: 0, value: 5 },
+          { time: 0.25, value: 20 },
+          { time: 0.5, value: 5 },
+          { time: 0.75, value: 12 },
+          { time: 1, value: 5 },
+        ],
+      },
+      {
+        joint: 'leftScapula',
+        property: 'elevation',
+        keyframes: [
+          { time: 0, value: 5 },
+          { time: 0.25, value: 12 },
+          { time: 0.5, value: 5 },
+          { time: 0.75, value: 8 },
+          { time: 1, value: 5 },
+        ],
+      },
+      {
+        joint: 'rightScapula',
+        property: 'elevation',
+        keyframes: [
+          { time: 0, value: 5 },
+          { time: 0.25, value: 12 },
+          { time: 0.5, value: 5 },
+          { time: 0.75, value: 8 },
+          { time: 1, value: 5 },
+        ],
+      },
+      {
+        joint: 'leftScapula',
+        property: 'protraction',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 10 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: -5 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightScapula',
+        property: 'protraction',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.25, value: 10 },
+          { time: 0.5, value: 0 },
+          { time: 0.75, value: -5 },
+          { time: 1, value: 0 },
         ],
       },
     ],
@@ -789,7 +869,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'armElevations',
     name: 'Arm Elevations',
-    description: 'Bilateral arms raising overhead through shoulder flexion',
+    description: 'Bilateral arms raising overhead through shoulder flexion with scapulohumeral rhythm',
     duration: 3000,
     loop: true,
     joints: [
@@ -810,6 +890,66 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 0, value: 0 },
           { time: 0.4, value: 180 },
           { time: 0.6, value: 180 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftScapula',
+        property: 'upwardRotation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 55 },
+          { time: 0.6, value: 55 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightScapula',
+        property: 'upwardRotation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 55 },
+          { time: 0.6, value: 55 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftScapula',
+        property: 'posteriorTilt',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 15 },
+          { time: 0.6, value: 15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightScapula',
+        property: 'posteriorTilt',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 15 },
+          { time: 0.6, value: 15 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftScapula',
+        property: 'clavicleRotation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 20 },
+          { time: 0.6, value: 20 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightScapula',
+        property: 'clavicleRotation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: 20 },
+          { time: 0.6, value: 20 },
           { time: 1, value: 0 },
         ],
       },
@@ -867,7 +1007,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
   {
     id: 'shoulderAbduction',
     name: 'Shoulder Abduction',
-    description: 'Bilateral shoulder abduction - arms raise laterally to overhead',
+    description: 'Bilateral shoulder abduction with scapulohumeral rhythm - arms raise laterally to overhead',
     duration: 3000,
     loop: true,
     joints: [
@@ -890,6 +1030,72 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 0.35, value: 90 },
           { time: 0.5, value: 170 },
           { time: 0.65, value: 90 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftScapula',
+        property: 'upwardRotation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.35, value: 25 },
+          { time: 0.5, value: 50 },
+          { time: 0.65, value: 25 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightScapula',
+        property: 'upwardRotation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.35, value: 25 },
+          { time: 0.5, value: 50 },
+          { time: 0.65, value: 25 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftScapula',
+        property: 'posteriorTilt',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.35, value: 8 },
+          { time: 0.5, value: 15 },
+          { time: 0.65, value: 8 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightScapula',
+        property: 'posteriorTilt',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.35, value: 8 },
+          { time: 0.5, value: 15 },
+          { time: 0.65, value: 8 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'leftScapula',
+        property: 'elevation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.35, value: 10 },
+          { time: 0.5, value: 15 },
+          { time: 0.65, value: 10 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'rightScapula',
+        property: 'elevation',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.35, value: 10 },
+          { time: 0.5, value: 15 },
+          { time: 0.65, value: 10 },
           { time: 1, value: 0 },
         ],
       },
@@ -1211,15 +1417,21 @@ export interface MovementRestriction {
 
 export const MOVEMENT_RESTRICTIONS: Record<string, MovementRestriction[]> = {
   squat: [
-    { joint: 'left_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 80 },
-    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 100 },
-    { joint: 'left_ankle', movement: 'dorsiflexion', label: 'Ankle Dorsiflexion', defaultMaxROM: 25 },
+    { joint: 'left_hip', movement: 'flexion', label: 'L Hip Flexion', defaultMaxROM: 80 },
+    { joint: 'right_hip', movement: 'flexion', label: 'R Hip Flexion', defaultMaxROM: 80 },
+    { joint: 'left_knee', movement: 'flexion', label: 'L Knee Flexion', defaultMaxROM: 100 },
+    { joint: 'right_knee', movement: 'flexion', label: 'R Knee Flexion', defaultMaxROM: 100 },
+    { joint: 'left_ankle', movement: 'dorsiflexion', label: 'L Ankle Dorsiflexion', defaultMaxROM: 25 },
+    { joint: 'right_ankle', movement: 'dorsiflexion', label: 'R Ankle Dorsiflexion', defaultMaxROM: 25 },
     { joint: 'lumbar_spine', movement: 'flexion', label: 'Trunk Flexion', defaultMaxROM: 20 },
   ],
   lunge: [
-    { joint: 'left_hip', movement: 'flexion', label: 'Lead Hip Flexion', defaultMaxROM: 90 },
-    { joint: 'left_knee', movement: 'flexion', label: 'Lead Knee Flexion', defaultMaxROM: 90 },
-    { joint: 'left_ankle', movement: 'dorsiflexion', label: 'Lead Ankle Dorsiflexion', defaultMaxROM: 25 },
+    { joint: 'left_hip', movement: 'flexion', label: 'L Hip Flexion', defaultMaxROM: 90 },
+    { joint: 'right_hip', movement: 'flexion', label: 'R Hip Flexion', defaultMaxROM: 90 },
+    { joint: 'left_knee', movement: 'flexion', label: 'L Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'right_knee', movement: 'flexion', label: 'R Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'left_ankle', movement: 'dorsiflexion', label: 'L Ankle Dorsiflexion', defaultMaxROM: 25 },
+    { joint: 'right_ankle', movement: 'dorsiflexion', label: 'R Ankle Dorsiflexion', defaultMaxROM: 25 },
     { joint: 'lumbar_spine', movement: 'flexion', label: 'Trunk Flexion', defaultMaxROM: 15 },
   ],
   forwardBend: [
@@ -1236,12 +1448,16 @@ export const MOVEMENT_RESTRICTIONS: Record<string, MovementRestriction[]> = {
   hipHinge: [
     { joint: 'spine', movement: 'flexion', label: 'Trunk Flexion', defaultMaxROM: 60 },
     { joint: 'lumbar_spine', movement: 'flexion', label: 'Lumbar Flexion', defaultMaxROM: 60 },
-    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 15 },
+    { joint: 'left_knee', movement: 'flexion', label: 'L Knee Flexion', defaultMaxROM: 15 },
+    { joint: 'right_knee', movement: 'flexion', label: 'R Knee Flexion', defaultMaxROM: 15 },
   ],
   walk: [
-    { joint: 'left_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 30 },
-    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 40 },
-    { joint: 'left_ankle', movement: 'plantarflexion', label: 'Ankle Plantarflexion', defaultMaxROM: 20 },
+    { joint: 'left_hip', movement: 'flexion', label: 'L Hip Flexion', defaultMaxROM: 30 },
+    { joint: 'right_hip', movement: 'flexion', label: 'R Hip Flexion', defaultMaxROM: 30 },
+    { joint: 'left_knee', movement: 'flexion', label: 'L Knee Flexion', defaultMaxROM: 40 },
+    { joint: 'right_knee', movement: 'flexion', label: 'R Knee Flexion', defaultMaxROM: 40 },
+    { joint: 'left_ankle', movement: 'plantarflexion', label: 'L Ankle Plantarflexion', defaultMaxROM: 20 },
+    { joint: 'right_ankle', movement: 'plantarflexion', label: 'R Ankle Plantarflexion', defaultMaxROM: 20 },
     { joint: 'spine', movement: 'thoracicRotation', label: 'Trunk Rotation', defaultMaxROM: 8 },
   ],
   trunkRotation: [
@@ -1261,27 +1477,37 @@ export const MOVEMENT_RESTRICTIONS: Record<string, MovementRestriction[]> = {
     { joint: 'neck', movement: 'lateralFlexion', label: 'Neck Lateral Flexion', defaultMaxROM: 30 },
   ],
   lateralLunge: [
-    { joint: 'right_hip', movement: 'abduction', label: 'Hip Abduction', defaultMaxROM: 45 },
-    { joint: 'right_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 60 },
-    { joint: 'right_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'left_hip', movement: 'abduction', label: 'L Hip Abduction', defaultMaxROM: 45 },
+    { joint: 'right_hip', movement: 'abduction', label: 'R Hip Abduction', defaultMaxROM: 45 },
+    { joint: 'left_hip', movement: 'flexion', label: 'L Hip Flexion', defaultMaxROM: 60 },
+    { joint: 'right_hip', movement: 'flexion', label: 'R Hip Flexion', defaultMaxROM: 60 },
+    { joint: 'left_knee', movement: 'flexion', label: 'L Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'right_knee', movement: 'flexion', label: 'R Knee Flexion', defaultMaxROM: 90 },
     { joint: 'lumbar_spine', movement: 'flexion', label: 'Trunk Flexion', defaultMaxROM: 15 },
   ],
   armElevations: [
-    { joint: 'left_shoulder', movement: 'flexion', label: 'Shoulder Flexion', defaultMaxROM: 170 },
+    { joint: 'left_shoulder', movement: 'flexion', label: 'L Shoulder Flexion', defaultMaxROM: 170 },
+    { joint: 'right_shoulder', movement: 'flexion', label: 'R Shoulder Flexion', defaultMaxROM: 170 },
   ],
   shoulderAbduction: [
-    { joint: 'left_shoulder', movement: 'abduction', label: 'Shoulder Abduction', defaultMaxROM: 170 },
+    { joint: 'left_shoulder', movement: 'abduction', label: 'L Shoulder Abduction', defaultMaxROM: 170 },
+    { joint: 'right_shoulder', movement: 'abduction', label: 'R Shoulder Abduction', defaultMaxROM: 170 },
   ],
   shoulderCircles: [
-    { joint: 'left_shoulder', movement: 'flexion', label: 'Shoulder Flexion', defaultMaxROM: 30 },
-    { joint: 'left_shoulder', movement: 'abduction', label: 'Shoulder Abduction', defaultMaxROM: 30 },
+    { joint: 'left_shoulder', movement: 'flexion', label: 'L Shoulder Flexion', defaultMaxROM: 30 },
+    { joint: 'right_shoulder', movement: 'flexion', label: 'R Shoulder Flexion', defaultMaxROM: 30 },
+    { joint: 'left_shoulder', movement: 'abduction', label: 'L Shoulder Abduction', defaultMaxROM: 30 },
+    { joint: 'right_shoulder', movement: 'abduction', label: 'R Shoulder Abduction', defaultMaxROM: 30 },
   ],
   elbowFlexion: [
-    { joint: 'left_elbow', movement: 'flexion', label: 'Elbow Flexion', defaultMaxROM: 135 },
+    { joint: 'left_elbow', movement: 'flexion', label: 'L Elbow Flexion', defaultMaxROM: 135 },
+    { joint: 'right_elbow', movement: 'flexion', label: 'R Elbow Flexion', defaultMaxROM: 135 },
   ],
   singleLegBalance: [
-    { joint: 'left_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 45 },
-    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'left_hip', movement: 'flexion', label: 'L Hip Flexion', defaultMaxROM: 45 },
+    { joint: 'right_hip', movement: 'flexion', label: 'R Hip Flexion', defaultMaxROM: 45 },
+    { joint: 'left_knee', movement: 'flexion', label: 'L Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'right_knee', movement: 'flexion', label: 'R Knee Flexion', defaultMaxROM: 90 },
     { joint: 'pelvis', movement: 'obliquity', label: 'Pelvis Drop', defaultMaxROM: 10 },
   ],
   hipCircles: [
@@ -1289,12 +1515,16 @@ export const MOVEMENT_RESTRICTIONS: Record<string, MovementRestriction[]> = {
     { joint: 'pelvis', movement: 'obliquity', label: 'Pelvis Obliquity', defaultMaxROM: 15 },
   ],
   calfRaises: [
-    { joint: 'left_ankle', movement: 'plantarflexion', label: 'Plantarflexion', defaultMaxROM: 45 },
-    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 10 },
+    { joint: 'left_ankle', movement: 'plantarflexion', label: 'L Plantarflexion', defaultMaxROM: 45 },
+    { joint: 'right_ankle', movement: 'plantarflexion', label: 'R Plantarflexion', defaultMaxROM: 45 },
+    { joint: 'left_knee', movement: 'flexion', label: 'L Knee Flexion', defaultMaxROM: 10 },
+    { joint: 'right_knee', movement: 'flexion', label: 'R Knee Flexion', defaultMaxROM: 10 },
   ],
   stepUp: [
-    { joint: 'left_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 70 },
-    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'left_hip', movement: 'flexion', label: 'L Hip Flexion', defaultMaxROM: 70 },
+    { joint: 'right_hip', movement: 'flexion', label: 'R Hip Flexion', defaultMaxROM: 70 },
+    { joint: 'left_knee', movement: 'flexion', label: 'L Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'right_knee', movement: 'flexion', label: 'R Knee Flexion', defaultMaxROM: 90 },
   ],
 };
 

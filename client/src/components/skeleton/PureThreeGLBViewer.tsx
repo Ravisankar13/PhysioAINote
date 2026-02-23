@@ -1021,6 +1021,12 @@ const snakeToCamelJoint = (snake: string): string => {
   return mappings[snake] || snake;
 };
 
+const getContralateralCamelJoint = (camelJoint: string): string | null => {
+  if (camelJoint.startsWith('left')) return 'right' + camelJoint.slice(4);
+  if (camelJoint.startsWith('right')) return 'left' + camelJoint.slice(5);
+  return null;
+};
+
 // Convert constraint system movement names to animation property names
 // Animation uses: flexion, extension, abduction, internalRotation, tilt, obliquity, rotation, thoracicKyphosis, lumbarLordosis, thoracicRotation, cervicalLordosis
 const snakeToCamelMovement = (joint: string, movement: string): string => {
@@ -4592,7 +4598,10 @@ export default function PureThreeGLBViewer({
           const constraint = currentConstraints.find(c => {
             const camelJoint = snakeToCamelJoint(c.joint);
             const camelMovement = snakeToCamelMovement(c.joint, c.movement);
-            return camelJoint === timeline.joint && camelMovement === timeline.property;
+            if (camelJoint === timeline.joint && camelMovement === timeline.property) return true;
+            const contralateral = getContralateralCamelJoint(camelJoint);
+            if (contralateral && contralateral === timeline.joint && camelMovement === timeline.property) return true;
+            return false;
           });
           
           if (constraint) {

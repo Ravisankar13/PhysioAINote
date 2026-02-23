@@ -40,14 +40,5 @@ task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
 
-[[workflows.workflow]]
-name = "Dev Server"
-author = 42543617
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-
 [agent]
 integrations = ["javascript_openai:1.0.0", "javascript_stripe:1.0.0", "javascript_openai_ai_integrations:1.0.0"]

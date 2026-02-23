@@ -57,7 +57,7 @@ interface ModelConfig {
   rightElbow?: JointConfig;
   leftWrist?: JointConfig;
   rightWrist?: JointConfig;
-  pelvis?: { tilt?: number; obliquity?: number; rotation?: number; drop?: number; leftInnominateRotation?: number; rightInnominateRotation?: number };
+  pelvis?: { tilt?: number; obliquity?: number; rotation?: number; drop?: number; zShift?: number; leftInnominateRotation?: number; rightInnominateRotation?: number };
   sacrum?: { nutation?: number; counternutation?: number; torsion?: number; lateralFlexion?: number };
   spine?: { cervicalLordosis?: number; thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number; forwardHead?: number; lateralShift?: number; cervicalRotation?: number; cervicalLateralFlexion?: number; thoracicRotation?: number; lumbarRotation?: number; flexion?: number; lateralFlexion?: number; lumbarScoliosis?: number; thoracicScoliosis?: number; cervicalScoliosis?: number };
   neck?: { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number };
@@ -1409,6 +1409,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Hip_R', axis: 'x', scale: -0.3 },
   ],
   'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }],
+  'pelvis.zShift': [{ boneName: 'Root_M', axis: 'z', scale: 0.01, isPosition: true }],
   
   // === SACRUM / SI JOINT ===
   // Verified axes (midline bones): LONG=x(Up), FLEX=z(Right), ABD=y(Fwd), ROT=x
@@ -4750,11 +4751,12 @@ export default function PureThreeGLBViewer({
       });
       
       const pelvisDropValue = jointValues['pelvis']?.['drop'] || 0;
+      const pelvisZShiftValue = jointValues['pelvis']?.['zShift'] || 0;
       const isClosedChainMovement = movement.useIK === true && legIKStateRef.current?.initialized;
       
       if (isClosedChainMovement && legIKStateRef.current) {
         // CLOSED-CHAIN: Use IK to keep feet planted while pelvis drops
-        // First apply pelvis position (body lowers)
+        // First apply pelvis position (body lowers and optionally shifts forward/back)
         const pelvisBone = bones['Root_M'] as THREE.Bone;
         if (pelvisBone) {
           if (!(pelvisBone as any).initialPosition) {
@@ -4766,6 +4768,10 @@ export default function PureThreeGLBViewer({
           const dropFraction = pelvisDropValue / 100;
           const dropAmount = dropFraction * totalLegLength * 0.55;
           pelvisBone.position.y = initialPos.y - dropAmount;
+          
+          const zShiftFraction = pelvisZShiftValue / 100;
+          const zShiftAmount = zShiftFraction * totalLegLength * 0.4;
+          pelvisBone.position.z = initialPos.z + zShiftAmount;
         }
         
         const pelvisBoneNames = ['Root_M', 'RootPart1_M', 'RootPart2_M'];
@@ -4810,21 +4816,9 @@ export default function PureThreeGLBViewer({
           }
         });
       } else {
-        // OPEN-CHAIN: Standard FK animation (walking, lunges, etc.)
+        // OPEN-CHAIN: Standard FK animation (walking, etc.)
         const kneeBoneNames = new Set(['Knee_L', 'Knee_R']);
         
-        // Step 0: Reset Root_M position to initial before each frame
-        // This prevents position accumulation from foot-ground compensation
-        const rootBoneFK = bones['Root_M'] as THREE.Bone;
-        if (rootBoneFK) {
-          if (!(rootBoneFK as any).initialPosition) {
-            (rootBoneFK as any).initialPosition = rootBoneFK.position.clone();
-          }
-          const initPos = (rootBoneFK as any).initialPosition as THREE.Vector3;
-          rootBoneFK.position.set(initPos.x, initPos.y, initPos.z);
-        }
-        
-        // Step 1: Apply all non-knee bone rotations
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
           if (kneeBoneNames.has(boneName)) return;
           const bone = bones[boneName];
@@ -4835,14 +4829,11 @@ export default function PureThreeGLBViewer({
           }
         });
         
-        // Step 2: Update hip chain matrices so knee parents have correct world transforms
         ['Hip_L', 'HipPart1_L', 'HipPart2_L', 'Hip_R', 'HipPart1_R', 'HipPart2_R'].forEach(name => {
           const b = bones[name] as THREE.Bone;
           if (b) b.updateWorldMatrix(true, false);
         });
         
-        // Step 3: Apply knee flexion using world mediolateral (X) axis
-        // This ensures pure sagittal plane knee movement regardless of hip position
         kneeBoneNames.forEach(boneName => {
           const initial = initialRotations[boneName];
           const anim = animBoneRotations[boneName];
@@ -4878,7 +4869,6 @@ export default function PureThreeGLBViewer({
           bone.rotation.z = eulerResult.z;
         });
         
-        // Apply positions to bones
         Object.entries(animBonePositions).forEach(([boneName, posOffset]) => {
           const bone = bones[boneName];
           if (bone) {
@@ -4892,7 +4882,6 @@ export default function PureThreeGLBViewer({
           }
         });
         
-        // Also reset positions for bones with position mappings when animation resets to 0
         Object.entries(BONE_MAPPING).forEach(([, mappings]) => {
           mappings.forEach(({ boneName, isPosition }) => {
             if (isPosition && !animBonePositions[boneName]) {
@@ -4906,59 +4895,6 @@ export default function PureThreeGLBViewer({
             }
           });
         });
-        
-        // Step 4: Foot-ground compensation
-        // After all FK rotations, measure foot world positions and drop Root_M
-        // so the lowest foot stays planted on the ground plane.
-        const ikState = legIKStateRef.current;
-        if (ikState?.initialized && ikState.leftInitialFootPos && ikState.rightInitialFootPos) {
-          const rootBone = bones['Root_M'] as THREE.Bone;
-          const leftFoot = bones['Ankle_L'] as THREE.Bone;
-          const rightFoot = bones['Ankle_R'] as THREE.Bone;
-          const leftToes = bones['Toes_L'] as THREE.Bone;
-          const rightToes = bones['Toes_R'] as THREE.Bone;
-          
-          if (rootBone && leftFoot && rightFoot) {
-            if (!(rootBone as any).initialPosition) {
-              (rootBone as any).initialPosition = rootBone.position.clone();
-            }
-            
-            const scene = rootBone.parent;
-            if (scene) {
-              scene.updateMatrixWorld(true);
-            }
-            
-            const leftFootWorld = new THREE.Vector3();
-            const rightFootWorld = new THREE.Vector3();
-            leftFoot.getWorldPosition(leftFootWorld);
-            rightFoot.getWorldPosition(rightFootWorld);
-            
-            let lowestY = Math.min(leftFootWorld.y, rightFootWorld.y);
-            if (leftToes) {
-              const leftToesWorld = new THREE.Vector3();
-              leftToes.getWorldPosition(leftToesWorld);
-              lowestY = Math.min(lowestY, leftToesWorld.y);
-            }
-            if (rightToes) {
-              const rightToesWorld = new THREE.Vector3();
-              rightToes.getWorldPosition(rightToesWorld);
-              lowestY = Math.min(lowestY, rightToesWorld.y);
-            }
-            
-            const groundY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
-            const overshoot = lowestY - groundY;
-            
-            if (Math.abs(overshoot) > 0.001) {
-              let worldToLocalScale = 1;
-              if (rootBone.parent) {
-                const parentScale = new THREE.Vector3();
-                rootBone.parent.getWorldScale(parentScale);
-                if (parentScale.y !== 0) worldToLocalScale = 1 / parentScale.y;
-              }
-              rootBone.position.y -= overshoot * worldToLocalScale;
-            }
-          }
-        }
       }
       
       if (onAnimationFrame) {

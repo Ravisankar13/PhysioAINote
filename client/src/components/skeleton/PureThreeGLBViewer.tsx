@@ -4598,10 +4598,7 @@ export default function PureThreeGLBViewer({
           const constraint = currentConstraints.find(c => {
             const camelJoint = snakeToCamelJoint(c.joint);
             const camelMovement = snakeToCamelMovement(c.joint, c.movement);
-            if (camelJoint === timeline.joint && camelMovement === timeline.property) return true;
-            const contralateral = getContralateralCamelJoint(camelJoint);
-            if (contralateral && contralateral === timeline.joint && camelMovement === timeline.property) return true;
-            return false;
+            return camelJoint === timeline.joint && camelMovement === timeline.property;
           });
           
           if (constraint) {

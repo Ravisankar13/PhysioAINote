@@ -1629,6 +1629,7 @@ export default function PureThreeGLBViewer({
   const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const legIKStateRef = useRef<LegIKState | null>(null);
+  const footGroundDebugRef = useRef<number>(0);
   const forceVisualizationRef = useRef<ForceVisualizationManager | null>(null);
   const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
   const muscleLayerManagerRef = useRef<MuscleLayerManager | null>(null);
@@ -3741,11 +3742,12 @@ export default function PureThreeGLBViewer({
               }
             }
             
-            // Initialize leg IK solver after bones are loaded
-            legIKStateRef.current = initializeLegIK(bones as { [name: string]: THREE.Bone });
-            
             model.position.set(-0.15, -1.2, 0);
             scene.add(model);
+            
+            model.updateMatrixWorld(true);
+            
+            legIKStateRef.current = initializeLegIK(bones as { [name: string]: THREE.Bone });
             
             if (sceneRef.current) {
               sceneRef.current.model = model;
@@ -4848,8 +4850,6 @@ export default function PureThreeGLBViewer({
         // Step 4: Direct foot-ground pelvis compensation
         // After all FK rotations and position resets, measures actual foot world positions
         // and drops Root_M to plant the lower (stance) foot on the ground plane.
-        // Root_M.position was already reset to initialPosition by the position reset loop above,
-        // so this subtraction is always relative to the standing pose (no accumulation).
         const ikState = legIKStateRef.current;
         if (ikState?.initialized && ikState.leftInitialFootPos && ikState.rightInitialFootPos) {
           const rootBone = bones['Root_M'] as THREE.Bone;
@@ -4857,7 +4857,17 @@ export default function PureThreeGLBViewer({
           const rightFoot = bones['Ankle_R'] as THREE.Bone;
           
           if (rootBone && leftFoot && rightFoot) {
+            if (!(rootBone as any).initialPosition) {
+              (rootBone as any).initialPosition = rootBone.position.clone();
+            }
+            const rootInitialPos = (rootBone as any).initialPosition as THREE.Vector3;
+            rootBone.position.x = rootInitialPos.x;
+            rootBone.position.y = rootInitialPos.y;
+            rootBone.position.z = rootInitialPos.z;
+            
             rootBone.updateMatrixWorld(true);
+            leftFoot.updateWorldMatrix(true, false);
+            rightFoot.updateWorldMatrix(true, false);
             
             const leftFootWorld = new THREE.Vector3();
             const rightFootWorld = new THREE.Vector3();
@@ -4867,6 +4877,19 @@ export default function PureThreeGLBViewer({
             const groundY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
             const currentLowestFootY = Math.min(leftFootWorld.y, rightFootWorld.y);
             const overshoot = currentLowestFootY - groundY;
+            
+            footGroundDebugRef.current++;
+            if (footGroundDebugRef.current <= 5 || footGroundDebugRef.current % 120 === 0) {
+              console.log('[FootGround]', {
+                frame: footGroundDebugRef.current,
+                leftFootY: leftFootWorld.y.toFixed(4),
+                rightFootY: rightFootWorld.y.toFixed(4),
+                groundY: groundY.toFixed(4),
+                overshoot: overshoot.toFixed(4),
+                rootPosY: rootBone.position.y.toFixed(4),
+                rootInitialY: rootInitialPos.y.toFixed(4),
+              });
+            }
             
             if (Math.abs(overshoot) > 0.005) {
               let worldToLocalScale = 1;

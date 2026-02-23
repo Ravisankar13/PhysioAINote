@@ -1342,15 +1342,15 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   // Elevation/Depression: Scapula moves up/down (Y-axis rotation)
   'leftScapula.elevation': [{ boneName: 'Scapula_L', axis: 'y', scale: -1 }],     // Shrug - scapula elevates
   'leftScapula.depression': [{ boneName: 'Scapula_L', axis: 'y', scale: 1 }],     // Push down
-  'rightScapula.elevation': [{ boneName: 'Scapula_R', axis: 'y', scale: 1 }],     // Opposite sign for right (mirrored)
-  'rightScapula.depression': [{ boneName: 'Scapula_R', axis: 'y', scale: -1 }],
+  'rightScapula.elevation': [{ boneName: 'Scapula_R', axis: 'y', scale: -1 }],    // Same sign as left (local axes not mirrored)
+  'rightScapula.depression': [{ boneName: 'Scapula_R', axis: 'y', scale: 1 }],
   
   // Upward/Downward Rotation: Glenoid points up (Z-axis rotation - frontal plane rotation)
   // Inferior angle moves laterally when glenoid faces upward
   'leftScapula.upwardRotation': [{ boneName: 'Scapula_L', axis: 'z', scale: 1 }],    // Inferior angle moves lateral, glenoid faces up
   'leftScapula.downwardRotation': [{ boneName: 'Scapula_L', axis: 'z', scale: -1 }], // Inferior angle moves medial
-  'rightScapula.upwardRotation': [{ boneName: 'Scapula_R', axis: 'z', scale: -1 }],  // Opposite for right side
-  'rightScapula.downwardRotation': [{ boneName: 'Scapula_R', axis: 'z', scale: 1 }],
+  'rightScapula.upwardRotation': [{ boneName: 'Scapula_R', axis: 'z', scale: 1 }],   // Same sign as left (local axes not mirrored)
+  'rightScapula.downwardRotation': [{ boneName: 'Scapula_R', axis: 'z', scale: -1 }],
   
   // Anterior/Posterior Tilt: Inferior angle tips forward/backward (X-axis = forward/backward)
   // Different from protraction - this is a smaller sagittal plane tilt of the scapula body
@@ -1367,7 +1367,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   ],
   'rightScapula.winging': [
     { boneName: 'Scapula_R', axis: 'x', scale: -0.6 },  // Same forward direction for right (symmetric)
-    { boneName: 'Scapula_R', axis: 'z', scale: -0.4 }   // Opposite Z for right side
+    { boneName: 'Scapula_R', axis: 'z', scale: 0.4 }    // Same Z sign as left (local axes not mirrored)
   ],
   
   // Clavicle axial rotation - simulates rotation along clavicle's long axis
@@ -1378,7 +1378,7 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Scapula_L', axis: 'x', scale: -0.3 }   // Secondary forward tilt component
   ],
   'rightScapula.clavicleRotation': [
-    { boneName: 'Scapula_R', axis: 'z', scale: -0.8 },  // Mirrored Z for right side
+    { boneName: 'Scapula_R', axis: 'z', scale: 0.8 },   // Same Z sign as left (local axes not mirrored)
     { boneName: 'Scapula_R', axis: 'x', scale: -0.3 }   // Same forward direction (symmetric)
   ],
   

@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { AlertCircle, Loader2, RotateCcw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getMovementById, interpolateKeyframes, applyJointConstraints, JointLimits } from '@/lib/movementSequences';
-import { initializeLegIK, applySquatIK, LegIKState } from '@/lib/legIKSolver';
+import { initializeLegIK, applySquatIK, applyLegIK, LEG_IK_CONFIG, LegIKState } from '@/lib/legIKSolver';
 import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } from '@/lib/forceVisualization';
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
@@ -4755,23 +4755,18 @@ export default function PureThreeGLBViewer({
       const isClosedChainMovement = movement.useIK === true && legIKStateRef.current?.initialized;
       
       if (isClosedChainMovement && legIKStateRef.current) {
-        // CLOSED-CHAIN: Use IK to keep feet planted while pelvis drops
-        // First apply pelvis position (body lowers and optionally shifts forward/back)
         const pelvisBone = bones['Root_M'] as THREE.Bone;
+        const totalLegLength = (legIKStateRef.current.leftLegLengths?.thighLength || 2) + 
+                                (legIKStateRef.current.leftLegLengths?.shinLength || 2);
         if (pelvisBone) {
           if (!(pelvisBone as any).initialPosition) {
             (pelvisBone as any).initialPosition = pelvisBone.position.clone();
           }
           const initialPos = (pelvisBone as any).initialPosition as THREE.Vector3;
-          const totalLegLength = (legIKStateRef.current.leftLegLengths?.thighLength || 2) + 
-                                  (legIKStateRef.current.leftLegLengths?.shinLength || 2);
           const dropFraction = pelvisDropValue / 100;
           const dropAmount = dropFraction * totalLegLength * 0.55;
           pelvisBone.position.y = initialPos.y - dropAmount;
-          
-          const zShiftFraction = pelvisZShiftValue / 100;
-          const zShiftAmount = zShiftFraction * totalLegLength * 0.4;
-          pelvisBone.position.z = initialPos.z + zShiftAmount;
+          pelvisBone.position.z = initialPos.z;
         }
         
         const pelvisBoneNames = ['Root_M', 'RootPart1_M', 'RootPart2_M'];
@@ -4795,11 +4790,44 @@ export default function PureThreeGLBViewer({
           ikInitialRotations[name] = { x: euler.x, y: euler.y, z: euler.z };
         });
         
-        applySquatIK(
-          bones as { [name: string]: THREE.Bone },
-          ikInitialRotations,
-          legIKStateRef.current
-        );
+        const ikState = legIKStateRef.current;
+        const zShiftFraction = pelvisZShiftValue / 100;
+        const footShiftAmount = zShiftFraction * totalLegLength * 0.35;
+        
+        if (Math.abs(footShiftAmount) > 0.001 && ikState.leftInitialFootPos && ikState.rightInitialFootPos) {
+          const leftFootTarget = ikState.leftInitialFootPos.clone();
+          const rightFootTarget = ikState.rightInitialFootPos.clone();
+          
+          leftFootTarget.z += footShiftAmount;
+          rightFootTarget.z -= footShiftAmount;
+          
+          if (ikState.leftLegLengths) {
+            applyLegIK(
+              bones as { [name: string]: THREE.Bone },
+              ikInitialRotations,
+              LEG_IK_CONFIG.left,
+              leftFootTarget,
+              ikState.leftLegLengths,
+              ikState.leftStandingAngles
+            );
+          }
+          if (ikState.rightLegLengths) {
+            applyLegIK(
+              bones as { [name: string]: THREE.Bone },
+              ikInitialRotations,
+              LEG_IK_CONFIG.right,
+              rightFootTarget,
+              ikState.rightLegLengths,
+              ikState.rightStandingAngles
+            );
+          }
+        } else {
+          applySquatIK(
+            bones as { [name: string]: THREE.Bone },
+            ikInitialRotations,
+            ikState
+          );
+        }
         
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
           if (boneName.includes('Hip') || boneName.includes('Knee') || boneName.includes('Toes')) {

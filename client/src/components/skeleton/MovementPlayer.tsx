@@ -1,16 +1,19 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical } from 'lucide-react';
-import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, type MovementSequence } from '@/lib/movementSequences';
-import type { AnimationState } from './PureThreeGLBViewer';
+import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal } from 'lucide-react';
+import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, type MovementSequence } from '@/lib/movementSequences';
+import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
 
 interface MovementPlayerProps {
   animationState: AnimationState;
   onAnimationStateChange: (state: AnimationState) => void;
+  onConstraintsChange?: (constraints: AnimationConstraint[]) => void;
 }
 
-export default function MovementPlayer({ animationState, onAnimationStateChange }: MovementPlayerProps) {
+export default function MovementPlayer({ animationState, onAnimationStateChange, onConstraintsChange }: MovementPlayerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showRestrictions, setShowRestrictions] = useState(false);
+  const [restrictions, setRestrictions] = useState<Record<string, number>>({});
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -19,6 +22,10 @@ export default function MovementPlayer({ animationState, onAnimationStateChange 
   const currentMovement = animationState.currentMovement
     ? MOVEMENT_SEQUENCES.find(m => m.id === animationState.currentMovement)
     : null;
+
+  const currentRestrictions = animationState.currentMovement
+    ? MOVEMENT_RESTRICTIONS[animationState.currentMovement] || []
+    : [];
 
   const handleDragStart = useCallback((clientX: number, clientY: number) => {
     dragRef.current = { startX: clientX, startY: clientY, origX: position.x, origY: position.y };
@@ -61,7 +68,39 @@ export default function MovementPlayer({ animationState, onAnimationStateChange 
     };
   }, [isDragging]);
 
+  useEffect(() => {
+    if (!animationState.currentMovement) {
+      setRestrictions({});
+      setShowRestrictions(false);
+    }
+  }, [animationState.currentMovement]);
+
+  useEffect(() => {
+    if (!onConstraintsChange) return;
+    const movementId = animationState.currentMovement;
+    if (!movementId) {
+      onConstraintsChange([]);
+      return;
+    }
+    const defs = MOVEMENT_RESTRICTIONS[movementId] || [];
+    const constraints: AnimationConstraint[] = [];
+    defs.forEach(def => {
+      const key = `${def.joint}:${def.movement}`;
+      const maxROM = restrictions[key];
+      if (maxROM !== undefined && maxROM < def.defaultMaxROM) {
+        constraints.push({
+          joint: def.joint,
+          movement: def.movement,
+          maxROM,
+          normalROM: def.defaultMaxROM,
+        });
+      }
+    });
+    onConstraintsChange(constraints);
+  }, [restrictions, animationState.currentMovement, onConstraintsChange]);
+
   const handleSelectMovement = useCallback((movement: MovementSequence) => {
+    setRestrictions({});
     onAnimationStateChange({
       isPlaying: true,
       currentMovement: movement.id,
@@ -94,6 +133,10 @@ export default function MovementPlayer({ animationState, onAnimationStateChange 
       speed,
     });
   }, [animationState, onAnimationStateChange]);
+
+  const handleRestrictionChange = useCallback((key: string, value: number) => {
+    setRestrictions(prev => ({ ...prev, [key]: value }));
+  }, []);
 
   const speedPresets = [0.25, 0.5, 1, 1.5, 2];
 
@@ -202,6 +245,20 @@ export default function MovementPlayer({ animationState, onAnimationStateChange 
             </button>
 
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              {currentMovement && currentRestrictions.length > 0 && (
+                <button
+                  onClick={() => setShowRestrictions(!showRestrictions)}
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
+                    showRestrictions
+                      ? 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/30'
+                      : 'bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-400'
+                  }`}
+                  title="Joint Restrictions"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                </button>
+              )}
+
               <button
                 onClick={handlePlayPause}
                 disabled={!animationState.currentMovement}
@@ -255,6 +312,54 @@ export default function MovementPlayer({ animationState, onAnimationStateChange 
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {showRestrictions && currentRestrictions.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-700/50">
+              <div className="flex items-center gap-2 mb-2">
+                <SlidersHorizontal className="w-3 h-3 text-purple-400" />
+                <span className="text-[10px] font-semibold text-purple-300 uppercase tracking-wider">Joint Restrictions</span>
+              </div>
+              <div className="space-y-2.5">
+                {currentRestrictions.map(restriction => {
+                  const key = `${restriction.joint}:${restriction.movement}`;
+                  const currentValue = restrictions[key] ?? restriction.defaultMaxROM;
+                  const isRestricted = currentValue < restriction.defaultMaxROM;
+                  return (
+                    <div key={key}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-[10px] font-medium ${isRestricted ? 'text-amber-300' : 'text-gray-400'}`}>
+                          {restriction.label}
+                        </span>
+                        <span className={`text-[10px] font-mono ${isRestricted ? 'text-amber-400' : 'text-gray-500'}`}>
+                          {Math.round(currentValue)}/{restriction.defaultMaxROM}°
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="range"
+                          min={0}
+                          max={restriction.defaultMaxROM}
+                          step={1}
+                          value={currentValue}
+                          onChange={(e) => handleRestrictionChange(key, Number(e.target.value))}
+                          className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                          style={{
+                            background: `linear-gradient(to right, ${isRestricted ? '#f59e0b' : '#06b6d4'} 0%, ${isRestricted ? '#f59e0b' : '#06b6d4'} ${(currentValue / restriction.defaultMaxROM) * 100}%, #374151 ${(currentValue / restriction.defaultMaxROM) * 100}%, #374151 100%)`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setRestrictions({})}
+                className="mt-2 w-full py-1 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-all"
+              >
+                Reset All
+              </button>
             </div>
           )}
         </div>

@@ -71,7 +71,7 @@ import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
-import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState } from "@/components/skeleton/PureThreeGLBViewer";
+import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState, AnimationConstraint } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
 import MovementPlayer from "@/components/skeleton/MovementPlayer";
 import FocusedCameraCapture, { type FocusedCameraResult, type FocusedRegion, FOCUSED_REGIONS } from "@/components/skeleton/FocusedCameraCapture";
@@ -372,6 +372,7 @@ export default function PhysioGPT() {
     progress: 0,
     speed: 1,
   });
+  const [animationConstraints, setAnimationConstraints] = useState<AnimationConstraint[]>([]);
   const [clinicalHighlights, setClinicalHighlights] = useState<RegionHighlight[]>([]);
   const [painMarkers, setPainMarkers] = useState<PainMarker[]>([]);
   const [painMarkerMode, setPainMarkerMode] = useState(false);
@@ -2191,11 +2192,13 @@ ${ddxList}`;
               }}
               highlightMuscleGroups={biomechanicalMuscleHighlights.length > 0 ? biomechanicalMuscleHighlights : undefined}
               animationState={animationState}
+              animationConstraints={animationConstraints}
             />
 
             <MovementPlayer
               animationState={animationState}
               onAnimationStateChange={setAnimationState}
+              onConstraintsChange={setAnimationConstraints}
             />
 
             {/* Joint Controls Overlay */}

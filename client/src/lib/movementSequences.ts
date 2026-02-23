@@ -1291,6 +1291,102 @@ export const MOVEMENT_CATEGORIES: { id: string; name: string; movements: string[
   { id: 'functional', name: 'Functional', movements: ['walk', 'singleLegBalance', 'hipCircles', 'stepUp'] },
 ];
 
+export interface MovementRestriction {
+  joint: string;
+  movement: string;
+  label: string;
+  defaultMaxROM: number;
+}
+
+export const MOVEMENT_RESTRICTIONS: Record<string, MovementRestriction[]> = {
+  squat: [
+    { joint: 'left_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 80 },
+    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 100 },
+    { joint: 'left_ankle', movement: 'dorsiflexion', label: 'Ankle Dorsiflexion', defaultMaxROM: 25 },
+    { joint: 'lumbar_spine', movement: 'flexion', label: 'Trunk Flexion', defaultMaxROM: 20 },
+  ],
+  lunge: [
+    { joint: 'left_hip', movement: 'flexion', label: 'Lead Hip Flexion', defaultMaxROM: 90 },
+    { joint: 'left_knee', movement: 'flexion', label: 'Lead Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'left_ankle', movement: 'dorsiflexion', label: 'Lead Ankle Dorsiflexion', defaultMaxROM: 25 },
+    { joint: 'lumbar_spine', movement: 'flexion', label: 'Trunk Flexion', defaultMaxROM: 15 },
+  ],
+  forwardBend: [
+    { joint: 'lumbar_spine', movement: 'flexion', label: 'Lumbar Flexion', defaultMaxROM: 70 },
+    { joint: 'thoracic_spine', movement: 'flexion', label: 'Thoracic Flexion', defaultMaxROM: 50 },
+    { joint: 'neck', movement: 'flexion', label: 'Neck Flexion', defaultMaxROM: 45 },
+    { joint: 'spine', movement: 'flexion', label: 'Hip/Trunk Flexion', defaultMaxROM: 60 },
+  ],
+  backwardBend: [
+    { joint: 'lumbar_spine', movement: 'extension', label: 'Lumbar Extension', defaultMaxROM: 30 },
+    { joint: 'thoracic_spine', movement: 'extension', label: 'Thoracic Extension', defaultMaxROM: 25 },
+    { joint: 'neck', movement: 'extension', label: 'Neck Extension', defaultMaxROM: 20 },
+  ],
+  hipHinge: [
+    { joint: 'spine', movement: 'flexion', label: 'Trunk Flexion', defaultMaxROM: 60 },
+    { joint: 'lumbar_spine', movement: 'flexion', label: 'Lumbar Flexion', defaultMaxROM: 60 },
+    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 15 },
+  ],
+  walk: [
+    { joint: 'left_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 30 },
+    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 40 },
+    { joint: 'left_ankle', movement: 'plantarflexion', label: 'Ankle Plantarflexion', defaultMaxROM: 20 },
+    { joint: 'spine', movement: 'thoracicRotation', label: 'Trunk Rotation', defaultMaxROM: 8 },
+  ],
+  trunkRotation: [
+    { joint: 'spine', movement: 'thoracicRotation', label: 'Thoracic Rotation', defaultMaxROM: 30 },
+    { joint: 'spine', movement: 'lumbarRotation', label: 'Lumbar Rotation', defaultMaxROM: 20 },
+    { joint: 'pelvis', movement: 'rotation', label: 'Pelvis Rotation', defaultMaxROM: 15 },
+  ],
+  lateralFlexion: [
+    { joint: 'spine', movement: 'lateralFlexion', label: 'Spine Lateral Flexion', defaultMaxROM: 35 },
+    { joint: 'pelvis', movement: 'obliquity', label: 'Pelvis Obliquity', defaultMaxROM: 15 },
+    { joint: 'neck', movement: 'lateralFlexion', label: 'Neck Lateral Flexion', defaultMaxROM: 10 },
+  ],
+  neckMobility: [
+    { joint: 'neck', movement: 'flexion', label: 'Neck Flexion', defaultMaxROM: 30 },
+    { joint: 'neck', movement: 'extension', label: 'Neck Extension', defaultMaxROM: 25 },
+    { joint: 'neck', movement: 'rotation', label: 'Neck Rotation', defaultMaxROM: 45 },
+    { joint: 'neck', movement: 'lateralFlexion', label: 'Neck Lateral Flexion', defaultMaxROM: 30 },
+  ],
+  lateralLunge: [
+    { joint: 'right_hip', movement: 'abduction', label: 'Hip Abduction', defaultMaxROM: 45 },
+    { joint: 'right_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 60 },
+    { joint: 'right_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'lumbar_spine', movement: 'flexion', label: 'Trunk Flexion', defaultMaxROM: 15 },
+  ],
+  armElevations: [
+    { joint: 'left_shoulder', movement: 'flexion', label: 'Shoulder Flexion', defaultMaxROM: 170 },
+  ],
+  shoulderAbduction: [
+    { joint: 'left_shoulder', movement: 'abduction', label: 'Shoulder Abduction', defaultMaxROM: 170 },
+  ],
+  shoulderCircles: [
+    { joint: 'left_shoulder', movement: 'flexion', label: 'Shoulder Flexion', defaultMaxROM: 30 },
+    { joint: 'left_shoulder', movement: 'abduction', label: 'Shoulder Abduction', defaultMaxROM: 30 },
+  ],
+  elbowFlexion: [
+    { joint: 'left_elbow', movement: 'flexion', label: 'Elbow Flexion', defaultMaxROM: 135 },
+  ],
+  singleLegBalance: [
+    { joint: 'left_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 45 },
+    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 90 },
+    { joint: 'pelvis', movement: 'obliquity', label: 'Pelvis Drop', defaultMaxROM: 10 },
+  ],
+  hipCircles: [
+    { joint: 'pelvis', movement: 'anterior_tilt', label: 'Pelvis Tilt', defaultMaxROM: 20 },
+    { joint: 'pelvis', movement: 'obliquity', label: 'Pelvis Obliquity', defaultMaxROM: 15 },
+  ],
+  calfRaises: [
+    { joint: 'left_ankle', movement: 'plantarflexion', label: 'Plantarflexion', defaultMaxROM: 45 },
+    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 10 },
+  ],
+  stepUp: [
+    { joint: 'left_hip', movement: 'flexion', label: 'Hip Flexion', defaultMaxROM: 70 },
+    { joint: 'left_knee', movement: 'flexion', label: 'Knee Flexion', defaultMaxROM: 90 },
+  ],
+};
+
 export function getMovementById(id: string): MovementSequence | undefined {
   return MOVEMENT_SEQUENCES.find(m => m.id === id);
 }

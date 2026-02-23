@@ -1010,10 +1010,13 @@ const snakeToCamelJoint = (snake: string): string => {
     'right_ankle': 'rightAnkle',
     'left_shoulder': 'leftShoulder',
     'right_shoulder': 'rightShoulder',
+    'left_elbow': 'leftElbow',
+    'right_elbow': 'rightElbow',
     'lumbar_spine': 'spine',
     'thoracic_spine': 'spine',
-    'cervical_spine': 'spine',
+    'cervical_spine': 'neck',
     'pelvis': 'pelvis',
+    'neck': 'neck',
   };
   return mappings[snake] || snake;
 };
@@ -1033,9 +1036,10 @@ const snakeToCamelMovement = (joint: string, movement: string): string => {
     if (movement === 'lateral_flexion') return 'scoliosis';
   }
   if (joint === 'cervical_spine') {
-    if (movement === 'flexion' || movement === 'extension') return 'cervicalLordosis';
-    if (movement === 'rotation') return 'cervicalLordosis'; // Maps to lordosis/flexion change
-    if (movement === 'lateral_flexion') return 'scoliosis';
+    if (movement === 'flexion') return 'flexion';
+    if (movement === 'extension') return 'extension';
+    if (movement === 'rotation') return 'rotation';
+    if (movement === 'lateral_flexion') return 'lateralFlexion';
   }
   // Pelvis-specific mappings
   if (joint === 'pelvis') {
@@ -1115,6 +1119,31 @@ const ANIMATION_COMPENSATION_MAPPING: Record<string, Array<{ targetJoint: string
   ],
   'right_shoulder:flexion': [
     { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.3 },
+  ],
+  'spine:flexion': [
+    { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: 0.3 },
+    { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: 0.3 },
+  ],
+  'spine:lateralFlexion': [
+    { targetJoint: 'pelvis', targetMovement: 'obliquity', ratio: 0.4 },
+  ],
+  'spine:thoracicRotation': [
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: 0.4 },
+  ],
+  'spine:lumbarRotation': [
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: 0.5 },
+  ],
+  'neck:flexion': [
+    { targetJoint: 'spine', targetMovement: 'thoracicKyphosis', ratio: 0.3 },
+  ],
+  'neck:extension': [
+    { targetJoint: 'spine', targetMovement: 'thoracicKyphosis', ratio: -0.2 },
+  ],
+  'neck:lateralFlexion': [
+    { targetJoint: 'spine', targetMovement: 'lateralFlexion', ratio: 0.3 },
+  ],
+  'pelvis:obliquity': [
+    { targetJoint: 'spine', targetMovement: 'lateralFlexion', ratio: 0.4 },
   ],
 };
 
@@ -4620,13 +4649,35 @@ export default function PureThreeGLBViewer({
       const animBoneRotations: { [boneName: string]: { x: number; y: number; z: number } } = {};
       const animBonePositions: { [boneName: string]: { x: number; y: number; z: number } } = {};
       
-      // Initialize rotations from initial state
+      // Initialize rotations from initial state + current control slider offsets
+      // This preserves the user's current pose (e.g., forward head, kyphosis) as the base
       Object.keys(bones).forEach(boneName => {
         const initial = initialRotations[boneName];
         if (initial) {
           animBoneRotations[boneName] = { x: initial.x, y: initial.y, z: initial.z };
         }
       });
+      
+      // Layer current modelConfig slider values on top of initial rotations
+      const currentConfig = modelConfigRef.current;
+      if (currentConfig) {
+        Object.entries(BONE_MAPPING).forEach(([configKey, mappings]) => {
+          const [jointName, propertyName] = configKey.split('.');
+          const jointConfig = currentConfig[jointName];
+          if (!jointConfig) return;
+          const sliderValue = (jointConfig as any)[propertyName];
+          if (sliderValue === undefined || sliderValue === 0) return;
+          const angleInRadians = (sliderValue * Math.PI) / 180;
+          mappings.forEach(({ boneName, axis, scale, isPosition }) => {
+            if (isPosition) return;
+            const adjustedAngle = angleInRadians * scale;
+            if (!animBoneRotations[boneName]) return;
+            if (axis === 'x') animBoneRotations[boneName].x += adjustedAngle;
+            else if (axis === 'y') animBoneRotations[boneName].y += adjustedAngle;
+            else if (axis === 'z') animBoneRotations[boneName].z += adjustedAngle;
+          });
+        });
+      }
       
       // Apply animation values through bone mappings
       Object.entries(jointValues).forEach(([joint, props]) => {

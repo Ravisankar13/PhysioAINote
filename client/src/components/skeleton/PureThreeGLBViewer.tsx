@@ -4896,59 +4896,55 @@ export default function PureThreeGLBViewer({
           });
         });
         
-        // Step 4: Direct foot-ground pelvis compensation
-        // After all FK rotations and position resets, measures actual foot world positions
-        // and drops Root_M to plant the lower (stance) foot on the ground plane.
+        // Step 4: Foot-ground compensation
+        // After all FK rotations, measure foot world positions and drop Root_M
+        // so the lowest foot stays planted on the ground plane.
         const ikState = legIKStateRef.current;
         if (ikState?.initialized && ikState.leftInitialFootPos && ikState.rightInitialFootPos) {
           const rootBone = bones['Root_M'] as THREE.Bone;
           const leftFoot = bones['Ankle_L'] as THREE.Bone;
           const rightFoot = bones['Ankle_R'] as THREE.Bone;
+          const leftToes = bones['Toes_L'] as THREE.Bone;
+          const rightToes = bones['Toes_R'] as THREE.Bone;
           
           if (rootBone && leftFoot && rightFoot) {
             if (!(rootBone as any).initialPosition) {
               (rootBone as any).initialPosition = rootBone.position.clone();
             }
-            const rootInitialPos = (rootBone as any).initialPosition as THREE.Vector3;
-            rootBone.position.x = rootInitialPos.x;
-            rootBone.position.y = rootInitialPos.y;
-            rootBone.position.z = rootInitialPos.z;
             
-            rootBone.updateMatrixWorld(true);
-            leftFoot.updateWorldMatrix(true, false);
-            rightFoot.updateWorldMatrix(true, false);
+            const scene = rootBone.parent;
+            if (scene) {
+              scene.updateMatrixWorld(true);
+            }
             
             const leftFootWorld = new THREE.Vector3();
             const rightFootWorld = new THREE.Vector3();
             leftFoot.getWorldPosition(leftFootWorld);
             rightFoot.getWorldPosition(rightFootWorld);
             
-            const groundY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
-            const currentLowestFootY = Math.min(leftFootWorld.y, rightFootWorld.y);
-            const overshoot = currentLowestFootY - groundY;
-            
-            footGroundDebugRef.current++;
-            if (footGroundDebugRef.current <= 5 || footGroundDebugRef.current % 120 === 0) {
-              console.log('[FootGround]', {
-                frame: footGroundDebugRef.current,
-                leftFootY: leftFootWorld.y.toFixed(4),
-                rightFootY: rightFootWorld.y.toFixed(4),
-                groundY: groundY.toFixed(4),
-                overshoot: overshoot.toFixed(4),
-                rootPosY: rootBone.position.y.toFixed(4),
-                rootInitialY: rootInitialPos.y.toFixed(4),
-              });
+            let lowestY = Math.min(leftFootWorld.y, rightFootWorld.y);
+            if (leftToes) {
+              const leftToesWorld = new THREE.Vector3();
+              leftToes.getWorldPosition(leftToesWorld);
+              lowestY = Math.min(lowestY, leftToesWorld.y);
+            }
+            if (rightToes) {
+              const rightToesWorld = new THREE.Vector3();
+              rightToes.getWorldPosition(rightToesWorld);
+              lowestY = Math.min(lowestY, rightToesWorld.y);
             }
             
-            if (Math.abs(overshoot) > 0.005) {
+            const groundY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
+            const overshoot = lowestY - groundY;
+            
+            if (Math.abs(overshoot) > 0.001) {
               let worldToLocalScale = 1;
               if (rootBone.parent) {
                 const parentScale = new THREE.Vector3();
                 rootBone.parent.getWorldScale(parentScale);
                 if (parentScale.y !== 0) worldToLocalScale = 1 / parentScale.y;
               }
-              const localDrop = overshoot * worldToLocalScale;
-              rootBone.position.y -= localDrop;
+              rootBone.position.y -= overshoot * worldToLocalScale;
             }
           }
         }

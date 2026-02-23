@@ -4816,59 +4816,6 @@ export default function PureThreeGLBViewer({
           bone.rotation.z = eulerResult.z;
         });
         
-        // Step 4: Automatic pelvis height compensation to keep stance foot on ground
-        // Uses actual standing pose angles as baseline (not idealized thigh+shin)
-        const ikState = legIKStateRef.current;
-        const leftHipFlexDeg = (jointValues['leftHip']?.['flexion'] || 0) - (jointValues['leftHip']?.['extension'] || 0);
-        const leftKneeFlexDeg = jointValues['leftKnee']?.['flexion'] || 0;
-        const rightHipFlexDeg = (jointValues['rightHip']?.['flexion'] || 0) - (jointValues['rightHip']?.['extension'] || 0);
-        const rightKneeFlexDeg = jointValues['rightKnee']?.['flexion'] || 0;
-        const hasSignificantLegFlexion = Math.abs(leftHipFlexDeg) > 3 || Math.abs(rightHipFlexDeg) > 3 ||
-                                          leftKneeFlexDeg > 3 || rightKneeFlexDeg > 3;
-        
-        if (ikState?.initialized && hasSignificantLegFlexion) {
-          const leftThigh = ikState.leftLegLengths?.thighLength || 2;
-          const leftShin = ikState.leftLegLengths?.shinLength || 2;
-          const rightThigh = ikState.rightLegLengths?.thighLength || 2;
-          const rightShin = ikState.rightLegLengths?.shinLength || 2;
-          
-          const initLeftHip = ikState.leftStandingAngles?.hipAngle || 0;
-          const initLeftKnee = ikState.leftStandingAngles?.kneeAngle || 0;
-          const initRightHip = ikState.rightStandingAngles?.hipAngle || 0;
-          const initRightKnee = ikState.rightStandingAngles?.kneeAngle || 0;
-          
-          const leftStandingH = leftThigh * Math.cos(initLeftHip) + leftShin * Math.cos(initLeftHip - initLeftKnee);
-          const rightStandingH = rightThigh * Math.cos(initRightHip) + rightShin * Math.cos(initRightHip - initRightKnee);
-          
-          const leftHipFlex = leftHipFlexDeg * Math.PI / 180 + initLeftHip;
-          const leftKneeFlex = leftKneeFlexDeg * Math.PI / 180 + initLeftKnee;
-          const rightHipFlex = rightHipFlexDeg * Math.PI / 180 + initRightHip;
-          const rightKneeFlex = rightKneeFlexDeg * Math.PI / 180 + initRightKnee;
-          
-          const leftCurrentH = leftThigh * Math.cos(leftHipFlex) + leftShin * Math.cos(leftHipFlex - leftKneeFlex);
-          const rightCurrentH = rightThigh * Math.cos(rightHipFlex) + rightShin * Math.cos(rightHipFlex - rightKneeFlex);
-          
-          const leftRise = leftStandingH - leftCurrentH;
-          const rightRise = rightStandingH - rightCurrentH;
-          
-          const pelvisDrop = Math.max(0, Math.min(leftRise, rightRise));
-          
-          const pelvisBone = bones['Root_M'] as THREE.Bone;
-          if (pelvisBone) {
-            if (!(pelvisBone as any).initialPosition) {
-              (pelvisBone as any).initialPosition = pelvisBone.position.clone();
-            }
-            const initialPos = (pelvisBone as any).initialPosition as THREE.Vector3;
-            pelvisBone.position.y = initialPos.y - pelvisDrop;
-          }
-        } else if (ikState?.initialized) {
-          const pelvisBone = bones['Root_M'] as THREE.Bone;
-          if (pelvisBone && (pelvisBone as any).initialPosition) {
-            const initialPos = (pelvisBone as any).initialPosition as THREE.Vector3;
-            pelvisBone.position.y = initialPos.y;
-          }
-        }
-        
         // Apply positions to bones
         Object.entries(animBonePositions).forEach(([boneName, posOffset]) => {
           const bone = bones[boneName];
@@ -4897,6 +4844,42 @@ export default function PureThreeGLBViewer({
             }
           });
         });
+        
+        // Step 4: Direct foot-ground pelvis compensation
+        // After all FK rotations and position resets, measures actual foot world positions
+        // and drops Root_M to plant the lower (stance) foot on the ground plane.
+        // Root_M.position was already reset to initialPosition by the position reset loop above,
+        // so this subtraction is always relative to the standing pose (no accumulation).
+        const ikState = legIKStateRef.current;
+        if (ikState?.initialized && ikState.leftInitialFootPos && ikState.rightInitialFootPos) {
+          const rootBone = bones['Root_M'] as THREE.Bone;
+          const leftFoot = bones['Ankle_L'] as THREE.Bone;
+          const rightFoot = bones['Ankle_R'] as THREE.Bone;
+          
+          if (rootBone && leftFoot && rightFoot) {
+            rootBone.updateMatrixWorld(true);
+            
+            const leftFootWorld = new THREE.Vector3();
+            const rightFootWorld = new THREE.Vector3();
+            leftFoot.getWorldPosition(leftFootWorld);
+            rightFoot.getWorldPosition(rightFootWorld);
+            
+            const groundY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
+            const currentLowestFootY = Math.min(leftFootWorld.y, rightFootWorld.y);
+            const overshoot = currentLowestFootY - groundY;
+            
+            if (Math.abs(overshoot) > 0.005) {
+              let worldToLocalScale = 1;
+              if (rootBone.parent) {
+                const parentScale = new THREE.Vector3();
+                rootBone.parent.getWorldScale(parentScale);
+                if (parentScale.y !== 0) worldToLocalScale = 1 / parentScale.y;
+              }
+              const localDrop = overshoot * worldToLocalScale;
+              rootBone.position.y -= localDrop;
+            }
+          }
+        }
       }
       
       if (onAnimationFrame) {

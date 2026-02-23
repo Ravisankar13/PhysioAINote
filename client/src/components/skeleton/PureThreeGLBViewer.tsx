@@ -4813,6 +4813,17 @@ export default function PureThreeGLBViewer({
         // OPEN-CHAIN: Standard FK animation (walking, lunges, etc.)
         const kneeBoneNames = new Set(['Knee_L', 'Knee_R']);
         
+        // Step 0: Reset Root_M position to initial before each frame
+        // This prevents position accumulation from foot-ground compensation
+        const rootBoneFK = bones['Root_M'] as THREE.Bone;
+        if (rootBoneFK) {
+          if (!(rootBoneFK as any).initialPosition) {
+            (rootBoneFK as any).initialPosition = rootBoneFK.position.clone();
+          }
+          const initPos = (rootBoneFK as any).initialPosition as THREE.Vector3;
+          rootBoneFK.position.set(initPos.x, initPos.y, initPos.z);
+        }
+        
         // Step 1: Apply all non-knee bone rotations
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
           if (kneeBoneNames.has(boneName)) return;

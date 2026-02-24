@@ -45,6 +45,7 @@ export interface CompensationResult {
   totalCompensation: number;
   overloadedStructures: string[];
   clinicalWarnings: string[];
+  postureNotes: string[];
 }
 
 // Normal ROM values for each joint/movement combination
@@ -347,65 +348,186 @@ const OVERLOAD_STRUCTURES: Record<string, string[]> = {
   'thoracic_spine:extension': ['T8-T12 facet joints', 'Costovertebral joints', 'Erector spinae', 'Thoracolumbar fascia'],
 };
 
+export interface PostureDeviation {
+  joint: JointType;
+  movement: MovementType;
+  deviationPercent: number;
+  description: string;
+}
+
+export interface PostureContext {
+  deviations: PostureDeviation[];
+}
+
+const POSTURE_DEVIATION_MAP: {
+  configPath: string;
+  configProp: string;
+  joint: JointType;
+  movement: MovementType;
+  maxDeviation: number;
+  description: (val: number) => string;
+}[] = [
+  { configPath: 'leftScapula', configProp: 'winging', joint: 'left_scapula', movement: 'upwardRotation', maxDeviation: 30, description: (v) => `Left scapula winging ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'rightScapula', configProp: 'winging', joint: 'right_scapula', movement: 'upwardRotation', maxDeviation: 30, description: (v) => `Right scapula winging ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'leftScapula', configProp: 'protraction', joint: 'left_scapula', movement: 'upwardRotation', maxDeviation: 25, description: (v) => `Left scapula protracted ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'rightScapula', configProp: 'protraction', joint: 'right_scapula', movement: 'upwardRotation', maxDeviation: 25, description: (v) => `Right scapula protracted ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'leftScapula', configProp: 'anteriorTilt', joint: 'left_scapula', movement: 'upwardRotation', maxDeviation: 20, description: (v) => `Left scapula anterior tilt ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'rightScapula', configProp: 'anteriorTilt', joint: 'right_scapula', movement: 'upwardRotation', maxDeviation: 20, description: (v) => `Right scapula anterior tilt ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'spine', configProp: 'thoracicKyphosis', joint: 'thoracic_spine', movement: 'extension', maxDeviation: 40, description: (v) => `Increased thoracic kyphosis ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'spine', configProp: 'lumbarLordosis', joint: 'lumbar_spine', movement: 'extension', maxDeviation: 35, description: (v) => `Increased lumbar lordosis ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'pelvis', configProp: 'tilt', joint: 'pelvis', movement: 'anterior_tilt', maxDeviation: 25, description: (v) => `Anterior pelvic tilt ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'leftShoulder', configProp: 'protraction', joint: 'left_shoulder', movement: 'flexion', maxDeviation: 20, description: (v) => `Left shoulder protracted ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'rightShoulder', configProp: 'protraction', joint: 'right_shoulder', movement: 'flexion', maxDeviation: 20, description: (v) => `Right shoulder protracted ${Math.abs(v).toFixed(0)}°` },
+  { configPath: 'spine', configProp: 'forwardHead', joint: 'cervical_spine', movement: 'extension', maxDeviation: 20, description: (v) => `Forward head posture ${Math.abs(v).toFixed(0)}°` },
+];
+
+export function computePostureDeviations(modelConfig: Record<string, Record<string, number | undefined> | undefined>): PostureContext {
+  const deviations: PostureDeviation[] = [];
+  const jointDeviationAccum = new Map<string, { total: number; descriptions: string[] }>();
+
+  for (const mapping of POSTURE_DEVIATION_MAP) {
+    const section = modelConfig[mapping.configPath];
+    if (!section) continue;
+    const value = section[mapping.configProp];
+    if (value === undefined || value === 0) continue;
+
+    const absVal = Math.abs(value);
+    const deviationPercent = Math.min(absVal / mapping.maxDeviation, 1.0);
+
+    if (deviationPercent > 0.05) {
+      const key = `${mapping.joint}:${mapping.movement}`;
+      const existing = jointDeviationAccum.get(key) || { total: 0, descriptions: [] };
+      existing.total = Math.min(existing.total + deviationPercent * 0.6, 0.95);
+      existing.descriptions.push(mapping.description(value));
+      jointDeviationAccum.set(key, existing);
+    }
+  }
+
+  for (const [key, accum] of Array.from(jointDeviationAccum.entries())) {
+    const [joint, movement] = key.split(':');
+    deviations.push({
+      joint: joint as JointType,
+      movement: movement as MovementType,
+      deviationPercent: accum.total,
+      description: accum.descriptions.join(', '),
+    });
+  }
+
+  return { deviations };
+}
+
 // Calculate compensation patterns for a set of constraints
-export function calculateCompensations(constraints: JointConstraint[]): CompensationResult {
+export function calculateCompensations(constraints: JointConstraint[], postureContext?: PostureContext): CompensationResult {
   const patterns: CompensationPattern[] = [];
   const overloadedStructures = new Set<string>();
   const clinicalWarnings: string[] = [];
+  const postureNotes: string[] = [];
   let totalCompensation = 0;
 
   const activeConstraints = constraints.filter(c => c.isActive);
 
+  const getPostureDeviation = (joint: JointType, movement: MovementType): number => {
+    if (!postureContext) return 0;
+    const matching = postureContext.deviations.filter(d => d.joint === joint && d.movement === movement);
+    if (matching.length === 0) return 0;
+    return Math.max(...matching.map(d => d.deviationPercent));
+  };
+
+  const addedPostureNotes = new Set<string>();
+
   for (const constraint of activeConstraints) {
     const restrictionRatio = 1 - (constraint.maxROM / constraint.normalROM);
     
-    // Find compensation chains for this constraint
     const chain = COMPENSATION_CHAINS.find(
       c => c.source.joint === constraint.joint && c.source.movement === constraint.movement
     );
 
     if (chain) {
+      let excessLoad = 0;
+      const compensatorResults: { compensator: typeof chain.compensators[0]; effectiveRatio: number; additionalLoad: number; postureReduction: number }[] = [];
+
       for (const compensator of chain.compensators) {
-        // Check if the compensating joint is also constrained
         const compensatorConstrained = activeConstraints.find(
           c => c.joint === compensator.joint && c.movement === compensator.movement
         );
 
         let effectiveRatio = compensator.ratio * restrictionRatio;
         let additionalLoad = compensator.loadIncrease * restrictionRatio;
+        let postureReduction = 0;
 
-        // If compensator is also restricted, reduce its ability to compensate
         if (compensatorConstrained) {
           const compensatorRestriction = compensatorConstrained.maxROM / (NORMAL_ROM[compensatorConstrained.joint]?.[compensatorConstrained.movement] || 100);
           effectiveRatio *= compensatorRestriction;
-          additionalLoad *= 1.5; // Even more stress on remaining available motion
+          additionalLoad *= 1.5;
           clinicalWarnings.push(
             `Double restriction: ${formatJointName(constraint.joint)} ${constraint.movement} AND ${formatJointName(compensator.joint)} ${compensator.movement} - severe movement limitation`
           );
         }
 
-        if (effectiveRatio > 0.05) { // Only include significant compensations
+        const deviation = getPostureDeviation(compensator.joint, compensator.movement);
+        if (deviation > 0) {
+          postureReduction = deviation;
+          const capacityRemaining = 1 - deviation;
+          const lostRatio = effectiveRatio * deviation;
+          effectiveRatio *= capacityRemaining;
+          additionalLoad *= (1 + deviation * 0.5);
+          excessLoad += lostRatio;
+
+          if (!addedPostureNotes.has(`${compensator.joint}:${compensator.movement}`)) {
+            addedPostureNotes.add(`${compensator.joint}:${compensator.movement}`);
+            const matchingDev = postureContext!.deviations.find(d => d.joint === compensator.joint && d.movement === compensator.movement);
+            const desc = matchingDev?.description || formatJointName(compensator.joint);
+            postureNotes.push(
+              `${desc} → ${Math.round(deviation * 100)}% compensation capacity reduced at ${formatJointName(compensator.joint)}`
+            );
+          }
+        }
+
+        compensatorResults.push({ compensator, effectiveRatio, additionalLoad, postureReduction });
+      }
+
+      if (excessLoad > 0) {
+        const availableCompensators = compensatorResults.filter(r => r.postureReduction < 0.8);
+        if (availableCompensators.length > 0) {
+          const totalAvailableCapacity = availableCompensators.reduce((sum, r) => sum + (1 - r.postureReduction), 0);
+          for (const r of availableCompensators) {
+            const share = totalAvailableCapacity > 0 ? (1 - r.postureReduction) / totalAvailableCapacity : 1 / availableCompensators.length;
+            r.effectiveRatio += excessLoad * share;
+            r.additionalLoad += r.compensator.loadIncrease * excessLoad * share * 1.2;
+          }
+        } else {
+          clinicalWarnings.push(
+            `All compensating joints for ${formatJointName(constraint.joint)} ${constraint.movement} have reduced capacity due to posture — significant movement limitation`
+          );
+        }
+      }
+
+      for (const r of compensatorResults) {
+        if (r.effectiveRatio > 0.05) {
+          let note = r.compensator.note;
+          if (r.postureReduction > 0.3) {
+            note += ` (capacity reduced by posture)`;
+          }
+
           patterns.push({
             sourceJoint: constraint.joint,
             sourceMovement: constraint.movement,
-            compensatingJoint: compensator.joint,
-            compensatingMovement: compensator.movement,
-            compensationRatio: effectiveRatio,
-            additionalLoad: additionalLoad,
-            clinicalNote: compensator.note,
+            compensatingJoint: r.compensator.joint,
+            compensatingMovement: r.compensator.movement,
+            compensationRatio: r.effectiveRatio,
+            additionalLoad: r.additionalLoad,
+            clinicalNote: note,
           });
 
-          totalCompensation += effectiveRatio;
+          totalCompensation += r.effectiveRatio;
 
-          // Add overloaded structures
-          const structureKey = `${compensator.joint}:${compensator.movement}`;
+          const structureKey = `${r.compensator.joint}:${r.compensator.movement}`;
           const structures = OVERLOAD_STRUCTURES[structureKey] || [];
           structures.forEach(s => overloadedStructures.add(s));
         }
       }
     }
 
-    // Add clinical warnings based on severity
     if (restrictionRatio > 0.7) {
       clinicalWarnings.push(
         `Severe ${constraint.movement} restriction at ${formatJointName(constraint.joint)} (${Math.round(restrictionRatio * 100)}% limited)`
@@ -413,7 +535,6 @@ export function calculateCompensations(constraints: JointConstraint[]): Compensa
     }
   }
 
-  // Check for compensation cascade (when compensating joints become overloaded)
   const compensatingJoints = new Set(patterns.map(p => p.compensatingJoint));
   const sourceJoints = new Set(activeConstraints.map(c => c.joint));
   
@@ -430,6 +551,7 @@ export function calculateCompensations(constraints: JointConstraint[]): Compensa
     totalCompensation,
     overloadedStructures: Array.from(overloadedStructures),
     clinicalWarnings,
+    postureNotes,
   };
 }
 

@@ -1,16 +1,19 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight } from 'lucide-react';
+import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight, PersonStanding } from 'lucide-react';
 import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, type MovementSequence } from '@/lib/movementSequences';
-import { calculateCompensations, NORMAL_ROM, type JointConstraint } from '@/lib/jointConstraints';
+import { calculateCompensations, computePostureDeviations, NORMAL_ROM, type JointConstraint } from '@/lib/jointConstraints';
 import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
+
+type PostureConfig = Record<string, Record<string, number | undefined> | undefined>;
 
 interface MovementPlayerProps {
   animationState: AnimationState;
   onAnimationStateChange: (state: AnimationState) => void;
   onConstraintsChange?: (constraints: AnimationConstraint[]) => void;
+  modelConfig?: PostureConfig;
 }
 
-export default function MovementPlayer({ animationState, onAnimationStateChange, onConstraintsChange }: MovementPlayerProps) {
+export default function MovementPlayer({ animationState, onAnimationStateChange, onConstraintsChange, modelConfig }: MovementPlayerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showRestrictions, setShowRestrictions] = useState(false);
@@ -139,6 +142,11 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
     setRestrictions(prev => ({ ...prev, [key]: value }));
   }, []);
 
+  const postureContext = useMemo(() => {
+    if (!modelConfig) return undefined;
+    return computePostureDeviations(modelConfig);
+  }, [modelConfig]);
+
   const compensationResult = useMemo(() => {
     if (!animationState.currentMovement) return null;
     const defs = MOVEMENT_RESTRICTIONS[animationState.currentMovement] || [];
@@ -160,8 +168,8 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
       }
     });
     if (jointConstraints.length === 0) return null;
-    return calculateCompensations(jointConstraints);
-  }, [restrictions, animationState.currentMovement]);
+    return calculateCompensations(jointConstraints, postureContext);
+  }, [restrictions, animationState.currentMovement, postureContext]);
 
   const speedPresets = [0.25, 0.5, 1, 1.5, 2];
 
@@ -386,8 +394,24 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
                 Reset All
               </button>
 
-              {compensationResult && (compensationResult.patterns.length > 0 || compensationResult.clinicalWarnings.length > 0) && (
+              {compensationResult && (compensationResult.patterns.length > 0 || compensationResult.clinicalWarnings.length > 0 || compensationResult.postureNotes.length > 0) && (
                 <div className="mt-3 pt-3 border-t border-gray-700/50">
+                  {compensationResult.postureNotes.length > 0 && (
+                    <div className="mb-2">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <PersonStanding className="w-3 h-3 text-blue-400" />
+                        <span className="text-[10px] font-semibold text-blue-300 uppercase tracking-wider">Posture Influence</span>
+                      </div>
+                      <div className="space-y-1">
+                        {compensationResult.postureNotes.map((note, i) => (
+                          <div key={i} className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-2 py-1.5">
+                            <span className="text-[9px] text-blue-300">{note}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {compensationResult.patterns.length > 0 && (
                     <div className="mb-2">
                       <div className="flex items-center gap-1.5 mb-1.5">

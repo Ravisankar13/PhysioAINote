@@ -2199,6 +2199,7 @@ ${ddxList}`;
               animationState={animationState}
               onAnimationStateChange={setAnimationState}
               onConstraintsChange={setAnimationConstraints}
+              modelConfig={modelConfig as any}
             />
 
             {/* Joint Controls Overlay */}

@@ -426,10 +426,18 @@ function ClinicalWarningsList({ compensationResult }: { compensationResult: Comp
         {compensationResult.clinicalWarnings.map((warning, idx) => (
           <div 
             key={idx}
-            className="bg-red-900/20 rounded-lg p-3 border border-red-500/30 flex gap-3"
+            className={`rounded-lg p-3 flex gap-3 ${
+              warning.severity === 'severe'
+                ? 'bg-red-900/20 border border-red-500/30'
+                : 'bg-amber-900/20 border border-amber-500/30'
+            }`}
           >
-            <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-red-200">{warning}</div>
+            <AlertTriangle className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
+              warning.severity === 'severe' ? 'text-red-400' : 'text-amber-400'
+            }`} />
+            <div className={`text-sm ${
+              warning.severity === 'severe' ? 'text-red-200' : 'text-amber-200'
+            }`}>{warning.message}</div>
           </div>
         ))}
 

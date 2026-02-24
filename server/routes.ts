@@ -8857,7 +8857,7 @@ OVERLOADED STRUCTURES:
 ${overloadedStructures?.join(', ') || 'None identified'}
 
 CLINICAL WARNINGS:
-${clinicalWarnings?.join(', ') || 'None'}
+${clinicalWarnings?.map((w: any) => typeof w === 'string' ? w : `[${w.severity?.toUpperCase() || 'WARNING'}] ${w.message}`).join('\n') || 'None'}
 
 Provide your assessment in the following JSON format:
 {

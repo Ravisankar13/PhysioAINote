@@ -40,11 +40,18 @@ export interface CompensationPattern {
   clinicalNote: string;
 }
 
+export type WarningSeverity = 'moderate' | 'severe';
+
+export interface ClinicalWarning {
+  message: string;
+  severity: WarningSeverity;
+}
+
 export interface CompensationResult {
   patterns: CompensationPattern[];
   totalCompensation: number;
   overloadedStructures: string[];
-  clinicalWarnings: string[];
+  clinicalWarnings: ClinicalWarning[];
   postureNotes: string[];
 }
 
@@ -294,6 +301,40 @@ const COMPENSATION_CHAINS: Array<{
       { joint: 'lumbar_spine', movement: 'extension', ratio: 0.15, loadIncrease: 30, note: 'Lumbar side-bend and extension during abduction' },
     ],
   },
+  // Shoulder internal rotation restriction → cervical, contralateral shoulder compensate
+  {
+    source: { joint: 'left_shoulder', movement: 'internal_rotation' },
+    compensators: [
+      { joint: 'left_scapula', movement: 'upwardRotation', ratio: 0.25, loadIncrease: 25, note: 'Scapular protraction compensating for GH internal rotation deficit' },
+      { joint: 'thoracic_spine', movement: 'rotation', ratio: 0.3, loadIncrease: 30, note: 'Thoracic rotation compensating for shoulder internal rotation loss' },
+      { joint: 'cervical_spine', movement: 'rotation', ratio: 0.15, loadIncrease: 20, note: 'Cervical rotation contributing to reaching movements' },
+    ],
+  },
+  {
+    source: { joint: 'right_shoulder', movement: 'internal_rotation' },
+    compensators: [
+      { joint: 'right_scapula', movement: 'upwardRotation', ratio: 0.25, loadIncrease: 25, note: 'Scapular protraction compensating for GH internal rotation deficit' },
+      { joint: 'thoracic_spine', movement: 'rotation', ratio: 0.3, loadIncrease: 30, note: 'Thoracic rotation compensating for shoulder internal rotation loss' },
+      { joint: 'cervical_spine', movement: 'rotation', ratio: 0.15, loadIncrease: 20, note: 'Cervical rotation contributing to reaching movements' },
+    ],
+  },
+  // Shoulder external rotation restriction → scapula retraction, thoracic compensate
+  {
+    source: { joint: 'left_shoulder', movement: 'external_rotation' },
+    compensators: [
+      { joint: 'left_scapula', movement: 'upwardRotation', ratio: 0.2, loadIncrease: 25, note: 'Scapular posterior tilt/upward rotation compensating for GH external rotation deficit' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Thoracic extension to achieve cocking/throwing position' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.2, loadIncrease: 35, note: 'Lumbar hyperextension during overhead/throwing activities' },
+    ],
+  },
+  {
+    source: { joint: 'right_shoulder', movement: 'external_rotation' },
+    compensators: [
+      { joint: 'right_scapula', movement: 'upwardRotation', ratio: 0.2, loadIncrease: 25, note: 'Scapular posterior tilt/upward rotation compensating for GH external rotation deficit' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Thoracic extension to achieve cocking/throwing position' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.2, loadIncrease: 35, note: 'Lumbar hyperextension during overhead/throwing activities' },
+    ],
+  },
   // Scapula upward rotation restriction → GH, thoracic, lumbar compensate
   {
     source: { joint: 'left_scapula', movement: 'upwardRotation' },
@@ -343,9 +384,18 @@ const OVERLOAD_STRUCTURES: Record<string, string[]> = {
   'right_shoulder:flexion': ['Subacromial space', 'Supraspinatus tendon', 'Superior labrum', 'Inferior GH ligament'],
   'left_shoulder:abduction': ['Subacromial space', 'Supraspinatus tendon', 'Acromioclavicular joint', 'Rotator cuff'],
   'right_shoulder:abduction': ['Subacromial space', 'Supraspinatus tendon', 'Acromioclavicular joint', 'Rotator cuff'],
+  'left_shoulder:internal_rotation': ['Anterior GH capsule', 'Subscapularis tendon', 'Anterior labrum', 'Middle GH ligament'],
+  'right_shoulder:internal_rotation': ['Anterior GH capsule', 'Subscapularis tendon', 'Anterior labrum', 'Middle GH ligament'],
+  'left_shoulder:external_rotation': ['Posterior GH capsule', 'Infraspinatus tendon', 'Teres minor', 'Posterior labrum'],
+  'right_shoulder:external_rotation': ['Posterior GH capsule', 'Infraspinatus tendon', 'Teres minor', 'Posterior labrum'],
   'left_scapula:upwardRotation': ['Serratus anterior', 'Lower trapezius', 'Pectoralis minor', 'Scapulothoracic joint'],
   'right_scapula:upwardRotation': ['Serratus anterior', 'Lower trapezius', 'Pectoralis minor', 'Scapulothoracic joint'],
   'thoracic_spine:extension': ['T8-T12 facet joints', 'Costovertebral joints', 'Erector spinae', 'Thoracolumbar fascia'],
+  'cervical_spine:extension': ['C4-C6 facet joints', 'Suboccipital muscles', 'Posterior cervical ligaments'],
+  'left_hip:extension': ['Hip flexor complex', 'Anterior hip capsule', 'Lumbar facet joints'],
+  'right_hip:extension': ['Hip flexor complex', 'Anterior hip capsule', 'Lumbar facet joints'],
+  'left_ankle:eversion': ['Peroneal tendons', 'Lateral ankle ligaments', 'Subtalar joint'],
+  'right_ankle:eversion': ['Peroneal tendons', 'Lateral ankle ligaments', 'Subtalar joint'],
 };
 
 export interface PostureDeviation {
@@ -420,7 +470,7 @@ export function computePostureDeviations(modelConfig: Record<string, Record<stri
 export function calculateCompensations(constraints: JointConstraint[], postureContext?: PostureContext): CompensationResult {
   const patterns: CompensationPattern[] = [];
   const overloadedStructures = new Set<string>();
-  const clinicalWarnings: string[] = [];
+  const clinicalWarnings: ClinicalWarning[] = [];
   const postureNotes: string[] = [];
   let totalCompensation = 0;
 
@@ -459,9 +509,10 @@ export function calculateCompensations(constraints: JointConstraint[], postureCo
           const compensatorRestriction = compensatorConstrained.maxROM / (NORMAL_ROM[compensatorConstrained.joint]?.[compensatorConstrained.movement] || 100);
           effectiveRatio *= compensatorRestriction;
           additionalLoad *= 1.5;
-          clinicalWarnings.push(
-            `Double restriction: ${formatJointName(constraint.joint)} ${constraint.movement} AND ${formatJointName(compensator.joint)} ${compensator.movement} - severe movement limitation`
-          );
+          clinicalWarnings.push({
+            message: `Double restriction: ${formatJointName(constraint.joint)} ${constraint.movement} AND ${formatJointName(compensator.joint)} ${compensator.movement} - severe movement limitation`,
+            severity: 'severe',
+          });
         }
 
         const deviation = getPostureDeviation(compensator.joint, compensator.movement);
@@ -496,9 +547,10 @@ export function calculateCompensations(constraints: JointConstraint[], postureCo
             r.additionalLoad += r.compensator.loadIncrease * excessLoad * share * 1.2;
           }
         } else {
-          clinicalWarnings.push(
-            `All compensating joints for ${formatJointName(constraint.joint)} ${constraint.movement} have reduced capacity due to posture — significant movement limitation`
-          );
+          clinicalWarnings.push({
+            message: `All compensating joints for ${formatJointName(constraint.joint)} ${constraint.movement} have reduced capacity due to posture — significant movement limitation`,
+            severity: 'severe',
+          });
         }
       }
 
@@ -528,10 +580,16 @@ export function calculateCompensations(constraints: JointConstraint[], postureCo
       }
     }
 
-    if (restrictionRatio > 0.7) {
-      clinicalWarnings.push(
-        `Severe ${constraint.movement} restriction at ${formatJointName(constraint.joint)} (${Math.round(restrictionRatio * 100)}% limited)`
-      );
+    if (restrictionRatio > 0.85) {
+      clinicalWarnings.push({
+        message: `Severe ${constraint.movement} restriction at ${formatJointName(constraint.joint)} (${Math.round(restrictionRatio * 100)}% limited) — significant functional limitation`,
+        severity: 'severe',
+      });
+    } else if (restrictionRatio > 0.5) {
+      clinicalWarnings.push({
+        message: `Moderate ${constraint.movement} restriction at ${formatJointName(constraint.joint)} (${Math.round(restrictionRatio * 100)}% limited) — compensatory patterns developing`,
+        severity: 'moderate',
+      });
     }
   }
 
@@ -540,9 +598,10 @@ export function calculateCompensations(constraints: JointConstraint[], postureCo
   
   Array.from(compensatingJoints).forEach(joint => {
     if (sourceJoints.has(joint)) {
-      clinicalWarnings.push(
-        `Compensation cascade detected: ${formatJointName(joint)} is both restricted and required to compensate for other restrictions`
-      );
+      clinicalWarnings.push({
+        message: `Compensation cascade detected: ${formatJointName(joint)} is both restricted and required to compensate for other restrictions`,
+        severity: 'severe',
+      });
     }
   });
 

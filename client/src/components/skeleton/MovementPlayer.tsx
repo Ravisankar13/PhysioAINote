@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight, PersonStanding } from 'lucide-react';
 import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, type MovementSequence } from '@/lib/movementSequences';
-import { calculateCompensations, computePostureDeviations, NORMAL_ROM, type JointConstraint } from '@/lib/jointConstraints';
+import { calculateCompensations, computePostureDeviations, NORMAL_ROM, type JointConstraint, type ClinicalWarning } from '@/lib/jointConstraints';
 import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
 
 type PostureConfig = Record<string, Record<string, number | undefined> | undefined>;
@@ -396,11 +396,17 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
 
               {compensationResult && (compensationResult.patterns.length > 0 || compensationResult.clinicalWarnings.length > 0 || compensationResult.postureNotes.length > 0) && (
                 <div className="mt-3 pt-3 border-t border-gray-700/50">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-[10px] font-semibold text-amber-300 uppercase tracking-wider">Consequences</span>
+                    <span className="ml-auto text-[9px] text-gray-500 font-mono">{compensationResult.patterns.length} compensation{compensationResult.patterns.length !== 1 ? 's' : ''}</span>
+                  </div>
+
                   {compensationResult.postureNotes.length > 0 && (
-                    <div className="mb-2">
+                    <div className="mb-2.5">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <PersonStanding className="w-3 h-3 text-blue-400" />
-                        <span className="text-[10px] font-semibold text-blue-300 uppercase tracking-wider">Posture Influence</span>
+                        <span className="text-[10px] font-medium text-blue-300">Posture Influence</span>
                       </div>
                       <div className="space-y-1">
                         {compensationResult.postureNotes.map((note, i) => (
@@ -413,21 +419,22 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
                   )}
 
                   {compensationResult.patterns.length > 0 && (
-                    <div className="mb-2">
+                    <div className="mb-2.5">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <ArrowRight className="w-3 h-3 text-amber-400" />
-                        <span className="text-[10px] font-semibold text-amber-300 uppercase tracking-wider">Compensations</span>
+                        <span className="text-[10px] font-medium text-amber-300">Active Compensations</span>
                       </div>
                       <div className="space-y-1.5">
                         {compensationResult.patterns.map((p, i) => (
                           <div key={i} className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
                             <div className="flex items-center gap-1 text-[10px] text-amber-300 font-medium">
                               <span>{formatJoint(p.compensatingJoint)}</span>
-                              <span className="text-amber-500/60">compensating</span>
+                              <span className="text-amber-500/60">compensating for</span>
+                              <span className="text-amber-400/80">{formatJoint(p.sourceJoint)}</span>
                             </div>
                             <div className="text-[9px] text-gray-400 mt-0.5">{p.clinicalNote}</div>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[9px] text-amber-400 font-mono">+{Math.round(p.additionalLoad)}% load</span>
+                              <span className={`text-[9px] font-mono ${p.additionalLoad > 30 ? 'text-red-400' : 'text-amber-400'}`}>+{Math.round(p.additionalLoad)}% load</span>
                               <span className="text-[9px] text-gray-600">|</span>
                               <span className="text-[9px] text-amber-500/80 font-mono">{Math.round(p.compensationRatio * 100)}% ratio</span>
                             </div>
@@ -438,10 +445,10 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
                   )}
 
                   {compensationResult.overloadedStructures.length > 0 && (
-                    <div className="mb-2">
+                    <div className="mb-2.5">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <Bone className="w-3 h-3 text-red-400" />
-                        <span className="text-[10px] font-semibold text-red-300 uppercase tracking-wider">At-Risk Structures</span>
+                        <span className="text-[10px] font-medium text-red-300">At-Risk Structures</span>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {compensationResult.overloadedStructures.map((s, i) => (
@@ -457,12 +464,23 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
                     <div>
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <AlertTriangle className="w-3 h-3 text-red-400" />
-                        <span className="text-[10px] font-semibold text-red-300 uppercase tracking-wider">Clinical Warnings</span>
+                        <span className="text-[10px] font-medium text-red-300">Clinical Warnings</span>
                       </div>
                       <div className="space-y-1">
                         {compensationResult.clinicalWarnings.map((w, i) => (
-                          <div key={i} className="bg-red-500/10 border border-red-500/20 rounded-lg px-2 py-1.5">
-                            <span className="text-[9px] text-red-300">{w}</span>
+                          <div key={i} className={`rounded-lg px-2 py-1.5 ${
+                            w.severity === 'severe'
+                              ? 'bg-red-500/10 border border-red-500/20'
+                              : 'bg-amber-500/10 border border-amber-500/20'
+                          }`}>
+                            <div className="flex items-center gap-1.5">
+                              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                w.severity === 'severe' ? 'bg-red-400' : 'bg-amber-400'
+                              }`} />
+                              <span className={`text-[9px] ${
+                                w.severity === 'severe' ? 'text-red-300' : 'text-amber-300'
+                              }`}>{w.message}</span>
+                            </div>
                           </div>
                         ))}
                       </div>

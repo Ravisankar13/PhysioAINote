@@ -234,6 +234,29 @@ export interface PropagatedMuscleState {
   totalChainActivation: number;
 }
 
+export const MUSCLE_BONE_POSITIONS: Record<string, string> = {
+  shin_l: 'Ankle_L',
+  shin_r: 'Ankle_R',
+  calf_l: 'Knee_L',
+  calf_r: 'Knee_R',
+  quad_l: 'HipPart2_L',
+  quad_r: 'HipPart2_R',
+  glute_l: 'Hip_L',
+  glute_r: 'Hip_R',
+  core: 'RootPart1_M',
+  spine: 'Spine1_M',
+  neck: 'Neck_M',
+  chest: 'Chest_M',
+  deltoid_l: 'Shoulder_L',
+  deltoid_r: 'Shoulder_R',
+  bicep_l: 'Elbow_L',
+  bicep_r: 'Elbow_R',
+  scapula_l: 'Scapula_L',
+  scapula_r: 'Scapula_R',
+  foot_l: 'Toes_L',
+  foot_r: 'Toes_R',
+};
+
 export function getChainMembership(muscleId: string): MyofascialChain[] {
   return MYOFASCIAL_CHAINS.filter(chain =>
     chain.links.some(link => link.muscleId === muscleId)

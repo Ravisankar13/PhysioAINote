@@ -12,6 +12,8 @@ import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager'
 import { classifyMuscleMeshes, setMuscleGroupVisibility, setAllMuscleGroupsVisibility, disposeMuscleGroups, MUSCLE_GROUPS, type SplitMuscleGroup } from '@/lib/muscleGroupSplitter';
 import { type MuscleStatesMap, getMuscleColor } from '@/lib/muscleBiomechanicsEngine';
 import { getEnvironmentPreset, type EnvironmentPreset } from '@/lib/environmentPresets';
+import { MUSCLE_BONE_POSITIONS, type MyofascialChain } from '@/lib/myofascialChains';
+import { type ScarMarker, type AdhesionBand, SCAR_TYPES } from '@/lib/scarTissueMapping';
 import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 
@@ -1270,6 +1272,15 @@ interface PureThreeGLBViewerProps {
   onMuscleGroupClick?: (groupId: string, screenX: number, screenY: number) => void;
   highlightMuscleGroups?: string[];
   environmentPreset?: string;
+  fascialChainVisualization?: {
+    enabled: boolean;
+    chains: MyofascialChain[];
+    tensions: Record<string, number>;
+    activeChains: string[];
+  };
+  scarMarkers?: ScarMarker[];
+  adhesionBands?: AdhesionBand[];
+  onScarMarkerClick?: (id: string) => void;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -1695,6 +1706,10 @@ export default function PureThreeGLBViewer({
   onMuscleGroupClick,
   highlightMuscleGroups,
   environmentPreset = 'clinical_dark',
+  fascialChainVisualization,
+  scarMarkers = [],
+  adhesionBands = [],
+  onScarMarkerClick,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1723,6 +1738,10 @@ export default function PureThreeGLBViewer({
   const biomechanicalHighlightRef = useRef<{ mesh: THREE.Mesh; origMaterial: THREE.Material; wasVisible: boolean }[]>([]);
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const chainHighlightOverlaysRef = useRef<THREE.Mesh[]>([]);
+  const fascialChainGroupRef = useRef<THREE.Group | null>(null);
+  const scarMarkerGroupRef = useRef<THREE.Group | null>(null);
+  const onScarMarkerClickRef = useRef(onScarMarkerClick);
+  onScarMarkerClickRef.current = onScarMarkerClick;
   const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
   const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh; hasMoved: boolean } | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -2322,6 +2341,263 @@ export default function PureThreeGLBViewer({
       chainHighlightOverlaysRef.current.push(outerGlow);
     }
   }, [highlightBoneNames]);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene, model } = sceneRef.current;
+
+    if (fascialChainGroupRef.current) {
+      fascialChainGroupRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+          child.geometry.dispose();
+          if (child.material instanceof THREE.Material) child.material.dispose();
+        }
+      });
+      scene.remove(fascialChainGroupRef.current);
+      fascialChainGroupRef.current = null;
+    }
+
+    if (!fascialChainVisualization?.enabled || !model) return;
+    if (fascialChainVisualization.activeChains.length === 0) return;
+
+    model.updateMatrixWorld(true);
+
+    const bones: Record<string, THREE.Object3D> = {};
+    model.traverse((child) => {
+      if ((child as any).isBone || child instanceof THREE.Bone) {
+        bones[child.name] = child;
+      }
+    });
+
+    const group = new THREE.Group();
+    group.userData.isFascialChainGroup = true;
+
+    for (const chain of fascialChainVisualization.chains) {
+      if (!fascialChainVisualization.activeChains.includes(chain.id)) continue;
+
+      const positions: THREE.Vector3[] = [];
+      const tensionValues: number[] = [];
+
+      for (const link of chain.links) {
+        const boneName = MUSCLE_BONE_POSITIONS[link.muscleId];
+        if (!boneName || !bones[boneName]) continue;
+        const worldPos = new THREE.Vector3();
+        bones[boneName].getWorldPosition(worldPos);
+        positions.push(worldPos);
+        const tension = fascialChainVisualization.tensions[link.muscleId] ?? 50;
+        tensionValues.push(tension);
+      }
+
+      if (positions.length < 2) continue;
+
+      const chainColor = new THREE.Color(chain.color);
+
+      const avgTension = tensionValues.reduce((a, b) => a + b, 0) / tensionValues.length;
+      const tensionIntensity = Math.abs(avgTension - 50) / 50;
+
+      const curvePoints: THREE.Vector3[] = [];
+      for (let i = 0; i < positions.length - 1; i++) {
+        const start = positions[i];
+        const end = positions[i + 1];
+        const steps = 8;
+        for (let s = 0; s <= steps; s++) {
+          const t = s / steps;
+          curvePoints.push(new THREE.Vector3().lerpVectors(start, end, t));
+        }
+      }
+
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(curvePoints);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: chainColor,
+        transparent: true,
+        opacity: 0.3 + tensionIntensity * 0.5,
+        linewidth: 1,
+        depthTest: true,
+        depthWrite: false,
+      });
+      const line = new THREE.Line(lineGeo, lineMat);
+      line.renderOrder = 990;
+      group.add(line);
+
+      for (let i = 0; i < positions.length; i++) {
+        const tension = tensionValues[i];
+        const deviation = Math.abs(tension - 50) / 50;
+        const nodeSize = 0.025 + deviation * 0.04;
+        const nodeGeo = new THREE.SphereGeometry(nodeSize, 10, 8);
+        const nodeMat = new THREE.MeshBasicMaterial({
+          color: chainColor,
+          transparent: true,
+          opacity: 0.4 + deviation * 0.5,
+          depthWrite: false,
+        });
+        const node = new THREE.Mesh(nodeGeo, nodeMat);
+        node.position.copy(positions[i]);
+        node.renderOrder = 991;
+        group.add(node);
+
+        if (deviation > 0.3) {
+          const glowGeo = new THREE.SphereGeometry(nodeSize * 2.5, 8, 6);
+          const glowMat = new THREE.MeshBasicMaterial({
+            color: chainColor,
+            transparent: true,
+            opacity: deviation * 0.2,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          });
+          const glow = new THREE.Mesh(glowGeo, glowMat);
+          glow.position.copy(positions[i]);
+          glow.renderOrder = 989;
+          group.add(glow);
+        }
+      }
+
+      for (let i = 0; i < positions.length - 1; i++) {
+        const segTension = (tensionValues[i] + tensionValues[i + 1]) / 2;
+        const segDeviation = Math.abs(segTension - 50) / 50;
+        if (segDeviation > 0.25) {
+          const mid = new THREE.Vector3().lerpVectors(positions[i], positions[i + 1], 0.5);
+          const tubeRadius = 0.008 + segDeviation * 0.015;
+          const dir = new THREE.Vector3().subVectors(positions[i + 1], positions[i]);
+          const segLen = dir.length();
+          const tubeGeo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, segLen, 6, 1);
+          const tubeMat = new THREE.MeshBasicMaterial({
+            color: chainColor,
+            transparent: true,
+            opacity: 0.15 + segDeviation * 0.3,
+            depthWrite: false,
+          });
+          const tube = new THREE.Mesh(tubeGeo, tubeMat);
+          tube.position.copy(mid);
+          dir.normalize();
+          const up = new THREE.Vector3(0, 1, 0);
+          const quat = new THREE.Quaternion().setFromUnitVectors(up, dir);
+          tube.setRotationFromQuaternion(quat);
+          tube.renderOrder = 988;
+          group.add(tube);
+        }
+      }
+    }
+
+    scene.add(group);
+    fascialChainGroupRef.current = group;
+  }, [fascialChainVisualization]);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene, model } = sceneRef.current;
+
+    if (scarMarkerGroupRef.current) {
+      scarMarkerGroupRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+          child.geometry.dispose();
+          if (child.material instanceof THREE.Material) child.material.dispose();
+        }
+      });
+      scene.remove(scarMarkerGroupRef.current);
+      scarMarkerGroupRef.current = null;
+    }
+
+    if (scarMarkers.length === 0 && adhesionBands.length === 0) return;
+    if (!model) return;
+
+    model.updateMatrixWorld(true);
+    const group = new THREE.Group();
+    group.userData.isScarGroup = true;
+
+    for (const scar of scarMarkers) {
+      const scarTypeInfo = SCAR_TYPES[scar.type];
+      const color = new THREE.Color(scarTypeInfo.color);
+
+      const length = Math.max(scar.length || 0.08, 0.04);
+      const width = Math.max(scar.width || 0.03, 0.015);
+      const scarGeo = new THREE.SphereGeometry(1, 12, 8);
+      scarGeo.scale(length / 2, width / 2, width / 3);
+
+      const scarMat = new THREE.MeshPhongMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.6 + (scar.severity / 5) * 0.3,
+        emissive: color,
+        emissiveIntensity: 0.2,
+        side: THREE.DoubleSide,
+      });
+
+      const scarMesh = new THREE.Mesh(scarGeo, scarMat);
+      scarMesh.position.set(scar.position.x, scar.position.y, scar.position.z);
+
+      if (scar.orientation) {
+        scarMesh.rotation.z = (scar.orientation * Math.PI) / 180;
+      }
+
+      scarMesh.renderOrder = 992;
+      scarMesh.userData.scarId = scar.id;
+      scarMesh.userData.isScarMarker = true;
+      group.add(scarMesh);
+
+      const outlineGeo = new THREE.SphereGeometry(1, 12, 8);
+      outlineGeo.scale(length / 2 + 0.005, width / 2 + 0.005, width / 3 + 0.005);
+      const outlineMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.15,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const outlineMesh = new THREE.Mesh(outlineGeo, outlineMat);
+      outlineMesh.position.copy(scarMesh.position);
+      outlineMesh.rotation.copy(scarMesh.rotation);
+      outlineMesh.renderOrder = 991;
+      group.add(outlineMesh);
+    }
+
+    for (const band of adhesionBands) {
+      const start = new THREE.Vector3(band.startPosition.x, band.startPosition.y, band.startPosition.z);
+      const end = new THREE.Vector3(band.endPosition.x, band.endPosition.y, band.endPosition.z);
+      const tensionFactor = band.tensionLevel / 100;
+
+      const bandColor = new THREE.Color('#8b0000');
+      bandColor.lerp(new THREE.Color('#ff4444'), tensionFactor);
+
+      const dir = new THREE.Vector3().subVectors(end, start);
+      const segLen = dir.length();
+      const mid = new THREE.Vector3().lerpVectors(start, end, 0.5);
+      const radius = 0.006 + tensionFactor * 0.01;
+      const tubeGeo = new THREE.CylinderGeometry(radius, radius, segLen, 6, 1);
+      const tubeMat = new THREE.MeshPhongMaterial({
+        color: bandColor,
+        transparent: true,
+        opacity: 0.5 + tensionFactor * 0.4,
+        emissive: bandColor,
+        emissiveIntensity: tensionFactor * 0.3,
+      });
+      const tube = new THREE.Mesh(tubeGeo, tubeMat);
+      tube.position.copy(mid);
+      dir.normalize();
+      const up = new THREE.Vector3(0, 1, 0);
+      const quat = new THREE.Quaternion().setFromUnitVectors(up, dir);
+      tube.setRotationFromQuaternion(quat);
+      tube.renderOrder = 992;
+      tube.userData.adhesionId = band.id;
+      group.add(tube);
+
+      [start, end].forEach(pos => {
+        const dotGeo = new THREE.SphereGeometry(radius * 2, 8, 6);
+        const dotMat = new THREE.MeshBasicMaterial({
+          color: bandColor,
+          transparent: true,
+          opacity: 0.7,
+          depthWrite: false,
+        });
+        const dot = new THREE.Mesh(dotGeo, dotMat);
+        dot.position.copy(pos);
+        dot.renderOrder = 993;
+        group.add(dot);
+      });
+    }
+
+    scene.add(group);
+    scarMarkerGroupRef.current = group;
+  }, [scarMarkers, adhesionBands]);
 
   useEffect(() => {
     if (!sceneRef.current) return;

@@ -63,7 +63,8 @@ import {
   Shield,
   Layers,
   Network,
-  Radio
+  Radio,
+  Palette
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -88,6 +89,7 @@ import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighli
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { computeBidirectionalEffects, MUSCLE_JOINT_ACTIONS } from "@/lib/bidirectionalMuscleJoint";
+import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
@@ -363,6 +365,8 @@ export default function PhysioGPT() {
   const [chatPanelOpen, setChatPanelOpen] = useState(true);
   const [showJointControls, setShowJointControls] = useState(false);
   const [openControlSections, setOpenControlSections] = useState<Set<string>>(new Set());
+  const [environmentPreset, setEnvironmentPreset] = useState(DEFAULT_ENVIRONMENT);
+  const [showEnvironmentPicker, setShowEnvironmentPicker] = useState(false);
 
   const [selectedRegion, setSelectedRegion] = useState<keyof typeof BODY_REGIONS | null>(null);
   const [showSpecialTests, setShowSpecialTests] = useState(false);
@@ -2257,6 +2261,7 @@ ${ddxList}`;
               animationState={animationState}
               onAnimationProgress={handleAnimationProgress}
               animationConstraints={animationConstraints}
+              environmentPreset={environmentPreset}
             />
 
             <MovementPlayer
@@ -4427,6 +4432,54 @@ ${ddxList}`;
                 <SlidersHorizontal className="h-3 w-3 mr-1" />
                 Controls
               </Button>
+              <div className="relative">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={`h-7 text-xs shadow-sm ${showEnvironmentPicker ? 'bg-indigo-500 text-white hover:bg-indigo-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                  onClick={() => setShowEnvironmentPicker(!showEnvironmentPicker)}
+                >
+                  <Palette className="h-3 w-3 mr-1" />
+                  Scene
+                </Button>
+                {showEnvironmentPicker && (
+                  <div className="absolute bottom-full mb-2 left-0 bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl p-3 w-56 z-50 animate-in slide-in-from-bottom-2 duration-200">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-[11px] font-semibold text-white">Virtual Environment</span>
+                      <button onClick={() => setShowEnvironmentPicker(false)} className="text-gray-400 hover:text-white">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ENVIRONMENT_PRESETS.map(env => (
+                        <button
+                          key={env.id}
+                          onClick={() => {
+                            setEnvironmentPreset(env.id);
+                            setShowEnvironmentPicker(false);
+                          }}
+                          className={`group rounded-lg overflow-hidden border transition-all ${
+                            environmentPreset === env.id
+                              ? 'border-indigo-500 ring-1 ring-indigo-500/40'
+                              : 'border-gray-700/50 hover:border-gray-600'
+                          }`}
+                        >
+                          <div
+                            className="h-10 w-full"
+                            style={{ background: env.thumbnail }}
+                          />
+                          <div className={`px-2 py-1.5 ${environmentPreset === env.id ? 'bg-indigo-500/15' : 'bg-gray-800/80'}`}>
+                            <div className={`text-[10px] font-medium truncate ${environmentPreset === env.id ? 'text-indigo-300' : 'text-gray-300 group-hover:text-white'}`}>
+                              {env.name}
+                            </div>
+                            <div className="text-[8px] text-gray-500 truncate">{env.description}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <Button
                 variant="secondary"
                 size="sm"

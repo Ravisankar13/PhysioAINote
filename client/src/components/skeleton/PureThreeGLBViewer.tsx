@@ -11,6 +11,7 @@ import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscle
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
 import { classifyMuscleMeshes, setMuscleGroupVisibility, setAllMuscleGroupsVisibility, disposeMuscleGroups, MUSCLE_GROUPS, type SplitMuscleGroup } from '@/lib/muscleGroupSplitter';
 import { type MuscleStatesMap, getMuscleColor } from '@/lib/muscleBiomechanicsEngine';
+import { getEnvironmentPreset, type EnvironmentPreset } from '@/lib/environmentPresets';
 import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 
@@ -1268,6 +1269,7 @@ interface PureThreeGLBViewerProps {
   enableMuscleInteraction?: boolean;
   onMuscleGroupClick?: (groupId: string, screenX: number, screenY: number) => void;
   highlightMuscleGroups?: string[];
+  environmentPreset?: string;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -1692,6 +1694,7 @@ export default function PureThreeGLBViewer({
   enableMuscleInteraction = false,
   onMuscleGroupClick,
   highlightMuscleGroups,
+  environmentPreset = 'clinical_dark',
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -3587,7 +3590,11 @@ export default function PureThreeGLBViewer({
         const height = container.clientHeight || 400;
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a2e);
+        const envPreset = getEnvironmentPreset(environmentPreset);
+        scene.background = new THREE.Color(envPreset.background);
+        if (envPreset.fog) {
+          scene.fog = new THREE.Fog(envPreset.fog.color, envPreset.fog.near, envPreset.fog.far);
+        }
 
         const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
         // Use fixed camera position if provided, otherwise use preset
@@ -3619,16 +3626,19 @@ export default function PureThreeGLBViewer({
           setStatus('error');
         });
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        const ambientLight = new THREE.AmbientLight(envPreset.ambientLight.color, envPreset.ambientLight.intensity);
+        ambientLight.name = '__env_ambient';
         scene.add(ambientLight);
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(5, 10, 7.5);
+        const directionalLight = new THREE.DirectionalLight(envPreset.directionalLight.color, envPreset.directionalLight.intensity);
+        directionalLight.position.set(...envPreset.directionalLight.position);
         directionalLight.castShadow = true;
+        directionalLight.name = '__env_directional';
         scene.add(directionalLight);
 
-        const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
-        backLight.position.set(-5, -5, -5);
+        const backLight = new THREE.DirectionalLight(envPreset.backLight.color, envPreset.backLight.intensity);
+        backLight.position.set(...envPreset.backLight.position);
+        backLight.name = '__env_back';
         scene.add(backLight);
 
         const controls = new OrbitControls(camera, renderer.domElement);
@@ -3648,9 +3658,20 @@ export default function PureThreeGLBViewer({
         }
         controls.update();
 
-        const gridHelper = new THREE.GridHelper(10, 10, 0x333366, 0x222244);
+        const gridHelper = new THREE.GridHelper(envPreset.grid.size, envPreset.grid.divisions, envPreset.grid.color1, envPreset.grid.color2);
         gridHelper.position.set(-0.15, -1.2, 0);
+        gridHelper.name = '__env_grid';
         scene.add(gridHelper);
+
+        if (envPreset.floor) {
+          const floorGeo = new THREE.PlaneGeometry(envPreset.grid.size, envPreset.grid.size);
+          const floorMat = new THREE.MeshBasicMaterial({ color: envPreset.floor.color, transparent: true, opacity: envPreset.floor.opacity, side: THREE.DoubleSide });
+          const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+          floorMesh.rotation.x = -Math.PI / 2;
+          floorMesh.position.set(-0.15, -1.21, 0);
+          floorMesh.name = '__env_floor';
+          scene.add(floorMesh);
+        }
 
         renderer.render(scene, camera);
 
@@ -4055,6 +4076,67 @@ export default function PureThreeGLBViewer({
       }
     };
   }, [modelPath]);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene } = sceneRef.current;
+    const env = getEnvironmentPreset(environmentPreset);
+
+    scene.background = new THREE.Color(env.background);
+
+    if (env.fog) {
+      scene.fog = new THREE.Fog(env.fog.color, env.fog.near, env.fog.far);
+    } else {
+      scene.fog = null;
+    }
+
+    const ambient = scene.getObjectByName('__env_ambient') as THREE.AmbientLight | undefined;
+    if (ambient) {
+      ambient.color.set(env.ambientLight.color);
+      ambient.intensity = env.ambientLight.intensity;
+    }
+
+    const dir = scene.getObjectByName('__env_directional') as THREE.DirectionalLight | undefined;
+    if (dir) {
+      dir.color.set(env.directionalLight.color);
+      dir.intensity = env.directionalLight.intensity;
+      dir.position.set(...env.directionalLight.position);
+    }
+
+    const back = scene.getObjectByName('__env_back') as THREE.DirectionalLight | undefined;
+    if (back) {
+      back.color.set(env.backLight.color);
+      back.intensity = env.backLight.intensity;
+      back.position.set(...env.backLight.position);
+    }
+
+    const oldGrid = scene.getObjectByName('__env_grid') as THREE.GridHelper | undefined;
+    if (oldGrid) {
+      scene.remove(oldGrid);
+      oldGrid.geometry.dispose();
+      (oldGrid.material as THREE.Material).dispose();
+    }
+    const newGrid = new THREE.GridHelper(env.grid.size, env.grid.divisions, env.grid.color1, env.grid.color2);
+    newGrid.position.set(-0.15, -1.2, 0);
+    newGrid.name = '__env_grid';
+    scene.add(newGrid);
+
+    const oldFloor = scene.getObjectByName('__env_floor');
+    if (oldFloor) {
+      scene.remove(oldFloor);
+      if ((oldFloor as THREE.Mesh).geometry) (oldFloor as THREE.Mesh).geometry.dispose();
+      if ((oldFloor as THREE.Mesh).material) ((oldFloor as THREE.Mesh).material as THREE.Material).dispose();
+    }
+    if (env.floor) {
+      const floorGeo = new THREE.PlaneGeometry(env.grid.size, env.grid.size);
+      const floorMat = new THREE.MeshBasicMaterial({ color: env.floor.color, transparent: true, opacity: env.floor.opacity, side: THREE.DoubleSide });
+      const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+      floorMesh.rotation.x = -Math.PI / 2;
+      floorMesh.position.set(-0.15, -1.21, 0);
+      floorMesh.name = '__env_floor';
+      scene.add(floorMesh);
+    }
+  }, [environmentPreset]);
 
   // Update camera and controls when cameraAngle or disableControls props change
   useEffect(() => {

@@ -208,6 +208,8 @@ export function initializeLegIK(
     rightStandingAngles = computeStandingIKAngles(bones, LEG_IK_CONFIG.right, rightLegLengths, rightInitialFootPos);
   }
 
+  const initialized = !!(leftLegLengths && rightLegLengths && leftInitialFootPos && rightInitialFootPos);
+
   return {
     leftLegLengths,
     rightLegLengths,
@@ -215,7 +217,7 @@ export function initializeLegIK(
     rightInitialFootPos,
     leftStandingAngles,
     rightStandingAngles,
-    initialized: !!(leftLegLengths && rightLegLengths && leftInitialFootPos && rightInitialFootPos),
+    initialized,
   };
 }
 

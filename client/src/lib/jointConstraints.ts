@@ -298,16 +298,16 @@ const COMPENSATION_CHAINS: Array<{
     source: { joint: 'left_shoulder', movement: 'abduction' },
     compensators: [
       { joint: 'left_scapula', movement: 'upwardRotation', ratio: 0.3, loadIncrease: 25, note: 'Increased scapular upward rotation during abduction' },
-      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.2, loadIncrease: 25, note: 'Thoracic extension to assist lateral elevation' },
-      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.15, loadIncrease: 30, note: 'Lumbar side-bend and extension during abduction' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.3, loadIncrease: 25, note: 'Thoracic extension to assist lateral elevation' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Lumbar side-bend and extension during abduction' },
     ],
   },
   {
     source: { joint: 'right_shoulder', movement: 'abduction' },
     compensators: [
       { joint: 'right_scapula', movement: 'upwardRotation', ratio: 0.3, loadIncrease: 25, note: 'Increased scapular upward rotation during abduction' },
-      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.2, loadIncrease: 25, note: 'Thoracic extension to assist lateral elevation' },
-      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.15, loadIncrease: 30, note: 'Lumbar side-bend and extension during abduction' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.3, loadIncrease: 25, note: 'Thoracic extension to assist lateral elevation' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Lumbar side-bend and extension during abduction' },
     ],
   },
   // Shoulder internal rotation restriction → cervical, contralateral shoulder compensate
@@ -348,7 +348,7 @@ const COMPENSATION_CHAINS: Array<{
   {
     source: { joint: 'left_scapula', movement: 'upwardRotation' },
     compensators: [
-      { joint: 'left_shoulder', movement: 'flexion', ratio: 0.2, loadIncrease: 30, note: 'GH joint forced beyond normal range - risk of subacromial impingement' },
+      { joint: 'left_shoulder', movement: 'flexion', ratio: 0.2, loadIncrease: 25, note: 'GH joint forced beyond normal range - risk of subacromial impingement' },
       { joint: 'thoracic_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Thoracic extension compensating for scapular restriction' },
       { joint: 'lumbar_spine', movement: 'extension', ratio: 0.2, loadIncrease: 35, note: 'Lumbar hyperlordosis from scapular dysfunction' },
     ],
@@ -356,7 +356,7 @@ const COMPENSATION_CHAINS: Array<{
   {
     source: { joint: 'right_scapula', movement: 'upwardRotation' },
     compensators: [
-      { joint: 'right_shoulder', movement: 'flexion', ratio: 0.2, loadIncrease: 30, note: 'GH joint forced beyond normal range - risk of subacromial impingement' },
+      { joint: 'right_shoulder', movement: 'flexion', ratio: 0.2, loadIncrease: 25, note: 'GH joint forced beyond normal range - risk of subacromial impingement' },
       { joint: 'thoracic_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Thoracic extension compensating for scapular restriction' },
       { joint: 'lumbar_spine', movement: 'extension', ratio: 0.2, loadIncrease: 35, note: 'Lumbar hyperlordosis from scapular dysfunction' },
     ],

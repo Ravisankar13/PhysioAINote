@@ -4885,18 +4885,72 @@ export default function PureThreeGLBViewer({
       
       if (isClosedChainMovement && legIKStateRef.current) {
         const pelvisBone = bones['Root_M'] as THREE.Bone;
-        const totalLegLength = (legIKStateRef.current.leftLegLengths?.thighLength || 2) + 
-                                (legIKStateRef.current.leftLegLengths?.shinLength || 2);
+        const ikState = legIKStateRef.current;
+        const leftThigh = ikState.leftLegLengths?.thighLength || 0.5;
+        const leftShin = ikState.leftLegLengths?.shinLength || 0.5;
+        const rightThigh = ikState.rightLegLengths?.thighLength || 0.5;
+        const rightShin = ikState.rightLegLengths?.shinLength || 0.5;
+        const totalLegLength = leftThigh + leftShin;
+        
+        const dropFraction = Math.max(0, Math.min(1, pelvisDropValue / 100));
+        const dropAmount = dropFraction * totalLegLength * 0.55;
+        const zShiftFraction = pelvisZShiftValue / 100;
+        const footShiftAmount = zShiftFraction * totalLegLength * 0.35;
+        
         if (pelvisBone) {
           if (!(pelvisBone as any).initialPosition) {
             (pelvisBone as any).initialPosition = pelvisBone.position.clone();
           }
           const initialPos = (pelvisBone as any).initialPosition as THREE.Vector3;
-          const dropFraction = pelvisDropValue / 100;
-          const dropAmount = dropFraction * totalLegLength * 0.55;
           pelvisBone.position.y = initialPos.y - dropAmount;
           pelvisBone.position.z = initialPos.z;
         }
+        
+        const computeLegAngles = (thighL: number, shinL: number, drop: number, footZOffset: number): { hipAngle: number; kneeAngle: number } => {
+          if (drop < 0.001 && Math.abs(footZOffset) < 0.001) {
+            return { hipAngle: 0, kneeAngle: 0 };
+          }
+          const verticalDist = (thighL + shinL) - drop;
+          const hipToFoot = Math.sqrt(verticalDist * verticalDist + footZOffset * footZOffset);
+          const clampedDist = Math.max(Math.abs(thighL - shinL) + 0.01, Math.min(thighL + shinL - 0.01, hipToFoot));
+          
+          const cosKnee = (thighL * thighL + shinL * shinL - clampedDist * clampedDist) / (2 * thighL * shinL);
+          const kneeAngle = Math.PI - Math.acos(Math.max(-1, Math.min(1, cosKnee)));
+          
+          const cosHip = (thighL * thighL + clampedDist * clampedDist - shinL * shinL) / (2 * thighL * clampedDist);
+          const hipAngleFromTarget = Math.acos(Math.max(-1, Math.min(1, cosHip)));
+          
+          const footAngle = Math.atan2(footZOffset, verticalDist);
+          const hipAngle = hipAngleFromTarget + footAngle;
+          
+          return { hipAngle, kneeAngle };
+        };
+        
+        const leftAngles = computeLegAngles(leftThigh, leftShin, dropAmount, footShiftAmount);
+        const rightAngles = computeLegAngles(rightThigh, rightShin, dropAmount, -footShiftAmount);
+        
+        const legBones = [
+          { hip: 'Hip_L', knee: 'Knee_L', angles: leftAngles },
+          { hip: 'Hip_R', knee: 'Knee_R', angles: rightAngles },
+        ];
+        
+        legBones.forEach(({ hip, knee, angles }) => {
+          const hipBone = bones[hip] as THREE.Bone;
+          const kneeBone = bones[knee] as THREE.Bone;
+          const hipInitial = initialRotations[hip];
+          const kneeInitial = initialRotations[knee];
+          
+          if (hipBone && hipInitial) {
+            hipBone.rotation.x = hipInitial.x;
+            hipBone.rotation.y = hipInitial.y;
+            hipBone.rotation.z = hipInitial.z + angles.hipAngle;
+          }
+          if (kneeBone && kneeInitial) {
+            kneeBone.rotation.x = kneeInitial.x;
+            kneeBone.rotation.y = kneeInitial.y;
+            kneeBone.rotation.z = kneeInitial.z - angles.kneeAngle;
+          }
+        });
         
         const pelvisBoneNames = ['Root_M', 'RootPart1_M', 'RootPart2_M'];
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
@@ -4909,54 +4963,6 @@ export default function PureThreeGLBViewer({
             }
           }
         });
-        
-        if (pelvisBone) {
-          pelvisBone.updateMatrixWorld(true);
-        }
-        
-        const ikInitialRotations: { [name: string]: { x: number; y: number; z: number } } = {};
-        Object.entries(initialRotations).forEach(([name, euler]) => {
-          ikInitialRotations[name] = { x: euler.x, y: euler.y, z: euler.z };
-        });
-        
-        const ikState = legIKStateRef.current;
-        const zShiftFraction = pelvisZShiftValue / 100;
-        const footShiftAmount = zShiftFraction * totalLegLength * 0.35;
-        
-        if (Math.abs(footShiftAmount) > 0.001 && ikState.leftInitialFootPos && ikState.rightInitialFootPos) {
-          const leftFootTarget = ikState.leftInitialFootPos.clone();
-          const rightFootTarget = ikState.rightInitialFootPos.clone();
-          
-          leftFootTarget.z += footShiftAmount;
-          rightFootTarget.z -= footShiftAmount;
-          
-          if (ikState.leftLegLengths) {
-            applyLegIK(
-              bones as { [name: string]: THREE.Bone },
-              ikInitialRotations,
-              LEG_IK_CONFIG.left,
-              leftFootTarget,
-              ikState.leftLegLengths,
-              ikState.leftStandingAngles
-            );
-          }
-          if (ikState.rightLegLengths) {
-            applyLegIK(
-              bones as { [name: string]: THREE.Bone },
-              ikInitialRotations,
-              LEG_IK_CONFIG.right,
-              rightFootTarget,
-              ikState.rightLegLengths,
-              ikState.rightStandingAngles
-            );
-          }
-        } else {
-          applySquatIK(
-            bones as { [name: string]: THREE.Bone },
-            ikInitialRotations,
-            ikState
-          );
-        }
         
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
           if (boneName.includes('Hip') || boneName.includes('Knee') || boneName.includes('Toes') || boneName.includes('Ankle')) {

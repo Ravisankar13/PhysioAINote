@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight, PersonStanding } from 'lucide-react';
 import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, type MovementSequence } from '@/lib/movementSequences';
-import { calculateCompensations, computePostureDeviations, NORMAL_ROM, type JointConstraint, type ClinicalWarning } from '@/lib/jointConstraints';
+import { calculateCompensations, computePostureDeviations, NORMAL_ROM, type JointConstraint, type ClinicalWarning, type CompensationResult } from '@/lib/jointConstraints';
 import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
 
 type PostureConfig = Record<string, Record<string, number | undefined> | undefined>;
@@ -42,10 +42,11 @@ interface MovementPlayerProps {
   animationState: AnimationState;
   onAnimationStateChange: (state: AnimationState) => void;
   onConstraintsChange?: (constraints: AnimationConstraint[]) => void;
+  onCompensationChange?: (result: CompensationResult | null, movementName: string | null, restrictions: Record<string, number>) => void;
   modelConfig?: PostureConfig;
 }
 
-export default function MovementPlayer({ animationState, onAnimationStateChange, onConstraintsChange, modelConfig }: MovementPlayerProps) {
+export default function MovementPlayer({ animationState, onAnimationStateChange, onConstraintsChange, onCompensationChange, modelConfig }: MovementPlayerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showRestrictions, setShowRestrictions] = useState(false);
@@ -203,6 +204,12 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
     if (jointConstraints.length === 0) return null;
     return calculateCompensations(jointConstraints, postureContext);
   }, [restrictions, animationState.currentMovement, postureContext]);
+
+  useEffect(() => {
+    if (!onCompensationChange) return;
+    const movementName = currentMovement?.name || null;
+    onCompensationChange(compensationResult, movementName, restrictions);
+  }, [compensationResult, currentMovement, restrictions, onCompensationChange]);
 
   const speedPresets = [0.25, 0.5, 1, 1.5, 2];
 

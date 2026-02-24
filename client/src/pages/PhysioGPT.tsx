@@ -74,6 +74,7 @@ import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState, AnimationConstraint } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
 import MovementPlayer from "@/components/skeleton/MovementPlayer";
+import type { CompensationResult } from "@/lib/jointConstraints";
 import FocusedCameraCapture, { type FocusedCameraResult, type FocusedRegion, FOCUSED_REGIONS } from "@/components/skeleton/FocusedCameraCapture";
 import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
@@ -443,6 +444,7 @@ export default function PhysioGPT() {
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const lastReasoningTriggerRef = useRef<string>('');
+  const compensationDataRef = useRef<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const voiceSpeechRecRef = useRef<any>(null);
   const voiceTranscriptRef = useRef('');
@@ -1897,13 +1899,30 @@ ${ddxList}`;
       .filter((s: any) => s.detected)
       .map((s: any) => ({ name: s.name, description: s.description }));
 
+    const compData = compensationDataRef.current;
+    const compensationSummary = compData.result && compData.result.patterns.length > 0 ? {
+      movementName: compData.movementName,
+      restrictions: Object.entries(compData.restrictions).filter(([_, v]) => v !== undefined).map(([k, v]) => ({ joint_movement: k, maxROM: v })),
+      compensations: compData.result.patterns.map(p => ({
+        source: `${p.sourceJoint}:${p.sourceMovement}`,
+        compensator: `${p.compensatingJoint}:${p.compensatingMovement}`,
+        additionalLoad: Math.round(p.additionalLoad),
+        ratio: Math.round(p.compensationRatio * 100),
+        note: p.clinicalNote,
+      })),
+      overloadedStructures: compData.result.overloadedStructures,
+      clinicalWarnings: compData.result.clinicalWarnings.map(w => `[${w.severity.toUpperCase()}] ${w.message}`),
+      postureNotes: compData.result.postureNotes,
+    } : null;
+
     const triggerKey = JSON.stringify({
       markers: markerData,
       history: subjectiveHistoryRef.current,
       posture: postureDeviations.map(d => `${d.region}.${d.parameter}:${d.value}`).join(','),
+      compensation: compensationSummary ? JSON.stringify(compensationSummary.restrictions) : '',
     });
     if (!forceRefresh && triggerKey === lastReasoningTriggerRef.current) return;
-    if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0) return;
+    if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
 
     lastReasoningTriggerRef.current = triggerKey;
     setClinicalReasoningProcessing(true);
@@ -1922,6 +1941,7 @@ ${ddxList}`;
           forceAnalysis: forcesSummary,
           muscleAnalysis: muscleSummary,
           detectedSyndromes: syndromeSummary,
+          compensationAnalysis: compensationSummary,
         }),
       });
 
@@ -1985,6 +2005,17 @@ ${ddxList}`;
     lastReasoningTriggerRef.current = '';
     triggerClinicalReasoningAnalysis(true);
   }, [subjectiveHistoryInput, triggerClinicalReasoningAnalysis]);
+
+  const handleCompensationChange = useCallback((result: CompensationResult | null, movementName: string | null, restrictions: Record<string, number>) => {
+    compensationDataRef.current = { result, movementName, restrictions };
+    if (!result || result.patterns.length === 0) return;
+    if (clinicalReasoningTimerRef.current) {
+      clearTimeout(clinicalReasoningTimerRef.current);
+    }
+    clinicalReasoningTimerRef.current = setTimeout(() => {
+      triggerClinicalReasoningAnalysis(true);
+    }, 1500);
+  }, [triggerClinicalReasoningAnalysis]);
 
   const forceAnalysis = useMemo(() => {
     if (!forceMode) return null;
@@ -2199,6 +2230,7 @@ ${ddxList}`;
               animationState={animationState}
               onAnimationStateChange={setAnimationState}
               onConstraintsChange={setAnimationConstraints}
+              onCompensationChange={handleCompensationChange}
               modelConfig={modelConfig as any}
             />
 

@@ -6132,8 +6132,8 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
 
   app.post("/api/physiogpt/clinical-reasoning-analyze", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements, postureDeviations, forceAnalysis, muscleAnalysis, detectedSyndromes } = req.body;
-      if (!painMarkers && !skeletonConfig && !subjectiveHistory && !postureDeviations) {
+      const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements, postureDeviations, forceAnalysis, muscleAnalysis, detectedSyndromes, compensationAnalysis } = req.body;
+      if (!painMarkers && !skeletonConfig && !subjectiveHistory && !postureDeviations && !compensationAnalysis) {
         return res.status(400).json({ error: "At least one clinical input is required" });
       }
 
@@ -6174,9 +6174,26 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
         ? `\n\nDETECTED SYNDROMES:\n${detectedSyndromes.map((s: any) => `- ${s.name}: ${s.description}`).join('\n')}`
         : '';
 
+      let compensationContext = '';
+      if (compensationAnalysis) {
+        const ca = compensationAnalysis;
+        const restrictionLines = (ca.restrictions || []).map((r: any) => `  - ${r.joint_movement}: restricted to ${r.maxROM}°`).join('\n');
+        const compLines = (ca.compensations || []).map((c: any) => `  - ${c.source} restricted → ${c.compensator} compensating (+${c.additionalLoad}% load, ${c.ratio}% ratio)\n    Clinical note: ${c.note}`).join('\n');
+        const structureList = (ca.overloadedStructures || []).join(', ');
+        const warningLines = (ca.clinicalWarnings || []).map((w: string) => `  - ${w}`).join('\n');
+        const postureLines = (ca.postureNotes || []).map((n: string) => `  - ${n}`).join('\n');
+
+        compensationContext = `\n\nMOVEMENT COMPENSATION ANALYSIS (Movement: ${ca.movementName || 'Unknown'}):\n` +
+          `Joint Restrictions Applied:\n${restrictionLines}\n\n` +
+          `Active Compensatory Patterns:\n${compLines}\n\n` +
+          `At-Risk / Overloaded Structures: ${structureList}\n\n` +
+          (warningLines ? `Clinical Warnings:\n${warningLines}\n\n` : '') +
+          (postureLines ? `Posture-Compensation Interactions:\n${postureLines}\n` : '');
+      }
+
       const prompt = `You are an expert musculoskeletal physiotherapist performing a comprehensive clinical reasoning analysis. Analyze ALL provided clinical data and produce a complete assessment with treatment plan. Pay special attention to posture deviations and their biomechanical consequences.
 
-${markerContext}${skeletonContext}${historyContext}${romContext}${postureContext}${forceContext}${muscleContext}${syndromeContext}
+${markerContext}${skeletonContext}${historyContext}${romContext}${postureContext}${forceContext}${muscleContext}${syndromeContext}${compensationContext}
 
 Return ONLY valid JSON with this structure:
 {
@@ -6255,7 +6272,8 @@ GUIDELINES:
 - Be specific about manual therapy (e.g., "Maitland Grade III PA glide L4/5" not just "mobilization").
 - Include exact dosage parameters for exercises (sets, reps, hold times, frequency).
 - "posturalAnalysis": CRITICAL - If posture deviations, force data, or muscle analysis data is provided, you MUST analyze how these postural changes create biomechanical stress. For EACH significant posture deviation, explain the force impact on joints, the muscle adaptation, and how it connects to the patient's pain. Think like a biomechanist - trace the kinetic chain from the postural fault to the symptomatic region.
-- "posturalAnalysis.correlations": Create one correlation entry for each significant posture deviation. Even if there are no pain markers, explain the potential clinical consequences of the posture. If pain markers exist, explicitly connect posture to pain.`;
+- "posturalAnalysis.correlations": Create one correlation entry for each significant posture deviation. Even if there are no pain markers, explain the potential clinical consequences of the posture. If pain markers exist, explicitly connect posture to pain.
+- MOVEMENT COMPENSATION ANALYSIS: If movement compensation data is provided, this is CRITICAL clinical information. Analyze the full compensation chain: explain WHY the restricted joint causes the compensating joint to overload, WHAT anatomical structures are at risk (e.g., subacromial impingement from GH compensation, facet loading from lumbar compensation), and HOW the additional load percentages translate to clinical consequences. Integrate compensation findings into your hypotheses, biomechanical links, and treatment plan. The treatment should address BOTH the restricted joint AND protect the compensating structures.`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",

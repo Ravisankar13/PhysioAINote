@@ -169,6 +169,7 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
     description: 'Parallel squat with hip/knee/ankle flexion and feet planted on floor',
     duration: 4000,
     loop: true,
+    useIK: true,
     joints: [
       {
         joint: 'pelvis',
@@ -176,9 +177,9 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
         keyframes: [
           { time: 0, value: 0 },
           { time: 0.1, value: 5 },
-          { time: 0.35, value: 40 },
-          { time: 0.5, value: 55 },
-          { time: 0.65, value: 40 },
+          { time: 0.35, value: 45 },
+          { time: 0.5, value: 65 },
+          { time: 0.65, value: 45 },
           { time: 0.9, value: 5 },
           { time: 1, value: 0 },
         ],

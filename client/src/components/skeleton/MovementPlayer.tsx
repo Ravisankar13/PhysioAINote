@@ -6,9 +6,18 @@ import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
 
 type PostureConfig = Record<string, Record<string, number | undefined> | undefined>;
 
+function mapMovement(m: string): string {
+  const movementMap: Record<string, string> = {
+    'lateralFlexion': 'lateral_flexion',
+    'internalRotation': 'internal_rotation',
+    'externalRotation': 'external_rotation',
+  };
+  return movementMap[m] || m;
+}
+
 function mapToCompensationNames(animJoint: string, animMovement: string): { joint: string; movement: string } {
   if (animJoint === 'neck') {
-    return { joint: 'cervical_spine', movement: animMovement === 'lateralFlexion' ? 'lateral_flexion' : animMovement };
+    return { joint: 'cervical_spine', movement: mapMovement(animMovement) };
   }
   if (animJoint === 'spine') {
     if (animMovement === 'thoracicRotation') return { joint: 'thoracic_spine', movement: 'rotation' };
@@ -16,14 +25,17 @@ function mapToCompensationNames(animJoint: string, animMovement: string): { join
     if (animMovement === 'lateralFlexion') return { joint: 'thoracic_spine', movement: 'lateral_flexion' };
     if (animMovement === 'flexion') return { joint: 'lumbar_spine', movement: 'flexion' };
     if (animMovement === 'extension') return { joint: 'lumbar_spine', movement: 'extension' };
-    return { joint: 'thoracic_spine', movement: animMovement };
+    return { joint: 'thoracic_spine', movement: mapMovement(animMovement) };
   }
-  const movementMap: Record<string, string> = {
-    'lateralFlexion': 'lateral_flexion',
-    'internalRotation': 'internal_rotation',
-    'externalRotation': 'external_rotation',
+  const jointMap: Record<string, string> = {
+    'leftHip': 'left_hip', 'rightHip': 'right_hip',
+    'leftKnee': 'left_knee', 'rightKnee': 'right_knee',
+    'leftAnkle': 'left_ankle', 'rightAnkle': 'right_ankle',
+    'leftShoulder': 'left_shoulder', 'rightShoulder': 'right_shoulder',
+    'leftElbow': 'left_elbow', 'rightElbow': 'right_elbow',
+    'leftScapula': 'left_scapula', 'rightScapula': 'right_scapula',
   };
-  return { joint: animJoint, movement: movementMap[animMovement] || animMovement };
+  return { joint: jointMap[animJoint] || animJoint, movement: mapMovement(animMovement) };
 }
 
 interface MovementPlayerProps {

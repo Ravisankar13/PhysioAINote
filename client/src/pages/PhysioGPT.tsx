@@ -5489,6 +5489,12 @@ ${ddxList}`;
         onToggle={() => setClinicalReasoningOpen(!clinicalReasoningOpen)}
         onClose={() => setClinicalReasoningOpen(false)}
         onPauseToggle={() => setClinicalReasoningPaused(prev => !prev)}
+        onReset={() => {
+          setClinicalReasoningData(null);
+          setClinicalReasoningPaused(false);
+          lastReasoningTriggerRef.current = '';
+          setTimeout(() => triggerClinicalReasoningAnalysis(true), 100);
+        }}
         subjectiveHistory={subjectiveHistoryInput}
         onSubjectiveHistoryChange={setSubjectiveHistoryInput}
         onSubjectiveHistorySubmit={handleSubjectiveHistorySubmit}

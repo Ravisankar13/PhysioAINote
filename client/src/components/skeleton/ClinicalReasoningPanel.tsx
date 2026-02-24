@@ -31,6 +31,7 @@ import {
   Copy,
   ClipboardCheck,
   ScrollText,
+  RotateCcw,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -161,6 +162,7 @@ interface ClinicalReasoningPanelProps {
   onToggle: () => void;
   onClose: () => void;
   onPauseToggle: () => void;
+  onReset?: () => void;
   subjectiveHistory: string;
   onSubjectiveHistoryChange: (text: string) => void;
   onSubjectiveHistorySubmit: () => void;
@@ -329,6 +331,7 @@ export default function ClinicalReasoningPanel({
   onToggle,
   onClose,
   onPauseToggle,
+  onReset,
   subjectiveHistory,
   onSubjectiveHistoryChange,
   onSubjectiveHistorySubmit,
@@ -453,6 +456,15 @@ export default function ClinicalReasoningPanel({
                 <Loader2 className="h-2.5 w-2.5 animate-spin text-cyan-400" />
                 <span className="text-[9px] text-cyan-400">Analyzing</span>
               </div>
+            )}
+            {onReset && (
+              <button
+                onClick={onReset}
+                className="p-1 rounded hover:bg-white/10 text-gray-500 hover:text-cyan-400 transition-colors"
+                title="Reset & restart analysis"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
             )}
             <button
               onClick={onPauseToggle}

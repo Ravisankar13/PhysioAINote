@@ -36,7 +36,6 @@ export function solveTwoBoneIK(
   targetFootPos: THREE.Vector3,
   thighLength: number,
   shinLength: number,
-  poleVector: THREE.Vector3 = new THREE.Vector3(0, 0, 1)
 ): IKResult {
   const targetDistance = hipWorldPos.distanceTo(targetFootPos);
   const totalLength = thighLength + shinLength;
@@ -85,7 +84,6 @@ export function calculateLegLengths(
   const footBone = bones[config.footBoneName];
 
   if (!hipBone || !shinBone || !footBone) {
-    console.warn('IK: Missing bones for leg IK', config);
     return null;
   }
 
@@ -138,16 +136,15 @@ export function applyLegIK(
   legLengths: { thighLength: number; shinLength: number },
   standingAngles: IKResult
 ): void {
-  const hipBone = bones[config.hipBoneName];
   const thighBone = bones[config.thighBoneName];
   const shinBone = bones[config.shinBoneName];
 
-  if (!hipBone || !thighBone || !shinBone) {
+  if (!thighBone || !shinBone) {
     return;
   }
 
   const hipWorldPos = new THREE.Vector3();
-  hipBone.getWorldPosition(hipWorldPos);
+  thighBone.getWorldPosition(hipWorldPos);
   const targetFootPos = initialFootPosition.clone();
 
   const ikResult = solveTwoBoneIK(
@@ -167,48 +164,18 @@ export function applyLegIK(
   const thighInitial = initialRotations[config.thighBoneName];
   const shinInitial = initialRotations[config.shinBoneName];
 
-  if (thighInitial && thighBone.parent) {
-    thighBone.parent.updateWorldMatrix(true, false);
-    const parentWorldQ = new THREE.Quaternion();
-    thighBone.parent.getWorldQuaternion(parentWorldQ);
-    const parentWorldQInv = parentWorldQ.clone().invert();
-
-    const worldFlexAxis = new THREE.Vector3(-1, 0, 0);
-    const localFlexAxis = worldFlexAxis.clone().applyQuaternion(parentWorldQInv).normalize();
-
-    const qInit = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(thighInitial.x, thighInitial.y, thighInitial.z, 'XYZ')
-    );
-    const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexAxis, deltaHipAngle);
-    const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
-    const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
-
-    thighBone.rotation.x = eulerResult.x;
-    thighBone.rotation.y = eulerResult.y;
-    thighBone.rotation.z = eulerResult.z;
+  if (thighInitial) {
+    thighBone.rotation.x = thighInitial.x;
+    thighBone.rotation.y = thighInitial.y;
+    thighBone.rotation.z = thighInitial.z + deltaHipAngle;
   }
 
   thighBone.updateWorldMatrix(true, false);
 
-  if (shinInitial && shinBone.parent) {
-    shinBone.parent.updateWorldMatrix(true, false);
-    const parentWorldQ = new THREE.Quaternion();
-    shinBone.parent.getWorldQuaternion(parentWorldQ);
-    const parentWorldQInv = parentWorldQ.clone().invert();
-
-    const worldFlexAxis = new THREE.Vector3(-1, 0, 0);
-    const localFlexAxis = worldFlexAxis.clone().applyQuaternion(parentWorldQInv).normalize();
-
-    const qInit = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(shinInitial.x, shinInitial.y, shinInitial.z, 'XYZ')
-    );
-    const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexAxis, -deltaKneeAngle);
-    const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
-    const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
-
-    shinBone.rotation.x = eulerResult.x;
-    shinBone.rotation.y = eulerResult.y;
-    shinBone.rotation.z = eulerResult.z;
+  if (shinInitial) {
+    shinBone.rotation.x = shinInitial.x;
+    shinBone.rotation.y = shinInitial.y;
+    shinBone.rotation.z = shinInitial.z - deltaKneeAngle;
   }
 }
 
@@ -240,15 +207,6 @@ export function initializeLegIK(
   if (rightLegLengths && rightInitialFootPos) {
     rightStandingAngles = computeStandingIKAngles(bones, LEG_IK_CONFIG.right, rightLegLengths, rightInitialFootPos);
   }
-
-  console.log('IK initialized:', {
-    leftLegLengths,
-    rightLegLengths,
-    leftInitialFootPos: leftInitialFootPos?.toArray(),
-    rightInitialFootPos: rightInitialFootPos?.toArray(),
-    leftStandingAngles,
-    rightStandingAngles,
-  });
 
   return {
     leftLegLengths,

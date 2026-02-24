@@ -4897,15 +4897,6 @@ export default function PureThreeGLBViewer({
         const zShiftFraction = pelvisZShiftValue / 100;
         const footShiftAmount = zShiftFraction * totalLegLength * 0.35;
         
-        if (pelvisBone) {
-          if (!(pelvisBone as any).initialPosition) {
-            (pelvisBone as any).initialPosition = pelvisBone.position.clone();
-          }
-          const initialPos = (pelvisBone as any).initialPosition as THREE.Vector3;
-          pelvisBone.position.y = initialPos.y - dropAmount;
-          pelvisBone.position.z = initialPos.z;
-        }
-        
         const computeLegAngles = (thighL: number, shinL: number, drop: number, footZOffset: number): { hipAngle: number; kneeAngle: number } => {
           if (drop < 0.001 && Math.abs(footZOffset) < 0.001) {
             return { hipAngle: 0, kneeAngle: 0 };
@@ -4929,26 +4920,74 @@ export default function PureThreeGLBViewer({
         const leftAngles = computeLegAngles(leftThigh, leftShin, dropAmount, footShiftAmount);
         const rightAngles = computeLegAngles(rightThigh, rightShin, dropAmount, -footShiftAmount);
         
+        if (pelvisBone) {
+          if (!(pelvisBone as any).initialPosition) {
+            (pelvisBone as any).initialPosition = pelvisBone.position.clone();
+          }
+          const initialPos = (pelvisBone as any).initialPosition as THREE.Vector3;
+          pelvisBone.position.y = initialPos.y - dropAmount;
+          
+          const leftShinAngle = leftAngles.hipAngle - leftAngles.kneeAngle;
+          const rightShinAngle = rightAngles.hipAngle - rightAngles.kneeAngle;
+          const avgAnkleZ = 0.5 * (
+            leftThigh * Math.sin(leftAngles.hipAngle) + leftShin * Math.sin(leftShinAngle) +
+            rightThigh * Math.sin(rightAngles.hipAngle) + rightShin * Math.sin(rightShinAngle)
+          );
+          pelvisBone.position.z = initialPos.z - avgAnkleZ;
+        }
+        
+        const applyFlexionQuaternion = (
+          bone: THREE.Bone, 
+          initial: { x: number; y: number; z: number }, 
+          angle: number
+        ) => {
+          if (Math.abs(angle) < 0.001) {
+            bone.rotation.set(initial.x, initial.y, initial.z);
+            return;
+          }
+          if (!bone.parent) {
+            bone.rotation.set(initial.x, initial.y, initial.z);
+            return;
+          }
+          bone.parent.updateWorldMatrix(true, false);
+          const parentWorldQ = new THREE.Quaternion();
+          bone.parent.getWorldQuaternion(parentWorldQ);
+          const parentWorldQInv = parentWorldQ.clone().invert();
+          const worldFlexAxis = new THREE.Vector3(-1, 0, 0);
+          const localFlexAxis = worldFlexAxis.clone().applyQuaternion(parentWorldQInv).normalize();
+          const qInit = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+          );
+          const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexAxis, angle);
+          const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
+          const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
+          bone.rotation.set(eulerResult.x, eulerResult.y, eulerResult.z);
+        };
+        
         const legBones = [
-          { hip: 'Hip_L', knee: 'Knee_L', angles: leftAngles },
-          { hip: 'Hip_R', knee: 'Knee_R', angles: rightAngles },
+          { hip: 'Hip_L', knee: 'Knee_L', ankle: 'Ankle_L', angles: leftAngles },
+          { hip: 'Hip_R', knee: 'Knee_R', ankle: 'Ankle_R', angles: rightAngles },
         ];
         
-        legBones.forEach(({ hip, knee, angles }) => {
+        legBones.forEach(({ hip, knee, ankle, angles }) => {
           const hipBone = bones[hip] as THREE.Bone;
           const kneeBone = bones[knee] as THREE.Bone;
+          const ankleBone = bones[ankle] as THREE.Bone;
           const hipInitial = initialRotations[hip];
           const kneeInitial = initialRotations[knee];
+          const ankleInitial = initialRotations[ankle];
           
           if (hipBone && hipInitial) {
-            hipBone.rotation.x = hipInitial.x;
-            hipBone.rotation.y = hipInitial.y;
-            hipBone.rotation.z = hipInitial.z + angles.hipAngle;
+            applyFlexionQuaternion(hipBone, hipInitial, angles.hipAngle);
+            hipBone.updateWorldMatrix(true, false);
           }
           if (kneeBone && kneeInitial) {
-            kneeBone.rotation.x = kneeInitial.x;
-            kneeBone.rotation.y = kneeInitial.y;
-            kneeBone.rotation.z = kneeInitial.z - angles.kneeAngle;
+            applyFlexionQuaternion(kneeBone, kneeInitial, -angles.kneeAngle);
+            kneeBone.updateWorldMatrix(true, false);
+          }
+          if (ankleBone && ankleInitial) {
+            const ankleDorsiflexion = angles.kneeAngle - angles.hipAngle;
+            applyFlexionQuaternion(ankleBone, ankleInitial, ankleDorsiflexion);
           }
         });
         

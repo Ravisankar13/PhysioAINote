@@ -374,6 +374,10 @@ export default function PhysioGPT() {
     speed: 1,
   });
   const [animationConstraints, setAnimationConstraints] = useState<AnimationConstraint[]>([]);
+  const handleAnimationProgress = useCallback((progress: number) => {
+    const rounded = Math.round(progress * 1000) / 1000;
+    setAnimationState(prev => prev.progress === rounded ? prev : { ...prev, progress: rounded });
+  }, []);
   const [clinicalHighlights, setClinicalHighlights] = useState<RegionHighlight[]>([]);
   const [painMarkers, setPainMarkers] = useState<PainMarker[]>([]);
   const [painMarkerMode, setPainMarkerMode] = useState(false);
@@ -2223,6 +2227,7 @@ ${ddxList}`;
               }}
               highlightMuscleGroups={biomechanicalMuscleHighlights.length > 0 ? biomechanicalMuscleHighlights : undefined}
               animationState={animationState}
+              onAnimationProgress={handleAnimationProgress}
               animationConstraints={animationConstraints}
             />
 

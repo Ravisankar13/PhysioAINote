@@ -1213,6 +1213,7 @@ interface PureThreeGLBViewerProps {
   modelConfig?: ModelConfig;
   className?: string;
   animationState?: AnimationState;
+  onAnimationProgress?: (progress: number) => void;
   onAnimationFrame?: (jointValues: { [key: string]: { [prop: string]: number } }) => void;
   jointLimits?: JointLimits;
   biomechanicsData?: BiomechanicsVisualizationData;
@@ -1645,6 +1646,7 @@ export default function PureThreeGLBViewer({
   modelConfig,
   className = '',
   animationState,
+  onAnimationProgress,
   onAnimationFrame,
   jointLimits,
   biomechanicsData,
@@ -1709,6 +1711,8 @@ export default function PureThreeGLBViewer({
   const muscleMeshesRef = useRef<THREE.Object3D[]>([]);
   const splitMuscleGroupsRef = useRef<Map<string, SplitMuscleGroup>>(new Map());
   const animationConstraintsRef = useRef<AnimationConstraint[]>([]);
+  const animationProgressRef = useRef<{ callback: ((p: number) => void) | undefined; lastReport: number }>({ callback: onAnimationProgress, lastReport: 0 });
+  animationProgressRef.current.callback = onAnimationProgress;
   const livePoseActiveRef = useRef<boolean>(false);
   const animationPlayingRef = useRef<boolean>(false);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
@@ -4970,6 +4974,12 @@ export default function PureThreeGLBViewer({
       
       if (onAnimationFrame) {
         onAnimationFrame(jointValues);
+      }
+      
+      const progressRef = animationProgressRef.current;
+      if (progressRef.callback && currentTime - progressRef.lastReport > 80) {
+        progressRef.lastReport = currentTime;
+        progressRef.callback(normalizedTime);
       }
       
       if (animationState.isPlaying) {

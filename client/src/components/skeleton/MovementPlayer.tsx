@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight, PersonStanding } from 'lucide-react';
+import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight, PersonStanding, Zap, TrendingUp } from 'lucide-react';
 import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, type MovementSequence } from '@/lib/movementSequences';
 import { calculateCompensations, computePostureDeviations, NORMAL_ROM, type JointConstraint, type ClinicalWarning, type CompensationResult } from '@/lib/jointConstraints';
+import { getMovementBiomechanics, computeRestrictionOverloads, type BiomechanicsSnapshot } from '@/lib/movementBiomechanics';
 import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
 
 type PostureConfig = Record<string, Record<string, number | undefined> | undefined>;
@@ -50,6 +51,7 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showRestrictions, setShowRestrictions] = useState(false);
+  const [showBiomechanics, setShowBiomechanics] = useState(false);
   const [restrictions, setRestrictions] = useState<Record<string, number>>({});
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -211,6 +213,16 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
     onCompensationChange(compensationResult, movementName, restrictions);
   }, [compensationResult, currentMovement, restrictions, onCompensationChange]);
 
+  const restrictionOverloads = useMemo(() => {
+    if (!compensationResult || compensationResult.patterns.length === 0) return undefined;
+    return computeRestrictionOverloads(compensationResult.patterns);
+  }, [compensationResult]);
+
+  const biomechanicsSnapshot = useMemo(() => {
+    if (!animationState.currentMovement) return null;
+    return getMovementBiomechanics(animationState.currentMovement, animationState.progress, restrictionOverloads);
+  }, [animationState.currentMovement, animationState.progress, restrictionOverloads]);
+
   const speedPresets = [0.25, 0.5, 1, 1.5, 2];
 
   return (
@@ -318,6 +330,19 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
             </button>
 
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              {currentMovement && (
+                <button
+                  onClick={() => setShowBiomechanics(!showBiomechanics)}
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
+                    showBiomechanics
+                      ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
+                      : 'bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-400'
+                  }`}
+                  title="Real-Time Biomechanics"
+                >
+                  <Zap className="w-4 h-4" />
+                </button>
+              )}
               {currentMovement && currentRestrictions.length > 0 && (
                 <button
                   onClick={() => setShowRestrictions(!showRestrictions)}
@@ -383,6 +408,102 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
                       {speed}x
                     </button>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showBiomechanics && biomechanicsSnapshot && (
+            <div className="mt-3 pt-3 border-t border-gray-700/50">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-3 h-3 text-emerald-400" />
+                  <span className="text-[10px] font-semibold text-emerald-300 uppercase tracking-wider">Live Biomechanics</span>
+                </div>
+                <span className="text-[9px] text-emerald-500/70 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded">{biomechanicsSnapshot.phase}</span>
+              </div>
+
+              <div className="mb-2.5">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <TrendingUp className="w-3 h-3 text-cyan-400" />
+                  <span className="text-[10px] font-medium text-cyan-300">Joint Forces</span>
+                  <span className="text-[9px] text-gray-600 ml-auto">% body weight</span>
+                </div>
+                <div className="space-y-1.5">
+                  {biomechanicsSnapshot.forces.map((f, i) => {
+                    const isHigh = f.forcePercent > 70;
+                    const isMod = f.forcePercent > 45;
+                    const overloaded = restrictionOverloads && restrictionOverloads[f.joint];
+                    return (
+                      <div key={i}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className={`text-[10px] font-medium ${overloaded ? 'text-red-300' : isHigh ? 'text-amber-300' : 'text-gray-400'}`}>
+                            {f.label}
+                            {overloaded ? <span className="text-red-400 text-[8px] ml-1">(+{Math.round(overloaded)}%)</span> : null}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[9px] font-mono ${overloaded ? 'text-red-400' : isHigh ? 'text-amber-400' : isMod ? 'text-cyan-400' : 'text-gray-500'}`}>
+                              {f.forcePercent}%
+                            </span>
+                            <span className="text-[8px] text-gray-600 italic">{f.direction}</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-150 ${
+                              overloaded ? 'bg-gradient-to-r from-red-500 to-red-400' :
+                              isHigh ? 'bg-gradient-to-r from-amber-500 to-amber-400' :
+                              isMod ? 'bg-gradient-to-r from-cyan-500 to-cyan-400' :
+                              'bg-gradient-to-r from-emerald-600 to-emerald-500'
+                            }`}
+                            style={{ width: `${Math.min(f.forcePercent, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Activity className="w-3 h-3 text-violet-400" />
+                  <span className="text-[10px] font-medium text-violet-300">Muscle Activation</span>
+                </div>
+                <div className="space-y-1.5">
+                  {biomechanicsSnapshot.muscles.map((m, i) => {
+                    const roleColors: Record<string, string> = {
+                      agonist: 'text-emerald-400',
+                      antagonist: 'text-blue-400',
+                      stabilizer: 'text-violet-400',
+                      synergist: 'text-cyan-400',
+                    };
+                    const barColors: Record<string, string> = {
+                      agonist: 'bg-gradient-to-r from-emerald-600 to-emerald-400',
+                      antagonist: 'bg-gradient-to-r from-blue-600 to-blue-400',
+                      stabilizer: 'bg-gradient-to-r from-violet-600 to-violet-400',
+                      synergist: 'bg-gradient-to-r from-cyan-600 to-cyan-400',
+                    };
+                    return (
+                      <div key={i}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[10px] font-medium text-gray-400">{m.muscle}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[9px] font-mono ${roleColors[m.role] || 'text-gray-500'}`}>
+                              {m.activationPercent}%
+                            </span>
+                            <span className={`text-[8px] italic ${roleColors[m.role] || 'text-gray-600'}`}>{m.role}</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-150 ${barColors[m.role] || 'bg-gray-600'}`}
+                            style={{ width: `${Math.min(m.activationPercent, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

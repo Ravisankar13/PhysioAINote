@@ -86,7 +86,8 @@ import { pdfGenerator } from "@/services/pdfGenerator";
 import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink } from "@/components/skeleton/ClinicalReasoningPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
-import { computeFullMuscleAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority } from "@/lib/muscleBiomechanicsEngine";
+import { computeFullMuscleAnalysis, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
+import { computeBidirectionalEffects, MUSCLE_JOINT_ACTIONS } from "@/lib/bidirectionalMuscleJoint";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
@@ -393,6 +394,7 @@ export default function PhysioGPT() {
   const [muscleStatusFilter, setMuscleStatusFilter] = useState<string | null>(null);
   const [showMuscleExercises, setShowMuscleExercises] = useState<string | null>(null);
   const [clickedMusclePopup, setClickedMusclePopup] = useState<{ groupId: string; screenX: number; screenY: number } | null>(null);
+  const [muscleOverrides, setMuscleOverrides] = useState<Record<string, MuscleOverride>>({});
   const [showBalanceRatios, setShowBalanceRatios] = useState(false);
   const [showTreatmentPriority, setShowTreatmentPriority] = useState(false);
   const [chainExplorerMode, setChainExplorerMode] = useState(false);
@@ -2021,34 +2023,60 @@ ${ddxList}`;
     }, 1500);
   }, [triggerClinicalReasoningAnalysis]);
 
+  const muscleDrivenEffects = useMemo(() => {
+    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
+    if (!hasManualOverrides) return null;
+    return computeBidirectionalEffects(muscleOverrides, modelConfig);
+  }, [muscleOverrides, modelConfig]);
+
+  const effectiveModelConfig = useMemo(() => {
+    if (!muscleDrivenEffects) return modelConfig;
+    const config = JSON.parse(JSON.stringify(modelConfig));
+    for (const [joint, params] of Object.entries(muscleDrivenEffects.jointAdjustments)) {
+      if (!config[joint]) config[joint] = {};
+      for (const [param, value] of Object.entries(params)) {
+        const current = config[joint][param] || 0;
+        config[joint][param] = current + value;
+      }
+    }
+    for (const [joint, params] of Object.entries(muscleDrivenEffects.couplingEffects)) {
+      if (!config[joint]) config[joint] = {};
+      for (const [param, value] of Object.entries(params)) {
+        const current = config[joint][param] || 0;
+        config[joint][param] = current + value;
+      }
+    }
+    return config;
+  }, [modelConfig, muscleDrivenEffects]);
+
   const forceAnalysis = useMemo(() => {
     if (!forceMode) return null;
-    const result = calculatePosturalForces(modelConfig);
+    const result = calculatePosturalForces(effectiveModelConfig);
     if (enabledForceJoints.size === 0 && result.joints.length > 0) {
       const defaultEnabled = new Set(result.joints.map(j => j.id));
       setEnabledForceJoints(defaultEnabled);
     }
     return result;
-  }, [modelConfig, forceMode]);
+  }, [effectiveModelConfig, forceMode]);
 
   const muscleAnalysis = useMemo(() => {
     if (!muscleMode) return null;
-    const result = computeFullMuscleAnalysis(modelConfig);
-    if (enabledMuscleGroups.size === 0 && result.groups.length > 0) {
-      setEnabledMuscleGroups(new Set(result.groups.map(g => g.id)));
+    const base = computeFullMuscleAnalysis(modelConfig);
+    if (enabledMuscleGroups.size === 0 && base.groups.length > 0) {
+      setEnabledMuscleGroups(new Set(base.groups.map(g => g.id)));
     }
-    return result;
-  }, [modelConfig, muscleMode]);
+    return applyOverridesToAnalysis(base, muscleOverrides);
+  }, [modelConfig, muscleMode, muscleOverrides]);
 
   const weightDistribution = useMemo(() => {
     if (!forceMode) return null;
-    return computeWeightDistribution(modelConfig, bodyWeightKg);
-  }, [modelConfig, forceMode, bodyWeightKg]);
+    return computeWeightDistribution(effectiveModelConfig, bodyWeightKg);
+  }, [effectiveModelConfig, forceMode, bodyWeightKg]);
 
   const correlationResult = useMemo(() => {
     if (!correlationMode && !chainIntegrityMode && !chainExplorerMode) return null;
-    const forces = calculatePosturalForces(modelConfig);
-    const muscles = computeFullMuscleAnalysis(modelConfig);
+    const forces = calculatePosturalForces(effectiveModelConfig);
+    const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
     return computeCrossSystemCorrelation({
       painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
       forces: forces.joints,
@@ -2447,11 +2475,23 @@ ${ddxList}`;
               const containerRect = skeletonContainerRef.current?.getBoundingClientRect();
               const popupX = containerRect ? clickedMusclePopup.screenX - containerRect.left : clickedMusclePopup.screenX;
               const popupY = containerRect ? clickedMusclePopup.screenY - containerRect.top : clickedMusclePopup.screenY;
-              const clampedX = Math.min(Math.max(popupX, 10), (containerRect?.width || 600) - 290);
+              const clampedX = Math.min(Math.max(popupX, 10), (containerRect?.width || 600) - 310);
               const clampedY = Math.min(Math.max(popupY, 10), (containerRect?.height || 400) - 200);
+              const groupHasOverrides = group.muscles.some(m => muscleOverrides[m.id]?.isManual);
+              const updateOverride = (muscleId: string, partial: Partial<MuscleOverride>) => {
+                setMuscleOverrides(prev => {
+                  const existing = prev[muscleId] || { tensionOffset: 0, activationOffset: 0, lengthOverride: 'none' as LengthOverride, inhibition: 0, pathology: 'none' as PathologyType, isManual: false };
+                  const updated = { ...existing, ...partial, isManual: true };
+                  if (updated.tensionOffset === 0 && updated.activationOffset === 0 && updated.lengthOverride === 'none' && updated.inhibition === 0 && updated.pathology === 'none') {
+                    const { [muscleId]: _, ...rest } = prev;
+                    return rest;
+                  }
+                  return { ...prev, [muscleId]: updated };
+                });
+              };
               return (
                 <div
-                  className="absolute z-30 w-[280px] max-h-[380px] overflow-y-auto bg-slate-900/95 backdrop-blur-md border border-cyan-500/40 rounded-xl shadow-2xl"
+                  className="absolute z-30 w-[300px] max-h-[450px] overflow-y-auto bg-slate-900/95 backdrop-blur-md border border-cyan-500/40 rounded-xl shadow-2xl scrollbar-thin"
                   style={{ left: clampedX, top: clampedY }}
                 >
                   <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md px-3 py-2 border-b border-white/10 flex items-center justify-between rounded-t-xl z-10">
@@ -2462,9 +2502,26 @@ ${ddxList}`;
                         {getClinicalStatusLabel(group.dominantStatus)}
                       </span>
                     </div>
-                    <button onClick={() => setClickedMusclePopup(null)} className="text-gray-400 hover:text-white p-0.5">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {groupHasOverrides && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMuscleOverrides(prev => {
+                              const next = { ...prev };
+                              group.muscles.forEach(m => delete next[m.id]);
+                              return next;
+                            });
+                          }}
+                          className="text-[8px] text-amber-400 hover:text-amber-300 px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20"
+                        >
+                          Reset
+                        </button>
+                      )}
+                      <button onClick={() => setClickedMusclePopup(null)} className="text-gray-400 hover:text-white p-0.5">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div className="px-3 py-2 space-y-1 border-b border-white/5">
                     <div className="flex gap-3 text-[9px] text-gray-400">
@@ -2477,14 +2534,17 @@ ${ddxList}`;
                     {group.muscles.map(m => {
                       const mColor = getClinicalStatusColor(m.clinicalStatus);
                       const isExpanded = selectedMuscleId === m.id;
+                      const override = muscleOverrides[m.id];
+                      const hasOverride = override?.isManual;
                       return (
                         <div key={m.id}
-                          className={`rounded-lg px-2 py-1.5 cursor-pointer transition-all ${isExpanded ? 'bg-cyan-500/15 ring-1 ring-cyan-500/30' : 'bg-white/5 hover:bg-white/10'}`}
+                          className={`rounded-lg px-2 py-1.5 cursor-pointer transition-all ${isExpanded ? 'bg-cyan-500/15 ring-1 ring-cyan-500/30' : hasOverride ? 'bg-amber-500/10 ring-1 ring-amber-500/20 hover:bg-amber-500/15' : 'bg-white/5 hover:bg-white/10'}`}
                           onClick={() => setSelectedMuscleId(prev => prev === m.id ? null : m.id)}
                         >
                           <div className="flex items-center gap-1.5 mb-1">
                             <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: mColor }} />
                             <span className="text-[10px] text-white font-medium flex-1 truncate">{m.label}</span>
+                            {hasOverride && <span className="text-[7px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-400">modified</span>}
                             <span className="text-[7px] px-1.5 py-0.5 rounded-full" style={{ color: mColor, backgroundColor: mColor + '20' }}>
                               {getClinicalStatusLabel(m.clinicalStatus)}
                             </span>
@@ -2506,21 +2566,122 @@ ${ddxList}`;
                             ))}
                           </div>
                           {isExpanded && (
-                            <div className="mt-1.5 pt-1.5 border-t border-white/10 space-y-1">
-                              <div className="flex justify-between">
-                                <span className="text-[8px] text-gray-400">Tone</span>
-                                <span className={`text-[8px] font-medium ${m.tone === 'hypertonic' ? 'text-red-400' : m.tone === 'hypotonic' ? 'text-blue-400' : 'text-green-400'}`}>
-                                  {getToneLabel(m.tone)}
-                                </span>
+                            <div className="mt-1.5 pt-1.5 border-t border-white/10 space-y-2" onClick={e => e.stopPropagation()}>
+                              <div className="text-[9px] text-cyan-400 font-semibold uppercase tracking-wider flex items-center gap-1">
+                                <SlidersHorizontal className="h-2.5 w-2.5" />
+                                Adjust Properties
                               </div>
-                              <div className="flex justify-between">
-                                <span className="text-[8px] text-gray-400">Fatigue Risk</span>
-                                <span className={`text-[8px] font-medium ${m.fatigueRisk > 60 ? 'text-red-400' : m.fatigueRisk > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
-                                  {m.fatigueRisk.toFixed(0)}%
-                                </span>
+                              <div>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[8px] text-blue-400">Length</span>
+                                  <span className="text-[8px] text-gray-400">{override?.lengthOverride && override.lengthOverride !== 'none' ? override.lengthOverride : 'auto'}</span>
+                                </div>
+                                <div className="flex gap-1">
+                                  {(['none', 'shortened', 'neutral', 'lengthened'] as LengthOverride[]).map(opt => (
+                                    <button
+                                      key={opt}
+                                      className={`flex-1 text-[7px] py-1 rounded transition-all ${
+                                        (override?.lengthOverride || 'none') === opt
+                                          ? opt === 'shortened' ? 'bg-red-500/30 text-red-300 ring-1 ring-red-500/40'
+                                          : opt === 'lengthened' ? 'bg-blue-500/30 text-blue-300 ring-1 ring-blue-500/40'
+                                          : opt === 'neutral' ? 'bg-green-500/30 text-green-300 ring-1 ring-green-500/40'
+                                          : 'bg-gray-600/30 text-gray-300 ring-1 ring-gray-500/40'
+                                        : 'bg-white/5 text-gray-500 hover:bg-white/10'
+                                      }`}
+                                      onClick={() => updateOverride(m.id, { lengthOverride: opt })}
+                                    >
+                                      {opt === 'none' ? 'Auto' : opt.charAt(0).toUpperCase() + opt.slice(1, 5)}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
-                              <p className="text-[8px] text-gray-400 leading-relaxed">{m.clinicalNote}</p>
-                              <div className="mt-1 pt-1 border-t border-white/10">
+                              <div>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[8px] text-green-400">Activation Offset</span>
+                                  <span className="text-[8px] text-gray-400 font-mono">{(override?.activationOffset || 0) > 0 ? '+' : ''}{override?.activationOffset || 0}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={-50}
+                                  max={50}
+                                  value={override?.activationOffset || 0}
+                                  onChange={e => updateOverride(m.id, { activationOffset: Number(e.target.value) })}
+                                  className="w-full h-1 rounded-full appearance-none cursor-pointer accent-green-400"
+                                  style={{ background: `linear-gradient(to right, #ef4444 0%, #374151 50%, #22c55e 100%)` }}
+                                />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[8px] text-purple-400">Inhibition</span>
+                                  <span className="text-[8px] text-gray-400 font-mono">{override?.inhibition || 0}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={100}
+                                  value={override?.inhibition || 0}
+                                  onChange={e => updateOverride(m.id, { inhibition: Number(e.target.value) })}
+                                  className="w-full h-1 rounded-full appearance-none cursor-pointer accent-purple-400"
+                                  style={{ background: `linear-gradient(to right, #374151 0%, #a855f7 100%)` }}
+                                />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[8px] text-orange-400">Tension Offset</span>
+                                  <span className="text-[8px] text-gray-400 font-mono">{(override?.tensionOffset || 0) > 0 ? '+' : ''}{override?.tensionOffset || 0}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={-40}
+                                  max={40}
+                                  value={override?.tensionOffset || 0}
+                                  onChange={e => updateOverride(m.id, { tensionOffset: Number(e.target.value) })}
+                                  className="w-full h-1 rounded-full appearance-none cursor-pointer accent-orange-400"
+                                  style={{ background: `linear-gradient(to right, #3b82f6 0%, #374151 50%, #f97316 100%)` }}
+                                />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[8px] text-red-400">Pathology</span>
+                                </div>
+                                <select
+                                  value={override?.pathology || 'none'}
+                                  onChange={e => updateOverride(m.id, { pathology: e.target.value as PathologyType })}
+                                  className="w-full text-[8px] bg-slate-800 border border-white/10 rounded px-1.5 py-1 text-white cursor-pointer focus:ring-1 focus:ring-cyan-500/40 focus:outline-none"
+                                >
+                                  {Object.entries(PATHOLOGY_LABELS).map(([key, label]) => (
+                                    <option key={key} value={key}>{label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="pt-1 border-t border-white/10 space-y-1">
+                                <div className="flex justify-between">
+                                  <span className="text-[8px] text-gray-400">Tone</span>
+                                  <span className={`text-[8px] font-medium ${m.tone === 'hypertonic' ? 'text-red-400' : m.tone === 'hypotonic' ? 'text-blue-400' : 'text-green-400'}`}>
+                                    {getToneLabel(m.tone)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-[8px] text-gray-400">Fatigue Risk</span>
+                                  <span className={`text-[8px] font-medium ${m.fatigueRisk > 60 ? 'text-red-400' : m.fatigueRisk > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
+                                    {m.fatigueRisk.toFixed(0)}%
+                                  </span>
+                                </div>
+                                <p className="text-[8px] text-gray-400 leading-relaxed">{m.clinicalNote}</p>
+                              </div>
+                              {MUSCLE_JOINT_ACTIONS[m.meshGroup] && (
+                                <div className="pt-1 border-t border-white/10">
+                                  <div className="text-[8px] text-gray-500 mb-1">Affected Joints:</div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {MUSCLE_JOINT_ACTIONS[m.meshGroup].map((action, ai) => (
+                                      <span key={ai} className="text-[7px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                        {action.joint} {action.parameter}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              <div className="pt-1 border-t border-white/10">
                                 <button
                                   className="text-[8px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
                                   onClick={(e) => { e.stopPropagation(); setShowMuscleExercises(prev => prev === m.id ? null : m.id); }}
@@ -2844,6 +3005,37 @@ ${ddxList}`;
                         <p className="text-[8px] text-red-300/80 mt-0.5 leading-relaxed">{s.description}</p>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {Object.keys(muscleOverrides).length > 0 && (
+                  <div className="mb-2 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2 py-1.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1">
+                        <SlidersHorizontal className="h-3 w-3 text-amber-400" />
+                        <span className="text-[9px] font-medium text-amber-300">{Object.keys(muscleOverrides).length} muscle{Object.keys(muscleOverrides).length !== 1 ? 's' : ''} modified</span>
+                      </div>
+                      <button
+                        onClick={() => setMuscleOverrides({})}
+                        className="text-[8px] text-amber-400 hover:text-amber-300 px-1.5 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                    {muscleDrivenEffects && Object.keys(muscleDrivenEffects.jointAdjustments).length > 0 && (
+                      <div className="mt-1 pt-1 border-t border-amber-500/20">
+                        <span className="text-[8px] text-gray-500">Joint effects:</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {Object.entries(muscleDrivenEffects.jointAdjustments).map(([joint, params]) => (
+                            Object.entries(params).map(([param, val]) => (
+                              <span key={`${joint}-${param}`} className={`text-[7px] px-1.5 py-0.5 rounded ${val > 0 ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                                {joint}.{param} {val > 0 ? '+' : ''}{val.toFixed(1)}°
+                              </span>
+                            ))
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

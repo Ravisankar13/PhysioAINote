@@ -1105,6 +1105,97 @@ export function applyOverridesAndChains(
   return results;
 }
 
+export function applyOverridesToAnalysis(
+  baseAnalysis: MuscleAnalysisResult,
+  overrides: Record<string, MuscleOverride>
+): MuscleAnalysisResult {
+  const hasOverrides = Object.keys(overrides).some(k => overrides[k]?.isManual);
+  if (!hasOverrides) return baseAnalysis;
+
+  const updatedMuscles = baseAnalysis.allMuscles.map(m => {
+    const override = overrides[m.id];
+    if (!override?.isManual) return m;
+
+    let lengthPct = m.lengthPercent;
+    let activation = m.activationPercent;
+    let tightness = m.tightnessPercent;
+    let inhibition = m.inhibitionPercent;
+
+    if (override.lengthOverride === 'shortened') {
+      lengthPct = clamp(70 + override.tensionOffset * 0.2, 50, 89);
+      tightness = Math.max(tightness, 65);
+    } else if (override.lengthOverride === 'lengthened') {
+      lengthPct = clamp(120 + override.tensionOffset * 0.2, 111, 150);
+      tightness = Math.max(tightness - 20, 0);
+    } else if (override.lengthOverride === 'neutral') {
+      lengthPct = clamp(100 + override.tensionOffset * 0.2, 90, 110);
+    }
+
+    activation = clamp(activation + override.activationOffset, 0, 100);
+
+    if (override.inhibition > 0) {
+      inhibition = clamp(override.inhibition, 0, 100);
+      activation *= (1 - override.inhibition / 100);
+      activation = Math.max(0, activation);
+    }
+
+    if (override.pathology !== 'none') {
+      const eff = PATHOLOGY_EFFECTS[override.pathology];
+      tightness = clamp(tightness + eff.tensionMod, 0, 100);
+      activation = clamp(activation + eff.activationMod, 0, 100);
+    }
+
+    const tone = getTone(tightness, activation);
+    const clinicalStatus = getClinicalStatus(lengthPct, activation, tightness, inhibition);
+    const state = getLengthState(lengthPct);
+    const fatigueRisk = getFatigueRisk(activation, tightness);
+
+    const notes: string[] = [];
+    if (override.lengthOverride !== 'none') notes.push(`Length: ${override.lengthOverride}`);
+    if (override.activationOffset !== 0) notes.push(`Activation ${override.activationOffset > 0 ? '+' : ''}${override.activationOffset}%`);
+    if (override.inhibition > 0) notes.push(`${override.inhibition}% inhibited`);
+    if (override.pathology !== 'none') notes.push(PATHOLOGY_LABELS[override.pathology]);
+    const clinicalNote = notes.length > 0 ? notes.join(', ') : m.clinicalNote;
+
+    return {
+      ...m,
+      lengthPercent: lengthPct,
+      activationPercent: activation,
+      tightnessPercent: tightness,
+      inhibitionPercent: inhibition,
+      tone,
+      fatigueRisk,
+      clinicalStatus,
+      clinicalNote,
+      state,
+    };
+  });
+
+  const grouped: Record<string, IndividualMuscle[]> = {};
+  for (const m of updatedMuscles) {
+    if (!grouped[m.meshGroup]) grouped[m.meshGroup] = [];
+    grouped[m.meshGroup].push(m);
+  }
+
+  const groups = baseAnalysis.groups.map(g => {
+    const gMuscles = grouped[g.id] || g.muscles;
+    const avgAct = gMuscles.reduce((s, m) => s + m.activationPercent, 0) / gMuscles.length;
+    const avgTight = gMuscles.reduce((s, m) => s + m.tightnessPercent, 0) / gMuscles.length;
+    const avgInhib = gMuscles.reduce((s, m) => s + m.inhibitionPercent, 0) / gMuscles.length;
+    const statuses = gMuscles.map(m => m.clinicalStatus);
+    const dominantStatus: ClinicalStatus = statuses.includes('spasm') ? 'spasm'
+      : statuses.includes('overactive') ? 'overactive'
+      : statuses.includes('inhibited') ? 'inhibited'
+      : statuses.includes('shortened') ? 'shortened'
+      : statuses.includes('lengthened') ? 'lengthened'
+      : statuses.includes('weak') ? 'weak'
+      : 'normal';
+    return { ...g, muscles: gMuscles, avgActivation: avgAct, avgTightness: avgTight, avgInhibition: avgInhib, dominantStatus };
+  });
+
+  return { ...baseAnalysis, groups, allMuscles: updatedMuscles };
+}
+
 export function getMuscleColor(status: MuscleStatus): { r: number; g: number; b: number } {
   const t = status.tension / 100;
   const a = status.activationPercent / 100;

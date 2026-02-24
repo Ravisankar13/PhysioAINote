@@ -1010,6 +1010,8 @@ const snakeToCamelJoint = (snake: string): string => {
     'right_ankle': 'rightAnkle',
     'left_shoulder': 'leftShoulder',
     'right_shoulder': 'rightShoulder',
+    'left_scapula': 'leftScapula',
+    'right_scapula': 'rightScapula',
     'left_elbow': 'leftElbow',
     'right_elbow': 'rightElbow',
     'lumbar_spine': 'spine',
@@ -1119,12 +1121,47 @@ const ANIMATION_COMPENSATION_MAPPING: Record<string, Array<{ targetJoint: string
     { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: 0.3 },
     { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: 0.2 },
   ],
-  // Shoulder restrictions
+  // Shoulder flexion restrictions - GH joint restricted → compensate via scapula, thoracic, lumbar
   'left_shoulder:flexion': [
+    { targetJoint: 'leftScapula', targetMovement: 'upwardRotation', ratio: 0.3 },
+    { targetJoint: 'spine', targetMovement: 'thoracicKyphosis', ratio: -0.2 },
+    { targetJoint: 'spine', targetMovement: 'lumbarLordosis', ratio: -0.15 },
     { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.3 },
   ],
   'right_shoulder:flexion': [
+    { targetJoint: 'rightScapula', targetMovement: 'upwardRotation', ratio: 0.3 },
+    { targetJoint: 'spine', targetMovement: 'thoracicKyphosis', ratio: -0.2 },
+    { targetJoint: 'spine', targetMovement: 'lumbarLordosis', ratio: -0.15 },
     { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.3 },
+  ],
+  // Shoulder abduction restrictions - similar compensation chain
+  'left_shoulder:abduction': [
+    { targetJoint: 'leftScapula', targetMovement: 'upwardRotation', ratio: 0.3 },
+    { targetJoint: 'spine', targetMovement: 'thoracicKyphosis', ratio: -0.15 },
+    { targetJoint: 'spine', targetMovement: 'lumbarLordosis', ratio: -0.1 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.2 },
+  ],
+  'right_shoulder:abduction': [
+    { targetJoint: 'rightScapula', targetMovement: 'upwardRotation', ratio: 0.3 },
+    { targetJoint: 'spine', targetMovement: 'thoracicKyphosis', ratio: -0.15 },
+    { targetJoint: 'spine', targetMovement: 'lumbarLordosis', ratio: -0.1 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.2 },
+  ],
+  // Scapula upward rotation restricted → compensate via GH, thoracic, lumbar
+  'left_scapula:upwardRotation': [
+    { targetJoint: 'leftShoulder', targetMovement: 'flexion', ratio: 0.2 },
+    { targetJoint: 'spine', targetMovement: 'thoracicKyphosis', ratio: -0.25 },
+    { targetJoint: 'spine', targetMovement: 'lumbarLordosis', ratio: -0.2 },
+  ],
+  'right_scapula:upwardRotation': [
+    { targetJoint: 'rightShoulder', targetMovement: 'flexion', ratio: 0.2 },
+    { targetJoint: 'spine', targetMovement: 'thoracicKyphosis', ratio: -0.25 },
+    { targetJoint: 'spine', targetMovement: 'lumbarLordosis', ratio: -0.2 },
+  ],
+  // Thoracic extension restricted → lumbar takes over
+  'thoracic_spine:extension': [
+    { targetJoint: 'spine', targetMovement: 'lumbarLordosis', ratio: -0.4 },
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.2 },
   ],
   'spine:flexion': [
     { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: 0.3 },

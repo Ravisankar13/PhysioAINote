@@ -933,6 +933,16 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 1, value: 0 },
         ],
       },
+      {
+        joint: 'spine',
+        property: 'thoracicKyphosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.4, value: -10 },
+          { time: 0.6, value: -10 },
+          { time: 1, value: 0 },
+        ],
+      },
     ],
   },
   {
@@ -1076,6 +1086,17 @@ export const MOVEMENT_SEQUENCES: MovementSequence[] = [
           { time: 0.35, value: 3 },
           { time: 0.5, value: 5 },
           { time: 0.65, value: 3 },
+          { time: 1, value: 0 },
+        ],
+      },
+      {
+        joint: 'spine',
+        property: 'thoracicKyphosis',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.35, value: -5 },
+          { time: 0.5, value: -10 },
+          { time: 0.65, value: -5 },
           { time: 1, value: 0 },
         ],
       },
@@ -1466,12 +1487,18 @@ export const MOVEMENT_RESTRICTIONS: Record<string, MovementRestriction[]> = {
     { joint: 'lumbar_spine', movement: 'flexion', label: 'Trunk Flexion', defaultMaxROM: 15 },
   ],
   armElevations: [
-    { joint: 'left_shoulder', movement: 'flexion', label: 'L Shoulder Flexion', defaultMaxROM: 170 },
-    { joint: 'right_shoulder', movement: 'flexion', label: 'R Shoulder Flexion', defaultMaxROM: 170 },
+    { joint: 'left_shoulder', movement: 'flexion', label: 'L GH Flexion', defaultMaxROM: 170 },
+    { joint: 'right_shoulder', movement: 'flexion', label: 'R GH Flexion', defaultMaxROM: 170 },
+    { joint: 'left_scapula', movement: 'upwardRotation', label: 'L Scapula Upward Rotation', defaultMaxROM: 15 },
+    { joint: 'right_scapula', movement: 'upwardRotation', label: 'R Scapula Upward Rotation', defaultMaxROM: 15 },
+    { joint: 'thoracic_spine', movement: 'extension', label: 'Thoracic Extension', defaultMaxROM: 20 },
   ],
   shoulderAbduction: [
-    { joint: 'left_shoulder', movement: 'abduction', label: 'L Shoulder Abduction', defaultMaxROM: 170 },
-    { joint: 'right_shoulder', movement: 'abduction', label: 'R Shoulder Abduction', defaultMaxROM: 170 },
+    { joint: 'left_shoulder', movement: 'abduction', label: 'L GH Abduction', defaultMaxROM: 170 },
+    { joint: 'right_shoulder', movement: 'abduction', label: 'R GH Abduction', defaultMaxROM: 170 },
+    { joint: 'left_scapula', movement: 'upwardRotation', label: 'L Scapula Upward Rotation', defaultMaxROM: 12 },
+    { joint: 'right_scapula', movement: 'upwardRotation', label: 'R Scapula Upward Rotation', defaultMaxROM: 12 },
+    { joint: 'thoracic_spine', movement: 'extension', label: 'Thoracic Extension', defaultMaxROM: 20 },
   ],
   shoulderCircles: [
     { joint: 'left_shoulder', movement: 'flexion', label: 'L Shoulder Flexion', defaultMaxROM: 30 },

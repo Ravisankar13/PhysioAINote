@@ -7,13 +7,15 @@ export type JointType =
   | 'left_hip' | 'right_hip'
   | 'left_knee' | 'right_knee'
   | 'left_ankle' | 'right_ankle'
-  | 'left_shoulder' | 'right_shoulder';
+  | 'left_shoulder' | 'right_shoulder'
+  | 'left_scapula' | 'right_scapula';
 
 export type MovementType = 
   | 'flexion' | 'extension' | 'rotation' | 'lateral_flexion'
   | 'abduction' | 'adduction' | 'internal_rotation' | 'external_rotation'
   | 'dorsiflexion' | 'plantarflexion' | 'inversion' | 'eversion'
-  | 'anterior_tilt' | 'posterior_tilt' | 'obliquity';
+  | 'anterior_tilt' | 'posterior_tilt' | 'obliquity'
+  | 'upwardRotation';
 
 export type ConstraintReason = 'pain' | 'stiffness' | 'weakness' | 'instability' | 'neural' | 'structural';
 
@@ -122,6 +124,12 @@ export const NORMAL_ROM: Record<JointType, Record<string, number>> = {
     adduction: 50,
     internal_rotation: 70,
     external_rotation: 90,
+  },
+  left_scapula: {
+    upwardRotation: 60,
+  },
+  right_scapula: {
+    upwardRotation: 60,
   },
 };
 
@@ -249,19 +257,65 @@ const COMPENSATION_CHAINS: Array<{
       { joint: 'lumbar_spine', movement: 'flexion', ratio: 0.2, loadIncrease: 25, note: 'Trunk lean forward to lower body' },
     ],
   },
-  // Shoulder flexion restriction
+  // Shoulder flexion restriction - GH joint stiff → scapula, thoracic, lumbar compensate
   {
     source: { joint: 'left_shoulder', movement: 'flexion' },
     compensators: [
-      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.4, loadIncrease: 30, note: 'Thoracic extension to achieve overhead reach' },
-      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.3, loadIncrease: 35, note: 'Lumbar extension strain during overhead activities' },
+      { joint: 'left_scapula', movement: 'upwardRotation', ratio: 0.3, loadIncrease: 25, note: 'Increased scapular upward rotation to compensate for GH stiffness' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Thoracic extension to achieve overhead reach' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.2, loadIncrease: 35, note: 'Lumbar hyperlordosis during overhead activities' },
+      { joint: 'pelvis', movement: 'anterior_tilt', ratio: 0.15, loadIncrease: 20, note: 'Anterior pelvic tilt to extend trunk for overhead reach' },
     ],
   },
   {
     source: { joint: 'right_shoulder', movement: 'flexion' },
     compensators: [
-      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.4, loadIncrease: 30, note: 'Thoracic extension to achieve overhead reach' },
-      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.3, loadIncrease: 35, note: 'Lumbar extension strain during overhead activities' },
+      { joint: 'right_scapula', movement: 'upwardRotation', ratio: 0.3, loadIncrease: 25, note: 'Increased scapular upward rotation to compensate for GH stiffness' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Thoracic extension to achieve overhead reach' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.2, loadIncrease: 35, note: 'Lumbar hyperlordosis during overhead activities' },
+      { joint: 'pelvis', movement: 'anterior_tilt', ratio: 0.15, loadIncrease: 20, note: 'Anterior pelvic tilt to extend trunk for overhead reach' },
+    ],
+  },
+  // Shoulder abduction restriction
+  {
+    source: { joint: 'left_shoulder', movement: 'abduction' },
+    compensators: [
+      { joint: 'left_scapula', movement: 'upwardRotation', ratio: 0.3, loadIncrease: 25, note: 'Increased scapular upward rotation during abduction' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.2, loadIncrease: 25, note: 'Thoracic extension to assist lateral elevation' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.15, loadIncrease: 30, note: 'Lumbar side-bend and extension during abduction' },
+    ],
+  },
+  {
+    source: { joint: 'right_shoulder', movement: 'abduction' },
+    compensators: [
+      { joint: 'right_scapula', movement: 'upwardRotation', ratio: 0.3, loadIncrease: 25, note: 'Increased scapular upward rotation during abduction' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.2, loadIncrease: 25, note: 'Thoracic extension to assist lateral elevation' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.15, loadIncrease: 30, note: 'Lumbar side-bend and extension during abduction' },
+    ],
+  },
+  // Scapula upward rotation restriction → GH, thoracic, lumbar compensate
+  {
+    source: { joint: 'left_scapula', movement: 'upwardRotation' },
+    compensators: [
+      { joint: 'left_shoulder', movement: 'flexion', ratio: 0.2, loadIncrease: 30, note: 'GH joint forced beyond normal range - risk of subacromial impingement' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Thoracic extension compensating for scapular restriction' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.2, loadIncrease: 35, note: 'Lumbar hyperlordosis from scapular dysfunction' },
+    ],
+  },
+  {
+    source: { joint: 'right_scapula', movement: 'upwardRotation' },
+    compensators: [
+      { joint: 'right_shoulder', movement: 'flexion', ratio: 0.2, loadIncrease: 30, note: 'GH joint forced beyond normal range - risk of subacromial impingement' },
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.25, loadIncrease: 30, note: 'Thoracic extension compensating for scapular restriction' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.2, loadIncrease: 35, note: 'Lumbar hyperlordosis from scapular dysfunction' },
+    ],
+  },
+  // Thoracic extension restriction → lumbar and pelvis compensate
+  {
+    source: { joint: 'thoracic_spine', movement: 'extension' },
+    compensators: [
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.4, loadIncrease: 40, note: 'Lumbar hyperlordosis compensating for thoracic stiffness' },
+      { joint: 'pelvis', movement: 'anterior_tilt', ratio: 0.2, loadIncrease: 25, note: 'Anterior pelvic tilt from thoracic restriction' },
     ],
   },
 ];
@@ -284,6 +338,13 @@ const OVERLOAD_STRUCTURES: Record<string, string[]> = {
   'right_knee:flexion': ['Patellofemoral joint', 'Quadriceps tendon', 'Patellar tendon'],
   'left_ankle:dorsiflexion': ['Achilles tendon', 'Tibialis anterior', 'Ankle mortise'],
   'right_ankle:dorsiflexion': ['Achilles tendon', 'Tibialis anterior', 'Ankle mortise'],
+  'left_shoulder:flexion': ['Subacromial space', 'Supraspinatus tendon', 'Superior labrum', 'Inferior GH ligament'],
+  'right_shoulder:flexion': ['Subacromial space', 'Supraspinatus tendon', 'Superior labrum', 'Inferior GH ligament'],
+  'left_shoulder:abduction': ['Subacromial space', 'Supraspinatus tendon', 'Acromioclavicular joint', 'Rotator cuff'],
+  'right_shoulder:abduction': ['Subacromial space', 'Supraspinatus tendon', 'Acromioclavicular joint', 'Rotator cuff'],
+  'left_scapula:upwardRotation': ['Serratus anterior', 'Lower trapezius', 'Pectoralis minor', 'Scapulothoracic joint'],
+  'right_scapula:upwardRotation': ['Serratus anterior', 'Lower trapezius', 'Pectoralis minor', 'Scapulothoracic joint'],
+  'thoracic_spine:extension': ['T8-T12 facet joints', 'Costovertebral joints', 'Erector spinae', 'Thoracolumbar fascia'],
 };
 
 // Calculate compensation patterns for a set of constraints
@@ -412,6 +473,8 @@ export function getJointDisplayInfo(joint: JointType): { name: string; icon: str
     right_ankle: { name: 'Right Ankle', icon: '🦶', category: 'Lower Limb' },
     left_shoulder: { name: 'Left Shoulder', icon: '💪', category: 'Upper Limb' },
     right_shoulder: { name: 'Right Shoulder', icon: '💪', category: 'Upper Limb' },
+    left_scapula: { name: 'Left Scapula', icon: '🦴', category: 'Upper Limb' },
+    right_scapula: { name: 'Right Scapula', icon: '🦴', category: 'Upper Limb' },
   };
   return info[joint];
 }

@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight } from 'lucide-react';
 import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, type MovementSequence } from '@/lib/movementSequences';
+import { calculateCompensations, NORMAL_ROM, type JointConstraint } from '@/lib/jointConstraints';
 import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
 
 interface MovementPlayerProps {
@@ -137,6 +138,30 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
   const handleRestrictionChange = useCallback((key: string, value: number) => {
     setRestrictions(prev => ({ ...prev, [key]: value }));
   }, []);
+
+  const compensationResult = useMemo(() => {
+    if (!animationState.currentMovement) return null;
+    const defs = MOVEMENT_RESTRICTIONS[animationState.currentMovement] || [];
+    const jointConstraints: JointConstraint[] = [];
+    defs.forEach(def => {
+      const key = `${def.joint}:${def.movement}`;
+      const maxROM = restrictions[key];
+      if (maxROM !== undefined && maxROM < def.defaultMaxROM) {
+        const normalROM = NORMAL_ROM[def.joint as keyof typeof NORMAL_ROM]?.[def.movement] || def.defaultMaxROM;
+        jointConstraints.push({
+          id: key,
+          joint: def.joint as any,
+          movement: def.movement as any,
+          maxROM,
+          normalROM,
+          reason: 'stiffness',
+          isActive: true,
+        });
+      }
+    });
+    if (jointConstraints.length === 0) return null;
+    return calculateCompensations(jointConstraints);
+  }, [restrictions, animationState.currentMovement]);
 
   const speedPresets = [0.25, 0.5, 1, 1.5, 2];
 
@@ -360,10 +385,75 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
               >
                 Reset All
               </button>
+
+              {compensationResult && (compensationResult.patterns.length > 0 || compensationResult.clinicalWarnings.length > 0) && (
+                <div className="mt-3 pt-3 border-t border-gray-700/50">
+                  {compensationResult.patterns.length > 0 && (
+                    <div className="mb-2">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <ArrowRight className="w-3 h-3 text-amber-400" />
+                        <span className="text-[10px] font-semibold text-amber-300 uppercase tracking-wider">Compensations</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {compensationResult.patterns.map((p, i) => (
+                          <div key={i} className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                            <div className="flex items-center gap-1 text-[10px] text-amber-300 font-medium">
+                              <span>{formatJoint(p.compensatingJoint)}</span>
+                              <span className="text-amber-500/60">compensating</span>
+                            </div>
+                            <div className="text-[9px] text-gray-400 mt-0.5">{p.clinicalNote}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[9px] text-amber-400 font-mono">+{Math.round(p.additionalLoad)}% load</span>
+                              <span className="text-[9px] text-gray-600">|</span>
+                              <span className="text-[9px] text-amber-500/80 font-mono">{Math.round(p.compensationRatio * 100)}% ratio</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {compensationResult.overloadedStructures.length > 0 && (
+                    <div className="mb-2">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Bone className="w-3 h-3 text-red-400" />
+                        <span className="text-[10px] font-semibold text-red-300 uppercase tracking-wider">At-Risk Structures</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {compensationResult.overloadedStructures.map((s, i) => (
+                          <span key={i} className="px-1.5 py-0.5 rounded-full bg-red-500/15 border border-red-500/25 text-[9px] text-red-300">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {compensationResult.clinicalWarnings.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <AlertTriangle className="w-3 h-3 text-red-400" />
+                        <span className="text-[10px] font-semibold text-red-300 uppercase tracking-wider">Clinical Warnings</span>
+                      </div>
+                      <div className="space-y-1">
+                        {compensationResult.clinicalWarnings.map((w, i) => (
+                          <div key={i} className="bg-red-500/10 border border-red-500/20 rounded-lg px-2 py-1.5">
+                            <span className="text-[9px] text-red-300">{w}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+function formatJoint(joint: string): string {
+  return joint.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }

@@ -236,9 +236,9 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
         userSelect: isDragging ? 'none' : undefined,
       }}
     >
-      <div className="bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl overflow-hidden">
+      <div className="bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
         <div
-          className="flex items-center justify-center gap-1 py-1 cursor-grab active:cursor-grabbing bg-gray-800/50 border-b border-gray-700/30 select-none"
+          className="flex items-center justify-center gap-1 py-1 cursor-grab active:cursor-grabbing bg-gray-800/50 border-b border-gray-700/30 select-none flex-shrink-0"
           onMouseDown={(e) => { e.preventDefault(); handleDragStart(e.clientX, e.clientY); }}
           onTouchStart={(e) => { if (e.touches.length === 1) handleDragStart(e.touches[0].clientX, e.touches[0].clientY); }}
         >
@@ -247,6 +247,7 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
           <GripVertical className="w-3 h-3 text-gray-600" />
         </div>
 
+        <div className="overflow-y-auto flex-1 min-h-0">
         {isExpanded && (
           <div className="max-h-[320px] overflow-y-auto p-3 border-b border-gray-700/50">
             <div className="flex gap-2 mb-3 flex-wrap">
@@ -678,6 +679,7 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
               )}
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>

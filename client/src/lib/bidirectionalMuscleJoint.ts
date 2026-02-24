@@ -331,6 +331,120 @@ function getJointParamRange(joint: string, param: string): [number, number] {
   return JOINT_RANGES[joint]?.[param] ?? [-90, 90];
 }
 
+export interface MuscleRestrictionEffect {
+  joint: string;
+  movement: string;
+  restrictionPercent: number;
+  reason: string;
+}
+
+const MUSCLE_RESTRICTION_MAP: Array<{
+  muscles: string[];
+  joint: string;
+  movement: string;
+  role: string;
+}> = [
+  { muscles: ['l_ant_deltoid', 'l_mid_deltoid', 'l_supraspinatus'], joint: 'leftShoulder', movement: 'flexion', role: 'shoulder flexors' },
+  { muscles: ['r_ant_deltoid', 'r_mid_deltoid', 'r_supraspinatus'], joint: 'rightShoulder', movement: 'flexion', role: 'shoulder flexors' },
+  { muscles: ['l_mid_deltoid', 'l_supraspinatus'], joint: 'leftShoulder', movement: 'abduction', role: 'shoulder abductors' },
+  { muscles: ['r_mid_deltoid', 'r_supraspinatus'], joint: 'rightShoulder', movement: 'abduction', role: 'shoulder abductors' },
+  { muscles: ['l_infraspinatus', 'l_post_deltoid'], joint: 'leftShoulder', movement: 'externalRotation', role: 'external rotators' },
+  { muscles: ['r_infraspinatus', 'r_post_deltoid'], joint: 'rightShoulder', movement: 'externalRotation', role: 'external rotators' },
+  { muscles: ['l_pec_major', 'l_pec_minor'], joint: 'leftShoulder', movement: 'internalRotation', role: 'internal rotators' },
+  { muscles: ['r_pec_major', 'r_pec_minor'], joint: 'rightShoulder', movement: 'internalRotation', role: 'internal rotators' },
+  { muscles: ['l_serratus_ant', 'l_lower_trap'], joint: 'leftScapula', movement: 'upwardRotation', role: 'scapular stabilizers' },
+  { muscles: ['r_serratus_ant', 'r_lower_trap'], joint: 'rightScapula', movement: 'upwardRotation', role: 'scapular stabilizers' },
+  { muscles: ['l_upper_trap', 'l_rhomboids'], joint: 'leftScapula', movement: 'elevation', role: 'scapular elevators' },
+  { muscles: ['r_upper_trap', 'r_rhomboids'], joint: 'rightScapula', movement: 'elevation', role: 'scapular elevators' },
+  { muscles: ['l_glut_max', 'l_hamstrings'], joint: 'leftHip', movement: 'extension', role: 'hip extensors' },
+  { muscles: ['r_glut_max', 'r_hamstrings'], joint: 'rightHip', movement: 'extension', role: 'hip extensors' },
+  { muscles: ['l_hip_flexors', 'l_rect_fem'], joint: 'leftHip', movement: 'flexion', role: 'hip flexors' },
+  { muscles: ['r_hip_flexors', 'r_rect_fem'], joint: 'rightHip', movement: 'flexion', role: 'hip flexors' },
+  { muscles: ['l_glut_med', 'l_glut_min'], joint: 'leftHip', movement: 'abduction', role: 'hip abductors' },
+  { muscles: ['r_glut_med', 'r_glut_min'], joint: 'rightHip', movement: 'abduction', role: 'hip abductors' },
+  { muscles: ['l_piriformis'], joint: 'leftHip', movement: 'internalRotation', role: 'deep rotators' },
+  { muscles: ['r_piriformis'], joint: 'rightHip', movement: 'internalRotation', role: 'deep rotators' },
+  { muscles: ['l_rect_fem', 'l_vast_lat', 'l_vast_med'], joint: 'leftKnee', movement: 'flexion', role: 'knee extensors' },
+  { muscles: ['r_rect_fem', 'r_vast_lat', 'r_vast_med'], joint: 'rightKnee', movement: 'flexion', role: 'knee extensors' },
+  { muscles: ['l_gastroc', 'l_soleus'], joint: 'leftAnkle', movement: 'dorsiflexion', role: 'plantarflexors' },
+  { muscles: ['r_gastroc', 'r_soleus'], joint: 'rightAnkle', movement: 'dorsiflexion', role: 'plantarflexors' },
+  { muscles: ['l_tib_ant'], joint: 'leftAnkle', movement: 'plantarflexion', role: 'dorsiflexors' },
+  { muscles: ['r_tib_ant'], joint: 'rightAnkle', movement: 'plantarflexion', role: 'dorsiflexors' },
+  { muscles: ['rectus_abdominis', 'transverse_abdominis', 'obliques'], joint: 'spine', movement: 'flexion', role: 'core stabilizers' },
+  { muscles: ['erector_spinae_lumbar', 'multifidus'], joint: 'spine', movement: 'extension', role: 'spinal extensors' },
+  { muscles: ['erector_spinae_thoracic'], joint: 'spine', movement: 'thoracicExtension', role: 'thoracic extensors' },
+  { muscles: ['l_biceps'], joint: 'leftElbow', movement: 'flexion', role: 'elbow flexors' },
+  { muscles: ['r_biceps'], joint: 'rightElbow', movement: 'flexion', role: 'elbow flexors' },
+];
+
+export function computeMuscleRestrictionEffects(
+  overrides: Record<string, MuscleOverride>
+): MuscleRestrictionEffect[] {
+  const effects: MuscleRestrictionEffect[] = [];
+
+  for (const mapping of MUSCLE_RESTRICTION_MAP) {
+    let totalDysfunction = 0;
+    let affectedCount = 0;
+    const reasons: string[] = [];
+
+    for (const muscleId of mapping.muscles) {
+      const ov = overrides[muscleId];
+      if (!ov?.isManual) continue;
+
+      let dysfunction = 0;
+
+      if (ov.inhibition > 0) {
+        dysfunction += ov.inhibition * 0.6;
+        if (ov.inhibition > 20) reasons.push('inhibited');
+      }
+
+      if (ov.pathology !== 'none') {
+        const pathEffect = PATHOLOGY_EFFECTS[ov.pathology];
+        dysfunction += Math.abs(pathEffect.tensionMod) * 1.5;
+        reasons.push(ov.pathology.replace(/_/g, ' '));
+      }
+
+      if (ov.lengthOverride === 'lengthened') {
+        dysfunction += 20;
+        reasons.push('lengthened');
+      } else if (ov.lengthOverride === 'shortened') {
+        dysfunction += 15;
+        reasons.push('shortened');
+      }
+
+      if (ov.activationOffset < -10) {
+        dysfunction += Math.abs(ov.activationOffset) * 0.5;
+      }
+
+      if (ov.tensionOffset < -10) {
+        dysfunction += Math.abs(ov.tensionOffset) * 0.4;
+      }
+
+      if (dysfunction > 0) {
+        totalDysfunction += dysfunction;
+        affectedCount++;
+      }
+    }
+
+    if (affectedCount === 0) continue;
+
+    const avgDysfunction = totalDysfunction / mapping.muscles.length;
+    const restrictionPercent = Math.min(Math.round(avgDysfunction), 80);
+
+    if (restrictionPercent < 10) continue;
+
+    const uniqueReasons = Array.from(new Set(reasons));
+    effects.push({
+      joint: mapping.joint,
+      movement: mapping.movement,
+      restrictionPercent,
+      reason: `${mapping.role} dysfunction (${uniqueReasons.join(', ')})`,
+    });
+  }
+
+  return effects;
+}
+
 export function getMuscleDrivenDescription(muscleId: string): string {
   const actions = MUSCLE_JOINT_ACTIONS[muscleId];
   if (!actions || actions.length === 0) return '';

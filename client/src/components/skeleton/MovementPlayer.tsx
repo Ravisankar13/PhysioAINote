@@ -3,6 +3,7 @@ import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVerti
 import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, type MovementSequence } from '@/lib/movementSequences';
 import { calculateCompensations, computePostureDeviations, NORMAL_ROM, getClinicalConsequences, type JointConstraint, type ClinicalWarning, type CompensationResult, type ClinicalConsequence } from '@/lib/jointConstraints';
 import { getMovementBiomechanics, computeRestrictionOverloads, type BiomechanicsSnapshot } from '@/lib/movementBiomechanics';
+import type { MuscleRestrictionEffect } from '@/lib/bidirectionalMuscleJoint';
 import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
 
 type PostureConfig = Record<string, Record<string, number | undefined> | undefined>;
@@ -45,9 +46,10 @@ interface MovementPlayerProps {
   onConstraintsChange?: (constraints: AnimationConstraint[]) => void;
   onCompensationChange?: (result: CompensationResult | null, movementName: string | null, restrictions: Record<string, number>) => void;
   modelConfig?: PostureConfig;
+  muscleRestrictionEffects?: MuscleRestrictionEffect[];
 }
 
-export default function MovementPlayer({ animationState, onAnimationStateChange, onConstraintsChange, onCompensationChange, modelConfig }: MovementPlayerProps) {
+export default function MovementPlayer({ animationState, onAnimationStateChange, onConstraintsChange, onCompensationChange, modelConfig, muscleRestrictionEffects }: MovementPlayerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showRestrictions, setShowRestrictions] = useState(false);
@@ -114,6 +116,24 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
     }
   }, [animationState.currentMovement]);
 
+  const effectiveRestrictions = useMemo(() => {
+    if (!muscleRestrictionEffects || muscleRestrictionEffects.length === 0) return restrictions;
+    if (!animationState.currentMovement) return restrictions;
+    const defs = MOVEMENT_RESTRICTIONS[animationState.currentMovement] || [];
+    const merged = { ...restrictions };
+    for (const effect of muscleRestrictionEffects) {
+      const matchingDef = defs.find(d => d.joint === effect.joint && d.movement === effect.movement);
+      if (!matchingDef) continue;
+      const key = `${effect.joint}:${effect.movement}`;
+      const muscleMaxROM = Math.round(matchingDef.defaultMaxROM * (1 - effect.restrictionPercent / 100));
+      const currentMax = merged[key];
+      if (currentMax === undefined || muscleMaxROM < currentMax) {
+        merged[key] = muscleMaxROM;
+      }
+    }
+    return merged;
+  }, [restrictions, muscleRestrictionEffects, animationState.currentMovement]);
+
   useEffect(() => {
     if (!onConstraintsChange) return;
     const movementId = animationState.currentMovement;
@@ -125,7 +145,7 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
     const constraints: AnimationConstraint[] = [];
     defs.forEach(def => {
       const key = `${def.joint}:${def.movement}`;
-      const maxROM = restrictions[key];
+      const maxROM = effectiveRestrictions[key];
       if (maxROM !== undefined && maxROM < def.defaultMaxROM) {
         constraints.push({
           joint: def.joint,
@@ -136,7 +156,7 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
       }
     });
     onConstraintsChange(constraints);
-  }, [restrictions, animationState.currentMovement, onConstraintsChange]);
+  }, [effectiveRestrictions, animationState.currentMovement, onConstraintsChange]);
 
   const handleSelectMovement = useCallback((movement: MovementSequence) => {
     setRestrictions({});
@@ -188,7 +208,7 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
     const jointConstraints: JointConstraint[] = [];
     defs.forEach(def => {
       const key = `${def.joint}:${def.movement}`;
-      const maxROM = restrictions[key];
+      const maxROM = effectiveRestrictions[key];
       if (maxROM !== undefined && maxROM < def.defaultMaxROM) {
         const mapped = mapToCompensationNames(def.joint, def.movement);
         const normalROM = NORMAL_ROM[mapped.joint as keyof typeof NORMAL_ROM]?.[mapped.movement] || def.defaultMaxROM;
@@ -205,13 +225,13 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
     });
     if (jointConstraints.length === 0) return null;
     return calculateCompensations(jointConstraints, postureContext);
-  }, [restrictions, animationState.currentMovement, postureContext]);
+  }, [effectiveRestrictions, animationState.currentMovement, postureContext]);
 
   useEffect(() => {
     if (!onCompensationChange) return;
     const movementName = currentMovement?.name || null;
-    onCompensationChange(compensationResult, movementName, restrictions);
-  }, [compensationResult, currentMovement, restrictions, onCompensationChange]);
+    onCompensationChange(compensationResult, movementName, effectiveRestrictions);
+  }, [compensationResult, currentMovement, effectiveRestrictions, onCompensationChange]);
 
   const restrictionOverloads = useMemo(() => {
     if (!compensationResult || compensationResult.patterns.length === 0) return undefined;
@@ -520,17 +540,26 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
                 {currentRestrictions.map(restriction => {
                   const key = `${restriction.joint}:${restriction.movement}`;
                   const currentValue = restrictions[key] ?? restriction.defaultMaxROM;
-                  const isRestricted = currentValue < restriction.defaultMaxROM;
+                  const muscleEffect = muscleRestrictionEffects?.find(e => e.joint === restriction.joint && e.movement === restriction.movement);
+                  const effectiveValue = effectiveRestrictions[key] ?? restriction.defaultMaxROM;
+                  const isRestricted = effectiveValue < restriction.defaultMaxROM;
+                  const isMuscleRestricted = muscleEffect && muscleEffect.restrictionPercent >= 10;
                   return (
                     <div key={key}>
                       <div className="flex items-center justify-between mb-1">
-                        <span className={`text-[10px] font-medium ${isRestricted ? 'text-amber-300' : 'text-gray-400'}`}>
+                        <span className={`text-[10px] font-medium ${isMuscleRestricted ? 'text-purple-300' : isRestricted ? 'text-amber-300' : 'text-gray-400'}`}>
                           {restriction.label}
+                          {isMuscleRestricted && (
+                            <span className="ml-1 text-[8px] text-purple-400 bg-purple-500/15 px-1 py-0.5 rounded">MUSCLE</span>
+                          )}
                         </span>
-                        <span className={`text-[10px] font-mono ${isRestricted ? 'text-amber-400' : 'text-gray-500'}`}>
-                          {Math.round(currentValue)}/{restriction.defaultMaxROM}°
+                        <span className={`text-[10px] font-mono ${isMuscleRestricted ? 'text-purple-400' : isRestricted ? 'text-amber-400' : 'text-gray-500'}`}>
+                          {Math.round(effectiveValue)}/{restriction.defaultMaxROM}°
                         </span>
                       </div>
+                      {isMuscleRestricted && (
+                        <div className="text-[8px] text-purple-400/70 mb-1 italic">{muscleEffect.reason}</div>
+                      )}
                       <div className="relative">
                         <input
                           type="range"
@@ -541,7 +570,7 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
                           onChange={(e) => handleRestrictionChange(key, Number(e.target.value))}
                           className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
                           style={{
-                            background: `linear-gradient(to right, ${isRestricted ? '#f59e0b' : '#06b6d4'} 0%, ${isRestricted ? '#f59e0b' : '#06b6d4'} ${(currentValue / restriction.defaultMaxROM) * 100}%, #374151 ${(currentValue / restriction.defaultMaxROM) * 100}%, #374151 100%)`,
+                            background: `linear-gradient(to right, ${isMuscleRestricted ? '#a855f7' : isRestricted ? '#f59e0b' : '#06b6d4'} 0%, ${isMuscleRestricted ? '#a855f7' : isRestricted ? '#f59e0b' : '#06b6d4'} ${(effectiveValue / restriction.defaultMaxROM) * 100}%, #374151 ${(effectiveValue / restriction.defaultMaxROM) * 100}%, #374151 100%)`,
                           }}
                         />
                       </div>

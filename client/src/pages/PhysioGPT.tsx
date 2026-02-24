@@ -88,7 +88,7 @@ import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalL
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
-import { computeBidirectionalEffects, MUSCLE_JOINT_ACTIONS } from "@/lib/bidirectionalMuscleJoint";
+import { computeBidirectionalEffects, computeMuscleRestrictionEffects, MUSCLE_JOINT_ACTIONS } from "@/lib/bidirectionalMuscleJoint";
 import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
@@ -2033,6 +2033,13 @@ ${ddxList}`;
     return computeBidirectionalEffects(muscleOverrides, modelConfig);
   }, [muscleOverrides, modelConfig]);
 
+  const muscleRestrictionEffects = useMemo(() => {
+    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
+    if (!hasManualOverrides) return undefined;
+    const effects = computeMuscleRestrictionEffects(muscleOverrides);
+    return effects.length > 0 ? effects : undefined;
+  }, [muscleOverrides]);
+
   const effectiveModelConfig = useMemo(() => {
     if (!muscleDrivenEffects) return modelConfig;
     const config = JSON.parse(JSON.stringify(modelConfig));
@@ -2180,6 +2187,79 @@ ${ddxList}`;
       glowSize: boneName.includes('Root') || boneName.includes('Spine') || boneName.includes('Chest') ? 0.25 : 0.2,
     }));
   }, [selectedChainId]);
+
+  const muscleOverrideHighlights = useMemo(() => {
+    const entries = Object.entries(muscleOverrides).filter(([_, ov]) => ov?.isManual);
+    if (entries.length === 0) return [];
+
+    const MUSCLE_TO_BONES: Record<string, string[]> = {
+      l_glut_max: ['Hip_L'], l_glut_med: ['Hip_L'], l_glut_min: ['Hip_L'], l_piriformis: ['Hip_L'],
+      r_glut_max: ['Hip_R'], r_glut_med: ['Hip_R'], r_glut_min: ['Hip_R'], r_piriformis: ['Hip_R'],
+      l_rect_fem: ['Hip_L', 'Knee_L'], l_vast_lat: ['Knee_L'], l_vast_med: ['Knee_L'], l_hamstrings: ['Hip_L', 'Knee_L'],
+      r_rect_fem: ['Hip_R', 'Knee_R'], r_vast_lat: ['Knee_R'], r_vast_med: ['Knee_R'], r_hamstrings: ['Hip_R', 'Knee_R'],
+      l_hip_flexors: ['Hip_L'], l_adductors: ['Hip_L'],
+      r_hip_flexors: ['Hip_R'], r_adductors: ['Hip_R'],
+      l_gastroc: ['Knee_L', 'Ankle_L'], l_soleus: ['Ankle_L'],
+      r_gastroc: ['Knee_R', 'Ankle_R'], r_soleus: ['Ankle_R'],
+      l_tib_ant: ['Ankle_L'], l_peroneals: ['Ankle_L'], l_tib_post: ['Ankle_L'], l_plantar_fascia: ['Ankle_L'],
+      r_tib_ant: ['Ankle_R'], r_peroneals: ['Ankle_R'], r_tib_post: ['Ankle_R'], r_plantar_fascia: ['Ankle_R'],
+      l_ant_deltoid: ['Shoulder_L'], l_mid_deltoid: ['Shoulder_L'], l_post_deltoid: ['Shoulder_L'], l_supraspinatus: ['Shoulder_L'],
+      r_ant_deltoid: ['Shoulder_R'], r_mid_deltoid: ['Shoulder_R'], r_post_deltoid: ['Shoulder_R'], r_supraspinatus: ['Shoulder_R'],
+      l_infraspinatus: ['Shoulder_L'], l_upper_trap: ['Shoulder_L', 'Neck_M'], l_lower_trap: ['Shoulder_L'],
+      r_infraspinatus: ['Shoulder_R'], r_upper_trap: ['Shoulder_R', 'Neck_M'], r_lower_trap: ['Shoulder_R'],
+      l_rhomboids: ['Shoulder_L'], l_serratus_ant: ['Shoulder_L'],
+      r_rhomboids: ['Shoulder_R'], r_serratus_ant: ['Shoulder_R'],
+      l_biceps: ['Elbow_L'], l_triceps: ['Elbow_L'], l_wrist_flex: ['Elbow_L'], l_wrist_ext: ['Elbow_L'],
+      r_biceps: ['Elbow_R'], r_triceps: ['Elbow_R'], r_wrist_flex: ['Elbow_R'], r_wrist_ext: ['Elbow_R'],
+      l_pec_major: ['Shoulder_L'], l_pec_minor: ['Shoulder_L'],
+      r_pec_major: ['Shoulder_R'], r_pec_minor: ['Shoulder_R'],
+      rectus_abdominis: ['RootPart1_M'], transverse_abdominis: ['RootPart1_M'], obliques: ['RootPart1_M'],
+      erector_spinae_lumbar: ['RootPart1_M'], erector_spinae_thoracic: ['Spine2_M'],
+      multifidus: ['RootPart1_M'],
+    };
+
+    const boneAccum: Record<string, { color: number; intensity: number; count: number }> = {};
+
+    for (const [muscleId, ov] of entries) {
+      if (!ov) continue;
+      const bones = MUSCLE_TO_BONES[muscleId];
+      if (!bones) continue;
+
+      let color = 0x22c55e;
+      let intensity = 0.4;
+
+      if (ov.pathology !== 'none') {
+        color = 0xef4444; intensity = 0.7;
+      } else if (ov.inhibition > 30) {
+        color = 0xa855f7; intensity = 0.4 + (ov.inhibition / 100) * 0.4;
+      } else if (ov.tensionOffset > 15) {
+        color = 0xf97316; intensity = 0.5 + (ov.tensionOffset / 40) * 0.3;
+      } else if (ov.tensionOffset < -15) {
+        color = 0x3b82f6; intensity = 0.5;
+      } else if (ov.lengthOverride === 'shortened') {
+        color = 0xef4444; intensity = 0.5;
+      } else if (ov.lengthOverride === 'lengthened') {
+        color = 0x3b82f6; intensity = 0.5;
+      } else if (ov.activationOffset > 15) {
+        color = 0x22c55e; intensity = 0.5;
+      } else if (ov.activationOffset < -15) {
+        color = 0xa855f7; intensity = 0.5;
+      }
+
+      for (const bone of bones) {
+        if (!boneAccum[bone] || intensity > boneAccum[bone].intensity) {
+          boneAccum[bone] = { color, intensity, count: (boneAccum[bone]?.count || 0) + 1 };
+        }
+      }
+    }
+
+    return Object.entries(boneAccum).map(([boneName, { color, intensity }]) => ({
+      boneName,
+      color,
+      intensity,
+      glowSize: boneName.includes('Root') || boneName.includes('Spine') ? 0.22 : 0.18,
+    }));
+  }, [muscleOverrides]);
   const getIntegrityLabel = (score: number) => score >= 80 ? 'Good' : score >= 60 ? 'Fair' : score >= 40 ? 'Poor' : 'Critical';
   const getSeverityColor = (severity: 'mild' | 'moderate' | 'severe') => severity === 'severe' ? 'text-red-400' : severity === 'moderate' ? 'text-orange-400' : 'text-yellow-400';
 
@@ -2229,7 +2309,10 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones}
+              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 ? [
+                ...(chainHighlightBones || []),
+                ...muscleOverrideHighlights,
+              ] : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
               painMarkers={painMarkers}
@@ -2270,6 +2353,7 @@ ${ddxList}`;
               onConstraintsChange={setAnimationConstraints}
               onCompensationChange={handleCompensationChange}
               modelConfig={modelConfig as any}
+              muscleRestrictionEffects={muscleRestrictionEffects}
             />
 
             {/* Joint Controls Overlay */}

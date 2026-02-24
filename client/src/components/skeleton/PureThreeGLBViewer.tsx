@@ -1281,6 +1281,8 @@ interface PureThreeGLBViewerProps {
   scarMarkers?: ScarMarker[];
   adhesionBands?: AdhesionBand[];
   onScarMarkerClick?: (id: string) => void;
+  onSkeletonClick?: (position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => void;
+  enableSkeletonClick?: boolean;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -1710,6 +1712,8 @@ export default function PureThreeGLBViewer({
   scarMarkers = [],
   adhesionBands = [],
   onScarMarkerClick,
+  onSkeletonClick,
+  enableSkeletonClick = false,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -1742,6 +1746,10 @@ export default function PureThreeGLBViewer({
   const scarMarkerGroupRef = useRef<THREE.Group | null>(null);
   const onScarMarkerClickRef = useRef(onScarMarkerClick);
   onScarMarkerClickRef.current = onScarMarkerClick;
+  const onSkeletonClickRef = useRef(onSkeletonClick);
+  onSkeletonClickRef.current = onSkeletonClick;
+  const enableSkeletonClickRef = useRef(enableSkeletonClick);
+  enableSkeletonClickRef.current = enableSkeletonClick;
   const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
   const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh; hasMoved: boolean } | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -3186,6 +3194,16 @@ export default function PureThreeGLBViewer({
     };
 
     const onMouseDown = (e: MouseEvent) => {
+      if (enableSkeletonClickRef.current && e.button === 0) {
+        const ndc = getMouseNDC(e);
+        const hitPoint = raycastModel(ndc);
+        if (hitPoint) {
+          const boneInfo = findNearestBone(hitPoint);
+          onSkeletonClickRef.current?.({ x: hitPoint.x, y: hitPoint.y, z: hitPoint.z }, boneInfo.boneName, boneInfo.label);
+          e.preventDefault();
+          return;
+        }
+      }
       if (!enablePainMarkersRef.current) return;
       mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
 

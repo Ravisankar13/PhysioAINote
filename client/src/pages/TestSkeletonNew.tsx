@@ -19,7 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import PureThreeGLBViewer, { AnimationState, AnatomicalRegion, JointGroup } from "@/components/skeleton/PureThreeGLBViewer";
 import { MUSCLE_GROUPS } from "@/lib/muscleGroupSplitter";
 import { computeAllMuscleStates, applyOverridesAndChains, type MuscleStatesMap, type MuscleStatus, type MuscleOverride, type PathologyType, type LengthOverride, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
-import { propagateChainEffects, computeWholeBodyTensionScore, getChainMembership, MYOFASCIAL_CHAINS } from "@/lib/myofascialChains";
+import { propagateChainEffects, computeWholeBodyTensionScore, getChainMembership, MYOFASCIAL_CHAINS, MUSCLE_BONE_POSITIONS } from "@/lib/myofascialChains";
+import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, SCAR_AGE_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computeBidirectionalEffects, applyBidirectionalToModelConfig, mergeReciprocalInhibitions, getAntagonistFor, type BidirectionalResult } from "@/lib/bidirectionalMuscleJoint";
 import JointZoomCameras from "@/components/skeleton/JointZoomCameras";
 import MultiViewSkeletonLayout from "@/components/skeleton/MultiViewSkeletonLayout";
@@ -294,6 +295,15 @@ export default function TestSkeletonNew() {
   const [livePose, setLivePose] = useState<Skeleton3DPose | null>(null);
   const [zoomToRegion, setZoomToRegion] = useState<AnatomicalRegion | null>(null);
   const [jointConstraints, setJointConstraints] = useState<JointConstraint[]>([]);
+  const [showChainVisualization, setShowChainVisualization] = useState(false);
+  const [activeChainIds, setActiveChainIds] = useState<string[]>(() => MYOFASCIAL_CHAINS.map(c => c.id));
+  const [showScarPanel, setShowScarPanel] = useState(false);
+  const [scarMarkers, setScarMarkers] = useState<ScarMarker[]>([]);
+  const [adhesionBands, setAdhesionBands] = useState<AdhesionBand[]>([]);
+  const [editingScar, setEditingScar] = useState<string | null>(null);
+  const [scarPlacementMode, setScarPlacementMode] = useState<ScarType | null>(null);
+  const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
+  const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   
   // Clinical Assessment State
   const [clinicalIntakeData, setClinicalIntakeData] = useState<ClinicalIntakeData | null>(null);
@@ -926,6 +936,16 @@ export default function TestSkeletonNew() {
   const wholeBodyScore = useMemo(() => {
     return computeWholeBodyTensionScore(baseMuscleTensions.tensions, effectiveOverrides);
   }, [baseMuscleTensions.tensions, effectiveOverrides]);
+
+  const fascialChainVizProp = useMemo(() => {
+    if (!showChainVisualization) return undefined;
+    return {
+      enabled: true,
+      chains: MYOFASCIAL_CHAINS,
+      tensions: baseMuscleTensions.tensions,
+      activeChains: activeChainIds,
+    };
+  }, [showChainVisualization, baseMuscleTensions.tensions, activeChainIds]);
 
   const getMuscleDrivenDelta = useCallback((joint: string, param: string): number | null => {
     if (!bidirectionalResult) return null;
@@ -1625,6 +1645,29 @@ export default function TestSkeletonNew() {
                 <Video className="h-4 w-4 mr-1" />
                 Live Capture
               </Button>
+              <Button
+                variant={showChainVisualization ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowChainVisualization(!showChainVisualization)}
+                className={showChainVisualization ? "bg-teal-600 hover:bg-teal-700" : ""}
+              >
+                <Activity className="h-4 w-4 mr-1" />
+                Body Tension
+              </Button>
+              <Button
+                variant={showScarPanel ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowScarPanel(!showScarPanel)}
+                className={showScarPanel ? "bg-pink-600 hover:bg-pink-700" : ""}
+              >
+                <FileText className="h-4 w-4 mr-1" />
+                Scar Map
+                {scarMarkers.length > 0 && (
+                  <span className="ml-1 bg-pink-500 text-white text-xs rounded-full px-1.5">
+                    {scarMarkers.length}
+                  </span>
+                )}
+              </Button>
               {!multiViewMode && (
                 <RegionZoomControls
                   currentRegion={zoomToRegion}
@@ -1803,6 +1846,51 @@ export default function TestSkeletonNew() {
                       normalROM: c.normalROM
                     }))}
                     muscleStates={showMuscleLayer ? muscleStates : undefined}
+                    fascialChainVisualization={fascialChainVizProp}
+                    scarMarkers={scarMarkers}
+                    adhesionBands={adhesionBands}
+                    onScarMarkerClick={(id) => setEditingScar(id)}
+                    enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle'}
+                    onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
+                      if (scarPlacementMode) {
+                        const newScar: ScarMarker = {
+                          id: `scar_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                          position,
+                          nearestBone,
+                          anatomicalLabel,
+                          type: scarPlacementMode,
+                          length: 0.08,
+                          width: 0.03,
+                          orientation: 0,
+                          affectedLayers: ['superficial'],
+                          severity: 3,
+                          age: 'chronic',
+                          mobility: 'tethered',
+                          painOnPalpation: 3,
+                          notes: '',
+                        };
+                        setScarMarkers(prev => [...prev, newScar]);
+                        setEditingScar(newScar.id);
+                        setScarPlacementMode(null);
+                      } else if (adhesionPlacementStep === 'start') {
+                        setPendingAdhesionStart({ position, bone: nearestBone });
+                        setAdhesionPlacementStep('end');
+                      } else if (adhesionPlacementStep === 'end' && pendingAdhesionStart) {
+                        const newBand: AdhesionBand = {
+                          id: `adhesion_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                          startPosition: pendingAdhesionStart.position,
+                          endPosition: position,
+                          startBone: pendingAdhesionStart.bone,
+                          endBone: nearestBone,
+                          restrictedMovements: [],
+                          tensionLevel: 50,
+                          depth: 'superficial',
+                        };
+                        setAdhesionBands(prev => [...prev, newBand]);
+                        setAdhesionPlacementStep('idle');
+                        setPendingAdhesionStart(null);
+                      }
+                    }}
                   />
                 </Suspense>
               </GLBErrorBoundary>
@@ -1952,6 +2040,216 @@ export default function TestSkeletonNew() {
               compensationResult={compensationResult}
             />
           </>
+        )}
+
+        {/* Scar Tissue Mapping Panel */}
+        {showScarPanel && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-4 w-4 text-pink-400" />
+                Scar Tissue & Adhesion Mapping
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(SCAR_TYPES) as ScarType[]).map(type => (
+                  <Button
+                    key={type}
+                    size="sm"
+                    variant={scarPlacementMode === type ? "default" : "outline"}
+                    onClick={() => {
+                      setScarPlacementMode(scarPlacementMode === type ? null : type);
+                      setAdhesionPlacementStep('idle');
+                    }}
+                    className={scarPlacementMode === type ? "bg-pink-600 hover:bg-pink-700" : ""}
+                  >
+                    <span className="mr-1">{SCAR_TYPES[type].icon}</span>
+                    {SCAR_TYPES[type].label}
+                  </Button>
+                ))}
+                <Button
+                  size="sm"
+                  variant={adhesionPlacementStep !== 'idle' ? "default" : "outline"}
+                  onClick={() => {
+                    if (adhesionPlacementStep !== 'idle') {
+                      setAdhesionPlacementStep('idle');
+                      setPendingAdhesionStart(null);
+                    } else {
+                      setAdhesionPlacementStep('start');
+                      setScarPlacementMode(null);
+                    }
+                  }}
+                  className={adhesionPlacementStep !== 'idle' ? "bg-red-700 hover:bg-red-800" : ""}
+                >
+                  {adhesionPlacementStep === 'idle' ? '+ Adhesion Band' : adhesionPlacementStep === 'start' ? 'Click Start Point...' : 'Click End Point...'}
+                </Button>
+              </div>
+
+              {scarPlacementMode && (
+                <div className="p-2 rounded-lg bg-pink-500/10 border border-pink-500/20 text-xs text-pink-300">
+                  Click on the 3D skeleton to place a {SCAR_TYPES[scarPlacementMode].label.toLowerCase()}. The marker will appear at the click location.
+                </div>
+              )}
+
+              {scarMarkers.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-xs font-medium text-slate-300">Placed Scars ({scarMarkers.length})</span>
+                  {scarMarkers.map(scar => {
+                    const impact = getScarImpact(scar);
+                    const isEditing = editingScar === scar.id;
+                    return (
+                      <div key={scar.id} className="p-3 rounded-lg border border-slate-600 bg-slate-800/50">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: SCAR_TYPES[scar.type].color }}></span>
+                            <span className="text-sm font-medium text-slate-200">{SCAR_TYPES[scar.type].label}</span>
+                            <span className="text-[10px] text-slate-500">@ {scar.anatomicalLabel}</span>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingScar(isEditing ? null : scar.id)}>
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-400 hover:text-red-300" onClick={() => setScarMarkers(prev => prev.filter(s => s.id !== scar.id))}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 mb-1">
+                          <Badge variant="outline" className="text-[9px]">{SCAR_SEVERITY_LABELS[scar.severity]?.label || 'Unknown'}</Badge>
+                          <Badge variant="outline" className="text-[9px]">{scar.age}</Badge>
+                          <Badge variant="outline" className="text-[9px]">{scar.mobility}</Badge>
+                          {scar.affectedLayers.map(l => (
+                            <Badge key={l} variant="outline" className="text-[9px] border-pink-500/30 text-pink-300">{l}</Badge>
+                          ))}
+                        </div>
+
+                        {isEditing && (
+                          <div className="mt-2 space-y-2 p-2 rounded bg-slate-700/50">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-[10px] text-slate-400">Severity (1-5)</Label>
+                                <input type="range" min={1} max={5} step={1} value={scar.severity}
+                                  onChange={(e) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, severity: Number(e.target.value) } : s))}
+                                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                                  style={{ background: `linear-gradient(to right, #22c55e, #ef4444)` }}
+                                />
+                                <span className="text-[9px] text-slate-500">{SCAR_SEVERITY_LABELS[scar.severity]?.label}</span>
+                              </div>
+                              <div>
+                                <Label className="text-[10px] text-slate-400">Pain on Palpation (0-10)</Label>
+                                <input type="range" min={0} max={10} step={1} value={scar.painOnPalpation}
+                                  onChange={(e) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, painOnPalpation: Number(e.target.value) } : s))}
+                                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                                  style={{ background: `linear-gradient(to right, #4ade80, #ef4444)` }}
+                                />
+                                <span className="text-[9px] text-slate-500">{scar.painOnPalpation}/10</span>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-[10px] text-slate-400">Age</Label>
+                                <Select value={scar.age} onValueChange={(v) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, age: v as ScarAge } : s))}>
+                                  <SelectTrigger className="h-7 text-[10px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {(Object.keys(SCAR_AGE_LABELS) as ScarAge[]).map(age => (
+                                      <SelectItem key={age} value={age}>{SCAR_AGE_LABELS[age].label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-[10px] text-slate-400">Mobility</Label>
+                                <Select value={scar.mobility} onValueChange={(v) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, mobility: v as ScarMobility } : s))}>
+                                  <SelectTrigger className="h-7 text-[10px]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="mobile">Mobile</SelectItem>
+                                    <SelectItem value="tethered">Tethered</SelectItem>
+                                    <SelectItem value="fixed">Fixed</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-slate-400">Affected Layers</Label>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(Object.keys(TISSUE_LAYERS) as TissueLayer[]).map(layer => {
+                                  const active = scar.affectedLayers.includes(layer);
+                                  return (
+                                    <button key={layer} onClick={() => {
+                                      setScarMarkers(prev => prev.map(s => {
+                                        if (s.id !== scar.id) return s;
+                                        return { ...s, affectedLayers: active ? s.affectedLayers.filter(l => l !== layer) : [...s.affectedLayers, layer] };
+                                      }));
+                                    }}
+                                    className={`text-[9px] px-2 py-0.5 rounded-full border transition-all ${active ? 'border-pink-500 bg-pink-500/20 text-pink-300' : 'border-slate-600 text-slate-500'}`}
+                                    >
+                                      {TISSUE_LAYERS[layer].label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-slate-400">Notes</Label>
+                              <Input className="h-7 text-[10px]" value={scar.notes} onChange={(e) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, notes: e.target.value } : s))} placeholder="Clinical notes..." />
+                            </div>
+                          </div>
+                        )}
+
+                        {impact.clinicalNotes.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {impact.clinicalNotes.map((note, i) => (
+                              <div key={i} className="text-[9px] text-slate-400 flex items-start gap-1">
+                                <AlertCircle className="h-2.5 w-2.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                                {note}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {impact.affectedChains.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {impact.affectedChains.map(({ chain }) => (
+                              <span key={chain.id} className="text-[8px] px-1.5 py-0.5 rounded-full border" style={{ borderColor: chain.color + '60', color: chain.color }}>
+                                {chain.name.replace(/ \([LR]\)$/, '')}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {adhesionBands.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-xs font-medium text-slate-300">Adhesion Bands ({adhesionBands.length})</span>
+                  {adhesionBands.map(band => (
+                    <div key={band.id} className="p-2 rounded-lg border border-red-800/40 bg-red-900/10 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-red-300">{band.startBone} → {band.endBone}</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[9px] text-slate-500">Tension: {band.tensionLevel}%</span>
+                          <span className="text-[9px] text-slate-500">Depth: {band.depth}</span>
+                        </div>
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-400 hover:text-red-300" onClick={() => setAdhesionBands(prev => prev.filter(b => b.id !== band.id))}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {scarMarkers.length === 0 && adhesionBands.length === 0 && !scarPlacementMode && adhesionPlacementStep === 'idle' && (
+                <div className="text-center py-4 text-slate-500 text-xs">
+                  No scars or adhesions mapped. Use the buttons above to start placing markers on the skeleton.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Region Insights Panel - Shows when a region is zoomed */}
@@ -2383,16 +2681,40 @@ export default function TestSkeletonNew() {
           </div>
 
           {/* Fascial Chain Legend */}
-          <div className="mb-4 flex flex-wrap gap-2">
-            {Array.from(new Map(MYOFASCIAL_CHAINS.map(c => [c.color, c])).values()).map(chain => {
-              const baseName = chain.name.replace(/ \([LR]\)$/, '');
-              return (
-                <span key={chain.color} className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: chain.color }}></span>
-                  {baseName}
-                </span>
-              );
-            })}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-slate-300">Fascial Chains</span>
+              {showChainVisualization && (
+                <span className="text-[10px] text-teal-400 bg-teal-500/20 px-2 py-0.5 rounded-full">3D Active</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Array.from(new Map(MYOFASCIAL_CHAINS.map(c => [c.color, c])).values()).map(chain => {
+                const baseName = chain.name.replace(/ \([LR]\)$/, '');
+                const matchingIds = MYOFASCIAL_CHAINS.filter(c => c.color === chain.color).map(c => c.id);
+                const allActive = matchingIds.every(id => activeChainIds.includes(id));
+                return (
+                  <button
+                    key={chain.color}
+                    onClick={() => {
+                      if (allActive) {
+                        setActiveChainIds(prev => prev.filter(id => !matchingIds.includes(id)));
+                      } else {
+                        setActiveChainIds(prev => [...new Set([...prev, ...matchingIds])]);
+                      }
+                    }}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 transition-all cursor-pointer ${
+                      allActive
+                        ? 'border-slate-500 text-slate-300 bg-slate-700/50'
+                        : 'border-slate-700 text-slate-600 bg-transparent opacity-50'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: chain.color, opacity: allActive ? 1 : 0.3 }}></span>
+                    {baseName}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Muscle Cards Grid */}

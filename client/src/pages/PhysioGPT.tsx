@@ -3165,22 +3165,115 @@ ${ddxList}`;
                                       <span className="text-[7px] text-gray-400 w-7 text-right tabular-nums">{m.inhibitionPercent.toFixed(0)}%</span>
                                     </div>
                                   </div>
-                                  {isSelected && (
-                                    <div className="mt-1 pt-1 border-t border-white/10 space-y-0.5">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-[7px] text-gray-400">Tone</span>
-                                        <span className={`text-[8px] font-medium ${m.tone === 'hypertonic' ? 'text-red-400' : m.tone === 'hypotonic' ? 'text-blue-400' : 'text-green-400'}`}>
-                                          {getToneLabel(m.tone)}
-                                        </span>
+                                  {isSelected && (() => {
+                                    const ov = muscleOverrides[m.id];
+                                    const doUpdate = (partial: Partial<MuscleOverride>) => {
+                                      setMuscleOverrides(prev => {
+                                        const existing = prev[m.id] || { tensionOffset: 0, activationOffset: 0, lengthOverride: 'none' as LengthOverride, inhibition: 0, pathology: 'none' as PathologyType, isManual: false };
+                                        const updated = { ...existing, ...partial, isManual: true };
+                                        if (updated.tensionOffset === 0 && updated.activationOffset === 0 && updated.lengthOverride === 'none' && updated.inhibition === 0 && updated.pathology === 'none') {
+                                          const { [m.id]: _, ...rest } = prev;
+                                          return rest;
+                                        }
+                                        return { ...prev, [m.id]: updated };
+                                      });
+                                    };
+                                    return (
+                                    <div className="mt-1.5 pt-1.5 border-t border-white/10 space-y-2" onClick={e => e.stopPropagation()}>
+                                      <div className="text-[8px] text-cyan-400 font-semibold uppercase tracking-wider flex items-center gap-1">
+                                        <SlidersHorizontal className="h-2.5 w-2.5" />
+                                        Adjust Properties
                                       </div>
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-[7px] text-gray-400">Fatigue Risk</span>
-                                        <span className={`text-[8px] font-medium ${m.fatigueRisk > 60 ? 'text-red-400' : m.fatigueRisk > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
-                                          {m.fatigueRisk.toFixed(0)}%
-                                        </span>
+                                      <div>
+                                        <div className="flex items-center justify-between mb-0.5">
+                                          <span className="text-[7px] text-blue-400">Length</span>
+                                          <span className="text-[7px] text-gray-400">{ov?.lengthOverride && ov.lengthOverride !== 'none' ? ov.lengthOverride : 'auto'}</span>
+                                        </div>
+                                        <div className="flex gap-0.5">
+                                          {(['none', 'shortened', 'neutral', 'lengthened'] as LengthOverride[]).map(opt => (
+                                            <button
+                                              key={opt}
+                                              className={`flex-1 text-[7px] py-0.5 rounded transition-all ${
+                                                (ov?.lengthOverride || 'none') === opt
+                                                  ? opt === 'shortened' ? 'bg-red-500/30 text-red-300 ring-1 ring-red-500/40'
+                                                  : opt === 'lengthened' ? 'bg-blue-500/30 text-blue-300 ring-1 ring-blue-500/40'
+                                                  : opt === 'neutral' ? 'bg-green-500/30 text-green-300 ring-1 ring-green-500/40'
+                                                  : 'bg-gray-600/30 text-gray-300 ring-1 ring-gray-500/40'
+                                                : 'bg-white/5 text-gray-500 hover:bg-white/10'
+                                              }`}
+                                              onClick={() => doUpdate({ lengthOverride: opt })}
+                                            >
+                                              {opt === 'none' ? 'Auto' : opt.charAt(0).toUpperCase() + opt.slice(1, 5)}
+                                            </button>
+                                          ))}
+                                        </div>
                                       </div>
-                                      <p className="text-[7px] text-gray-400 leading-relaxed">{m.clinicalNote}</p>
-                                      <div className="mt-1 pt-1 border-t border-white/10">
+                                      <div>
+                                        <div className="flex items-center justify-between mb-0.5">
+                                          <span className="text-[7px] text-green-400">Activation Offset</span>
+                                          <span className="text-[7px] text-gray-400 font-mono">{(ov?.activationOffset || 0) > 0 ? '+' : ''}{ov?.activationOffset || 0}%</span>
+                                        </div>
+                                        <input
+                                          type="range" min={-50} max={50} value={ov?.activationOffset || 0}
+                                          onChange={e => doUpdate({ activationOffset: Number(e.target.value) })}
+                                          className="w-full h-1 rounded-full appearance-none cursor-pointer accent-green-400"
+                                          style={{ background: `linear-gradient(to right, #ef4444 0%, #374151 50%, #22c55e 100%)` }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center justify-between mb-0.5">
+                                          <span className="text-[7px] text-purple-400">Inhibition</span>
+                                          <span className="text-[7px] text-gray-400 font-mono">{ov?.inhibition || 0}%</span>
+                                        </div>
+                                        <input
+                                          type="range" min={0} max={100} value={ov?.inhibition || 0}
+                                          onChange={e => doUpdate({ inhibition: Number(e.target.value) })}
+                                          className="w-full h-1 rounded-full appearance-none cursor-pointer accent-purple-400"
+                                          style={{ background: `linear-gradient(to right, #374151 0%, #a855f7 100%)` }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center justify-between mb-0.5">
+                                          <span className="text-[7px] text-orange-400">Tension Offset</span>
+                                          <span className="text-[7px] text-gray-400 font-mono">{(ov?.tensionOffset || 0) > 0 ? '+' : ''}{ov?.tensionOffset || 0}%</span>
+                                        </div>
+                                        <input
+                                          type="range" min={-40} max={40} value={ov?.tensionOffset || 0}
+                                          onChange={e => doUpdate({ tensionOffset: Number(e.target.value) })}
+                                          className="w-full h-1 rounded-full appearance-none cursor-pointer accent-orange-400"
+                                          style={{ background: `linear-gradient(to right, #3b82f6 0%, #374151 50%, #f97316 100%)` }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center justify-between mb-0.5">
+                                          <span className="text-[7px] text-red-400">Pathology</span>
+                                        </div>
+                                        <select
+                                          value={ov?.pathology || 'none'}
+                                          onChange={e => doUpdate({ pathology: e.target.value as PathologyType })}
+                                          className="w-full text-[7px] bg-slate-800 border border-white/10 rounded px-1.5 py-0.5 text-white cursor-pointer focus:ring-1 focus:ring-cyan-500/40 focus:outline-none"
+                                        >
+                                          {Object.entries(PATHOLOGY_LABELS).map(([key, label]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div className="pt-1 border-t border-white/10 space-y-0.5">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[7px] text-gray-400">Tone</span>
+                                          <span className={`text-[7px] font-medium ${m.tone === 'hypertonic' ? 'text-red-400' : m.tone === 'hypotonic' ? 'text-blue-400' : 'text-green-400'}`}>
+                                            {getToneLabel(m.tone)}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[7px] text-gray-400">Fatigue Risk</span>
+                                          <span className={`text-[7px] font-medium ${m.fatigueRisk > 60 ? 'text-red-400' : m.fatigueRisk > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
+                                            {m.fatigueRisk.toFixed(0)}%
+                                          </span>
+                                        </div>
+                                        <p className="text-[7px] text-gray-400 leading-relaxed">{m.clinicalNote}</p>
+                                      </div>
+                                      <div className="pt-1 border-t border-white/10">
                                         <button
                                           className="text-[7px] text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5"
                                           onClick={(e) => { e.stopPropagation(); setShowMuscleExercises(prev => prev === m.id ? null : m.id); }}
@@ -3206,7 +3299,8 @@ ${ddxList}`;
                                         )}
                                       </div>
                                     </div>
-                                  )}
+                                    );
+                                  })()}
                                 </div>
                               );
                             })}

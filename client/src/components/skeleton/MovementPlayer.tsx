@@ -6,6 +6,26 @@ import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
 
 type PostureConfig = Record<string, Record<string, number | undefined> | undefined>;
 
+function mapToCompensationNames(animJoint: string, animMovement: string): { joint: string; movement: string } {
+  if (animJoint === 'neck') {
+    return { joint: 'cervical_spine', movement: animMovement === 'lateralFlexion' ? 'lateral_flexion' : animMovement };
+  }
+  if (animJoint === 'spine') {
+    if (animMovement === 'thoracicRotation') return { joint: 'thoracic_spine', movement: 'rotation' };
+    if (animMovement === 'lumbarRotation') return { joint: 'lumbar_spine', movement: 'rotation' };
+    if (animMovement === 'lateralFlexion') return { joint: 'thoracic_spine', movement: 'lateral_flexion' };
+    if (animMovement === 'flexion') return { joint: 'lumbar_spine', movement: 'flexion' };
+    if (animMovement === 'extension') return { joint: 'lumbar_spine', movement: 'extension' };
+    return { joint: 'thoracic_spine', movement: animMovement };
+  }
+  const movementMap: Record<string, string> = {
+    'lateralFlexion': 'lateral_flexion',
+    'internalRotation': 'internal_rotation',
+    'externalRotation': 'external_rotation',
+  };
+  return { joint: animJoint, movement: movementMap[animMovement] || animMovement };
+}
+
 interface MovementPlayerProps {
   animationState: AnimationState;
   onAnimationStateChange: (state: AnimationState) => void;
@@ -155,11 +175,12 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
       const key = `${def.joint}:${def.movement}`;
       const maxROM = restrictions[key];
       if (maxROM !== undefined && maxROM < def.defaultMaxROM) {
-        const normalROM = NORMAL_ROM[def.joint as keyof typeof NORMAL_ROM]?.[def.movement] || def.defaultMaxROM;
+        const mapped = mapToCompensationNames(def.joint, def.movement);
+        const normalROM = NORMAL_ROM[mapped.joint as keyof typeof NORMAL_ROM]?.[mapped.movement] || def.defaultMaxROM;
         jointConstraints.push({
           id: key,
-          joint: def.joint as any,
-          movement: def.movement as any,
+          joint: mapped.joint as any,
+          movement: mapped.movement as any,
           maxROM,
           normalROM,
           reason: 'stiffness',

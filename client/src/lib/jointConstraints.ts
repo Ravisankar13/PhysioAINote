@@ -8,6 +8,7 @@ export type JointType =
   | 'left_knee' | 'right_knee'
   | 'left_ankle' | 'right_ankle'
   | 'left_shoulder' | 'right_shoulder'
+  | 'left_elbow' | 'right_elbow'
   | 'left_scapula' | 'right_scapula';
 
 export type MovementType = 
@@ -132,6 +133,14 @@ export const NORMAL_ROM: Record<JointType, Record<string, number>> = {
     adduction: 50,
     internal_rotation: 70,
     external_rotation: 90,
+  },
+  left_elbow: {
+    flexion: 140,
+    extension: 0,
+  },
+  right_elbow: {
+    flexion: 140,
+    extension: 0,
   },
   left_scapula: {
     upwardRotation: 60,
@@ -360,6 +369,136 @@ const COMPENSATION_CHAINS: Array<{
       { joint: 'pelvis', movement: 'anterior_tilt', ratio: 0.2, loadIncrease: 25, note: 'Anterior pelvic tilt from thoracic restriction' },
     ],
   },
+  // Thoracic flexion restriction → lumbar and cervical compensate
+  {
+    source: { joint: 'thoracic_spine', movement: 'flexion' },
+    compensators: [
+      { joint: 'lumbar_spine', movement: 'flexion', ratio: 0.4, loadIncrease: 35, note: 'Lumbar flexion overload from thoracic stiffness' },
+      { joint: 'cervical_spine', movement: 'flexion', ratio: 0.3, loadIncrease: 25, note: 'Cervical hypermobility compensating for thoracic flexion loss' },
+    ],
+  },
+  // Pelvis rotation restriction → lumbar and thoracic compensate
+  {
+    source: { joint: 'pelvis', movement: 'rotation' },
+    compensators: [
+      { joint: 'lumbar_spine', movement: 'rotation', ratio: 0.4, loadIncrease: 35, note: 'Lumbar rotation overload from pelvic restriction (lumbar not designed for rotation)' },
+      { joint: 'thoracic_spine', movement: 'rotation', ratio: 0.3, loadIncrease: 25, note: 'Thoracic rotation compensating for pelvic rotation loss' },
+      { joint: 'left_hip', movement: 'internal_rotation', ratio: 0.2, loadIncrease: 20, note: 'Hip rotation compensating for pelvic restriction' },
+    ],
+  },
+  // Pelvis anterior tilt restriction → lumbar and hip compensate
+  {
+    source: { joint: 'pelvis', movement: 'anterior_tilt' },
+    compensators: [
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.4, loadIncrease: 30, note: 'Lumbar extension compensating for pelvic tilt restriction' },
+      { joint: 'left_hip', movement: 'flexion', ratio: 0.25, loadIncrease: 20, note: 'Hip flexion compensating for restricted pelvic motion' },
+      { joint: 'right_hip', movement: 'flexion', ratio: 0.25, loadIncrease: 20, note: 'Hip flexion compensating for restricted pelvic motion' },
+    ],
+  },
+  // Cervical flexion restriction → thoracic compensates
+  {
+    source: { joint: 'cervical_spine', movement: 'flexion' },
+    compensators: [
+      { joint: 'thoracic_spine', movement: 'flexion', ratio: 0.4, loadIncrease: 30, note: 'Upper thoracic hypermobility compensating for cervical flexion loss' },
+      { joint: 'left_shoulder', movement: 'flexion', ratio: 0.15, loadIncrease: 15, note: 'Shoulder protraction assisting neck flexion movement' },
+    ],
+  },
+  // Cervical extension restriction → thoracic compensates
+  {
+    source: { joint: 'cervical_spine', movement: 'extension' },
+    compensators: [
+      { joint: 'thoracic_spine', movement: 'extension', ratio: 0.4, loadIncrease: 30, note: 'Upper thoracic extension compensating for cervical extension loss' },
+      { joint: 'lumbar_spine', movement: 'extension', ratio: 0.2, loadIncrease: 25, note: 'Lumbar lordosis increase to look upward' },
+    ],
+  },
+  // Cervical lateral flexion restriction → thoracic compensates
+  {
+    source: { joint: 'cervical_spine', movement: 'lateral_flexion' },
+    compensators: [
+      { joint: 'thoracic_spine', movement: 'lateral_flexion', ratio: 0.5, loadIncrease: 30, note: 'Upper thoracic lateral flexion compensating for cervical restriction' },
+      { joint: 'left_shoulder', movement: 'abduction', ratio: 0.15, loadIncrease: 15, note: 'Ipsilateral shoulder elevation assisting head tilt' },
+    ],
+  },
+  // Thoracic lateral flexion restriction → lumbar and pelvis compensate
+  {
+    source: { joint: 'thoracic_spine', movement: 'lateral_flexion' },
+    compensators: [
+      { joint: 'lumbar_spine', movement: 'lateral_flexion', ratio: 0.4, loadIncrease: 35, note: 'Lumbar lateral flexion overload from thoracic restriction' },
+      { joint: 'pelvis', movement: 'obliquity', ratio: 0.3, loadIncrease: 25, note: 'Pelvis hiking to achieve lateral trunk motion' },
+    ],
+  },
+  // Lumbar lateral flexion restriction → thoracic and pelvis compensate
+  {
+    source: { joint: 'lumbar_spine', movement: 'lateral_flexion' },
+    compensators: [
+      { joint: 'thoracic_spine', movement: 'lateral_flexion', ratio: 0.4, loadIncrease: 30, note: 'Thoracic lateral flexion compensating for lumbar restriction' },
+      { joint: 'pelvis', movement: 'obliquity', ratio: 0.3, loadIncrease: 25, note: 'Pelvis obliquity compensating for lumbar lateral restriction' },
+      { joint: 'left_hip', movement: 'abduction', ratio: 0.2, loadIncrease: 20, note: 'Hip abductor activation to assist lateral trunk lean' },
+    ],
+  },
+  // Ankle plantarflexion restriction (left)
+  {
+    source: { joint: 'left_ankle', movement: 'plantarflexion' },
+    compensators: [
+      { joint: 'left_knee', movement: 'flexion', ratio: 0.3, loadIncrease: 25, note: 'Knee flexion compensating for reduced push-off power' },
+      { joint: 'left_hip', movement: 'flexion', ratio: 0.35, loadIncrease: 30, note: 'Hip flexion increasing stride compensation for weak push-off' },
+      { joint: 'pelvis', movement: 'anterior_tilt', ratio: 0.15, loadIncrease: 20, note: 'Anterior pelvic tilt during gait compensation' },
+    ],
+  },
+  // Ankle plantarflexion restriction (right)
+  {
+    source: { joint: 'right_ankle', movement: 'plantarflexion' },
+    compensators: [
+      { joint: 'right_knee', movement: 'flexion', ratio: 0.3, loadIncrease: 25, note: 'Knee flexion compensating for reduced push-off power' },
+      { joint: 'right_hip', movement: 'flexion', ratio: 0.35, loadIncrease: 30, note: 'Hip flexion increasing stride compensation for weak push-off' },
+      { joint: 'pelvis', movement: 'anterior_tilt', ratio: 0.15, loadIncrease: 20, note: 'Anterior pelvic tilt during gait compensation' },
+    ],
+  },
+  // Hip abduction restriction (left)
+  {
+    source: { joint: 'left_hip', movement: 'abduction' },
+    compensators: [
+      { joint: 'lumbar_spine', movement: 'lateral_flexion', ratio: 0.35, loadIncrease: 30, note: 'Lumbar lateral flexion compensating for hip abduction deficit' },
+      { joint: 'pelvis', movement: 'obliquity', ratio: 0.3, loadIncrease: 25, note: 'Pelvis hiking (Trendelenburg compensation) from hip abduction loss' },
+      { joint: 'left_knee', movement: 'flexion', ratio: 0.15, loadIncrease: 20, note: 'Knee valgus stress from hip abduction weakness' },
+    ],
+  },
+  // Hip abduction restriction (right)
+  {
+    source: { joint: 'right_hip', movement: 'abduction' },
+    compensators: [
+      { joint: 'lumbar_spine', movement: 'lateral_flexion', ratio: 0.35, loadIncrease: 30, note: 'Lumbar lateral flexion compensating for hip abduction deficit' },
+      { joint: 'pelvis', movement: 'obliquity', ratio: 0.3, loadIncrease: 25, note: 'Pelvis hiking (Trendelenburg compensation) from hip abduction loss' },
+      { joint: 'right_knee', movement: 'flexion', ratio: 0.15, loadIncrease: 20, note: 'Knee valgus stress from hip abduction weakness' },
+    ],
+  },
+  // Pelvis obliquity restriction
+  {
+    source: { joint: 'pelvis', movement: 'obliquity' },
+    compensators: [
+      { joint: 'lumbar_spine', movement: 'lateral_flexion', ratio: 0.4, loadIncrease: 35, note: 'Lumbar lateral flexion compensating for pelvic obliquity restriction' },
+      { joint: 'left_hip', movement: 'abduction', ratio: 0.3, loadIncrease: 25, note: 'Hip abductor overload from pelvic instability' },
+      { joint: 'thoracic_spine', movement: 'lateral_flexion', ratio: 0.2, loadIncrease: 20, note: 'Thoracic lateral shift to maintain balance' },
+    ],
+  },
+  // Elbow flexion restriction (left)
+  {
+    source: { joint: 'left_elbow', movement: 'flexion' },
+    compensators: [
+      { joint: 'left_shoulder', movement: 'flexion', ratio: 0.35, loadIncrease: 25, note: 'Shoulder flexion compensating for elbow restriction during reaching' },
+      { joint: 'left_shoulder', movement: 'internal_rotation', ratio: 0.2, loadIncrease: 20, note: 'Shoulder rotation to position hand with limited elbow bend' },
+      { joint: 'thoracic_spine', movement: 'rotation', ratio: 0.15, loadIncrease: 15, note: 'Trunk rotation to bring object closer when elbow cannot flex' },
+    ],
+  },
+  // Elbow flexion restriction (right)
+  {
+    source: { joint: 'right_elbow', movement: 'flexion' },
+    compensators: [
+      { joint: 'right_shoulder', movement: 'flexion', ratio: 0.35, loadIncrease: 25, note: 'Shoulder flexion compensating for elbow restriction during reaching' },
+      { joint: 'right_shoulder', movement: 'internal_rotation', ratio: 0.2, loadIncrease: 20, note: 'Shoulder rotation to position hand with limited elbow bend' },
+      { joint: 'thoracic_spine', movement: 'rotation', ratio: 0.15, loadIncrease: 15, note: 'Trunk rotation to bring object closer when elbow cannot flex' },
+    ],
+  },
 ];
 
 // Structure overload mapping - which structures get overloaded for each compensation
@@ -396,6 +535,18 @@ const OVERLOAD_STRUCTURES: Record<string, string[]> = {
   'right_hip:extension': ['Hip flexor complex', 'Anterior hip capsule', 'Lumbar facet joints'],
   'left_ankle:eversion': ['Peroneal tendons', 'Lateral ankle ligaments', 'Subtalar joint'],
   'right_ankle:eversion': ['Peroneal tendons', 'Lateral ankle ligaments', 'Subtalar joint'],
+  'cervical_spine:flexion': ['C4-C6 disc complex', 'Posterior cervical ligaments', 'Suboccipital muscles'],
+  'cervical_spine:lateral_flexion': ['Scalene muscles', 'Cervical facet joints', 'Brachial plexus'],
+  'thoracic_spine:lateral_flexion': ['Intercostal muscles', 'Costovertebral joints', 'Thoracic facet joints'],
+  'lumbar_spine:lateral_flexion': ['Quadratus lumborum', 'Lumbar facet joints', 'Intertransverse ligaments'],
+  'left_ankle:plantarflexion': ['Gastrocnemius', 'Soleus', 'Posterior tibialis', 'Plantar fascia'],
+  'right_ankle:plantarflexion': ['Gastrocnemius', 'Soleus', 'Posterior tibialis', 'Plantar fascia'],
+  'left_hip:abduction': ['Gluteus medius', 'Gluteus minimus', 'ITB/TFL complex', 'Hip capsule'],
+  'right_hip:abduction': ['Gluteus medius', 'Gluteus minimus', 'ITB/TFL complex', 'Hip capsule'],
+  'pelvis:obliquity': ['Quadratus lumborum', 'Gluteus medius', 'Sacroiliac joint', 'Hip abductors'],
+  'pelvis:rotation': ['Sacroiliac joint', 'Hip rotators', 'Lumbar facet joints', 'Pubic symphysis'],
+  'left_elbow:flexion': ['Biceps tendon', 'Brachialis', 'Medial collateral ligament', 'Ulnohumeral joint'],
+  'right_elbow:flexion': ['Biceps tendon', 'Brachialis', 'Medial collateral ligament', 'Ulnohumeral joint'],
 };
 
 export interface PostureDeviation {
@@ -654,6 +805,8 @@ export function getJointDisplayInfo(joint: JointType): { name: string; icon: str
     right_ankle: { name: 'Right Ankle', icon: '🦶', category: 'Lower Limb' },
     left_shoulder: { name: 'Left Shoulder', icon: '💪', category: 'Upper Limb' },
     right_shoulder: { name: 'Right Shoulder', icon: '💪', category: 'Upper Limb' },
+    left_elbow: { name: 'Left Elbow', icon: '💪', category: 'Upper Limb' },
+    right_elbow: { name: 'Right Elbow', icon: '💪', category: 'Upper Limb' },
     left_scapula: { name: 'Left Scapula', icon: '🦴', category: 'Upper Limb' },
     right_scapula: { name: 'Right Scapula', icon: '🦴', category: 'Upper Limb' },
   };

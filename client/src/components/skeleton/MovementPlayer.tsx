@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight, PersonStanding, Zap, TrendingUp } from 'lucide-react';
 import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, type MovementSequence } from '@/lib/movementSequences';
-import { calculateCompensations, computePostureDeviations, NORMAL_ROM, type JointConstraint, type ClinicalWarning, type CompensationResult } from '@/lib/jointConstraints';
+import { calculateCompensations, computePostureDeviations, NORMAL_ROM, getClinicalConsequences, type JointConstraint, type ClinicalWarning, type CompensationResult, type ClinicalConsequence } from '@/lib/jointConstraints';
 import { getMovementBiomechanics, computeRestrictionOverloads, type BiomechanicsSnapshot } from '@/lib/movementBiomechanics';
 import type { AnimationState, AnimationConstraint } from './PureThreeGLBViewer';
 
@@ -586,21 +586,48 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
                         <span className="text-[10px] font-medium text-amber-300">Active Compensations</span>
                       </div>
                       <div className="space-y-1.5">
-                        {compensationResult.patterns.map((p, i) => (
-                          <div key={i} className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
-                            <div className="flex items-center gap-1 text-[10px] text-amber-300 font-medium">
-                              <span>{formatJoint(p.compensatingJoint)}</span>
-                              <span className="text-amber-500/60">compensating for</span>
-                              <span className="text-amber-400/80">{formatJoint(p.sourceJoint)}</span>
+                        {compensationResult.patterns.map((p, i) => {
+                          const consequences = getClinicalConsequences(p.compensatingJoint, p.compensatingMovement);
+                          return (
+                            <div key={i} className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                              <div className="flex items-center gap-1 text-[10px] text-amber-300 font-medium">
+                                <span>{formatJoint(p.compensatingJoint)}</span>
+                                <span className="text-amber-500/60">compensating for</span>
+                                <span className="text-amber-400/80">{formatJoint(p.sourceJoint)}</span>
+                              </div>
+                              <div className="text-[9px] text-gray-400 mt-0.5">{p.clinicalNote}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-[9px] font-mono ${p.additionalLoad > 30 ? 'text-red-400' : 'text-amber-400'}`}>+{Math.round(p.additionalLoad)}% load</span>
+                                <span className="text-[9px] text-gray-600">|</span>
+                                <span className="text-[9px] text-amber-500/80 font-mono">{Math.round(p.compensationRatio * 100)}% ratio</span>
+                              </div>
+                              {consequences.length > 0 && (
+                                <div className="mt-1.5 pt-1.5 border-t border-gray-700/40">
+                                  <div className="text-[9px] text-gray-500 mb-1 font-medium uppercase tracking-wider">Clinical Risks</div>
+                                  <div className="space-y-1">
+                                    {consequences.map((c, ci) => (
+                                      <div key={ci} className={`flex items-start gap-1.5 rounded px-1.5 py-1 ${
+                                        c.severity === 'severe' 
+                                          ? 'bg-red-500/10 border border-red-500/15' 
+                                          : 'bg-yellow-500/10 border border-yellow-500/15'
+                                      }`}>
+                                        <div className={`w-1 h-1 rounded-full mt-1 flex-shrink-0 ${
+                                          c.severity === 'severe' ? 'bg-red-400' : 'bg-yellow-400'
+                                        }`} />
+                                        <div>
+                                          <span className={`text-[9px] font-medium ${
+                                            c.severity === 'severe' ? 'text-red-300' : 'text-yellow-300'
+                                          }`}>{c.condition}</span>
+                                          <span className="text-[8px] text-gray-500 ml-1">— {c.mechanism}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <div className="text-[9px] text-gray-400 mt-0.5">{p.clinicalNote}</div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`text-[9px] font-mono ${p.additionalLoad > 30 ? 'text-red-400' : 'text-amber-400'}`}>+{Math.round(p.additionalLoad)}% load</span>
-                              <span className="text-[9px] text-gray-600">|</span>
-                              <span className="text-[9px] text-amber-500/80 font-mono">{Math.round(p.compensationRatio * 100)}% ratio</span>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

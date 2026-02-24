@@ -549,6 +549,106 @@ const OVERLOAD_STRUCTURES: Record<string, string[]> = {
   'right_elbow:flexion': ['Biceps tendon', 'Brachialis', 'Medial collateral ligament', 'Ulnohumeral joint'],
 };
 
+export interface ClinicalConsequence {
+  condition: string;
+  mechanism: string;
+  severity: 'moderate' | 'severe';
+}
+
+const CLINICAL_CONSEQUENCES: Record<string, ClinicalConsequence[]> = {
+  'left_shoulder:flexion': [
+    { condition: 'Subacromial impingement', mechanism: 'GH forced beyond normal arc — supraspinatus compressed under acromion', severity: 'severe' },
+    { condition: 'Superior labral tear risk', mechanism: 'Excessive GH translation stresses superior labrum attachment', severity: 'moderate' },
+    { condition: 'Rotator cuff overload', mechanism: 'Supraspinatus and infraspinatus working beyond normal demand', severity: 'severe' },
+  ],
+  'right_shoulder:flexion': [
+    { condition: 'Subacromial impingement', mechanism: 'GH forced beyond normal arc — supraspinatus compressed under acromion', severity: 'severe' },
+    { condition: 'Superior labral tear risk', mechanism: 'Excessive GH translation stresses superior labrum attachment', severity: 'moderate' },
+    { condition: 'Rotator cuff overload', mechanism: 'Supraspinatus and infraspinatus working beyond normal demand', severity: 'severe' },
+  ],
+  'left_shoulder:abduction': [
+    { condition: 'Subacromial impingement', mechanism: 'Narrowed subacromial space during compensatory abduction', severity: 'severe' },
+    { condition: 'AC joint degeneration', mechanism: 'Excessive force through acromioclavicular joint', severity: 'moderate' },
+  ],
+  'right_shoulder:abduction': [
+    { condition: 'Subacromial impingement', mechanism: 'Narrowed subacromial space during compensatory abduction', severity: 'severe' },
+    { condition: 'AC joint degeneration', mechanism: 'Excessive force through acromioclavicular joint', severity: 'moderate' },
+  ],
+  'left_shoulder:internal_rotation': [
+    { condition: 'Anterior capsule laxity', mechanism: 'Repeated anterior translation stretches capsule', severity: 'moderate' },
+    { condition: 'Subscapularis strain', mechanism: 'Overworked internal rotator beyond normal demand', severity: 'moderate' },
+  ],
+  'right_shoulder:internal_rotation': [
+    { condition: 'Anterior capsule laxity', mechanism: 'Repeated anterior translation stretches capsule', severity: 'moderate' },
+    { condition: 'Subscapularis strain', mechanism: 'Overworked internal rotator beyond normal demand', severity: 'moderate' },
+  ],
+  'left_shoulder:external_rotation': [
+    { condition: 'Posterior capsule tightness', mechanism: 'Compensatory external rotation stresses posterior structures', severity: 'moderate' },
+    { condition: 'Internal impingement', mechanism: 'Posterior-superior glenoid contact with excessive external rotation', severity: 'severe' },
+  ],
+  'right_shoulder:external_rotation': [
+    { condition: 'Posterior capsule tightness', mechanism: 'Compensatory external rotation stresses posterior structures', severity: 'moderate' },
+    { condition: 'Internal impingement', mechanism: 'Posterior-superior glenoid contact with excessive external rotation', severity: 'severe' },
+  ],
+  'left_scapula:upwardRotation': [
+    { condition: 'Scapular dyskinesis', mechanism: 'Serratus anterior and lower trapezius overloaded, altered scapular rhythm', severity: 'moderate' },
+    { condition: 'Pec minor adaptive shortening', mechanism: 'Compensatory scapular anterior tilt from pec minor overactivity', severity: 'moderate' },
+  ],
+  'right_scapula:upwardRotation': [
+    { condition: 'Scapular dyskinesis', mechanism: 'Serratus anterior and lower trapezius overloaded, altered scapular rhythm', severity: 'moderate' },
+    { condition: 'Pec minor adaptive shortening', mechanism: 'Compensatory scapular anterior tilt from pec minor overactivity', severity: 'moderate' },
+  ],
+  'thoracic_spine:extension': [
+    { condition: 'Facet joint loading', mechanism: 'T8-T12 facets compressed with compensatory extension', severity: 'moderate' },
+    { condition: 'Costovertebral joint stress', mechanism: 'Rib articulations strained by excessive thoracic extension', severity: 'moderate' },
+  ],
+  'thoracic_spine:rotation': [
+    { condition: 'Costovertebral joint dysfunction', mechanism: 'Rib articulations stressed by excessive rotation demand', severity: 'moderate' },
+  ],
+  'lumbar_spine:extension': [
+    { condition: 'Lumbar facet irritation', mechanism: 'Compensatory hyperlordosis compresses posterior elements', severity: 'severe' },
+    { condition: 'Spondylolisthesis risk', mechanism: 'Repeated extension overload at pars interarticularis', severity: 'severe' },
+  ],
+  'lumbar_spine:flexion': [
+    { condition: 'Disc herniation risk', mechanism: 'Excessive flexion loads L4-L5 and L5-S1 discs posteriorly', severity: 'severe' },
+    { condition: 'Posterior ligament strain', mechanism: 'Compensatory flexion stretches posterior longitudinal ligament', severity: 'moderate' },
+  ],
+  'lumbar_spine:rotation': [
+    { condition: 'Annular tear risk', mechanism: 'Lumbar spine poorly designed for rotation — shear on disc annulus', severity: 'severe' },
+    { condition: 'Facet joint capsule strain', mechanism: 'Rotational forces exceed facet joint capacity', severity: 'moderate' },
+  ],
+  'cervical_spine:rotation': [
+    { condition: 'C1-C2 instability risk', mechanism: 'Excessive atlantoaxial rotation beyond normal range', severity: 'severe' },
+    { condition: 'Vertebral artery compromise', mechanism: 'Repeated end-range cervical rotation may stress vertebral arteries', severity: 'severe' },
+  ],
+  'cervical_spine:extension': [
+    { condition: 'Cervical foraminal stenosis', mechanism: 'Extension narrows intervertebral foramina compressing nerve roots', severity: 'moderate' },
+  ],
+  'pelvis:anterior_tilt': [
+    { condition: 'Hip flexor adaptive shortening', mechanism: 'Sustained anterior tilt shortens iliopsoas and rectus femoris', severity: 'moderate' },
+    { condition: 'SIJ dysfunction', mechanism: 'Altered pelvic mechanics stress sacroiliac joint', severity: 'moderate' },
+  ],
+  'left_hip:flexion': [
+    { condition: 'Hip labral stress', mechanism: 'Compensatory flexion increases anterosuperior labral load', severity: 'moderate' },
+    { condition: 'FAI risk', mechanism: 'Excessive hip flexion may cause femoroacetabular impingement', severity: 'moderate' },
+  ],
+  'right_hip:flexion': [
+    { condition: 'Hip labral stress', mechanism: 'Compensatory flexion increases anterosuperior labral load', severity: 'moderate' },
+    { condition: 'FAI risk', mechanism: 'Excessive hip flexion may cause femoroacetabular impingement', severity: 'moderate' },
+  ],
+  'left_knee:flexion': [
+    { condition: 'Patellofemoral overload', mechanism: 'Increased patellofemoral contact pressure with deep flexion compensation', severity: 'moderate' },
+  ],
+  'right_knee:flexion': [
+    { condition: 'Patellofemoral overload', mechanism: 'Increased patellofemoral contact pressure with deep flexion compensation', severity: 'moderate' },
+  ],
+};
+
+export function getClinicalConsequences(compensatingJoint: string, compensatingMovement: string): ClinicalConsequence[] {
+  const key = `${compensatingJoint}:${compensatingMovement}`;
+  return CLINICAL_CONSEQUENCES[key] || [];
+}
+
 export interface PostureDeviation {
   joint: JointType;
   movement: MovementType;

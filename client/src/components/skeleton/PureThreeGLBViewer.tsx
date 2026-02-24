@@ -4951,84 +4951,11 @@ export default function PureThreeGLBViewer({
             );
           }
         } else {
-          const hasExplicitLegKeyframes = movement.joints.some(j => 
-            (j.joint === 'leftHip' || j.joint === 'rightHip' || j.joint === 'leftKnee' || j.joint === 'rightKnee') &&
-            (j.property === 'flexion')
+          applySquatIK(
+            bones as { [name: string]: THREE.Bone },
+            ikInitialRotations,
+            ikState
           );
-          
-          if (hasExplicitLegKeyframes) {
-            const legBoneNames = ['Hip_L', 'Hip_R'];
-            legBoneNames.forEach(boneName => {
-              const anim = animBoneRotations[boneName];
-              if (!anim) return;
-              const bone = bones[boneName] as THREE.Bone;
-              if (bone) {
-                bone.rotation.x = anim.x;
-                bone.rotation.y = anim.y;
-                bone.rotation.z = anim.z;
-              }
-            });
-            
-            ['Hip_L', 'HipPart1_L', 'HipPart2_L', 'Hip_R', 'HipPart1_R', 'HipPart2_R'].forEach(name => {
-              const b = bones[name] as THREE.Bone;
-              if (b) b.updateWorldMatrix(true, false);
-            });
-            
-            ['Knee_L', 'Knee_R'].forEach(boneName => {
-              const initial = initialRotations[boneName];
-              const anim = animBoneRotations[boneName];
-              if (!initial || !anim) return;
-              
-              const zDelta = anim.z - initial.z;
-              if (Math.abs(zDelta) < 0.001) {
-                const bone = bones[boneName] as THREE.Bone;
-                if (bone) {
-                  bone.rotation.x = initial.x;
-                  bone.rotation.y = initial.y;
-                  bone.rotation.z = initial.z;
-                }
-                return;
-              }
-              
-              const bone = bones[boneName] as THREE.Bone;
-              if (!bone || !bone.parent) return;
-              
-              const parentWorldQ = new THREE.Quaternion();
-              bone.parent.getWorldQuaternion(parentWorldQ);
-              const parentWorldQInv = parentWorldQ.clone().invert();
-              
-              const worldFlexAxis = new THREE.Vector3(-1, 0, 0);
-              const localFlexAxis = worldFlexAxis.clone().applyQuaternion(parentWorldQInv).normalize();
-              
-              const qInit = new THREE.Quaternion().setFromEuler(
-                new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
-              );
-              const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexAxis, zDelta);
-              const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
-              const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
-              
-              bone.rotation.x = eulerResult.x;
-              bone.rotation.y = eulerResult.y;
-              bone.rotation.z = eulerResult.z;
-            });
-            
-            ['Ankle_L', 'Ankle_R'].forEach(boneName => {
-              const anim = animBoneRotations[boneName];
-              if (!anim) return;
-              const bone = bones[boneName] as THREE.Bone;
-              if (bone) {
-                bone.rotation.x = anim.x;
-                bone.rotation.y = anim.y;
-                bone.rotation.z = anim.z;
-              }
-            });
-          } else {
-            applySquatIK(
-              bones as { [name: string]: THREE.Bone },
-              ikInitialRotations,
-              ikState
-            );
-          }
         }
         
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {

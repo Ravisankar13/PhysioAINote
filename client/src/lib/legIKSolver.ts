@@ -167,16 +167,48 @@ export function applyLegIK(
   const thighInitial = initialRotations[config.thighBoneName];
   const shinInitial = initialRotations[config.shinBoneName];
 
-  if (thighInitial) {
-    thighBone.rotation.x = thighInitial.x;
-    thighBone.rotation.y = thighInitial.y;
-    thighBone.rotation.z = thighInitial.z + deltaHipAngle;
+  if (thighInitial && thighBone.parent) {
+    thighBone.parent.updateWorldMatrix(true, false);
+    const parentWorldQ = new THREE.Quaternion();
+    thighBone.parent.getWorldQuaternion(parentWorldQ);
+    const parentWorldQInv = parentWorldQ.clone().invert();
+
+    const worldFlexAxis = new THREE.Vector3(-1, 0, 0);
+    const localFlexAxis = worldFlexAxis.clone().applyQuaternion(parentWorldQInv).normalize();
+
+    const qInit = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(thighInitial.x, thighInitial.y, thighInitial.z, 'XYZ')
+    );
+    const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexAxis, deltaHipAngle);
+    const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
+    const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
+
+    thighBone.rotation.x = eulerResult.x;
+    thighBone.rotation.y = eulerResult.y;
+    thighBone.rotation.z = eulerResult.z;
   }
 
-  if (shinInitial) {
-    shinBone.rotation.x = shinInitial.x;
-    shinBone.rotation.y = shinInitial.y;
-    shinBone.rotation.z = shinInitial.z - deltaKneeAngle;
+  thighBone.updateWorldMatrix(true, false);
+
+  if (shinInitial && shinBone.parent) {
+    shinBone.parent.updateWorldMatrix(true, false);
+    const parentWorldQ = new THREE.Quaternion();
+    shinBone.parent.getWorldQuaternion(parentWorldQ);
+    const parentWorldQInv = parentWorldQ.clone().invert();
+
+    const worldFlexAxis = new THREE.Vector3(-1, 0, 0);
+    const localFlexAxis = worldFlexAxis.clone().applyQuaternion(parentWorldQInv).normalize();
+
+    const qInit = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(shinInitial.x, shinInitial.y, shinInitial.z, 'XYZ')
+    );
+    const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexAxis, -deltaKneeAngle);
+    const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
+    const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
+
+    shinBone.rotation.x = eulerResult.x;
+    shinBone.rotation.y = eulerResult.y;
+    shinBone.rotation.z = eulerResult.z;
   }
 }
 

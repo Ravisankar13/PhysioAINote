@@ -31,6 +31,12 @@ export const ANATOMICAL_RANGES = {
   knee: {
     flexion: { min: 0, max: 2.4 }                      // 0° to 140° (straight to fully bent)
   },
+  ankle: {
+    dorsiflexion: { min: -0.87, max: 0.35 }            // -50° plantarflexion to 20° dorsiflexion
+  },
+  wrist: {
+    flexion: { min: -1.2, max: 1.2 }                   // ~-70° extension to ~70° flexion
+  },
   spine: {
     forward: { min: -0.5, max: 0.7 },                  // Extension to flexion
     lateral: { min: -0.5, max: 0.5 }                   // Side bending
@@ -47,14 +53,18 @@ export const ANATOMICAL_RANGES = {
  * All values are in radians, where 0 = neutral position
  */
 export interface ControllerValues {
-  leftShoulder: { flexion: number; abduction: number };
-  rightShoulder: { flexion: number; abduction: number };
+  leftShoulder: { flexion: number; abduction: number; internalRotation: number };
+  rightShoulder: { flexion: number; abduction: number; internalRotation: number };
   leftElbow: { flexion: number };
   rightElbow: { flexion: number };
   leftHip: { flexion: number; abduction: number };
   rightHip: { flexion: number; abduction: number };
   leftKnee: { flexion: number };
   rightKnee: { flexion: number };
+  leftAnkle: { dorsiflexion: number };
+  rightAnkle: { dorsiflexion: number };
+  leftWrist: { flexion: number };
+  rightWrist: { flexion: number };
   pelvis: { tilt: number; obliquity: number };
   spine: { flexion: number; lateralFlexion: number };
   neck: { flexion: number; rotation: number; lateralFlexion: number };
@@ -84,13 +94,13 @@ function applyDeadZone(value: number, threshold: number = 0.03): number {
  * Dead zone for arms - larger threshold to prevent twitching when standing still
  * but small enough to detect intentional ~15° movements
  */
-const ARM_DEAD_ZONE = 0.12; // ~7 degrees - balances stability vs responsiveness
+const ARM_DEAD_ZONE = 0.06; // ~3.5 degrees - tracks small intentional arm adjustments
 
 /**
  * Dead zone for spine - smaller threshold relies on ControllerSmoother for jitter control
  * while preserving moderate torso movements
  */
-const SPINE_DEAD_ZONE = 0.05; // ~3 degrees - minimal filtering, smoother handles jitter
+const SPINE_DEAD_ZONE = 0.03; // ~1.7 degrees - better torso tracking sensitivity
 
 /**
  * Convert Skeleton3DPose to controller-compatible values
@@ -113,6 +123,9 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   
   const rightShoulderFlexion = applyDeadZone(clamp(pose.rightShoulder.x, shoulder.flexion.min, shoulder.flexion.max), ARM_DEAD_ZONE);
   const rightShoulderAbduction = applyDeadZone(clamp(pose.rightShoulder.z, shoulder.abduction.min, shoulder.abduction.max), ARM_DEAD_ZONE);
+
+  const leftShoulderInternalRotation = applyDeadZone(clamp(pose.leftShoulder.y, -1.2, 1.2), ARM_DEAD_ZONE);
+  const rightShoulderInternalRotation = applyDeadZone(clamp(pose.rightShoulder.y, -1.2, 1.2), ARM_DEAD_ZONE);
   
   // Elbows - x=flexion (0=straight, positive=bent) - use larger dead zone
   const leftElbowFlexion = applyDeadZone(clamp(pose.leftElbow.x, elbow.flexion.min, elbow.flexion.max), ARM_DEAD_ZONE);
@@ -129,6 +142,15 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   const leftKneeFlexion = applyDeadZone(clamp(pose.leftKnee.x, knee.flexion.min, knee.flexion.max));
   const rightKneeFlexion = applyDeadZone(clamp(pose.rightKnee.x, knee.flexion.min, knee.flexion.max));
   
+  // Ankles - x=dorsiflexion (positive=dorsiflexion, negative=plantarflexion)
+  const { ankle, wrist } = ANATOMICAL_RANGES;
+  const leftAnkleDorsiflexion = applyDeadZone(clamp(pose.leftAnkle.x, ankle.dorsiflexion.min, ankle.dorsiflexion.max));
+  const rightAnkleDorsiflexion = applyDeadZone(clamp(pose.rightAnkle.x, ankle.dorsiflexion.min, ankle.dorsiflexion.max));
+  
+  // Wrists - x=flexion (positive=flexion, negative=extension)
+  const leftWristFlexion = applyDeadZone(clamp(pose.leftWrist.x, wrist.flexion.min, wrist.flexion.max), ARM_DEAD_ZONE);
+  const rightWristFlexion = applyDeadZone(clamp(pose.rightWrist.x, wrist.flexion.min, wrist.flexion.max), ARM_DEAD_ZONE);
+  
   // Pelvis - derived from spine forward/lateral lean with subtle scaling
   const pelvisTilt = applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max)) * 0.5;
   const pelvisObliquity = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max)) * 0.3;
@@ -144,14 +166,18 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   const neckLateralFlexion = applyDeadZone(clamp(pose.neck.z, neck.lateral.min, neck.lateral.max));
   
   return {
-    leftShoulder: { flexion: leftShoulderFlexion, abduction: leftShoulderAbduction },
-    rightShoulder: { flexion: rightShoulderFlexion, abduction: rightShoulderAbduction },
+    leftShoulder: { flexion: leftShoulderFlexion, abduction: leftShoulderAbduction, internalRotation: leftShoulderInternalRotation },
+    rightShoulder: { flexion: rightShoulderFlexion, abduction: rightShoulderAbduction, internalRotation: rightShoulderInternalRotation },
     leftElbow: { flexion: leftElbowFlexion },
     rightElbow: { flexion: rightElbowFlexion },
     leftHip: { flexion: leftHipFlexion, abduction: leftHipAbduction },
     rightHip: { flexion: rightHipFlexion, abduction: rightHipAbduction },
     leftKnee: { flexion: leftKneeFlexion },
     rightKnee: { flexion: rightKneeFlexion },
+    leftAnkle: { dorsiflexion: leftAnkleDorsiflexion },
+    rightAnkle: { dorsiflexion: rightAnkleDorsiflexion },
+    leftWrist: { flexion: leftWristFlexion },
+    rightWrist: { flexion: rightWristFlexion },
     pelvis: { tilt: pelvisTilt, obliquity: pelvisObliquity },
     spine: { flexion: spineFlexion, lateralFlexion: spineLateralFlexion },
     neck: { flexion: neckFlexion, rotation: neckRotation, lateralFlexion: neckLateralFlexion }
@@ -167,7 +193,7 @@ export class ControllerSmoother {
   private smoothingFactor: number;
   private noiseThreshold: number;
   
-  constructor(smoothingFactor: number = 0.4, noiseThreshold: number = 0.02) {
+  constructor(smoothingFactor: number = 0.6, noiseThreshold: number = 0.015) {
     this.smoothingFactor = smoothingFactor;
     this.noiseThreshold = noiseThreshold;
   }
@@ -182,7 +208,7 @@ export class ControllerSmoother {
       const delta = curr - prev;
       // More smoothing for small movements (noise), less for large (intentional)
       const factor = Math.abs(delta) < this.noiseThreshold 
-        ? this.smoothingFactor * 0.3 
+        ? this.smoothingFactor * 0.5 
         : this.smoothingFactor;
       return prev + delta * factor;
     };
@@ -190,11 +216,13 @@ export class ControllerSmoother {
     const smoothed: ControllerValues = {
       leftShoulder: {
         flexion: smoothValue(current.leftShoulder.flexion, this.previous.leftShoulder.flexion),
-        abduction: smoothValue(current.leftShoulder.abduction, this.previous.leftShoulder.abduction)
+        abduction: smoothValue(current.leftShoulder.abduction, this.previous.leftShoulder.abduction),
+        internalRotation: smoothValue(current.leftShoulder.internalRotation, this.previous.leftShoulder.internalRotation)
       },
       rightShoulder: {
         flexion: smoothValue(current.rightShoulder.flexion, this.previous.rightShoulder.flexion),
-        abduction: smoothValue(current.rightShoulder.abduction, this.previous.rightShoulder.abduction)
+        abduction: smoothValue(current.rightShoulder.abduction, this.previous.rightShoulder.abduction),
+        internalRotation: smoothValue(current.rightShoulder.internalRotation, this.previous.rightShoulder.internalRotation)
       },
       leftElbow: {
         flexion: smoothValue(current.leftElbow.flexion, this.previous.leftElbow.flexion)
@@ -215,6 +243,18 @@ export class ControllerSmoother {
       },
       rightKnee: {
         flexion: smoothValue(current.rightKnee.flexion, this.previous.rightKnee.flexion)
+      },
+      leftAnkle: {
+        dorsiflexion: smoothValue(current.leftAnkle.dorsiflexion, this.previous.leftAnkle.dorsiflexion)
+      },
+      rightAnkle: {
+        dorsiflexion: smoothValue(current.rightAnkle.dorsiflexion, this.previous.rightAnkle.dorsiflexion)
+      },
+      leftWrist: {
+        flexion: smoothValue(current.leftWrist.flexion, this.previous.leftWrist.flexion)
+      },
+      rightWrist: {
+        flexion: smoothValue(current.rightWrist.flexion, this.previous.rightWrist.flexion)
       },
       pelvis: {
         tilt: smoothValue(current.pelvis.tilt, this.previous.pelvis.tilt),

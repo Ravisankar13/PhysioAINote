@@ -119,11 +119,11 @@ export default function CameraPoseCapture({
       });
 
       pose.setOptions({
-        modelComplexity: 1,
+        modelComplexity: 2,
         smoothLandmarks: true,
         enableSegmentation: false,
-        minDetectionConfidence: 0.6,
-        minTrackingConfidence: 0.6
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7
       });
 
       pose.onResults((results: any) => {

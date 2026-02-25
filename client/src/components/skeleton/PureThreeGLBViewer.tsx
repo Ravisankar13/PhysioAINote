@@ -4684,8 +4684,10 @@ export default function PureThreeGLBViewer({
       // Shoulders - flexion and abduction
       'leftShoulder.flexion': controllerValues.leftShoulder.flexion,
       'leftShoulder.abduction': controllerValues.leftShoulder.abduction,
+      'leftShoulder.internalRotation': controllerValues.leftShoulder.internalRotation,
       'rightShoulder.flexion': controllerValues.rightShoulder.flexion,
       'rightShoulder.abduction': controllerValues.rightShoulder.abduction,
+      'rightShoulder.internalRotation': controllerValues.rightShoulder.internalRotation,
       // Elbows - flexion only
       'leftElbow.flexion': controllerValues.leftElbow.flexion,
       'rightElbow.flexion': controllerValues.rightElbow.flexion,
@@ -4697,6 +4699,12 @@ export default function PureThreeGLBViewer({
       // Knees - flexion only
       'leftKnee.flexion': controllerValues.leftKnee.flexion,
       'rightKnee.flexion': controllerValues.rightKnee.flexion,
+      // Ankles - dorsiflexion/plantarflexion
+      'leftAnkle.dorsiflexion': controllerValues.leftAnkle.dorsiflexion,
+      'rightAnkle.dorsiflexion': controllerValues.rightAnkle.dorsiflexion,
+      // Wrists - flexion/extension
+      'leftWrist.flexion': controllerValues.leftWrist.flexion,
+      'rightWrist.flexion': controllerValues.rightWrist.flexion,
       // Pelvis
       'pelvis.tilt': controllerValues.pelvis.tilt,
       'pelvis.obliquity': controllerValues.pelvis.obliquity,

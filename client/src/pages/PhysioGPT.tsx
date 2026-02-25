@@ -4957,7 +4957,7 @@ ${ddxList}`;
                               <div>
                                 <label className="text-[8px] text-gray-400">Severity</label>
                                 <Slider value={[scar.severity]} min={1} max={5} step={1} onValueChange={([v]) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, severity: v } : s))} className="mt-0.5" />
-                                <span className="text-[8px] text-gray-500">{SCAR_SEVERITY_LABELS[scar.severity as keyof typeof SCAR_SEVERITY_LABELS]}</span>
+                                <span className="text-[8px] text-gray-500">{SCAR_SEVERITY_LABELS[scar.severity as keyof typeof SCAR_SEVERITY_LABELS]?.label}</span>
                               </div>
                               <div className="grid grid-cols-2 gap-1">
                                 <div>

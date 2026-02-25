@@ -97,6 +97,8 @@ import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type 
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
 import { MYOFASCIAL_CHAINS, MUSCLE_BONE_POSITIONS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState } from "@/lib/myofascialChains";
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
+import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
+import { type FascialModifiers } from "@/lib/posturalForceEngine";
 
 const BODY_REGIONS = {
   cervical: {
@@ -1941,6 +1943,98 @@ ${ddxList}`;
       postureNotes: compData.result.postureNotes,
     } : null;
 
+    const localMuscleStates = computeAllMuscleStates(modelConfig);
+    const localTensions: Record<string, number> = {};
+    Object.entries(localMuscleStates).forEach(([id, s]) => { localTensions[id] = s.tension; });
+    const localPropEffects = propagateChainEffects(localTensions, muscleOverrides);
+
+    const currentChainEffects = MYOFASCIAL_CHAINS.map(chain => {
+      const chainTensions = chain.links.map(l => localTensions[l.muscleId] ?? 50);
+      const avgTension = chainTensions.length > 0 ? chainTensions.reduce((a, b) => a + b, 0) / chainTensions.length : 50;
+      return { chainId: chain.id, chainName: chain.name, avgTension };
+    });
+
+    const fascialChainAnalysis = currentChainEffects
+      .filter(ce => ce.avgTension > 55)
+      .map(ce => {
+        const chain = MYOFASCIAL_CHAINS.find(c => c.id === ce.chainId);
+        const propInfo = chain ? chain.links.map(l => {
+          const pe = localPropEffects[l.muscleId];
+          return pe ? pe.totalChainTension : 0;
+        }) : [];
+        const avgPropagation = propInfo.length > 0 ? propInfo.reduce((a, b) => a + b, 0) / propInfo.length : 0;
+        const level = ce.avgTension >= 75 ? 'critical' : ce.avgTension >= 65 ? 'high' : 'moderate';
+        return {
+          chainName: ce.chainName,
+          avgTension: Math.round(ce.avgTension),
+          level,
+          avgPropagation: Math.round(avgPropagation * 10) / 10,
+        };
+      });
+
+    const scarTissueAnalysis = scarMarkers.map(scar => {
+      const impact = getScarImpact(scar);
+      return {
+        type: SCAR_TYPES[scar.type]?.label || scar.type,
+        location: scar.anatomicalLabel,
+        severity: scar.severity,
+        mobility: scar.mobility,
+        affectedChains: impact.affectedChains.map(ac => ac.chain.name),
+        restrictedMovements: impact.restrictedMovements,
+        clinicalNotes: impact.clinicalNotes,
+      };
+    });
+
+    let painDriverSummary: { category: string; label: string; evidenceScore: number; mechanism: string; severity: string }[] = [];
+    if (painMarkers.length > 0) {
+      const localPropagatedMap: Record<string, PropagatedMuscleState> = {};
+      for (const [id, state] of Object.entries(localPropEffects)) {
+        localPropagatedMap[id] = state;
+      }
+
+      const corrForDrivers = computeCrossSystemCorrelation({
+        painMarkers: painMarkers.map(pm => ({
+          id: pm.id,
+          position: pm.position,
+          label: pm.anatomicalLabel || pm.nearestBone,
+          type: pm.type,
+          severity: (pm as any).severity ?? 5,
+          description: pm.description,
+          subjectiveHistory: pm.subjectiveHistory,
+        })),
+        forces: forces.joints,
+        muscles: muscles.allMuscles,
+        muscleGroups: muscles.groups,
+        syndromes: muscles.syndromes,
+        kineticChains: KINETIC_CHAINS,
+        bodyWeightKg,
+        fascialChainData: {
+          chains: MYOFASCIAL_CHAINS,
+          tensions: localTensions,
+          propagatedEffects: localPropagatedMap,
+        },
+        scarData: scarMarkers.length > 0 || adhesionBands.length > 0
+          ? { scars: scarMarkers, adhesions: adhesionBands }
+          : undefined,
+      });
+
+      const allDrivers: { category: string; label: string; evidenceScore: number; mechanism: string; severity: string }[] = [];
+      for (const pc of corrForDrivers.painCorrelations) {
+        const report = computePainDrivers(
+          pc,
+          forces.joints.map(j => ({ id: j.id, label: j.label, category: j.category, compression: j.compression, tension: j.tension, shear: j.shear, totalForce: j.totalForce, status: j.status, clinical: j.clinical })),
+          muscles.allMuscles.map(m => ({ id: m.id, label: m.label, lengthPercent: m.lengthPercent, activationPercent: m.activationPercent, tightnessPercent: m.tightnessPercent, inhibitionPercent: m.inhibitionPercent, clinicalStatus: m.clinicalStatus, clinicalNote: m.clinicalNote, state: m.state })),
+          { chains: MYOFASCIAL_CHAINS, tensions: localTensions, propagatedEffects: localPropagatedMap },
+          scarMarkers.length > 0 ? { scars: scarMarkers, adhesions: adhesionBands } : undefined,
+        );
+        for (const d of report.drivers) {
+          allDrivers.push({ category: d.category, label: d.label, evidenceScore: d.evidenceScore, mechanism: d.mechanism, severity: d.severity });
+        }
+      }
+      allDrivers.sort((a, b) => b.evidenceScore - a.evidenceScore);
+      painDriverSummary = allDrivers.slice(0, 5);
+    }
+
     const triggerKey = JSON.stringify({
       markers: markerData,
       history: subjectiveHistoryRef.current,
@@ -1968,6 +2062,9 @@ ${ddxList}`;
           muscleAnalysis: muscleSummary,
           detectedSyndromes: syndromeSummary,
           compensationAnalysis: compensationSummary,
+          fascialChainAnalysis: fascialChainAnalysis.length > 0 ? fascialChainAnalysis : undefined,
+          scarTissueAnalysis: scarTissueAnalysis.length > 0 ? scarTissueAnalysis : undefined,
+          painDriverSummary: painDriverSummary.length > 0 ? painDriverSummary : undefined,
         }),
       });
 
@@ -2212,18 +2309,105 @@ ${ddxList}`;
     return { state, membership, propState };
   }, [selectedChainNode, modelConfig, propagatedEffects]);
 
+  const fascialModifiers = useMemo((): FascialModifiers | undefined => {
+    const tensions = baseMuscleTensions.tensions;
+    const hasElevatedTension = Object.values(tensions).some(t => Math.abs(t - 50) > 5);
+    const hasScarRestrictions = scarMarkers.length > 0;
+    if (!hasElevatedTension && !hasScarRestrictions) return undefined;
+    const scarRestrictions = scarMarkers.map(scar => {
+      const mobilityFactor = scar.mobility === 'fixed' ? 0.85 : scar.mobility === 'tethered' ? 0.92 : 0.98;
+      return { bone: scar.nearestBone, mobilityFactor };
+    });
+    return {
+      chainTensions: tensions,
+      scarRestrictions: scarRestrictions.length > 0 ? scarRestrictions : undefined,
+    };
+  }, [baseMuscleTensions.tensions, scarMarkers]);
+
+  const painDriverReports = useMemo((): PainDriverReport[] => {
+    if (painMarkers.length === 0) return [];
+    const forces = calculatePosturalForces(effectiveModelConfig, fascialModifiers);
+    const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
+    const allPropEffects = propagateChainEffects(baseMuscleTensions.tensions, muscleOverrides);
+    const allChainEffects: import("@/lib/myofascialChains").ChainEffect[] = [];
+    for (const state of Object.values(allPropEffects)) {
+      allChainEffects.push(...state.chainEffects, ...state.slingEffects);
+    }
+    const fascialData = {
+      chains: MYOFASCIAL_CHAINS,
+      tensions: baseMuscleTensions.tensions,
+      propagatedEffects: allPropEffects,
+      chainEffects: allChainEffects,
+    };
+    const scarData = scarMarkers.length > 0 || adhesionBands.length > 0
+      ? { scars: scarMarkers, adhesions: adhesionBands }
+      : undefined;
+    const correlation = computeCrossSystemCorrelation({
+      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
+      forces: forces.joints,
+      muscles: muscles.allMuscles,
+      muscleGroups: muscles.groups,
+      syndromes: muscles.syndromes,
+      kineticChains: KINETIC_CHAINS,
+      bodyWeightKg,
+      fascialChainData: fascialData,
+      scarData,
+    });
+    const forceData = forces.joints.map(j => ({
+      id: j.id,
+      label: j.label,
+      category: j.category,
+      compression: j.compression,
+      tension: j.tension,
+      shear: j.shear,
+      totalForce: j.totalForce,
+      status: j.status,
+      clinical: j.clinical,
+    }));
+    const muscleData = muscles.allMuscles.map(m => ({
+      id: m.id,
+      label: m.label,
+      lengthPercent: m.lengthPercent,
+      activationPercent: m.activationPercent,
+      tightnessPercent: m.tightnessPercent,
+      inhibitionPercent: m.inhibitionPercent,
+      clinicalStatus: m.clinicalStatus,
+      clinicalNote: m.clinicalNote,
+      state: m.state,
+    }));
+    return correlation.painCorrelations.map(pc =>
+      computePainDrivers(pc, forceData, muscleData, fascialData, scarData)
+    );
+  }, [painMarkers, effectiveModelConfig, fascialModifiers, baseMuscleTensions.tensions, muscleOverrides, scarMarkers, adhesionBands, bodyWeightKg]);
+
+  const painDriverChainIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const report of painDriverReports) {
+      for (const driver of report.drivers) {
+        if (driver.category === 'fascial_chain') {
+          const chainIdMatch = driver.id.replace(/^fascial_/, '').replace(/^fascial_effect_/, '');
+          const chainId = chainIdMatch.split('_').slice(0, -1).join('_') || chainIdMatch;
+          const chain = MYOFASCIAL_CHAINS.find(c => driver.id.includes(c.id));
+          if (chain) ids.add(chain.id);
+        }
+      }
+    }
+    return Array.from(ids);
+  }, [painDriverReports]);
+
   const fascialChainVizProp = useMemo(() => {
     if (!showChainVisualization) return undefined;
+    const combinedPainChains = Array.from(new Set([...painAffectedChainIds, ...painDriverChainIds]));
     return {
       enabled: true,
       chains: MYOFASCIAL_CHAINS,
       tensions: baseMuscleTensions.tensions,
       activeChains: activeChainIds,
-      painHighlightChains: painAffectedChainIds,
+      painHighlightChains: combinedPainChains,
       showPropagation,
       propagationDeltas,
     };
-  }, [showChainVisualization, baseMuscleTensions.tensions, activeChainIds, painAffectedChainIds, showPropagation, propagationDeltas]);
+  }, [showChainVisualization, baseMuscleTensions.tensions, activeChainIds, painAffectedChainIds, painDriverChainIds, showPropagation, propagationDeltas]);
 
   const handleChainNodeClick = useCallback((data: { chainId: string; muscleId: string; chainName: string }) => {
     setSelectedChainNode(prev => prev?.muscleId === data.muscleId && prev?.chainId === data.chainId ? null : data);
@@ -6525,6 +6709,7 @@ ${ddxList}`;
         onSubjectiveHistorySubmit={handleSubjectiveHistorySubmit}
         onBiomechanicalLinkClick={handleBiomechanicalLinkClick}
         activeBiomechanicalLinkId={activeBiomechanicalLink?.id || null}
+        painDriverReports={painDriverReports}
       />
     </div>
   );

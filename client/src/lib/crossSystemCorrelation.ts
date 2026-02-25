@@ -1,4 +1,6 @@
 import { KINETIC_CHAINS } from './kineticChainExplorer';
+import { findChainsForBone, type MyofascialChain, type PropagatedMuscleState, type ChainEffect } from './myofascialChains';
+import { getScarImpact, type ScarMarker, type AdhesionBand, type ScarType, type ScarImpact } from './scarTissueMapping';
 
 type ClinicalStatus = 'normal' | 'shortened' | 'lengthened' | 'overactive' | 'inhibited' | 'spasm' | 'weak';
 
@@ -84,6 +86,16 @@ export interface CorrelationInput {
   syndromes: CrossSyndromePattern[];
   kineticChains: KineticChainDefinition[];
   bodyWeightKg: number;
+  fascialChainData?: {
+    chains: MyofascialChain[];
+    tensions: Record<string, number>;
+    propagatedEffects?: Record<string, PropagatedMuscleState>;
+    chainEffects?: ChainEffect[];
+  };
+  scarData?: {
+    scars: ScarMarker[];
+    adhesions: AdhesionBand[];
+  };
 }
 
 export interface PainCorrelation {
@@ -125,6 +137,19 @@ export interface PainCorrelation {
     description: string;
     severity: 'mild' | 'moderate' | 'severe';
     involvedStructures: string[];
+  }[];
+  relatedFascialChains: {
+    chainId: string;
+    chainName: string;
+    avgTension: number;
+    propagationDelta: number;
+    relevance: string;
+  }[];
+  relatedScars: {
+    scarId: string;
+    type: ScarType;
+    impact: ScarImpact;
+    proximity: string;
   }[];
   rootCauseChain: {
     step: number;
@@ -640,7 +665,9 @@ function buildRootCauseChain(
   region: string,
   relatedForces: PainCorrelation['relatedForces'],
   relatedMuscles: PainCorrelation['relatedMuscles'],
-  chains: PainCorrelation['relatedChains']
+  chains: PainCorrelation['relatedChains'],
+  relatedFascialChains?: PainCorrelation['relatedFascialChains'],
+  relatedScars?: PainCorrelation['relatedScars']
 ): PainCorrelation['rootCauseChain'] {
   const rootCause: PainCorrelation['rootCauseChain'] = [];
   let step = 1;
@@ -674,6 +701,35 @@ function buildRootCauseChain(
           : `Altered muscle length-tension relationship`,
       arrow: '→',
     });
+  }
+
+  if (relatedFascialChains && relatedFascialChains.length > 0) {
+    const highTensionChain = relatedFascialChains.find(fc => fc.avgTension > 60);
+    if (highTensionChain) {
+      rootCause.push({
+        step: step++,
+        structure: highTensionChain.chainName,
+        finding: `Fascial chain tension elevated (${Math.round(highTensionChain.avgTension)}%), propagation delta ${highTensionChain.propagationDelta > 0 ? '+' : ''}${Math.round(highTensionChain.propagationDelta)}%`,
+        mechanism: `Tension propagating through ${highTensionChain.chainName} increasing load at ${region}`,
+        arrow: '→',
+      });
+    }
+  }
+
+  if (relatedScars && relatedScars.length > 0) {
+    const impactfulScar = relatedScars.find(s => s.impact.restrictedMovements.length > 0 || s.impact.affectedChains.length > 0);
+    if (impactfulScar) {
+      const restrictions = impactfulScar.impact.restrictedMovements.length > 0
+        ? impactfulScar.impact.restrictedMovements.join(', ')
+        : 'tissue mobility';
+      rootCause.push({
+        step: step++,
+        structure: `Scar tissue (${impactfulScar.type.replace(/_/g, ' ')})`,
+        finding: `Scar restricting ${restrictions}, disrupting ${impactfulScar.impact.affectedChains.length} fascial chain(s)`,
+        mechanism: `Scar-induced restriction at ${region} altering force distribution and tissue mobility`,
+        arrow: '→',
+      });
+    }
   }
 
   const referredMuscles = relatedMuscles.filter(m => m.contributionType === 'referred' && m.clinicalStatus !== 'normal');
@@ -897,8 +953,139 @@ function buildSummaryFindings(
   return findings;
 }
 
+function findRelatedFascialChainsForMarker(
+  markerLabel: string,
+  region: string,
+  fascialChainData?: CorrelationInput['fascialChainData']
+): PainCorrelation['relatedFascialChains'] {
+  if (!fascialChainData) return [];
+
+  const { chains, tensions, propagatedEffects } = fascialChainData;
+  const results: PainCorrelation['relatedFascialChains'] = [];
+
+  const boneMatches = new Set<string>();
+  const regionBoneMap: Record<string, string[]> = {
+    lumbar: ['Spine1_M', 'RootPart1_M'],
+    thoracic: ['Spine1_M', 'Chest_M'],
+    cervical: ['Neck_M'],
+    hip: ['Hip_L', 'Hip_R', 'HipPart2_L', 'HipPart2_R'],
+    knee: ['Knee_L', 'Knee_R'],
+    ankle_foot: ['Ankle_L', 'Ankle_R', 'Toes_L', 'Toes_R'],
+    shoulder: ['Shoulder_L', 'Shoulder_R', 'Scapula_L', 'Scapula_R'],
+    pelvic: ['RootPart1_M', 'Hip_L', 'Hip_R'],
+    upper_extremity: ['Elbow_L', 'Elbow_R'],
+  };
+
+  const regionBones = regionBoneMap[region] || [];
+  for (const bone of regionBones) {
+    const chainHits = findChainsForBone(bone);
+    for (const hit of chainHits) {
+      boneMatches.add(hit.chainId);
+    }
+  }
+
+  for (const chain of chains) {
+    const chainMuscleIds = chain.links.map(l => l.muscleId);
+    const chainTensions = chainMuscleIds.map(mid => tensions[mid] ?? 50);
+    const avgTension = chainTensions.length > 0
+      ? chainTensions.reduce((a, b) => a + b, 0) / chainTensions.length
+      : 50;
+
+    let totalPropDelta = 0;
+    if (propagatedEffects) {
+      for (const mid of chainMuscleIds) {
+        const pe = propagatedEffects[mid];
+        if (pe) {
+          totalPropDelta += pe.totalChainTension;
+        }
+      }
+    }
+    const avgPropDelta = chainMuscleIds.length > 0 ? totalPropDelta / chainMuscleIds.length : 0;
+
+    const passesThrough = boneMatches.has(chain.id) || chainMuscleIds.some(mid => {
+      const muscleRegionKeys = MUSCLE_REGION_MAP[region] || [];
+      return muscleRegionKeys.some(k => mid.includes(k));
+    });
+
+    if (!passesThrough && Math.abs(avgTension - 50) < 10) continue;
+
+    let relevance: string;
+    if (passesThrough && avgTension > 60) {
+      relevance = `Chain passes through ${region} with elevated tension (${Math.round(avgTension)}%)`;
+    } else if (passesThrough) {
+      relevance = `Chain passes through ${region} region`;
+    } else if (avgTension > 65) {
+      relevance = `High tension chain (${Math.round(avgTension)}%) may contribute to regional loading`;
+    } else {
+      continue;
+    }
+
+    results.push({
+      chainId: chain.id,
+      chainName: chain.name,
+      avgTension: Math.round(avgTension * 10) / 10,
+      propagationDelta: Math.round(avgPropDelta * 10) / 10,
+      relevance,
+    });
+  }
+
+  return results.sort((a, b) => b.avgTension - a.avgTension);
+}
+
+function findRelatedScarsForMarker(
+  markerLabel: string,
+  region: string,
+  scarData?: CorrelationInput['scarData']
+): PainCorrelation['relatedScars'] {
+  if (!scarData) return [];
+
+  const results: PainCorrelation['relatedScars'] = [];
+  const regionBoneMap: Record<string, string[]> = {
+    lumbar: ['Spine1_M', 'RootPart1_M'],
+    thoracic: ['Spine1_M', 'Chest_M'],
+    cervical: ['Neck_M'],
+    hip: ['Hip_L', 'Hip_R', 'HipPart2_L', 'HipPart2_R'],
+    knee: ['Knee_L', 'Knee_R'],
+    ankle_foot: ['Ankle_L', 'Ankle_R', 'Toes_L', 'Toes_R'],
+    shoulder: ['Shoulder_L', 'Shoulder_R', 'Scapula_L', 'Scapula_R'],
+    pelvic: ['RootPart1_M', 'Hip_L', 'Hip_R'],
+    upper_extremity: ['Elbow_L', 'Elbow_R'],
+  };
+
+  const regionBones = new Set(regionBoneMap[region] || []);
+  const adjacentRegions = ADJACENT_REGIONS[region] || [];
+  const adjacentBones = new Set<string>();
+  for (const adjRegion of adjacentRegions) {
+    for (const bone of (regionBoneMap[adjRegion] || [])) {
+      adjacentBones.add(bone);
+    }
+  }
+
+  for (const scar of scarData.scars) {
+    const scarBone = scar.nearestBone;
+    const parentBone = scarBone.replace(/Part[12]_[LR]$/, '').replace(/_[LR]$/, '');
+
+    const isInRegion = regionBones.has(scarBone) || Array.from(regionBones).some(rb => rb.includes(parentBone) || parentBone.includes(rb.replace(/_[LRM]$/, '')));
+    const isAdjacent = adjacentBones.has(scarBone) || Array.from(adjacentBones).some(ab => ab.includes(parentBone) || parentBone.includes(ab.replace(/_[LRM]$/, '')));
+
+    if (!isInRegion && !isAdjacent) continue;
+
+    const impact = getScarImpact(scar);
+    const proximity = isInRegion ? 'direct' : 'adjacent';
+
+    results.push({
+      scarId: scar.id,
+      type: scar.type,
+      impact,
+      proximity,
+    });
+  }
+
+  return results;
+}
+
 export function computeCrossSystemCorrelation(input: CorrelationInput): CrossSystemCorrelationResult {
-  const { painMarkers, forces, muscles, muscleGroups, syndromes, kineticChains, bodyWeightKg } = input;
+  const { painMarkers, forces, muscles, muscleGroups, syndromes, kineticChains, bodyWeightKg, fascialChainData, scarData } = input;
 
   const allChains = kineticChains.length > 0 ? kineticChains : KINETIC_CHAINS;
 
@@ -912,7 +1099,11 @@ export function computeCrossSystemCorrelation(input: CorrelationInput): CrossSys
     const relatedForces = findRelatedForces(region, marker.label, forces);
     const relatedMuscles = findRelatedMuscles(region, marker.label, muscles, relatedChains);
     const compensationPatterns = findLocalCompensationPatterns(region, relatedMuscles, globalCompensations);
-    const rootCauseChain = buildRootCauseChain(region, relatedForces, relatedMuscles, relatedChains);
+
+    const relatedFascialChains = findRelatedFascialChainsForMarker(marker.label, region, fascialChainData);
+    const relatedScars = findRelatedScarsForMarker(marker.label, region, scarData);
+
+    const rootCauseChain = buildRootCauseChain(region, relatedForces, relatedMuscles, relatedChains, relatedFascialChains, relatedScars);
 
     return {
       markerId: marker.id,
@@ -923,6 +1114,8 @@ export function computeCrossSystemCorrelation(input: CorrelationInput): CrossSys
       relatedForces,
       relatedMuscles,
       compensationPatterns,
+      relatedFascialChains,
+      relatedScars,
       rootCauseChain,
     };
   });

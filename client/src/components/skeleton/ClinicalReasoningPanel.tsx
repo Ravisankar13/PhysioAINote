@@ -168,6 +168,7 @@ interface ClinicalReasoningPanelProps {
   onSubjectiveHistorySubmit: () => void;
   onBiomechanicalLinkClick?: (link: BiomechanicalLink | null) => void;
   activeBiomechanicalLinkId?: string | null;
+  painDriverReports?: import("@/lib/painDriverEngine").PainDriverReport[];
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -337,11 +338,13 @@ export default function ClinicalReasoningPanel({
   onSubjectiveHistorySubmit,
   onBiomechanicalLinkClick,
   activeBiomechanicalLinkId,
+  painDriverReports,
 }: ClinicalReasoningPanelProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
     findings: true,
     flags: true,
+    painDrivers: true,
     biomechanical: false,
     reasoning: true,
     priorities: false,
@@ -679,6 +682,68 @@ export default function ClinicalReasoningPanel({
                           {finding.category.charAt(0).toUpperCase() + finding.category.slice(1)}
                         </span>
                         <span className="text-[10px] text-gray-300">{finding.text}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {painDriverReports && painDriverReports.length > 0 && (
+            <div>
+              <SectionHeader
+                icon={Crosshair}
+                title="Pain Driver Report"
+                count={painDriverReports.reduce((sum, r) => sum + r.drivers.length, 0)}
+                color="text-rose-400"
+                isOpen={expandedSections.painDrivers}
+                onToggle={() => toggleSection("painDrivers")}
+              />
+              {expandedSections.painDrivers && (
+                <div className="space-y-2 mt-1 ml-1">
+                  {painDriverReports.map((report) => {
+                    const severityColors: Record<string, string> = {
+                      critical: 'text-red-400 bg-red-500/20 border-red-500/30',
+                      high: 'text-orange-400 bg-orange-500/20 border-orange-500/30',
+                      moderate: 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30',
+                      low: 'text-green-400 bg-green-500/20 border-green-500/30',
+                    };
+                    const categoryIcons: Record<string, string> = {
+                      structural: '🦴',
+                      biomechanical: '⚙️',
+                      myofascial: '💪',
+                      fascial_chain: '🔗',
+                      scar_tissue: '🩹',
+                      referred: '↗️',
+                      compensatory: '🔄',
+                    };
+                    return (
+                      <div key={report.markerId} className="rounded-lg border border-rose-500/20 bg-gray-800/40 p-2">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <Crosshair className="h-3 w-3 text-rose-400" />
+                          <span className="text-[11px] font-semibold text-rose-300">{report.region}</span>
+                          <span className="text-[9px] text-gray-500 ml-auto">{report.totalDriverCount} driver{report.totalDriverCount !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="space-y-1">
+                          {report.drivers.slice(0, 5).map((driver, idx) => {
+                            const colors = severityColors[driver.severity] || severityColors.low;
+                            return (
+                              <div key={driver.id} className={`rounded p-1.5 border ${colors} bg-opacity-30`}>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px]">{categoryIcons[driver.category] || '•'}</span>
+                                  <span className="text-[10px] font-medium flex-1">{driver.label}</span>
+                                  <span className="text-[8px] px-1 py-0.5 rounded bg-gray-900/50 text-gray-400">#{idx + 1}</span>
+                                  <span className="text-[8px] font-mono">{driver.evidenceScore}%</span>
+                                </div>
+                                <p className="text-[9px] text-gray-400 mt-0.5">{driver.mechanism}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {report.narrative && (
+                          <p className="text-[9px] text-gray-500 mt-1.5 italic border-t border-gray-700/30 pt-1">{report.narrative}</p>
+                        )}
                       </div>
                     );
                   })}

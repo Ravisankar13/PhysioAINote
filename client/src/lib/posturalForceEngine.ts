@@ -605,7 +605,102 @@ function computeWristForces(config: JointAngles, side: 'left' | 'right'): JointS
   return joints;
 }
 
-export function calculatePosturalForces(config: JointAngles): ForceAnalysisResult {
+export interface FascialModifiers {
+  chainTensions: Record<string, number>;
+  scarRestrictions?: { bone: string; mobilityFactor: number }[];
+}
+
+const BONE_ADJACENCY: Record<string, string[]> = {
+  'Neck_M': ['Spine2Part2_M'],
+  'Spine2Part2_M': ['Neck_M', 'Spine2_M'],
+  'Spine2_M': ['Spine2Part2_M', 'Spine1Part2_M'],
+  'Spine1Part2_M': ['Spine2_M', 'Spine1Part1_M'],
+  'Spine1Part1_M': ['Spine1Part2_M', 'Spine1_M'],
+  'Spine1_M': ['Spine1Part1_M', 'RootPart2_M'],
+  'RootPart2_M': ['Spine1_M', 'RootPart1_M'],
+  'RootPart1_M': ['RootPart2_M', 'Root_M', 'Hip_L', 'Hip_R'],
+  'Root_M': ['RootPart1_M', 'Hip_L', 'Hip_R'],
+  'Hip_L': ['RootPart1_M', 'Root_M', 'HipPart2_L', 'Knee_L'],
+  'Hip_R': ['RootPart1_M', 'Root_M', 'HipPart2_R', 'Knee_R'],
+  'HipPart2_L': ['Hip_L', 'Knee_L'],
+  'HipPart2_R': ['Hip_R', 'Knee_R'],
+  'Knee_L': ['HipPart2_L', 'Hip_L', 'Ankle_L'],
+  'Knee_R': ['HipPart2_R', 'Hip_R', 'Ankle_R'],
+  'Ankle_L': ['Knee_L', 'Toes_L'],
+  'Ankle_R': ['Knee_R', 'Toes_R'],
+  'Toes_L': ['Ankle_L'],
+  'Toes_R': ['Ankle_R'],
+  'Shoulder_L': ['Scapula_L', 'Spine2Part2_M', 'Elbow_L'],
+  'Shoulder_R': ['Scapula_R', 'Spine2Part2_M', 'Elbow_R'],
+  'Scapula_L': ['Shoulder_L', 'Spine2_M'],
+  'Scapula_R': ['Shoulder_R', 'Spine2_M'],
+  'Elbow_L': ['Shoulder_L', 'Wrist_L'],
+  'Elbow_R': ['Shoulder_R', 'Wrist_R'],
+  'Wrist_L': ['Elbow_L'],
+  'Wrist_R': ['Elbow_R'],
+  'Chest_M': ['Spine2_M', 'Spine2Part2_M'],
+};
+
+function getChainTensionFactor(chainTensions: Record<string, number>, chainPrefix: string): number {
+  let maxTension = 0;
+  for (const [chainId, tension] of Object.entries(chainTensions)) {
+    if (chainId.startsWith(chainPrefix) && tension > 50) {
+      maxTension = Math.max(maxTension, tension);
+    }
+  }
+  if (maxTension <= 50) return 1.0;
+  return 1 + (maxTension - 50) / 200;
+}
+
+function applyFascialModifiers(joints: JointSurfaceForce[], modifiers: FascialModifiers): void {
+  const { chainTensions, scarRestrictions } = modifiers;
+
+  const sblFactor = getChainTensionFactor(chainTensions, 'superficial_back');
+  const sflFactor = getChainTensionFactor(chainTensions, 'superficial_front');
+  const llFactor = getChainTensionFactor(chainTensions, 'lateral_line');
+  const dflFactor = getChainTensionFactor(chainTensions, 'deep_front');
+
+  for (const j of joints) {
+    if (j.category === 'lumbar_spine' && j.id.includes('disc')) {
+      j.compression *= sblFactor;
+      j.totalForce = j.compression + j.shear;
+    }
+
+    if ((j.category === 'lumbar_spine' || j.category === 'left_hip' || j.category === 'right_hip') && llFactor > 1.0) {
+      j.shear *= llFactor;
+      j.totalForce = j.compression + j.shear;
+    }
+
+    if ((j.category === 'cervical_spine' || j.category === 'thoracic_spine') && sflFactor > 1.0) {
+      j.tension *= sflFactor;
+      j.compression *= (1 + (sflFactor - 1) * 0.5);
+      j.totalForce = j.compression + j.shear;
+    }
+
+    if ((j.category === 'left_hip' || j.category === 'right_hip') && j.id.includes('femoral_head') && dflFactor > 1.0) {
+      j.compression *= dflFactor;
+      j.totalForce = j.compression + j.shear;
+    }
+  }
+
+  if (scarRestrictions && scarRestrictions.length > 0) {
+    for (const scar of scarRestrictions) {
+      const adjacentBones = BONE_ADJACENCY[scar.bone] || [];
+      const severityIncrease = 1 + (1 - scar.mobilityFactor) * 0.1;
+
+      for (const j of joints) {
+        if (adjacentBones.includes(j.boneName)) {
+          j.compression *= severityIncrease;
+          j.shear *= severityIncrease;
+          j.tension *= severityIncrease;
+          j.totalForce = j.compression + j.shear;
+        }
+      }
+    }
+  }
+}
+
+export function calculatePosturalForces(config: JointAngles, fascialModifiers?: FascialModifiers): ForceAnalysisResult {
   const allJoints: JointSurfaceForce[] = [
     ...computeSpineForces(config),
     ...computeHipForces(config, 'left'),
@@ -621,6 +716,10 @@ export function calculatePosturalForces(config: JointAngles): ForceAnalysisResul
     ...computeWristForces(config, 'left'),
     ...computeWristForces(config, 'right'),
   ];
+
+  if (fascialModifiers) {
+    applyFascialModifiers(allJoints, fascialModifiers);
+  }
 
   const categoryMap: Record<string, { label: string; order: number }> = {
     cervical_spine: { label: 'Cervical Spine', order: 0 },

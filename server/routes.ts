@@ -6132,7 +6132,7 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
 
   app.post("/api/physiogpt/clinical-reasoning-analyze", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements, postureDeviations, forceAnalysis, muscleAnalysis, detectedSyndromes, compensationAnalysis } = req.body;
+      const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements, postureDeviations, forceAnalysis, muscleAnalysis, detectedSyndromes, compensationAnalysis, fascialChainAnalysis, scarTissueAnalysis, painDriverSummary } = req.body;
       if (!painMarkers && !skeletonConfig && !subjectiveHistory && !postureDeviations && !compensationAnalysis) {
         return res.status(400).json({ error: "At least one clinical input is required" });
       }
@@ -6191,9 +6191,24 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
           (postureLines ? `Posture-Compensation Interactions:\n${postureLines}\n` : '');
       }
 
+      let fascialChainContext = '';
+      if (fascialChainAnalysis && fascialChainAnalysis.length > 0) {
+        fascialChainContext = `\n\nFASCIAL CHAIN TENSION DATA (${fascialChainAnalysis.length} chains with elevated tension):\n${fascialChainAnalysis.map((fc: any, i: number) => `${i+1}. ${fc.chainName}: Average tension ${fc.avgTension}% (Level: ${fc.level}), Propagation effect: ${fc.avgPropagation}`).join('\n')}`;
+      }
+
+      let scarTissueContext = '';
+      if (scarTissueAnalysis && scarTissueAnalysis.length > 0) {
+        scarTissueContext = `\n\nSCAR TISSUE / ADHESIONS (${scarTissueAnalysis.length} scars/adhesions identified):\n${scarTissueAnalysis.map((s: any, i: number) => `${i+1}. ${s.type} at ${s.location} — Severity: ${s.severity}/5, Mobility: ${s.mobility}${s.affectedChains.length > 0 ? ', Affected chains: ' + s.affectedChains.join(', ') : ''}${s.restrictedMovements.length > 0 ? ', Restrictions: ' + s.restrictedMovements.join(', ') : ''}${s.clinicalNotes.length > 0 ? ', Notes: ' + s.clinicalNotes.join('; ') : ''}`).join('\n')}`;
+      }
+
+      let painDriverContext = '';
+      if (painDriverSummary && painDriverSummary.length > 0) {
+        painDriverContext = `\n\nRANKED PAIN DRIVERS (top ${painDriverSummary.length} computed drivers by evidence score):\n${painDriverSummary.map((d: any, i: number) => `${i+1}. [${d.category.toUpperCase()}] ${d.label} — Evidence score: ${d.evidenceScore}/100, Severity: ${d.severity}\n   Mechanism: ${d.mechanism}`).join('\n')}`;
+      }
+
       const prompt = `You are an expert musculoskeletal physiotherapist performing a comprehensive clinical reasoning analysis. Analyze ALL provided clinical data and produce a complete assessment with treatment plan. Pay special attention to posture deviations and their biomechanical consequences.
 
-${markerContext}${skeletonContext}${historyContext}${romContext}${postureContext}${forceContext}${muscleContext}${syndromeContext}${compensationContext}
+${markerContext}${skeletonContext}${historyContext}${romContext}${postureContext}${forceContext}${muscleContext}${syndromeContext}${compensationContext}${fascialChainContext}${scarTissueContext}${painDriverContext}
 
 Return ONLY valid JSON with this structure:
 {
@@ -6273,7 +6288,8 @@ GUIDELINES:
 - Include exact dosage parameters for exercises (sets, reps, hold times, frequency).
 - "posturalAnalysis": CRITICAL - If posture deviations, force data, or muscle analysis data is provided, you MUST analyze how these postural changes create biomechanical stress. For EACH significant posture deviation, explain the force impact on joints, the muscle adaptation, and how it connects to the patient's pain. Think like a biomechanist - trace the kinetic chain from the postural fault to the symptomatic region.
 - "posturalAnalysis.correlations": Create one correlation entry for each significant posture deviation. Even if there are no pain markers, explain the potential clinical consequences of the posture. If pain markers exist, explicitly connect posture to pain.
-- MOVEMENT COMPENSATION ANALYSIS: If movement compensation data is provided, this is CRITICAL clinical information. Analyze the full compensation chain: explain WHY the restricted joint causes the compensating joint to overload, WHAT anatomical structures are at risk (e.g., subacromial impingement from GH compensation, facet loading from lumbar compensation), and HOW the additional load percentages translate to clinical consequences. Integrate compensation findings into your hypotheses, biomechanical links, and treatment plan. The treatment should address BOTH the restricted joint AND protect the compensating structures.`;
+- MOVEMENT COMPENSATION ANALYSIS: If movement compensation data is provided, this is CRITICAL clinical information. Analyze the full compensation chain: explain WHY the restricted joint causes the compensating joint to overload, WHAT anatomical structures are at risk (e.g., subacromial impingement from GH compensation, facet loading from lumbar compensation), and HOW the additional load percentages translate to clinical consequences. Integrate compensation findings into your hypotheses, biomechanical links, and treatment plan. The treatment should address BOTH the restricted joint AND protect the compensating structures.
+- PAIN DRIVER INTEGRATION: Consider ALL pain drivers including fascial chain tension propagation, scar tissue restrictions, and compensatory patterns. Explain how each driver contributes to the patient's presentation. Identify which is the PRIMARY cause vs contributing factors. If fascial chain tension data is provided, reference specific chains by name and explain how their elevated tension propagates load through the kinetic chain. If scar tissue data is provided, explain how scars restrict mobility and disrupt fascial continuity. If ranked pain drivers are provided, use them to prioritize your clinical reasoning and treatment approach — address the highest-scoring drivers first.`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",

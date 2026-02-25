@@ -1304,7 +1304,7 @@ const FORCE_JOINT_TO_BONE: Record<string, string> = {
   rightElbow: 'Elbow_R',
 };
 
-const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean }[] } = {
+const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean; customAxis?: { x: number; y: number; z: number } }[] } = {
   // === HIP / FEMUR ===
   // Empirically verified with Euler angle addition (matching viewer behavior):
   // Hip_L: Y-30=OUTWARD, Y+30=INWARD; Hip_R: Y+30=OUTWARD, Y-30=INWARD (mirrored initial orientations)
@@ -1327,17 +1327,18 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightHip.externalRotation': [{ boneName: 'Hip_R', axis: 'x', scale: 1 }],
   
   // === KNEE / TIBIA ===
-  // Combined Y+Z rotation cancels lateral displacement (ratio 0.86 from bone axis tests)
-  'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'y', scale: -0.86 }, { boneName: 'Knee_L', axis: 'z', scale: -1 }],
+  // customAxis: single axis-angle rotation avoids Euler non-linearity at large angles
+  // Axis normalize(0, 0.86, 1.0) = (0, 0.651, 0.759) cancels lateral displacement
+  'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'z', scale: -1, customAxis: { x: 0, y: 0.651, z: 0.759 } }],
   'leftKnee.varus': [{ boneName: 'Knee_L', axis: 'y', scale: 1 }],
   'leftKnee.tibialTorsion': [{ boneName: 'Knee_L', axis: 'x', scale: 1 }],
-  'leftKnee.recurvatum': [{ boneName: 'Knee_L', axis: 'y', scale: 0.43 }, { boneName: 'Knee_L', axis: 'z', scale: 0.5 }],
-  'leftKnee.tibialSlope': [{ boneName: 'Knee_L', axis: 'y', scale: -0.258 }, { boneName: 'Knee_L', axis: 'z', scale: -0.3 }],
-  'rightKnee.flexion': [{ boneName: 'Knee_R', axis: 'y', scale: -0.86 }, { boneName: 'Knee_R', axis: 'z', scale: -1 }],
+  'leftKnee.recurvatum': [{ boneName: 'Knee_L', axis: 'z', scale: 0.5, customAxis: { x: 0, y: 0.651, z: 0.759 } }],
+  'leftKnee.tibialSlope': [{ boneName: 'Knee_L', axis: 'z', scale: -0.3, customAxis: { x: 0, y: 0.651, z: 0.759 } }],
+  'rightKnee.flexion': [{ boneName: 'Knee_R', axis: 'z', scale: -1, customAxis: { x: 0, y: 0.651, z: 0.759 } }],
   'rightKnee.varus': [{ boneName: 'Knee_R', axis: 'y', scale: -1 }],
   'rightKnee.tibialTorsion': [{ boneName: 'Knee_R', axis: 'x', scale: -1 }],
-  'rightKnee.recurvatum': [{ boneName: 'Knee_R', axis: 'y', scale: 0.43 }, { boneName: 'Knee_R', axis: 'z', scale: 0.5 }],
-  'rightKnee.tibialSlope': [{ boneName: 'Knee_R', axis: 'y', scale: -0.258 }, { boneName: 'Knee_R', axis: 'z', scale: -0.3 }],
+  'rightKnee.recurvatum': [{ boneName: 'Knee_R', axis: 'z', scale: 0.5, customAxis: { x: 0, y: 0.651, z: 0.759 } }],
+  'rightKnee.tibialSlope': [{ boneName: 'Knee_R', axis: 'z', scale: -0.3, customAxis: { x: 0, y: 0.651, z: 0.759 } }],
   
   // === ANKLE & FOOT ===
   // Empirically verified: Ankle_L/R Z+30 = UP (toes go up)
@@ -1616,6 +1617,30 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
     { boneName: 'Head_M', axis: 'z', scale: 0.1 },
   ],
 };
+
+function applyCustomAxisRotation(
+  boneRotations: { [boneName: string]: { x: number; y: number; z: number } },
+  boneName: string,
+  customAxis: { x: number; y: number; z: number },
+  adjustedAngle: number,
+  initialRotations: { [key: string]: { x: number; y: number; z: number } }
+) {
+  const initial = initialRotations[boneName];
+  if (!initial) return;
+  if (!boneRotations[boneName]) {
+    boneRotations[boneName] = { x: initial.x, y: initial.y, z: initial.z };
+  }
+  const axisVec = new THREE.Vector3(customAxis.x, customAxis.y, customAxis.z).normalize();
+  const initQuat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+  );
+  const deltaQuat = new THREE.Quaternion().setFromAxisAngle(axisVec, adjustedAngle);
+  const resultQuat = new THREE.Quaternion().multiplyQuaternions(deltaQuat, initQuat);
+  const resultEuler = new THREE.Euler().setFromQuaternion(resultQuat, 'XYZ');
+  boneRotations[boneName].x = resultEuler.x;
+  boneRotations[boneName].y = resultEuler.y;
+  boneRotations[boneName].z = resultEuler.z;
+}
 
 interface PoseBoneConfig {
   configKey: string;
@@ -4722,25 +4747,48 @@ export default function PureThreeGLBViewer({
     const boneRotationDeltas: { [boneName: string]: { x: number; y: number; z: number } } = {};
     
     // Process each live pose config through BONE_MAPPING
+    const customAxisAccum: { [boneName: string]: { axis: THREE.Vector3; angle: number } } = {};
+    
     Object.entries(livePoseConfig).forEach(([configKey, value]) => {
       const mappings = BONE_MAPPING[configKey];
       if (!mappings) return;
       
-      // Value is already in radians (from poseToControllerValues)
-      // Apply the BONE_MAPPING scale directly (no degree conversion needed)
-      mappings.forEach(({ boneName, axis, scale, isPosition }) => {
-        if (isPosition) return; // Skip position-based for now
+      mappings.forEach(({ boneName, axis, scale, isPosition, customAxis }) => {
+        if (isPosition) return;
         
         const adjustedAngle = value * scale;
         
-        if (!boneRotationDeltas[boneName]) {
-          boneRotationDeltas[boneName] = { x: 0, y: 0, z: 0 };
+        if (customAxis) {
+          if (!customAxisAccum[boneName]) {
+            customAxisAccum[boneName] = { axis: new THREE.Vector3(customAxis.x, customAxis.y, customAxis.z).normalize(), angle: 0 };
+          }
+          customAxisAccum[boneName].angle += adjustedAngle;
+        } else {
+          if (!boneRotationDeltas[boneName]) {
+            boneRotationDeltas[boneName] = { x: 0, y: 0, z: 0 };
+          }
+          if (axis === 'x') boneRotationDeltas[boneName].x += adjustedAngle;
+          else if (axis === 'y') boneRotationDeltas[boneName].y += adjustedAngle;
+          else if (axis === 'z') boneRotationDeltas[boneName].z += adjustedAngle;
         }
-        
-        if (axis === 'x') boneRotationDeltas[boneName].x += adjustedAngle;
-        else if (axis === 'y') boneRotationDeltas[boneName].y += adjustedAngle;
-        else if (axis === 'z') boneRotationDeltas[boneName].z += adjustedAngle;
       });
+    });
+    
+    Object.entries(customAxisAccum).forEach(([boneName, { axis: axisVec, angle }]) => {
+      const initial = initialRotations[boneName];
+      if (!initial) return;
+      const initQuat = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+      );
+      const deltaQuat = new THREE.Quaternion().setFromAxisAngle(axisVec, angle);
+      const resultQuat = new THREE.Quaternion().multiplyQuaternions(deltaQuat, initQuat);
+      const resultEuler = new THREE.Euler().setFromQuaternion(resultQuat, 'XYZ');
+      if (!boneRotationDeltas[boneName]) {
+        boneRotationDeltas[boneName] = { x: 0, y: 0, z: 0 };
+      }
+      boneRotationDeltas[boneName].x += resultEuler.x - initial.x;
+      boneRotationDeltas[boneName].y += resultEuler.y - initial.y;
+      boneRotationDeltas[boneName].z += resultEuler.z - initial.z;
     });
     
     // Bones that are handled by the animation loop (need rotations stored in sliderRotationsRef)
@@ -4948,9 +4996,8 @@ export default function PureThreeGLBViewer({
       
       const angleInRadians = (value * Math.PI) / 180;
       
-      mappings.forEach(({ boneName, axis, scale, isPosition }) => {
+      mappings.forEach(({ boneName, axis, scale, isPosition, customAxis }) => {
         if (isPosition) {
-          // Handle position-based transformations (e.g., pelvis drop)
           const positionOffset = value * scale;
           if (!bonePositions[boneName]) {
             bonePositions[boneName] = { x: 0, y: 0, z: 0 };
@@ -4963,27 +5010,32 @@ export default function PureThreeGLBViewer({
             bonePositions[boneName].z += positionOffset;
           }
         } else {
-          // Handle rotation-based transformations
           const adjustedAngle = angleInRadians * scale;
           
-          // For animation loop bones, store slider rotations separately
           if (animationLoopBones.has(boneName)) {
-            if (axis === 'x') {
-              sliderOnlyRotations[boneName].x += adjustedAngle;
-            } else if (axis === 'y') {
-              sliderOnlyRotations[boneName].y += adjustedAngle;
-            } else if (axis === 'z') {
-              sliderOnlyRotations[boneName].z += adjustedAngle;
+            if (customAxis) {
+              applyCustomAxisRotation(sliderOnlyRotations, boneName, customAxis, adjustedAngle, { [boneName]: { x: 0, y: 0, z: 0 } });
+            } else {
+              if (axis === 'x') {
+                sliderOnlyRotations[boneName].x += adjustedAngle;
+              } else if (axis === 'y') {
+                sliderOnlyRotations[boneName].y += adjustedAngle;
+              } else if (axis === 'z') {
+                sliderOnlyRotations[boneName].z += adjustedAngle;
+              }
             }
           } else {
-            // For regular bones, accumulate to boneRotations
             if (!boneRotations[boneName]) return;
-            if (axis === 'x') {
-              boneRotations[boneName].x += adjustedAngle;
-            } else if (axis === 'y') {
-              boneRotations[boneName].y += adjustedAngle;
-            } else if (axis === 'z') {
-              boneRotations[boneName].z += adjustedAngle;
+            if (customAxis) {
+              applyCustomAxisRotation(boneRotations, boneName, customAxis, adjustedAngle, initialRotations);
+            } else {
+              if (axis === 'x') {
+                boneRotations[boneName].x += adjustedAngle;
+              } else if (axis === 'y') {
+                boneRotations[boneName].y += adjustedAngle;
+              } else if (axis === 'z') {
+                boneRotations[boneName].z += adjustedAngle;
+              }
             }
           }
         }
@@ -5224,13 +5276,17 @@ export default function PureThreeGLBViewer({
           const sliderValue = (jointConfig as any)[propertyName];
           if (sliderValue === undefined || sliderValue === 0) return;
           const angleInRadians = (sliderValue * Math.PI) / 180;
-          mappings.forEach(({ boneName, axis, scale, isPosition }) => {
+          mappings.forEach(({ boneName, axis, scale, isPosition, customAxis }) => {
             if (isPosition) return;
             const adjustedAngle = angleInRadians * scale;
             if (!animBoneRotations[boneName]) return;
-            if (axis === 'x') animBoneRotations[boneName].x += adjustedAngle;
-            else if (axis === 'y') animBoneRotations[boneName].y += adjustedAngle;
-            else if (axis === 'z') animBoneRotations[boneName].z += adjustedAngle;
+            if (customAxis) {
+              applyCustomAxisRotation(animBoneRotations, boneName, customAxis, adjustedAngle, initialRotations);
+            } else {
+              if (axis === 'x') animBoneRotations[boneName].x += adjustedAngle;
+              else if (axis === 'y') animBoneRotations[boneName].y += adjustedAngle;
+              else if (axis === 'z') animBoneRotations[boneName].z += adjustedAngle;
+            }
           });
         });
       }
@@ -5245,9 +5301,8 @@ export default function PureThreeGLBViewer({
           
           const angleInRadians = (value * Math.PI) / 180;
           
-          mappings.forEach(({ boneName, axis, scale, isPosition }) => {
+          mappings.forEach(({ boneName, axis, scale, isPosition, customAxis }) => {
             if (isPosition) {
-              // Handle position-based transformations
               const positionOffset = value * scale;
               if (!animBonePositions[boneName]) {
                 animBonePositions[boneName] = { x: 0, y: 0, z: 0 };
@@ -5256,15 +5311,18 @@ export default function PureThreeGLBViewer({
               else if (axis === 'y') animBonePositions[boneName].y += positionOffset;
               else if (axis === 'z') animBonePositions[boneName].z += positionOffset;
             } else {
-              // Handle rotation-based transformations
               const adjustedAngle = angleInRadians * scale;
               if (!animBoneRotations[boneName]) {
                 const initial = initialRotations[boneName];
                 animBoneRotations[boneName] = initial ? { ...initial } : { x: 0, y: 0, z: 0 };
               }
-              if (axis === 'x') animBoneRotations[boneName].x += adjustedAngle;
-              else if (axis === 'y') animBoneRotations[boneName].y += adjustedAngle;
-              else if (axis === 'z') animBoneRotations[boneName].z += adjustedAngle;
+              if (customAxis) {
+                applyCustomAxisRotation(animBoneRotations, boneName, customAxis, adjustedAngle, initialRotations);
+              } else {
+                if (axis === 'x') animBoneRotations[boneName].x += adjustedAngle;
+                else if (axis === 'y') animBoneRotations[boneName].y += adjustedAngle;
+                else if (axis === 'z') animBoneRotations[boneName].z += adjustedAngle;
+              }
             }
           });
         });

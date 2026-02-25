@@ -1625,17 +1625,18 @@ function applyCustomAxisRotation(
   adjustedAngle: number,
   initialRotations: { [key: string]: { x: number; y: number; z: number } }
 ) {
-  const initial = initialRotations[boneName];
-  if (!initial) return;
   if (!boneRotations[boneName]) {
+    const initial = initialRotations[boneName];
+    if (!initial) return;
     boneRotations[boneName] = { x: initial.x, y: initial.y, z: initial.z };
   }
+  const current = boneRotations[boneName];
   const axisVec = new THREE.Vector3(customAxis.x, customAxis.y, customAxis.z).normalize();
-  const initQuat = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+  const currentQuat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(current.x, current.y, current.z, 'XYZ')
   );
   const deltaQuat = new THREE.Quaternion().setFromAxisAngle(axisVec, adjustedAngle);
-  const resultQuat = new THREE.Quaternion().multiplyQuaternions(deltaQuat, initQuat);
+  const resultQuat = new THREE.Quaternion().multiplyQuaternions(deltaQuat, currentQuat);
   const resultEuler = new THREE.Euler().setFromQuaternion(resultQuat, 'XYZ');
   boneRotations[boneName].x = resultEuler.x;
   boneRotations[boneName].y = resultEuler.y;

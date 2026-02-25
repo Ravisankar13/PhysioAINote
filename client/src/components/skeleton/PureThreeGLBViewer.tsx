@@ -4747,18 +4747,30 @@ export default function PureThreeGLBViewer({
     // Bones that are handled by the animation loop (need rotations stored in sliderRotationsRef)
     const animationLoopBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);
     
-    // Apply rotations to bones (initial + delta, same as slider system)
+    const shoulderBones = new Set(['Shoulder_L', 'Shoulder_R']);
+
     Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
       const bone = bones[boneName] as THREE.Bone;
       const initial = initialRotations[boneName];
       if (!bone || !initial) return;
       
-      if (animationLoopBones.has(boneName)) {
-        // For animation loop bones, merge deltas into sliderRotationsRef for the animation loop to use
-        // This is critical because the animation loop overwrites direct bone rotations
+      if (shoulderBones.has(boneName)) {
+        const initialQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+        );
+        const deltaQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(delta.x, delta.y, delta.z, 'XYZ')
+        );
+        const targetQuat = initialQuat.clone().multiply(deltaQuat);
+        const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
+        sliderRotationsRef.current[boneName] = {
+          x: targetEuler.x - initial.x,
+          y: targetEuler.y - initial.y,
+          z: targetEuler.z - initial.z
+        };
+      } else if (animationLoopBones.has(boneName)) {
         sliderRotationsRef.current[boneName] = delta;
       } else {
-        // For regular bones, apply directly
         bone.rotation.set(
           initial.x + delta.x,
           initial.y + delta.y,

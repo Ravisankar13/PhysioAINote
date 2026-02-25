@@ -1327,18 +1327,17 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   'rightHip.externalRotation': [{ boneName: 'Hip_R', axis: 'x', scale: 1 }],
   
   // === KNEE / TIBIA ===
-  // Empirically verified: Knee_L/R Z+30 = FORWARD (ankle moves forward)
-  // Knee flexion = ankle moves backward = negative Z
-  'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'z', scale: -1 }],
+  // Combined Y+Z rotation cancels lateral displacement (ratio 0.86 from bone axis tests)
+  'leftKnee.flexion': [{ boneName: 'Knee_L', axis: 'y', scale: -0.86 }, { boneName: 'Knee_L', axis: 'z', scale: -1 }],
   'leftKnee.varus': [{ boneName: 'Knee_L', axis: 'y', scale: 1 }],
   'leftKnee.tibialTorsion': [{ boneName: 'Knee_L', axis: 'x', scale: 1 }],
-  'leftKnee.recurvatum': [{ boneName: 'Knee_L', axis: 'z', scale: 0.5 }],
-  'leftKnee.tibialSlope': [{ boneName: 'Knee_L', axis: 'z', scale: -0.3 }],
-  'rightKnee.flexion': [{ boneName: 'Knee_R', axis: 'z', scale: -1 }],
+  'leftKnee.recurvatum': [{ boneName: 'Knee_L', axis: 'y', scale: 0.43 }, { boneName: 'Knee_L', axis: 'z', scale: 0.5 }],
+  'leftKnee.tibialSlope': [{ boneName: 'Knee_L', axis: 'y', scale: -0.258 }, { boneName: 'Knee_L', axis: 'z', scale: -0.3 }],
+  'rightKnee.flexion': [{ boneName: 'Knee_R', axis: 'y', scale: -0.86 }, { boneName: 'Knee_R', axis: 'z', scale: -1 }],
   'rightKnee.varus': [{ boneName: 'Knee_R', axis: 'y', scale: -1 }],
   'rightKnee.tibialTorsion': [{ boneName: 'Knee_R', axis: 'x', scale: -1 }],
-  'rightKnee.recurvatum': [{ boneName: 'Knee_R', axis: 'z', scale: 0.5 }],
-  'rightKnee.tibialSlope': [{ boneName: 'Knee_R', axis: 'z', scale: -0.3 }],
+  'rightKnee.recurvatum': [{ boneName: 'Knee_R', axis: 'y', scale: 0.43 }, { boneName: 'Knee_R', axis: 'z', scale: 0.5 }],
+  'rightKnee.tibialSlope': [{ boneName: 'Knee_R', axis: 'y', scale: -0.258 }, { boneName: 'Knee_R', axis: 'z', scale: -0.3 }],
   
   // === ANKLE & FOOT ===
   // Empirically verified: Ankle_L/R Z+30 = UP (toes go up)

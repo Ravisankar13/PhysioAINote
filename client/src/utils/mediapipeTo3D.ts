@@ -292,55 +292,38 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightUpperArm = normalize(createVector(rightShoulder, rightElbow));
   const rightForearm = normalize(createVector(rightElbow, rightWrist));
 
-  // SIMPLIFIED DIRECT MAPPING for shoulder angles
-  // 
-  // The key insight: we map arm position directly to skeleton rotation axes:
-  // - FLEXION: arm moving forward/backward (rotation around Y axis in skeleton)
-  // - ABDUCTION: arm moving up/sideways (rotation around Z axis in skeleton)
+  // ELEVATION-AZIMUTH DECOMPOSITION for shoulder angles
   //
-  // In the camera view:
-  // - User faces camera, so +Z in THREE.js = toward camera = backward for user
-  // - When user raises arm FORWARD (toward camera), skeleton should show flexion
-  // - When user raises arm UP/SIDEWAYS, skeleton should show abduction
+  // Instead of independent atan2 projections (which become unstable when y→0),
+  // we compute a single elevation angle from vertical, then decompose it into
+  // flexion and abduction based on the direction the arm points in the horizontal plane.
   //
-  // The arm vector after conversion:
-  // - Arm down: (0, -1, 0)
-  // - Arm forward (toward camera): (0, 0, +1) 
-  // - Arm to side: (±1, 0, 0)
-  // - Arm up: (0, +1, 0)
-  
-  // FLEXION: How much the arm is forward/backward (Z component relative to vertical)
-  // Using atan2(z, -y) matches the hip flexion pattern for consistent full-range behavior:
-  // arm down: z≈0, y≈-1 → atan2(0, 1) = 0
-  // arm forward: z>0, y≈0 → positive flexion
-  // arm overhead: z≈0, y>0 → atan2(0, -1) = π
-  // arm behind: z<0 → negative flexion
-  const leftShoulderFlexion = Math.atan2(leftUpperArm.z, -leftUpperArm.y);
-  const rightShoulderFlexion = Math.atan2(rightUpperArm.z, -rightUpperArm.y);
-  
-  // ABDUCTION: How much the arm is raised laterally (combines X and Y)
-  // For left arm: negative X = abduction (arm going left)
-  // For right arm: positive X = abduction (arm going right)  
-  // Also, positive Y = arm raised up
+  // elevation = atan2(sqrt(x²+z²), -y)  — total angle from vertical down (0=down, π/2=horizontal, π=up)
+  // azimuth = atan2(z, -x) [left] or atan2(z, x) [right] — direction in horizontal plane (0=lateral, π/2=forward)
+  // flexion = elevation * sin(azimuth)   — forward component
+  // abduction = elevation * cos(azimuth) — lateral component
   //
-  // Key insight: abduction should increase when arm goes UP or SIDEWAYS
-  // Use the elevation from vertical, but only when in the frontal plane
-  //
-  // Elevation from down = acos(-y) gives total angle from vertical down
-  // But we want abduction specifically (lateral elevation)
-  // Abduction = atan2(horizontal-lateral-distance, -vertical)
-  //
-  // For left arm: lateral distance = -x (left is positive abduction)
-  // For right arm: lateral distance = +x (right is positive abduction)
-  // Vertical down reference = -y
-  //
-  // When arm is down: x≈0, y≈-1 → atan2(0, 1) = 0
-  // When arm is sideways: x≈-1 (left), y≈0 → atan2(1, 0) = π/2
-  // When arm is straight up: x≈0, y≈+1 → atan2(0, -1) = π
-  // But straight up should be ~180° of abduction which is correct!
-  
-  const leftShoulderAbduction = Math.atan2(-leftUpperArm.x, -leftUpperArm.y);
-  const rightShoulderAbduction = Math.atan2(rightUpperArm.x, -rightUpperArm.y);
+  // This avoids singularities because elevation uses magnitude (always ≥0) and azimuth
+  // is only used as a weighting factor, not as a standalone angle.
+
+  const computeShoulderAngles = (armDir: Vec3, isLeft: boolean): { flexion: number; abduction: number } => {
+    const horizMag = Math.sqrt(armDir.x * armDir.x + armDir.z * armDir.z);
+    const elevation = Math.atan2(horizMag, -armDir.y);
+    const lateralX = isLeft ? -armDir.x : armDir.x;
+    const azimuth = Math.atan2(armDir.z, lateralX);
+    return {
+      flexion: elevation * Math.sin(azimuth),
+      abduction: elevation * Math.cos(azimuth)
+    };
+  };
+
+  const leftShoulderAngles = computeShoulderAngles(leftUpperArm, true);
+  const leftShoulderFlexion = leftShoulderAngles.flexion;
+  const leftShoulderAbduction = leftShoulderAngles.abduction;
+
+  const rightShoulderAngles = computeShoulderAngles(rightUpperArm, false);
+  const rightShoulderFlexion = rightShoulderAngles.flexion;
+  const rightShoulderAbduction = rightShoulderAngles.abduction;
 
   // SHOULDER INTERNAL/EXTERNAL ROTATION
   // Computed from the relationship between upper arm and forearm directions
@@ -381,8 +364,9 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightShin = normalize(createVector(rightKnee, rightAnkle));
 
   // Hip flexion (leg raised forward) - stored in .x
-  const leftHipFlexion = Math.atan2(leftThigh.z, -leftThigh.y);
-  const rightHipFlexion = Math.atan2(rightThigh.z, -rightThigh.y);
+  // Z-depth dampening (0.5x) reduces noise from MediaPipe's unreliable monocular Z estimation
+  const leftHipFlexion = Math.atan2(leftThigh.z * 0.5, -leftThigh.y);
+  const rightHipFlexion = Math.atan2(rightThigh.z * 0.5, -rightThigh.y);
   
   // Hip abduction (leg moved outward) - stored in .z
   // Left leg: negative X = abducted (moved left), positive X = adducted (moved right/medial)
@@ -700,8 +684,11 @@ function computeJointFromPartial(
       const rw = safeGet(landmarks, LANDMARKS.RIGHT_WRIST);
       const upperArm = normalize(createVector(rs, re));
       const forearm = normalize(createVector(re, rw));
-      const flexion = Math.atan2(upperArm.z, -upperArm.y);
-      const abduction = Math.atan2(upperArm.x, -upperArm.y);
+      const horizMag = Math.sqrt(upperArm.x * upperArm.x + upperArm.z * upperArm.z);
+      const elevation = Math.atan2(horizMag, -upperArm.y);
+      const azimuth = Math.atan2(upperArm.z, upperArm.x);
+      const flexion = elevation * Math.sin(azimuth);
+      const abduction = elevation * Math.cos(azimuth);
       const cross = {
         x: upperArm.y * forearm.z - upperArm.z * forearm.y,
         y: upperArm.z * forearm.x - upperArm.x * forearm.z,
@@ -719,8 +706,11 @@ function computeJointFromPartial(
       const lw = safeGet(landmarks, LANDMARKS.LEFT_WRIST);
       const upperArm = normalize(createVector(ls, le));
       const forearm = normalize(createVector(le, lw));
-      const flexion = Math.atan2(upperArm.z, -upperArm.y);
-      const abduction = Math.atan2(-upperArm.x, -upperArm.y);
+      const horizMag = Math.sqrt(upperArm.x * upperArm.x + upperArm.z * upperArm.z);
+      const elevation = Math.atan2(horizMag, -upperArm.y);
+      const azimuth = Math.atan2(upperArm.z, -upperArm.x);
+      const flexion = elevation * Math.sin(azimuth);
+      const abduction = elevation * Math.cos(azimuth);
       const cross = {
         x: upperArm.y * forearm.z - upperArm.z * forearm.y,
         y: upperArm.z * forearm.x - upperArm.x * forearm.z,
@@ -754,7 +744,7 @@ function computeJointFromPartial(
       const rh = safeGet(landmarks, LANDMARKS.RIGHT_HIP);
       const rk = safeGet(landmarks, LANDMARKS.RIGHT_KNEE);
       const thigh = normalize(createVector(rh, rk));
-      const flexion = Math.atan2(thigh.z, -thigh.y);
+      const flexion = Math.atan2(thigh.z * 0.5, -thigh.y);
       const abduction = Math.atan2(thigh.x, -thigh.y);
       return { x: clamp(flexion, -0.5, 2.0), y: 0, z: clamp(abduction, -0.3, 0.8) };
     }
@@ -763,7 +753,7 @@ function computeJointFromPartial(
       const lh = safeGet(landmarks, LANDMARKS.LEFT_HIP);
       const lk = safeGet(landmarks, LANDMARKS.LEFT_KNEE);
       const thigh = normalize(createVector(lh, lk));
-      const flexion = Math.atan2(thigh.z, -thigh.y);
+      const flexion = Math.atan2(thigh.z * 0.5, -thigh.y);
       const abduction = Math.atan2(-thigh.x, -thigh.y);
       return { x: clamp(flexion, -0.5, 2.0), y: 0, z: clamp(abduction, -0.3, 0.8) };
     }

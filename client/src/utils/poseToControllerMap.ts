@@ -101,6 +101,7 @@ const ARM_DEAD_ZONE = 0.06; // ~3.5 degrees - tracks small intentional arm adjus
  * while preserving moderate torso movements
  */
 const SPINE_DEAD_ZONE = 0.03; // ~1.7 degrees - better torso tracking sensitivity
+const HIP_DEAD_ZONE = 0.08; // ~4.5 degrees - larger dead zone for hips due to noisy MediaPipe Z-depth
 
 /**
  * Convert Skeleton3DPose to controller-compatible values
@@ -132,10 +133,11 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   const rightElbowFlexion = applyDeadZone(clamp(pose.rightElbow.x, elbow.flexion.min, elbow.flexion.max), ARM_DEAD_ZONE);
   
   // Hips - x=flexion (0=standing, positive=leg forward), z=abduction
-  const leftHipFlexion = applyDeadZone(clamp(pose.leftHip.x, hip.flexion.min, hip.flexion.max));
+  // Use larger dead zone for hip flexion due to noisy MediaPipe Z-depth
+  const leftHipFlexion = applyDeadZone(clamp(pose.leftHip.x, hip.flexion.min, hip.flexion.max), HIP_DEAD_ZONE);
   const leftHipAbduction = applyDeadZone(clamp(pose.leftHip.z, hip.abduction.min, hip.abduction.max));
   
-  const rightHipFlexion = applyDeadZone(clamp(pose.rightHip.x, hip.flexion.min, hip.flexion.max));
+  const rightHipFlexion = applyDeadZone(clamp(pose.rightHip.x, hip.flexion.min, hip.flexion.max), HIP_DEAD_ZONE);
   const rightHipAbduction = applyDeadZone(clamp(pose.rightHip.z, hip.abduction.min, hip.abduction.max));
   
   // Knees - x=flexion (0=straight, positive=bent)

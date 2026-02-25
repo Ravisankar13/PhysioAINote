@@ -4682,11 +4682,13 @@ export default function PureThreeGLBViewer({
     // Map controller values to BONE_MAPPING keys (values in radians, matching slider behavior)
     const livePoseConfig: { [key: string]: number } = {
       // Shoulders - flexion and abduction
+      // T-pose offset: skeleton rest pose is T-pose (arms at 90° abduction)
+      // Subtract π/2 so camera "arms at sides" (0) maps to skeleton "arms down" (-π/2 from T-pose)
       'leftShoulder.flexion': controllerValues.leftShoulder.flexion,
-      'leftShoulder.abduction': controllerValues.leftShoulder.abduction,
+      'leftShoulder.abduction': controllerValues.leftShoulder.abduction - Math.PI / 2,
       'leftShoulder.internalRotation': controllerValues.leftShoulder.internalRotation,
       'rightShoulder.flexion': controllerValues.rightShoulder.flexion,
-      'rightShoulder.abduction': controllerValues.rightShoulder.abduction,
+      'rightShoulder.abduction': controllerValues.rightShoulder.abduction - Math.PI / 2,
       'rightShoulder.internalRotation': controllerValues.rightShoulder.internalRotation,
       // Elbows - flexion only
       'leftElbow.flexion': controllerValues.leftElbow.flexion,

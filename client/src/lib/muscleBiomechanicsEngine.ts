@@ -953,9 +953,10 @@ function computeGroupStatesFromAnalysis(muscles: IndividualMuscle[]): MuscleStat
 
   const results: MuscleStatesMap = {};
   for (const [gId, gMuscles] of Object.entries(grouped)) {
-    const avgTension = gMuscles.reduce((s, m) => s + (m.tightnessPercent + (100 - m.lengthPercent)) / 2, 0) / gMuscles.length;
+    const avgTight = gMuscles.reduce((s, m) => s + m.tightnessPercent, 0) / gMuscles.length;
     const avgAct = gMuscles.reduce((s, m) => s + m.activationPercent, 0) / gMuscles.length;
     const avgLength = gMuscles.reduce((s, m) => s + m.lengthPercent, 0) / gMuscles.length;
+    const avgTension = 50 + (avgTight - 15) * 0.8 + (100 - avgLength) * 0.5 + (avgAct - 15) * 0.4;
 
     let state: MuscleState = 'neutral';
     if (avgLength < 90) state = 'shortened';

@@ -5043,6 +5043,53 @@ export default function PureThreeGLBViewer({
       });
     });
     
+    // Quaternion composition for shoulder and hip bones to match camera path behavior
+    // Prevents Euler gimbal issues when multiple rotations are combined (e.g. flexion + abduction)
+    const quaternionComposeBones = new Set(['Shoulder_L', 'Shoulder_R', 'Hip_L', 'Hip_R']);
+    
+    quaternionComposeBones.forEach(boneName => {
+      const initial = initialRotations[boneName];
+      if (!initial) return;
+      
+      if (animationLoopBones.has(boneName)) {
+        const delta = sliderOnlyRotations[boneName];
+        if (!delta || (Math.abs(delta.x) < 0.001 && Math.abs(delta.y) < 0.001 && Math.abs(delta.z) < 0.001)) return;
+        const initialQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+        );
+        const deltaQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(delta.x, delta.y, delta.z, 'XYZ')
+        );
+        const targetQuat = initialQuat.clone().multiply(deltaQuat);
+        const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
+        sliderOnlyRotations[boneName] = {
+          x: targetEuler.x - initial.x,
+          y: targetEuler.y - initial.y,
+          z: targetEuler.z - initial.z
+        };
+      } else {
+        const rot = boneRotations[boneName];
+        if (!rot) return;
+        const dx = rot.x - initial.x;
+        const dy = rot.y - initial.y;
+        const dz = rot.z - initial.z;
+        if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001 && Math.abs(dz) < 0.001) return;
+        const initialQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+        );
+        const deltaQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(dx, dy, dz, 'XYZ')
+        );
+        const targetQuat = initialQuat.clone().multiply(deltaQuat);
+        const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
+        boneRotations[boneName] = {
+          x: targetEuler.x,
+          y: targetEuler.y,
+          z: targetEuler.z
+        };
+      }
+    });
+    
     // Store slider rotations for animation loop to use
     // Only update if live pose is NOT active (live pose effect sets these values itself)
     if (!livePose) {
@@ -5329,39 +5376,29 @@ export default function PureThreeGLBViewer({
         });
       });
       
-      // Hip flexion fix: Use world mediolateral (X) axis for hip flexion
-      // to ensure pure sagittal plane movement at ALL angles (no lateral drift)
-      // The world X axis has zero lateral component, preventing leg crossing
-      // at large flexion angles (e.g., squat at 80°)
-      ['Hip_L', 'Hip_R'].forEach(boneName => {
+      // Quaternion composition for shoulder and hip bones (matches slider and camera paths)
+      ['Shoulder_L', 'Shoulder_R', 'Hip_L', 'Hip_R'].forEach(boneName => {
         const initial = initialRotations[boneName];
         const anim = animBoneRotations[boneName];
         if (!initial || !anim) return;
         
-        const zDelta = anim.z - initial.z;
-        if (Math.abs(zDelta) < 0.001) return;
+        const dx = anim.x - initial.x;
+        const dy = anim.y - initial.y;
+        const dz = anim.z - initial.z;
+        if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001 && Math.abs(dz) < 0.001) return;
         
-        const bone = bones[boneName] as THREE.Bone;
-        if (!bone || !bone.parent) return;
-        
-        bone.parent.updateWorldMatrix(true, false);
-        const parentWorldQ = new THREE.Quaternion();
-        bone.parent.getWorldQuaternion(parentWorldQ);
-        const parentWorldQInv = parentWorldQ.clone().invert();
-        
-        const worldFlexAxis = new THREE.Vector3(-1, 0, 0);
-        const localFlexAxis = worldFlexAxis.clone().applyQuaternion(parentWorldQInv).normalize();
-        
-        const qInit = new THREE.Quaternion().setFromEuler(
+        const initialQuat = new THREE.Quaternion().setFromEuler(
           new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
         );
-        const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexAxis, zDelta);
-        const qResult = new THREE.Quaternion().multiplyQuaternions(qFlex, qInit);
-        const eulerResult = new THREE.Euler().setFromQuaternion(qResult, 'XYZ');
+        const deltaQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(dx, dy, dz, 'XYZ')
+        );
+        const targetQuat = initialQuat.clone().multiply(deltaQuat);
+        const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
         
-        anim.x = eulerResult.x;
-        anim.y = eulerResult.y;
-        anim.z = eulerResult.z;
+        anim.x = targetEuler.x;
+        anim.y = targetEuler.y;
+        anim.z = targetEuler.z;
       });
       
       const pelvisDropValue = jointValues['pelvis']?.['drop'] || 0;

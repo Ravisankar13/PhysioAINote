@@ -2889,7 +2889,7 @@ export default function PureThreeGLBViewer({
   }, []);
 
   useEffect(() => {
-    if (!sceneRef.current || !enablePainMarkers) return;
+    if (!sceneRef.current || (!enablePainMarkers && !enableSkeletonClick)) return;
     const { renderer, camera, scene, model, controls } = sceneRef.current;
     if (!model || !renderer) return;
     const domElement = renderer.domElement;
@@ -3523,7 +3523,7 @@ export default function PureThreeGLBViewer({
       pendingReferralRef.current = null;
       pendingLineRef.current = null;
     };
-  }, [enablePainMarkers, findNearestBone]);
+  }, [enablePainMarkers, enableSkeletonClick, findNearestBone]);
 
   useEffect(() => {
     if (!sceneRef.current || !enableRomMode) return;

@@ -4981,9 +4981,9 @@ ${ddxList}`;
                               <div>
                                 <label className="text-[8px] text-gray-400">Affected Layers</label>
                                 <div className="flex flex-wrap gap-0.5 mt-0.5">
-                                  {TISSUE_LAYERS.map(layer => (
+                                  {(Object.keys(TISSUE_LAYERS) as TissueLayer[]).map(layer => (
                                     <button key={layer} className={`text-[7px] px-1 py-0.5 rounded ${scar.affectedLayers.includes(layer) ? 'bg-pink-500/30 text-pink-300' : 'bg-white/5 text-gray-500'}`} onClick={() => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, affectedLayers: s.affectedLayers.includes(layer) ? s.affectedLayers.filter(l => l !== layer) : [...s.affectedLayers, layer] } : s))}>
-                                      {layer}
+                                      {TISSUE_LAYERS[layer].label}
                                     </button>
                                   ))}
                                 </div>

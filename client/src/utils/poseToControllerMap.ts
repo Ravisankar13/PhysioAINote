@@ -101,7 +101,9 @@ const ARM_DEAD_ZONE = 0.06; // ~3.5 degrees - tracks small intentional arm adjus
  * while preserving moderate torso movements
  */
 const SPINE_DEAD_ZONE = 0.03; // ~1.7 degrees - better torso tracking sensitivity
-const HIP_DEAD_ZONE = 0.08; // ~4.5 degrees - larger dead zone for hips due to noisy MediaPipe Z-depth
+const HIP_DEAD_ZONE = 0.12; // ~7 degrees - larger dead zone for hips due to noisy MediaPipe Z-depth
+const KNEE_DEAD_ZONE = 0.1; // ~5.7 degrees - filters phantom flexion from landmark misalignment
+const ANKLE_DEAD_ZONE = 0.08; // ~4.5 degrees - filters noisy foot landmark detection
 
 /**
  * Convert Skeleton3DPose to controller-compatible values
@@ -135,19 +137,19 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   // Hips - x=flexion (0=standing, positive=leg forward), z=abduction
   // Use larger dead zone for hip flexion due to noisy MediaPipe Z-depth
   const leftHipFlexion = applyDeadZone(clamp(pose.leftHip.x, hip.flexion.min, hip.flexion.max), HIP_DEAD_ZONE);
-  const leftHipAbduction = applyDeadZone(clamp(pose.leftHip.z, hip.abduction.min, hip.abduction.max));
+  const leftHipAbduction = applyDeadZone(clamp(pose.leftHip.z, hip.abduction.min, hip.abduction.max), HIP_DEAD_ZONE);
   
   const rightHipFlexion = applyDeadZone(clamp(pose.rightHip.x, hip.flexion.min, hip.flexion.max), HIP_DEAD_ZONE);
-  const rightHipAbduction = applyDeadZone(clamp(pose.rightHip.z, hip.abduction.min, hip.abduction.max));
+  const rightHipAbduction = applyDeadZone(clamp(pose.rightHip.z, hip.abduction.min, hip.abduction.max), HIP_DEAD_ZONE);
   
   // Knees - x=flexion (0=straight, positive=bent)
-  const leftKneeFlexion = applyDeadZone(clamp(pose.leftKnee.x, knee.flexion.min, knee.flexion.max));
-  const rightKneeFlexion = applyDeadZone(clamp(pose.rightKnee.x, knee.flexion.min, knee.flexion.max));
+  const leftKneeFlexion = applyDeadZone(clamp(pose.leftKnee.x, knee.flexion.min, knee.flexion.max), KNEE_DEAD_ZONE);
+  const rightKneeFlexion = applyDeadZone(clamp(pose.rightKnee.x, knee.flexion.min, knee.flexion.max), KNEE_DEAD_ZONE);
   
   // Ankles - x=dorsiflexion (positive=dorsiflexion, negative=plantarflexion)
   const { ankle, wrist } = ANATOMICAL_RANGES;
-  const leftAnkleDorsiflexion = applyDeadZone(clamp(pose.leftAnkle.x, ankle.dorsiflexion.min, ankle.dorsiflexion.max));
-  const rightAnkleDorsiflexion = applyDeadZone(clamp(pose.rightAnkle.x, ankle.dorsiflexion.min, ankle.dorsiflexion.max));
+  const leftAnkleDorsiflexion = applyDeadZone(clamp(pose.leftAnkle.x, ankle.dorsiflexion.min, ankle.dorsiflexion.max), ANKLE_DEAD_ZONE);
+  const rightAnkleDorsiflexion = applyDeadZone(clamp(pose.rightAnkle.x, ankle.dorsiflexion.min, ankle.dorsiflexion.max), ANKLE_DEAD_ZONE);
   
   // Wrists - x=flexion (positive=flexion, negative=extension)
   const leftWristFlexion = applyDeadZone(clamp(pose.leftWrist.x, wrist.flexion.min, wrist.flexion.max), ARM_DEAD_ZONE);

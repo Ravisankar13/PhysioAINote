@@ -364,9 +364,9 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightShin = normalize(createVector(rightKnee, rightAnkle));
 
   // Hip flexion (leg raised forward) - stored in .x
-  // Z-depth dampening (0.5x) reduces noise from MediaPipe's unreliable monocular Z estimation
-  const leftHipFlexion = Math.atan2(leftThigh.z * 0.5, -leftThigh.y);
-  const rightHipFlexion = Math.atan2(rightThigh.z * 0.5, -rightThigh.y);
+  // Z-depth dampening (0.3x) reduces noise from MediaPipe's unreliable monocular Z estimation
+  const leftHipFlexion = Math.atan2(leftThigh.z * 0.3, -leftThigh.y);
+  const rightHipFlexion = Math.atan2(rightThigh.z * 0.3, -rightThigh.y);
   
   // Hip abduction (leg moved outward) - stored in .z
   // Left leg: negative X = abducted (moved left), positive X = adducted (moved right/medial)
@@ -744,7 +744,7 @@ function computeJointFromPartial(
       const rh = safeGet(landmarks, LANDMARKS.RIGHT_HIP);
       const rk = safeGet(landmarks, LANDMARKS.RIGHT_KNEE);
       const thigh = normalize(createVector(rh, rk));
-      const flexion = Math.atan2(thigh.z * 0.5, -thigh.y);
+      const flexion = Math.atan2(thigh.z * 0.3, -thigh.y);
       const abduction = Math.atan2(thigh.x, -thigh.y);
       return { x: clamp(flexion, -0.5, 2.0), y: 0, z: clamp(abduction, -0.3, 0.8) };
     }
@@ -753,7 +753,7 @@ function computeJointFromPartial(
       const lh = safeGet(landmarks, LANDMARKS.LEFT_HIP);
       const lk = safeGet(landmarks, LANDMARKS.LEFT_KNEE);
       const thigh = normalize(createVector(lh, lk));
-      const flexion = Math.atan2(thigh.z * 0.5, -thigh.y);
+      const flexion = Math.atan2(thigh.z * 0.3, -thigh.y);
       const abduction = Math.atan2(-thigh.x, -thigh.y);
       return { x: clamp(flexion, -0.5, 2.0), y: 0, z: clamp(abduction, -0.3, 0.8) };
     }

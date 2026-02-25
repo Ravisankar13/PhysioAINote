@@ -64,7 +64,9 @@ import {
   Layers,
   Network,
   Radio,
-  Palette
+  Palette,
+  Scissors,
+  Grid2X2
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -87,12 +89,14 @@ import { pdfGenerator } from "@/services/pdfGenerator";
 import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink } from "@/components/skeleton/ClinicalReasoningPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
-import { computeFullMuscleAnalysis, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
+import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { computeBidirectionalEffects, computeMuscleRestrictionEffects, MUSCLE_JOINT_ACTIONS } from "@/lib/bidirectionalMuscleJoint";
 import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
+import { MYOFASCIAL_CHAINS, MUSCLE_BONE_POSITIONS, type MyofascialChain, computeWholeBodyTensionScore } from "@/lib/myofascialChains";
+import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 
 const BODY_REGIONS = {
   cervical: {
@@ -430,6 +434,15 @@ export default function PhysioGPT() {
   const [correlationTab, setCorrelationTab] = useState<'overview' | 'chains' | 'muscles' | 'root_cause'>('overview');
   const [chainIntegrityMode, setChainIntegrityMode] = useState(false);
   const [expandedChainIntegrity, setExpandedChainIntegrity] = useState<string | null>(null);
+  const [showChainVisualization, setShowChainVisualization] = useState(false);
+  const [activeChainIds, setActiveChainIds] = useState<string[]>(() => MYOFASCIAL_CHAINS.map(c => c.id));
+  const [showScarPanel, setShowScarPanel] = useState(false);
+  const [scarMarkers, setScarMarkers] = useState<ScarMarker[]>([]);
+  const [adhesionBands, setAdhesionBands] = useState<AdhesionBand[]>([]);
+  const [editingScar, setEditingScar] = useState<string | null>(null);
+  const [scarPlacementMode, setScarPlacementMode] = useState<ScarType | null>(null);
+  const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
+  const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment'>('chat');
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
@@ -2134,6 +2147,35 @@ ${ddxList}`;
     return scores;
   }, [modelConfig, chainExplorerMode, chainIntegrityMode]);
 
+  const baseMuscleTensions = useMemo(() => {
+    const base = computeAllMuscleStates(modelConfig);
+    const tensions: { [id: string]: number } = {};
+    Object.entries(base).forEach(([id, s]) => { tensions[id] = s.tension; });
+    return { tensions };
+  }, [modelConfig]);
+
+  const wholeBodyScore = useMemo(() => {
+    return computeWholeBodyTensionScore(baseMuscleTensions.tensions, muscleOverrides);
+  }, [baseMuscleTensions, muscleOverrides]);
+
+  const chainEffects = useMemo(() => {
+    return MYOFASCIAL_CHAINS.map(chain => {
+      const tensions = chain.links.map(l => baseMuscleTensions.tensions[l.muscleId] ?? 50);
+      const avgTension = tensions.length > 0 ? tensions.reduce((a, b) => a + b, 0) / tensions.length : 50;
+      return { chainId: chain.id, avgTension };
+    });
+  }, [baseMuscleTensions]);
+
+  const fascialChainVizProp = useMemo(() => {
+    if (!showChainVisualization) return undefined;
+    return {
+      enabled: true,
+      chains: MYOFASCIAL_CHAINS,
+      tensions: baseMuscleTensions.tensions,
+      activeChains: activeChainIds,
+    };
+  }, [showChainVisualization, baseMuscleTensions.tensions, activeChainIds]);
+
   const treatmentPlan = useMemo(() => {
     if (rightPanelTab !== 'treatment') return null;
     const forces = calculatePosturalForces(modelConfig);
@@ -2345,6 +2387,51 @@ ${ddxList}`;
               onAnimationProgress={handleAnimationProgress}
               animationConstraints={animationConstraints}
               environmentPreset={environmentPreset}
+              fascialChainVisualization={fascialChainVizProp}
+              scarMarkers={scarMarkers}
+              adhesionBands={adhesionBands}
+              onScarMarkerClick={(id) => setEditingScar(id)}
+              enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle'}
+              onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
+                if (scarPlacementMode) {
+                  const newScar: ScarMarker = {
+                    id: `scar_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                    position,
+                    nearestBone,
+                    anatomicalLabel,
+                    type: scarPlacementMode,
+                    length: 0.08,
+                    width: 0.03,
+                    orientation: 0,
+                    affectedLayers: ['superficial'],
+                    severity: 3,
+                    age: 'chronic',
+                    mobility: 'tethered',
+                    painOnPalpation: 3,
+                    notes: '',
+                  };
+                  setScarMarkers(prev => [...prev, newScar]);
+                  setEditingScar(newScar.id);
+                  setScarPlacementMode(null);
+                } else if (adhesionPlacementStep === 'start') {
+                  setPendingAdhesionStart({ position, bone: nearestBone });
+                  setAdhesionPlacementStep('end');
+                } else if (adhesionPlacementStep === 'end' && pendingAdhesionStart) {
+                  const newBand: AdhesionBand = {
+                    id: `adhesion_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                    startPosition: pendingAdhesionStart.position,
+                    endPosition: position,
+                    startBone: pendingAdhesionStart.bone,
+                    endBone: nearestBone,
+                    restrictedMovements: [],
+                    tensionLevel: 50,
+                    depth: 'superficial',
+                  };
+                  setAdhesionBands(prev => [...prev, newBand]);
+                  setAdhesionPlacementStep('idle');
+                  setPendingAdhesionStart(null);
+                }
+              }}
             />
 
             <MovementPlayer
@@ -4601,6 +4688,41 @@ ${ddxList}`;
                 <Network className="h-3 w-3 mr-1" />
                 {correlationMode ? 'Correlate On' : 'Correlate'}
               </Button>
+              <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${showChainVisualization ? 'bg-teal-500 text-white hover:bg-teal-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  const newMode = !showChainVisualization;
+                  setShowChainVisualization(newMode);
+                  if (newMode) {
+                    toast({ title: "Body Tension Visualization", description: "Showing myofascial chain tension lines on the skeleton. Adjust posture to see tension changes." });
+                  }
+                }}
+              >
+                <Activity className="h-3 w-3 mr-1" />
+                {showChainVisualization ? 'Tension On' : 'Tension'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${showScarPanel ? 'bg-pink-500 text-white hover:bg-pink-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  const newMode = !showScarPanel;
+                  setShowScarPanel(newMode);
+                  if (newMode) {
+                    toast({ title: "Scar Tissue Mapping", description: "Document surgical scars and adhesion bands on the 3D model. Click placement buttons then click the skeleton." });
+                  }
+                }}
+              >
+                <Scissors className="h-3 w-3 mr-1" />
+                Scars
+                {scarMarkers.length > 0 && (
+                  <span className="ml-1 bg-pink-400 text-white text-[9px] rounded-full px-1 leading-tight">{scarMarkers.length}</span>
+                )}
+              </Button>
+              <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
               <Button
                 variant="secondary"
                 size="sm"
@@ -4691,6 +4813,227 @@ ${ddxList}`;
               </Button>
               </div>
             </div>
+
+            {showChainVisualization && (
+              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[280px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5 text-teal-400" />
+                    <span className="text-[11px] font-semibold text-white">Body Tension</span>
+                  </div>
+                  <button onClick={() => setShowChainVisualization(false)} className="text-gray-400 hover:text-white">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className={`mb-3 p-2 rounded-lg border ${
+                  wholeBodyScore.level === 'critical' ? 'border-red-500/50 bg-red-500/10' :
+                  wholeBodyScore.level === 'high' ? 'border-orange-500/50 bg-orange-500/10' :
+                  wholeBodyScore.level === 'moderate' ? 'border-yellow-500/50 bg-yellow-500/10' :
+                  'border-green-500/50 bg-green-500/10'
+                }`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-medium text-gray-300">Whole-Body Tension</span>
+                    <span className={`text-sm font-bold ${
+                      wholeBodyScore.level === 'critical' ? 'text-red-400' :
+                      wholeBodyScore.level === 'high' ? 'text-orange-400' :
+                      wholeBodyScore.level === 'moderate' ? 'text-yellow-400' :
+                      'text-green-400'
+                    }`}>{wholeBodyScore.score}/100</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-1.5">
+                    <div className={`h-1.5 rounded-full ${
+                      wholeBodyScore.level === 'critical' ? 'bg-red-500' :
+                      wholeBodyScore.level === 'high' ? 'bg-orange-500' :
+                      wholeBodyScore.level === 'moderate' ? 'bg-yellow-500' :
+                      'bg-green-500'
+                    }`} style={{ width: `${wholeBodyScore.score}%` }} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[9px] text-gray-400 font-medium">Myofascial Chains</span>
+                  {MYOFASCIAL_CHAINS.map(chain => {
+                    const effect = chainEffects.find(e => e.chainId === chain.id);
+                    const isActive = activeChainIds.includes(chain.id);
+                    return (
+                      <button
+                        key={chain.id}
+                        className={`w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors ${isActive ? 'bg-white/10 hover:bg-white/15' : 'bg-white/3 hover:bg-white/8 opacity-50'}`}
+                        onClick={() => setActiveChainIds(prev => prev.includes(chain.id) ? prev.filter(id => id !== chain.id) : [...prev, chain.id])}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: chain.color }} />
+                          <span className="text-[9px] text-gray-200">{chain.name}</span>
+                        </div>
+                        {effect && (
+                          <span className={`text-[8px] font-medium ${
+                            effect.avgTension > 70 || effect.avgTension < 30 ? 'text-red-400' :
+                            effect.avgTension > 60 || effect.avgTension < 40 ? 'text-yellow-400' :
+                            'text-green-400'
+                          }`}>{Math.round(effect.avgTension)}%</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {showScarPanel && (
+              <div className="absolute top-2 right-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[280px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Scissors className="h-3.5 w-3.5 text-pink-400" />
+                    <span className="text-[11px] font-semibold text-white">Scar Tissue Mapping</span>
+                  </div>
+                  <button onClick={() => setShowScarPanel(false)} className="text-gray-400 hover:text-white">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+
+                {scarPlacementMode && (
+                  <div className="mb-2 p-2 rounded-lg bg-pink-500/20 border border-pink-500/30 text-[9px] text-pink-300">
+                    Click on the skeleton to place a {SCAR_TYPES[scarPlacementMode].label.toLowerCase()}
+                    <button className="ml-2 text-pink-400 hover:text-white underline" onClick={() => setScarPlacementMode(null)}>Cancel</button>
+                  </div>
+                )}
+                {adhesionPlacementStep !== 'idle' && (
+                  <div className="mb-2 p-2 rounded-lg bg-red-500/20 border border-red-500/30 text-[9px] text-red-300">
+                    {adhesionPlacementStep === 'start' ? 'Click skeleton for adhesion START point' : 'Click skeleton for adhesion END point'}
+                    <button className="ml-2 text-red-400 hover:text-white underline" onClick={() => { setAdhesionPlacementStep('idle'); setPendingAdhesionStart(null); }}>Cancel</button>
+                  </div>
+                )}
+
+                <div className="mb-3">
+                  <span className="text-[9px] text-gray-400 font-medium">Place Markers</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(Object.entries(SCAR_TYPES) as [ScarType, typeof SCAR_TYPES[ScarType]][]).map(([type, info]) => (
+                      <Button
+                        key={type}
+                        variant="secondary"
+                        size="sm"
+                        className={`h-6 text-[9px] ${scarPlacementMode === type ? 'bg-pink-500 text-white' : 'bg-gray-800/80 text-gray-300 border border-gray-600/50'}`}
+                        onClick={() => setScarPlacementMode(scarPlacementMode === type ? null : type)}
+                      >
+                        {info.label}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className={`h-6 text-[9px] ${adhesionPlacementStep !== 'idle' ? 'bg-red-500 text-white' : 'bg-gray-800/80 text-gray-300 border border-gray-600/50'}`}
+                      onClick={() => {
+                        if (adhesionPlacementStep !== 'idle') {
+                          setAdhesionPlacementStep('idle');
+                          setPendingAdhesionStart(null);
+                        } else {
+                          setAdhesionPlacementStep('start');
+                          setScarPlacementMode(null);
+                        }
+                      }}
+                    >
+                      Adhesion Band
+                    </Button>
+                  </div>
+                </div>
+
+                {scarMarkers.length > 0 && (
+                  <div className="mb-3">
+                    <span className="text-[9px] text-gray-400 font-medium">Scars ({scarMarkers.length})</span>
+                    <div className="space-y-1 mt-1">
+                      {scarMarkers.map(scar => (
+                        <div key={scar.id} className={`p-1.5 rounded border transition-colors cursor-pointer ${editingScar === scar.id ? 'border-pink-500/50 bg-pink-500/10' : 'border-gray-700/50 bg-white/5 hover:bg-white/10'}`}>
+                          <div className="flex items-center justify-between" onClick={() => setEditingScar(editingScar === scar.id ? null : scar.id)}>
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: SCAR_TYPES[scar.type].color }} />
+                              <span className="text-[9px] text-gray-200">{SCAR_TYPES[scar.type].label}</span>
+                              <span className="text-[8px] text-gray-500">{scar.anatomicalLabel}</span>
+                            </div>
+                            <button className="text-gray-500 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setScarMarkers(prev => prev.filter(s => s.id !== scar.id)); if (editingScar === scar.id) setEditingScar(null); }}>
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                          {editingScar === scar.id && (
+                            <div className="mt-2 space-y-2 border-t border-gray-700/50 pt-2">
+                              <div>
+                                <label className="text-[8px] text-gray-400">Severity</label>
+                                <Slider value={[scar.severity]} min={1} max={5} step={1} onValueChange={([v]) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, severity: v } : s))} className="mt-0.5" />
+                                <span className="text-[8px] text-gray-500">{SCAR_SEVERITY_LABELS[scar.severity as keyof typeof SCAR_SEVERITY_LABELS]}</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <div>
+                                  <label className="text-[8px] text-gray-400">Age</label>
+                                  <select value={scar.age} onChange={(e) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, age: e.target.value as ScarAge } : s))} className="w-full bg-gray-800 border border-gray-700 rounded text-[9px] text-gray-200 px-1 py-0.5">
+                                    <option value="acute">Acute</option>
+                                    <option value="subacute">Subacute</option>
+                                    <option value="chronic">Chronic</option>
+                                    <option value="mature">Mature</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-[8px] text-gray-400">Mobility</label>
+                                  <select value={scar.mobility} onChange={(e) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, mobility: e.target.value as ScarMobility } : s))} className="w-full bg-gray-800 border border-gray-700 rounded text-[9px] text-gray-200 px-1 py-0.5">
+                                    <option value="mobile">Mobile</option>
+                                    <option value="tethered">Tethered</option>
+                                    <option value="fixed">Fixed</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[8px] text-gray-400">Affected Layers</label>
+                                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                  {TISSUE_LAYERS.map(layer => (
+                                    <button key={layer} className={`text-[7px] px-1 py-0.5 rounded ${scar.affectedLayers.includes(layer) ? 'bg-pink-500/30 text-pink-300' : 'bg-white/5 text-gray-500'}`} onClick={() => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, affectedLayers: s.affectedLayers.includes(layer) ? s.affectedLayers.filter(l => l !== layer) : [...s.affectedLayers, layer] } : s))}>
+                                      {layer}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[8px] text-gray-400">Pain on Palpation (0-10)</label>
+                                <Slider value={[scar.painOnPalpation]} min={0} max={10} step={1} onValueChange={([v]) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, painOnPalpation: v } : s))} className="mt-0.5" />
+                                <span className="text-[8px] text-gray-500">{scar.painOnPalpation}/10</span>
+                              </div>
+                              {(() => {
+                                const impact = getScarImpact(scar);
+                                return impact.affectedChains.length > 0 || impact.movementRestrictions.length > 0 ? (
+                                  <div className="p-1.5 rounded bg-yellow-500/10 border border-yellow-500/30">
+                                    <span className="text-[8px] font-medium text-yellow-400">Clinical Impact</span>
+                                    {impact.affectedChains.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Chains: {impact.affectedChains.join(', ')}</p>}
+                                    {impact.movementRestrictions.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Restrictions: {impact.movementRestrictions.join(', ')}</p>}
+                                  </div>
+                                ) : null;
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {adhesionBands.length > 0 && (
+                  <div>
+                    <span className="text-[9px] text-gray-400 font-medium">Adhesion Bands ({adhesionBands.length})</span>
+                    <div className="space-y-1 mt-1">
+                      {adhesionBands.map(band => (
+                        <div key={band.id} className="p-1.5 rounded border border-gray-700/50 bg-white/5 flex items-center justify-between">
+                          <div>
+                            <span className="text-[9px] text-gray-200">{band.startBone} → {band.endBone}</span>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-[8px] text-gray-500">Tension: {band.tensionLevel}%</span>
+                              <span className="text-[8px] text-gray-500">Depth: {band.depth}</span>
+                            </div>
+                          </div>
+                          <button className="text-gray-500 hover:text-red-400" onClick={() => setAdhesionBands(prev => prev.filter(b => b.id !== band.id))}>
+                            <Trash2 className="h-2.5 w-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {showShoulderAssessment && (
               <div className="absolute top-2 right-2 z-30 w-80 h-[calc(100%-50px)]">

@@ -56,6 +56,8 @@ Preferred communication style: Simple, everyday language.
 - **Free-Draw Paint Mode**: Click and drag to paint irregular symptom patterns directly on the 3D skeleton surface, capturing real-world symptom distributions that don't conform to point/area shapes.
 - **Postural-Pain Correlation System**: Auto-triggers when posture sliders change (≥3° deviation), computes force/muscle impacts, and sends to AI for biomechanical analysis showing causal chains from posture deviation to force impact to muscle effect to pain link.
 - **Real-Time Postural Force Analysis**: Calculates joint loading as a percentage of body weight based on skeleton pose, providing real-time updates and color-coded status for 12 joints.
+- **Fascial Chain 3D Visualization (Body Tension)**: Renders myofascial chains as colored 3D lines on the skeleton connecting muscle attachment bones. Tension levels drive line opacity, node size, and glow effects. Includes whole-body tension score, individual chain toggles, and tension-based color coding. Available on both PhysioGPT and test skeleton pages via "Tension" toolbar button.
+- **Scar Tissue & Adhesion Mapping**: Click-to-place system for documenting surgical scars, fibrotic areas, and adhesion bands on the 3D skeleton. Scars render as oriented ellipsoid meshes; adhesion bands as tension-colored cylinders between two points. Includes severity/age/mobility/layer editors and clinical impact analysis showing affected fascial chains and movement restrictions. Available on both PhysioGPT and test skeleton pages via "Scars" toolbar button.
 
 ## External Dependencies
 

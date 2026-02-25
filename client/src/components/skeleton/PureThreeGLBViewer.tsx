@@ -4747,14 +4747,14 @@ export default function PureThreeGLBViewer({
     // Bones that are handled by the animation loop (need rotations stored in sliderRotationsRef)
     const animationLoopBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);
     
-    const shoulderBones = new Set(['Shoulder_L', 'Shoulder_R']);
+    const quaternionComposeBones = new Set(['Shoulder_L', 'Shoulder_R', 'Hip_L', 'Hip_R']);
 
     Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
       const bone = bones[boneName] as THREE.Bone;
       const initial = initialRotations[boneName];
       if (!bone || !initial) return;
       
-      if (shoulderBones.has(boneName)) {
+      if (quaternionComposeBones.has(boneName)) {
         const initialQuat = new THREE.Quaternion().setFromEuler(
           new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
         );
@@ -4763,11 +4763,15 @@ export default function PureThreeGLBViewer({
         );
         const targetQuat = initialQuat.clone().multiply(deltaQuat);
         const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
-        sliderRotationsRef.current[boneName] = {
-          x: targetEuler.x - initial.x,
-          y: targetEuler.y - initial.y,
-          z: targetEuler.z - initial.z
-        };
+        if (animationLoopBones.has(boneName)) {
+          sliderRotationsRef.current[boneName] = {
+            x: targetEuler.x - initial.x,
+            y: targetEuler.y - initial.y,
+            z: targetEuler.z - initial.z
+          };
+        } else {
+          bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
+        }
       } else if (animationLoopBones.has(boneName)) {
         sliderRotationsRef.current[boneName] = delta;
       } else {

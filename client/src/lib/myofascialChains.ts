@@ -438,3 +438,206 @@ export function computeWholeBodyTensionScore(
 
   return { score: Math.round(score), level, description };
 }
+
+export interface ChainRecommendation {
+  chainId: string;
+  chainName: string;
+  level: 'moderate' | 'high' | 'critical';
+  stretches: string[];
+  treatments: string[];
+  description: string;
+}
+
+const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: Record<string, string[]> }> = {
+  superficial_back_l: {
+    stretches: ['Seated Forward Fold', 'Cat-Cow Stretch', 'Standing Calf Stretch', 'Downward Dog'],
+    treatments: {
+      moderate: ['Foam rolling along posterior chain', 'Gentle dynamic stretching pre-activity'],
+      high: ['Myofascial release of erector spinae', 'Deep tissue massage of calves and hamstrings', 'Neural flossing for sciatic nerve'],
+      critical: ['Manual therapy focusing on thoracolumbar fascia', 'Trigger point dry needling of paraspinals', 'Progressive eccentric loading program'],
+    },
+  },
+  superficial_back_r: {
+    stretches: ['Seated Forward Fold', 'Cat-Cow Stretch', 'Standing Calf Stretch', 'Downward Dog'],
+    treatments: {
+      moderate: ['Foam rolling along posterior chain', 'Gentle dynamic stretching pre-activity'],
+      high: ['Myofascial release of erector spinae', 'Deep tissue massage of calves and hamstrings', 'Neural flossing for sciatic nerve'],
+      critical: ['Manual therapy focusing on thoracolumbar fascia', 'Trigger point dry needling of paraspinals', 'Progressive eccentric loading program'],
+    },
+  },
+  superficial_front_l: {
+    stretches: ['Standing Quad Stretch', 'Hip Flexor Lunge Stretch', 'Chest Doorway Stretch', 'Cobra Pose'],
+    treatments: {
+      moderate: ['Self-massage of quadriceps and hip flexors', 'Active mobility drills for hip extension'],
+      high: ['Soft tissue mobilization of rectus femoris', 'Psoas release technique', 'Anterior chain stretching protocol'],
+      critical: ['Instrument-assisted soft tissue mobilization (IASTM)', 'PNF stretching of hip flexors and quads', 'Breathing re-education for diaphragm release'],
+    },
+  },
+  superficial_front_r: {
+    stretches: ['Standing Quad Stretch', 'Hip Flexor Lunge Stretch', 'Chest Doorway Stretch', 'Cobra Pose'],
+    treatments: {
+      moderate: ['Self-massage of quadriceps and hip flexors', 'Active mobility drills for hip extension'],
+      high: ['Soft tissue mobilization of rectus femoris', 'Psoas release technique', 'Anterior chain stretching protocol'],
+      critical: ['Instrument-assisted soft tissue mobilization (IASTM)', 'PNF stretching of hip flexors and quads', 'Breathing re-education for diaphragm release'],
+    },
+  },
+  lateral_line_l: {
+    stretches: ['Side-Lying Lateral Stretch', 'IT Band Foam Roll', 'Standing Side Bend', 'Pigeon Pose Variation'],
+    treatments: {
+      moderate: ['Lateral chain foam rolling', 'Balance training on unstable surfaces'],
+      high: ['IT band release with sustained pressure', 'Gluteus medius activation exercises', 'Lateral hip mobilization'],
+      critical: ['Manual fascial release of lateral line', 'Corrective exercise for frontal plane imbalance', 'Neuromuscular re-education for lateral stability'],
+    },
+  },
+  lateral_line_r: {
+    stretches: ['Side-Lying Lateral Stretch', 'IT Band Foam Roll', 'Standing Side Bend', 'Pigeon Pose Variation'],
+    treatments: {
+      moderate: ['Lateral chain foam rolling', 'Balance training on unstable surfaces'],
+      high: ['IT band release with sustained pressure', 'Gluteus medius activation exercises', 'Lateral hip mobilization'],
+      critical: ['Manual fascial release of lateral line', 'Corrective exercise for frontal plane imbalance', 'Neuromuscular re-education for lateral stability'],
+    },
+  },
+  spiral_line_l: {
+    stretches: ['Seated Spinal Twist', 'Thread the Needle', 'Supine Trunk Rotation', 'World\'s Greatest Stretch'],
+    treatments: {
+      moderate: ['Rotational mobility exercises', 'Cross-body foam rolling patterns'],
+      high: ['Oblique and rotator cuff soft tissue work', 'Anti-rotation core stability exercises', 'Thoracic spine mobilization'],
+      critical: ['Manual therapy for rotational restrictions', 'Spiral line fascial release', 'Functional rotational retraining program'],
+    },
+  },
+  spiral_line_r: {
+    stretches: ['Seated Spinal Twist', 'Thread the Needle', 'Supine Trunk Rotation', 'World\'s Greatest Stretch'],
+    treatments: {
+      moderate: ['Rotational mobility exercises', 'Cross-body foam rolling patterns'],
+      high: ['Oblique and rotator cuff soft tissue work', 'Anti-rotation core stability exercises', 'Thoracic spine mobilization'],
+      critical: ['Manual therapy for rotational restrictions', 'Spiral line fascial release', 'Functional rotational retraining program'],
+    },
+  },
+  deep_front_l: {
+    stretches: ['Diaphragmatic Breathing', 'Psoas March', 'Deep Squat Hold', 'Child\'s Pose with Breathing'],
+    treatments: {
+      moderate: ['Breathing exercises and diaphragm mobility', 'Gentle psoas stretching with pelvic control'],
+      high: ['Visceral mobilization techniques', 'Deep front line fascial release', 'Pelvic floor coordination exercises'],
+      critical: ['Manual therapy for deep fascial restrictions', 'Craniosacral integration', 'Comprehensive core stability retraining'],
+    },
+  },
+  deep_front_r: {
+    stretches: ['Diaphragmatic Breathing', 'Psoas March', 'Deep Squat Hold', 'Child\'s Pose with Breathing'],
+    treatments: {
+      moderate: ['Breathing exercises and diaphragm mobility', 'Gentle psoas stretching with pelvic control'],
+      high: ['Visceral mobilization techniques', 'Deep front line fascial release', 'Pelvic floor coordination exercises'],
+      critical: ['Manual therapy for deep fascial restrictions', 'Craniosacral integration', 'Comprehensive core stability retraining'],
+    },
+  },
+  arm_line_l: {
+    stretches: ['Cross-Body Shoulder Stretch', 'Wrist Flexor/Extensor Stretch', 'Doorway Pec Stretch', 'Eagle Arms'],
+    treatments: {
+      moderate: ['Upper limb foam rolling and self-massage', 'Scapular stabilization exercises'],
+      high: ['Shoulder girdle soft tissue mobilization', 'Neural gliding for median/ulnar nerve', 'Rotator cuff strengthening protocol'],
+      critical: ['Manual therapy for shoulder capsule restrictions', 'Comprehensive upper quarter treatment', 'Graduated loading program for arm line'],
+    },
+  },
+  arm_line_r: {
+    stretches: ['Cross-Body Shoulder Stretch', 'Wrist Flexor/Extensor Stretch', 'Doorway Pec Stretch', 'Eagle Arms'],
+    treatments: {
+      moderate: ['Upper limb foam rolling and self-massage', 'Scapular stabilization exercises'],
+      high: ['Shoulder girdle soft tissue mobilization', 'Neural gliding for median/ulnar nerve', 'Rotator cuff strengthening protocol'],
+      critical: ['Manual therapy for shoulder capsule restrictions', 'Comprehensive upper quarter treatment', 'Graduated loading program for arm line'],
+    },
+  },
+};
+
+export function getChainRecommendations(
+  chainEffects: { chainId: string; avgTension: number }[]
+): ChainRecommendation[] {
+  const recommendations: ChainRecommendation[] = [];
+
+  for (const effect of chainEffects) {
+    if (effect.avgTension <= 55 && effect.avgTension >= 45) continue;
+
+    const chain = MYOFASCIAL_CHAINS.find(c => c.id === effect.chainId);
+    if (!chain) continue;
+
+    const data = CHAIN_RECOMMENDATIONS[effect.chainId];
+    if (!data) continue;
+
+    const deviation = Math.abs(effect.avgTension - 50);
+    let level: 'moderate' | 'high' | 'critical';
+    if (deviation >= 25) level = 'critical';
+    else if (deviation >= 15) level = 'high';
+    else level = 'moderate';
+
+    const description = deviation >= 25
+      ? `Critical tension imbalance (${Math.round(effect.avgTension)}%) — immediate intervention recommended`
+      : deviation >= 15
+      ? `High tension detected (${Math.round(effect.avgTension)}%) — targeted treatment advised`
+      : `Moderate tension deviation (${Math.round(effect.avgTension)}%) — preventive stretching recommended`;
+
+    recommendations.push({
+      chainId: effect.chainId,
+      chainName: chain.name,
+      level,
+      stretches: data.stretches.slice(0, 3),
+      treatments: data.treatments[level] || [],
+      description,
+    });
+  }
+
+  return recommendations.sort((a, b) => {
+    const order = { critical: 0, high: 1, moderate: 2 };
+    return order[a.level] - order[b.level];
+  });
+}
+
+export function findChainsForBone(boneName: string): { chainId: string; muscleId: string }[] {
+  const results: { chainId: string; muscleId: string }[] = [];
+  const boneToMuscle: Record<string, string[]> = {};
+  for (const [muscleId, bone] of Object.entries(MUSCLE_BONE_POSITIONS)) {
+    if (!boneToMuscle[bone]) boneToMuscle[bone] = [];
+    boneToMuscle[bone].push(muscleId);
+  }
+
+  const BONE_ADJACENCY: Record<string, string[]> = {
+    'Ankle_L': ['Knee_L', 'Toes_L'],
+    'Ankle_R': ['Knee_R', 'Toes_R'],
+    'Knee_L': ['Ankle_L', 'HipPart2_L', 'Hip_L'],
+    'Knee_R': ['Ankle_R', 'HipPart2_R', 'Hip_R'],
+    'HipPart2_L': ['Knee_L', 'Hip_L', 'RootPart1_M'],
+    'HipPart2_R': ['Knee_R', 'Hip_R', 'RootPart1_M'],
+    'Hip_L': ['HipPart2_L', 'RootPart1_M', 'Spine1_M'],
+    'Hip_R': ['HipPart2_R', 'RootPart1_M', 'Spine1_M'],
+    'RootPart1_M': ['Hip_L', 'Hip_R', 'Spine1_M'],
+    'Spine1_M': ['RootPart1_M', 'Chest_M', 'Neck_M'],
+    'Chest_M': ['Spine1_M', 'Neck_M', 'Shoulder_L', 'Shoulder_R', 'Scapula_L', 'Scapula_R'],
+    'Neck_M': ['Chest_M', 'Spine1_M'],
+    'Shoulder_L': ['Chest_M', 'Scapula_L', 'Elbow_L'],
+    'Shoulder_R': ['Chest_M', 'Scapula_R', 'Elbow_R'],
+    'Scapula_L': ['Chest_M', 'Shoulder_L'],
+    'Scapula_R': ['Chest_M', 'Shoulder_R'],
+    'Elbow_L': ['Shoulder_L'],
+    'Elbow_R': ['Shoulder_R'],
+    'Toes_L': ['Ankle_L'],
+    'Toes_R': ['Ankle_R'],
+  };
+
+  const directMuscles = boneToMuscle[boneName] || [];
+  const adjacentBones = BONE_ADJACENCY[boneName] || [];
+  const nearbyMuscles = new Set(directMuscles);
+  for (const adjBone of adjacentBones) {
+    for (const m of (boneToMuscle[adjBone] || [])) {
+      nearbyMuscles.add(m);
+    }
+  }
+
+  for (const muscleId of nearbyMuscles) {
+    for (const chain of MYOFASCIAL_CHAINS) {
+      if (chain.links.some(l => l.muscleId === muscleId)) {
+        if (!results.some(r => r.chainId === chain.id && r.muscleId === muscleId)) {
+          results.push({ chainId: chain.id, muscleId });
+        }
+      }
+    }
+  }
+
+  return results;
+}

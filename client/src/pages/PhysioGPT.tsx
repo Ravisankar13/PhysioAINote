@@ -95,7 +95,7 @@ import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPrese
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
-import { MYOFASCIAL_CHAINS, MUSCLE_BONE_POSITIONS, type MyofascialChain, computeWholeBodyTensionScore } from "@/lib/myofascialChains";
+import { MYOFASCIAL_CHAINS, MUSCLE_BONE_POSITIONS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState } from "@/lib/myofascialChains";
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 
 const BODY_REGIONS = {
@@ -436,6 +436,9 @@ export default function PhysioGPT() {
   const [expandedChainIntegrity, setExpandedChainIntegrity] = useState<string | null>(null);
   const [showChainVisualization, setShowChainVisualization] = useState(false);
   const [activeChainIds, setActiveChainIds] = useState<string[]>(() => MYOFASCIAL_CHAINS.map(c => c.id));
+  const [showPropagation, setShowPropagation] = useState(false);
+  const [selectedChainNode, setSelectedChainNode] = useState<{ chainId: string; muscleId: string; chainName: string } | null>(null);
+  const [showChainRecommendations, setShowChainRecommendations] = useState(false);
   const [showScarPanel, setShowScarPanel] = useState(false);
   const [scarMarkers, setScarMarkers] = useState<ScarMarker[]>([]);
   const [adhesionBands, setAdhesionBands] = useState<AdhesionBand[]>([]);
@@ -2166,6 +2169,49 @@ ${ddxList}`;
     });
   }, [baseMuscleTensions]);
 
+  const propagatedEffects = useMemo(() => {
+    if (!showChainVisualization || !showPropagation) return null;
+    return propagateChainEffects(baseMuscleTensions.tensions, muscleOverrides);
+  }, [showChainVisualization, showPropagation, baseMuscleTensions.tensions, muscleOverrides]);
+
+  const propagationDeltas = useMemo(() => {
+    if (!propagatedEffects) return {};
+    const deltas: Record<string, number> = {};
+    for (const [id, state] of Object.entries(propagatedEffects)) {
+      deltas[id] = state.totalChainTension;
+    }
+    return deltas;
+  }, [propagatedEffects]);
+
+  const painAffectedChainIds = useMemo(() => {
+    if (!showChainVisualization || painMarkers.length === 0) return [];
+    const affectedIds = new Set<string>();
+    for (const pm of painMarkers) {
+      const bone = pm.nearestBone;
+      if (!bone) continue;
+      const matches = findChainsForBone(bone);
+      for (const m of matches) {
+        affectedIds.add(m.chainId);
+      }
+    }
+    return Array.from(affectedIds);
+  }, [showChainVisualization, painMarkers]);
+
+  const chainRecommendations = useMemo(() => {
+    if (!showChainVisualization) return [];
+    return getChainRecommendations(chainEffects);
+  }, [showChainVisualization, chainEffects]);
+
+  const selectedNodeDetails = useMemo(() => {
+    if (!selectedChainNode) return null;
+    const muscleStates = computeAllMuscleStates(modelConfig);
+    const state = muscleStates[selectedChainNode.muscleId];
+    if (!state) return null;
+    const membership = getChainMembership(selectedChainNode.muscleId);
+    const propState = propagatedEffects?.[selectedChainNode.muscleId];
+    return { state, membership, propState };
+  }, [selectedChainNode, modelConfig, propagatedEffects]);
+
   const fascialChainVizProp = useMemo(() => {
     if (!showChainVisualization) return undefined;
     return {
@@ -2173,8 +2219,15 @@ ${ddxList}`;
       chains: MYOFASCIAL_CHAINS,
       tensions: baseMuscleTensions.tensions,
       activeChains: activeChainIds,
+      painHighlightChains: painAffectedChainIds,
+      showPropagation,
+      propagationDeltas,
     };
-  }, [showChainVisualization, baseMuscleTensions.tensions, activeChainIds]);
+  }, [showChainVisualization, baseMuscleTensions.tensions, activeChainIds, painAffectedChainIds, showPropagation, propagationDeltas]);
+
+  const handleChainNodeClick = useCallback((data: { chainId: string; muscleId: string; chainName: string }) => {
+    setSelectedChainNode(prev => prev?.muscleId === data.muscleId && prev?.chainId === data.chainId ? null : data);
+  }, []);
 
   const treatmentPlan = useMemo(() => {
     if (rightPanelTab !== 'treatment') return null;
@@ -2388,6 +2441,7 @@ ${ddxList}`;
               animationConstraints={animationConstraints}
               environmentPreset={environmentPreset}
               fascialChainVisualization={fascialChainVizProp}
+              onChainNodeClick={handleChainNodeClick}
               scarMarkers={scarMarkers}
               adhesionBands={adhesionBands}
               onScarMarkerClick={(id) => setEditingScar(id)}
@@ -4821,7 +4875,7 @@ ${ddxList}`;
                     <Activity className="h-3.5 w-3.5 text-teal-400" />
                     <span className="text-[11px] font-semibold text-white">Body Tension</span>
                   </div>
-                  <button onClick={() => setShowChainVisualization(false)} className="text-gray-400 hover:text-white">
+                  <button onClick={() => { setShowChainVisualization(false); setSelectedChainNode(null); }} className="text-gray-400 hover:text-white">
                     <X className="h-3 w-3" />
                   </button>
                 </div>
@@ -4849,31 +4903,199 @@ ${ddxList}`;
                     }`} style={{ width: `${wholeBodyScore.score}%` }} />
                   </div>
                 </div>
+
+                <div className="flex gap-1 mb-2">
+                  <button
+                    className={`flex-1 px-2 py-1 rounded text-[8px] font-medium transition-colors ${showPropagation ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-transparent'}`}
+                    onClick={() => setShowPropagation(prev => !prev)}
+                  >
+                    <Zap className="h-2.5 w-2.5 inline mr-0.5" />
+                    Propagation
+                  </button>
+                  <button
+                    className={`flex-1 px-2 py-1 rounded text-[8px] font-medium transition-colors ${showChainRecommendations ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-transparent'}`}
+                    onClick={() => setShowChainRecommendations(prev => !prev)}
+                  >
+                    <Lightbulb className="h-2.5 w-2.5 inline mr-0.5" />
+                    Advice
+                  </button>
+                </div>
+
+                {painAffectedChainIds.length > 0 && (
+                  <div className="mb-2 p-1.5 rounded border border-red-500/30 bg-red-500/10">
+                    <div className="flex items-center gap-1 mb-1">
+                      <MapPin className="h-3 w-3 text-red-400" />
+                      <span className="text-[9px] font-medium text-red-300">{painAffectedChainIds.length} chain{painAffectedChainIds.length !== 1 ? 's' : ''} through pain areas</span>
+                    </div>
+                    <div className="flex flex-wrap gap-0.5">
+                      {painAffectedChainIds.map(cid => {
+                        const chain = MYOFASCIAL_CHAINS.find(c => c.id === cid);
+                        return chain ? (
+                          <span key={cid} className="text-[7px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-300">
+                            {chain.name.replace(/ \([LR]\)$/, '')}
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-1">
                   <span className="text-[9px] text-gray-400 font-medium">Myofascial Chains</span>
                   {MYOFASCIAL_CHAINS.map(chain => {
                     const effect = chainEffects.find(e => e.chainId === chain.id);
                     const isActive = activeChainIds.includes(chain.id);
+                    const isPainAffected = painAffectedChainIds.includes(chain.id);
                     return (
                       <button
                         key={chain.id}
-                        className={`w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors ${isActive ? 'bg-white/10 hover:bg-white/15' : 'bg-white/3 hover:bg-white/8 opacity-50'}`}
+                        className={`w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors ${isPainAffected ? 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/20' : isActive ? 'bg-white/10 hover:bg-white/15' : 'bg-white/3 hover:bg-white/8 opacity-50'}`}
                         onClick={() => setActiveChainIds(prev => prev.includes(chain.id) ? prev.filter(id => id !== chain.id) : [...prev, chain.id])}
                       >
                         <div className="flex items-center gap-1.5">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: chain.color }} />
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: isPainAffected ? '#ff4444' : chain.color }} />
                           <span className="text-[9px] text-gray-200">{chain.name}</span>
+                          {isPainAffected && <MapPin className="h-2.5 w-2.5 text-red-400" />}
                         </div>
-                        {effect && (
-                          <span className={`text-[8px] font-medium ${
-                            effect.avgTension > 70 || effect.avgTension < 30 ? 'text-red-400' :
-                            effect.avgTension > 60 || effect.avgTension < 40 ? 'text-yellow-400' :
-                            'text-green-400'
-                          }`}>{Math.round(effect.avgTension)}%</span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {showPropagation && effect && (() => {
+                            const chainMuscles = chain.links.map(l => l.muscleId);
+                            const totalProp = chainMuscles.reduce((sum, mid) => sum + (propagationDeltas[mid] ?? 0), 0);
+                            if (Math.abs(totalProp) < 1) return null;
+                            return (
+                              <span className={`text-[7px] ${totalProp > 0 ? 'text-red-400' : 'text-cyan-400'}`}>
+                                {totalProp > 0 ? '+' : ''}{Math.round(totalProp)}
+                              </span>
+                            );
+                          })()}
+                          {effect && (
+                            <span className={`text-[8px] font-medium ${
+                              effect.avgTension > 70 || effect.avgTension < 30 ? 'text-red-400' :
+                              effect.avgTension > 60 || effect.avgTension < 40 ? 'text-yellow-400' :
+                              'text-green-400'
+                            }`}>{Math.round(effect.avgTension)}%</span>
+                          )}
+                        </div>
                       </button>
                     );
                   })}
+                </div>
+
+                {selectedChainNode && selectedNodeDetails && (
+                  <div className="mt-2 p-2 rounded-lg border border-teal-500/30 bg-teal-500/10">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-semibold text-teal-300">{selectedNodeDetails.state.label}</span>
+                      <button onClick={() => setSelectedChainNode(null)} className="text-gray-400 hover:text-white">
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 mb-1.5">
+                      <div className="bg-black/30 rounded p-1">
+                        <span className="text-[7px] text-gray-400 block">Tension</span>
+                        <span className={`text-[10px] font-bold ${selectedNodeDetails.state.tension > 65 ? 'text-red-400' : selectedNodeDetails.state.tension > 55 ? 'text-yellow-400' : 'text-green-400'}`}>
+                          {Math.round(selectedNodeDetails.state.tension)}%
+                        </span>
+                      </div>
+                      <div className="bg-black/30 rounded p-1">
+                        <span className="text-[7px] text-gray-400 block">Activation</span>
+                        <span className="text-[10px] font-bold text-blue-300">{selectedNodeDetails.state.activation}</span>
+                      </div>
+                      <div className="bg-black/30 rounded p-1">
+                        <span className="text-[7px] text-gray-400 block">State</span>
+                        <span className={`text-[10px] font-bold ${selectedNodeDetails.state.state === 'shortened' ? 'text-orange-400' : selectedNodeDetails.state.state === 'lengthened' ? 'text-blue-400' : 'text-green-400'}`}>
+                          {selectedNodeDetails.state.state}
+                        </span>
+                      </div>
+                      {selectedNodeDetails.propState && Math.abs(selectedNodeDetails.propState.totalChainTension) > 0.5 && (
+                        <div className="bg-black/30 rounded p-1">
+                          <span className="text-[7px] text-gray-400 block">Propagation</span>
+                          <span className={`text-[10px] font-bold ${selectedNodeDetails.propState.totalChainTension > 0 ? 'text-red-400' : 'text-cyan-400'}`}>
+                            {selectedNodeDetails.propState.totalChainTension > 0 ? '+' : ''}{Math.round(selectedNodeDetails.propState.totalChainTension)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[8px] text-gray-300 mb-1.5">{selectedNodeDetails.state.description}</p>
+                    {selectedNodeDetails.membership.length > 0 && (
+                      <div>
+                        <span className="text-[7px] text-gray-400">Chains through this muscle:</span>
+                        <div className="flex flex-wrap gap-0.5 mt-0.5">
+                          {selectedNodeDetails.membership.map(c => (
+                            <span key={c.id} className="text-[7px] px-1 py-0.5 rounded" style={{ backgroundColor: c.color + '30', color: c.color }}>
+                              {c.name.replace(/ \([LR]\)$/, '')}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selectedNodeDetails.propState && selectedNodeDetails.propState.chainEffects.length > 0 && (
+                      <div className="mt-1.5">
+                        <span className="text-[7px] text-gray-400">Tension sources:</span>
+                        {selectedNodeDetails.propState.chainEffects.slice(0, 3).map((eff, i) => (
+                          <div key={i} className="flex items-center justify-between mt-0.5">
+                            <span className="text-[7px] text-gray-300">via {eff.chainName.replace(/ \([LR]\)$/, '')} from {eff.sourceMuscle}</span>
+                            <span className={`text-[7px] font-medium ${eff.tensionDelta > 0 ? 'text-red-400' : 'text-cyan-400'}`}>
+                              {eff.tensionDelta > 0 ? '+' : ''}{eff.tensionDelta.toFixed(1)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {showChainRecommendations && chainRecommendations.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    <span className="text-[9px] text-gray-400 font-medium flex items-center gap-1">
+                      <Lightbulb className="h-3 w-3 text-blue-400" />
+                      Clinical Recommendations
+                    </span>
+                    {chainRecommendations.slice(0, 4).map(rec => (
+                      <Collapsible key={rec.chainId}>
+                        <CollapsibleTrigger className="w-full">
+                          <div className={`flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${
+                            rec.level === 'critical' ? 'bg-red-500/15 border border-red-500/30' :
+                            rec.level === 'high' ? 'bg-orange-500/15 border border-orange-500/30' :
+                            'bg-yellow-500/10 border border-yellow-500/20'
+                          }`}>
+                            <span className="text-[8px] text-gray-200">{rec.chainName.replace(/ \([LR]\)$/, '')}</span>
+                            <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded ${
+                              rec.level === 'critical' ? 'bg-red-500/30 text-red-300' :
+                              rec.level === 'high' ? 'bg-orange-500/30 text-orange-300' :
+                              'bg-yellow-500/20 text-yellow-300'
+                            }`}>{rec.level}</span>
+                          </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <div className="px-2 py-1.5 bg-white/5 rounded-b">
+                            <p className="text-[7px] text-gray-400 mb-1">{rec.description}</p>
+                            <div className="mb-1">
+                              <span className="text-[7px] font-medium text-green-400">Stretches:</span>
+                              {rec.stretches.map((s, i) => (
+                                <span key={i} className="text-[7px] text-gray-300 block ml-1">- {s}</span>
+                              ))}
+                            </div>
+                            <div>
+                              <span className="text-[7px] font-medium text-blue-400">Treatment:</span>
+                              {rec.treatments.map((t, i) => (
+                                <span key={i} className="text-[7px] text-gray-300 block ml-1">- {t}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ))}
+                  </div>
+                )}
+
+                {showChainRecommendations && chainRecommendations.length === 0 && (
+                  <div className="mt-2 p-2 rounded bg-green-500/10 border border-green-500/20">
+                    <span className="text-[8px] text-green-300">All chains within normal tension range. No specific interventions needed.</span>
+                  </div>
+                )}
+
+                <div className="mt-2 text-[7px] text-gray-500 text-center">
+                  Click chain nodes on skeleton for details
                 </div>
               </div>
             )}

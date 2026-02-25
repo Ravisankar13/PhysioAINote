@@ -1277,7 +1277,11 @@ interface PureThreeGLBViewerProps {
     chains: MyofascialChain[];
     tensions: Record<string, number>;
     activeChains: string[];
+    painHighlightChains?: string[];
+    showPropagation?: boolean;
+    propagationDeltas?: Record<string, number>;
   };
+  onChainNodeClick?: (data: { chainId: string; muscleId: string; chainName: string }) => void;
   scarMarkers?: ScarMarker[];
   adhesionBands?: AdhesionBand[];
   onScarMarkerClick?: (id: string) => void;
@@ -1709,6 +1713,7 @@ export default function PureThreeGLBViewer({
   highlightMuscleGroups,
   environmentPreset = 'clinical_dark',
   fascialChainVisualization,
+  onChainNodeClick,
   scarMarkers = [],
   adhesionBands = [],
   onScarMarkerClick,
@@ -1746,6 +1751,8 @@ export default function PureThreeGLBViewer({
   const scarMarkerGroupRef = useRef<THREE.Group | null>(null);
   const onScarMarkerClickRef = useRef(onScarMarkerClick);
   onScarMarkerClickRef.current = onScarMarkerClick;
+  const onChainNodeClickRef = useRef(onChainNodeClick);
+  onChainNodeClickRef.current = onChainNodeClick;
   const onSkeletonClickRef = useRef(onSkeletonClick);
   onSkeletonClickRef.current = onSkeletonClick;
   const enableSkeletonClickRef = useRef(enableSkeletonClick);
@@ -2380,11 +2387,18 @@ export default function PureThreeGLBViewer({
     const group = new THREE.Group();
     group.userData.isFascialChainGroup = true;
 
+    const painChains = fascialChainVisualization.painHighlightChains || [];
+    const showProp = fascialChainVisualization.showPropagation || false;
+    const propDeltas = fascialChainVisualization.propagationDeltas || {};
+    const time = Date.now() * 0.001;
+
     for (const chain of fascialChainVisualization.chains) {
       if (!fascialChainVisualization.activeChains.includes(chain.id)) continue;
 
+      const isPainChain = painChains.includes(chain.id);
       const positions: THREE.Vector3[] = [];
       const tensionValues: number[] = [];
+      const muscleIds: string[] = [];
 
       for (const link of chain.links) {
         const boneName = MUSCLE_BONE_POSITIONS[link.muscleId];
@@ -2394,6 +2408,7 @@ export default function PureThreeGLBViewer({
         positions.push(worldPos);
         const tension = fascialChainVisualization.tensions[link.muscleId] ?? 50;
         tensionValues.push(tension);
+        muscleIds.push(link.muscleId);
       }
 
       if (positions.length < 2) continue;
@@ -2415,10 +2430,11 @@ export default function PureThreeGLBViewer({
       }
 
       const lineGeo = new THREE.BufferGeometry().setFromPoints(curvePoints);
+      const lineOpacity = isPainChain ? 0.6 + tensionIntensity * 0.4 : 0.3 + tensionIntensity * 0.5;
       const lineMat = new THREE.LineBasicMaterial({
-        color: chainColor,
+        color: isPainChain ? new THREE.Color('#ff4444') : chainColor,
         transparent: true,
-        opacity: 0.3 + tensionIntensity * 0.5,
+        opacity: lineOpacity,
         linewidth: 1,
         depthTest: true,
         depthWrite: false,
@@ -2427,13 +2443,30 @@ export default function PureThreeGLBViewer({
       line.renderOrder = 990;
       group.add(line);
 
+      if (isPainChain) {
+        const pulseGeo = new THREE.BufferGeometry().setFromPoints(curvePoints);
+        const pulseMat = new THREE.LineBasicMaterial({
+          color: new THREE.Color('#ff0000'),
+          transparent: true,
+          opacity: 0.3,
+          linewidth: 1,
+          depthTest: true,
+          depthWrite: false,
+        });
+        const pulseLine = new THREE.Line(pulseGeo, pulseMat);
+        pulseLine.renderOrder = 992;
+        pulseLine.userData = { type: 'pulseLine' };
+        group.add(pulseLine);
+      }
+
       for (let i = 0; i < positions.length; i++) {
         const tension = tensionValues[i];
         const deviation = Math.abs(tension - 50) / 50;
         const nodeSize = 0.025 + deviation * 0.04;
         const nodeGeo = new THREE.SphereGeometry(nodeSize, 10, 8);
+        const nodeColor = isPainChain ? new THREE.Color('#ff4444') : chainColor;
         const nodeMat = new THREE.MeshBasicMaterial({
-          color: chainColor,
+          color: nodeColor,
           transparent: true,
           opacity: 0.4 + deviation * 0.5,
           depthWrite: false,
@@ -2441,12 +2474,37 @@ export default function PureThreeGLBViewer({
         const node = new THREE.Mesh(nodeGeo, nodeMat);
         node.position.copy(positions[i]);
         node.renderOrder = 991;
+        node.userData = {
+          type: 'chainNode',
+          chainId: chain.id,
+          muscleId: muscleIds[i],
+          chainName: chain.name,
+        };
         group.add(node);
+
+        if (showProp && muscleIds[i]) {
+          const delta = propDeltas[muscleIds[i]] ?? 0;
+          if (Math.abs(delta) > 1) {
+            const propSize = 0.015 + Math.min(Math.abs(delta) / 30, 1) * 0.025;
+            const propGeo = new THREE.RingGeometry(propSize, propSize + 0.005, 16);
+            const propMat = new THREE.MeshBasicMaterial({
+              color: delta > 0 ? new THREE.Color('#ff6b6b') : new THREE.Color('#4ecdc4'),
+              transparent: true,
+              opacity: 0.3 + Math.sin(time * 4 + i) * 0.2,
+              depthWrite: false,
+              side: THREE.DoubleSide,
+            });
+            const propRing = new THREE.Mesh(propGeo, propMat);
+            propRing.position.copy(positions[i]);
+            propRing.renderOrder = 993;
+            group.add(propRing);
+          }
+        }
 
         if (deviation > 0.3) {
           const glowGeo = new THREE.SphereGeometry(nodeSize * 2.5, 8, 6);
           const glowMat = new THREE.MeshBasicMaterial({
-            color: chainColor,
+            color: isPainChain ? new THREE.Color('#ff0000') : chainColor,
             transparent: true,
             opacity: deviation * 0.2,
             depthWrite: false,
@@ -2462,16 +2520,17 @@ export default function PureThreeGLBViewer({
       for (let i = 0; i < positions.length - 1; i++) {
         const segTension = (tensionValues[i] + tensionValues[i + 1]) / 2;
         const segDeviation = Math.abs(segTension - 50) / 50;
-        if (segDeviation > 0.25) {
+        if (segDeviation > 0.25 || isPainChain) {
+          const effDeviation = isPainChain ? Math.max(segDeviation, 0.3) : segDeviation;
           const mid = new THREE.Vector3().lerpVectors(positions[i], positions[i + 1], 0.5);
-          const tubeRadius = 0.008 + segDeviation * 0.015;
+          const tubeRadius = 0.008 + effDeviation * 0.015;
           const dir = new THREE.Vector3().subVectors(positions[i + 1], positions[i]);
           const segLen = dir.length();
           const tubeGeo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, segLen, 6, 1);
           const tubeMat = new THREE.MeshBasicMaterial({
-            color: chainColor,
+            color: isPainChain ? new THREE.Color('#ff4444') : chainColor,
             transparent: true,
-            opacity: 0.15 + segDeviation * 0.3,
+            opacity: 0.15 + effDeviation * 0.3,
             depthWrite: false,
           });
           const tube = new THREE.Mesh(tubeGeo, tubeMat);
@@ -2483,12 +2542,60 @@ export default function PureThreeGLBViewer({
           tube.renderOrder = 988;
           group.add(tube);
         }
+
+        if (showProp && i < muscleIds.length - 1) {
+          const srcDelta = Math.abs(propDeltas[muscleIds[i]] ?? 0);
+          const tgtDelta = Math.abs(propDeltas[muscleIds[i + 1]] ?? 0);
+          if (srcDelta > 2 || tgtDelta > 2) {
+            const flowGeo = new THREE.SphereGeometry(0.012, 6, 4);
+            const flowMat = new THREE.MeshBasicMaterial({
+              color: new THREE.Color('#ffdd57'),
+              transparent: true,
+              opacity: 0.6,
+              depthWrite: false,
+            });
+            const flowDot = new THREE.Mesh(flowGeo, flowMat);
+            flowDot.position.copy(positions[i]);
+            flowDot.renderOrder = 994;
+            flowDot.userData = { type: 'flowDot', startPos: positions[i].clone(), endPos: positions[i + 1].clone(), segIndex: i };
+            group.add(flowDot);
+          }
+        }
       }
     }
 
     scene.add(group);
     fascialChainGroupRef.current = group;
   }, [fascialChainVisualization]);
+
+  useEffect(() => {
+    if (!fascialChainVisualization?.showPropagation && !fascialChainVisualization?.painHighlightChains?.length) return;
+    if (!fascialChainVisualization?.enabled) return;
+    let animFrameId: number;
+    const animate = () => {
+      if (fascialChainGroupRef.current) {
+        const t = Date.now() * 0.001;
+        fascialChainGroupRef.current.traverse((child) => {
+          if (!(child instanceof THREE.Mesh) && !(child instanceof THREE.Line)) return;
+          const ud = child.userData;
+          if (ud.type === 'flowDot' && child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+            const flowT = ((t * 2 + (ud.segIndex || 0) * 0.5) % 1);
+            child.position.lerpVectors(ud.startPos, ud.endPos, flowT);
+            child.material.opacity = 0.4 + Math.sin(t * 5 + (ud.segIndex || 0)) * 0.3;
+          } else if (ud.type === 'pulseLine' && child instanceof THREE.Line && child.material instanceof THREE.LineBasicMaterial) {
+            child.material.opacity = 0.15 + Math.sin(t * 3) * 0.15;
+          } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial && child.geometry instanceof THREE.RingGeometry) {
+            child.material.opacity = 0.3 + Math.sin(t * 4) * 0.2;
+            const scale = 1 + Math.sin(t * 3) * 0.15;
+            child.scale.set(scale, scale, scale);
+          }
+        });
+      }
+      animFrameId = requestAnimationFrame(animate);
+    };
+    animFrameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animFrameId);
+  }, [fascialChainVisualization?.showPropagation, fascialChainVisualization?.painHighlightChains, fascialChainVisualization?.enabled]);
 
   useEffect(() => {
     if (!sceneRef.current) return;
@@ -5787,17 +5894,35 @@ export default function PureThreeGLBViewer({
 
     const onClick = (e: MouseEvent) => {
       const otherToolActive = enablePainMarkersRef.current || enableRomModeRef.current || enablePoseModeRef.current || enableZoomToolRef.current;
-      if (!enableMuscleInteractionRef.current || otherToolActive) return;
+      if (!sceneRef.current) return;
       const rect = container.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1
       );
-      const allMuscleMeshes = muscleMeshesRef.current.filter(m => m.visible);
-      if (allMuscleMeshes.length === 0) return;
-      if (!sceneRef.current) return;
       const cam = sceneRef.current.camera;
       raycasterRef.current.setFromCamera(ndc, cam);
+
+      if (fascialChainGroupRef.current && onChainNodeClickRef.current) {
+        const chainMeshes: THREE.Object3D[] = [];
+        fascialChainGroupRef.current.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.userData.type === 'chainNode') {
+            chainMeshes.push(child);
+          }
+        });
+        if (chainMeshes.length > 0) {
+          const chainHits = raycasterRef.current.intersectObjects(chainMeshes, false);
+          if (chainHits.length > 0) {
+            const ud = chainHits[0].object.userData;
+            onChainNodeClickRef.current({ chainId: ud.chainId, muscleId: ud.muscleId, chainName: ud.chainName });
+            return;
+          }
+        }
+      }
+
+      if (!enableMuscleInteractionRef.current || otherToolActive) return;
+      const allMuscleMeshes = muscleMeshesRef.current.filter(m => m.visible);
+      if (allMuscleMeshes.length === 0) return;
       const hits = raycasterRef.current.intersectObjects(allMuscleMeshes, true);
       if (hits.length > 0) {
         const info = findMuscleGroupForMesh(hits[0].object);

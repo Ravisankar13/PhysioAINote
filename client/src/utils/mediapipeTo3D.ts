@@ -372,8 +372,8 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   // Left leg: negative X = abducted (moved left), positive X = adducted (moved right/medial)
   // Right leg: positive X = abducted (moved right), negative X = adducted (moved left/medial)
   // Keep signed values to distinguish abduction vs adduction
-  const leftHipAbduction = Math.atan2(-leftThigh.x, -leftThigh.y);  // Negative X for left leg = positive abduction
-  const rightHipAbduction = Math.atan2(rightThigh.x, -rightThigh.y); // Positive X for right leg = positive abduction
+  const leftHipAbduction = Math.atan2(leftThigh.x, -leftThigh.y);
+  const rightHipAbduction = Math.atan2(-rightThigh.x, -rightThigh.y);
 
   // Knee flexion
   const leftKneeFlexion = calculateJointFlexion(leftHip, leftKnee, leftAnkle);
@@ -745,7 +745,7 @@ function computeJointFromPartial(
       const rk = safeGet(landmarks, LANDMARKS.RIGHT_KNEE);
       const thigh = normalize(createVector(rh, rk));
       const flexion = Math.atan2(thigh.z * 0.3, -thigh.y);
-      const abduction = Math.atan2(thigh.x, -thigh.y);
+      const abduction = Math.atan2(-thigh.x, -thigh.y);
       return { x: clamp(flexion, -0.5, 2.0), y: 0, z: clamp(abduction, -0.3, 0.8) };
     }
     case 'leftHip': {
@@ -754,7 +754,7 @@ function computeJointFromPartial(
       const lk = safeGet(landmarks, LANDMARKS.LEFT_KNEE);
       const thigh = normalize(createVector(lh, lk));
       const flexion = Math.atan2(thigh.z * 0.3, -thigh.y);
-      const abduction = Math.atan2(-thigh.x, -thigh.y);
+      const abduction = Math.atan2(thigh.x, -thigh.y);
       return { x: clamp(flexion, -0.5, 2.0), y: 0, z: clamp(abduction, -0.3, 0.8) };
     }
     case 'rightKnee': {

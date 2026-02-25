@@ -4995,11 +4995,11 @@ ${ddxList}`;
                               </div>
                               {(() => {
                                 const impact = getScarImpact(scar);
-                                return impact.affectedChains.length > 0 || impact.movementRestrictions.length > 0 ? (
+                                return impact.affectedChains.length > 0 || impact.restrictedMovements.length > 0 ? (
                                   <div className="p-1.5 rounded bg-yellow-500/10 border border-yellow-500/30">
                                     <span className="text-[8px] font-medium text-yellow-400">Clinical Impact</span>
-                                    {impact.affectedChains.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Chains: {impact.affectedChains.join(', ')}</p>}
-                                    {impact.movementRestrictions.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Restrictions: {impact.movementRestrictions.join(', ')}</p>}
+                                    {impact.affectedChains.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Chains: {impact.affectedChains.map(c => c.chain.name).join(', ')}</p>}
+                                    {impact.restrictedMovements.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Restrictions: {impact.restrictedMovements.join(', ')}</p>}
                                   </div>
                                 ) : null;
                               })()}

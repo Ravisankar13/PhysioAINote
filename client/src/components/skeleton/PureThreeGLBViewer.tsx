@@ -5513,6 +5513,25 @@ export default function PureThreeGLBViewer({
           }
         });
         
+        if (pelvisBone) {
+          pelvisBone.updateMatrixWorld(true);
+          const leftAnkleBone = bones['Ankle_L'] as THREE.Bone;
+          const rightAnkleBone = bones['Ankle_R'] as THREE.Bone;
+          const ikState = legIKStateRef.current!;
+          if (leftAnkleBone && rightAnkleBone && ikState.leftInitialFootPos && ikState.rightInitialFootPos) {
+            const actualLeftY = new THREE.Vector3();
+            const actualRightY = new THREE.Vector3();
+            leftAnkleBone.getWorldPosition(actualLeftY);
+            rightAnkleBone.getWorldPosition(actualRightY);
+            const actualLowestY = Math.min(actualLeftY.y, actualRightY.y);
+            const targetLowestY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
+            const footError = actualLowestY - targetLowestY;
+            if (Math.abs(footError) > 0.001) {
+              pelvisBone.position.y -= footError;
+            }
+          }
+        }
+        
         const pelvisBoneNames = ['Root_M', 'RootPart1_M', 'RootPart2_M'];
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
           if (pelvisBoneNames.includes(boneName)) {

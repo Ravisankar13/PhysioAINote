@@ -4706,16 +4706,10 @@ export default function PureThreeGLBViewer({
     const controllerValues = poseToControllerValues(livePose);
     
     // Map controller values to BONE_MAPPING keys (values in radians, matching slider behavior)
+    // NOTE: Shoulder flexion/abduction are handled separately below using world-axis rotations
+    // to avoid Euler axis coupling (combining -PI/2 T-pose offset with flexion in one Euler
+    // causes flexion to act as abduction because the local Z axis rotates with the Y correction)
     const livePoseConfig: { [key: string]: number } = {
-      // Shoulders - flexion and abduction
-      // T-pose offset: skeleton rest pose is T-pose (arms at 90° abduction)
-      // Subtract π/2 so camera "arms at sides" (0) maps to skeleton "arms down" (-π/2 from T-pose)
-      'leftShoulder.flexion': controllerValues.leftShoulder.flexion,
-      'leftShoulder.abduction': controllerValues.leftShoulder.abduction - Math.PI / 2,
-      'leftShoulder.internalRotation': controllerValues.leftShoulder.internalRotation,
-      'rightShoulder.flexion': controllerValues.rightShoulder.flexion,
-      'rightShoulder.abduction': controllerValues.rightShoulder.abduction - Math.PI / 2,
-      'rightShoulder.internalRotation': controllerValues.rightShoulder.internalRotation,
       // Elbows - flexion only
       'leftElbow.flexion': controllerValues.leftElbow.flexion,
       'rightElbow.flexion': controllerValues.rightElbow.flexion,
@@ -4796,7 +4790,68 @@ export default function PureThreeGLBViewer({
     // Bones that are handled by the animation loop (need rotations stored in sliderRotationsRef)
     const animationLoopBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);
     
-    const quaternionComposeBones = new Set(['Shoulder_L', 'Shoulder_R', 'Hip_L', 'Hip_R']);
+    const quaternionComposeBones = new Set(['Hip_L', 'Hip_R']);
+
+    // Apply shoulder bones using independent world-axis rotations
+    // This avoids Euler axis coupling: when combining -PI/2 T-pose offset (Y) with flexion (Z)
+    // in one Euler, the Z axis rotates with the Y correction, causing flexion to act as abduction.
+    // Instead, we apply each movement as a separate rotation around fixed T-pose world axes.
+    const shoulderConfigs = [
+      { boneName: 'Shoulder_L', rotBoneName: 'ShoulderPart1_L',
+        flexion: controllerValues.leftShoulder.flexion,
+        abduction: controllerValues.leftShoulder.abduction,
+        internalRotation: controllerValues.leftShoulder.internalRotation,
+        abductionScale: -1, rotationScale: -1 },
+      { boneName: 'Shoulder_R', rotBoneName: 'ShoulderPart1_R',
+        flexion: controllerValues.rightShoulder.flexion,
+        abduction: controllerValues.rightShoulder.abduction,
+        internalRotation: controllerValues.rightShoulder.internalRotation,
+        abductionScale: -1, rotationScale: 1 },
+    ];
+
+    shoulderConfigs.forEach(({ boneName, rotBoneName, flexion, abduction, internalRotation, abductionScale, rotationScale }) => {
+      const bone = bones[boneName] as THREE.Bone;
+      const initial = initialRotations[boneName];
+      if (!bone || !initial || !bone.parent) return;
+
+      const initialQuat = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+      );
+
+      bone.parent.updateWorldMatrix(true, false);
+      const parentWorldQ = new THREE.Quaternion();
+      bone.parent.getWorldQuaternion(parentWorldQ);
+      const parentWorldQInv = parentWorldQ.clone().invert();
+
+      const totalAbduction = (abduction - Math.PI / 2) * abductionScale;
+      const worldAbductionAxis = new THREE.Vector3(0, 1, 0);
+      const localAbductionAxis = worldAbductionAxis.clone().applyQuaternion(parentWorldQInv).normalize();
+      const qAbduct = new THREE.Quaternion().setFromAxisAngle(localAbductionAxis, totalAbduction);
+
+      const worldFlexionAxis = new THREE.Vector3(0, 0, -1);
+      const localFlexionAxis = worldFlexionAxis.clone().applyQuaternion(parentWorldQInv).normalize();
+      const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexionAxis, flexion);
+
+      const targetQuat = new THREE.Quaternion()
+        .multiplyQuaternions(qFlex, qAbduct)
+        .multiply(initialQuat);
+      const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
+
+      bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
+      sliderRotationsRef.current[boneName] = {
+        x: targetEuler.x - initial.x,
+        y: targetEuler.y - initial.y,
+        z: targetEuler.z - initial.z
+      };
+
+      const rotBone = bones[rotBoneName] as THREE.Bone;
+      const rotInitial = initialRotations[rotBoneName];
+      if (rotBone && rotInitial) {
+        const rotAngle = internalRotation * rotationScale;
+        rotBone.rotation.set(rotInitial.x + rotAngle, rotInitial.y, rotInitial.z);
+        sliderRotationsRef.current[rotBoneName] = { x: rotAngle, y: 0, z: 0 };
+      }
+    });
 
     Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
       const bone = bones[boneName] as THREE.Bone;
@@ -4813,20 +4868,8 @@ export default function PureThreeGLBViewer({
         const targetQuat = initialQuat.clone().multiply(deltaQuat);
         const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
         bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
-        if (animationLoopBones.has(boneName)) {
-          sliderRotationsRef.current[boneName] = {
-            x: targetEuler.x - initial.x,
-            y: targetEuler.y - initial.y,
-            z: targetEuler.z - initial.z
-          };
-        }
       } else if (animationLoopBones.has(boneName)) {
-        bone.rotation.set(
-          initial.x + delta.x,
-          initial.y + delta.y,
-          initial.z + delta.z
-        );
-        sliderRotationsRef.current[boneName] = delta;
+        // Skip — shoulder bones handled above
       } else {
         bone.rotation.set(
           initial.x + delta.x,

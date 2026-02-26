@@ -1766,6 +1766,7 @@ export default function PureThreeGLBViewer({
   const animationProgressRef = useRef<{ callback: ((p: number) => void) | undefined; lastReport: number }>({ callback: onAnimationProgress, lastReport: 0 });
   animationProgressRef.current.callback = onAnimationProgress;
   const livePoseActiveRef = useRef<boolean>(false);
+  const defaultShoulderRotRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } } | null>(null);
   const animationPlayingRef = useRef<boolean>(false);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
@@ -4792,54 +4793,52 @@ export default function PureThreeGLBViewer({
     
     const quaternionComposeBones = new Set(['Hip_L', 'Hip_R']);
 
-    // Apply shoulder bones using independent world-axis rotations
-    // This avoids Euler axis coupling: when combining -PI/2 T-pose offset (Y) with flexion (Z)
-    // in one Euler, the Z axis rotates with the Y correction, causing flexion to act as abduction.
-    // Instead, we apply each movement as a separate rotation around fixed T-pose world axes.
+    if (!defaultShoulderRotRef.current) {
+      const shoulderBones = ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'];
+      defaultShoulderRotRef.current = {};
+      shoulderBones.forEach(name => {
+        const rot = sliderRotationsRef.current[name];
+        defaultShoulderRotRef.current![name] = rot ? { ...rot } : { x: 0, y: 0, z: 0 };
+      });
+    }
+
     const shoulderConfigs = [
       { boneName: 'Shoulder_L', rotBoneName: 'ShoulderPart1_L',
         flexion: controllerValues.leftShoulder.flexion,
         abduction: controllerValues.leftShoulder.abduction,
         internalRotation: controllerValues.leftShoulder.internalRotation,
-        abductionScale: -1, rotationScale: -1 },
+        rotationScale: -1 },
       { boneName: 'Shoulder_R', rotBoneName: 'ShoulderPart1_R',
         flexion: controllerValues.rightShoulder.flexion,
         abduction: controllerValues.rightShoulder.abduction,
         internalRotation: controllerValues.rightShoulder.internalRotation,
-        abductionScale: -1, rotationScale: 1 },
+        rotationScale: 1 },
     ];
 
-    shoulderConfigs.forEach(({ boneName, rotBoneName, flexion, abduction, internalRotation, abductionScale, rotationScale }) => {
+    shoulderConfigs.forEach(({ boneName, rotBoneName, flexion, abduction, internalRotation, rotationScale }) => {
       const bone = bones[boneName] as THREE.Bone;
       const initial = initialRotations[boneName];
-      if (!bone || !initial) return;
+      const defaultRot = defaultShoulderRotRef.current![boneName];
+      if (!bone || !initial || !defaultRot) return;
 
-      const adductDelta = Math.PI / 2 - abduction;
+      const totalX = initial.x + defaultRot.x;
+      const totalY = initial.y + defaultRot.y + abduction * (-1);
+      const totalZ = initial.z + defaultRot.z + flexion * 1;
 
-      const step1 = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(initial.x, initial.y + adductDelta, initial.z, 'XYZ')
-      );
-
-      const qFlexLocal = new THREE.Quaternion().setFromAxisAngle(
-        new THREE.Vector3(0, 0, 1), flexion
-      );
-
-      const targetQuat = step1.clone().multiply(qFlexLocal);
-      const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
-
-      bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
+      bone.rotation.set(totalX, totalY, totalZ);
       sliderRotationsRef.current[boneName] = {
-        x: targetEuler.x - initial.x,
-        y: targetEuler.y - initial.y,
-        z: targetEuler.z - initial.z
+        x: totalX - initial.x,
+        y: totalY - initial.y,
+        z: totalZ - initial.z
       };
 
       const rotBone = bones[rotBoneName] as THREE.Bone;
       const rotInitial = initialRotations[rotBoneName];
-      if (rotBone && rotInitial) {
-        const rotAngle = internalRotation * rotationScale;
-        rotBone.rotation.set(rotInitial.x + rotAngle, rotInitial.y, rotInitial.z);
-        sliderRotationsRef.current[rotBoneName] = { x: rotAngle, y: 0, z: 0 };
+      const defaultRotPart = defaultShoulderRotRef.current![rotBoneName];
+      if (rotBone && rotInitial && defaultRotPart) {
+        const rotAngle = defaultRotPart.x + internalRotation * rotationScale;
+        rotBone.rotation.set(rotInitial.x + rotAngle, rotInitial.y + defaultRotPart.y, rotInitial.z + defaultRotPart.z);
+        sliderRotationsRef.current[rotBoneName] = { x: rotAngle, y: defaultRotPart.y, z: defaultRotPart.z };
       }
     });
 
@@ -5215,9 +5214,11 @@ export default function PureThreeGLBViewer({
     animationConstraintsRef.current = animationConstraints || [];
   }, [animationConstraints]);
 
-  // Keep refs updated for animation loop access
   useEffect(() => {
     livePoseActiveRef.current = livePose !== null;
+    if (livePose === null) {
+      defaultShoulderRotRef.current = null;
+    }
   }, [livePose]);
 
   useEffect(() => {

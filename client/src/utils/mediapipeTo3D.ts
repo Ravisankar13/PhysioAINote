@@ -190,6 +190,19 @@ function landmarksVisible(landmarks: NormalizedLandmark[], indices: number[]): b
   });
 }
 
+function getLandmarkConfidence(landmarks: NormalizedLandmark[], indices: number[]): number {
+  let totalVis = 0;
+  let count = 0;
+  for (const i of indices) {
+    const lm = landmarks[i];
+    if (lm) {
+      totalVis += lm.visibility ?? 0.5;
+      count++;
+    }
+  }
+  return count > 0 ? totalVis / count : 0;
+}
+
 /**
  * Convert MediaPipe landmarks to 3D skeleton pose
  * All rotations are in radians
@@ -236,9 +249,8 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   };
 
   // === SPINE CALCULATIONS ===
-  // Lateral tilt: difference in shoulder heights vs hip heights
   const shoulderTilt = Math.atan2(
-    -(rightShoulder.y - leftShoulder.y), // Flip for Y-up
+    -(rightShoulder.y - leftShoulder.y),
     rightShoulder.x - leftShoulder.x
   );
   const hipTilt = Math.atan2(
@@ -247,41 +259,73 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   );
   const spineLateral = shoulderTilt - hipTilt;
   
-  // Forward lean: how much the shoulders are forward/back of hips
   const spineForward = Math.atan2(
     -(shoulderMid.z - hipMid.z),
     shoulderMid.y - hipMid.y
   );
 
-  // === HEAD/NECK CALCULATIONS ===
-  // Use ears and nose for robust head orientation
+  // === HEAD/NECK CALCULATIONS (Enhanced) ===
   const leftEar = landmarks[LANDMARKS.LEFT_EAR];
   const rightEar = landmarks[LANDMARKS.RIGHT_EAR];
   const leftEye = landmarks[LANDMARKS.LEFT_EYE];
   const rightEye = landmarks[LANDMARKS.RIGHT_EYE];
-  
-  // Ear-to-ear vector for head orientation basis
+
+  const earConfidence = getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_EAR, LANDMARKS.RIGHT_EAR]);
+  const eyeConfidence = getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_EYE, LANDMARKS.RIGHT_EYE]);
+  const noseConfidence = getLandmarkConfidence(landmarks, [LANDMARKS.NOSE]);
+
   const earVector = createVector(leftEar, rightEar);
   const eyeVector = createVector(leftEye, rightEye);
-  
-  // YAW (head rotation left/right): determined by ear Z difference
-  // When head turns right, right ear moves closer to camera (more negative Z in MediaPipe)
-  // After coordinate conversion, this means rightEar.z > leftEar.z when turning right
-  // Using atan2 for the angle: positive = turned right, negative = turned left
-  const headYaw = Math.atan2(earVector.z, Math.abs(earVector.x) || 0.01) * 1.5; // Scale up for visibility
-  
-  // ROLL (head tilt sideways): determined by ear height difference
-  // When tilting head right, right ear drops (higher Y in MediaPipe, lower in THREE.js)
-  const headRoll = Math.atan2(earVector.y, Math.abs(earVector.x) || 0.01);
-  
-  // PITCH (nodding up/down): nose position relative to eye midpoint
-  // When looking down, nose Y increases (in MediaPipe), becomes more negative in THREE.js
+
+  // YAW (head rotation left/right): Use shoulder-to-ear vectors for stability
+  // Primary: ear Z-depth difference (most direct yaw indicator)
+  // Secondary: nose-to-shoulder-midpoint lateral offset for cross-validation
+  const shoulderMidRaw: Vec3 = {
+    x: (leftShoulder.x + rightShoulder.x) / 2,
+    y: (leftShoulder.y + rightShoulder.y) / 2,
+    z: (leftShoulder.z + rightShoulder.z) / 2
+  };
+  const earYaw = Math.atan2(earVector.z, Math.abs(earVector.x) || 0.01) * 1.5;
+  const leftShoulderToEar = createVector(leftShoulder, leftEar);
+  const rightShoulderToEar = createVector(rightShoulder, rightEar);
+  const shoulderEarYaw = Math.atan2(
+    rightShoulderToEar.z - leftShoulderToEar.z,
+    (Math.abs(leftShoulderToEar.x) + Math.abs(rightShoulderToEar.x)) || 0.01
+  ) * 1.2;
+  const earWeight = Math.min(earConfidence / 0.7, 1.0);
+  const headYaw = earWeight * earYaw + (1 - earWeight) * shoulderEarYaw;
+
+  // ROLL (head tilt sideways): ear height difference, cross-validated with eye tilt
+  const earRoll = Math.atan2(earVector.y, Math.abs(earVector.x) || 0.01);
+  const eyeRoll = Math.atan2(eyeVector.y, Math.abs(eyeVector.x) || 0.01);
+  const headRoll = earConfidence > 0.5
+    ? earRoll * 0.7 + eyeRoll * 0.3
+    : eyeRoll;
+
+  // PITCH (nodding): nose-to-shoulder-midpoint vector angle relative to torso
+  // More stable than nose-to-eye because shoulder midpoint is a better torso reference
+  const nosePt: Vec3 = { x: nose.x, y: -nose.y, z: -nose.z };
+  const shoulderMidPt: Vec3 = {
+    x: shoulderMidRaw.x,
+    y: -shoulderMidRaw.y,
+    z: -shoulderMidRaw.z
+  };
+  const noseToShoulderVec: Vec3 = {
+    x: nosePt.x - shoulderMidPt.x,
+    y: nosePt.y - shoulderMidPt.y,
+    z: nosePt.z - shoulderMidPt.z
+  };
+  const noseShoulderPitch = Math.atan2(noseToShoulderVec.z, noseToShoulderVec.y);
+
   const eyeMidY = -(leftEye.y + rightEye.y) / 2;
   const noseY = -nose.y;
   const eyeMidZ = -(leftEye.z + rightEye.z) / 2;
   const noseZ = -nose.z;
-  // Pitch is forward/back nod - comparing nose to eye center position
-  const headPitch = Math.atan2(noseY - eyeMidY, Math.abs(noseZ - eyeMidZ) + 0.01) - 0.3; // Offset for natural head angle
+  const noseEyePitch = Math.atan2(noseY - eyeMidY, Math.abs(noseZ - eyeMidZ) + 0.01) - 0.3;
+
+  const headPitch = noseConfidence > 0.6
+    ? noseShoulderPitch * 0.4 + noseEyePitch * 0.6
+    : noseEyePitch;
 
   // === ARM CALCULATIONS ===
   // Left upper arm direction (shoulder to elbow)
@@ -293,19 +337,6 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightForearm = normalize(createVector(rightElbow, rightWrist));
 
   // ELEVATION-AZIMUTH DECOMPOSITION for shoulder angles
-  //
-  // Instead of independent atan2 projections (which become unstable when y→0),
-  // we compute a single elevation angle from vertical, then decompose it into
-  // flexion and abduction based on the direction the arm points in the horizontal plane.
-  //
-  // elevation = atan2(sqrt(x²+z²), -y)  — total angle from vertical down (0=down, π/2=horizontal, π=up)
-  // azimuth = atan2(z, -x) [left] or atan2(z, x) [right] — direction in horizontal plane (0=lateral, π/2=forward)
-  // flexion = elevation * sin(azimuth)   — forward component
-  // abduction = elevation * cos(azimuth) — lateral component
-  //
-  // This avoids singularities because elevation uses magnitude (always ≥0) and azimuth
-  // is only used as a weighting factor, not as a standalone angle.
-
   const computeShoulderAngles = (armDir: Vec3, isLeft: boolean): { flexion: number; abduction: number } => {
     const horizMag = Math.sqrt(armDir.x * armDir.x + armDir.z * armDir.z);
     const elevation = Math.atan2(horizMag, -armDir.y);
@@ -326,22 +357,13 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightShoulderAbduction = rightShoulderAngles.abduction;
 
   // SHOULDER INTERNAL/EXTERNAL ROTATION
-  // Computed from the relationship between upper arm and forearm directions
-  // Project forearm onto the plane perpendicular to the upper arm (transverse plane of the humerus)
-  // Cross product of upper arm and forearm gives rotation axis; dot with reference gives rotation angle
   const computeShoulderRotation = (upperArm: Vec3, forearm: Vec3, isLeft: boolean): number => {
-    // Reference "no rotation" direction: when forearm hangs straight down relative to upper arm
-    // Use the body's forward direction (Z) and lateral direction (X) to define the reference plane
-    // Cross product: upperArm × forearm
     const cross = {
       x: upperArm.y * forearm.z - upperArm.z * forearm.y,
       y: upperArm.z * forearm.x - upperArm.x * forearm.z,
       z: upperArm.x * forearm.y - upperArm.y * forearm.x
     };
-    // Project cross product onto the upper arm axis to get rotation component
     const dot = cross.x * upperArm.x + cross.y * upperArm.y + cross.z * upperArm.z;
-    // The magnitude indicates rotation amount; sign indicates internal vs external
-    // For left arm: positive dot = internal rotation; for right arm: negative dot = internal rotation
     const rotation = Math.atan2(dot, 
       forearm.x * upperArm.x + forearm.y * upperArm.y + forearm.z * upperArm.z + 0.001);
     return isLeft ? rotation : -rotation;
@@ -355,35 +377,22 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightElbowFlexion = calculateJointFlexion(rightShoulder, rightElbow, rightWrist);
 
   // === LEG CALCULATIONS ===
-  // Thigh directions
   const leftThigh = normalize(createVector(leftHip, leftKnee));
   const rightThigh = normalize(createVector(rightHip, rightKnee));
   
-  // Shin directions
   const leftShin = normalize(createVector(leftKnee, leftAnkle));
   const rightShin = normalize(createVector(rightKnee, rightAnkle));
 
-  // Hip flexion (leg raised forward) - stored in .x
-  // Z-depth dampening (0.3x) reduces noise from MediaPipe's unreliable monocular Z estimation
   const leftHipFlexion = Math.atan2(leftThigh.z * 0.3, -leftThigh.y);
   const rightHipFlexion = Math.atan2(rightThigh.z * 0.3, -rightThigh.y);
   
-  // Hip abduction (leg moved outward) - stored in .z
-  // Left leg: negative X = abducted (moved left), positive X = adducted (moved right/medial)
-  // Right leg: positive X = abducted (moved right), negative X = adducted (moved left/medial)
-  // Keep signed values to distinguish abduction vs adduction
   const leftHipAbduction = Math.atan2(leftThigh.x, -leftThigh.y);
   const rightHipAbduction = Math.atan2(-rightThigh.x, -rightThigh.y);
 
-  // Knee flexion
   const leftKneeFlexion = calculateJointFlexion(leftHip, leftKnee, leftAnkle);
   const rightKneeFlexion = calculateJointFlexion(rightHip, rightKnee, rightAnkle);
 
   // === ANKLE CALCULATIONS ===
-  // Dorsiflexion/plantarflexion: angle between shin direction and foot direction
-  // Shin direction: knee → ankle; Foot direction: ankle → foot_index (or heel → foot_index)
-  // When foot is flat (90° to shin), dorsiflexion ≈ 0
-  // Positive = dorsiflexion (toes up), Negative = plantarflexion (toes down)
   const leftShinDir = normalize(createVector(leftKnee, leftAnkle));
   const leftFootDir = normalize(createVector(leftHeel, leftFootIndex));
   const leftAnkleBendAngle = angleBetweenVectors(
@@ -401,9 +410,6 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightAnkleDorsiflexion = (Math.PI / 2) - rightAnkleBendAngle;
 
   // === WRIST CALCULATIONS ===
-  // Wrist flexion/extension: angle between forearm and hand direction
-  // Forearm: elbow → wrist; Hand: wrist → index finger base (landmark 19/20)
-  // Positive = flexion (palm toward forearm), Negative = extension (back of hand toward forearm)
   const leftHandDir = normalize(createVector(leftWrist, leftIndex));
   const leftWristBendAngle = angleBetweenVectors(leftForearm, leftHandDir);
   const leftWristFlexion = Math.PI - leftWristBendAngle;
@@ -473,11 +479,6 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const leftWristVisible = landmarksVisible(landmarks, [LANDMARKS.LEFT_ELBOW, LANDMARKS.LEFT_WRIST, LANDMARKS.LEFT_INDEX]);
   const rightWristVisible = landmarksVisible(landmarks, [LANDMARKS.RIGHT_ELBOW, LANDMARKS.RIGHT_WRIST, LANDMARKS.RIGHT_INDEX]);
 
-  // When mirror mode is ON, swap left/right joints AND invert lateral (z) components
-  // The webcam shows a mirror image, so:
-  // 1. User's left arm appears on right side of screen → we detect it as rightShoulder landmarks
-  // 2. Lateral movements (X-axis) are reversed in the mirrored view
-  // 3. We swap joints AND negate z (abduction) to correct both issues
   if (mirrorMode) {
     return {
       spine: spineVisible ? {
@@ -580,7 +581,6 @@ const REGION_JOINT_REQUIREMENTS: Record<string, RegionLandmarkMap> = {
     requiredLandmarks: [24, 26],
     jointMapping: [
       { joint: 'rightHip', landmarks: [24, 26] },
-      { joint: 'rightKnee', landmarks: [24, 26, 28] },
     ]
   },
   left_hip: {
@@ -588,7 +588,6 @@ const REGION_JOINT_REQUIREMENTS: Record<string, RegionLandmarkMap> = {
     requiredLandmarks: [23, 25],
     jointMapping: [
       { joint: 'leftHip', landmarks: [23, 25] },
-      { joint: 'leftKnee', landmarks: [23, 25, 27] },
     ]
   },
   right_shoulder: {
@@ -609,84 +608,81 @@ const REGION_JOINT_REQUIREMENTS: Record<string, RegionLandmarkMap> = {
   },
   right_elbow: {
     regionId: 'right_elbow',
-    requiredLandmarks: [14, 16],
+    requiredLandmarks: [12, 14, 16],
     jointMapping: [
-      { joint: 'rightShoulder', landmarks: [12, 14] },
       { joint: 'rightElbow', landmarks: [12, 14, 16] },
     ]
   },
   left_elbow: {
     regionId: 'left_elbow',
-    requiredLandmarks: [13, 15],
+    requiredLandmarks: [11, 13, 15],
     jointMapping: [
-      { joint: 'leftShoulder', landmarks: [11, 13] },
       { joint: 'leftElbow', landmarks: [11, 13, 15] },
     ]
   },
-  cervical_spine: {
-    regionId: 'cervical_spine',
-    requiredLandmarks: [0],
+  cervical: {
+    regionId: 'cervical',
+    requiredLandmarks: [0, 7, 8],
     jointMapping: [
-      { joint: 'neck', landmarks: [0, 7, 8] },
+      { joint: 'neck', landmarks: [0, 2, 5, 7, 8] },
+    ]
+  },
+  lumbar: {
+    regionId: 'lumbar',
+    requiredLandmarks: [11, 12, 23, 24],
+    jointMapping: [
       { joint: 'spine', landmarks: [11, 12, 23, 24] },
     ]
   },
-  lumbar_spine: {
-    regionId: 'lumbar_spine',
-    requiredLandmarks: [11, 12],
-    jointMapping: [
-      { joint: 'spine', landmarks: [11, 12, 23, 24] },
-    ]
-  },
-  right_leg: {
-    regionId: 'right_leg',
-    requiredLandmarks: [26],
-    jointMapping: [
-      { joint: 'rightHip', landmarks: [24, 26] },
-      { joint: 'rightKnee', landmarks: [24, 26, 28] },
-    ]
-  },
-  left_leg: {
-    regionId: 'left_leg',
-    requiredLandmarks: [25],
+  full_legs: {
+    regionId: 'full_legs',
+    requiredLandmarks: [23, 24, 25, 26, 27, 28],
     jointMapping: [
       { joint: 'leftHip', landmarks: [23, 25] },
+      { joint: 'rightHip', landmarks: [24, 26] },
       { joint: 'leftKnee', landmarks: [23, 25, 27] },
+      { joint: 'rightKnee', landmarks: [24, 26, 28] },
     ]
   },
 };
 
-function hasVisibleLandmarks(landmarks: NormalizedLandmark[], indices: number[], minVisibility: number = 0.3): boolean {
+function hasVisibleLandmarks(landmarks: NormalizedLandmark[], indices: number[], minVis: number = MIN_VISIBILITY): boolean {
   return indices.every(i => {
     const lm = landmarks[i];
-    return lm && (lm.visibility === undefined || lm.visibility >= minVisibility);
+    return lm && (lm.visibility === undefined || lm.visibility >= minVis);
   });
 }
 
 function safeGet(landmarks: NormalizedLandmark[], index: number): NormalizedLandmark {
-  const lm = landmarks[index];
-  if (lm) return lm;
-  return { x: 0.5, y: 0.5, z: 0, visibility: 0 };
+  return landmarks[index] || { x: 0, y: 0, z: 0, visibility: 0 };
 }
 
-function computeJointFromPartial(
+export function computeJointFromPartial(
   joint: keyof Skeleton3DPose,
   landmarks: NormalizedLandmark[],
-  mirrorMode: boolean
+  mirrorMode: boolean = false
 ): Joint3DRotation | null {
   const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
 
   switch (joint) {
+    case 'leftShoulder':
     case 'rightShoulder': {
-      if (!hasVisibleLandmarks(landmarks, [LANDMARKS.RIGHT_SHOULDER, LANDMARKS.RIGHT_ELBOW], 0.15)) return null;
-      const rs = safeGet(landmarks, LANDMARKS.RIGHT_SHOULDER);
-      const re = safeGet(landmarks, LANDMARKS.RIGHT_ELBOW);
-      const rw = safeGet(landmarks, LANDMARKS.RIGHT_WRIST);
-      const upperArm = normalize(createVector(rs, re));
-      const forearm = normalize(createVector(re, rw));
+      const isLeft = joint === 'leftShoulder';
+      const actualJoint = mirrorMode ? (isLeft ? 'rightShoulder' : 'leftShoulder') : joint;
+      const sIdx = actualJoint === 'leftShoulder' ? LANDMARKS.LEFT_SHOULDER : LANDMARKS.RIGHT_SHOULDER;
+      const eIdx = actualJoint === 'leftShoulder' ? LANDMARKS.LEFT_ELBOW : LANDMARKS.RIGHT_ELBOW;
+      const wIdx = actualJoint === 'leftShoulder' ? LANDMARKS.LEFT_WRIST : LANDMARKS.RIGHT_WRIST;
+      if (!hasVisibleLandmarks(landmarks, [sIdx, eIdx], 0.15)) return null;
+      const sLm = safeGet(landmarks, sIdx);
+      const eLm = safeGet(landmarks, eIdx);
+      const wLm = safeGet(landmarks, wIdx);
+      const upperArm = normalize(createVector(sLm, eLm));
+      const forearm = normalize(createVector(eLm, wLm));
       const horizMag = Math.sqrt(upperArm.x * upperArm.x + upperArm.z * upperArm.z);
       const elevation = Math.atan2(horizMag, -upperArm.y);
-      const azimuth = Math.atan2(upperArm.z, upperArm.x);
+      const sideIsLeft = actualJoint === 'leftShoulder';
+      const lateralX = sideIsLeft ? -upperArm.x : upperArm.x;
+      const azimuth = Math.atan2(upperArm.z, lateralX);
       const flexion = elevation * Math.sin(azimuth);
       const abduction = elevation * Math.cos(azimuth);
       const cross = {
@@ -694,106 +690,51 @@ function computeJointFromPartial(
         y: upperArm.z * forearm.x - upperArm.x * forearm.z,
         z: upperArm.x * forearm.y - upperArm.y * forearm.x
       };
-      const dotCross = cross.x * upperArm.x + cross.y * upperArm.y + cross.z * upperArm.z;
-      const dotFore = forearm.x * upperArm.x + forearm.y * upperArm.y + forearm.z * upperArm.z + 0.001;
-      const rotation = -Math.atan2(dotCross, dotFore);
-      return { x: clamp(flexion, -0.5, Math.PI), y: clamp(rotation, -1.2, 1.2), z: clamp(abduction, -0.3, Math.PI) };
-    }
-    case 'leftShoulder': {
-      if (!hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.LEFT_ELBOW], 0.15)) return null;
-      const ls = safeGet(landmarks, LANDMARKS.LEFT_SHOULDER);
-      const le = safeGet(landmarks, LANDMARKS.LEFT_ELBOW);
-      const lw = safeGet(landmarks, LANDMARKS.LEFT_WRIST);
-      const upperArm = normalize(createVector(ls, le));
-      const forearm = normalize(createVector(le, lw));
-      const horizMag = Math.sqrt(upperArm.x * upperArm.x + upperArm.z * upperArm.z);
-      const elevation = Math.atan2(horizMag, -upperArm.y);
-      const azimuth = Math.atan2(upperArm.z, -upperArm.x);
-      const flexion = elevation * Math.sin(azimuth);
-      const abduction = elevation * Math.cos(azimuth);
-      const cross = {
-        x: upperArm.y * forearm.z - upperArm.z * forearm.y,
-        y: upperArm.z * forearm.x - upperArm.x * forearm.z,
-        z: upperArm.x * forearm.y - upperArm.y * forearm.x
+      const dot = cross.x * upperArm.x + cross.y * upperArm.y + cross.z * upperArm.z;
+      const intRot = Math.atan2(dot, forearm.x * upperArm.x + forearm.y * upperArm.y + forearm.z * upperArm.z + 0.001);
+      const signedRot = sideIsLeft ? intRot : -intRot;
+      return {
+        x: clamp(flexion, -0.5, Math.PI),
+        y: clamp(signedRot, -1.2, 1.2),
+        z: clamp(abduction, -0.3, Math.PI)
       };
-      const dotCross = cross.x * upperArm.x + cross.y * upperArm.y + cross.z * upperArm.z;
-      const dotFore = forearm.x * upperArm.x + forearm.y * upperArm.y + forearm.z * upperArm.z + 0.001;
-      const rotation = Math.atan2(dotCross, dotFore);
-      return { x: clamp(flexion, -0.5, Math.PI), y: clamp(rotation, -1.2, 1.2), z: clamp(abduction, -0.3, Math.PI) };
     }
+    case 'leftElbow':
     case 'rightElbow': {
-      if (!hasVisibleLandmarks(landmarks, [LANDMARKS.RIGHT_SHOULDER, LANDMARKS.RIGHT_ELBOW, LANDMARKS.RIGHT_WRIST], 0.15)) return null;
-      const flexion = calculateJointFlexion(
-        safeGet(landmarks, LANDMARKS.RIGHT_SHOULDER),
-        safeGet(landmarks, LANDMARKS.RIGHT_ELBOW),
-        safeGet(landmarks, LANDMARKS.RIGHT_WRIST)
-      );
-      return { x: clamp(flexion, 0, 2.5), y: 0, z: 0 };
+      const isLeft = joint === 'leftElbow';
+      const actualJoint = mirrorMode ? (isLeft ? 'rightElbow' : 'leftElbow') : joint;
+      const sIdx = actualJoint === 'leftElbow' ? LANDMARKS.LEFT_SHOULDER : LANDMARKS.RIGHT_SHOULDER;
+      const eIdx = actualJoint === 'leftElbow' ? LANDMARKS.LEFT_ELBOW : LANDMARKS.RIGHT_ELBOW;
+      const wIdx = actualJoint === 'leftElbow' ? LANDMARKS.LEFT_WRIST : LANDMARKS.RIGHT_WRIST;
+      if (!hasVisibleLandmarks(landmarks, [sIdx, eIdx, wIdx], 0.15)) return null;
+      const angleFromVertical = calculateJointFlexion(safeGet(landmarks, sIdx), safeGet(landmarks, eIdx), safeGet(landmarks, wIdx));
+      return { x: clamp(angleFromVertical, 0, 2.5), y: 0, z: 0 };
     }
-    case 'leftElbow': {
-      if (!hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.LEFT_ELBOW, LANDMARKS.LEFT_WRIST], 0.15)) return null;
-      const flexion = calculateJointFlexion(
-        safeGet(landmarks, LANDMARKS.LEFT_SHOULDER),
-        safeGet(landmarks, LANDMARKS.LEFT_ELBOW),
-        safeGet(landmarks, LANDMARKS.LEFT_WRIST)
-      );
-      return { x: clamp(flexion, 0, 2.5), y: 0, z: 0 };
-    }
+    case 'leftHip':
     case 'rightHip': {
-      if (!hasVisibleLandmarks(landmarks, [LANDMARKS.RIGHT_HIP, LANDMARKS.RIGHT_KNEE], 0.15)) return null;
-      const rh = safeGet(landmarks, LANDMARKS.RIGHT_HIP);
-      const rk = safeGet(landmarks, LANDMARKS.RIGHT_KNEE);
-      const thigh = normalize(createVector(rh, rk));
-      const flexion = Math.atan2(thigh.z * 0.3, -thigh.y);
-      const abduction = Math.atan2(-thigh.x, -thigh.y);
-      return { x: clamp(flexion, -0.5, 2.0), y: 0, z: clamp(abduction, -0.3, 0.8) };
+      const isLeft = joint === 'leftHip';
+      const actualJoint = mirrorMode ? (isLeft ? 'rightHip' : 'leftHip') : joint;
+      const hIdx = actualJoint === 'leftHip' ? LANDMARKS.LEFT_HIP : LANDMARKS.RIGHT_HIP;
+      const kIdx = actualJoint === 'leftHip' ? LANDMARKS.LEFT_KNEE : LANDMARKS.RIGHT_KNEE;
+      if (!hasVisibleLandmarks(landmarks, [hIdx, kIdx], 0.15)) return null;
+      const thigh = normalize(createVector(safeGet(landmarks, hIdx), safeGet(landmarks, kIdx)));
+      const hipFlex = Math.atan2(thigh.z * 0.3, -thigh.y);
+      const isActualLeft = actualJoint === 'leftHip';
+      const hipAbd = isActualLeft
+        ? Math.atan2(thigh.x, -thigh.y)
+        : Math.atan2(-thigh.x, -thigh.y);
+      return { x: clamp(hipFlex, -0.5, 2.0), y: 0, z: clamp(hipAbd, -0.3, 0.8) };
     }
-    case 'leftHip': {
-      if (!hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_HIP, LANDMARKS.LEFT_KNEE], 0.15)) return null;
-      const lh = safeGet(landmarks, LANDMARKS.LEFT_HIP);
-      const lk = safeGet(landmarks, LANDMARKS.LEFT_KNEE);
-      const thigh = normalize(createVector(lh, lk));
-      const flexion = Math.atan2(thigh.z * 0.3, -thigh.y);
-      const abduction = Math.atan2(thigh.x, -thigh.y);
-      return { x: clamp(flexion, -0.5, 2.0), y: 0, z: clamp(abduction, -0.3, 0.8) };
-    }
+    case 'leftKnee':
     case 'rightKnee': {
-      if (hasVisibleLandmarks(landmarks, [LANDMARKS.RIGHT_HIP, LANDMARKS.RIGHT_KNEE, LANDMARKS.RIGHT_ANKLE], 0.15)) {
-        const flexion = calculateJointFlexion(
-          safeGet(landmarks, LANDMARKS.RIGHT_HIP),
-          safeGet(landmarks, LANDMARKS.RIGHT_KNEE),
-          safeGet(landmarks, LANDMARKS.RIGHT_ANKLE)
-        );
-        return { x: clamp(flexion, 0, 2.5), y: 0, z: 0 };
-      }
-      if (hasVisibleLandmarks(landmarks, [LANDMARKS.RIGHT_KNEE, LANDMARKS.RIGHT_ANKLE], 0.15)) {
-        const shin = normalize(createVector(
-          safeGet(landmarks, LANDMARKS.RIGHT_KNEE),
-          safeGet(landmarks, LANDMARKS.RIGHT_ANKLE)
-        ));
-        const angleFromVertical = Math.acos(Math.max(-1, Math.min(1, -shin.y)));
-        return { x: clamp(angleFromVertical, 0, 2.5), y: 0, z: 0 };
-      }
-      return null;
-    }
-    case 'leftKnee': {
-      if (hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_HIP, LANDMARKS.LEFT_KNEE, LANDMARKS.LEFT_ANKLE], 0.15)) {
-        const flexion = calculateJointFlexion(
-          safeGet(landmarks, LANDMARKS.LEFT_HIP),
-          safeGet(landmarks, LANDMARKS.LEFT_KNEE),
-          safeGet(landmarks, LANDMARKS.LEFT_ANKLE)
-        );
-        return { x: clamp(flexion, 0, 2.5), y: 0, z: 0 };
-      }
-      if (hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_KNEE, LANDMARKS.LEFT_ANKLE], 0.15)) {
-        const shin = normalize(createVector(
-          safeGet(landmarks, LANDMARKS.LEFT_KNEE),
-          safeGet(landmarks, LANDMARKS.LEFT_ANKLE)
-        ));
-        const angleFromVertical = Math.acos(Math.max(-1, Math.min(1, -shin.y)));
-        return { x: clamp(angleFromVertical, 0, 2.5), y: 0, z: 0 };
-      }
-      return null;
+      const isLeft = joint === 'leftKnee';
+      const actualJoint = mirrorMode ? (isLeft ? 'rightKnee' : 'leftKnee') : joint;
+      const hIdx = actualJoint === 'leftKnee' ? LANDMARKS.LEFT_HIP : LANDMARKS.RIGHT_HIP;
+      const kIdx = actualJoint === 'leftKnee' ? LANDMARKS.LEFT_KNEE : LANDMARKS.RIGHT_KNEE;
+      const aIdx = actualJoint === 'leftKnee' ? LANDMARKS.LEFT_ANKLE : LANDMARKS.RIGHT_ANKLE;
+      if (!hasVisibleLandmarks(landmarks, [hIdx, kIdx, aIdx], 0.15)) return null;
+      const angleFromVertical = calculateJointFlexion(safeGet(landmarks, hIdx), safeGet(landmarks, kIdx), safeGet(landmarks, aIdx));
+      return { x: clamp(angleFromVertical, 0, 2.5), y: 0, z: 0 };
     }
     case 'spine': {
       if (!hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.RIGHT_SHOULDER, LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP], 0.15)) {
@@ -808,33 +749,67 @@ function computeJointFromPartial(
       const rs = safeGet(landmarks, LANDMARKS.RIGHT_SHOULDER);
       const lh = safeGet(landmarks, LANDMARKS.LEFT_HIP);
       const rh = safeGet(landmarks, LANDMARKS.RIGHT_HIP);
-      const shoulderMid: Vec3 = { x: (ls.x + rs.x) / 2, y: -((ls.y + rs.y) / 2), z: -((ls.z + rs.z) / 2) };
-      const hipMid: Vec3 = { x: (lh.x + rh.x) / 2, y: -((lh.y + rh.y) / 2), z: -((lh.z + rh.z) / 2) };
-      const shoulderTilt = Math.atan2(-(rs.y - ls.y), rs.x - ls.x);
-      const hipTilt = Math.atan2(-(rh.y - lh.y), rh.x - lh.x);
-      const lateral = shoulderTilt - hipTilt;
-      const forward = Math.atan2(-(shoulderMid.z - hipMid.z), shoulderMid.y - hipMid.y);
+      const sMid: Vec3 = { x: (ls.x + rs.x) / 2, y: -((ls.y + rs.y) / 2), z: -((ls.z + rs.z) / 2) };
+      const hMid: Vec3 = { x: (lh.x + rh.x) / 2, y: -((lh.y + rh.y) / 2), z: -((lh.z + rh.z) / 2) };
+      const sTilt = Math.atan2(-(rs.y - ls.y), rs.x - ls.x);
+      const hTilt = Math.atan2(-(rh.y - lh.y), rh.x - lh.x);
+      const lateral = sTilt - hTilt;
+      const forward = Math.atan2(-(sMid.z - hMid.z), sMid.y - hMid.y);
       return { x: clamp(forward, -0.8, 0.8), y: 0, z: clamp(lateral, -0.5, 0.5) };
     }
     case 'neck': {
       if (!hasVisibleLandmarks(landmarks, [LANDMARKS.NOSE], 0.1)) return null;
-      const nose = safeGet(landmarks, LANDMARKS.NOSE);
-      const leftEar = safeGet(landmarks, LANDMARKS.LEFT_EAR);
-      const rightEar = safeGet(landmarks, LANDMARKS.RIGHT_EAR);
-      const leftEye = safeGet(landmarks, LANDMARKS.LEFT_EYE);
-      const rightEye = safeGet(landmarks, LANDMARKS.RIGHT_EYE);
-      const earVis = hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_EAR, LANDMARKS.RIGHT_EAR], 0.05);
-      const eyeVis = hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_EYE, LANDMARKS.RIGHT_EYE], 0.05);
-      if (!earVis && !eyeVis) return null;
-      const earVector = earVis ? createVector(leftEar, rightEar) : createVector(leftEye, rightEye);
-      const headYaw = Math.atan2(earVector.z, Math.abs(earVector.x) || 0.01) * 1.5;
-      const headRoll = Math.atan2(earVector.y, Math.abs(earVector.x) || 0.01);
-      const eyeMidY = -(leftEye.y + rightEye.y) / 2;
-      const noseY = -nose.y;
-      const eyeMidZ = -(leftEye.z + rightEye.z) / 2;
-      const noseZ = -nose.z;
-      const headPitch = Math.atan2(noseY - eyeMidY, Math.abs(noseZ - eyeMidZ) + 0.01) - 0.3;
-      return { x: clamp(headPitch, -0.6, 0.6), y: clamp(headYaw, -0.8, 0.8), z: clamp(headRoll, -0.5, 0.5) };
+      const noseL = safeGet(landmarks, LANDMARKS.NOSE);
+      const leftEarL = safeGet(landmarks, LANDMARKS.LEFT_EAR);
+      const rightEarL = safeGet(landmarks, LANDMARKS.RIGHT_EAR);
+      const leftEyeL = safeGet(landmarks, LANDMARKS.LEFT_EYE);
+      const rightEyeL = safeGet(landmarks, LANDMARKS.RIGHT_EYE);
+      const earVisL = hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_EAR, LANDMARKS.RIGHT_EAR], 0.05);
+      const eyeVisL = hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_EYE, LANDMARKS.RIGHT_EYE], 0.05);
+      if (!earVisL && !eyeVisL) return null;
+
+      const earVecL = earVisL ? createVector(leftEarL, rightEarL) : createVector(leftEyeL, rightEyeL);
+      const earConfL = getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_EAR, LANDMARKS.RIGHT_EAR]);
+
+      const leftShoulderL = safeGet(landmarks, LANDMARKS.LEFT_SHOULDER);
+      const rightShoulderL = safeGet(landmarks, LANDMARKS.RIGHT_SHOULDER);
+      const earYawL = Math.atan2(earVecL.z, Math.abs(earVecL.x) || 0.01) * 1.5;
+      const lSToEar = createVector(leftShoulderL, leftEarL);
+      const rSToEar = createVector(rightShoulderL, rightEarL);
+      const sEarYawL = Math.atan2(
+        rSToEar.z - lSToEar.z,
+        (Math.abs(lSToEar.x) + Math.abs(rSToEar.x)) || 0.01
+      ) * 1.2;
+      const earWL = Math.min(earConfL / 0.7, 1.0);
+      const yawL = earWL * earYawL + (1 - earWL) * sEarYawL;
+
+      const eyeVecL = createVector(leftEyeL, rightEyeL);
+      const earRollL = Math.atan2(earVecL.y, Math.abs(earVecL.x) || 0.01);
+      const eyeRollL = Math.atan2(eyeVecL.y, Math.abs(eyeVecL.x) || 0.01);
+      const rollL = earConfL > 0.5 ? earRollL * 0.7 + eyeRollL * 0.3 : eyeRollL;
+
+      const sMidRawL: Vec3 = {
+        x: (leftShoulderL.x + rightShoulderL.x) / 2,
+        y: (leftShoulderL.y + rightShoulderL.y) / 2,
+        z: (leftShoulderL.z + rightShoulderL.z) / 2
+      };
+      const nosePtL: Vec3 = { x: noseL.x, y: -noseL.y, z: -noseL.z };
+      const sMidPtL: Vec3 = { x: sMidRawL.x, y: -sMidRawL.y, z: -sMidRawL.z };
+      const nToSVec: Vec3 = {
+        x: nosePtL.x - sMidPtL.x,
+        y: nosePtL.y - sMidPtL.y,
+        z: nosePtL.z - sMidPtL.z
+      };
+      const nsP = Math.atan2(nToSVec.z, nToSVec.y);
+      const eMidYL = -(leftEyeL.y + rightEyeL.y) / 2;
+      const nYL = -noseL.y;
+      const eMidZL = -(leftEyeL.z + rightEyeL.z) / 2;
+      const nZL = -noseL.z;
+      const neP = Math.atan2(nYL - eMidYL, Math.abs(nZL - eMidZL) + 0.01) - 0.3;
+      const noseConfL = getLandmarkConfidence(landmarks, [LANDMARKS.NOSE]);
+      const pitchL = noseConfL > 0.6 ? nsP * 0.4 + neP * 0.6 : neP;
+
+      return { x: clamp(pitchL, -0.6, 0.6), y: clamp(yawL, -0.8, 0.8), z: clamp(rollL, -0.5, 0.5) };
     }
     case 'leftWrist': {
       if (!hasVisibleLandmarks(landmarks, [LANDMARKS.LEFT_ELBOW, LANDMARKS.LEFT_WRIST, LANDMARKS.LEFT_INDEX], 0.15)) return null;

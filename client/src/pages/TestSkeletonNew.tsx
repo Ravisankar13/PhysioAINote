@@ -1634,9 +1634,21 @@ export default function TestSkeletonNew() {
                 variant={showCameraCapture ? "default" : "outline"}
                 size="sm"
                 onClick={() => {
-                  setShowCameraCapture(!showCameraCapture);
-                  if (showCameraCapture) {
+                  const willShow = !showCameraCapture;
+                  setShowCameraCapture(willShow);
+                  if (!willShow) {
                     setLivePose(null);
+                  } else {
+                    const zero = { x: 0, y: 0, z: 0 };
+                    setLivePose({
+                      spine: zero, neck: zero,
+                      leftShoulder: zero, rightShoulder: zero,
+                      leftElbow: zero, rightElbow: zero,
+                      leftHip: zero, rightHip: zero,
+                      leftKnee: zero, rightKnee: zero,
+                      leftWrist: zero, rightWrist: zero,
+                      leftAnkle: zero, rightAnkle: zero,
+                    });
                   }
                 }}
                 className={showCameraCapture ? "bg-purple-600 hover:bg-purple-700" : ""}

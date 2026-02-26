@@ -4814,23 +4814,17 @@ export default function PureThreeGLBViewer({
       const initial = initialRotations[boneName];
       if (!bone || !initial) return;
 
-      const initialQuat = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+      const adductDelta = Math.PI / 2 - abduction;
+
+      const step1 = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(initial.x, initial.y + adductDelta, initial.z, 'XYZ')
       );
 
-      const axisY = new THREE.Vector3(0, 1, 0).applyQuaternion(initialQuat).normalize();
-      const axisZ = new THREE.Vector3(0, 0, 1).applyQuaternion(initialQuat).normalize();
+      const qFlexLocal = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 0, 1), flexion
+      );
 
-      const abductAngle = (abduction - Math.PI / 2) * (-1);
-      const qAbduct = new THREE.Quaternion().setFromAxisAngle(axisY, abductAngle);
-
-      const flexAxis = axisZ.clone().applyQuaternion(qAbduct).normalize();
-      const flexAngle = flexion * 1;
-      const qFlex = new THREE.Quaternion().setFromAxisAngle(flexAxis, flexAngle);
-
-      const targetQuat = new THREE.Quaternion()
-        .multiplyQuaternions(qFlex, qAbduct)
-        .multiply(initialQuat);
+      const targetQuat = step1.clone().multiply(qFlexLocal);
       const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
 
       bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);

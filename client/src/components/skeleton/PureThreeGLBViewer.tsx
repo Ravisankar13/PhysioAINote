@@ -1766,7 +1766,7 @@ export default function PureThreeGLBViewer({
   const animationProgressRef = useRef<{ callback: ((p: number) => void) | undefined; lastReport: number }>({ callback: onAnimationProgress, lastReport: 0 });
   animationProgressRef.current.callback = onAnimationProgress;
   const livePoseActiveRef = useRef<boolean>(false);
-  const defaultShoulderAnglesRef = useRef<{ left: { flexionRad: number; abductionRad: number; intRotRad: number }; right: { flexionRad: number; abductionRad: number; intRotRad: number } } | null>(null);
+  const defaultShoulderAnglesRef = useRef<{ left: { flexionRad: number; abductionRad: number; intRotRad: number; extRotRad: number; retroversionRad: number }; right: { flexionRad: number; abductionRad: number; intRotRad: number; extRotRad: number; retroversionRad: number } } | null>(null);
   const animationPlayingRef = useRef<boolean>(false);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
@@ -4706,44 +4706,61 @@ export default function PureThreeGLBViewer({
     // Convert raw pose to controller-compatible values
     const controllerValues = poseToControllerValues(livePose);
     
-    // Map controller values to BONE_MAPPING keys (values in radians, matching slider behavior)
-    // NOTE: Shoulder flexion/abduction are handled separately below using world-axis rotations
-    // to avoid Euler axis coupling (combining -PI/2 T-pose offset with flexion in one Euler
-    // causes flexion to act as abduction because the local Z axis rotates with the Y correction)
+    if (!defaultShoulderAnglesRef.current) {
+      const lShoulder = modelConfig?.leftShoulder as any;
+      const rShoulder = modelConfig?.rightShoulder as any;
+      defaultShoulderAnglesRef.current = {
+        left: {
+          flexionRad: ((lShoulder?.flexion ?? -75) * Math.PI) / 180,
+          abductionRad: ((lShoulder?.abduction ?? -31) * Math.PI) / 180,
+          intRotRad: ((lShoulder?.internalRotation ?? 0) * Math.PI) / 180,
+          extRotRad: ((lShoulder?.externalRotation ?? 0) * Math.PI) / 180,
+          retroversionRad: ((lShoulder?.retroversion ?? 0) * Math.PI) / 180,
+        },
+        right: {
+          flexionRad: ((rShoulder?.flexion ?? 75) * Math.PI) / 180,
+          abductionRad: ((rShoulder?.abduction ?? -30) * Math.PI) / 180,
+          intRotRad: ((rShoulder?.internalRotation ?? 0) * Math.PI) / 180,
+          extRotRad: ((rShoulder?.externalRotation ?? 0) * Math.PI) / 180,
+          retroversionRad: ((rShoulder?.retroversion ?? 0) * Math.PI) / 180,
+        },
+      };
+    }
+    const shoulderDefaults = defaultShoulderAnglesRef.current;
+
     const livePoseConfig: { [key: string]: number } = {
-      // Elbows - flexion only
+      'leftShoulder.flexion': shoulderDefaults.left.flexionRad + controllerValues.leftShoulder.flexion,
+      'leftShoulder.abduction': shoulderDefaults.left.abductionRad + controllerValues.leftShoulder.abduction,
+      'leftShoulder.internalRotation': shoulderDefaults.left.intRotRad + controllerValues.leftShoulder.internalRotation,
+      'leftShoulder.externalRotation': shoulderDefaults.left.extRotRad,
+      'leftShoulder.retroversion': shoulderDefaults.left.retroversionRad,
+      'rightShoulder.flexion': shoulderDefaults.right.flexionRad + controllerValues.rightShoulder.flexion,
+      'rightShoulder.abduction': shoulderDefaults.right.abductionRad + controllerValues.rightShoulder.abduction,
+      'rightShoulder.internalRotation': shoulderDefaults.right.intRotRad + controllerValues.rightShoulder.internalRotation,
+      'rightShoulder.externalRotation': shoulderDefaults.right.extRotRad,
+      'rightShoulder.retroversion': shoulderDefaults.right.retroversionRad,
       'leftElbow.flexion': controllerValues.leftElbow.flexion,
       'rightElbow.flexion': controllerValues.rightElbow.flexion,
-      // Hips - flexion and abduction
       'leftHip.flexion': controllerValues.leftHip.flexion,
       'leftHip.abduction': controllerValues.leftHip.abduction,
       'rightHip.flexion': controllerValues.rightHip.flexion,
       'rightHip.abduction': controllerValues.rightHip.abduction,
-      // Knees - flexion only
       'leftKnee.flexion': controllerValues.leftKnee.flexion,
       'rightKnee.flexion': controllerValues.rightKnee.flexion,
-      // Ankles - dorsiflexion/plantarflexion
       'leftAnkle.dorsiflexion': controllerValues.leftAnkle.dorsiflexion,
       'rightAnkle.dorsiflexion': controllerValues.rightAnkle.dorsiflexion,
-      // Wrists - flexion/extension
       'leftWrist.flexion': controllerValues.leftWrist.flexion,
       'rightWrist.flexion': controllerValues.rightWrist.flexion,
-      // Pelvis
       'pelvis.tilt': controllerValues.pelvis.tilt,
       'pelvis.obliquity': controllerValues.pelvis.obliquity,
-      // Spine - forward/lateral bending distributed across spine bones
       'spine.flexion': controllerValues.spine.flexion,
       'spine.lateralFlexion': controllerValues.spine.lateralFlexion,
-      // Neck - yaw/pitch/roll for head tracking
       'neck.flexion': controllerValues.neck.flexion,
       'neck.rotation': controllerValues.neck.rotation,
       'neck.lateralFlexion': controllerValues.neck.lateralFlexion,
     };
     
-    // Track rotation deltas per bone (same approach as slider system)
     const boneRotationDeltas: { [boneName: string]: { x: number; y: number; z: number } } = {};
-    
-    // Process each live pose config through BONE_MAPPING
     const customAxisAccum: { [boneName: string]: { axis: THREE.Vector3; angle: number } } = {};
     
     Object.entries(livePoseConfig).forEach(([configKey, value]) => {
@@ -4788,78 +4805,8 @@ export default function PureThreeGLBViewer({
       boneRotationDeltas[boneName].z += resultEuler.z - initial.z;
     });
     
-    // Bones that are handled by the animation loop (need rotations stored in sliderRotationsRef)
     const animationLoopBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);
-    
-    const quaternionComposeBones = new Set(['Hip_L', 'Hip_R']);
-
-    if (!defaultShoulderAnglesRef.current && modelConfig) {
-      const lShoulder = modelConfig.leftShoulder as any;
-      const rShoulder = modelConfig.rightShoulder as any;
-      defaultShoulderAnglesRef.current = {
-        left: {
-          flexionRad: ((lShoulder?.flexion || 0) * Math.PI) / 180,
-          abductionRad: ((lShoulder?.abduction || 0) * Math.PI) / 180,
-          intRotRad: ((lShoulder?.internalRotation || 0) * Math.PI) / 180,
-        },
-        right: {
-          flexionRad: ((rShoulder?.flexion || 0) * Math.PI) / 180,
-          abductionRad: ((rShoulder?.abduction || 0) * Math.PI) / 180,
-          intRotRad: ((rShoulder?.internalRotation || 0) * Math.PI) / 180,
-        },
-      };
-    }
-
-    const defaults = defaultShoulderAnglesRef.current;
-    if (defaults) {
-      const shoulderConfigs = [
-        { boneName: 'Shoulder_L', rotBoneName: 'ShoulderPart1_L',
-          cameraFlexion: controllerValues.leftShoulder.flexion,
-          cameraAbduction: controllerValues.leftShoulder.abduction,
-          cameraIntRot: controllerValues.leftShoulder.internalRotation,
-          defaultAngles: defaults.left,
-          intRotScale: -1 },
-        { boneName: 'Shoulder_R', rotBoneName: 'ShoulderPart1_R',
-          cameraFlexion: controllerValues.rightShoulder.flexion,
-          cameraAbduction: controllerValues.rightShoulder.abduction,
-          cameraIntRot: controllerValues.rightShoulder.internalRotation,
-          defaultAngles: defaults.right,
-          intRotScale: 1 },
-      ];
-
-      shoulderConfigs.forEach(({ boneName, rotBoneName, cameraFlexion, cameraAbduction, cameraIntRot, defaultAngles, intRotScale }) => {
-        const bone = bones[boneName] as THREE.Bone;
-        const initial = initialRotations[boneName];
-        if (!bone || !initial) return;
-
-        const rawDeltaY = (defaultAngles.abductionRad + cameraAbduction) * (-1);
-        const rawDeltaZ = (defaultAngles.flexionRad + cameraFlexion) * 1;
-
-        const initialQuat = new THREE.Quaternion().setFromEuler(
-          new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
-        );
-        const deltaQuat = new THREE.Quaternion().setFromEuler(
-          new THREE.Euler(0, rawDeltaY, rawDeltaZ, 'XYZ')
-        );
-        const targetQuat = initialQuat.clone().multiply(deltaQuat);
-        const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
-
-        bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
-        sliderRotationsRef.current[boneName] = {
-          x: targetEuler.x - initial.x,
-          y: targetEuler.y - initial.y,
-          z: targetEuler.z - initial.z
-        };
-
-        const rotBone = bones[rotBoneName] as THREE.Bone;
-        const rotInitial = initialRotations[rotBoneName];
-        if (rotBone && rotInitial) {
-          const totalIntRot = (defaultAngles.intRotRad + cameraIntRot) * intRotScale;
-          rotBone.rotation.set(rotInitial.x + totalIntRot, rotInitial.y, rotInitial.z);
-          sliderRotationsRef.current[rotBoneName] = { x: totalIntRot, y: 0, z: 0 };
-        }
-      });
-    }
+    const quaternionComposeBones = new Set(['Hip_L', 'Hip_R', 'Shoulder_L', 'Shoulder_R']);
 
     Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
       const bone = bones[boneName] as THREE.Bone;
@@ -4876,8 +4823,20 @@ export default function PureThreeGLBViewer({
         const targetQuat = initialQuat.clone().multiply(deltaQuat);
         const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
         bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
+        if (animationLoopBones.has(boneName)) {
+          sliderRotationsRef.current[boneName] = {
+            x: targetEuler.x - initial.x,
+            y: targetEuler.y - initial.y,
+            z: targetEuler.z - initial.z
+          };
+        }
       } else if (animationLoopBones.has(boneName)) {
-        // Skip — shoulder bones handled above
+        bone.rotation.set(
+          initial.x + delta.x,
+          initial.y + delta.y,
+          initial.z + delta.z
+        );
+        sliderRotationsRef.current[boneName] = { x: delta.x, y: delta.y, z: delta.z };
       } else {
         bone.rotation.set(
           initial.x + delta.x,

@@ -1766,7 +1766,7 @@ export default function PureThreeGLBViewer({
   const animationProgressRef = useRef<{ callback: ((p: number) => void) | undefined; lastReport: number }>({ callback: onAnimationProgress, lastReport: 0 });
   animationProgressRef.current.callback = onAnimationProgress;
   const livePoseActiveRef = useRef<boolean>(false);
-  const defaultShoulderRotRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } } | null>(null);
+  const defaultShoulderAnglesRef = useRef<{ left: { flexionRad: number; abductionRad: number; intRotRad: number }; right: { flexionRad: number; abductionRad: number; intRotRad: number } } | null>(null);
   const animationPlayingRef = useRef<boolean>(false);
   const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
   const highlightedMeshesRef = useRef<Map<string, { mesh: THREE.Mesh; originalEmissive: THREE.Color; originalIntensity: number }[]>>(new Map());
@@ -4793,54 +4793,73 @@ export default function PureThreeGLBViewer({
     
     const quaternionComposeBones = new Set(['Hip_L', 'Hip_R']);
 
-    if (!defaultShoulderRotRef.current) {
-      const shoulderBones = ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'];
-      defaultShoulderRotRef.current = {};
-      shoulderBones.forEach(name => {
-        const rot = sliderRotationsRef.current[name];
-        defaultShoulderRotRef.current![name] = rot ? { ...rot } : { x: 0, y: 0, z: 0 };
-      });
+    if (!defaultShoulderAnglesRef.current && modelConfig) {
+      const lShoulder = modelConfig.leftShoulder as any;
+      const rShoulder = modelConfig.rightShoulder as any;
+      defaultShoulderAnglesRef.current = {
+        left: {
+          flexionRad: ((lShoulder?.flexion || 0) * Math.PI) / 180,
+          abductionRad: ((lShoulder?.abduction || 0) * Math.PI) / 180,
+          intRotRad: ((lShoulder?.internalRotation || 0) * Math.PI) / 180,
+        },
+        right: {
+          flexionRad: ((rShoulder?.flexion || 0) * Math.PI) / 180,
+          abductionRad: ((rShoulder?.abduction || 0) * Math.PI) / 180,
+          intRotRad: ((rShoulder?.internalRotation || 0) * Math.PI) / 180,
+        },
+      };
     }
 
-    const shoulderConfigs = [
-      { boneName: 'Shoulder_L', rotBoneName: 'ShoulderPart1_L',
-        flexion: controllerValues.leftShoulder.flexion,
-        abduction: controllerValues.leftShoulder.abduction,
-        internalRotation: controllerValues.leftShoulder.internalRotation,
-        rotationScale: -1 },
-      { boneName: 'Shoulder_R', rotBoneName: 'ShoulderPart1_R',
-        flexion: controllerValues.rightShoulder.flexion,
-        abduction: controllerValues.rightShoulder.abduction,
-        internalRotation: controllerValues.rightShoulder.internalRotation,
-        rotationScale: 1 },
-    ];
+    const defaults = defaultShoulderAnglesRef.current;
+    if (defaults) {
+      const shoulderConfigs = [
+        { boneName: 'Shoulder_L', rotBoneName: 'ShoulderPart1_L',
+          cameraFlexion: controllerValues.leftShoulder.flexion,
+          cameraAbduction: controllerValues.leftShoulder.abduction,
+          cameraIntRot: controllerValues.leftShoulder.internalRotation,
+          defaultAngles: defaults.left,
+          intRotScale: -1 },
+        { boneName: 'Shoulder_R', rotBoneName: 'ShoulderPart1_R',
+          cameraFlexion: controllerValues.rightShoulder.flexion,
+          cameraAbduction: controllerValues.rightShoulder.abduction,
+          cameraIntRot: controllerValues.rightShoulder.internalRotation,
+          defaultAngles: defaults.right,
+          intRotScale: 1 },
+      ];
 
-    shoulderConfigs.forEach(({ boneName, rotBoneName, flexion, abduction, internalRotation, rotationScale }) => {
-      const bone = bones[boneName] as THREE.Bone;
-      const initial = initialRotations[boneName];
-      const defaultRot = defaultShoulderRotRef.current![boneName];
-      if (!bone || !initial || !defaultRot) return;
+      shoulderConfigs.forEach(({ boneName, rotBoneName, cameraFlexion, cameraAbduction, cameraIntRot, defaultAngles, intRotScale }) => {
+        const bone = bones[boneName] as THREE.Bone;
+        const initial = initialRotations[boneName];
+        if (!bone || !initial) return;
 
-      const totalX = initial.x + defaultRot.x;
-      const totalY = initial.y + defaultRot.y + abduction * (-1);
-      const totalZ = initial.z + defaultRot.z + flexion * 1;
+        const rawDeltaY = (defaultAngles.abductionRad + cameraAbduction) * (-1);
+        const rawDeltaZ = (defaultAngles.flexionRad + cameraFlexion) * 1;
 
-      bone.rotation.set(totalX, totalY, totalZ);
-      sliderRotationsRef.current[boneName] = {
-        x: totalX - initial.x,
-        y: totalY - initial.y,
-        z: totalZ - initial.z
-      };
+        const initialQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+        );
+        const deltaQuat = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(0, rawDeltaY, rawDeltaZ, 'XYZ')
+        );
+        const targetQuat = initialQuat.clone().multiply(deltaQuat);
+        const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
 
-      const rotBone = bones[rotBoneName] as THREE.Bone;
-      const rotInitial = initialRotations[rotBoneName];
-      const defaultRotPart = defaultShoulderRotRef.current![rotBoneName];
-      if (rotBone && rotInitial && defaultRotPart) {
-        const rotAngle = defaultRotPart.x + internalRotation * rotationScale;
-        rotBone.rotation.set(rotInitial.x + rotAngle, rotInitial.y + defaultRotPart.y, rotInitial.z + defaultRotPart.z);
-        sliderRotationsRef.current[rotBoneName] = { x: rotAngle, y: defaultRotPart.y, z: defaultRotPart.z };
-      }
-    });
+        bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
+        sliderRotationsRef.current[boneName] = {
+          x: targetEuler.x - initial.x,
+          y: targetEuler.y - initial.y,
+          z: targetEuler.z - initial.z
+        };
+
+        const rotBone = bones[rotBoneName] as THREE.Bone;
+        const rotInitial = initialRotations[rotBoneName];
+        if (rotBone && rotInitial) {
+          const totalIntRot = (defaultAngles.intRotRad + cameraIntRot) * intRotScale;
+          rotBone.rotation.set(rotInitial.x + totalIntRot, rotInitial.y, rotInitial.z);
+          sliderRotationsRef.current[rotBoneName] = { x: totalIntRot, y: 0, z: 0 };
+        }
+      });
+    }
 
     Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
       const bone = bones[boneName] as THREE.Bone;
@@ -5217,7 +5236,7 @@ export default function PureThreeGLBViewer({
   useEffect(() => {
     livePoseActiveRef.current = livePose !== null;
     if (livePose === null) {
-      defaultShoulderRotRef.current = null;
+      defaultShoulderAnglesRef.current = null;
     }
   }, [livePose]);
 

@@ -4812,25 +4812,21 @@ export default function PureThreeGLBViewer({
     shoulderConfigs.forEach(({ boneName, rotBoneName, flexion, abduction, internalRotation, abductionScale, rotationScale }) => {
       const bone = bones[boneName] as THREE.Bone;
       const initial = initialRotations[boneName];
-      if (!bone || !initial || !bone.parent) return;
+      if (!bone || !initial) return;
 
       const initialQuat = new THREE.Quaternion().setFromEuler(
         new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
       );
 
-      bone.parent.updateWorldMatrix(true, false);
-      const parentWorldQ = new THREE.Quaternion();
-      bone.parent.getWorldQuaternion(parentWorldQ);
-      const parentWorldQInv = parentWorldQ.clone().invert();
+      const axisY = new THREE.Vector3(0, 1, 0).applyQuaternion(initialQuat).normalize();
+      const axisZ = new THREE.Vector3(0, 0, 1).applyQuaternion(initialQuat).normalize();
 
-      const totalAbduction = (abduction - Math.PI / 2) * abductionScale;
-      const worldAbductionAxis = new THREE.Vector3(0, 1, 0);
-      const localAbductionAxis = worldAbductionAxis.clone().applyQuaternion(parentWorldQInv).normalize();
-      const qAbduct = new THREE.Quaternion().setFromAxisAngle(localAbductionAxis, totalAbduction);
+      const abductAngle = (abduction - Math.PI / 2) * (-1);
+      const qAbduct = new THREE.Quaternion().setFromAxisAngle(axisY, abductAngle);
 
-      const worldFlexionAxis = new THREE.Vector3(0, 0, -1);
-      const localFlexionAxis = worldFlexionAxis.clone().applyQuaternion(parentWorldQInv).normalize();
-      const qFlex = new THREE.Quaternion().setFromAxisAngle(localFlexionAxis, flexion);
+      const flexAxis = axisZ.clone().applyQuaternion(qAbduct).normalize();
+      const flexAngle = flexion * 1;
+      const qFlex = new THREE.Quaternion().setFromAxisAngle(flexAxis, flexAngle);
 
       const targetQuat = new THREE.Quaternion()
         .multiplyQuaternions(qFlex, qAbduct)

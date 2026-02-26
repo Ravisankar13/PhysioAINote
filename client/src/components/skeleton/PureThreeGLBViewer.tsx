@@ -1762,6 +1762,8 @@ export default function PureThreeGLBViewer({
   const muscleLayerManagerRef = useRef<MuscleLayerManager | null>(null);
   const muscleMeshesRef = useRef<THREE.Object3D[]>([]);
   const splitMuscleGroupsRef = useRef<Map<string, SplitMuscleGroup>>(new Map());
+  const muscleHitProxiesRef = useRef<{ mesh: THREE.Mesh; groupId: string }[]>([]);
+  const muscleGroupCentersRef = useRef<Map<string, THREE.Vector3>>(new Map());
   const animationConstraintsRef = useRef<AnimationConstraint[]>([]);
   const animationProgressRef = useRef<{ callback: ((p: number) => void) | undefined; lastReport: number }>({ callback: onAnimationProgress, lastReport: 0 });
   animationProgressRef.current.callback = onAnimationProgress;
@@ -4262,6 +4264,69 @@ export default function PureThreeGLBViewer({
                     setMuscleGroupVisibility(groups, id, visible);
                   });
                 }
+
+                muscleHitProxiesRef.current.forEach(p => {
+                  p.mesh.geometry.dispose();
+                  if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+                });
+                muscleHitProxiesRef.current = [];
+                muscleGroupCentersRef.current.clear();
+
+                groups.forEach((group, groupId) => {
+                  if (groupId === 'other' || group.meshes.length === 0) return;
+
+                  const combinedBox = new THREE.Box3();
+                  for (const mesh of group.meshes) {
+                    mesh.updateWorldMatrix(true, false);
+                    const meshBox = new THREE.Box3().setFromObject(mesh);
+                    combinedBox.union(meshBox);
+                  }
+
+                  if (combinedBox.isEmpty()) return;
+
+                  const center = new THREE.Vector3();
+                  const size = new THREE.Vector3();
+                  combinedBox.getCenter(center);
+                  combinedBox.getSize(size);
+
+                  muscleGroupCentersRef.current.set(groupId, center.clone());
+
+                  const padding = 0.35;
+                  const expandedSize = new THREE.Vector3(
+                    Math.max(size.x * 1.4, size.x + padding),
+                    Math.max(size.y * 1.4, size.y + padding),
+                    Math.max(size.z * 1.4, size.z + padding)
+                  );
+
+                  const proxyGeo = new THREE.BoxGeometry(expandedSize.x, expandedSize.y, expandedSize.z);
+                  const proxyMat = new THREE.MeshBasicMaterial({
+                    transparent: true,
+                    opacity: 0,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                  });
+                  const proxyMesh = new THREE.Mesh(proxyGeo, proxyMat);
+                  proxyMesh.position.copy(center);
+                  proxyMesh.renderOrder = -1;
+                  proxyMesh.userData.muscleGroupId = groupId;
+
+                  const groupDef = MUSCLE_GROUPS.find(g => g.id === groupId);
+                  if (groupDef && groupDef.bones.length > 0 && bones[groupDef.bones[0]]) {
+                    const parentBone = bones[groupDef.bones[0]];
+                    parentBone.updateWorldMatrix(true, false);
+                    const boneWorldInverse = new THREE.Matrix4().copy(parentBone.matrixWorld).invert();
+                    const localPos = center.clone().applyMatrix4(boneWorldInverse);
+                    proxyMesh.position.copy(localPos);
+                    parentBone.add(proxyMesh);
+                  } else {
+                    scene.add(proxyMesh);
+                  }
+
+                  muscleHitProxiesRef.current.push({ mesh: proxyMesh, groupId });
+                });
+
+                console.log(`Created ${muscleHitProxiesRef.current.length} muscle hit proxies for improved hover detection`);
+
               } catch (err) {
                 console.error('Failed to split muscle meshes:', err);
               }
@@ -5945,6 +6010,13 @@ export default function PureThreeGLBViewer({
       if (splitMuscleGroupsRef.current.size > 0) {
         disposeMuscleGroups(splitMuscleGroupsRef.current);
       }
+      muscleHitProxiesRef.current.forEach(p => {
+        p.mesh.geometry.dispose();
+        (p.mesh.material as THREE.Material).dispose();
+        if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+      });
+      muscleHitProxiesRef.current = [];
+      muscleGroupCentersRef.current.clear();
     };
   }, []);
 
@@ -5988,6 +6060,128 @@ export default function PureThreeGLBViewer({
       return null;
     };
 
+    const findMuscleGroupByProxy = (hitMesh: THREE.Object3D): { groupId: string; label: string } | null => {
+      const gId = hitMesh.userData.muscleGroupId as string | undefined;
+      if (!gId) return null;
+      const group = splitMuscleGroupsRef.current.get(gId);
+      if (!group) return null;
+      return { groupId: gId, label: group.label };
+    };
+
+    const findClosestMuscleGroupByScreenDistance = (
+      screenX: number,
+      screenY: number,
+      cam: THREE.Camera,
+      rect: DOMRect,
+      maxPixelDistance: number = 60
+    ): { groupId: string; label: string } | null => {
+      const groups = splitMuscleGroupsRef.current;
+      if (groups.size === 0) return null;
+
+      let closestGroupId: string | null = null;
+      let closestLabel = '';
+      let closestDist = Infinity;
+      const tempVec = new THREE.Vector3();
+
+      groups.forEach((group, groupId) => {
+        if (groupId === 'other') return;
+        const hasVisible = group.meshes.some(m => m.visible);
+        if (!hasVisible) return;
+
+        let centerWorld: THREE.Vector3 | null = null;
+        const proxy = muscleHitProxiesRef.current.find(p => p.groupId === groupId);
+        if (proxy) {
+          tempVec.setFromMatrixPosition(proxy.mesh.matrixWorld);
+          centerWorld = tempVec.clone();
+        } else {
+          const stored = muscleGroupCentersRef.current.get(groupId);
+          if (stored) centerWorld = stored.clone();
+        }
+        if (!centerWorld) return;
+
+        const projected = centerWorld.clone().project(cam);
+        const sx = (projected.x * 0.5 + 0.5) * rect.width + rect.left;
+        const sy = (-projected.y * 0.5 + 0.5) * rect.height + rect.top;
+
+        if (projected.z < 0 || projected.z > 1) return;
+
+        const dist = Math.sqrt((screenX - sx) ** 2 + (screenY - sy) ** 2);
+        if (dist < closestDist && dist < maxPixelDistance) {
+          closestDist = dist;
+          closestGroupId = groupId;
+          closestLabel = group.label;
+        }
+      });
+
+      if (closestGroupId) {
+        return { groupId: closestGroupId, label: closestLabel };
+      }
+      return null;
+    };
+
+    const highlightMuscleGroup = (info: { groupId: string; label: string }, screenX: number, screenY: number) => {
+      if (info.groupId === hoveredGroupId) {
+        setMuscleHoverInfo(prev => prev ? { ...prev, screenX, screenY } : null);
+        return;
+      }
+      clearMuscleHover();
+      hoveredGroupId = info.groupId;
+      const group = splitMuscleGroupsRef.current.get(info.groupId);
+      if (group) {
+        for (const mesh of group.meshes) {
+          if (mesh instanceof THREE.Mesh) {
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            if (mat && mat.emissive) {
+              muscleOriginalEmissiveRef.current.set(mesh, {
+                color: mat.emissive.clone(),
+                intensity: mat.emissiveIntensity,
+              });
+              mat.emissive.set(0x00ffff);
+              mat.emissiveIntensity = 0.4;
+              mat.needsUpdate = true;
+            }
+          }
+        }
+      }
+      setMuscleHoverInfo({ groupId: info.groupId, label: info.label, screenX, screenY });
+      canvas.style.cursor = 'pointer';
+    };
+
+    const detectMuscleGroup = (
+      ndc: THREE.Vector2,
+      cam: THREE.Camera,
+      rect: DOMRect,
+      screenX: number,
+      screenY: number
+    ): { groupId: string; label: string } | null => {
+      const allMuscleMeshes = muscleMeshesRef.current.filter(m => m.visible);
+      raycasterRef.current.setFromCamera(ndc, cam);
+
+      if (allMuscleMeshes.length > 0) {
+        const directHits = raycasterRef.current.intersectObjects(allMuscleMeshes, true);
+        if (directHits.length > 0) {
+          const info = findMuscleGroupForMesh(directHits[0].object);
+          if (info) return info;
+        }
+      }
+
+      const proxyMeshes = muscleHitProxiesRef.current
+        .filter(p => {
+          const group = splitMuscleGroupsRef.current.get(p.groupId);
+          return group && group.meshes.some(m => m.visible);
+        })
+        .map(p => p.mesh);
+      if (proxyMeshes.length > 0) {
+        const proxyHits = raycasterRef.current.intersectObjects(proxyMeshes, false);
+        if (proxyHits.length > 0) {
+          const info = findMuscleGroupByProxy(proxyHits[0].object);
+          if (info) return info;
+        }
+      }
+
+      return findClosestMuscleGroupByScreenDistance(screenX, screenY, cam, rect);
+    };
+
     const onMouseMove = (e: MouseEvent) => {
       const otherToolActive = enablePainMarkersRef.current || enableRomModeRef.current || enablePoseModeRef.current || enableZoomToolRef.current;
       if (!enableMuscleInteractionRef.current || otherToolActive) {
@@ -6004,42 +6198,16 @@ export default function PureThreeGLBViewer({
         -((e.clientY - rect.top) / rect.height) * 2 + 1
       );
       const allMuscleMeshes = muscleMeshesRef.current.filter(m => m.visible);
-      if (allMuscleMeshes.length === 0) {
+      if (allMuscleMeshes.length === 0 && muscleHitProxiesRef.current.length === 0) {
         if (hoveredGroupId) { clearMuscleHover(); setMuscleHoverInfo(null); canvas.style.cursor = ''; }
         return;
       }
       if (!sceneRef.current) return;
       const cam = sceneRef.current.camera;
-      raycasterRef.current.setFromCamera(ndc, cam);
-      const hits = raycasterRef.current.intersectObjects(allMuscleMeshes, true);
-      if (hits.length > 0) {
-        const hit = hits[0];
-        const info = findMuscleGroupForMesh(hit.object);
-        if (info && info.groupId !== hoveredGroupId) {
-          clearMuscleHover();
-          hoveredGroupId = info.groupId;
-          const group = splitMuscleGroupsRef.current.get(info.groupId);
-          if (group) {
-            for (const mesh of group.meshes) {
-              if (mesh instanceof THREE.Mesh) {
-                const mat = mesh.material as THREE.MeshStandardMaterial;
-                if (mat && mat.emissive) {
-                  muscleOriginalEmissiveRef.current.set(mesh, {
-                    color: mat.emissive.clone(),
-                    intensity: mat.emissiveIntensity,
-                  });
-                  mat.emissive.set(0x00ffff);
-                  mat.emissiveIntensity = 0.4;
-                  mat.needsUpdate = true;
-                }
-              }
-            }
-          }
-          setMuscleHoverInfo({ groupId: info.groupId, label: info.label, screenX: e.clientX, screenY: e.clientY });
-          canvas.style.cursor = 'pointer';
-        } else if (info) {
-          setMuscleHoverInfo(prev => prev ? { ...prev, screenX: e.clientX, screenY: e.clientY } : null);
-        }
+
+      const info = detectMuscleGroup(ndc, cam, rect, e.clientX, e.clientY);
+      if (info) {
+        highlightMuscleGroup(info, e.clientX, e.clientY);
       } else {
         if (hoveredGroupId) {
           clearMuscleHover();
@@ -6078,14 +6246,10 @@ export default function PureThreeGLBViewer({
       }
 
       if (!enableMuscleInteractionRef.current || otherToolActive) return;
-      const allMuscleMeshes = muscleMeshesRef.current.filter(m => m.visible);
-      if (allMuscleMeshes.length === 0) return;
-      const hits = raycasterRef.current.intersectObjects(allMuscleMeshes, true);
-      if (hits.length > 0) {
-        const info = findMuscleGroupForMesh(hits[0].object);
-        if (info && onMuscleGroupClickRef.current) {
-          onMuscleGroupClickRef.current(info.groupId, e.clientX, e.clientY);
-        }
+
+      const info = detectMuscleGroup(ndc, cam, rect, e.clientX, e.clientY);
+      if (info && onMuscleGroupClickRef.current) {
+        onMuscleGroupClickRef.current(info.groupId, e.clientX, e.clientY);
       }
     };
 

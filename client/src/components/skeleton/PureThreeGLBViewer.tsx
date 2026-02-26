@@ -4309,9 +4309,10 @@ export default function PureThreeGLBViewer({
           const currentBones = bonesRef.current;
           const initialRots = initialRotationsRef.current;
           
-          // Apply stored rotations to shoulder bones (live pose effect stores values here too)
-          // Skip when movement animation is playing - the animation loop handles shoulders directly
-          if (!animationPlayingRef.current) {
+          // Apply stored rotations to shoulder bones from sliderRotationsRef
+          // Skip when movement animation is playing or live pose is active
+          // (live pose useEffect directly sets bone rotations, don't overwrite)
+          if (!animationPlayingRef.current && !livePoseActiveRef.current) {
             ['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R'].forEach(boneName => {
               const bone = currentBones[boneName] as THREE.Bone;
               const sliderRot = sliderRotations[boneName];
@@ -4811,16 +4812,20 @@ export default function PureThreeGLBViewer({
         );
         const targetQuat = initialQuat.clone().multiply(deltaQuat);
         const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
+        bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
         if (animationLoopBones.has(boneName)) {
           sliderRotationsRef.current[boneName] = {
             x: targetEuler.x - initial.x,
             y: targetEuler.y - initial.y,
             z: targetEuler.z - initial.z
           };
-        } else {
-          bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
         }
       } else if (animationLoopBones.has(boneName)) {
+        bone.rotation.set(
+          initial.x + delta.x,
+          initial.y + delta.y,
+          initial.z + delta.z
+        );
         sliderRotationsRef.current[boneName] = delta;
       } else {
         bone.rotation.set(

@@ -1,4 +1,4 @@
-import { type MuscleOverride, PATHOLOGY_EFFECTS } from './muscleBiomechanicsEngine';
+import { type MuscleOverride, PATHOLOGY_EFFECTS, getMuscleToGroupMap } from './muscleBiomechanicsEngine';
 
 export interface MuscleJointAction {
   joint: string;
@@ -137,6 +137,64 @@ export const JOINT_COUPLINGS: JointCoupling[] = [
   { sourceJoint: 'spine', sourceParam: 'scoliosis', targetJoint: 'pelvis', targetParam: 'obliquity', ratio: 0.3 },
 ];
 
+function aggregateOverridesToGroups(
+  overrides: Record<string, MuscleOverride>
+): Record<string, MuscleOverride> {
+  const muscleToGroup = getMuscleToGroupMap();
+  const groupBuckets: Record<string, MuscleOverride[]> = {};
+  const result: Record<string, MuscleOverride> = {};
+
+  for (const [id, ov] of Object.entries(overrides)) {
+    if (!ov?.isManual) continue;
+
+    if (MUSCLE_JOINT_ACTIONS[id]) {
+      result[id] = ov;
+      continue;
+    }
+
+    const groupId = muscleToGroup[id];
+    if (!groupId) continue;
+    if (!groupBuckets[groupId]) groupBuckets[groupId] = [];
+    groupBuckets[groupId].push(ov);
+  }
+
+  for (const [groupId, ovs] of Object.entries(groupBuckets)) {
+    if (result[groupId]) continue;
+    const n = ovs.length;
+    const avgTension = ovs.reduce((s, o) => s + o.tensionOffset, 0) / n;
+    const avgActivation = ovs.reduce((s, o) => s + o.activationOffset, 0) / n;
+    const maxInhibition = Math.max(...ovs.map(o => o.inhibition));
+
+    let bestLength: MuscleOverride['lengthOverride'] = 'none';
+    for (const o of ovs) {
+      if (o.lengthOverride === 'shortened' || o.lengthOverride === 'lengthened') {
+        bestLength = o.lengthOverride;
+        break;
+      }
+      if (o.lengthOverride === 'neutral') bestLength = 'neutral';
+    }
+
+    let bestPathology: MuscleOverride['pathology'] = 'none';
+    for (const o of ovs) {
+      if (o.pathology !== 'none') {
+        bestPathology = o.pathology;
+        break;
+      }
+    }
+
+    result[groupId] = {
+      tensionOffset: avgTension,
+      activationOffset: avgActivation,
+      inhibition: maxInhibition,
+      lengthOverride: bestLength,
+      pathology: bestPathology,
+      isManual: true,
+    };
+  }
+
+  return result;
+}
+
 function getEffectiveMuscleForce(
   muscleId: string,
   overrides: Record<string, MuscleOverride>
@@ -180,6 +238,8 @@ export function computeBidirectionalEffects(
   overrides: Record<string, MuscleOverride>,
   currentModelConfig: any
 ): BidirectionalResult {
+  const groupOverrides = aggregateOverridesToGroups(overrides);
+
   const jointAdjustments: Record<string, Record<string, number>> = {};
   const reciprocalInhibitions: Record<string, number> = {};
   const couplingEffects: Record<string, Record<string, number>> = {};
@@ -189,7 +249,7 @@ export function computeBidirectionalEffects(
 
   const getForce = (muscleId: string): number | null => {
     if (!(muscleId in muscleForcesCache)) {
-      muscleForcesCache[muscleId] = getEffectiveMuscleForce(muscleId, overrides);
+      muscleForcesCache[muscleId] = getEffectiveMuscleForce(muscleId, groupOverrides);
     }
     return muscleForcesCache[muscleId];
   };
@@ -219,7 +279,7 @@ export function computeBidirectionalEffects(
     const agonistDeviation = agonistForce - 50;
     if (Math.abs(agonistDeviation) < 5) continue;
 
-    const antagonistOverride = overrides[pair.antagonist];
+    const antagonistOverride = groupOverrides[pair.antagonist];
     if (antagonistOverride?.isManual) continue;
 
     const inhibitionAmount = Math.abs(agonistDeviation) * pair.reciprocalInhibitionStrength;

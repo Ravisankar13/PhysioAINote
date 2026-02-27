@@ -797,6 +797,18 @@ function buildMuscles(): MuscleDefinition[] {
 
 const MUSCLE_DEFINITIONS = buildMuscles();
 
+let _muscleToGroupCache: Record<string, string> | null = null;
+
+export function getMuscleToGroupMap(): Record<string, string> {
+  if (_muscleToGroupCache) return _muscleToGroupCache;
+  const map: Record<string, string> = {};
+  for (const m of MUSCLE_DEFINITIONS) {
+    map[m.id] = m.meshGroup;
+  }
+  _muscleToGroupCache = map;
+  return map;
+}
+
 const MUSCLE_GROUP_ORDER: Record<string, { label: string; order: number }> = {
   neck: { label: 'Neck', order: 0 },
   chest: { label: 'Chest', order: 1 },

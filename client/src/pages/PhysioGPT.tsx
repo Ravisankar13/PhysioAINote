@@ -1443,6 +1443,40 @@ ${ddxList}`;
     lastReasoningTriggerRef.current = '';
   }, [toast]);
 
+  const muscleDrivenEffects = useMemo(() => {
+    if (!bidirectionalMode) return null;
+    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
+    if (!hasManualOverrides) return null;
+    return computeBidirectionalEffects(muscleOverrides, modelConfig);
+  }, [muscleOverrides, modelConfig, bidirectionalMode]);
+
+  const muscleRestrictionEffects = useMemo(() => {
+    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
+    if (!hasManualOverrides) return undefined;
+    const effects = computeMuscleRestrictionEffects(muscleOverrides);
+    return effects.length > 0 ? effects : undefined;
+  }, [muscleOverrides]);
+
+  const effectiveModelConfig = useMemo(() => {
+    if (!muscleDrivenEffects) return modelConfig;
+    const config = JSON.parse(JSON.stringify(modelConfig));
+    for (const [joint, params] of Object.entries(muscleDrivenEffects.jointAdjustments)) {
+      if (!config[joint]) config[joint] = {};
+      for (const [param, value] of Object.entries(params)) {
+        const current = config[joint][param] || 0;
+        config[joint][param] = current + value;
+      }
+    }
+    for (const [joint, params] of Object.entries(muscleDrivenEffects.couplingEffects)) {
+      if (!config[joint]) config[joint] = {};
+      for (const [param, value] of Object.entries(params)) {
+        const current = config[joint][param] || 0;
+        config[joint][param] = current + value;
+      }
+    }
+    return config;
+  }, [modelConfig, muscleDrivenEffects]);
+
   const handleAnalyzeSkeleton = useCallback(() => {
     const sections: string[] = [];
 
@@ -2141,40 +2175,6 @@ ${ddxList}`;
       triggerClinicalReasoningAnalysis(true);
     }, 1500);
   }, [triggerClinicalReasoningAnalysis]);
-
-  const muscleDrivenEffects = useMemo(() => {
-    if (!bidirectionalMode) return null;
-    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
-    if (!hasManualOverrides) return null;
-    return computeBidirectionalEffects(muscleOverrides, modelConfig);
-  }, [muscleOverrides, modelConfig, bidirectionalMode]);
-
-  const muscleRestrictionEffects = useMemo(() => {
-    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
-    if (!hasManualOverrides) return undefined;
-    const effects = computeMuscleRestrictionEffects(muscleOverrides);
-    return effects.length > 0 ? effects : undefined;
-  }, [muscleOverrides]);
-
-  const effectiveModelConfig = useMemo(() => {
-    if (!muscleDrivenEffects) return modelConfig;
-    const config = JSON.parse(JSON.stringify(modelConfig));
-    for (const [joint, params] of Object.entries(muscleDrivenEffects.jointAdjustments)) {
-      if (!config[joint]) config[joint] = {};
-      for (const [param, value] of Object.entries(params)) {
-        const current = config[joint][param] || 0;
-        config[joint][param] = current + value;
-      }
-    }
-    for (const [joint, params] of Object.entries(muscleDrivenEffects.couplingEffects)) {
-      if (!config[joint]) config[joint] = {};
-      for (const [param, value] of Object.entries(params)) {
-        const current = config[joint][param] || 0;
-        config[joint][param] = current + value;
-      }
-    }
-    return config;
-  }, [modelConfig, muscleDrivenEffects]);
 
   const forceAnalysis = useMemo(() => {
     if (!forceMode) return null;

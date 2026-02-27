@@ -66,7 +66,8 @@ import {
   Radio,
   Palette,
   Scissors,
-  Grid2X2
+  Grid2X2,
+  RefreshCw
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -436,6 +437,7 @@ export default function PhysioGPT() {
   const [correlationTab, setCorrelationTab] = useState<'overview' | 'chains' | 'muscles' | 'root_cause'>('overview');
   const [chainIntegrityMode, setChainIntegrityMode] = useState(false);
   const [expandedChainIntegrity, setExpandedChainIntegrity] = useState<string | null>(null);
+  const [bidirectionalMode, setBidirectionalMode] = useState(true);
   const [showChainVisualization, setShowChainVisualization] = useState(false);
   const [activeChainIds, setActiveChainIds] = useState<string[]>(() => MYOFASCIAL_CHAINS.map(c => c.id));
   const [showPropagation, setShowPropagation] = useState(false);
@@ -1504,7 +1506,7 @@ ${ddxList}`;
       sections.push(`**Symptom Markers (${painMarkers.length}):**\n${markerLines.join('\n')}`);
     }
 
-    const forces = calculatePosturalForces(modelConfig);
+    const forces = calculatePosturalForces(effectiveModelConfig);
     const highForces = forces.joints.filter(j => j.status === 'high' || j.status === 'very_high');
     const forceLines = forces.joints.map(j =>
       `- ${j.label}: C=${(j.compression * 100).toFixed(0)}% T=${(j.tension * 100).toFixed(0)}% S=${(j.shear * 100).toFixed(0)}% BW (${forceToNewtons(j.totalForce, bodyWeightKg)}N) — ${j.status}`
@@ -1529,7 +1531,7 @@ ${ddxList}`;
 
     sendMessageStreaming(prompt);
     toast({ title: "Analyzing Skeleton", description: "Sending full skeleton assessment to AI for clinical interpretation..." });
-  }, [modelConfig, painMarkers, bodyWeightKg, romMeasurements, getRomStatus]);
+  }, [modelConfig, effectiveModelConfig, painMarkers, bodyWeightKg, romMeasurements, getRomStatus]);
 
   const handleSendMessage = useCallback((messageContent?: string) => {
     const content = messageContent || message.trim();
@@ -1911,9 +1913,9 @@ ${ddxList}`;
       subjectiveHistory: pm.subjectiveHistory || '',
     }));
 
-    const postureDeviations = computePostureDeviations(modelConfig);
-    const forces = calculatePosturalForces(modelConfig);
-    const muscles = computeFullMuscleAnalysis(modelConfig);
+    const postureDeviations = computePostureDeviations(effectiveModelConfig);
+    const forces = calculatePosturalForces(effectiveModelConfig);
+    const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
 
     const forcesSummary = forces.joints
       .filter(j => j.status === 'high' || j.status === 'very_high')
@@ -1943,7 +1945,7 @@ ${ddxList}`;
       postureNotes: compData.result.postureNotes,
     } : null;
 
-    const localMuscleStates = computeAllMuscleStates(modelConfig);
+    const localMuscleStates = computeAllMuscleStates(effectiveModelConfig);
     const localTensions: Record<string, number> = {};
     Object.entries(localMuscleStates).forEach(([id, s]) => { localTensions[id] = s.tension; });
     const localPropEffects = propagateChainEffects(localTensions, muscleOverrides);
@@ -2091,7 +2093,7 @@ ${ddxList}`;
     } finally {
       setClinicalReasoningProcessing(false);
     }
-  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations]);
+  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations]);
 
   useEffect(() => {
     const hasPostureChanges = Object.entries(modelConfig).some(([key, val]: [string, any]) => {
@@ -2141,10 +2143,11 @@ ${ddxList}`;
   }, [triggerClinicalReasoningAnalysis]);
 
   const muscleDrivenEffects = useMemo(() => {
+    if (!bidirectionalMode) return null;
     const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
     if (!hasManualOverrides) return null;
     return computeBidirectionalEffects(muscleOverrides, modelConfig);
-  }, [muscleOverrides, modelConfig]);
+  }, [muscleOverrides, modelConfig, bidirectionalMode]);
 
   const muscleRestrictionEffects = useMemo(() => {
     const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
@@ -2185,12 +2188,12 @@ ${ddxList}`;
 
   const muscleAnalysis = useMemo(() => {
     if (!muscleMode) return null;
-    const base = computeFullMuscleAnalysis(modelConfig);
+    const base = computeFullMuscleAnalysis(effectiveModelConfig);
     if (enabledMuscleGroups.size === 0 && base.groups.length > 0) {
       setEnabledMuscleGroups(new Set(base.groups.map(g => g.id)));
     }
     return applyOverridesToAnalysis(base, muscleOverrides);
-  }, [modelConfig, muscleMode, muscleOverrides]);
+  }, [effectiveModelConfig, muscleMode, muscleOverrides]);
 
   const weightDistribution = useMemo(() => {
     if (!forceMode) return null;
@@ -2210,11 +2213,11 @@ ${ddxList}`;
       kineticChains: KINETIC_CHAINS,
       bodyWeightKg,
     });
-  }, [modelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode]);
+  }, [effectiveModelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode]);
 
   const chainIntegrityScores = useMemo(() => {
     if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
-    const muscles = computeFullMuscleAnalysis(modelConfig);
+    const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
     const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     for (const chain of KINETIC_CHAINS) {
       let totalScore = 100;
@@ -2245,14 +2248,14 @@ ${ddxList}`;
       scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
     }
     return scores;
-  }, [modelConfig, chainExplorerMode, chainIntegrityMode]);
+  }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode]);
 
   const baseMuscleTensions = useMemo(() => {
-    const base = computeAllMuscleStates(modelConfig);
+    const base = computeAllMuscleStates(effectiveModelConfig);
     const tensions: { [id: string]: number } = {};
     Object.entries(base).forEach(([id, s]) => { tensions[id] = s.tension; });
     return { tensions };
-  }, [modelConfig]);
+  }, [effectiveModelConfig]);
 
   const wholeBodyScore = useMemo(() => {
     return computeWholeBodyTensionScore(baseMuscleTensions.tensions, muscleOverrides);
@@ -2301,13 +2304,13 @@ ${ddxList}`;
 
   const selectedNodeDetails = useMemo(() => {
     if (!selectedChainNode) return null;
-    const muscleStates = computeAllMuscleStates(modelConfig);
+    const muscleStates = computeAllMuscleStates(effectiveModelConfig);
     const state = muscleStates[selectedChainNode.muscleId];
     if (!state) return null;
     const membership = getChainMembership(selectedChainNode.muscleId);
     const propState = propagatedEffects?.[selectedChainNode.muscleId];
     return { state, membership, propState };
-  }, [selectedChainNode, modelConfig, propagatedEffects]);
+  }, [selectedChainNode, effectiveModelConfig, propagatedEffects]);
 
   const fascialModifiers = useMemo((): FascialModifiers | undefined => {
     const tensions = baseMuscleTensions.tensions;
@@ -2415,8 +2418,8 @@ ${ddxList}`;
 
   const treatmentPlan = useMemo(() => {
     if (rightPanelTab !== 'treatment') return null;
-    const forces = calculatePosturalForces(modelConfig);
-    const muscles = computeFullMuscleAnalysis(modelConfig);
+    const forces = calculatePosturalForces(effectiveModelConfig);
+    const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
     const corr = computeCrossSystemCorrelation({
       painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
       forces: forces.joints,
@@ -2446,7 +2449,7 @@ ${ddxList}`;
       bodyWeightKg,
       clinicalBubbleData: clinicalBubbleDataArr.length > 0 ? clinicalBubbleDataArr : undefined,
     });
-  }, [modelConfig, painMarkers, bodyWeightKg, rightPanelTab, chainIntegrityScores, clinicalBubbleResults]);
+  }, [effectiveModelConfig, painMarkers, bodyWeightKg, rightPanelTab, chainIntegrityScores, clinicalBubbleResults]);
 
   const getEvidenceGradeColor = (grade: EvidenceGrade) => grade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : grade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : grade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
 
@@ -2573,7 +2576,7 @@ ${ddxList}`;
             <div ref={skeletonContainerRef} className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
-              modelConfig={modelConfig as any}
+              modelConfig={effectiveModelConfig as any}
               zoomToRegion={zoomToRegion}
               className="w-full h-full"
               highlightRegions={[
@@ -2677,7 +2680,7 @@ ${ddxList}`;
               onAnimationStateChange={setAnimationState}
               onConstraintsChange={setAnimationConstraints}
               onCompensationChange={handleCompensationChange}
-              modelConfig={modelConfig as any}
+              modelConfig={effectiveModelConfig as any}
               muscleRestrictionEffects={muscleRestrictionEffects}
             />
 
@@ -3421,6 +3424,24 @@ ${ddxList}`;
                     ))}
                   </div>
                 )}
+
+                <div className="mb-2 bg-indigo-500/10 border border-indigo-500/25 rounded-lg px-2 py-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <RefreshCw className="h-3 w-3 text-indigo-400" />
+                      <span className="text-[9px] font-medium text-indigo-300">Muscles Move Bones</span>
+                    </div>
+                    <button
+                      onClick={() => setBidirectionalMode(!bidirectionalMode)}
+                      className={`text-[8px] px-2 py-0.5 rounded font-medium transition-colors ${bidirectionalMode ? 'bg-indigo-500/30 text-indigo-300 hover:bg-indigo-500/50' : 'bg-gray-600/30 text-gray-400 hover:bg-gray-600/50'}`}
+                    >
+                      {bidirectionalMode ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
+                  {bidirectionalMode && (
+                    <p className="text-[7px] text-indigo-400/70 mt-1 leading-relaxed">Muscle changes automatically adjust skeleton joint angles, fascial chains, and kinetic chains</p>
+                  )}
+                </div>
 
                 {Object.keys(muscleOverrides).length > 0 && (
                   <div className="mb-2 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2 py-1.5">

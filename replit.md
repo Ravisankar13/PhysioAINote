@@ -30,7 +30,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Key Features & Design Patterns
 - **AI Integration**: Leverages OpenAI GPT-4o for clinical analysis, content generation, virtual patient analysis, research gap analysis, exercise generation, real-time movement analysis, and privacy-preserving SOAP-to-Virtual-Patient conversion.
-- **Biomechanical Systems**: Includes a bidirectional muscle-joint system, 3D force visualization, and a biomechanical clinical assessment system for patient digital twins and injury risk scoring.
+- **Biomechanical Systems**: Includes a bidirectional muscle-joint system, 3D force visualization, and a biomechanical clinical assessment system for patient digital twins and injury risk scoring. The bidirectional engine is fully wired on both PhysioGPT and TestSkeletonNew pages — muscle slider changes (activation, tension, inhibition, length) automatically adjust skeleton joint angles, and skeleton slider changes automatically update muscle states, fascial chain tensions, and kinetic chain integrity scores. Controlled via "Muscles Move Bones" toggle (ON by default).
 - **Multi-View Skeleton Visualization**: Simultaneous display of the skeleton from multiple angles with fixed camera presets and synchronized viewers.
 - **Expanded MuscleOverride System**: Allows for length override, inhibition, and pathology-specific modifiers.
 - **Motion Capture & Virtual Patient System**: WebRTC camera integration for real-time pose detection, skeleton overlay, AI-powered virtual patient generation, and detailed movement analysis using a medical-grade 3D skeleton system.

@@ -4276,70 +4276,49 @@ export default function PureThreeGLBViewer({
                 muscleHitProxiesRef.current = [];
                 muscleGroupCentersRef.current.clear();
 
+                const PROXY_SIZES: Record<string, [number, number, number]> = {
+                  chest: [1.0, 0.8, 0.5],
+                  core: [0.8, 0.7, 0.5],
+                  spine: [0.6, 0.8, 0.4],
+                  neck: [0.4, 0.5, 0.4],
+                  deltoid_l: [0.5, 0.5, 0.5], deltoid_r: [0.5, 0.5, 0.5],
+                  scapula_l: [0.5, 0.6, 0.4], scapula_r: [0.5, 0.6, 0.4],
+                  bicep_l: [0.4, 0.6, 0.4], bicep_r: [0.4, 0.6, 0.4],
+                  glute_l: [0.5, 0.5, 0.5], glute_r: [0.5, 0.5, 0.5],
+                  quad_l: [0.5, 0.8, 0.5], quad_r: [0.5, 0.8, 0.5],
+                  calf_l: [0.4, 0.7, 0.4], calf_r: [0.4, 0.7, 0.4],
+                  shin_l: [0.4, 0.6, 0.4], shin_r: [0.4, 0.6, 0.4],
+                  foot_l: [0.4, 0.3, 0.5], foot_r: [0.4, 0.3, 0.5],
+                };
+
                 groups.forEach((group, groupId) => {
                   if (groupId === 'other' || group.meshes.length === 0) return;
 
+                  const groupDef = MUSCLE_GROUPS.find(g => g.id === groupId);
+                  if (!groupDef || groupDef.bones.length === 0) return;
+
+                  const bonePositions: THREE.Vector3[] = [];
+                  for (const boneName of groupDef.bones) {
+                    const bone = bones[boneName];
+                    if (bone) {
+                      const worldPos = new THREE.Vector3();
+                      bone.getWorldPosition(worldPos);
+                      bonePositions.push(worldPos);
+                    }
+                  }
+
+                  if (bonePositions.length === 0) return;
+
                   const groupCenter = new THREE.Vector3();
-                  const groupMin = new THREE.Vector3(Infinity, Infinity, Infinity);
-                  const groupMax = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
-                  let totalSamples = 0;
-
-                  for (const mesh of group.meshes) {
-                    if (!(mesh instanceof THREE.SkinnedMesh) || !mesh.skeleton) continue;
-
-                    mesh.updateWorldMatrix(true, false);
-                    if (mesh.skeleton) {
-                      mesh.skeleton.update();
-                    }
-
-                    const posAttr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
-                    const skinIdxAttr = mesh.geometry.getAttribute('skinIndex') as THREE.BufferAttribute;
-                    const skinWtAttr = mesh.geometry.getAttribute('skinWeight') as THREE.BufferAttribute;
-
-                    if (!posAttr || !skinIdxAttr || !skinWtAttr) continue;
-
-                    const vertCount = posAttr.count;
-                    const sampleStep = Math.max(1, Math.floor(vertCount / 50));
-                    const tempVec = new THREE.Vector3();
-
-                    for (let vi = 0; vi < vertCount; vi += sampleStep) {
-                      tempVec.fromBufferAttribute(posAttr, vi);
-                      mesh.localToWorld(tempVec);
-
-                      groupCenter.add(tempVec);
-                      groupMin.min(tempVec);
-                      groupMax.max(tempVec);
-                      totalSamples++;
-                    }
+                  for (const pos of bonePositions) {
+                    groupCenter.add(pos);
                   }
-
-                  if (totalSamples === 0) {
-                    const fallbackBox = new THREE.Box3();
-                    for (const mesh of group.meshes) {
-                      mesh.updateWorldMatrix(true, false);
-                      fallbackBox.expandByObject(mesh);
-                    }
-                    if (fallbackBox.isEmpty()) return;
-                    fallbackBox.getCenter(groupCenter);
-                    fallbackBox.getSize(groupMax);
-                    groupMin.copy(groupCenter).sub(groupMax.clone().multiplyScalar(0.5));
-                    groupMax.copy(groupCenter).add(groupMax.clone().multiplyScalar(0.5));
-                  } else {
-                    groupCenter.divideScalar(totalSamples);
-                  }
-
-                  const size = new THREE.Vector3().subVectors(groupMax, groupMin);
+                  groupCenter.divideScalar(bonePositions.length);
 
                   muscleGroupCentersRef.current.set(groupId, groupCenter.clone());
 
-                  const padding = 0.35;
-                  const expandedSize = new THREE.Vector3(
-                    Math.max(size.x * 1.4, size.x + padding),
-                    Math.max(size.y * 1.4, size.y + padding),
-                    Math.max(size.z * 1.4, size.z + padding)
-                  );
-
-                  const proxyGeo = new THREE.BoxGeometry(expandedSize.x, expandedSize.y, expandedSize.z);
+                  const proxySize = PROXY_SIZES[groupId] || [0.5, 0.5, 0.5];
+                  const proxyGeo = new THREE.BoxGeometry(proxySize[0], proxySize[1], proxySize[2]);
                   const proxyMat = new THREE.MeshBasicMaterial({
                     transparent: true,
                     opacity: 0,
@@ -4350,9 +4329,8 @@ export default function PureThreeGLBViewer({
                   proxyMesh.renderOrder = -1;
                   proxyMesh.userData.muscleGroupId = groupId;
 
-                  const groupDef = MUSCLE_GROUPS.find(g => g.id === groupId);
-                  if (groupDef && groupDef.bones.length > 0 && bones[groupDef.bones[0]]) {
-                    const parentBone = bones[groupDef.bones[0]];
+                  const parentBone = bones[groupDef.bones[0]];
+                  if (parentBone) {
                     parentBone.updateWorldMatrix(true, false);
                     const boneWorldInverse = new THREE.Matrix4().copy(parentBone.matrixWorld).invert();
                     const localPos = groupCenter.clone().applyMatrix4(boneWorldInverse);

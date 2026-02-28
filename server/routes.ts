@@ -6598,6 +6598,71 @@ IMPORTANT:
     }
   });
 
+  app.post("/api/physiogpt/treatment-synthesis", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { targets, summary, syndromes } = req.body;
+      if (!targets || !Array.isArray(targets) || targets.length === 0) {
+        return res.status(400).json({ error: "Treatment targets are required" });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const openai = new OpenAI({ apiKey, baseURL });
+
+      const targetDescriptions = targets.map((t: any, i: number) =>
+        `${i + 1}. ${t.name} — Status: ${t.status}, Action: ${t.action}${t.isRootCause ? ' [ROOT CAUSE]' : ''}${t.isCompensation ? ' [COMPENSATION]' : ''}\n   Rationale: ${t.rationale}${t.painLinks?.length ? '\n   Pain links: ' + t.painLinks.join('; ') : ''}${t.chains?.length ? '\n   Chains: ' + t.chains.join(', ') : ''}`
+      ).join('\n\n');
+
+      const prompt = `You are an expert musculoskeletal physiotherapist creating a treatment plan based on a biomechanical assessment.
+
+ASSESSMENT FINDINGS:
+- Total treatment targets: ${summary?.totalTargets || targets.length}
+- Root causes identified: ${summary?.rootCauses || 0}
+- Compensatory patterns: ${summary?.compensations || 0}
+${summary?.criticalChain ? `- Critical chain: ${summary.criticalChain}` : ''}
+${syndromes?.length ? `- Detected syndromes: ${syndromes.join(', ')}` : ''}
+
+TREATMENT TARGETS (ranked by priority):
+${targetDescriptions}
+
+${summary?.treatmentSequence?.length ? `SUGGESTED SEQUENCE:\n${summary.treatmentSequence.join('\n')}` : ''}
+
+Provide a comprehensive treatment plan with these sections:
+
+1. CLINICAL SUMMARY (2-3 sentences synthesizing the overall clinical picture)
+
+2. TREATMENT PRIORITIES (ordered list — what to treat FIRST and why, focusing on root causes before compensations)
+
+3. SESSION STRUCTURE (how to organize a typical treatment session — time allocation for manual therapy, exercises, education)
+
+4. MANUAL THERAPY PLAN (specific techniques for each target with dosage and rationale)
+
+5. EXERCISE PRESCRIPTION (specific exercises for each target with sets/reps/frequency)
+
+6. PRECAUTIONS & CONTRAINDICATIONS (what to avoid, red flags to monitor)
+
+7. PROGRESSION MILESTONES (measurable criteria to progress treatment — e.g., "Progress when pain-free ROM > 120° flexion")
+
+8. HOME PROGRAM (3-5 key exercises/self-management strategies for the patient)
+
+Keep it clinically precise, evidence-informed, and actionable. Use physiotherapy terminology appropriate for a qualified practitioner.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 2000,
+        temperature: 0.7,
+      });
+
+      const plan = response.choices[0]?.message?.content || "Unable to generate treatment plan.";
+      res.json({ plan });
+    } catch (error: any) {
+      console.error("Treatment synthesis error:", error);
+      res.status(500).json({ error: "Failed to generate treatment plan", details: error.message });
+    }
+  });
+
   // Clinical Bubble AI endpoint - returns structured clinical data for pain marker regions
   app.post("/api/physiogpt/clinical-bubble", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

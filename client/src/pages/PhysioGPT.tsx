@@ -101,6 +101,7 @@ import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
+import { computeTreatmentPriorities as computeFullTreatmentPriorities, type TreatmentPriorityResult, type TreatmentTarget } from "@/lib/treatmentPriorityEngine";
 
 const BODY_REGIONS = {
   cervical: {
@@ -2328,6 +2329,21 @@ ${ddxList}`;
     return scores;
   }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, muscleOverrides, crossMuscleEffects]);
 
+  const treatmentPriorities = useMemo((): TreatmentPriorityResult => {
+    const hasOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
+    if (!muscleAnalysis || !hasOverrides) {
+      return { targets: [], summary: { totalTargets: 0, rootCauses: 0, compensations: 0, criticalChain: null, syndromes: [], treatmentSequence: [] } };
+    }
+    const integrityObj: Record<string, number> = {};
+    chainIntegrityScores.forEach((val, key) => { integrityObj[key] = val.score; });
+    return computeFullTreatmentPriorities(muscleAnalysis, influenceMap, integrityObj, painMarkers);
+  }, [muscleAnalysis, muscleOverrides, influenceMap, chainIntegrityScores, painMarkers]);
+
+  const [treatmentPanelOpen, setTreatmentPanelOpen] = useState(true);
+  const [expandedTreatmentTarget, setExpandedTreatmentTarget] = useState<string | null>(null);
+  const [aiTreatmentPlan, setAiTreatmentPlan] = useState<string | null>(null);
+  const [aiTreatmentLoading, setAiTreatmentLoading] = useState(false);
+
   const painAffectedChainIds = useMemo(() => {
     if (!showChainVisualization || painMarkers.length === 0) return [];
     const affectedIds = new Set<string>();
@@ -3568,6 +3584,203 @@ ${ddxList}`;
                             ))
                           ))}
                         </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {treatmentPriorities.targets.length > 0 && (
+                  <div className="mb-2 bg-emerald-500/10 border border-emerald-500/25 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setTreatmentPanelOpen(!treatmentPanelOpen)}
+                      className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-emerald-500/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Target className="h-3.5 w-3.5 text-emerald-400" />
+                        <span className="text-[10px] font-semibold text-emerald-300">Treatment Plan</span>
+                        <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">
+                          {treatmentPriorities.summary.totalTargets} targets
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {treatmentPriorities.summary.rootCauses > 0 && (
+                          <span className="text-[7px] px-1 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/20">
+                            {treatmentPriorities.summary.rootCauses} root cause{treatmentPriorities.summary.rootCauses > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {treatmentPanelOpen ? <ChevronUp className="h-3 w-3 text-gray-400" /> : <ChevronDown className="h-3 w-3 text-gray-400" />}
+                      </div>
+                    </button>
+
+                    {treatmentPanelOpen && (
+                      <div className="px-2 pb-2 space-y-1.5">
+                        {treatmentPriorities.summary.syndromes.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {treatmentPriorities.summary.syndromes.map(s => (
+                              <span key={s} className="text-[7px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/20">
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {treatmentPriorities.summary.criticalChain && (
+                          <div className="flex items-center gap-1 pt-0.5">
+                            <AlertTriangle className="h-2.5 w-2.5 text-orange-400 flex-shrink-0" />
+                            <span className="text-[8px] text-orange-300">Critical chain: {treatmentPriorities.summary.criticalChain}</span>
+                          </div>
+                        )}
+
+                        {treatmentPriorities.summary.treatmentSequence.length > 0 && (
+                          <div className="bg-black/30 rounded px-1.5 py-1 mt-1">
+                            <span className="text-[8px] font-medium text-gray-400">Treatment sequence:</span>
+                            {treatmentPriorities.summary.treatmentSequence.map((step, i) => (
+                              <p key={i} className="text-[8px] text-gray-300 leading-relaxed mt-0.5">{step}</p>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="space-y-1 pt-1">
+                          {treatmentPriorities.targets.map(target => {
+                            const isExpanded = expandedTreatmentTarget === target.targetId;
+                            const actionColors: Record<string, string> = {
+                              release: 'bg-red-500/25 text-red-300 border-red-500/30',
+                              stretch: 'bg-blue-500/25 text-blue-300 border-blue-500/30',
+                              strengthen: 'bg-green-500/25 text-green-300 border-green-500/30',
+                              activate: 'bg-yellow-500/25 text-yellow-300 border-yellow-500/30',
+                              mobilize: 'bg-purple-500/25 text-purple-300 border-purple-500/30',
+                              stabilize: 'bg-cyan-500/25 text-cyan-300 border-cyan-500/30',
+                            };
+                            return (
+                              <div
+                                key={target.targetId}
+                                className={`rounded border transition-colors ${target.isRootCause ? 'border-red-500/30 bg-red-500/5' : target.isCompensation ? 'border-blue-500/20 bg-blue-500/5' : 'border-gray-600/30 bg-white/3'}`}
+                              >
+                                <button
+                                  onClick={() => setExpandedTreatmentTarget(isExpanded ? null : target.targetId)}
+                                  className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-white/5 transition-colors"
+                                >
+                                  <div className="flex items-center gap-1 flex-1 min-w-0">
+                                    <span className="text-[8px] font-bold text-white bg-gray-600/50 rounded-full w-4 h-4 flex items-center justify-center flex-shrink-0">
+                                      {target.priority}
+                                    </span>
+                                    <span className="text-[9px] font-medium text-white truncate">{target.targetName}</span>
+                                    <span className={`text-[7px] px-1 py-0.5 rounded border flex-shrink-0 ${actionColors[target.treatmentAction] || 'bg-gray-500/25 text-gray-300 border-gray-500/30'}`}>
+                                      {target.actionLabel}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    {target.isRootCause && (
+                                      <span className="text-[6px] px-1 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold">ROOT</span>
+                                    )}
+                                    {target.isCompensation && (
+                                      <span className="text-[6px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold">COMP</span>
+                                    )}
+                                    {target.painCorrelations.length > 0 && (
+                                      <MapPin className="h-2.5 w-2.5 text-red-400" />
+                                    )}
+                                    {isExpanded ? <ChevronUp className="h-2.5 w-2.5 text-gray-500" /> : <ChevronDown className="h-2.5 w-2.5 text-gray-500" />}
+                                  </div>
+                                </button>
+
+                                <p className="text-[8px] text-gray-400 leading-relaxed px-2 pb-1">{target.rationale}</p>
+
+                                {isExpanded && (
+                                  <div className="px-2 pb-2 space-y-1.5 border-t border-gray-600/20 pt-1.5">
+                                    {target.techniques.length > 0 && (
+                                      <div>
+                                        <span className="text-[8px] font-medium text-emerald-400">Techniques:</span>
+                                        {target.techniques.map((tech, i) => (
+                                          <div key={i} className="mt-0.5 bg-black/20 rounded px-1.5 py-1">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[8px] text-white font-medium">{tech.name}</span>
+                                              <span className={`text-[7px] px-1 py-0.5 rounded ${tech.type === 'manual' ? 'bg-purple-500/20 text-purple-300' : tech.type === 'exercise' ? 'bg-green-500/20 text-green-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                                                {tech.type}
+                                              </span>
+                                            </div>
+                                            <p className="text-[7px] text-gray-500 mt-0.5">{tech.dosage}</p>
+                                            <p className="text-[7px] text-gray-400 mt-0.5">{tech.rationale}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {target.painCorrelations.length > 0 && (
+                                      <div>
+                                        <span className="text-[8px] font-medium text-red-400">Pain Links:</span>
+                                        {target.painCorrelations.map((pc, i) => (
+                                          <div key={i} className="mt-0.5 flex items-start gap-1">
+                                            <span className={`text-[7px] px-1 py-0.5 rounded flex-shrink-0 ${pc.mechanism === 'direct' ? 'bg-red-500/20 text-red-300' : pc.mechanism === 'referred' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-orange-500/20 text-orange-300'}`}>
+                                              {pc.mechanism}
+                                            </span>
+                                            <span className="text-[7px] text-gray-400">{pc.explanation}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {target.chainContext.length > 0 && (
+                                      <div className="flex flex-wrap gap-1">
+                                        {target.chainContext.map((cc, i) => (
+                                          <span key={i} className={`text-[7px] px-1 py-0.5 rounded border ${cc.integrity < 60 ? 'bg-red-500/10 text-red-400 border-red-500/20' : cc.integrity < 80 ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
+                                            {cc.chainName} {cc.integrity}%
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <button
+                          onClick={async () => {
+                            setAiTreatmentLoading(true);
+                            setAiTreatmentPlan(null);
+                            try {
+                              const response = await apiRequest('POST', '/api/physiogpt/treatment-synthesis', {
+                                targets: treatmentPriorities.targets.map(t => ({
+                                  name: t.targetName,
+                                  status: t.clinicalStatus,
+                                  action: t.actionLabel,
+                                  isRootCause: t.isRootCause,
+                                  isCompensation: t.isCompensation,
+                                  rationale: t.rationale,
+                                  painLinks: t.painCorrelations.map(p => p.explanation),
+                                  chains: t.chainContext.map(c => `${c.chainName} (${c.integrity}%)`),
+                                })),
+                                summary: treatmentPriorities.summary,
+                                syndromes: muscleAnalysis.syndromes.filter(s => s.detected).map(s => s.label),
+                              });
+                              const data = await response.json();
+                              setAiTreatmentPlan(data.plan);
+                            } catch {
+                              setAiTreatmentPlan('Failed to generate AI treatment plan. Please try again.');
+                            } finally {
+                              setAiTreatmentLoading(false);
+                            }
+                          }}
+                          disabled={aiTreatmentLoading}
+                          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-[9px] font-medium disabled:opacity-50"
+                        >
+                          {aiTreatmentLoading ? (
+                            <><Loader2 className="h-3 w-3 animate-spin" /> Generating AI Treatment Plan...</>
+                          ) : (
+                            <><Sparkles className="h-3 w-3" /> Generate AI Treatment Plan</>
+                          )}
+                        </button>
+
+                        {aiTreatmentPlan && (
+                          <div className="bg-black/30 rounded-lg px-2 py-1.5 border border-emerald-500/20">
+                            <div className="flex items-center gap-1 mb-1">
+                              <Sparkles className="h-3 w-3 text-emerald-400" />
+                              <span className="text-[9px] font-medium text-emerald-300">AI Treatment Synthesis</span>
+                            </div>
+                            <div className="text-[8px] text-gray-300 leading-relaxed whitespace-pre-wrap">{aiTreatmentPlan}</div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

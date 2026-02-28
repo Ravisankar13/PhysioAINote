@@ -2587,6 +2587,59 @@ ${ddxList}`;
       glowSize: boneName.includes('Root') || boneName.includes('Spine') ? 0.22 : 0.18,
     }));
   }, [muscleOverrides]);
+
+  const influenceHighlights = useMemo(() => {
+    const entries = Object.entries(influenceMap);
+    if (entries.length === 0) return [];
+
+    const GROUP_TO_BONES: Record<string, string[]> = {
+      glute_l: ['Hip_L', 'HipPart1_L'], glute_r: ['Hip_R', 'HipPart1_R'],
+      quad_l: ['HipPart2_L', 'Knee_L'], quad_r: ['HipPart2_R', 'Knee_R'],
+      calf_l: ['Knee_L', 'Ankle_L'], calf_r: ['Knee_R', 'Ankle_R'],
+      shin_l: ['Ankle_L', 'Toes_L'], shin_r: ['Ankle_R', 'Toes_R'],
+      deltoid_l: ['Shoulder_L', 'ShoulderPart1_L'], deltoid_r: ['Shoulder_R', 'ShoulderPart1_R'],
+      scapula_l: ['Scapula_L', 'Shoulder_L'], scapula_r: ['Scapula_R', 'Shoulder_R'],
+      bicep_l: ['Elbow_L', 'ElbowPart1_L'], bicep_r: ['Elbow_R', 'ElbowPart1_R'],
+      chest: ['Chest_M', 'Spine1Part2_M'],
+      spine: ['Spine1_M', 'Spine1Part1_M', 'RootPart2_M'],
+      core: ['RootPart1_M', 'Root_M'],
+      neck: ['Neck_M', 'NeckPart1_M'],
+    };
+
+    const PATHWAY_COLORS: Record<InfluencePathway, number> = {
+      reciprocal_inhibition: 0xeab308,
+      fascial_chain: 0x06b6d4,
+      kinetic_chain: 0xf97316,
+    };
+
+    const boneAccum: Record<string, { color: number; intensity: number }> = {};
+    const overrideBones = new Set(muscleOverrideHighlights.map(h => h.boneName));
+
+    for (const [groupId, entry] of entries) {
+      const bones = GROUP_TO_BONES[groupId];
+      if (!bones) continue;
+
+      const dominant = getDominantPathway(entry);
+      const maxDelta = Math.max(...entry.sources.map(s => s.delta));
+      const intensity = Math.min(0.6, Math.max(0.15, maxDelta / 60));
+      const color = PATHWAY_COLORS[dominant];
+
+      for (const bone of bones) {
+        if (overrideBones.has(bone)) continue;
+        if (!boneAccum[bone] || intensity > boneAccum[bone].intensity) {
+          boneAccum[bone] = { color, intensity };
+        }
+      }
+    }
+
+    return Object.entries(boneAccum).map(([boneName, { color, intensity }]) => ({
+      boneName,
+      color,
+      intensity,
+      glowSize: boneName.includes('Root') || boneName.includes('Spine') || boneName.includes('Chest') ? 0.20 : 0.16,
+    }));
+  }, [influenceMap, muscleOverrideHighlights]);
+
   const getIntegrityLabel = (score: number) => score >= 80 ? 'Good' : score >= 60 ? 'Fair' : score >= 40 ? 'Poor' : 'Critical';
   const getSeverityColor = (severity: 'mild' | 'moderate' | 'severe') => severity === 'severe' ? 'text-red-400' : severity === 'moderate' ? 'text-orange-400' : 'text-yellow-400';
 
@@ -2636,9 +2689,10 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 ? [
+              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 ? [
                 ...(chainHighlightBones || []),
                 ...muscleOverrideHighlights,
+                ...influenceHighlights,
               ] : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}

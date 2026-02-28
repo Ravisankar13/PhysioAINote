@@ -58,7 +58,7 @@ Preferred communication style: Simple, everyday language.
 - **Fascial Chain 3D Visualization (Body Tension)**: Renders myofascial chains as colored 3D lines on the skeleton, with tension levels driving visual effects.
 - **Scar Tissue & Adhesion Mapping**: Click-to-place system for documenting scars and adhesion bands on the 3D skeleton, including clinical impact analysis.
 - **Treatment Priority Engine**: Auto-generates ranked treatment targets with clinical status, actions, techniques (including evidence grades and references), root cause/compensation classification, and syndrome protocols. Includes a contraindication system.
-- **Pathology Compensation Engine**: When a muscle has pathology, automatically computes clinically accurate compensation patterns, ROM restrictions, and postural deviations.
+- **Pathology Compensation Engine**: When a muscle has pathology, automatically computes clinically accurate compensation patterns, ROM restrictions, and postural deviations. Feeds directly into movement animations: pathology ROM restrictions become animation constraints that limit joint movement and redistribute blocked motion to compensating joints. Postural deviations serve as animation baselines. Visual "Pathology Compensation Active" badge shows affected joints during animation playback.
 - **Unified Pain Investigation System**: Connects all analysis engines (forces, muscles, fascial chains, scars, kinetic chains) when a pain marker is placed, featuring a Pain Driver Ranking Engine and cross-system correlation.
 
 ## External Dependencies

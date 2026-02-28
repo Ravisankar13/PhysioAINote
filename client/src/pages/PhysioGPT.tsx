@@ -92,7 +92,7 @@ import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalL
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
-import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS } from "@/lib/bidirectionalMuscleJoint";
+import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS, type MuscleRestrictionEffect } from "@/lib/bidirectionalMuscleJoint";
 import { computePathologyCompensation, type PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
 import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
@@ -1488,11 +1488,41 @@ ${ddxList}`;
   }, [compensatedOverrides, modelConfig, bidirectionalMode]);
 
   const muscleRestrictionEffects = useMemo(() => {
+    const effects: MuscleRestrictionEffect[] = [];
+
     const hasManualOverrides = Object.values(compensatedOverrides).some(o => o?.isManual);
-    if (!hasManualOverrides) return undefined;
-    const effects = computeMuscleRestrictionEffects(compensatedOverrides);
+    if (hasManualOverrides) {
+      effects.push(...computeMuscleRestrictionEffects(compensatedOverrides));
+    }
+
+    if (pathologyCompensation && pathologyCompensation.romRestrictions.length > 0) {
+      const camelToSnake: Record<string, string> = {
+        leftShoulder: 'left_shoulder', rightShoulder: 'right_shoulder',
+        leftHip: 'left_hip', rightHip: 'right_hip',
+        leftKnee: 'left_knee', rightKnee: 'right_knee',
+        leftAnkle: 'left_ankle', rightAnkle: 'right_ankle',
+        leftElbow: 'left_elbow', rightElbow: 'right_elbow',
+        leftScapula: 'left_scapula', rightScapula: 'right_scapula',
+        spine: 'spine', pelvis: 'pelvis', neck: 'neck',
+      };
+      for (const restriction of pathologyCompensation.romRestrictions) {
+        const snakeJoint = camelToSnake[restriction.joint] || restriction.joint;
+        const existing = effects.find(e => e.joint === snakeJoint && e.movement === restriction.parameter);
+        if (existing) {
+          existing.restrictionPercent = Math.max(existing.restrictionPercent, restriction.restrictionPercent);
+        } else {
+          effects.push({
+            joint: snakeJoint,
+            movement: restriction.parameter,
+            restrictionPercent: restriction.restrictionPercent,
+            reason: restriction.reason,
+          });
+        }
+      }
+    }
+
     return effects.length > 0 ? effects : undefined;
-  }, [compensatedOverrides]);
+  }, [compensatedOverrides, pathologyCompensation]);
 
   const effectiveModelConfig = useMemo(() => {
     const config = JSON.parse(JSON.stringify(modelConfig));

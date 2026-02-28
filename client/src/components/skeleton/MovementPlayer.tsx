@@ -434,6 +434,31 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
             </div>
           )}
 
+          {animationState.currentMovement && animationState.isPlaying && muscleRestrictionEffects && muscleRestrictionEffects.length > 0 && (
+            <div className="mt-2.5 px-2 py-1.5 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="w-3 h-3 text-orange-400 flex-shrink-0" />
+                <span className="text-[10px] font-semibold text-orange-300">Pathology Compensation Active</span>
+                <span className="text-[9px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded-full ml-auto font-mono">
+                  {muscleRestrictionEffects.length} {muscleRestrictionEffects.length === 1 ? 'joint' : 'joints'}
+                </span>
+              </div>
+              <div className="mt-1 space-y-0.5">
+                {muscleRestrictionEffects.slice(0, 4).map((effect, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-[9px]">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400/60 flex-shrink-0" />
+                    <span className="text-orange-200/80 truncate">
+                      {effect.joint.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} — {effect.movement.replace(/([A-Z])/g, ' $1').trim()} restricted {effect.restrictionPercent}%
+                    </span>
+                  </div>
+                ))}
+                {muscleRestrictionEffects.length > 4 && (
+                  <div className="text-[9px] text-orange-400/60 pl-3">+{muscleRestrictionEffects.length - 4} more</div>
+                )}
+              </div>
+            </div>
+          )}
+
           {showBiomechanics && biomechanicsSnapshot && (
             <div className="mt-3 pt-3 border-t border-gray-700/50">
               <div className="flex items-center justify-between mb-2">

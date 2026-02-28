@@ -1191,6 +1191,68 @@ const ANIMATION_COMPENSATION_MAPPING: Record<string, Array<{ targetJoint: string
   'pelvis:obliquity': [
     { targetJoint: 'spine', targetMovement: 'lateralFlexion', ratio: 0.4 },
   ],
+  'left_shoulder:internalRotation': [
+    { targetJoint: 'leftScapula', targetMovement: 'protraction', ratio: 0.3 },
+    { targetJoint: 'spine', targetMovement: 'thoracicRotation', ratio: 0.25 },
+  ],
+  'right_shoulder:internalRotation': [
+    { targetJoint: 'rightScapula', targetMovement: 'protraction', ratio: 0.3 },
+    { targetJoint: 'spine', targetMovement: 'thoracicRotation', ratio: 0.25 },
+  ],
+  'left_hip:abduction': [
+    { targetJoint: 'pelvis', targetMovement: 'obliquity', ratio: 0.5 },
+    { targetJoint: 'spine', targetMovement: 'lateralFlexion', ratio: 0.3 },
+  ],
+  'right_hip:abduction': [
+    { targetJoint: 'pelvis', targetMovement: 'obliquity', ratio: -0.5 },
+    { targetJoint: 'spine', targetMovement: 'lateralFlexion', ratio: -0.3 },
+  ],
+  'left_hip:extension': [
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.4 },
+    { targetJoint: 'spine', targetMovement: 'lumbarLordosis', ratio: 0.3 },
+  ],
+  'right_hip:extension': [
+    { targetJoint: 'pelvis', targetMovement: 'tilt', ratio: -0.4 },
+    { targetJoint: 'spine', targetMovement: 'lumbarLordosis', ratio: 0.3 },
+  ],
+  'left_knee:extension': [
+    { targetJoint: 'leftHip', targetMovement: 'flexion', ratio: -0.3 },
+    { targetJoint: 'leftAnkle', targetMovement: 'plantarflexion', ratio: 0.25 },
+  ],
+  'right_knee:extension': [
+    { targetJoint: 'rightHip', targetMovement: 'flexion', ratio: -0.3 },
+    { targetJoint: 'rightAnkle', targetMovement: 'plantarflexion', ratio: 0.25 },
+  ],
+  'left_ankle:plantarflexion': [
+    { targetJoint: 'leftKnee', targetMovement: 'flexion', ratio: 0.3 },
+  ],
+  'right_ankle:plantarflexion': [
+    { targetJoint: 'rightKnee', targetMovement: 'flexion', ratio: 0.3 },
+  ],
+  'left_shoulder:externalRotation': [
+    { targetJoint: 'leftScapula', targetMovement: 'retraction', ratio: 0.3 },
+    { targetJoint: 'spine', targetMovement: 'thoracicRotation', ratio: -0.2 },
+  ],
+  'right_shoulder:externalRotation': [
+    { targetJoint: 'rightScapula', targetMovement: 'retraction', ratio: 0.3 },
+    { targetJoint: 'spine', targetMovement: 'thoracicRotation', ratio: 0.2 },
+  ],
+  'left_hip:internalRotation': [
+    { targetJoint: 'leftKnee', targetMovement: 'varus', ratio: -0.3 },
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: 0.25 },
+  ],
+  'right_hip:internalRotation': [
+    { targetJoint: 'rightKnee', targetMovement: 'varus', ratio: -0.3 },
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: -0.25 },
+  ],
+  'left_hip:externalRotation': [
+    { targetJoint: 'leftKnee', targetMovement: 'varus', ratio: 0.3 },
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: -0.25 },
+  ],
+  'right_hip:externalRotation': [
+    { targetJoint: 'rightKnee', targetMovement: 'varus', ratio: 0.3 },
+    { targetJoint: 'pelvis', targetMovement: 'rotation', ratio: 0.25 },
+  ],
 };
 
 export interface MuscleVisibilityConfig {

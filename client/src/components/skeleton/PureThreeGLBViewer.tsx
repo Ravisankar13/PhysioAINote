@@ -4790,15 +4790,15 @@ export default function PureThreeGLBViewer({
       const rShoulder = modelConfig?.rightShoulder as any;
       defaultShoulderAnglesRef.current = {
         left: {
-          flexionRad: ((lShoulder?.flexion ?? -75) * Math.PI) / 180,
-          abductionRad: ((lShoulder?.abduction ?? -31) * Math.PI) / 180,
+          flexionRad: ((lShoulder?.flexion ?? 0) * Math.PI) / 180,
+          abductionRad: ((lShoulder?.abduction ?? -80) * Math.PI) / 180,
           intRotRad: ((lShoulder?.internalRotation ?? 0) * Math.PI) / 180,
           extRotRad: ((lShoulder?.externalRotation ?? 0) * Math.PI) / 180,
           retroversionRad: ((lShoulder?.retroversion ?? 0) * Math.PI) / 180,
         },
         right: {
-          flexionRad: ((rShoulder?.flexion ?? 75) * Math.PI) / 180,
-          abductionRad: ((rShoulder?.abduction ?? -30) * Math.PI) / 180,
+          flexionRad: ((rShoulder?.flexion ?? 0) * Math.PI) / 180,
+          abductionRad: ((rShoulder?.abduction ?? -80) * Math.PI) / 180,
           intRotRad: ((rShoulder?.internalRotation ?? 0) * Math.PI) / 180,
           extRotRad: ((rShoulder?.externalRotation ?? 0) * Math.PI) / 180,
           retroversionRad: ((rShoulder?.retroversion ?? 0) * Math.PI) / 180,

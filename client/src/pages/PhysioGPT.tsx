@@ -1272,8 +1272,8 @@ ${ddxList}`;
 
     setModelConfig(prev => ({
       ...prev,
-      leftShoulder: { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: rad2deg(smoothed.leftShoulder.abduction) },
-      rightShoulder: { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: rad2deg(smoothed.rightShoulder.abduction) },
+      leftShoulder: { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(smoothed.leftShoulder.abduction) },
+      rightShoulder: { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(smoothed.rightShoulder.abduction) },
       leftElbow: { ...prev.leftElbow, flexion: rad2deg(smoothed.leftElbow.flexion) },
       rightElbow: { ...prev.rightElbow, flexion: rad2deg(smoothed.rightElbow.flexion) },
       leftHip: { ...prev.leftHip, flexion: rad2deg(smoothed.leftHip.flexion), abduction: rad2deg(smoothed.leftHip.abduction) },
@@ -1293,10 +1293,10 @@ ${ddxList}`;
     setModelConfig(prev => {
       const next = { ...prev };
       if (partialPose.leftShoulder) {
-        next.leftShoulder = { ...prev.leftShoulder, flexion: rad2deg(partialPose.leftShoulder.x), abduction: rad2deg(partialPose.leftShoulder.z) };
+        next.leftShoulder = { ...prev.leftShoulder, flexion: rad2deg(partialPose.leftShoulder.x), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(partialPose.leftShoulder.z) };
       }
       if (partialPose.rightShoulder) {
-        next.rightShoulder = { ...prev.rightShoulder, flexion: rad2deg(partialPose.rightShoulder.x), abduction: rad2deg(partialPose.rightShoulder.z) };
+        next.rightShoulder = { ...prev.rightShoulder, flexion: rad2deg(partialPose.rightShoulder.x), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(partialPose.rightShoulder.z) };
       }
       if (partialPose.leftElbow) {
         next.leftElbow = { ...prev.leftElbow, flexion: rad2deg(partialPose.leftElbow.x) };

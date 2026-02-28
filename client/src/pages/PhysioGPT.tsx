@@ -2186,71 +2186,6 @@ ${ddxList}`;
     return result;
   }, [effectiveModelConfig, forceMode]);
 
-  const muscleAnalysis = useMemo(() => {
-    if (!muscleMode) return null;
-    const base = computeFullMuscleAnalysis(effectiveModelConfig);
-    if (enabledMuscleGroups.size === 0 && base.groups.length > 0) {
-      setEnabledMuscleGroups(new Set(base.groups.map(g => g.id)));
-    }
-    return applyOverridesToAnalysis(base, muscleOverrides, crossMuscleEffects);
-  }, [effectiveModelConfig, muscleMode, muscleOverrides, crossMuscleEffects]);
-
-  const weightDistribution = useMemo(() => {
-    if (!forceMode) return null;
-    return computeWeightDistribution(effectiveModelConfig, bodyWeightKg);
-  }, [effectiveModelConfig, forceMode, bodyWeightKg]);
-
-  const correlationResult = useMemo(() => {
-    if (!correlationMode && !chainIntegrityMode && !chainExplorerMode) return null;
-    const forces = calculatePosturalForces(effectiveModelConfig);
-    const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
-    return computeCrossSystemCorrelation({
-      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
-      forces: forces.joints,
-      muscles: muscles.allMuscles,
-      muscleGroups: muscles.groups,
-      syndromes: muscles.syndromes,
-      kineticChains: KINETIC_CHAINS,
-      bodyWeightKg,
-    });
-  }, [effectiveModelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode]);
-
-  const chainIntegrityScores = useMemo(() => {
-    if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
-    const baseAnalysis = computeFullMuscleAnalysis(effectiveModelConfig);
-    const muscles = applyOverridesToAnalysis(baseAnalysis, muscleOverrides, crossMuscleEffects);
-    const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
-    for (const chain of KINETIC_CHAINS) {
-      let totalScore = 100;
-      const issues: string[] = [];
-      const problematicLinks: string[] = [];
-      const exercises: string[] = [];
-      for (const link of chain.links) {
-        for (const muscName of link.muscles) {
-          const muscLower = muscName.toLowerCase();
-          const matchedMuscle = muscles.allMuscles.find(m => {
-            const mLabel = m.label.toLowerCase();
-            const mId = m.id.toLowerCase();
-            return mLabel.includes(muscLower) || muscLower.includes(mLabel.replace(/^[lr] /, '')) || mId.includes(muscLower.replace(/ /g, '_')) || muscLower.replace(/ /g, '_').includes(mId.replace(/^[lr]_/, ''));
-          });
-          if (matchedMuscle && matchedMuscle.clinicalStatus !== 'normal') {
-            const penalty = matchedMuscle.clinicalStatus === 'spasm' ? 15 : matchedMuscle.clinicalStatus === 'inhibited' ? 12 : matchedMuscle.clinicalStatus === 'overactive' ? 10 : matchedMuscle.clinicalStatus === 'shortened' ? 8 : matchedMuscle.clinicalStatus === 'weak' ? 10 : matchedMuscle.clinicalStatus === 'lengthened' ? 6 : 3;
-            totalScore -= penalty;
-            issues.push(`${matchedMuscle.label}: ${matchedMuscle.clinicalStatus}`);
-            if (!problematicLinks.includes(link.label)) problematicLinks.push(link.label);
-            if (matchedMuscle.clinicalStatus === 'shortened' || matchedMuscle.clinicalStatus === 'overactive') exercises.push(`Stretch/release ${muscName}`);
-            else if (matchedMuscle.clinicalStatus === 'inhibited' || matchedMuscle.clinicalStatus === 'weak') exercises.push(`Strengthen/activate ${muscName}`);
-            else if (matchedMuscle.clinicalStatus === 'spasm') exercises.push(`Release/manual therapy for ${muscName}`);
-          }
-          if (matchedMuscle && matchedMuscle.tightnessPercent > 50) totalScore -= 3;
-          if (matchedMuscle && matchedMuscle.inhibitionPercent > 40) totalScore -= 4;
-        }
-      }
-      scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
-    }
-    return scores;
-  }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, muscleOverrides, crossMuscleEffects]);
-
   const baseMuscleTensions = useMemo(() => {
     const base = computeAllMuscleStates(effectiveModelConfig);
     const tensions: { [id: string]: number } = {};
@@ -2321,6 +2256,71 @@ ${ddxList}`;
       ) : undefined,
     };
   }, [muscleDrivenEffects, chainPropagation]);
+
+  const muscleAnalysis = useMemo(() => {
+    if (!muscleMode) return null;
+    const base = computeFullMuscleAnalysis(effectiveModelConfig);
+    if (enabledMuscleGroups.size === 0 && base.groups.length > 0) {
+      setEnabledMuscleGroups(new Set(base.groups.map(g => g.id)));
+    }
+    return applyOverridesToAnalysis(base, muscleOverrides, crossMuscleEffects);
+  }, [effectiveModelConfig, muscleMode, muscleOverrides, crossMuscleEffects]);
+
+  const weightDistribution = useMemo(() => {
+    if (!forceMode) return null;
+    return computeWeightDistribution(effectiveModelConfig, bodyWeightKg);
+  }, [effectiveModelConfig, forceMode, bodyWeightKg]);
+
+  const correlationResult = useMemo(() => {
+    if (!correlationMode && !chainIntegrityMode && !chainExplorerMode) return null;
+    const forces = calculatePosturalForces(effectiveModelConfig);
+    const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
+    return computeCrossSystemCorrelation({
+      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
+      forces: forces.joints,
+      muscles: muscles.allMuscles,
+      muscleGroups: muscles.groups,
+      syndromes: muscles.syndromes,
+      kineticChains: KINETIC_CHAINS,
+      bodyWeightKg,
+    });
+  }, [effectiveModelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode]);
+
+  const chainIntegrityScores = useMemo(() => {
+    if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
+    const baseAnalysis = computeFullMuscleAnalysis(effectiveModelConfig);
+    const muscles = applyOverridesToAnalysis(baseAnalysis, muscleOverrides, crossMuscleEffects);
+    const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
+    for (const chain of KINETIC_CHAINS) {
+      let totalScore = 100;
+      const issues: string[] = [];
+      const problematicLinks: string[] = [];
+      const exercises: string[] = [];
+      for (const link of chain.links) {
+        for (const muscName of link.muscles) {
+          const muscLower = muscName.toLowerCase();
+          const matchedMuscle = muscles.allMuscles.find(m => {
+            const mLabel = m.label.toLowerCase();
+            const mId = m.id.toLowerCase();
+            return mLabel.includes(muscLower) || muscLower.includes(mLabel.replace(/^[lr] /, '')) || mId.includes(muscLower.replace(/ /g, '_')) || muscLower.replace(/ /g, '_').includes(mId.replace(/^[lr]_/, ''));
+          });
+          if (matchedMuscle && matchedMuscle.clinicalStatus !== 'normal') {
+            const penalty = matchedMuscle.clinicalStatus === 'spasm' ? 15 : matchedMuscle.clinicalStatus === 'inhibited' ? 12 : matchedMuscle.clinicalStatus === 'overactive' ? 10 : matchedMuscle.clinicalStatus === 'shortened' ? 8 : matchedMuscle.clinicalStatus === 'weak' ? 10 : matchedMuscle.clinicalStatus === 'lengthened' ? 6 : 3;
+            totalScore -= penalty;
+            issues.push(`${matchedMuscle.label}: ${matchedMuscle.clinicalStatus}`);
+            if (!problematicLinks.includes(link.label)) problematicLinks.push(link.label);
+            if (matchedMuscle.clinicalStatus === 'shortened' || matchedMuscle.clinicalStatus === 'overactive') exercises.push(`Stretch/release ${muscName}`);
+            else if (matchedMuscle.clinicalStatus === 'inhibited' || matchedMuscle.clinicalStatus === 'weak') exercises.push(`Strengthen/activate ${muscName}`);
+            else if (matchedMuscle.clinicalStatus === 'spasm') exercises.push(`Release/manual therapy for ${muscName}`);
+          }
+          if (matchedMuscle && matchedMuscle.tightnessPercent > 50) totalScore -= 3;
+          if (matchedMuscle && matchedMuscle.inhibitionPercent > 40) totalScore -= 4;
+        }
+      }
+      scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
+    }
+    return scores;
+  }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, muscleOverrides, crossMuscleEffects]);
 
   const painAffectedChainIds = useMemo(() => {
     if (!showChainVisualization || painMarkers.length === 0) return [];

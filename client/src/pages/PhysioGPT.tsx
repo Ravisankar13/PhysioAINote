@@ -67,7 +67,8 @@ import {
   Palette,
   Scissors,
   Grid2X2,
-  RefreshCw
+  RefreshCw,
+  ExternalLink
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -101,7 +102,7 @@ import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
-import { computeTreatmentPriorities as computeFullTreatmentPriorities, type TreatmentPriorityResult, type TreatmentTarget } from "@/lib/treatmentPriorityEngine";
+import { computeTreatmentPriorities as computeFullTreatmentPriorities, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol } from "@/lib/treatmentPriorityEngine";
 
 const BODY_REGIONS = {
   cervical: {
@@ -3624,6 +3625,71 @@ ${ddxList}`;
                           </div>
                         )}
 
+                        {treatmentPriorities.summary.syndromeProtocols && treatmentPriorities.summary.syndromeProtocols.length > 0 && (
+                          <div className="space-y-1 pt-0.5">
+                            {treatmentPriorities.summary.syndromeProtocols.map((protocol: SyndromeProtocol) => (
+                              <div key={protocol.syndromeId} className="bg-red-500/5 border border-red-500/20 rounded-lg overflow-hidden">
+                                <button
+                                  onClick={() => setExpandedTreatmentTarget(expandedTreatmentTarget === `protocol_${protocol.syndromeId}` ? null : `protocol_${protocol.syndromeId}`)}
+                                  className="w-full flex items-center justify-between px-2 py-1 hover:bg-red-500/10 transition-colors"
+                                >
+                                  <div className="flex items-center gap-1">
+                                    <BookOpen className="h-3 w-3 text-red-400" />
+                                    <span className="text-[8px] font-semibold text-red-300">{protocol.protocolName}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[7px] text-red-400/70">{protocol.sourceAuthor}</span>
+                                    {expandedTreatmentTarget === `protocol_${protocol.syndromeId}` ? <ChevronUp className="h-2.5 w-2.5 text-red-400/50" /> : <ChevronDown className="h-2.5 w-2.5 text-red-400/50" />}
+                                  </div>
+                                </button>
+                                {expandedTreatmentTarget === `protocol_${protocol.syndromeId}` && (
+                                  <div className="px-2 pb-2 border-t border-red-500/15 pt-1.5 space-y-1">
+                                    <p className="text-[7px] text-gray-400 leading-relaxed">{protocol.description}</p>
+                                    <p className="text-[7px] text-amber-400/80 leading-relaxed">{protocol.phaseNotes}</p>
+                                    <div className="space-y-0.5 mt-1">
+                                      <span className="text-[8px] font-medium text-red-300">Protocol Sequence:</span>
+                                      {protocol.techniqueSequence.map((tech, ti) => (
+                                        <div key={ti} className="bg-black/20 rounded px-1.5 py-1 mt-0.5">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[8px] text-white font-medium">{tech.name}</span>
+                                            <div className="flex items-center gap-1">
+                                              <span className={`text-[6px] px-1 py-0.5 rounded font-bold ${tech.evidenceGrade === 'A' ? 'bg-green-500/25 text-green-300' : tech.evidenceGrade === 'B' ? 'bg-yellow-500/25 text-yellow-300' : 'bg-gray-500/25 text-gray-400'}`}>
+                                                {tech.evidenceGrade}
+                                              </span>
+                                              <span className={`text-[7px] px-1 py-0.5 rounded ${tech.type === 'manual' ? 'bg-purple-500/20 text-purple-300' : tech.type === 'exercise' ? 'bg-green-500/20 text-green-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                                                {tech.type}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <p className="text-[7px] text-gray-500 mt-0.5">{tech.dosage}</p>
+                                          <p className="text-[7px] text-gray-400 mt-0.5">{tech.rationale}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {protocol.references.length > 0 && (
+                                      <div className="mt-1 pt-1 border-t border-red-500/10">
+                                        <span className="text-[7px] text-gray-500 font-medium">References:</span>
+                                        {protocol.references.map((ref, ri) => (
+                                          <div key={ri} className="flex items-start gap-1 mt-0.5">
+                                            <span className="text-[6px] text-gray-500 leading-relaxed">
+                                              {ref.authors} ({ref.year}). {ref.title}. <em>{ref.journal}</em>.
+                                              {ref.pmid && (
+                                                <a href={`https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 ml-0.5 inline-flex items-center gap-0.5">
+                                                  PubMed <ExternalLink className="h-2 w-2 inline" />
+                                                </a>
+                                              )}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         {treatmentPriorities.summary.criticalChain && (
                           <div className="flex items-center gap-1 pt-0.5">
                             <AlertTriangle className="h-2.5 w-2.5 text-orange-400 flex-shrink-0" />
@@ -3679,11 +3745,30 @@ ${ddxList}`;
                                     {target.painCorrelations.length > 0 && (
                                       <MapPin className="h-2.5 w-2.5 text-red-400" />
                                     )}
+                                    {target.contraindications && target.contraindications.length > 0 && (
+                                      <AlertTriangle className={`h-2.5 w-2.5 ${target.contraindications.some(c => c.severity === 'stop') ? 'text-red-500' : target.contraindications.some(c => c.severity === 'warning') ? 'text-orange-400' : 'text-amber-400'}`} />
+                                    )}
                                     {isExpanded ? <ChevronUp className="h-2.5 w-2.5 text-gray-500" /> : <ChevronDown className="h-2.5 w-2.5 text-gray-500" />}
                                   </div>
                                 </button>
 
                                 <p className="text-[8px] text-gray-400 leading-relaxed px-2 pb-1">{target.rationale}</p>
+
+                                {target.contraindications && target.contraindications.length > 0 && (
+                                  <div className="px-2 pb-1 space-y-0.5">
+                                    {target.contraindications.map((ci, ciIdx) => (
+                                      <div key={ciIdx} className={`flex items-start gap-1 rounded px-1.5 py-1 ${ci.severity === 'stop' ? 'bg-red-500/10 border border-red-500/25' : ci.severity === 'warning' ? 'bg-orange-500/10 border border-orange-500/25' : 'bg-amber-500/10 border border-amber-500/25'}`}>
+                                        <AlertTriangle className={`h-2.5 w-2.5 flex-shrink-0 mt-0.5 ${ci.severity === 'stop' ? 'text-red-400' : ci.severity === 'warning' ? 'text-orange-400' : 'text-amber-400'}`} />
+                                        <div>
+                                          <span className={`text-[7px] font-semibold ${ci.severity === 'stop' ? 'text-red-300' : ci.severity === 'warning' ? 'text-orange-300' : 'text-amber-300'}`}>
+                                            {ci.severity === 'stop' ? 'STOP' : ci.severity === 'warning' ? 'WARNING' : 'CAUTION'}: {ci.flag}
+                                          </span>
+                                          <p className="text-[6px] text-gray-400 leading-relaxed mt-0.5">{ci.reason}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
 
                                 {isExpanded && (
                                   <div className="px-2 pb-2 space-y-1.5 border-t border-gray-600/20 pt-1.5">
@@ -3693,13 +3778,39 @@ ${ddxList}`;
                                         {target.techniques.map((tech, i) => (
                                           <div key={i} className="mt-0.5 bg-black/20 rounded px-1.5 py-1">
                                             <div className="flex items-center justify-between">
-                                              <span className="text-[8px] text-white font-medium">{tech.name}</span>
-                                              <span className={`text-[7px] px-1 py-0.5 rounded ${tech.type === 'manual' ? 'bg-purple-500/20 text-purple-300' : tech.type === 'exercise' ? 'bg-green-500/20 text-green-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                                              <div className="flex items-center gap-1 flex-1 min-w-0">
+                                                <span className={`text-[6px] px-1 py-0.5 rounded font-bold flex-shrink-0 ${tech.evidenceGrade === 'A' ? 'bg-green-500/25 text-green-300 border border-green-500/30' : tech.evidenceGrade === 'B' ? 'bg-yellow-500/25 text-yellow-300 border border-yellow-500/30' : tech.evidenceGrade === 'C' ? 'bg-gray-500/25 text-gray-400 border border-gray-500/30' : 'bg-gray-500/15 text-gray-500 border border-gray-500/20'}`}>
+                                                  {tech.evidenceGrade}
+                                                </span>
+                                                <span className="text-[8px] text-white font-medium truncate">{tech.name}</span>
+                                              </div>
+                                              <span className={`text-[7px] px-1 py-0.5 rounded flex-shrink-0 ${tech.type === 'manual' ? 'bg-purple-500/20 text-purple-300' : tech.type === 'exercise' ? 'bg-green-500/20 text-green-300' : 'bg-amber-500/20 text-amber-300'}`}>
                                                 {tech.type}
                                               </span>
                                             </div>
-                                            <p className="text-[7px] text-gray-500 mt-0.5">{tech.dosage}</p>
+                                            <div className="flex items-center gap-1 mt-0.5">
+                                              <p className="text-[7px] text-gray-500">{tech.dosage}</p>
+                                              {tech.guidelineSource && (
+                                                <span className="text-[6px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400/80 flex-shrink-0">
+                                                  {tech.guidelineSource}
+                                                </span>
+                                              )}
+                                            </div>
                                             <p className="text-[7px] text-gray-400 mt-0.5">{tech.rationale}</p>
+                                            {tech.references && tech.references.length > 0 && (
+                                              <div className="mt-1 pt-0.5 border-t border-gray-700/30">
+                                                {tech.references.map((ref, ri) => (
+                                                  <p key={ri} className="text-[6px] text-gray-500 leading-relaxed">
+                                                    {ref.authors} ({ref.year}). <em>{ref.journal}</em>
+                                                    {ref.pmid && (
+                                                      <a href={`https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 ml-0.5 inline-flex items-center gap-0.5">
+                                                        <ExternalLink className="h-2 w-2 inline" />
+                                                      </a>
+                                                    )}
+                                                  </p>
+                                                ))}
+                                              </div>
+                                            )}
                                           </div>
                                         ))}
                                       </div>
@@ -3750,8 +3861,11 @@ ${ddxList}`;
                                   rationale: t.rationale,
                                   painLinks: t.painCorrelations.map(p => p.explanation),
                                   chains: t.chainContext.map(c => `${c.chainName} (${c.integrity}%)`),
+                                  contraindications: t.contraindications?.map(c => `[${c.severity.toUpperCase()}] ${c.flag}: ${c.reason}`) || [],
+                                  techniques: t.techniques.map(tech => `${tech.name} (${tech.evidenceGrade}) - ${tech.dosage}`),
                                 })),
                                 summary: treatmentPriorities.summary,
+                                syndromeProtocols: treatmentPriorities.summary.syndromeProtocols?.map(p => ({ name: p.protocolName, source: p.sourceAuthor, sequence: p.techniqueSequence.map(t => t.name) })) || [],
                                 syndromes: muscleAnalysis.syndromes.filter(s => s.detected).map(s => s.label),
                               });
                               const data = await response.json();

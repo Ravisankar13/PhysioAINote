@@ -93,6 +93,7 @@ import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighli
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS } from "@/lib/bidirectionalMuscleJoint";
+import { computePathologyCompensation, type PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
 import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
@@ -1446,39 +1447,92 @@ ${ddxList}`;
     lastReasoningTriggerRef.current = '';
   }, [toast]);
 
-  const muscleDrivenEffects = useMemo(() => {
-    if (!bidirectionalMode) return null;
-    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
-    if (!hasManualOverrides) return null;
-    return computeBidirectionalEffects(muscleOverrides, modelConfig);
-  }, [muscleOverrides, modelConfig, bidirectionalMode]);
-
-  const muscleRestrictionEffects = useMemo(() => {
-    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
-    if (!hasManualOverrides) return undefined;
-    const effects = computeMuscleRestrictionEffects(muscleOverrides);
-    return effects.length > 0 ? effects : undefined;
+  const pathologyCompensation = useMemo<PathologyCompensationResult | null>(() => {
+    const hasPathology = Object.values(muscleOverrides).some(o => o?.isManual && o.pathology !== 'none');
+    if (!hasPathology) return null;
+    return computePathologyCompensation(muscleOverrides);
   }, [muscleOverrides]);
 
+  const compensatedOverrides = useMemo(() => {
+    if (!pathologyCompensation || Object.keys(pathologyCompensation.compensatoryOverrides).length === 0) {
+      return muscleOverrides;
+    }
+    const merged = { ...muscleOverrides };
+    for (const [groupId, comp] of Object.entries(pathologyCompensation.compensatoryOverrides)) {
+      const existing = merged[groupId];
+      if (existing?.isManual) {
+        merged[groupId] = {
+          ...existing,
+          tensionOffset: existing.tensionOffset + (comp.tensionOffset || 0),
+          activationOffset: existing.activationOffset + (comp.activationOffset || 0),
+        };
+      } else {
+        merged[groupId] = {
+          tensionOffset: comp.tensionOffset || 0,
+          activationOffset: comp.activationOffset || 0,
+          inhibition: 0,
+          lengthOverride: 'none' as const,
+          pathology: 'none' as const,
+          isManual: true,
+        };
+      }
+    }
+    return merged;
+  }, [muscleOverrides, pathologyCompensation]);
+
+  const muscleDrivenEffects = useMemo(() => {
+    if (!bidirectionalMode) return null;
+    const hasManualOverrides = Object.values(compensatedOverrides).some(o => o?.isManual);
+    if (!hasManualOverrides) return null;
+    return computeBidirectionalEffects(compensatedOverrides, modelConfig);
+  }, [compensatedOverrides, modelConfig, bidirectionalMode]);
+
+  const muscleRestrictionEffects = useMemo(() => {
+    const hasManualOverrides = Object.values(compensatedOverrides).some(o => o?.isManual);
+    if (!hasManualOverrides) return undefined;
+    const effects = computeMuscleRestrictionEffects(compensatedOverrides);
+    return effects.length > 0 ? effects : undefined;
+  }, [compensatedOverrides]);
+
   const effectiveModelConfig = useMemo(() => {
-    if (!muscleDrivenEffects) return modelConfig;
     const config = JSON.parse(JSON.stringify(modelConfig));
-    for (const [joint, params] of Object.entries(muscleDrivenEffects.jointAdjustments)) {
-      if (!config[joint]) config[joint] = {};
-      for (const [param, value] of Object.entries(params)) {
-        const current = config[joint][param] || 0;
-        config[joint][param] = current + value;
+
+    if (muscleDrivenEffects) {
+      for (const [joint, params] of Object.entries(muscleDrivenEffects.jointAdjustments)) {
+        if (!config[joint]) config[joint] = {};
+        for (const [param, value] of Object.entries(params)) {
+          const current = config[joint][param] || 0;
+          config[joint][param] = current + value;
+        }
+      }
+      for (const [joint, params] of Object.entries(muscleDrivenEffects.couplingEffects)) {
+        if (!config[joint]) config[joint] = {};
+        for (const [param, value] of Object.entries(params)) {
+          const current = config[joint][param] || 0;
+          config[joint][param] = current + value;
+        }
       }
     }
-    for (const [joint, params] of Object.entries(muscleDrivenEffects.couplingEffects)) {
-      if (!config[joint]) config[joint] = {};
-      for (const [param, value] of Object.entries(params)) {
-        const current = config[joint][param] || 0;
-        config[joint][param] = current + value;
+
+    if (pathologyCompensation) {
+      for (const deviation of pathologyCompensation.posturalDeviations) {
+        if (!config[deviation.joint]) config[deviation.joint] = {};
+        const current = config[deviation.joint][deviation.parameter] || 0;
+        config[deviation.joint][deviation.parameter] = current + deviation.deviationDegrees;
+      }
+
+      for (const restriction of pathologyCompensation.romRestrictions) {
+        if (!config[restriction.joint]) config[restriction.joint] = {};
+        const current = config[restriction.joint][restriction.parameter] || 0;
+        const maxAllowed = current * (1 - restriction.restrictionPercent / 100);
+        if (Math.abs(current) > Math.abs(maxAllowed) && Math.abs(current) > 0) {
+          config[restriction.joint][restriction.parameter] = maxAllowed;
+        }
       }
     }
+
     return config;
-  }, [modelConfig, muscleDrivenEffects]);
+  }, [modelConfig, muscleDrivenEffects, pathologyCompensation]);
 
   const handleAnalyzeSkeleton = useCallback(() => {
     const sections: string[] = [];
@@ -1985,7 +2039,7 @@ ${ddxList}`;
     const localMuscleStates = computeAllMuscleStates(effectiveModelConfig);
     const localTensions: Record<string, number> = {};
     Object.entries(localMuscleStates).forEach(([id, s]) => { localTensions[id] = s.tension; });
-    const localPropEffects = propagateChainEffects(localTensions, muscleOverrides);
+    const localPropEffects = propagateChainEffects(localTensions, compensatedOverrides);
 
     const currentChainEffects = MYOFASCIAL_CHAINS.map(chain => {
       const chainTensions = chain.links.map(l => localTensions[l.muscleId] ?? 50);
@@ -2197,8 +2251,8 @@ ${ddxList}`;
   }, [effectiveModelConfig]);
 
   const wholeBodyScore = useMemo(() => {
-    return computeWholeBodyTensionScore(baseMuscleTensions.tensions, muscleOverrides);
-  }, [baseMuscleTensions, muscleOverrides]);
+    return computeWholeBodyTensionScore(baseMuscleTensions.tensions, compensatedOverrides);
+  }, [baseMuscleTensions, compensatedOverrides]);
 
   const chainEffects = useMemo(() => {
     return MYOFASCIAL_CHAINS.map(chain => {
@@ -2209,10 +2263,10 @@ ${ddxList}`;
   }, [baseMuscleTensions]);
 
   const chainPropagation = useMemo(() => {
-    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
+    const hasManualOverrides = Object.values(compensatedOverrides).some(o => o?.isManual);
     if (!hasManualOverrides) return null;
-    return propagateChainEffects(baseMuscleTensions.tensions, muscleOverrides);
-  }, [baseMuscleTensions.tensions, muscleOverrides]);
+    return propagateChainEffects(baseMuscleTensions.tensions, compensatedOverrides);
+  }, [baseMuscleTensions.tensions, compensatedOverrides]);
 
   const propagatedEffects = useMemo(() => {
     if (!showChainVisualization || !showPropagation) return chainPropagation;
@@ -2271,8 +2325,8 @@ ${ddxList}`;
     if (enabledMuscleGroups.size === 0 && base.groups.length > 0) {
       setEnabledMuscleGroups(new Set(base.groups.map(g => g.id)));
     }
-    return applyOverridesToAnalysis(base, muscleOverrides, crossMuscleEffects);
-  }, [effectiveModelConfig, muscleMode, muscleOverrides, crossMuscleEffects]);
+    return applyOverridesToAnalysis(base, compensatedOverrides, crossMuscleEffects);
+  }, [effectiveModelConfig, muscleMode, compensatedOverrides, crossMuscleEffects]);
 
   const weightDistribution = useMemo(() => {
     if (!forceMode) return null;
@@ -2297,7 +2351,7 @@ ${ddxList}`;
   const chainIntegrityScores = useMemo(() => {
     if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     const baseAnalysis = computeFullMuscleAnalysis(effectiveModelConfig);
-    const muscles = applyOverridesToAnalysis(baseAnalysis, muscleOverrides, crossMuscleEffects);
+    const muscles = applyOverridesToAnalysis(baseAnalysis, compensatedOverrides, crossMuscleEffects);
     const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     for (const chain of KINETIC_CHAINS) {
       let totalScore = 100;
@@ -2328,7 +2382,7 @@ ${ddxList}`;
       scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
     }
     return scores;
-  }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, muscleOverrides, crossMuscleEffects]);
+  }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, compensatedOverrides, crossMuscleEffects]);
 
   const treatmentPriorities = useMemo((): TreatmentPriorityResult => {
     const hasOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
@@ -2341,6 +2395,7 @@ ${ddxList}`;
   }, [muscleAnalysis, muscleOverrides, influenceMap, chainIntegrityScores, painMarkers]);
 
   const [treatmentPanelOpen, setTreatmentPanelOpen] = useState(true);
+  const [compensationPanelOpen, setCompensationPanelOpen] = useState(true);
   const [expandedTreatmentTarget, setExpandedTreatmentTarget] = useState<string | null>(null);
   const [aiTreatmentPlan, setAiTreatmentPlan] = useState<string | null>(null);
   const [aiTreatmentLoading, setAiTreatmentLoading] = useState(false);
@@ -2393,7 +2448,7 @@ ${ddxList}`;
     if (painMarkers.length === 0) return [];
     const forces = calculatePosturalForces(effectiveModelConfig, fascialModifiers);
     const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
-    const allPropEffects = propagateChainEffects(baseMuscleTensions.tensions, muscleOverrides);
+    const allPropEffects = propagateChainEffects(baseMuscleTensions.tensions, compensatedOverrides);
     const allChainEffects: import("@/lib/myofascialChains").ChainEffect[] = [];
     for (const state of Object.values(allPropEffects)) {
       allChainEffects.push(...state.chainEffects, ...state.slingEffects);
@@ -2443,7 +2498,7 @@ ${ddxList}`;
     return correlation.painCorrelations.map(pc =>
       computePainDrivers(pc, forceData, muscleData, fascialData, scarData)
     );
-  }, [painMarkers, effectiveModelConfig, fascialModifiers, baseMuscleTensions.tensions, muscleOverrides, scarMarkers, adhesionBands, bodyWeightKg]);
+  }, [painMarkers, effectiveModelConfig, fascialModifiers, baseMuscleTensions.tensions, compensatedOverrides, scarMarkers, adhesionBands, bodyWeightKg]);
 
   const painDriverChainIds = useMemo(() => {
     const ids = new Set<string>();
@@ -3585,6 +3640,89 @@ ${ddxList}`;
                             ))
                           ))}
                         </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {pathologyCompensation && pathologyCompensation.clinicalFindings.length > 0 && (
+                  <div className="mb-2 bg-orange-500/10 border border-orange-500/25 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setCompensationPanelOpen(!compensationPanelOpen)}
+                      className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-orange-500/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Activity className="h-3.5 w-3.5 text-orange-400" />
+                        <span className="text-[10px] font-semibold text-orange-300">Pathology Compensation</span>
+                        <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-medium">
+                          {pathologyCompensation.clinicalFindings.length} pattern{pathologyCompensation.clinicalFindings.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {pathologyCompensation.clinicalFindings.some(f => f.severity === 'severe') && (
+                          <span className="text-[7px] px-1 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/20">severe</span>
+                        )}
+                        {compensationPanelOpen ? <ChevronUp className="h-3 w-3 text-gray-400" /> : <ChevronDown className="h-3 w-3 text-gray-400" />}
+                      </div>
+                    </button>
+                    {compensationPanelOpen && (
+                      <div className="px-2 pb-2 space-y-1.5">
+                        {pathologyCompensation.clinicalFindings.map((finding, i) => (
+                          <div key={i} className={`rounded px-2 py-1.5 border ${
+                            finding.severity === 'severe' ? 'bg-red-500/15 border-red-500/30' :
+                            finding.severity === 'moderate' ? 'bg-orange-500/15 border-orange-500/30' :
+                            'bg-yellow-500/15 border-yellow-500/30'
+                          }`}>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-medium ${
+                                finding.severity === 'severe' ? 'bg-red-500/30 text-red-300' :
+                                finding.severity === 'moderate' ? 'bg-orange-500/30 text-orange-300' :
+                                'bg-yellow-500/30 text-yellow-300'
+                              }`}>{finding.severity}</span>
+                              <span className="text-[9px] font-medium text-white">{finding.title}</span>
+                            </div>
+                            <p className="text-[8px] text-gray-300/80 leading-relaxed">{finding.description}</p>
+                          </div>
+                        ))}
+
+                        {Object.keys(pathologyCompensation.compensatoryOverrides).length > 0 && (
+                          <div className="pt-1 border-t border-orange-500/20">
+                            <span className="text-[8px] font-medium text-orange-300">Compensating Muscles:</span>
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {Object.entries(pathologyCompensation.compensatoryOverrides).map(([groupId, comp]) => (
+                                <span key={groupId} className="text-[7px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300 border border-orange-500/25">
+                                  {groupId.replace(/_/g, ' ')} +{comp.tensionOffset || 0}T
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {pathologyCompensation.romRestrictions.length > 0 && (
+                          <div className="pt-1 border-t border-orange-500/20">
+                            <span className="text-[8px] font-medium text-red-300">ROM Restrictions:</span>
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {pathologyCompensation.romRestrictions.map((r, i) => (
+                                <span key={i} className="text-[7px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">
+                                  {r.joint}.{r.parameter} -{r.restrictionPercent}%
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {pathologyCompensation.posturalDeviations.length > 0 && (
+                          <div className="pt-1 border-t border-orange-500/20">
+                            <span className="text-[8px] font-medium text-yellow-300">Postural Deviations:</span>
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {pathologyCompensation.posturalDeviations.map((d, i) => (
+                                <span key={i} className="text-[7px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                                  {d.joint}.{d.parameter} {d.deviationDegrees > 0 ? '+' : ''}{d.deviationDegrees.toFixed(1)}°
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

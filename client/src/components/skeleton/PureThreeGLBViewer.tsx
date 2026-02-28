@@ -4249,6 +4249,10 @@ export default function PureThreeGLBViewer({
             muscleMeshesRef.current = muscleMeshes;
             console.log(`Found ${muscleMeshes.length} muscle meshes, visibility: ${showMuscles}`);
             
+            model.position.set(-0.15, -1.2, 0);
+            scene.add(model);
+            model.updateMatrixWorld(true);
+
             if (muscleMeshes.length > 0 && splitMuscleGroupsRef.current.size === 0) {
               try {
                 const groups = classifyMuscleMeshes(muscleMeshes);
@@ -4275,21 +4279,58 @@ export default function PureThreeGLBViewer({
                 groups.forEach((group, groupId) => {
                   if (groupId === 'other' || group.meshes.length === 0) return;
 
-                  const combinedBox = new THREE.Box3();
+                  const groupCenter = new THREE.Vector3();
+                  const groupMin = new THREE.Vector3(Infinity, Infinity, Infinity);
+                  const groupMax = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+                  let totalSamples = 0;
+
                   for (const mesh of group.meshes) {
+                    if (!(mesh instanceof THREE.SkinnedMesh) || !mesh.skeleton) continue;
+
                     mesh.updateWorldMatrix(true, false);
-                    const meshBox = new THREE.Box3().setFromObject(mesh);
-                    combinedBox.union(meshBox);
+                    if (mesh.skeleton) {
+                      mesh.skeleton.update();
+                    }
+
+                    const posAttr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+                    const skinIdxAttr = mesh.geometry.getAttribute('skinIndex') as THREE.BufferAttribute;
+                    const skinWtAttr = mesh.geometry.getAttribute('skinWeight') as THREE.BufferAttribute;
+
+                    if (!posAttr || !skinIdxAttr || !skinWtAttr) continue;
+
+                    const vertCount = posAttr.count;
+                    const sampleStep = Math.max(1, Math.floor(vertCount / 50));
+                    const tempVec = new THREE.Vector3();
+
+                    for (let vi = 0; vi < vertCount; vi += sampleStep) {
+                      tempVec.fromBufferAttribute(posAttr, vi);
+                      mesh.localToWorld(tempVec);
+
+                      groupCenter.add(tempVec);
+                      groupMin.min(tempVec);
+                      groupMax.max(tempVec);
+                      totalSamples++;
+                    }
                   }
 
-                  if (combinedBox.isEmpty()) return;
+                  if (totalSamples === 0) {
+                    const fallbackBox = new THREE.Box3();
+                    for (const mesh of group.meshes) {
+                      mesh.updateWorldMatrix(true, false);
+                      fallbackBox.expandByObject(mesh);
+                    }
+                    if (fallbackBox.isEmpty()) return;
+                    fallbackBox.getCenter(groupCenter);
+                    fallbackBox.getSize(groupMax);
+                    groupMin.copy(groupCenter).sub(groupMax.clone().multiplyScalar(0.5));
+                    groupMax.copy(groupCenter).add(groupMax.clone().multiplyScalar(0.5));
+                  } else {
+                    groupCenter.divideScalar(totalSamples);
+                  }
 
-                  const center = new THREE.Vector3();
-                  const size = new THREE.Vector3();
-                  combinedBox.getCenter(center);
-                  combinedBox.getSize(size);
+                  const size = new THREE.Vector3().subVectors(groupMax, groupMin);
 
-                  muscleGroupCentersRef.current.set(groupId, center.clone());
+                  muscleGroupCentersRef.current.set(groupId, groupCenter.clone());
 
                   const padding = 0.35;
                   const expandedSize = new THREE.Vector3(
@@ -4306,7 +4347,6 @@ export default function PureThreeGLBViewer({
                     side: THREE.DoubleSide,
                   });
                   const proxyMesh = new THREE.Mesh(proxyGeo, proxyMat);
-                  proxyMesh.position.copy(center);
                   proxyMesh.renderOrder = -1;
                   proxyMesh.userData.muscleGroupId = groupId;
 
@@ -4315,10 +4355,11 @@ export default function PureThreeGLBViewer({
                     const parentBone = bones[groupDef.bones[0]];
                     parentBone.updateWorldMatrix(true, false);
                     const boneWorldInverse = new THREE.Matrix4().copy(parentBone.matrixWorld).invert();
-                    const localPos = center.clone().applyMatrix4(boneWorldInverse);
+                    const localPos = groupCenter.clone().applyMatrix4(boneWorldInverse);
                     proxyMesh.position.copy(localPos);
                     parentBone.add(proxyMesh);
                   } else {
+                    proxyMesh.position.copy(groupCenter);
                     scene.add(proxyMesh);
                   }
 
@@ -4331,11 +4372,6 @@ export default function PureThreeGLBViewer({
                 console.error('Failed to split muscle meshes:', err);
               }
             }
-            
-            model.position.set(-0.15, -1.2, 0);
-            scene.add(model);
-            
-            model.updateMatrixWorld(true);
             
             legIKStateRef.current = initializeLegIK(bones as { [name: string]: THREE.Bone });
             

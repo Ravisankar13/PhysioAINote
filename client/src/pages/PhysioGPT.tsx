@@ -97,6 +97,7 @@ import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getCha
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
 import { MYOFASCIAL_CHAINS, MUSCLE_BONE_POSITIONS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState } from "@/lib/myofascialChains";
+import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel, getInfluencePathwayAbbrev, getDominantPathway, type InfluenceMap, type InfluencePathway } from "@/lib/muscleInfluenceMap";
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
@@ -2257,6 +2258,11 @@ ${ddxList}`;
     };
   }, [muscleDrivenEffects, chainPropagation]);
 
+  const influenceMap = useMemo((): InfluenceMap => {
+    if (!muscleMode) return {};
+    return computeInfluenceMap(muscleOverrides, crossMuscleEffects);
+  }, [muscleOverrides, crossMuscleEffects, muscleMode]);
+
   const muscleAnalysis = useMemo(() => {
     if (!muscleMode) return null;
     const base = computeFullMuscleAnalysis(effectiveModelConfig);
@@ -3568,6 +3574,11 @@ ${ddxList}`;
                           <span className="text-[8px] px-1 py-0 rounded" style={{ color: statusColor }}>
                             {getClinicalStatusLabel(group.dominantStatus)}
                           </span>
+                          {influenceMap[group.id] && (
+                            <span className="text-[7px] px-1 py-0 rounded-full font-medium" style={{ backgroundColor: `${getInfluencePathwayColor(getDominantPathway(influenceMap[group.id]))}20`, color: getInfluencePathwayColor(getDominantPathway(influenceMap[group.id])) }}>
+                              {influenceMap[group.id].sources.length} influenced
+                            </span>
+                          )}
                           <button
                             className={`w-4 h-3 rounded-full flex items-center transition-colors ${isEnabled ? 'bg-rose-500' : 'bg-gray-600'}`}
                             onClick={(e) => {
@@ -3592,9 +3603,12 @@ ${ddxList}`;
                             {group.muscles.filter(m => !muscleStatusFilter || m.clinicalStatus === muscleStatusFilter).map(m => {
                               const mStatusColor = getClinicalStatusColor(m.clinicalStatus);
                               const isSelected = selectedMuscleId === m.id;
+                              const mInfluence = influenceMap[m.meshGroup];
+                              const mInfluenceBorderColor = mInfluence ? getInfluencePathwayColor(getDominantPathway(mInfluence)) : null;
                               return (
                                 <div key={m.id}
                                   className={`rounded px-1.5 py-1 cursor-pointer transition-colors ${isSelected ? 'bg-rose-500/20 ring-1 ring-rose-500/40' : 'bg-white/5 hover:bg-white/10'}`}
+                                  style={mInfluenceBorderColor ? { borderLeft: `2px solid ${mInfluenceBorderColor}` } : undefined}
                                   onClick={() => setSelectedMuscleId(prev => prev === m.id ? null : m.id)}
                                 >
                                   <div className="flex items-center gap-1 mb-0.5">
@@ -3748,6 +3762,81 @@ ${ddxList}`;
                                         </div>
                                         <p className="text-[7px] text-gray-400 leading-relaxed">{m.clinicalNote}</p>
                                       </div>
+                                      {(() => {
+                                        const srcGroup = m.meshGroup;
+                                        const influencedTargets = Object.entries(influenceMap).filter(([_, entry]) =>
+                                          entry.sources.some(s => s.sourceGroupId === srcGroup)
+                                        );
+                                        if (influencedTargets.length === 0 || !muscleOverrides[m.id]?.isManual) return null;
+
+                                        const byPathway: Record<InfluencePathway, { groupId: string; sources: typeof influenceMap[string]['sources'] }[]> = {
+                                          reciprocal_inhibition: [],
+                                          fascial_chain: [],
+                                          kinetic_chain: [],
+                                        };
+                                        for (const [gId, entry] of influencedTargets) {
+                                          for (const src of entry.sources) {
+                                            if (src.sourceGroupId === srcGroup) {
+                                              const existing = byPathway[src.pathway].find(e => e.groupId === gId);
+                                              if (existing) existing.sources.push(src);
+                                              else byPathway[src.pathway].push({ groupId: gId, sources: [src] });
+                                            }
+                                          }
+                                        }
+
+                                        return (
+                                          <div className="pt-1.5 border-t border-white/10">
+                                            <div className="text-[8px] text-amber-400 font-semibold uppercase tracking-wider flex items-center gap-1 mb-1">
+                                              <Zap className="h-2.5 w-2.5" />
+                                              Influence Ripple ({influencedTargets.length} muscles)
+                                            </div>
+                                            <div className="space-y-1.5">
+                                              {(['reciprocal_inhibition', 'fascial_chain', 'kinetic_chain'] as InfluencePathway[]).map(pathway => {
+                                                const items = byPathway[pathway];
+                                                if (items.length === 0) return null;
+                                                const color = getInfluencePathwayColor(pathway);
+                                                return (
+                                                  <div key={pathway}>
+                                                    <div className="text-[7px] font-medium mb-0.5 flex items-center gap-1" style={{ color }}>
+                                                      <div className="w-1 h-1 rounded-full" style={{ backgroundColor: color }} />
+                                                      {getInfluencePathwayLabel(pathway)}
+                                                    </div>
+                                                    <div className="space-y-0.5 pl-2">
+                                                      {items.map(item => {
+                                                        const targetGroup = muscleAnalysis?.groups.find(g => g.id === item.groupId);
+                                                        const targetLabel = targetGroup?.label || item.groupId;
+                                                        const src = item.sources[0];
+                                                        const targetStatus = targetGroup?.dominantStatus;
+                                                        return (
+                                                          <div
+                                                            key={`${pathway}-${item.groupId}`}
+                                                            className="flex items-center gap-1 rounded px-1 py-0.5 bg-white/5 hover:bg-white/10 cursor-pointer transition-colors"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              const firstMuscle = targetGroup?.muscles[0];
+                                                              if (firstMuscle) setSelectedMuscleId(firstMuscle.id);
+                                                            }}
+                                                          >
+                                                            <span className="text-[7px] px-0.5 rounded font-medium" style={{ backgroundColor: `${color}20`, color }}>{getInfluencePathwayAbbrev(pathway)}</span>
+                                                            <span className="text-[8px] text-white flex-1 truncate">{targetLabel}</span>
+                                                            <span className="text-[7px] font-mono" style={{ color }}>{src.delta > 0 ? '+' : ''}{src.delta}%</span>
+                                                            {targetStatus && targetStatus !== 'normal' && (
+                                                              <span className="text-[6px] text-gray-400">→ {getClinicalStatusLabel(targetStatus)}</span>
+                                                            )}
+                                                          </div>
+                                                        );
+                                                      })}
+                                                      {items[0]?.sources[0]?.chainName && (
+                                                        <div className="text-[6px] text-gray-500 italic pl-1">via {items[0].sources[0].chainName}</div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
                                       <div className="pt-1 border-t border-white/10">
                                         <button
                                           className="text-[7px] text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5"

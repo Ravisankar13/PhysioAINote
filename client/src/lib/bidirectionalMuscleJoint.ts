@@ -505,6 +505,32 @@ export function computeMuscleRestrictionEffects(
   return effects;
 }
 
+export function computeChainDrivenJointEffects(
+  chainPropagation: Record<string, { totalChainTension: number; totalChainActivation: number }>
+): Record<string, Record<string, number>> {
+  const jointAdjustments: Record<string, Record<string, number>> = {};
+  const CHAIN_STRENGTH_FACTOR = 0.15;
+
+  for (const [groupId, chainState] of Object.entries(chainPropagation)) {
+    const actions = MUSCLE_JOINT_ACTIONS[groupId];
+    if (!actions) continue;
+
+    const deviation = chainState.totalChainTension;
+    if (Math.abs(deviation) < 3) continue;
+
+    for (const action of actions) {
+      if (!jointAdjustments[action.joint]) {
+        jointAdjustments[action.joint] = {};
+      }
+      const current = jointAdjustments[action.joint][action.parameter] || 0;
+      const contribution = deviation * action.direction * action.strength * CHAIN_STRENGTH_FACTOR;
+      jointAdjustments[action.joint][action.parameter] = current + contribution;
+    }
+  }
+
+  return jointAdjustments;
+}
+
 export function getMuscleDrivenDescription(muscleId: string): string {
   const actions = MUSCLE_JOINT_ACTIONS[muscleId];
   if (!actions || actions.length === 0) return '';

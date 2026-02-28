@@ -13,6 +13,8 @@ export interface MuscleStatus {
   description: string;
 }
 
+export type InfluenceSource = 'manual' | 'reciprocal_inhibition' | 'fascial_chain';
+
 export interface IndividualMuscle {
   id: string;
   label: string;
@@ -26,6 +28,10 @@ export interface IndividualMuscle {
   clinicalStatus: ClinicalStatus;
   clinicalNote: string;
   state: MuscleState;
+  influenceSources?: InfluenceSource[];
+  riInhibitionDelta?: number;
+  chainTensionDelta?: number;
+  chainActivationDelta?: number;
 }
 
 export interface MuscleGroupAnalysis {
@@ -1118,44 +1124,82 @@ export function applyOverridesAndChains(
   return results;
 }
 
+export interface CrossMuscleEffects {
+  reciprocalInhibitions?: Record<string, number>;
+  chainPropagation?: Record<string, { totalChainTension: number; totalChainActivation: number }>;
+}
+
 export function applyOverridesToAnalysis(
   baseAnalysis: MuscleAnalysisResult,
-  overrides: Record<string, MuscleOverride>
+  overrides: Record<string, MuscleOverride>,
+  crossEffects?: CrossMuscleEffects
 ): MuscleAnalysisResult {
   const hasOverrides = Object.keys(overrides).some(k => overrides[k]?.isManual);
-  if (!hasOverrides) return baseAnalysis;
+  const hasRI = crossEffects?.reciprocalInhibitions && Object.keys(crossEffects.reciprocalInhibitions).length > 0;
+  const hasChain = crossEffects?.chainPropagation && Object.keys(crossEffects.chainPropagation).length > 0;
+  if (!hasOverrides && !hasRI && !hasChain) return baseAnalysis;
 
   const updatedMuscles = baseAnalysis.allMuscles.map(m => {
     const override = overrides[m.id];
-    if (!override?.isManual) return m;
+    const riAmount = crossEffects?.reciprocalInhibitions?.[m.meshGroup] ?? 0;
+    const chainEffect = crossEffects?.chainPropagation?.[m.meshGroup];
+
+    const hasManualOverride = override?.isManual;
+    const hasRIEffect = riAmount > 2;
+    const hasChainEffect = chainEffect && (Math.abs(chainEffect.totalChainTension) > 1 || Math.abs(chainEffect.totalChainActivation) > 1);
+
+    if (!hasManualOverride && !hasRIEffect && !hasChainEffect) return m;
 
     let lengthPct = m.lengthPercent;
     let activation = m.activationPercent;
     let tightness = m.tightnessPercent;
     let inhibition = m.inhibitionPercent;
+    const sources: InfluenceSource[] = [];
 
-    if (override.lengthOverride === 'shortened') {
-      lengthPct = clamp(70 + override.tensionOffset * 0.2, 50, 89);
-      tightness = Math.max(tightness, 65);
-    } else if (override.lengthOverride === 'lengthened') {
-      lengthPct = clamp(120 + override.tensionOffset * 0.2, 111, 150);
-      tightness = Math.max(tightness - 20, 0);
-    } else if (override.lengthOverride === 'neutral') {
-      lengthPct = clamp(100 + override.tensionOffset * 0.2, 90, 110);
+    if (hasManualOverride) {
+      sources.push('manual');
+      if (override.lengthOverride === 'shortened') {
+        lengthPct = clamp(70 + override.tensionOffset * 0.2, 50, 89);
+        tightness = Math.max(tightness, 65);
+      } else if (override.lengthOverride === 'lengthened') {
+        lengthPct = clamp(120 + override.tensionOffset * 0.2, 111, 150);
+        tightness = Math.max(tightness - 20, 0);
+      } else if (override.lengthOverride === 'neutral') {
+        lengthPct = clamp(100 + override.tensionOffset * 0.2, 90, 110);
+      }
+
+      activation = clamp(activation + override.activationOffset, 0, 100);
+
+      if (override.inhibition > 0) {
+        inhibition = clamp(override.inhibition, 0, 100);
+        activation *= (1 - override.inhibition / 100);
+        activation = Math.max(0, activation);
+      }
+
+      if (override.pathology !== 'none') {
+        const eff = PATHOLOGY_EFFECTS[override.pathology];
+        tightness = clamp(tightness + eff.tensionMod, 0, 100);
+        activation = clamp(activation + eff.activationMod, 0, 100);
+      }
     }
 
-    activation = clamp(activation + override.activationOffset, 0, 100);
-
-    if (override.inhibition > 0) {
-      inhibition = clamp(override.inhibition, 0, 100);
-      activation *= (1 - override.inhibition / 100);
+    let riDelta = 0;
+    if (hasRIEffect) {
+      sources.push('reciprocal_inhibition');
+      riDelta = riAmount;
+      inhibition = clamp(inhibition + riAmount, 0, 100);
+      activation *= (1 - riAmount / 200);
       activation = Math.max(0, activation);
     }
 
-    if (override.pathology !== 'none') {
-      const eff = PATHOLOGY_EFFECTS[override.pathology];
-      tightness = clamp(tightness + eff.tensionMod, 0, 100);
-      activation = clamp(activation + eff.activationMod, 0, 100);
+    let chainTDelta = 0;
+    let chainADelta = 0;
+    if (hasChainEffect && chainEffect) {
+      sources.push('fascial_chain');
+      chainTDelta = chainEffect.totalChainTension;
+      chainADelta = chainEffect.totalChainActivation;
+      tightness = clamp(tightness + chainTDelta * 0.6, 0, 100);
+      activation = clamp(activation + chainADelta * 0.4, 0, 100);
     }
 
     const tone = getTone(tightness, activation);
@@ -1164,10 +1208,14 @@ export function applyOverridesToAnalysis(
     const fatigueRisk = getFatigueRisk(activation, tightness);
 
     const notes: string[] = [];
-    if (override.lengthOverride !== 'none') notes.push(`Length: ${override.lengthOverride}`);
-    if (override.activationOffset !== 0) notes.push(`Activation ${override.activationOffset > 0 ? '+' : ''}${override.activationOffset}%`);
-    if (override.inhibition > 0) notes.push(`${override.inhibition}% inhibited`);
-    if (override.pathology !== 'none') notes.push(PATHOLOGY_LABELS[override.pathology]);
+    if (hasManualOverride) {
+      if (override.lengthOverride !== 'none') notes.push(`Length: ${override.lengthOverride}`);
+      if (override.activationOffset !== 0) notes.push(`Activation ${override.activationOffset > 0 ? '+' : ''}${override.activationOffset}%`);
+      if (override.inhibition > 0) notes.push(`${override.inhibition}% inhibited`);
+      if (override.pathology !== 'none') notes.push(PATHOLOGY_LABELS[override.pathology]);
+    }
+    if (hasRIEffect) notes.push(`RI: +${Math.round(riAmount)}% inhibition`);
+    if (hasChainEffect && chainEffect) notes.push(`Chain: ${chainTDelta > 0 ? '+' : ''}${Math.round(chainTDelta)}% tension`);
     const clinicalNote = notes.length > 0 ? notes.join(', ') : m.clinicalNote;
 
     return {
@@ -1181,6 +1229,10 @@ export function applyOverridesToAnalysis(
       clinicalStatus,
       clinicalNote,
       state,
+      influenceSources: sources.length > 0 ? sources : undefined,
+      riInhibitionDelta: riDelta > 0 ? riDelta : undefined,
+      chainTensionDelta: Math.abs(chainTDelta) > 0.5 ? chainTDelta : undefined,
+      chainActivationDelta: Math.abs(chainADelta) > 0.5 ? chainADelta : undefined,
     };
   });
 

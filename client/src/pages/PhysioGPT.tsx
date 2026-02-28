@@ -90,8 +90,8 @@ import { pdfGenerator } from "@/services/pdfGenerator";
 import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink } from "@/components/skeleton/ClinicalReasoningPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
-import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
-import { computeBidirectionalEffects, computeMuscleRestrictionEffects, MUSCLE_JOINT_ACTIONS } from "@/lib/bidirectionalMuscleJoint";
+import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
+import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS } from "@/lib/bidirectionalMuscleJoint";
 import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
@@ -2192,8 +2192,8 @@ ${ddxList}`;
     if (enabledMuscleGroups.size === 0 && base.groups.length > 0) {
       setEnabledMuscleGroups(new Set(base.groups.map(g => g.id)));
     }
-    return applyOverridesToAnalysis(base, muscleOverrides);
-  }, [effectiveModelConfig, muscleMode, muscleOverrides]);
+    return applyOverridesToAnalysis(base, muscleOverrides, crossMuscleEffects);
+  }, [effectiveModelConfig, muscleMode, muscleOverrides, crossMuscleEffects]);
 
   const weightDistribution = useMemo(() => {
     if (!forceMode) return null;
@@ -2217,7 +2217,8 @@ ${ddxList}`;
 
   const chainIntegrityScores = useMemo(() => {
     if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
-    const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
+    const baseAnalysis = computeFullMuscleAnalysis(effectiveModelConfig);
+    const muscles = applyOverridesToAnalysis(baseAnalysis, muscleOverrides, crossMuscleEffects);
     const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     for (const chain of KINETIC_CHAINS) {
       let totalScore = 100;
@@ -2248,7 +2249,7 @@ ${ddxList}`;
       scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
     }
     return scores;
-  }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode]);
+  }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, muscleOverrides, crossMuscleEffects]);
 
   const baseMuscleTensions = useMemo(() => {
     const base = computeAllMuscleStates(effectiveModelConfig);
@@ -2269,10 +2270,16 @@ ${ddxList}`;
     });
   }, [baseMuscleTensions]);
 
-  const propagatedEffects = useMemo(() => {
-    if (!showChainVisualization || !showPropagation) return null;
+  const chainPropagation = useMemo(() => {
+    const hasManualOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
+    if (!hasManualOverrides) return null;
     return propagateChainEffects(baseMuscleTensions.tensions, muscleOverrides);
-  }, [showChainVisualization, showPropagation, baseMuscleTensions.tensions, muscleOverrides]);
+  }, [baseMuscleTensions.tensions, muscleOverrides]);
+
+  const propagatedEffects = useMemo(() => {
+    if (!showChainVisualization || !showPropagation) return chainPropagation;
+    return chainPropagation;
+  }, [showChainVisualization, showPropagation, chainPropagation]);
 
   const propagationDeltas = useMemo(() => {
     if (!propagatedEffects) return {};
@@ -2282,6 +2289,38 @@ ${ddxList}`;
     }
     return deltas;
   }, [propagatedEffects]);
+
+  const chainDrivenJointEffects = useMemo(() => {
+    if (!chainPropagation || !bidirectionalMode) return null;
+    return computeChainDrivenJointEffects(chainPropagation);
+  }, [chainPropagation, bidirectionalMode]);
+
+  const finalModelConfig = useMemo(() => {
+    if (!chainDrivenJointEffects) return effectiveModelConfig;
+    const config = JSON.parse(JSON.stringify(effectiveModelConfig));
+    for (const [joint, params] of Object.entries(chainDrivenJointEffects)) {
+      if (!config[joint]) config[joint] = {};
+      for (const [param, value] of Object.entries(params)) {
+        const current = config[joint][param] || 0;
+        config[joint][param] = current + value;
+      }
+    }
+    return config;
+  }, [effectiveModelConfig, chainDrivenJointEffects]);
+
+  const crossMuscleEffects = useMemo((): CrossMuscleEffects | undefined => {
+    const ri = muscleDrivenEffects?.reciprocalInhibitions;
+    const cp = chainPropagation;
+    const hasRI = ri && Object.keys(ri).length > 0;
+    const hasCP = cp && Object.keys(cp).length > 0;
+    if (!hasRI && !hasCP) return undefined;
+    return {
+      reciprocalInhibitions: ri || undefined,
+      chainPropagation: cp ? Object.fromEntries(
+        Object.entries(cp).map(([id, state]) => [id, { totalChainTension: state.totalChainTension, totalChainActivation: state.totalChainActivation }])
+      ) : undefined,
+    };
+  }, [muscleDrivenEffects, chainPropagation]);
 
   const painAffectedChainIds = useMemo(() => {
     if (!showChainVisualization || painMarkers.length === 0) return [];
@@ -2576,7 +2615,7 @@ ${ddxList}`;
             <div ref={skeletonContainerRef} className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
-              modelConfig={effectiveModelConfig as any}
+              modelConfig={finalModelConfig as any}
               zoomToRegion={zoomToRegion}
               className="w-full h-full"
               highlightRegions={[
@@ -2680,7 +2719,7 @@ ${ddxList}`;
               onAnimationStateChange={setAnimationState}
               onConstraintsChange={setAnimationConstraints}
               onCompensationChange={handleCompensationChange}
-              modelConfig={effectiveModelConfig as any}
+              modelConfig={finalModelConfig as any}
               muscleRestrictionEffects={muscleRestrictionEffects}
             />
 
@@ -3561,6 +3600,12 @@ ${ddxList}`;
                                   <div className="flex items-center gap-1 mb-0.5">
                                     <div className="w-1 h-1 rounded-full" style={{ backgroundColor: mStatusColor }} />
                                     <span className="text-[9px] text-white flex-1 truncate">{m.label}</span>
+                                    {m.influenceSources?.includes('reciprocal_inhibition') && (
+                                      <span className="text-[6px] px-0.5 rounded bg-yellow-500/20 text-yellow-400 font-medium" title={`Reciprocal inhibition: +${Math.round(m.riInhibitionDelta ?? 0)}%`}>RI</span>
+                                    )}
+                                    {m.influenceSources?.includes('fascial_chain') && (
+                                      <span className="text-[6px] px-0.5 rounded bg-cyan-500/20 text-cyan-400 font-medium" title={`Chain: ${(m.chainTensionDelta ?? 0) > 0 ? '+' : ''}${Math.round(m.chainTensionDelta ?? 0)}% tension`}>FC</span>
+                                    )}
                                     <span className="text-[7px] px-1 rounded" style={{ color: mStatusColor, backgroundColor: `${mStatusColor}20` }}>
                                       {getClinicalStatusLabel(m.clinicalStatus)}
                                     </span>
@@ -3583,14 +3628,14 @@ ${ddxList}`;
                                     <div className="flex items-center gap-1">
                                       <span className="text-[7px] text-orange-400 w-8">Tight</span>
                                       <div className="flex-1 bg-gray-700 rounded-full h-1">
-                                        <div className="bg-orange-400 h-1 rounded-full" style={{ width: `${Math.min(100, m.tightnessPercent)}%` }} />
+                                        <div className={`h-1 rounded-full ${m.chainTensionDelta && m.chainTensionDelta > 1 ? 'bg-gradient-to-r from-orange-400 to-cyan-400' : 'bg-orange-400'}`} style={{ width: `${Math.min(100, m.tightnessPercent)}%` }} />
                                       </div>
                                       <span className="text-[7px] text-gray-400 w-7 text-right tabular-nums">{m.tightnessPercent.toFixed(0)}%</span>
                                     </div>
                                     <div className="flex items-center gap-1">
                                       <span className="text-[7px] text-purple-400 w-8">Inhib</span>
                                       <div className="flex-1 bg-gray-700 rounded-full h-1">
-                                        <div className="bg-purple-400 h-1 rounded-full" style={{ width: `${Math.min(100, m.inhibitionPercent)}%` }} />
+                                        <div className={`h-1 rounded-full ${m.riInhibitionDelta && m.riInhibitionDelta > 2 ? 'bg-gradient-to-r from-purple-400 to-yellow-400' : 'bg-purple-400'}`} style={{ width: `${Math.min(100, m.inhibitionPercent)}%` }} />
                                       </div>
                                       <span className="text-[7px] text-gray-400 w-7 text-right tabular-nums">{m.inhibitionPercent.toFixed(0)}%</span>
                                     </div>

@@ -1792,7 +1792,7 @@ export default function TestSkeletonNew() {
             )}
             {multiViewMode ? (
               <MultiViewSkeletonLayout
-                modelPath="/models/skeleton_character.glb"
+                modelPath="/models/piriformis.glb"
                 modelConfig={effectiveModelConfig}
                 animationState={animationState}
                 onAnimationFrame={handleAnimationFrame}
@@ -1829,7 +1829,7 @@ export default function TestSkeletonNew() {
                   </div>
                 }>
                   <PureThreeGLBViewer 
-                    modelPath="/models/skeleton_character.glb" 
+                    modelPath="/models/piriformis.glb" 
                     modelConfig={effectiveModelConfig} 
                     className="w-full h-full"
                     animationState={animationState}

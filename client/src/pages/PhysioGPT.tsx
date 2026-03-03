@@ -85,7 +85,7 @@ import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/C
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
 import ShoulderAssessmentPanel from "@/components/shoulder/ShoulderAssessmentPanel";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
-import type { Skeleton3DPose, PartialSkeleton3DPose } from "@/utils/mediapipeTo3D";
+import type { Skeleton3DPose, PartialSkeleton3DPose, PosturalMetrics, CameraViewType } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink } from "@/components/skeleton/ClinicalReasoningPanel";
@@ -425,6 +425,7 @@ export default function PhysioGPT() {
   const [poseMode, setPoseMode] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
   const [cameraPoseActive, setCameraPoseActive] = useState(false);
+  const [posturalMetrics, setPosturalMetrics] = useState<PosturalMetrics | null>(null);
   const [focusedCameraResult, setFocusedCameraResult] = useState<FocusedCameraResult | null>(null);
   const [focusedRegion, setFocusedRegion] = useState<FocusedRegion>(FOCUSED_REGIONS[0]);
   const [showShoulderAssessment, setShowShoulderAssessment] = useState(false);
@@ -1264,6 +1265,29 @@ ${ddxList}`;
     setBiomechanicalMuscleHighlights(allMuscles);
   }, [BIOMECHANICAL_REGION_TO_MUSCLES]);
 
+  const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
+    if (!cameraPoseActive) return;
+    setPosturalMetrics(metrics);
+
+    setModelConfig(prev => ({
+      ...prev,
+      spine: {
+        ...prev.spine,
+        thoracicKyphosis: Math.round(metrics.kyphosisAngle),
+        lumbarLordosis: Math.round(metrics.lordosisAngle),
+        scoliosis: Math.round(metrics.scoliosisAngle) * (metrics.scoliosisDirection === 'left' ? -1 : 1),
+        forwardHead: Math.round(metrics.forwardHeadAngle),
+        lateralShift: Math.round(metrics.trunkLateralShift),
+      },
+      pelvis: {
+        ...prev.pelvis,
+        tilt: Math.round(metrics.anteriorPelvicTilt),
+        obliquity: Math.round(metrics.pelvicObliquity),
+        rotation: Math.round(metrics.pelvicRotation),
+      },
+    }));
+  }, [cameraPoseActive]);
+
   const handleCameraPoseUpdate = useCallback((pose: Skeleton3DPose) => {
     if (!cameraPoseActive) return;
     const controllerVals = poseToControllerValues(pose);
@@ -1280,8 +1304,6 @@ ${ddxList}`;
       rightHip: { ...prev.rightHip, flexion: rad2deg(smoothed.rightHip.flexion), abduction: rad2deg(smoothed.rightHip.abduction) },
       leftKnee: { ...prev.leftKnee, flexion: rad2deg(smoothed.leftKnee.flexion) },
       rightKnee: { ...prev.rightKnee, flexion: rad2deg(smoothed.rightKnee.flexion) },
-      pelvis: { ...prev.pelvis, tilt: rad2deg(smoothed.pelvis.tilt), obliquity: rad2deg(smoothed.pelvis.obliquity) },
-      spine: { ...prev.spine, thoracicKyphosis: rad2deg(smoothed.spine.flexion), scoliosis: rad2deg(smoothed.spine.lateralFlexion) },
       neck: { ...prev.neck, flexion: rad2deg(smoothed.neck.flexion), rotation: rad2deg(smoothed.neck.rotation), lateralFlexion: rad2deg(smoothed.neck.lateralFlexion) },
     }));
   }, [cameraPoseActive]);
@@ -1339,6 +1361,7 @@ ${ddxList}`;
       toast({ title: "Camera Capture", description: "Position the patient in frame. The skeleton will mirror their posture in real-time." });
     } else {
       setCameraPoseActive(false);
+      setPosturalMetrics(null);
     }
   }, [cameraMode, toast]);
 
@@ -2754,11 +2777,136 @@ ${ddxList}`;
                 <FocusedCameraCapture
                   onPoseUpdate={handleCameraPoseUpdate}
                   onPartialPoseUpdate={handlePartialPoseUpdate}
+                  onPosturalMetrics={handlePosturalMetricsUpdate}
                   isActive={cameraMode}
                   onFocusedAnalysisComplete={handleFocusedAnalysisComplete}
                   onRegionChange={(region) => setFocusedRegion(region)}
                   className="h-full border-0 rounded-none"
                 />
+                {cameraPoseActive && posturalMetrics && (
+                  <div className="absolute top-2 left-2 right-2 z-20 pointer-events-none">
+                    <div className="bg-black/75 backdrop-blur-sm rounded-lg p-2.5 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-cyan-400 font-semibold text-[11px] uppercase tracking-wide">Postural Analysis</span>
+                        <Badge variant="outline" className={`text-[10px] h-5 ${
+                          posturalMetrics.viewType === 'frontal' ? 'border-green-500 text-green-400' :
+                          posturalMetrics.viewType.startsWith('lateral') ? 'border-blue-500 text-blue-400' :
+                          posturalMetrics.viewType === 'posterior' ? 'border-purple-500 text-purple-400' :
+                          'border-yellow-500 text-yellow-400'
+                        }`}>
+                          {posturalMetrics.viewType === 'lateral_left' ? 'Left Lateral' :
+                           posturalMetrics.viewType === 'lateral_right' ? 'Right Lateral' :
+                           posturalMetrics.viewType.charAt(0).toUpperCase() + posturalMetrics.viewType.slice(1)} View
+                        </Badge>
+                      </div>
+
+                      {(posturalMetrics.viewType === 'lateral_left' || posturalMetrics.viewType === 'lateral_right') && (
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Kyphosis</span>
+                            <span className={`font-mono ${Math.abs(posturalMetrics.kyphosisAngle) > 40 ? 'text-red-400' : Math.abs(posturalMetrics.kyphosisAngle) > 25 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {Math.round(posturalMetrics.kyphosisAngle)}°
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Lordosis</span>
+                            <span className={`font-mono ${Math.abs(posturalMetrics.lordosisAngle) > 45 ? 'text-red-400' : Math.abs(posturalMetrics.lordosisAngle) > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {Math.round(posturalMetrics.lordosisAngle)}°
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Fwd Head</span>
+                            <span className={`font-mono ${posturalMetrics.forwardHeadAngle > 20 ? 'text-red-400' : posturalMetrics.forwardHeadAngle > 10 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {Math.round(posturalMetrics.forwardHeadAngle)}°
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Pelvic Tilt</span>
+                            <span className={`font-mono ${Math.abs(posturalMetrics.anteriorPelvicTilt) > 15 ? 'text-red-400' : Math.abs(posturalMetrics.anteriorPelvicTilt) > 8 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {Math.round(posturalMetrics.anteriorPelvicTilt)}° {posturalMetrics.anteriorPelvicTilt > 0 ? 'ant' : 'post'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {(posturalMetrics.viewType === 'frontal' || posturalMetrics.viewType === 'posterior') && (
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Scoliosis</span>
+                            <span className={`font-mono ${posturalMetrics.scoliosisAngle > 10 ? 'text-red-400' : posturalMetrics.scoliosisAngle > 5 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {Math.round(posturalMetrics.scoliosisAngle)}° {posturalMetrics.scoliosisDirection !== 'none' ? posturalMetrics.scoliosisDirection.charAt(0).toUpperCase() : ''}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Shoulder Level</span>
+                            <span className={`font-mono ${Math.abs(posturalMetrics.shoulderLevelDifference) > 5 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {Math.round(Math.abs(posturalMetrics.shoulderLevelDifference))}°
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Pelvic Obliq</span>
+                            <span className={`font-mono ${Math.abs(posturalMetrics.pelvicObliquity) > 5 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {Math.round(Math.abs(posturalMetrics.pelvicObliquity))}°
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Trunk Shift</span>
+                            <span className={`font-mono ${Math.abs(posturalMetrics.trunkLateralShift) > 5 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {Math.round(Math.abs(posturalMetrics.trunkLateralShift))}°
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {posturalMetrics.viewType === 'oblique' && (
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Fwd Head</span>
+                            <span className="font-mono text-gray-300">{Math.round(posturalMetrics.forwardHeadAngle)}°</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Scoliosis</span>
+                            <span className="font-mono text-gray-300">{Math.round(posturalMetrics.scoliosisAngle)}°</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="border-t border-gray-700 pt-1 mt-1">
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span className="text-cyan-400/80 text-[10px] font-medium">Scapulohumeral</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">L Ratio</span>
+                            <span className={`font-mono ${posturalMetrics.leftScapuloHumeralRatio < 1.5 || posturalMetrics.leftScapuloHumeralRatio > 3 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {posturalMetrics.leftScapuloHumeralRatio.toFixed(1)}:1
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">R Ratio</span>
+                            <span className={`font-mono ${posturalMetrics.rightScapuloHumeralRatio < 1.5 || posturalMetrics.rightScapuloHumeralRatio > 3 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {posturalMetrics.rightScapuloHumeralRatio.toFixed(1)}:1
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">L Scap Elev</span>
+                            <span className="font-mono text-gray-300">{Math.round(posturalMetrics.leftScapulaElevation)}°</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">R Scap Elev</span>
+                            <span className="font-mono text-gray-300">{Math.round(posturalMetrics.rightScapulaElevation)}°</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-[9px] text-gray-500 italic">
+                        {(posturalMetrics.viewType === 'frontal' || posturalMetrics.viewType === 'posterior') ?
+                          'Turn sideways for kyphosis/lordosis/pelvic tilt' :
+                          'Face camera for scoliosis/shoulder level'}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {cameraPoseActive && (
                   <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-10">
                     <Button

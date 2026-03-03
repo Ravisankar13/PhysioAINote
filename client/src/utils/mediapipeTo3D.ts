@@ -21,6 +21,31 @@ export interface Joint3DRotation {
   z: number; // Typically abduction/adduction
 }
 
+export type CameraViewType = 'frontal' | 'lateral_left' | 'lateral_right' | 'posterior' | 'oblique';
+
+export interface PosturalMetrics {
+  viewType: CameraViewType;
+  viewConfidence: number;
+  kyphosisAngle: number;
+  lordosisAngle: number;
+  scoliosisAngle: number;
+  scoliosisDirection: 'left' | 'right' | 'none';
+  forwardHeadAngle: number;
+  anteriorPelvicTilt: number;
+  pelvicObliquity: number;
+  pelvicRotation: number;
+  leftScapulaElevation: number;
+  rightScapulaElevation: number;
+  leftScapulaProtraction: number;
+  rightScapulaProtraction: number;
+  leftScapuloHumeralRatio: number;
+  rightScapuloHumeralRatio: number;
+  leftShoulderElevation: number;
+  rightShoulderElevation: number;
+  shoulderLevelDifference: number;
+  trunkLateralShift: number;
+}
+
 export interface Skeleton3DPose {
   spine: Joint3DRotation;
   neck: Joint3DRotation;
@@ -535,6 +560,216 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
 export type PartialSkeleton3DPose = {
   [K in keyof Skeleton3DPose]: Joint3DRotation | null;
 };
+
+function detectCameraView(landmarks: NormalizedLandmark[]): { viewType: CameraViewType; confidence: number } {
+  const lShoulder = landmarks[LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = landmarks[LANDMARKS.RIGHT_SHOULDER];
+  const lHip = landmarks[LANDMARKS.LEFT_HIP];
+  const rHip = landmarks[LANDMARKS.RIGHT_HIP];
+
+  if (!lShoulder || !rShoulder || !lHip || !rHip) {
+    return { viewType: 'frontal', confidence: 0 };
+  }
+
+  const shoulderWidth = Math.abs(rShoulder.x - lShoulder.x);
+  const shoulderDepth = Math.abs(rShoulder.z - lShoulder.z);
+  const hipWidth = Math.abs(rHip.x - lHip.x);
+
+  const depthToWidthRatio = shoulderDepth / (shoulderWidth + 0.001);
+
+  if (depthToWidthRatio > 1.5) {
+    const leftCloser = lShoulder.z < rShoulder.z;
+    if (leftCloser) {
+      return { viewType: 'lateral_right', confidence: Math.min(depthToWidthRatio / 3, 1) };
+    }
+    return { viewType: 'lateral_left', confidence: Math.min(depthToWidthRatio / 3, 1) };
+  }
+
+  if (depthToWidthRatio > 0.6) {
+    return { viewType: 'oblique', confidence: 0.5 };
+  }
+
+  const noseVis = landmarks[LANDMARKS.NOSE]?.visibility ?? 0;
+  if (noseVis < 0.3 && shoulderWidth > 0.1) {
+    return { viewType: 'posterior', confidence: 0.7 };
+  }
+
+  return { viewType: 'frontal', confidence: Math.min(shoulderWidth / hipWidth, 1) };
+}
+
+export function computePosturalMetrics(landmarks: NormalizedLandmark[]): PosturalMetrics {
+  const { viewType, confidence: viewConfidence } = detectCameraView(landmarks);
+
+  const lShoulder = landmarks[LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = landmarks[LANDMARKS.RIGHT_SHOULDER];
+  const lHip = landmarks[LANDMARKS.LEFT_HIP];
+  const rHip = landmarks[LANDMARKS.RIGHT_HIP];
+  const lKnee = landmarks[LANDMARKS.LEFT_KNEE];
+  const rKnee = landmarks[LANDMARKS.RIGHT_KNEE];
+  const lAnkle = landmarks[LANDMARKS.LEFT_ANKLE];
+  const rAnkle = landmarks[LANDMARKS.RIGHT_ANKLE];
+  const nose = landmarks[LANDMARKS.NOSE];
+  const lEar = landmarks[LANDMARKS.LEFT_EAR];
+  const rEar = landmarks[LANDMARKS.RIGHT_EAR];
+  const lElbow = landmarks[LANDMARKS.LEFT_ELBOW];
+  const rElbow = landmarks[LANDMARKS.RIGHT_ELBOW];
+
+  const r2d = (r: number) => r * 180 / Math.PI;
+  const clampDeg = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+  const shoulderMidX = (lShoulder.x + rShoulder.x) / 2;
+  const shoulderMidY = (lShoulder.y + rShoulder.y) / 2;
+  const shoulderMidZ = (lShoulder.z + rShoulder.z) / 2;
+  const hipMidX = (lHip.x + rHip.x) / 2;
+  const hipMidY = (lHip.y + rHip.y) / 2;
+  const hipMidZ = (lHip.z + rHip.z) / 2;
+  const kneeMidY = (lKnee.y + rKnee.y) / 2;
+  const kneeMidZ = (lKnee.z + rKnee.z) / 2;
+
+  const isLateral = viewType === 'lateral_left' || viewType === 'lateral_right';
+
+  let kyphosisAngle = 0;
+  let lordosisAngle = 0;
+  if (isLateral) {
+    const shoulderForwardOffset = shoulderMidZ - hipMidZ;
+    kyphosisAngle = clampDeg(r2d(Math.atan2(shoulderForwardOffset, Math.abs(shoulderMidY - hipMidY) + 0.001)), -10, 60);
+
+    const hipForwardOfKnee = hipMidZ - kneeMidZ;
+    const hipToKneeVertical = Math.abs(hipMidY - kneeMidY) + 0.001;
+    lordosisAngle = clampDeg(r2d(Math.atan2(hipForwardOfKnee, hipToKneeVertical)) * 2.5, -10, 60);
+  } else {
+    const shoulderForwardOffset = shoulderMidZ - hipMidZ;
+    kyphosisAngle = clampDeg(r2d(Math.atan2(shoulderForwardOffset, Math.abs(shoulderMidY - hipMidY) + 0.001)) * 0.5, -5, 30);
+    lordosisAngle = 0;
+  }
+
+  const shoulderTiltDeg = r2d(Math.atan2(rShoulder.y - lShoulder.y, rShoulder.x - lShoulder.x));
+  const hipTiltDeg = r2d(Math.atan2(rHip.y - lHip.y, rHip.x - lHip.x));
+  const scoliosisAngle = clampDeg(Math.abs(shoulderTiltDeg - hipTiltDeg), 0, 40);
+  const lateralShift = shoulderMidX - hipMidX;
+  const trunkLateralShift = clampDeg(r2d(Math.atan2(lateralShift, Math.abs(shoulderMidY - hipMidY) + 0.001)), -20, 20);
+  const scoliosisDirection: 'left' | 'right' | 'none' =
+    scoliosisAngle < 3 ? 'none' :
+    lateralShift > 0 ? 'right' : 'left';
+
+  let forwardHeadAngle = 0;
+  if (nose && lEar && rEar) {
+    const earMidX = (lEar.x + rEar.x) / 2;
+    const earMidY = (lEar.y + rEar.y) / 2;
+    const earMidZ = (lEar.z + rEar.z) / 2;
+
+    if (isLateral) {
+      const headForwardOffset = earMidZ - shoulderMidZ;
+      const headAboveShoulders = Math.abs(shoulderMidY - earMidY) + 0.001;
+      forwardHeadAngle = clampDeg(r2d(Math.atan2(headForwardOffset, headAboveShoulders)), -10, 50);
+    } else {
+      const noseForward = nose.z - shoulderMidZ;
+      forwardHeadAngle = clampDeg(r2d(Math.atan2(noseForward, Math.abs(shoulderMidY - nose.y) + 0.001)) * 0.7, -5, 30);
+    }
+  }
+
+  let anteriorPelvicTilt = 0;
+  if (isLateral) {
+    const hipToKneeZ = hipMidZ - kneeMidZ;
+    const hipToKneeY = Math.abs(hipMidY - kneeMidY) + 0.001;
+    const pelvisAngle = r2d(Math.atan2(hipToKneeZ, hipToKneeY));
+
+    const shoulderToHipZ = shoulderMidZ - hipMidZ;
+    const shoulderToHipY = Math.abs(shoulderMidY - hipMidY) + 0.001;
+    const trunkAngle = r2d(Math.atan2(shoulderToHipZ, shoulderToHipY));
+
+    anteriorPelvicTilt = clampDeg((pelvisAngle - trunkAngle * 0.3) * 2, -30, 30);
+  } else {
+    const spineForwardRaw = shoulderMidZ - hipMidZ;
+    anteriorPelvicTilt = clampDeg(r2d(Math.atan2(spineForwardRaw, Math.abs(shoulderMidY - hipMidY) + 0.001)) * 0.4, -15, 15);
+  }
+
+  const pelvicObliquity = clampDeg(r2d(Math.atan2(rHip.y - lHip.y, rHip.x - lHip.x)), -20, 20);
+
+  const pelvicRotation = clampDeg(r2d(Math.atan2(rHip.z - lHip.z, Math.abs(rHip.x - lHip.x) + 0.001)), -30, 30);
+
+  const shoulderLevelDifference = clampDeg(r2d(Math.atan2(rShoulder.y - lShoulder.y, rShoulder.x - lShoulder.x)), -20, 20);
+
+  const torsoHeight = Math.abs(shoulderMidY - hipMidY) + 0.001;
+
+  const leftShoulderElevation = clampDeg(
+    r2d((shoulderMidY - lShoulder.y) / torsoHeight) * 30, -15, 25
+  );
+  const rightShoulderElevation = clampDeg(
+    r2d((shoulderMidY - rShoulder.y) / torsoHeight) * 30, -15, 25
+  );
+
+  let leftScapulaElevation = 0;
+  let rightScapulaElevation = 0;
+  if (lEar && rEar) {
+    const earToShoulderL = lShoulder.y - lEar.y;
+    const earToShoulderR = rShoulder.y - rEar.y;
+    const avgEarToShoulder = ((earToShoulderL + earToShoulderR) / 2) || 0.001;
+    leftScapulaElevation = clampDeg(((earToShoulderL - avgEarToShoulder) / Math.abs(avgEarToShoulder)) * -20, -15, 15);
+    rightScapulaElevation = clampDeg(((earToShoulderR - avgEarToShoulder) / Math.abs(avgEarToShoulder)) * -20, -15, 15);
+  }
+
+  const leftScapulaProtraction = clampDeg(
+    r2d(Math.atan2(lShoulder.z - shoulderMidZ, torsoHeight)) * 3, -20, 20
+  );
+  const rightScapulaProtraction = clampDeg(
+    r2d(Math.atan2(rShoulder.z - shoulderMidZ, torsoHeight)) * 3, -20, 20
+  );
+
+  let leftScapuloHumeralRatio = 2.0;
+  let rightScapuloHumeralRatio = 2.0;
+  if (lElbow) {
+    const leftArmVec = createVector(lShoulder, lElbow);
+    const leftArmElevation = r2d(Math.atan2(
+      Math.sqrt(leftArmVec.x * leftArmVec.x + leftArmVec.z * leftArmVec.z),
+      -leftArmVec.y
+    ));
+    if (leftArmElevation > 30) {
+      const leftShoulderHike = (shoulderMidY - lShoulder.y) / torsoHeight;
+      const scapularContribution = Math.max(0, leftShoulderHike * 180);
+      const glenohumeralContribution = Math.max(1, leftArmElevation - scapularContribution);
+      leftScapuloHumeralRatio = glenohumeralContribution / Math.max(1, scapularContribution);
+      leftScapuloHumeralRatio = Math.max(0.5, Math.min(5, leftScapuloHumeralRatio));
+    }
+  }
+  if (rElbow) {
+    const rightArmVec = createVector(rShoulder, rElbow);
+    const rightArmElevation = r2d(Math.atan2(
+      Math.sqrt(rightArmVec.x * rightArmVec.x + rightArmVec.z * rightArmVec.z),
+      -rightArmVec.y
+    ));
+    if (rightArmElevation > 30) {
+      const rightShoulderHike = (shoulderMidY - rShoulder.y) / torsoHeight;
+      const scapularContribution = Math.max(0, rightShoulderHike * 180);
+      const glenohumeralContribution = Math.max(1, rightArmElevation - scapularContribution);
+      rightScapuloHumeralRatio = glenohumeralContribution / Math.max(1, scapularContribution);
+      rightScapuloHumeralRatio = Math.max(0.5, Math.min(5, rightScapuloHumeralRatio));
+    }
+  }
+
+  return {
+    viewType,
+    viewConfidence,
+    kyphosisAngle,
+    lordosisAngle,
+    scoliosisAngle,
+    scoliosisDirection,
+    forwardHeadAngle,
+    anteriorPelvicTilt,
+    pelvicObliquity,
+    pelvicRotation,
+    leftScapulaElevation,
+    rightScapulaElevation,
+    leftScapulaProtraction,
+    rightScapulaProtraction,
+    leftScapuloHumeralRatio,
+    rightScapuloHumeralRatio,
+    leftShoulderElevation,
+    rightShoulderElevation,
+    shoulderLevelDifference,
+    trunkLateralShift
+  };
+}
 
 export interface RegionLandmarkMap {
   regionId: string;

@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, Posesmoother, PartialPoseSmoother, Skeleton3DPose, PartialSkeleton3DPose } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, PartialSkeleton3DPose, PosturalMetrics } from '@/utils/mediapipeTo3D';
 import { QRCodeSVG } from 'qrcode.react';
 
 export interface FocusedRegion {
@@ -170,6 +170,7 @@ interface FocusedCameraCaptureProps {
   onPoseUpdate?: (pose: Skeleton3DPose) => void;
   onPartialPoseUpdate?: (pose: PartialSkeleton3DPose) => void;
   onRawLandmarks?: (landmarks: any[]) => void;
+  onPosturalMetrics?: (metrics: PosturalMetrics) => void;
   onFocusedAnalysisComplete?: (result: FocusedCameraResult) => void;
   onRegionChange?: (region: FocusedRegion) => void;
   className?: string;
@@ -180,6 +181,7 @@ export default function FocusedCameraCapture({
   onPoseUpdate,
   onPartialPoseUpdate,
   onRawLandmarks,
+  onPosturalMetrics,
   onFocusedAnalysisComplete,
   onRegionChange,
   className,
@@ -572,6 +574,9 @@ export default function FocusedCameraCapture({
                 const fullSmoothed = phoneFullPoseSmootherRef.current.smooth(pose3D);
                 onPoseUpdate(fullSmoothed);
               }
+              if (onPosturalMetrics) {
+                onPosturalMetrics(computePosturalMetrics(results.poseLandmarks));
+              }
             }
           } else {
             const partialPose = convertPartialMediaPipeTo3D(results.poseLandmarks, regionId, false);
@@ -786,6 +791,9 @@ export default function FocusedCameraCapture({
             const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
             const smoothedPose = smootherRef.current.smooth(pose3D);
             onPoseUpdate(smoothedPose);
+          }
+          if (onPosturalMetrics) {
+            onPosturalMetrics(computePosturalMetrics(results.poseLandmarks));
           }
 
           if (canvasRef.current) {

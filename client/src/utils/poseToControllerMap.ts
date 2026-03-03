@@ -65,9 +65,10 @@ export interface ControllerValues {
   rightAnkle: { dorsiflexion: number };
   leftWrist: { flexion: number };
   rightWrist: { flexion: number };
-  pelvis: { tilt: number; obliquity: number };
-  spine: { flexion: number; lateralFlexion: number };
+  pelvis: { tilt: number; obliquity: number; rotation: number };
+  spine: { flexion: number; lateralFlexion: number; kyphosis: number; lordosis: number; scoliosis: number; forwardHead: number; lateralShift: number };
   neck: { flexion: number; rotation: number; lateralFlexion: number };
+  scapula: { leftElevation: number; rightElevation: number; leftProtraction: number; rightProtraction: number };
 }
 
 /**
@@ -249,9 +250,10 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
     rightAnkle: { dorsiflexion: rightAnkleDorsiflexion },
     leftWrist: { flexion: leftWristFlexion },
     rightWrist: { flexion: rightWristFlexion },
-    pelvis: { tilt: pelvisTilt, obliquity: pelvisObliquity },
-    spine: { flexion: spineFlexion, lateralFlexion: spineLateralFlexion },
-    neck: { flexion: neckFlexion, rotation: neckRotation, lateralFlexion: neckLateralFlexion }
+    pelvis: { tilt: pelvisTilt, obliquity: pelvisObliquity, rotation: 0 },
+    spine: { flexion: spineFlexion, lateralFlexion: spineLateralFlexion, kyphosis: 0, lordosis: 0, scoliosis: 0, forwardHead: 0, lateralShift: 0 },
+    neck: { flexion: neckFlexion, rotation: neckRotation, lateralFlexion: neckLateralFlexion },
+    scapula: { leftElevation: 0, rightElevation: 0, leftProtraction: 0, rightProtraction: 0 }
   };
 }
 
@@ -310,7 +312,7 @@ export class ControllerSmoother {
       const result: ControllerValues = {
         ...current,
         neck: { flexion: neckFlexionFinal, rotation: neckRotationFinal, lateralFlexion: neckLateralFinal },
-        spine: { flexion: spineFlexionFinal, lateralFlexion: spineLateralFinal }
+        spine: { ...current.spine, flexion: spineFlexionFinal, lateralFlexion: spineLateralFinal }
       };
       this.previous = structuredClone(result);
       return result;
@@ -369,16 +371,28 @@ export class ControllerSmoother {
       },
       pelvis: {
         tilt: smoothValue(current.pelvis.tilt, this.previous.pelvis.tilt),
-        obliquity: smoothValue(current.pelvis.obliquity, this.previous.pelvis.obliquity)
+        obliquity: smoothValue(current.pelvis.obliquity, this.previous.pelvis.obliquity),
+        rotation: smoothValue(current.pelvis.rotation, this.previous.pelvis.rotation)
       },
       spine: {
         flexion: spineFlexionFinal,
-        lateralFlexion: spineLateralFinal
+        lateralFlexion: spineLateralFinal,
+        kyphosis: smoothValue(current.spine.kyphosis, this.previous.spine.kyphosis),
+        lordosis: smoothValue(current.spine.lordosis, this.previous.spine.lordosis),
+        scoliosis: smoothValue(current.spine.scoliosis, this.previous.spine.scoliosis),
+        forwardHead: smoothValue(current.spine.forwardHead, this.previous.spine.forwardHead),
+        lateralShift: smoothValue(current.spine.lateralShift, this.previous.spine.lateralShift)
       },
       neck: {
         flexion: neckFlexionFinal,
         rotation: neckRotationFinal,
         lateralFlexion: neckLateralFinal
+      },
+      scapula: {
+        leftElevation: smoothValue(current.scapula.leftElevation, this.previous.scapula.leftElevation),
+        rightElevation: smoothValue(current.scapula.rightElevation, this.previous.scapula.rightElevation),
+        leftProtraction: smoothValue(current.scapula.leftProtraction, this.previous.scapula.leftProtraction),
+        rightProtraction: smoothValue(current.scapula.rightProtraction, this.previous.scapula.rightProtraction)
       }
     };
     

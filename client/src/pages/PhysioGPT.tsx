@@ -459,7 +459,7 @@ export default function PhysioGPT() {
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
   const skeletonContainerRef = useRef<HTMLDivElement>(null);
-  const controllerSmootherRef = useRef(new ControllerSmoother(0.35, 0.015));
+  const controllerSmootherRef = useRef(new ControllerSmoother(0.5, 0.015));
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
   const [romValues, setRomValues] = useState<Record<string, number>>({});
   const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
@@ -1296,8 +1296,8 @@ ${ddxList}`;
 
     setModelConfig(prev => ({
       ...prev,
-      leftShoulder: { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(smoothed.leftShoulder.abduction) },
-      rightShoulder: { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(smoothed.rightShoulder.abduction) },
+      leftShoulder: { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(smoothed.leftShoulder.abduction), internalRotation: rad2deg(smoothed.leftShoulder.internalRotation) },
+      rightShoulder: { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(smoothed.rightShoulder.abduction), internalRotation: rad2deg(smoothed.rightShoulder.internalRotation) },
       leftElbow: { ...prev.leftElbow, flexion: rad2deg(smoothed.leftElbow.flexion) },
       rightElbow: { ...prev.rightElbow, flexion: rad2deg(smoothed.rightElbow.flexion) },
       leftHip: { ...prev.leftHip, flexion: rad2deg(smoothed.leftHip.flexion), abduction: rad2deg(smoothed.leftHip.abduction) },
@@ -1315,10 +1315,10 @@ ${ddxList}`;
     setModelConfig(prev => {
       const next = { ...prev };
       if (partialPose.leftShoulder) {
-        next.leftShoulder = { ...prev.leftShoulder, flexion: rad2deg(partialPose.leftShoulder.x), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(partialPose.leftShoulder.z) };
+        next.leftShoulder = { ...prev.leftShoulder, flexion: rad2deg(partialPose.leftShoulder.x), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(partialPose.leftShoulder.z), internalRotation: rad2deg(partialPose.leftShoulder.y) };
       }
       if (partialPose.rightShoulder) {
-        next.rightShoulder = { ...prev.rightShoulder, flexion: rad2deg(partialPose.rightShoulder.x), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(partialPose.rightShoulder.z) };
+        next.rightShoulder = { ...prev.rightShoulder, flexion: rad2deg(partialPose.rightShoulder.x), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(partialPose.rightShoulder.z), internalRotation: rad2deg(partialPose.rightShoulder.y) };
       }
       if (partialPose.leftElbow) {
         next.leftElbow = { ...prev.leftElbow, flexion: rad2deg(partialPose.leftElbow.x) };
@@ -1357,7 +1357,7 @@ ${ddxList}`;
       setPoseMode(false);
       setSelectedRomJoint(null);
       setCameraPoseActive(true);
-      controllerSmootherRef.current = new ControllerSmoother(0.35, 0.015);
+      controllerSmootherRef.current = new ControllerSmoother(0.5, 0.015);
       toast({ title: "Camera Capture", description: "Position the patient in frame. The skeleton will mirror their posture in real-time." });
     } else {
       setCameraPoseActive(false);

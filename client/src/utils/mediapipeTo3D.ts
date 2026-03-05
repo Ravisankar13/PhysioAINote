@@ -352,25 +352,47 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     ? noseShoulderPitch * 0.4 + noseEyePitch * 0.6
     : noseEyePitch;
 
+  // === TORSO COORDINATE FRAME ===
+  const torsoUp = normalize({
+    x: shoulderMid.x - hipMid.x,
+    y: shoulderMid.y - hipMid.y,
+    z: shoulderMid.z - hipMid.z
+  });
+  const shoulderVec: Vec3 = {
+    x: (rightShoulder.x - leftShoulder.x),
+    y: -(rightShoulder.y - leftShoulder.y),
+    z: -(rightShoulder.z - leftShoulder.z)
+  };
+  const torsoRight = normalize(shoulderVec);
+  const torsoForward = normalize({
+    x: torsoUp.y * torsoRight.z - torsoUp.z * torsoRight.y,
+    y: torsoUp.z * torsoRight.x - torsoUp.x * torsoRight.z,
+    z: torsoUp.x * torsoRight.y - torsoUp.y * torsoRight.x
+  });
+
   // === ARM CALCULATIONS ===
-  // Left upper arm direction (shoulder to elbow)
   const leftUpperArm = normalize(createVector(leftShoulder, leftElbow));
   const leftForearm = normalize(createVector(leftElbow, leftWrist));
-  
-  // Right upper arm direction
   const rightUpperArm = normalize(createVector(rightShoulder, rightElbow));
   const rightForearm = normalize(createVector(rightElbow, rightWrist));
 
-  // ELEVATION-AZIMUTH DECOMPOSITION for shoulder angles
   const computeShoulderAngles = (armDir: Vec3, isLeft: boolean): { flexion: number; abduction: number } => {
-    const horizMag = Math.sqrt(armDir.x * armDir.x + armDir.z * armDir.z);
-    const elevation = Math.atan2(horizMag, -armDir.y);
-    const lateralX = isLeft ? -armDir.x : armDir.x;
-    const azimuth = Math.atan2(armDir.z, lateralX);
-    return {
-      flexion: elevation * Math.sin(azimuth),
-      abduction: elevation * Math.cos(azimuth)
-    };
+    const dotUp = armDir.x * torsoUp.x + armDir.y * torsoUp.y + armDir.z * torsoUp.z;
+    const dotFwd = armDir.x * torsoForward.x + armDir.y * torsoForward.y + armDir.z * torsoForward.z;
+    const dotRight = armDir.x * torsoRight.x + armDir.y * torsoRight.y + armDir.z * torsoRight.z;
+
+    const lateral = isLeft ? -dotRight : dotRight;
+
+    const elevation = Math.acos(Math.max(-1, Math.min(1, -dotUp)));
+
+    if (elevation < 0.08) {
+      return { flexion: 0, abduction: 0 };
+    }
+
+    const flexion = Math.atan2(dotFwd, -dotUp);
+    const abduction = Math.atan2(lateral, -dotUp);
+
+    return { flexion, abduction };
   };
 
   const leftShoulderAngles = computeShoulderAngles(leftUpperArm, true);
@@ -381,25 +403,63 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightShoulderFlexion = rightShoulderAngles.flexion;
   const rightShoulderAbduction = rightShoulderAngles.abduction;
 
-  // SHOULDER INTERNAL/EXTERNAL ROTATION
   const computeShoulderRotation = (upperArm: Vec3, forearm: Vec3, isLeft: boolean): number => {
-    const cross = {
-      x: upperArm.y * forearm.z - upperArm.z * forearm.y,
-      y: upperArm.z * forearm.x - upperArm.x * forearm.z,
-      z: upperArm.x * forearm.y - upperArm.y * forearm.x
+    const armLen = Math.sqrt(upperArm.x * upperArm.x + upperArm.y * upperArm.y + upperArm.z * upperArm.z);
+    if (armLen < 0.001) return 0;
+
+    const elbowAngle = angleBetweenVectors(upperArm, forearm);
+    if (elbowAngle < 0.15 || elbowAngle > Math.PI - 0.15) return 0;
+
+    const armAxis = normalize(upperArm);
+    const foreProj = {
+      x: forearm.x - (forearm.x * armAxis.x + forearm.y * armAxis.y + forearm.z * armAxis.z) * armAxis.x,
+      y: forearm.y - (forearm.x * armAxis.x + forearm.y * armAxis.y + forearm.z * armAxis.z) * armAxis.y,
+      z: forearm.z - (forearm.x * armAxis.x + forearm.y * armAxis.y + forearm.z * armAxis.z) * armAxis.z,
     };
-    const dot = cross.x * upperArm.x + cross.y * upperArm.y + cross.z * upperArm.z;
-    const rotation = Math.atan2(dot, 
-      forearm.x * upperArm.x + forearm.y * upperArm.y + forearm.z * upperArm.z + 0.001);
+    const foreProjNorm = normalize(foreProj);
+
+    const refVec = normalize({
+      x: torsoForward.x - (torsoForward.x * armAxis.x + torsoForward.y * armAxis.y + torsoForward.z * armAxis.z) * armAxis.x,
+      y: torsoForward.y - (torsoForward.x * armAxis.x + torsoForward.y * armAxis.y + torsoForward.z * armAxis.z) * armAxis.y,
+      z: torsoForward.z - (torsoForward.x * armAxis.x + torsoForward.y * armAxis.y + torsoForward.z * armAxis.z) * armAxis.z,
+    });
+
+    const dotCos = foreProjNorm.x * refVec.x + foreProjNorm.y * refVec.y + foreProjNorm.z * refVec.z;
+    const crossForRef = {
+      x: refVec.y * foreProjNorm.z - refVec.z * foreProjNorm.y,
+      y: refVec.z * foreProjNorm.x - refVec.x * foreProjNorm.z,
+      z: refVec.x * foreProjNorm.y - refVec.y * foreProjNorm.x,
+    };
+    const dotSin = crossForRef.x * armAxis.x + crossForRef.y * armAxis.y + crossForRef.z * armAxis.z;
+
+    const rotation = Math.atan2(dotSin, dotCos);
     return isLeft ? rotation : -rotation;
   };
 
   const leftShoulderRotation = computeShoulderRotation(leftUpperArm, leftForearm, true);
   const rightShoulderRotation = computeShoulderRotation(rightUpperArm, rightForearm, false);
 
-  // Elbow flexion (bend angle at elbow)
-  const leftElbowFlexion = calculateJointFlexion(leftShoulder, leftElbow, leftWrist);
-  const rightElbowFlexion = calculateJointFlexion(rightShoulder, rightElbow, rightWrist);
+  const calculateElbowFlexionRobust = (
+    shoulder: NormalizedLandmark, elbow: NormalizedLandmark, wrist: NormalizedLandmark
+  ): number => {
+    const flexion3D = calculateJointFlexion(shoulder, elbow, wrist);
+    const dx = wrist.x - elbow.x;
+    const dy = wrist.y - elbow.y;
+    const dxU = elbow.x - shoulder.x;
+    const dyU = elbow.y - shoulder.y;
+    const dot2D = dx * dxU + dy * dyU;
+    const mag1 = Math.sqrt(dx * dx + dy * dy) + 0.001;
+    const mag2 = Math.sqrt(dxU * dxU + dyU * dyU) + 0.001;
+    const angle2D = Math.acos(Math.max(-1, Math.min(1, dot2D / (mag1 * mag2))));
+    const flexion2D = Math.PI - angle2D;
+
+    const zRange = Math.abs(wrist.z - shoulder.z);
+    const depthConfidence = Math.min(1, zRange / 0.15);
+    return flexion3D * depthConfidence + flexion2D * (1 - depthConfidence);
+  };
+
+  const leftElbowFlexion = calculateElbowFlexionRobust(leftShoulder, leftElbow, leftWrist);
+  const rightElbowFlexion = calculateElbowFlexionRobust(rightShoulder, rightElbow, rightWrist);
 
   // === LEG CALCULATIONS ===
   const leftThigh = normalize(createVector(leftHip, leftKnee));
@@ -448,14 +508,14 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
 
   // Build the base pose, returning null for joints with low-confidence landmarks
   const leftShoulderJoint: Joint3DRotation | null = landmarksVisible(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.LEFT_ELBOW]) ? {
-    x: clamp(leftShoulderFlexion, -0.5, Math.PI),
-    y: clamp(leftShoulderRotation, -1.2, 1.2),
-    z: clamp(leftShoulderAbduction, -0.3, Math.PI)
+    x: leftShoulderFlexion,
+    y: leftShoulderRotation,
+    z: leftShoulderAbduction
   } : null;
   const rightShoulderJoint: Joint3DRotation | null = landmarksVisible(landmarks, [LANDMARKS.RIGHT_SHOULDER, LANDMARKS.RIGHT_ELBOW]) ? {
-    x: clamp(rightShoulderFlexion, -0.5, Math.PI),
-    y: clamp(rightShoulderRotation, -1.2, 1.2),
-    z: clamp(rightShoulderAbduction, -0.3, Math.PI)
+    x: rightShoulderFlexion,
+    y: rightShoulderRotation,
+    z: rightShoulderAbduction
   } : null;
   const leftElbowJoint: Joint3DRotation | null = landmarksVisible(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.LEFT_ELBOW, LANDMARKS.LEFT_WRIST]) ? {
     x: clamp(leftElbowFlexion, 0, 2.5),

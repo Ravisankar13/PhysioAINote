@@ -18,8 +18,8 @@ import { Skeleton3DPose } from './mediapipeTo3D';
  */
 export const ANATOMICAL_RANGES = {
   shoulder: {
-    flexion: { min: -0.35, max: Math.PI * 0.9 },      // -20° to 162° (extension to overhead)
-    abduction: { min: -0.17, max: Math.PI * 0.9 },    // -10° to 162° (adduction to overhead)
+    flexion: { min: -0.5, max: Math.PI },               // -28° to 180° (extension to full overhead)
+    abduction: { min: -0.35, max: Math.PI },            // -20° to 180° (adduction to full overhead)
   },
   elbow: {
     flexion: { min: 0, max: 2.6 }                      // 0° to 150° (straight to fully bent)
@@ -177,17 +177,16 @@ class AdaptiveDeadZone {
   }
 }
 
-/**
- * Apply dead zone to reduce jitter near neutral positions
- * Returns 0 for values below threshold, otherwise scales remaining range
- */
 function applyDeadZone(value: number, threshold: number = 0.03): number {
-  if (Math.abs(value) < threshold) return 0;
+  const abs = Math.abs(value);
+  if (abs < 0.001) return 0;
   const sign = value > 0 ? 1 : -1;
-  return sign * (Math.abs(value) - threshold);
+  if (abs >= threshold * 2) return value;
+  const t = abs / (threshold * 2);
+  return sign * abs * t * t;
 }
 
-const ARM_DEAD_ZONE = 0.06;
+const ARM_DEAD_ZONE = 0.025;
 const SPINE_DEAD_ZONE = 0.03;
 const HIP_DEAD_ZONE = 0.12;
 const KNEE_DEAD_ZONE = 0.1;
@@ -320,10 +319,7 @@ export class ControllerSmoother {
     
     const smoothValue = (curr: number, prev: number): number => {
       const delta = curr - prev;
-      const factor = Math.abs(delta) < this.noiseThreshold 
-        ? this.smoothingFactor * 0.5 
-        : this.smoothingFactor;
-      return prev + delta * factor;
+      return prev + delta * this.smoothingFactor;
     };
     
     const smoothed: ControllerValues = {

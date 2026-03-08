@@ -385,12 +385,24 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
 
     const elevation = Math.acos(Math.max(-1, Math.min(1, -dotUp)));
 
-    if (elevation < 0.08) {
+    if (elevation < 0.04) {
       return { flexion: 0, abduction: 0 };
     }
 
-    const flexion = Math.atan2(dotFwd, -dotUp);
-    const abduction = Math.atan2(lateral, -dotUp);
+    const clampedFwd = Math.max(-0.999, Math.min(0.999, dotFwd));
+    const flexion = Math.asin(clampedFwd);
+    const cosFlex = Math.cos(flexion);
+
+    let abduction: number;
+    if (cosFlex > 0.15) {
+      const by = Math.atan2(-dotUp, lateral);
+      abduction = Math.PI / 2 - by;
+    } else {
+      const blendT = Math.max(0, (cosFlex - 0.05) / 0.10);
+      const byFallback = Math.atan2(-dotUp, lateral);
+      const abdEuler = Math.PI / 2 - byFallback;
+      abduction = abdEuler * blendT;
+    }
 
     return { flexion, abduction };
   };
@@ -461,6 +473,33 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const leftElbowFlexion = calculateElbowFlexionRobust(leftShoulder, leftElbow, leftWrist);
   const rightElbowFlexion = calculateElbowFlexionRobust(rightShoulder, rightElbow, rightWrist);
 
+  const computeForearmPronation = (
+    forearmDir: Vec3, wristLm: NormalizedLandmark, indexLm: NormalizedLandmark, isLeft: boolean
+  ): number => {
+    const handDir = normalize(createVector(wristLm, indexLm));
+    const forearmAxis = normalize(forearmDir);
+    const dotAlong = handDir.x * forearmAxis.x + handDir.y * forearmAxis.y + handDir.z * forearmAxis.z;
+    const handPerp = normalize({
+      x: handDir.x - dotAlong * forearmAxis.x,
+      y: handDir.y - dotAlong * forearmAxis.y,
+      z: handDir.z - dotAlong * forearmAxis.z
+    });
+    const refPerp = normalize({
+      x: torsoUp.x - (torsoUp.x * forearmAxis.x + torsoUp.y * forearmAxis.y + torsoUp.z * forearmAxis.z) * forearmAxis.x,
+      y: torsoUp.y - (torsoUp.x * forearmAxis.x + torsoUp.y * forearmAxis.y + torsoUp.z * forearmAxis.z) * forearmAxis.y,
+      z: torsoUp.z - (torsoUp.x * forearmAxis.x + torsoUp.y * forearmAxis.y + torsoUp.z * forearmAxis.z) * forearmAxis.z
+    });
+    const cosAngle = handPerp.x * refPerp.x + handPerp.y * refPerp.y + handPerp.z * refPerp.z;
+    const crossDot = (refPerp.y * handPerp.z - refPerp.z * handPerp.y) * forearmAxis.x +
+                     (refPerp.z * handPerp.x - refPerp.x * handPerp.z) * forearmAxis.y +
+                     (refPerp.x * handPerp.y - refPerp.y * handPerp.x) * forearmAxis.z;
+    const angle = Math.atan2(crossDot, cosAngle);
+    return isLeft ? angle : -angle;
+  };
+
+  const leftPronation = computeForearmPronation(leftForearm, leftWrist, leftIndex, true);
+  const rightPronation = computeForearmPronation(rightForearm, rightWrist, rightIndex, false);
+
   // === LEG CALCULATIONS ===
   const leftThigh = normalize(createVector(leftHip, leftKnee));
   const rightThigh = normalize(createVector(rightHip, rightKnee));
@@ -519,12 +558,12 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   } : null;
   const leftElbowJoint: Joint3DRotation | null = landmarksVisible(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.LEFT_ELBOW, LANDMARKS.LEFT_WRIST]) ? {
     x: clamp(leftElbowFlexion, 0, 2.5),
-    y: 0,
+    y: clamp(leftPronation, -1.5, 1.5),
     z: 0
   } : null;
   const rightElbowJoint: Joint3DRotation | null = landmarksVisible(landmarks, [LANDMARKS.RIGHT_SHOULDER, LANDMARKS.RIGHT_ELBOW, LANDMARKS.RIGHT_WRIST]) ? {
     x: clamp(rightElbowFlexion, 0, 2.5),
-    y: 0,
+    y: clamp(rightPronation, -1.5, 1.5),
     z: 0
   } : null;
   const leftHipJoint: Joint3DRotation | null = landmarksVisible(landmarks, [LANDMARKS.LEFT_HIP, LANDMARKS.LEFT_KNEE]) ? {

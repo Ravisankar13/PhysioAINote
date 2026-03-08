@@ -55,8 +55,8 @@ export const ANATOMICAL_RANGES = {
 export interface ControllerValues {
   leftShoulder: { flexion: number; abduction: number; internalRotation: number };
   rightShoulder: { flexion: number; abduction: number; internalRotation: number };
-  leftElbow: { flexion: number };
-  rightElbow: { flexion: number };
+  leftElbow: { flexion: number; pronation: number };
+  rightElbow: { flexion: number; pronation: number };
   leftHip: { flexion: number; abduction: number };
   rightHip: { flexion: number; abduction: number };
   leftKnee: { flexion: number };
@@ -209,6 +209,8 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   
   const leftElbowFlexion = applyDeadZone(clamp(pose.leftElbow.x, elbow.flexion.min, elbow.flexion.max), ARM_DEAD_ZONE);
   const rightElbowFlexion = applyDeadZone(clamp(pose.rightElbow.x, elbow.flexion.min, elbow.flexion.max), ARM_DEAD_ZONE);
+  const leftElbowPronation = applyDeadZone(clamp(pose.leftElbow.y, -1.5, 1.5), ARM_DEAD_ZONE);
+  const rightElbowPronation = applyDeadZone(clamp(pose.rightElbow.y, -1.5, 1.5), ARM_DEAD_ZONE);
   
   const leftHipFlexion = applyDeadZone(clamp(pose.leftHip.x, hip.flexion.min, hip.flexion.max), HIP_DEAD_ZONE);
   const leftHipAbduction = applyDeadZone(clamp(pose.leftHip.z, hip.abduction.min, hip.abduction.max), HIP_DEAD_ZONE);
@@ -239,8 +241,8 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   return {
     leftShoulder: { flexion: leftShoulderFlexion, abduction: leftShoulderAbduction, internalRotation: leftShoulderInternalRotation },
     rightShoulder: { flexion: rightShoulderFlexion, abduction: rightShoulderAbduction, internalRotation: rightShoulderInternalRotation },
-    leftElbow: { flexion: leftElbowFlexion },
-    rightElbow: { flexion: rightElbowFlexion },
+    leftElbow: { flexion: leftElbowFlexion, pronation: leftElbowPronation },
+    rightElbow: { flexion: rightElbowFlexion, pronation: rightElbowPronation },
     leftHip: { flexion: leftHipFlexion, abduction: leftHipAbduction },
     rightHip: { flexion: rightHipFlexion, abduction: rightHipAbduction },
     leftKnee: { flexion: leftKneeFlexion },
@@ -334,10 +336,12 @@ export class ControllerSmoother {
         internalRotation: smoothValue(current.rightShoulder.internalRotation, this.previous.rightShoulder.internalRotation)
       },
       leftElbow: {
-        flexion: smoothValue(current.leftElbow.flexion, this.previous.leftElbow.flexion)
+        flexion: smoothValue(current.leftElbow.flexion, this.previous.leftElbow.flexion),
+        pronation: smoothValue(current.leftElbow.pronation, this.previous.leftElbow.pronation)
       },
       rightElbow: {
-        flexion: smoothValue(current.rightElbow.flexion, this.previous.rightElbow.flexion)
+        flexion: smoothValue(current.rightElbow.flexion, this.previous.rightElbow.flexion),
+        pronation: smoothValue(current.rightElbow.pronation, this.previous.rightElbow.pronation)
       },
       leftHip: {
         flexion: smoothValue(current.leftHip.flexion, this.previous.leftHip.flexion),

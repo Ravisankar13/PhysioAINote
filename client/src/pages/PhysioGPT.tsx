@@ -325,8 +325,8 @@ const DEFAULT_MODEL_CONFIG: ModelConfig = {
   rightKnee: { flexion: 0, varus: 0, tibialTorsion: 0, recurvatum: 0, tibialSlope: 0, patellaAlta: 0 },
   leftAnkle: { dorsiflexion: 0, plantarflexion: 0, inversion: 0, eversion: 0, forefootVarus: 0, toeExtension: 0, archHeight: 0 },
   rightAnkle: { dorsiflexion: 0, plantarflexion: 0, inversion: 0, eversion: 0, forefootVarus: 0, toeExtension: 0, archHeight: 0 },
-  leftShoulder: { flexion: 0, abduction: -80, internalRotation: 0, externalRotation: 0, retroversion: 0, elevation: 0, protraction: 0, winging: 0, clavicleLength: 0 },
-  rightShoulder: { flexion: 0, abduction: -80, internalRotation: 0, externalRotation: 0, retroversion: 0, elevation: 0, protraction: 0, winging: 0, clavicleLength: 0 },
+  leftShoulder: { flexion: 0, abduction: -90, internalRotation: 0, externalRotation: 0, retroversion: 0, elevation: 0, protraction: 0, winging: 0, clavicleLength: 0 },
+  rightShoulder: { flexion: 0, abduction: -90, internalRotation: 0, externalRotation: 0, retroversion: 0, elevation: 0, protraction: 0, winging: 0, clavicleLength: 0 },
   leftScapula: { protraction: 0, retraction: 0, elevation: 0, depression: 0, upwardRotation: 0, downwardRotation: 0, anteriorTilt: 0, posteriorTilt: 0, winging: 0, clavicleRotation: 0 },
   rightScapula: { protraction: 0, retraction: 0, elevation: 0, depression: 0, upwardRotation: 0, downwardRotation: 0, anteriorTilt: 0, posteriorTilt: 0, winging: 0, clavicleRotation: 0 },
   leftElbow: { flexion: 0, carryingAngle: 0, pronation: 0 },
@@ -1298,8 +1298,8 @@ ${ddxList}`;
       ...prev,
       leftShoulder: { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(smoothed.leftShoulder.abduction), internalRotation: rad2deg(smoothed.leftShoulder.internalRotation) },
       rightShoulder: { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(smoothed.rightShoulder.abduction), internalRotation: rad2deg(smoothed.rightShoulder.internalRotation) },
-      leftElbow: { ...prev.leftElbow, flexion: rad2deg(smoothed.leftElbow.flexion) },
-      rightElbow: { ...prev.rightElbow, flexion: rad2deg(smoothed.rightElbow.flexion) },
+      leftElbow: { ...prev.leftElbow, flexion: rad2deg(smoothed.leftElbow.flexion), pronation: rad2deg(smoothed.leftElbow.pronation) },
+      rightElbow: { ...prev.rightElbow, flexion: rad2deg(smoothed.rightElbow.flexion), pronation: rad2deg(smoothed.rightElbow.pronation) },
       leftHip: { ...prev.leftHip, flexion: rad2deg(smoothed.leftHip.flexion), abduction: rad2deg(smoothed.leftHip.abduction) },
       rightHip: { ...prev.rightHip, flexion: rad2deg(smoothed.rightHip.flexion), abduction: rad2deg(smoothed.rightHip.abduction) },
       leftKnee: { ...prev.leftKnee, flexion: rad2deg(smoothed.leftKnee.flexion) },
@@ -1321,10 +1321,10 @@ ${ddxList}`;
         next.rightShoulder = { ...prev.rightShoulder, flexion: rad2deg(partialPose.rightShoulder.x), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(partialPose.rightShoulder.z), internalRotation: rad2deg(partialPose.rightShoulder.y) };
       }
       if (partialPose.leftElbow) {
-        next.leftElbow = { ...prev.leftElbow, flexion: rad2deg(partialPose.leftElbow.x) };
+        next.leftElbow = { ...prev.leftElbow, flexion: rad2deg(partialPose.leftElbow.x), pronation: rad2deg(partialPose.leftElbow.y) };
       }
       if (partialPose.rightElbow) {
-        next.rightElbow = { ...prev.rightElbow, flexion: rad2deg(partialPose.rightElbow.x) };
+        next.rightElbow = { ...prev.rightElbow, flexion: rad2deg(partialPose.rightElbow.x), pronation: rad2deg(partialPose.rightElbow.y) };
       }
       if (partialPose.leftHip) {
         next.leftHip = { ...prev.leftHip, flexion: rad2deg(partialPose.leftHip.x), abduction: rad2deg(partialPose.leftHip.z) };

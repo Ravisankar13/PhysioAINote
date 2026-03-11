@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ZoomIn, Target, Bone, CircleDot, ChevronRight, ArrowLeft } from 'lucide-react';
+import { ZoomIn, Target, Bone, CircleDot, ChevronRight, ArrowLeft, Hand, Footprints, Brain, Activity } from 'lucide-react';
 import { AnatomicalRegion, ANATOMICAL_REGION_PRESETS, LUMBAR_SEGMENTS, SUB_STRUCTURES, SpinalSegment, SubStructure } from './PureThreeGLBViewer';
 
 interface RegionZoomControlsProps {
@@ -288,6 +288,90 @@ export default function RegionZoomControls({
                       Pelvis
                     </Button>
                     {REGION_GROUPS.lower.regions.filter(r => r !== 'pelvis').map((region) => (
+                      <Button
+                        key={region}
+                        variant={currentRegion === region ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => onRegionChange(region)}
+                        className="text-xs h-8"
+                        data-testid={`btn-zoom-${region}`}
+                      >
+                        {ANATOMICAL_REGION_PRESETS[region].label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                    <Brain className="h-3 w-3" />
+                    Head
+                  </div>
+                  <div className="grid grid-cols-1 gap-1">
+                    {REGION_GROUPS.head.regions.map((region) => (
+                      <Button
+                        key={region}
+                        variant={currentRegion === region ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => onRegionChange(region)}
+                        className="text-xs h-8"
+                        data-testid={`btn-zoom-${region}`}
+                      >
+                        {ANATOMICAL_REGION_PRESETS[region].label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                    <Hand className="h-3 w-3" />
+                    Hand & Wrist
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {REGION_GROUPS.hand_wrist.regions.map((region) => (
+                      <Button
+                        key={region}
+                        variant={currentRegion === region ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => onRegionChange(region)}
+                        className="text-xs h-8"
+                        data-testid={`btn-zoom-${region}`}
+                      >
+                        {ANATOMICAL_REGION_PRESETS[region].label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                    <Activity className="h-3 w-3" />
+                    Anterior Pelvis & Inguinal
+                  </div>
+                  <div className="grid grid-cols-1 gap-1">
+                    {REGION_GROUPS.anterior_pelvis_inguinal.regions.map((region) => (
+                      <Button
+                        key={region}
+                        variant={currentRegion === region ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => onRegionChange(region)}
+                        className="text-xs h-8"
+                        data-testid={`btn-zoom-${region}`}
+                      >
+                        {ANATOMICAL_REGION_PRESETS[region].label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                    <Footprints className="h-3 w-3" />
+                    Foot & Ankle
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {REGION_GROUPS.foot_ankle.regions.map((region) => (
                       <Button
                         key={region}
                         variant={currentRegion === region ? 'default' : 'outline'}

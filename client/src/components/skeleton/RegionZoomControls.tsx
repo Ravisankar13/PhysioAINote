@@ -36,13 +36,25 @@ const REGION_GROUPS = {
     label: 'Spine',
     regions: ['cervical_spine', 'thoracic_spine', 'lumbar_spine'] as AnatomicalRegion[],
   },
+  head: {
+    label: 'Head',
+    regions: ['head'] as AnatomicalRegion[],
+  },
   upper: {
     label: 'Upper Body',
-    regions: ['left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow'] as AnatomicalRegion[],
+    regions: ['left_shoulder', 'right_shoulder', 'left_scapula', 'right_scapula', 'left_elbow', 'right_elbow'] as AnatomicalRegion[],
+  },
+  hand_wrist: {
+    label: 'Hand & Wrist',
+    regions: ['left_wrist', 'right_wrist', 'left_hand', 'right_hand'] as AnatomicalRegion[],
   },
   lower: {
     label: 'Lower Body',
-    regions: ['pelvis', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle'] as AnatomicalRegion[],
+    regions: ['pelvis', 'anterior_pelvis', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle'] as AnatomicalRegion[],
+  },
+  foot: {
+    label: 'Foot',
+    regions: ['left_foot', 'right_foot'] as AnatomicalRegion[],
   },
 };
 

@@ -50,10 +50,14 @@ const REGION_GROUPS = {
   },
   lower: {
     label: 'Lower Body',
-    regions: ['pelvis', 'anterior_pelvis', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle'] as AnatomicalRegion[],
+    regions: ['pelvis', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle'] as AnatomicalRegion[],
   },
-  foot: {
-    label: 'Foot',
+  anterior_pelvis_inguinal: {
+    label: 'Anterior Pelvis & Inguinal',
+    regions: ['anterior_pelvis'] as AnatomicalRegion[],
+  },
+  foot_ankle: {
+    label: 'Foot & Ankle',
     regions: ['left_foot', 'right_foot'] as AnatomicalRegion[],
   },
 };

@@ -1149,6 +1149,16 @@ export const ANATOMICAL_VIRTUAL_POINTS: Array<{ label: string; boneName: string;
   { label: 'Right 5th MTP Joint', boneName: 'virt_mtp5_R', boneA: 'Toes_R', boneB: 'ToesEnd_R', t: 0.3, offsetX: 0.03 },
   { label: 'Left Sesamoids (1st MTP)', boneName: 'virt_sesamoid_L', boneA: 'Toes_L', boneB: 'ToesEnd_L', t: 0.25, offsetX: 0.03, offsetY: -0.02 },
   { label: 'Right Sesamoids (1st MTP)', boneName: 'virt_sesamoid_R', boneA: 'Toes_R', boneB: 'ToesEnd_R', t: 0.25, offsetX: -0.03, offsetY: -0.02 },
+  { label: 'Left 1st MTP Joint', boneName: 'virt_mtp1_L', boneA: 'Toes_L', boneB: 'ToesEnd_L', t: 0.3, offsetX: 0.04 },
+  { label: 'Right 1st MTP Joint', boneName: 'virt_mtp1_R', boneA: 'Toes_R', boneB: 'ToesEnd_R', t: 0.3, offsetX: -0.04 },
+  { label: 'Left 1st Intermetatarsal Space', boneName: 'virt_ims1_L', boneA: 'Toes_L', boneB: 'ToesEnd_L', t: 0.2, offsetX: 0.025, offsetY: 0.01 },
+  { label: 'Right 1st Intermetatarsal Space', boneName: 'virt_ims1_R', boneA: 'Toes_R', boneB: 'ToesEnd_R', t: 0.2, offsetX: -0.025, offsetY: 0.01 },
+  { label: 'Left 2nd Intermetatarsal Space', boneName: 'virt_ims2_L', boneA: 'Toes_L', boneB: 'ToesEnd_L', t: 0.2, offsetX: 0.01, offsetY: 0.01 },
+  { label: 'Right 2nd Intermetatarsal Space', boneName: 'virt_ims2_R', boneA: 'Toes_R', boneB: 'ToesEnd_R', t: 0.2, offsetX: -0.01, offsetY: 0.01 },
+  { label: 'Left 3rd Intermetatarsal Space', boneName: 'virt_ims3_L', boneA: 'Toes_L', boneB: 'ToesEnd_L', t: 0.2, offsetX: -0.005, offsetY: 0.01 },
+  { label: 'Right 3rd Intermetatarsal Space', boneName: 'virt_ims3_R', boneA: 'Toes_R', boneB: 'ToesEnd_R', t: 0.2, offsetX: 0.005, offsetY: 0.01 },
+  { label: 'Left 4th Intermetatarsal Space', boneName: 'virt_ims4_L', boneA: 'Toes_L', boneB: 'ToesEnd_L', t: 0.2, offsetX: -0.02, offsetY: 0.01 },
+  { label: 'Right 4th Intermetatarsal Space', boneName: 'virt_ims4_R', boneA: 'Toes_R', boneB: 'ToesEnd_R', t: 0.2, offsetX: 0.02, offsetY: 0.01 },
 
   // ========== ROTATOR CUFF & SHOULDER DETAIL ==========
   { label: 'Left Supraspinatus Insertion', boneName: 'virt_suprasp_ins_L', boneA: 'Shoulder_L', boneB: 'ShoulderPart1_L', t: 0.05, offsetY: 0.04 },

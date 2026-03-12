@@ -41,7 +41,7 @@ Preferred communication style: Simple, everyday language.
 - **Clinical Documentation**: AI-enhanced SOAP note generation, OpenAI Whisper for audio transcription, automated PII de-identification, and version control.
 - **PhysioGPT Clinical Enhancements**: Transforms the PhysioGPT page into a comprehensive clinical decision support system with a clinical context panel, integrated tools, and professional mode.
 - **Exercise Prescription**: Comprehensive, body part-specific, difficulty-scaled, and evidence-based exercise database with AI-powered recommendations.
-- **Research Integration**: AI-analyzed research database with bias assessment and clinical application insights.
+- **Research Integration**: AI-analyzed research database with bias assessment and clinical application insights. PubMed/PEDro-equivalent evidence is now wired into all AI clinical reasoning pipelines (PhysioGPT chat, Clinical Bubble, Treatment Synthesis) via `server/services/clinicalEvidenceService.ts`. Every recommendation can cite actual papers with PMIDs, evidence grades (A-D), and clickable PubMed links. The service uses in-memory TTL caching (15 min) and falls back to curated reference papers when PubMed is unreachable.
 - **UI/UX Decisions**: Utilizes Shadcn/ui and Tailwind CSS for a modern, professional aesthetic with intuitive navigation and responsive design.
 - **Security**: Encrypted session secrets, robust CORS configuration, Zod schema validation, and secure file upload handling.
 - **Clinical Bubble on Pain Markers**: An AI-powered floating clinical info panel triggered by pain markers, offering differential diagnoses, assessments, treatments, and follow-up questions.

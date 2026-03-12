@@ -6610,11 +6610,28 @@ IMPORTANT:
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
       const openai = new OpenAI({ apiKey, baseURL });
 
+      // Fetch evidence for treatment targets
+      let treatmentEvidence: any[] = [];
+      try {
+        const { fetchClinicalEvidence } = await import("./services/clinicalEvidenceService");
+        const regionTerms = targets.map((t: any) => t.name).join(' ');
+        const evidence = await fetchClinicalEvidence(regionTerms, '', 'treatment rehabilitation');
+        if (evidence && evidence.papers.length > 0) {
+          treatmentEvidence = evidence.papers;
+        }
+      } catch (evErr) {
+        console.warn("Evidence fetch for treatment synthesis failed:", evErr);
+      }
+
+      const evidenceSection = treatmentEvidence.length > 0
+        ? `\n\nRELEVANT PUBMED EVIDENCE (cite these papers using [Author, Year] format with PMIDs):\n${treatmentEvidence.map((p: any, i: number) => `[${i+1}] ${p.authors} (${p.year}). "${p.title}" ${p.journal}. PMID: ${p.pmid}. Evidence Grade: ${p.evidenceGrade}.`).join('\n')}`
+        : '';
+
       const targetDescriptions = targets.map((t: any, i: number) =>
         `${i + 1}. ${t.name} — Status: ${t.status}, Action: ${t.action}${t.isRootCause ? ' [ROOT CAUSE]' : ''}${t.isCompensation ? ' [COMPENSATION]' : ''}\n   Rationale: ${t.rationale}${t.painLinks?.length ? '\n   Pain links: ' + t.painLinks.join('; ') : ''}${t.chains?.length ? '\n   Chains: ' + t.chains.join(', ') : ''}`
       ).join('\n\n');
 
-      const prompt = `You are an expert musculoskeletal physiotherapist creating a treatment plan based on a biomechanical assessment.
+      const prompt = `You are an expert musculoskeletal physiotherapist creating a treatment plan based on a biomechanical assessment.${evidenceSection}
 
 ASSESSMENT FINDINGS:
 - Total treatment targets: ${summary?.totalTargets || targets.length}
@@ -6646,7 +6663,8 @@ Provide a comprehensive treatment plan with these sections:
 
 8. HOME PROGRAM (3-5 key exercises/self-management strategies for the patient)
 
-Keep it clinically precise, evidence-informed, and actionable. Use physiotherapy terminology appropriate for a qualified practitioner.`;
+Keep it clinically precise, evidence-informed, and actionable. Use physiotherapy terminology appropriate for a qualified practitioner.
+${treatmentEvidence.length > 0 ? '\nIMPORTANT: Cite relevant papers from the PUBMED EVIDENCE section above using [Author, Year] format with PMIDs. Include evidence grades (A-D) for key recommendations.' : ''}`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -6656,7 +6674,19 @@ Keep it clinically precise, evidence-informed, and actionable. Use physiotherapy
       });
 
       const plan = response.choices[0]?.message?.content || "Unable to generate treatment plan.";
-      res.json({ plan });
+      res.json({
+        plan,
+        evidenceReferences: treatmentEvidence.map((p: any) => ({
+          title: p.title,
+          authors: p.authors,
+          journal: p.journal,
+          year: p.year,
+          pmid: p.pmid,
+          evidenceGrade: p.evidenceGrade,
+          studyType: p.studyType,
+          pubmedUrl: p.pubmedUrl,
+        })),
+      });
     } catch (error: any) {
       console.error("Treatment synthesis error:", error);
       res.status(500).json({ error: "Failed to generate treatment plan", details: error.message });
@@ -6682,7 +6712,25 @@ Keep it clinically precise, evidence-informed, and actionable. Use physiotherapy
         ? `\n\nThe clinician has documented the following subjective patient history:\n"${subjectiveHistory.trim()}"\n\nCRITICAL: Integrate this subjective history deeply into ALL your analysis. Use it to:\n- Adjust differential diagnosis likelihoods based on history, onset pattern, aggravating/easing factors\n- Tailor clinical questions to explore gaps in the subjective history\n- Recommend assessments that are most relevant given the reported history\n- Customize treatment approaches based on patient context (occupation, lifestyle, prior injuries)\n- Prescribe exercises appropriate for the patient's functional level and goals`
         : '';
 
-      const prompt = `You are a clinical physiotherapy expert. A clinician has placed a ${markerType} pain marker on the "${region}" of a patient's body. The reported severity is "${severity || 'moderate'}".${answersContext}${subjectiveContext}
+      // Fetch PubMed evidence for this region
+      let evidenceReferences: any[] = [];
+      let evidenceGradeOverall: string = 'D';
+      try {
+        const { fetchClinicalEvidence } = await import("./services/clinicalEvidenceService");
+        const evidence = await fetchClinicalEvidence(region, markerType || '', '');
+        if (evidence && evidence.papers.length > 0) {
+          evidenceReferences = evidence.papers;
+          evidenceGradeOverall = evidence.overallGrade;
+        }
+      } catch (evErr) {
+        console.warn("Evidence fetch for clinical bubble failed:", evErr);
+      }
+
+      const evidenceContext = evidenceReferences.length > 0
+        ? `\n\nRELEVANT PUBMED EVIDENCE (incorporate these citations where appropriate using [Author, Year] format):\n${evidenceReferences.map((p: any, i: number) => `[${i+1}] ${p.authors} (${p.year}). "${p.title}" ${p.journal}. PMID: ${p.pmid}. Grade: ${p.evidenceGrade}.`).join('\n')}`
+        : '';
+
+      const prompt = `You are a clinical physiotherapy expert. A clinician has placed a ${markerType} pain marker on the "${region}" of a patient's body. The reported severity is "${severity || 'moderate'}".${answersContext}${subjectiveContext}${evidenceContext}
 
 IMPORTANT: The anatomical location "${region}" is a PRECISE bony landmark or anatomical structure identified on a 3D skeleton model. Provide your clinical analysis specific to this EXACT structure, not just the general region. For example:
 - If the location is "L4-L5 Disc", focus on disc pathology at that specific level
@@ -6696,8 +6744,8 @@ Provide a structured clinical analysis in JSON format with these fields:
   "differentials": [{"name": "condition name", "likelihood": "high|moderate|low", "reasoning": "brief clinical reasoning specific to this anatomical landmark"}],
   "questions": [{"id": "q1", "question": "clinical question to ask", "options": ["option1", "option2", "option3"]}],
   "assessment": [{"test": "special test name", "purpose": "what it tests for", "technique": "brief technique description"}],
-  "treatments": [{"name": "treatment name", "description": "brief description", "frequency": "e.g. 2-3x/week"}],
-  "exercises": [{"name": "exercise name", "description": "brief description", "sets": "3", "reps": "10-12"}],
+  "treatments": [{"name": "treatment name", "description": "brief description", "frequency": "e.g. 2-3x/week", "evidenceGrade": "A|B|C|D", "citation": "[Author, Year] PMID:xxxxx"}],
+  "exercises": [{"name": "exercise name", "description": "brief description", "sets": "3", "reps": "10-12", "evidenceGrade": "A|B|C|D"}],
   "redFlags": ["red flag description if applicable"]
 }
 
@@ -6705,8 +6753,8 @@ Guidelines:
 - Provide 3-5 differential diagnoses ranked by likelihood, specific to the exact anatomical structure
 - Provide 3-5 targeted clinical questions with 3-4 answer options each that will help narrow the differential
 - Provide 3-5 objective assessment tests specific to this anatomical landmark
-- Provide 3-4 evidence-based treatment approaches
-- Provide 3-4 therapeutic exercises appropriate for the condition
+- Provide 3-4 evidence-based treatment approaches WITH evidence grades (A-D) and citations from the PubMed evidence above
+- Provide 3-4 therapeutic exercises appropriate for the condition WITH evidence grades
 - Only include red flags if genuinely concerning patterns exist for this structure
 - Be concise but clinically precise - reference the specific anatomy in your reasoning
 - Return ONLY valid JSON, no markdown or explanation`;
@@ -6729,6 +6777,17 @@ Guidelines:
         treatments: parsed.treatments || [],
         exercises: parsed.exercises || [],
         redFlags: parsed.redFlags || [],
+        evidenceReferences: evidenceReferences.map((p: any) => ({
+          title: p.title,
+          authors: p.authors,
+          journal: p.journal,
+          year: p.year,
+          pmid: p.pmid,
+          evidenceGrade: p.evidenceGrade,
+          studyType: p.studyType,
+          pubmedUrl: p.pubmedUrl,
+        })),
+        evidenceGrade: evidenceGradeOverall,
       });
     } catch (error: any) {
       console.error("Clinical bubble error:", error);

@@ -75,6 +75,7 @@ import { useAuth } from "@/hooks/use-auth";
 import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
+import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState, AnimationConstraint } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
@@ -335,6 +336,17 @@ const DEFAULT_MODEL_CONFIG: ModelConfig = {
   rightWrist: { deviation: 0, flexion: 0 },
 };
 
+interface PubMedPaper {
+  title: string;
+  authors: string;
+  journal: string;
+  year: number;
+  pmid: string;
+  evidenceGrade: 'A' | 'B' | 'C' | 'D';
+  studyType: string;
+  pubmedUrl: string;
+}
+
 interface PhysioGptResponse {
   response: string;
   conversationId: number;
@@ -357,6 +369,12 @@ interface PhysioGptResponse {
     redFlags?: string[];
     differentialDiagnosis?: string[];
     outcomeMeasures?: string[];
+  };
+  pubmedEvidence?: {
+    papers: PubMedPaper[];
+    overallGrade: 'A' | 'B' | 'C' | 'D';
+    confidence: string;
+    source: 'pubmed' | 'fallback';
   };
   contraindications?: string[];
   icdCodes?: string[];
@@ -834,6 +852,9 @@ export default function PhysioGPT() {
                     evidenceDataReceived.evidenceSummary = data.data;
                     evidenceDataReceived.evidenceGrade = data.data.evidenceGrade;
                     evidenceDataReceived.confidenceLevel = data.data.confidenceLevel;
+                    break;
+                  case 'pubmedEvidence':
+                    evidenceDataReceived.pubmedEvidence = data.data;
                     break;
                   case 'exercises':
                     evidenceDataReceived.exerciseImages = data.data;
@@ -7226,6 +7247,15 @@ ${ddxList}`;
                                 <VisualContentDisplay
                                   visualContent={evidenceData.get(selectedConversationId!)!.visualContent}
                                   exerciseImages={evidenceData.get(selectedConversationId!)?.exerciseImages}
+                                />
+                              )}
+                              {evidenceData.has(selectedConversationId!) && index === messages.length - 1 &&
+                               evidenceData.get(selectedConversationId!)?.pubmedEvidence && (
+                                <EvidenceCitationInline
+                                  papers={evidenceData.get(selectedConversationId!)!.pubmedEvidence!.papers}
+                                  overallGrade={evidenceData.get(selectedConversationId!)!.pubmedEvidence!.overallGrade}
+                                  confidence={evidenceData.get(selectedConversationId!)!.pubmedEvidence!.confidence}
+                                  source={evidenceData.get(selectedConversationId!)!.pubmedEvidence!.source}
                                 />
                               )}
                               <div className="mt-2 flex justify-end">

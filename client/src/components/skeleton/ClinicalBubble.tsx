@@ -24,6 +24,17 @@ import {
 import { getKineticChainConnections, type KineticChainConnection } from "@/lib/kineticChainMap";
 import type { AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
 
+export interface EvidenceRef {
+  title: string;
+  authors: string;
+  journal: string;
+  year: number;
+  pmid: string;
+  evidenceGrade: 'A' | 'B' | 'C' | 'D';
+  studyType: string;
+  pubmedUrl: string;
+}
+
 export interface ClinicalBubbleData {
   differentials: Array<{
     name: string;
@@ -44,14 +55,19 @@ export interface ClinicalBubbleData {
     name: string;
     description: string;
     frequency?: string;
+    evidenceGrade?: string;
+    citation?: string;
   }>;
   exercises: Array<{
     name: string;
     description: string;
     sets?: string;
     reps?: string;
+    evidenceGrade?: string;
   }>;
   redFlags: string[];
+  evidenceReferences?: EvidenceRef[];
+  evidenceGrade?: string;
 }
 
 interface ClinicalBubbleProps {
@@ -433,13 +449,58 @@ export default function ClinicalBubble({
                 <div className="space-y-2">
                   {data.treatments.map((t, i) => (
                     <div key={i} className="bg-white/5 rounded-lg p-2">
-                      <span className="text-[11px] text-white font-medium">{t.name}</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-white font-medium">{t.name}</span>
+                        {t.evidenceGrade && (
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+                            t.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-300' :
+                            t.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-300' :
+                            t.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-300' :
+                            'bg-red-500/20 text-red-300'
+                          }`}>
+                            Grade {t.evidenceGrade}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-gray-400 mt-0.5 leading-relaxed">{t.description}</p>
                       {t.frequency && (
                         <span className="text-[9px] text-blue-300 mt-1 inline-block">{t.frequency}</span>
                       )}
+                      {t.citation && (
+                        <p className="text-[8px] text-teal-400/70 mt-0.5 italic">{t.citation}</p>
+                      )}
                     </div>
                   ))}
+                  {data.evidenceReferences && data.evidenceReferences.length > 0 && (
+                    <div className="border-t border-gray-700/30 pt-2 mt-2">
+                      <div className="flex items-center gap-1 mb-1.5">
+                        <Sparkles className="h-3 w-3 text-teal-400" />
+                        <span className="text-[10px] text-teal-300 font-medium">PubMed Evidence</span>
+                        {data.evidenceGrade && (
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ml-1 ${
+                            data.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-300' :
+                            data.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-300' :
+                            data.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-300' :
+                            'bg-red-500/20 text-red-300'
+                          }`}>
+                            Overall: {data.evidenceGrade}
+                          </span>
+                        )}
+                      </div>
+                      {data.evidenceReferences.slice(0, 3).map((ref, ri) => (
+                        <a
+                          key={ri}
+                          href={ref.pubmedUrl || `https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}/`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block bg-white/3 rounded p-1.5 mb-1 hover:bg-white/5 transition-colors"
+                        >
+                          <p className="text-[9px] text-gray-300 leading-tight">{ref.title}</p>
+                          <p className="text-[8px] text-gray-500 mt-0.5">{ref.authors} — {ref.journal} ({ref.year}) · PMID: {ref.pmid}</p>
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -447,7 +508,19 @@ export default function ClinicalBubble({
                 <div className="space-y-2">
                   {data.exercises.map((e, i) => (
                     <div key={i} className="bg-white/5 rounded-lg p-2">
-                      <span className="text-[11px] text-white font-medium">{e.name}</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-white font-medium">{e.name}</span>
+                        {e.evidenceGrade && (
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+                            e.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-300' :
+                            e.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-300' :
+                            e.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-300' :
+                            'bg-red-500/20 text-red-300'
+                          }`}>
+                            Grade {e.evidenceGrade}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-gray-400 mt-0.5 leading-relaxed">{e.description}</p>
                       {(e.sets || e.reps) && (
                         <span className="text-[9px] text-green-300 mt-1 inline-block">

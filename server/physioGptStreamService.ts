@@ -3,6 +3,7 @@ import { physioGptStorage } from "./physioGptStorage";
 import { storage } from "./storage";
 import { evidenceService, EvidenceSummary, ResearchPaper } from "./evidenceIntegration";
 import { visualContentService, type VisualContentResult } from "./visualContentService";
+import { fetchClinicalEvidence, extractClinicalTerms, formatPapersForPrompt, type ClinicalEvidenceResult } from "./services/clinicalEvidenceService";
 import { Response } from "express";
 
 // Use Replit AI Integrations OpenAI if available, otherwise fall back to standard OPENAI_API_KEY
@@ -281,8 +282,23 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         content: request.message
       });
       
+      // Fetch PubMed evidence before AI call to inject into prompt
+      let pubmedEvidence: ClinicalEvidenceResult | null = null;
+      try {
+        const terms = extractClinicalTerms(request.message);
+        if (terms.region || terms.condition || terms.treatment) {
+          pubmedEvidence = await fetchClinicalEvidence(terms.region, terms.condition, terms.treatment);
+        }
+      } catch (e) {
+        console.warn('PubMed pre-fetch failed:', e);
+      }
+
       // Build messages for OpenAI
-      const systemPrompt = this.buildSystemPrompt(request.clinicalContext, request.virtualPatient);
+      let systemPrompt = this.buildSystemPrompt(request.clinicalContext, request.virtualPatient);
+      if (pubmedEvidence && pubmedEvidence.papers.length > 0) {
+        systemPrompt += formatPapersForPrompt(pubmedEvidence.papers);
+        systemPrompt += '\n\nIMPORTANT: When making clinical recommendations, cite the relevant papers above using [Author, Year] format. Include the PMID where possible. Base your evidence grades on these actual studies.';
+      }
       const openaiMessages = [
         { role: 'system', content: systemPrompt },
         ...previousMessages,
@@ -348,9 +364,17 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         );
       }
       
-      // Check if evidence search is needed (run in parallel)
+      // Send PubMed evidence as SSE event (already fetched before AI call)
+      if (pubmedEvidence && pubmedEvidence.papers.length > 0) {
+        res.write(`data: ${JSON.stringify({ 
+          type: 'pubmedEvidence', 
+          data: pubmedEvidence 
+        })}\n\n`);
+      }
+
+      // Check if evidence search is needed (run in parallel) - legacy evidence summary
       const needsEvidence = this.checkNeedsEvidence(request.message);
-      if (needsEvidence) {
+      if (needsEvidence && !pubmedEvidence) {
         enhancementsPromises.push(
           this.fetchEvidenceAsync(request.message)
             .then(evidence => {

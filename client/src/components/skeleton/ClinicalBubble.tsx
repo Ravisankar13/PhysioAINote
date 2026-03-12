@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { getKineticChainConnections, type KineticChainConnection } from "@/lib/kineticChainMap";
 import type { AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
+import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
 
 export interface EvidenceRef {
   title: string;
@@ -33,6 +34,7 @@ export interface EvidenceRef {
   evidenceGrade: 'A' | 'B' | 'C' | 'D';
   studyType: string;
   pubmedUrl: string;
+  abstract?: string;
 }
 
 export interface ClinicalBubbleData {
@@ -473,32 +475,11 @@ export default function ClinicalBubble({
                   ))}
                   {data.evidenceReferences && data.evidenceReferences.length > 0 && (
                     <div className="border-t border-gray-700/30 pt-2 mt-2">
-                      <div className="flex items-center gap-1 mb-1.5">
-                        <Sparkles className="h-3 w-3 text-teal-400" />
-                        <span className="text-[10px] text-teal-300 font-medium">PubMed Evidence</span>
-                        {data.evidenceGrade && (
-                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ml-1 ${
-                            data.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-300' :
-                            data.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-300' :
-                            data.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-300' :
-                            'bg-red-500/20 text-red-300'
-                          }`}>
-                            Overall: {data.evidenceGrade}
-                          </span>
-                        )}
-                      </div>
-                      {data.evidenceReferences.slice(0, 3).map((ref, ri) => (
-                        <a
-                          key={ri}
-                          href={ref.pubmedUrl || `https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}/`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block bg-white/3 rounded p-1.5 mb-1 hover:bg-white/5 transition-colors"
-                        >
-                          <p className="text-[9px] text-gray-300 leading-tight">{ref.title}</p>
-                          <p className="text-[8px] text-gray-500 mt-0.5">{ref.authors} — {ref.journal} ({ref.year}) · PMID: {ref.pmid}</p>
-                        </a>
-                      ))}
+                      <EvidenceCitationInline
+                        papers={data.evidenceReferences}
+                        overallGrade={data.evidenceGrade as 'A' | 'B' | 'C' | 'D' | undefined}
+                        compact={true}
+                      />
                     </div>
                   )}
                 </div>

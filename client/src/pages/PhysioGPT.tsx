@@ -2479,7 +2479,29 @@ ${ddxList}`;
   const [expandedTreatmentTarget, setExpandedTreatmentTarget] = useState<string | null>(null);
   const [aiTreatmentPlan, setAiTreatmentPlan] = useState<string | null>(null);
   const [treatmentEvidenceRefs, setTreatmentEvidenceRefs] = useState<PubMedPaper[]>([]);
+  const [liveTargetEvidence, setLiveTargetEvidence] = useState<PubMedPaper[]>([]);
   const [aiTreatmentLoading, setAiTreatmentLoading] = useState(false);
+
+  useEffect(() => {
+    if (treatmentPriorities.targets.length === 0) {
+      setLiveTargetEvidence([]);
+      return;
+    }
+    const fetchEvidence = async () => {
+      try {
+        const response = await apiRequest('POST', '/api/physiogpt/treatment-evidence', {
+          targets: treatmentPriorities.targets.slice(0, 5).map(t => ({
+            name: t.targetName,
+            status: t.clinicalStatus,
+            action: t.treatmentAction,
+          })),
+        });
+        const data = await response.json();
+        if (data.papers) setLiveTargetEvidence(data.papers);
+      } catch { }
+    };
+    fetchEvidence();
+  }, [treatmentPriorities.targets.length]);
 
   const painAffectedChainIds = useMemo(() => {
     if (!showChainVisualization || painMarkers.length === 0) return [];
@@ -4190,6 +4212,15 @@ ${ddxList}`;
                           })}
                         </div>
 
+                        {liveTargetEvidence.length > 0 && (
+                          <div className="mb-2 p-2 rounded-lg border border-teal-500/20 bg-teal-500/5">
+                            <EvidenceCitationInline
+                              papers={liveTargetEvidence}
+                              compact={true}
+                            />
+                          </div>
+                        )}
+
                         <button
                           onClick={async () => {
                             setAiTreatmentLoading(true);
@@ -4242,32 +4273,10 @@ ${ddxList}`;
                             <div className="text-[8px] text-gray-300 leading-relaxed whitespace-pre-wrap">{aiTreatmentPlan}</div>
                             {treatmentEvidenceRefs.length > 0 && (
                               <div className="mt-2 border-t border-emerald-500/20 pt-2">
-                                <div className="flex items-center gap-1 mb-1.5">
-                                  <BookOpen className="h-3 w-3 text-teal-400" />
-                                  <span className="text-[9px] font-medium text-teal-300">PubMed Evidence ({treatmentEvidenceRefs.length})</span>
-                                </div>
-                                {treatmentEvidenceRefs.map((ref, ri) => (
-                                  <a
-                                    key={ri}
-                                    href={ref.pubmedUrl || `https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}/`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="block bg-white/3 rounded p-1.5 mb-1 hover:bg-white/5 transition-colors"
-                                  >
-                                    <div className="flex items-start justify-between gap-1">
-                                      <p className="text-[8px] text-gray-300 leading-tight flex-1">{ref.title}</p>
-                                      <span className={`text-[7px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${
-                                        ref.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-300' :
-                                        ref.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-300' :
-                                        ref.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-300' :
-                                        'bg-red-500/20 text-red-300'
-                                      }`}>
-                                        {ref.evidenceGrade}
-                                      </span>
-                                    </div>
-                                    <p className="text-[7px] text-gray-500 mt-0.5">{ref.authors} — {ref.journal} ({ref.year}) · PMID: {ref.pmid}</p>
-                                  </a>
-                                ))}
+                                <EvidenceCitationInline
+                                  papers={treatmentEvidenceRefs}
+                                  compact={true}
+                                />
                               </div>
                             )}
                           </div>

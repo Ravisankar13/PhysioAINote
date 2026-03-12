@@ -6685,11 +6685,57 @@ ${treatmentEvidence.length > 0 ? '\nIMPORTANT: Cite relevant papers from the PUB
           evidenceGrade: p.evidenceGrade,
           studyType: p.studyType,
           pubmedUrl: p.pubmedUrl,
+          abstract: p.abstract,
         })),
       });
     } catch (error: any) {
       console.error("Treatment synthesis error:", error);
       res.status(500).json({ error: "Failed to generate treatment plan", details: error.message });
+    }
+  });
+
+  app.post("/api/physiogpt/treatment-evidence", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { targets } = req.body;
+      if (!targets || !Array.isArray(targets) || targets.length === 0) {
+        return res.status(400).json({ error: "Treatment targets are required" });
+      }
+      const { fetchClinicalEvidence } = await import("./services/clinicalEvidenceService");
+      const allPapers: any[] = [];
+      const seen = new Set<string>();
+      for (const target of targets.slice(0, 5)) {
+        try {
+          const evidence = await fetchClinicalEvidence(
+            target.name || '',
+            target.status || '',
+            target.action || 'treatment'
+          );
+          if (evidence?.papers) {
+            for (const p of evidence.papers) {
+              if (!seen.has(p.pmid)) {
+                seen.add(p.pmid);
+                allPapers.push(p);
+              }
+            }
+          }
+        } catch { }
+      }
+      res.json({
+        papers: allPapers.slice(0, 10).map((p: any) => ({
+          title: p.title,
+          authors: p.authors,
+          journal: p.journal,
+          year: p.year,
+          pmid: p.pmid,
+          evidenceGrade: p.evidenceGrade,
+          studyType: p.studyType,
+          pubmedUrl: p.pubmedUrl,
+          abstract: p.abstract,
+        })),
+      });
+    } catch (error: any) {
+      console.error("Treatment evidence lookup error:", error);
+      res.status(500).json({ error: "Failed to fetch treatment evidence" });
     }
   });
 
@@ -6786,6 +6832,7 @@ Guidelines:
           evidenceGrade: p.evidenceGrade,
           studyType: p.studyType,
           pubmedUrl: p.pubmedUrl,
+          abstract: p.abstract,
         })),
         evidenceGrade: evidenceGradeOverall,
       });

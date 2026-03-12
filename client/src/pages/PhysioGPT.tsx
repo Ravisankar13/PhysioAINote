@@ -4167,16 +4167,22 @@ ${ddxList}`;
                                             <p className="text-[7px] text-gray-400 mt-0.5">{tech.rationale}</p>
                                             {tech.references && tech.references.length > 0 && (
                                               <div className="mt-1 pt-0.5 border-t border-gray-700/30">
-                                                {tech.references.map((ref, ri) => (
-                                                  <p key={ri} className="text-[6px] text-gray-500 leading-relaxed">
-                                                    {ref.authors} ({ref.year}). <em>{ref.journal}</em>
-                                                    {ref.pmid && (
-                                                      <a href={`https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 ml-0.5 inline-flex items-center gap-0.5">
-                                                        <ExternalLink className="h-2 w-2 inline" />
-                                                      </a>
-                                                    )}
-                                                  </p>
-                                                ))}
+                                                {tech.references.map((ref, ri) => {
+                                                  const liveMatch = ref.pmid ? liveTargetEvidence.find(le => le.pmid === ref.pmid) : null;
+                                                  return (
+                                                    <p key={ri} className="text-[6px] text-gray-500 leading-relaxed">
+                                                      {ref.authors} ({ref.year}). <em>{ref.journal}</em>
+                                                      {ref.pmid && (
+                                                        <a href={`https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 ml-0.5 inline-flex items-center gap-0.5">
+                                                          <ExternalLink className="h-2 w-2 inline" />
+                                                        </a>
+                                                      )}
+                                                      {liveMatch && (
+                                                        <span className="ml-0.5 text-[5px] bg-teal-500/20 text-teal-400 px-1 py-0.5 rounded">live</span>
+                                                      )}
+                                                    </p>
+                                                  );
+                                                })}
                                               </div>
                                             )}
                                           </div>

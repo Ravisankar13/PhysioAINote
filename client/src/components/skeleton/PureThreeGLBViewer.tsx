@@ -5886,6 +5886,23 @@ export default function PureThreeGLBViewer({
         const zShiftFraction = pelvisZShiftValue / 100;
         const footShiftAmount = zShiftFraction * totalLegLength * 0.35;
         
+        const pelvisBoneNames = ['Root_M', 'RootPart1_M', 'RootPart2_M'];
+        pelvisBoneNames.forEach(boneName => {
+          const rotation = animBoneRotations[boneName];
+          if (rotation) {
+            const bone = bones[boneName];
+            if (bone) {
+              bone.rotation.x = rotation.x;
+              bone.rotation.y = rotation.y;
+              bone.rotation.z = rotation.z;
+            }
+          }
+        });
+        
+        if (pelvisBone) {
+          pelvisBone.updateMatrixWorld(true);
+        }
+        
         const computeLegAngles = (thighL: number, shinL: number, drop: number, footZOffset: number): { hipAngle: number; kneeAngle: number } => {
           if (drop < 0.001 && Math.abs(footZOffset) < 0.001) {
             return { hipAngle: 0, kneeAngle: 0 };
@@ -5984,32 +6001,25 @@ export default function PureThreeGLBViewer({
           pelvisBone.updateMatrixWorld(true);
           const leftAnkleBone = bones['Ankle_L'] as THREE.Bone;
           const rightAnkleBone = bones['Ankle_R'] as THREE.Bone;
-          const ikState = legIKStateRef.current!;
           if (leftAnkleBone && rightAnkleBone && ikState.leftInitialFootPos && ikState.rightInitialFootPos) {
-            const actualLeftY = new THREE.Vector3();
-            const actualRightY = new THREE.Vector3();
-            leftAnkleBone.getWorldPosition(actualLeftY);
-            rightAnkleBone.getWorldPosition(actualRightY);
-            const actualLowestY = Math.min(actualLeftY.y, actualRightY.y);
+            const actualLeftPos = new THREE.Vector3();
+            const actualRightPos = new THREE.Vector3();
+            leftAnkleBone.getWorldPosition(actualLeftPos);
+            rightAnkleBone.getWorldPosition(actualRightPos);
+            const actualLowestY = Math.min(actualLeftPos.y, actualRightPos.y);
             const targetLowestY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
-            const footError = actualLowestY - targetLowestY;
-            if (Math.abs(footError) > 0.001) {
-              pelvisBone.position.y -= footError;
+            const footYError = actualLowestY - targetLowestY;
+            if (Math.abs(footYError) > 0.001) {
+              pelvisBone.position.y -= footYError;
+            }
+            const avgActualZ = 0.5 * (actualLeftPos.z + actualRightPos.z);
+            const avgTargetZ = 0.5 * (ikState.leftInitialFootPos.z + ikState.rightInitialFootPos.z);
+            const footZError = avgActualZ - avgTargetZ;
+            if (Math.abs(footZError) > 0.001) {
+              pelvisBone.position.z -= footZError;
             }
           }
         }
-        
-        const pelvisBoneNames = ['Root_M', 'RootPart1_M', 'RootPart2_M'];
-        Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
-          if (pelvisBoneNames.includes(boneName)) {
-            const bone = bones[boneName];
-            if (bone) {
-              bone.rotation.x = rotation.x;
-              bone.rotation.y = rotation.y;
-              bone.rotation.z = rotation.z;
-            }
-          }
-        });
         
         Object.entries(animBoneRotations).forEach(([boneName, rotation]) => {
           if (boneName.includes('Hip') || boneName.includes('Knee') || boneName.includes('Toes') || boneName.includes('Ankle')) {
@@ -6025,6 +6035,31 @@ export default function PureThreeGLBViewer({
             bone.rotation.z = rotation.z;
           }
         });
+        
+        if (pelvisBone) {
+          pelvisBone.updateMatrixWorld(true);
+          const leftAnkleBone = bones['Ankle_L'] as THREE.Bone;
+          const rightAnkleBone = bones['Ankle_R'] as THREE.Bone;
+          if (leftAnkleBone && rightAnkleBone && ikState.leftInitialFootPos && ikState.rightInitialFootPos) {
+            const postLeftPos = new THREE.Vector3();
+            const postRightPos = new THREE.Vector3();
+            leftAnkleBone.getWorldPosition(postLeftPos);
+            rightAnkleBone.getWorldPosition(postRightPos);
+            const postLowestY = Math.min(postLeftPos.y, postRightPos.y);
+            const targetLowestY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
+            const postYError = postLowestY - targetLowestY;
+            if (Math.abs(postYError) > 0.001) {
+              pelvisBone.position.y -= postYError;
+            }
+            const postAvgZ = 0.5 * (postLeftPos.z + postRightPos.z);
+            const postTargetZ = 0.5 * (ikState.leftInitialFootPos.z + ikState.rightInitialFootPos.z);
+            const postZError = postAvgZ - postTargetZ;
+            if (Math.abs(postZError) > 0.001) {
+              pelvisBone.position.z -= postZError;
+            }
+            pelvisBone.updateMatrixWorld(true);
+          }
+        }
       } else {
         // OPEN-CHAIN: Standard FK animation (walking, etc.)
         const kneeBoneNames = new Set(['Knee_L', 'Knee_R']);

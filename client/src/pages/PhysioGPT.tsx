@@ -2489,7 +2489,7 @@ ${ddxList}`;
     }
     const fetchEvidence = async () => {
       try {
-        const response = await apiRequest('POST', '/api/physiogpt/treatment-evidence', {
+        const response = await apiRequest('/api/physiogpt/treatment-evidence', 'POST', {
           targets: treatmentPriorities.targets.slice(0, 5).map(t => ({
             name: t.targetName,
             status: t.clinicalStatus,
@@ -2498,7 +2498,9 @@ ${ddxList}`;
         });
         const data = await response.json();
         if (data.papers) setLiveTargetEvidence(data.papers);
-      } catch { }
+      } catch (err) {
+        console.warn('Treatment evidence fetch failed:', err);
+      }
     };
     fetchEvidence();
   }, [treatmentPriorities.targets.length]);
@@ -4226,7 +4228,7 @@ ${ddxList}`;
                             setAiTreatmentLoading(true);
                             setAiTreatmentPlan(null);
                             try {
-                              const response = await apiRequest('POST', '/api/physiogpt/treatment-synthesis', {
+                              const response = await apiRequest('/api/physiogpt/treatment-synthesis', 'POST', {
                                 targets: treatmentPriorities.targets.map(t => ({
                                   name: t.targetName,
                                   status: t.clinicalStatus,

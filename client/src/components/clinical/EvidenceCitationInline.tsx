@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, BookOpen, Award } from "lucide-react";
+import { ExternalLink, BookOpen, Award, ChevronDown, ChevronUp } from "lucide-react";
 
 interface ClinicalPaper {
   title: string;
@@ -10,6 +10,7 @@ interface ClinicalPaper {
   evidenceGrade: 'A' | 'B' | 'C' | 'D';
   studyType: string;
   pubmedUrl: string;
+  abstract?: string;
 }
 
 interface EvidenceCitationInlineProps {
@@ -29,11 +30,20 @@ const GRADE_STYLES: Record<string, { bg: string; text: string; label: string }> 
 
 export default function EvidenceCitationInline({ papers, overallGrade, confidence, source, compact }: EvidenceCitationInlineProps) {
   const [expanded, setExpanded] = useState(false);
-  const [hoveredPaper, setHoveredPaper] = useState<number | null>(null);
+  const [expandedAbstracts, setExpandedAbstracts] = useState<Set<number>>(new Set());
 
   if (!papers || papers.length === 0) return null;
 
   const gradeStyle = overallGrade ? GRADE_STYLES[overallGrade] : GRADE_STYLES.D;
+
+  const toggleAbstract = (index: number) => {
+    setExpandedAbstracts(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
 
   if (compact) {
     return (
@@ -86,12 +96,12 @@ export default function EvidenceCitationInline({ papers, overallGrade, confidenc
         <div className="mt-2 space-y-2">
           {papers.map((paper, i) => {
             const pGrade = GRADE_STYLES[paper.evidenceGrade] || GRADE_STYLES.D;
+            const showAbstract = expandedAbstracts.has(i);
+            const hasAbstract = paper.abstract && paper.abstract !== 'No abstract available.';
             return (
               <div
                 key={i}
                 className="relative bg-blue-50/50 border border-blue-100 rounded-lg p-3 text-sm"
-                onMouseEnter={() => setHoveredPaper(i)}
-                onMouseLeave={() => setHoveredPaper(null)}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -119,7 +129,21 @@ export default function EvidenceCitationInline({ papers, overallGrade, confidenc
                     <ExternalLink className="h-3 w-3" />
                     PMID: {paper.pmid}
                   </a>
+                  {hasAbstract && (
+                    <button
+                      onClick={() => toggleAbstract(i)}
+                      className="inline-flex items-center gap-0.5 text-[10px] text-gray-500 hover:text-gray-700 font-medium"
+                    >
+                      {showAbstract ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      {showAbstract ? 'Hide Abstract' : 'Show Abstract'}
+                    </button>
+                  )}
                 </div>
+                {showAbstract && hasAbstract && (
+                  <div className="mt-2 p-2 bg-white border border-blue-100 rounded text-[11px] text-gray-700 leading-relaxed max-h-40 overflow-y-auto">
+                    {paper.abstract}
+                  </div>
+                )}
               </div>
             );
           })}

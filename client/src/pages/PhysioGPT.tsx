@@ -345,6 +345,7 @@ interface PubMedPaper {
   evidenceGrade: 'A' | 'B' | 'C' | 'D';
   studyType: string;
   pubmedUrl: string;
+  abstract?: string;
 }
 
 interface PhysioGptResponse {
@@ -466,6 +467,7 @@ export default function PhysioGPT() {
   const [showPropagation, setShowPropagation] = useState(false);
   const [selectedChainNode, setSelectedChainNode] = useState<{ chainId: string; muscleId: string; chainName: string } | null>(null);
   const [showChainRecommendations, setShowChainRecommendations] = useState(false);
+  const [manualChainTensions, setManualChainTensions] = useState<Record<string, number>>({});
   const [showScarPanel, setShowScarPanel] = useState(false);
   const [scarMarkers, setScarMarkers] = useState<ScarMarker[]>([]);
   const [adhesionBands, setAdhesionBands] = useState<AdhesionBand[]>([]);
@@ -2321,8 +2323,11 @@ ${ddxList}`;
     const base = computeAllMuscleStates(effectiveModelConfig);
     const tensions: { [id: string]: number } = {};
     Object.entries(base).forEach(([id, s]) => { tensions[id] = s.tension; });
+    Object.entries(manualChainTensions).forEach(([id, val]) => {
+      tensions[id] = val;
+    });
     return { tensions };
-  }, [effectiveModelConfig]);
+  }, [effectiveModelConfig, manualChainTensions]);
 
   const wholeBodyScore = useMemo(() => {
     return computeWholeBodyTensionScore(baseMuscleTensions.tensions, compensatedOverrides);
@@ -2338,9 +2343,10 @@ ${ddxList}`;
 
   const chainPropagation = useMemo(() => {
     const hasManualOverrides = Object.values(compensatedOverrides).some(o => o?.isManual);
-    if (!hasManualOverrides) return null;
+    const hasManualChainTensions = Object.keys(manualChainTensions).length > 0;
+    if (!hasManualOverrides && !hasManualChainTensions) return null;
     return propagateChainEffects(baseMuscleTensions.tensions, compensatedOverrides);
-  }, [baseMuscleTensions.tensions, compensatedOverrides]);
+  }, [baseMuscleTensions.tensions, compensatedOverrides, manualChainTensions]);
 
   const propagatedEffects = useMemo(() => {
     if (!showChainVisualization || !showPropagation) return chainPropagation;
@@ -2472,6 +2478,7 @@ ${ddxList}`;
   const [compensationPanelOpen, setCompensationPanelOpen] = useState(true);
   const [expandedTreatmentTarget, setExpandedTreatmentTarget] = useState<string | null>(null);
   const [aiTreatmentPlan, setAiTreatmentPlan] = useState<string | null>(null);
+  const [treatmentEvidenceRefs, setTreatmentEvidenceRefs] = useState<PubMedPaper[]>([]);
   const [aiTreatmentLoading, setAiTreatmentLoading] = useState(false);
 
   const painAffectedChainIds = useMemo(() => {
@@ -4207,6 +4214,9 @@ ${ddxList}`;
                               });
                               const data = await response.json();
                               setAiTreatmentPlan(data.plan);
+                              if (data.evidenceReferences) {
+                                setTreatmentEvidenceRefs(data.evidenceReferences);
+                              }
                             } catch {
                               setAiTreatmentPlan('Failed to generate AI treatment plan. Please try again.');
                             } finally {
@@ -4230,6 +4240,36 @@ ${ddxList}`;
                               <span className="text-[9px] font-medium text-emerald-300">AI Treatment Synthesis</span>
                             </div>
                             <div className="text-[8px] text-gray-300 leading-relaxed whitespace-pre-wrap">{aiTreatmentPlan}</div>
+                            {treatmentEvidenceRefs.length > 0 && (
+                              <div className="mt-2 border-t border-emerald-500/20 pt-2">
+                                <div className="flex items-center gap-1 mb-1.5">
+                                  <BookOpen className="h-3 w-3 text-teal-400" />
+                                  <span className="text-[9px] font-medium text-teal-300">PubMed Evidence ({treatmentEvidenceRefs.length})</span>
+                                </div>
+                                {treatmentEvidenceRefs.map((ref, ri) => (
+                                  <a
+                                    key={ri}
+                                    href={ref.pubmedUrl || `https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}/`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block bg-white/3 rounded p-1.5 mb-1 hover:bg-white/5 transition-colors"
+                                  >
+                                    <div className="flex items-start justify-between gap-1">
+                                      <p className="text-[8px] text-gray-300 leading-tight flex-1">{ref.title}</p>
+                                      <span className={`text-[7px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${
+                                        ref.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-300' :
+                                        ref.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-300' :
+                                        ref.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-300' :
+                                        'bg-red-500/20 text-red-300'
+                                      }`}>
+                                        {ref.evidenceGrade}
+                                      </span>
+                                    </div>
+                                    <p className="text-[7px] text-gray-500 mt-0.5">{ref.authors} — {ref.journal} ({ref.year}) · PMID: {ref.pmid}</p>
+                                  </a>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -6073,6 +6113,47 @@ ${ddxList}`;
                       )}
                     </div>
                     <p className="text-[8px] text-gray-300 mb-1.5">{selectedNodeDetails.state.description}</p>
+                    <div className="mb-2 p-1.5 rounded border border-amber-500/30 bg-amber-500/10">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[8px] font-medium text-amber-300">Introduce Tension</span>
+                        {manualChainTensions[selectedChainNode.muscleId] !== undefined && (
+                          <button
+                            className="text-[7px] text-red-400 hover:text-red-300 underline"
+                            onClick={() => setManualChainTensions(prev => {
+                              const next = { ...prev };
+                              delete next[selectedChainNode.muscleId];
+                              return next;
+                            })}
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={manualChainTensions[selectedChainNode.muscleId] ?? Math.round(selectedNodeDetails.state.tension)}
+                        onChange={e => {
+                          const val = parseInt(e.target.value);
+                          setManualChainTensions(prev => ({ ...prev, [selectedChainNode.muscleId]: val }));
+                          if (!showPropagation) setShowPropagation(true);
+                        }}
+                        className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                      />
+                      <div className="flex justify-between mt-0.5">
+                        <span className="text-[7px] text-gray-500">Relaxed 0%</span>
+                        <span className={`text-[8px] font-bold ${
+                          (manualChainTensions[selectedChainNode.muscleId] ?? selectedNodeDetails.state.tension) > 70 ? 'text-red-400' :
+                          (manualChainTensions[selectedChainNode.muscleId] ?? selectedNodeDetails.state.tension) > 55 ? 'text-yellow-400' :
+                          'text-green-400'
+                        }`}>
+                          {manualChainTensions[selectedChainNode.muscleId] ?? Math.round(selectedNodeDetails.state.tension)}%
+                        </span>
+                        <span className="text-[7px] text-gray-500">100% Max</span>
+                      </div>
+                    </div>
                     {selectedNodeDetails.membership.length > 0 && (
                       <div>
                         <span className="text-[7px] text-gray-400">Chains through this muscle:</span>
@@ -6151,8 +6232,20 @@ ${ddxList}`;
                   </div>
                 )}
 
+                {Object.keys(manualChainTensions).length > 0 && (
+                  <div className="mt-2 flex items-center justify-between p-1.5 rounded border border-amber-500/20 bg-amber-500/10">
+                    <span className="text-[8px] text-amber-300">{Object.keys(manualChainTensions).length} manual tension{Object.keys(manualChainTensions).length !== 1 ? 's' : ''} active</span>
+                    <button
+                      className="text-[7px] text-red-400 hover:text-red-300 underline"
+                      onClick={() => setManualChainTensions({})}
+                    >
+                      Reset All
+                    </button>
+                  </div>
+                )}
+
                 <div className="mt-2 text-[7px] text-gray-500 text-center">
-                  Click chain nodes on skeleton for details
+                  Click chain nodes on skeleton to inspect & inject tension
                 </div>
               </div>
             )}

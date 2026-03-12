@@ -94,11 +94,63 @@ export class EvidenceIntegrationService {
    * Parse PubMed XML response to extract paper information
    */
   private parsePubMedXML(xmlData: string): ResearchPaper[] {
-    // Simplified XML parsing - in production, use a proper XML parser
     const papers: ResearchPaper[] = [];
-    
-    // This is a simplified implementation
-    // In production, you'd use an XML parser like xml2js
+    const articleRegex = /<PubmedArticle>([\s\S]*?)<\/PubmedArticle>/g;
+    let artMatch;
+    while ((artMatch = articleRegex.exec(xmlData)) !== null) {
+      const block = artMatch[1];
+      const pmidMatch = block.match(/<PMID[^>]*>(\d+)<\/PMID>/);
+      const titleMatch = block.match(/<ArticleTitle>([\s\S]*?)<\/ArticleTitle>/);
+      const journalMatch = block.match(/<Title>([\s\S]*?)<\/Title>/);
+      const yearMatch = block.match(/<PubDate>[\s\S]*?<Year>(\d{4})<\/Year>/);
+      const doiMatch = block.match(/<ELocationID EIdType="doi"[^>]*>([\s\S]*?)<\/ELocationID>/);
+      const authorBlocks = block.match(/<Author[\s\S]*?<\/Author>/g) || [];
+      const authorNames = authorBlocks.slice(0, 6).map(ab => {
+        const last = ab.match(/<LastName>(.*?)<\/LastName>/)?.[1] || '';
+        const initials = ab.match(/<Initials>(.*?)<\/Initials>/)?.[1] || '';
+        return `${last} ${initials}`.trim();
+      }).filter(Boolean);
+
+      const abstractSegments: string[] = [];
+      const absRegex = /<AbstractText[^>]*>([\s\S]*?)<\/AbstractText>/g;
+      let absMatch;
+      while ((absMatch = absRegex.exec(block)) !== null) {
+        const cleaned = absMatch[1].replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim();
+        if (cleaned) abstractSegments.push(cleaned);
+      }
+      const abstract = abstractSegments.join(' ') || 'No abstract available.';
+      const cleanTitle = (titleMatch?.[1] || 'Untitled').replace(/<[^>]*>/g, '');
+      const year = parseInt(yearMatch?.[1] || `${new Date().getFullYear()}`);
+      const textForClassification = `${cleanTitle} ${abstract}`.toLowerCase();
+
+      let studyType: ResearchPaper['studyType'] = 'Case Study';
+      if (textForClassification.includes('meta-analysis') || textForClassification.includes('meta analysis')) studyType = 'Meta-Analysis';
+      else if (textForClassification.includes('systematic review')) studyType = 'Systematic Review';
+      else if (textForClassification.includes('randomized') || textForClassification.includes('randomised') || textForClassification.includes('rct')) studyType = 'RCT';
+      else if (textForClassification.includes('cohort') || textForClassification.includes('prospective')) studyType = 'Cohort';
+      else if (textForClassification.includes('guideline') || textForClassification.includes('consensus')) studyType = 'Clinical Guideline';
+
+      let evidenceLevel: ResearchPaper['evidenceLevel'] = 'V';
+      let gradeRecommendation: ResearchPaper['gradeRecommendation'] = 'D';
+      if (studyType === 'Meta-Analysis' || studyType === 'Systematic Review') { evidenceLevel = 'I'; gradeRecommendation = 'A'; }
+      else if (studyType === 'RCT') { evidenceLevel = 'II'; gradeRecommendation = (new Date().getFullYear() - year <= 5) ? 'A' : 'B'; }
+      else if (studyType === 'Clinical Guideline') { evidenceLevel = 'II'; gradeRecommendation = 'B'; }
+      else if (studyType === 'Cohort') { evidenceLevel = 'III'; gradeRecommendation = 'C'; }
+
+      papers.push({
+        title: cleanTitle,
+        authors: authorNames.length > 0 ? authorNames : ['Unknown'],
+        journal: journalMatch?.[1]?.replace(/<[^>]*>/g, '') || 'Unknown Journal',
+        year,
+        pmid: pmidMatch?.[1],
+        doi: doiMatch?.[1],
+        abstract,
+        studyType,
+        evidenceLevel,
+        gradeRecommendation,
+        relevanceScore: 0.8,
+      });
+    }
     return papers;
   }
   

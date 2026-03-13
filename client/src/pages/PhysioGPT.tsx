@@ -1268,23 +1268,24 @@ ${ddxList}`;
 
   const inferMuscleStatusFromText = useCallback((text: string): 'weak' | 'tight' | 'overactive' | 'inhibited' | 'normal' => {
     const lower = text.toLowerCase();
-    if (/\b(weak|weakness|underactive|atrophy|inhibit)\b/.test(lower)) return 'weak';
-    if (/\b(tight|tightness|shortened|contracture|stiff|restricted)\b/.test(lower)) return 'tight';
-    if (/\b(overactive|hyperactive|spasm|hypertonic)\b/.test(lower)) return 'overactive';
     if (/\b(inhibited|inhibition|suppressed)\b/.test(lower)) return 'inhibited';
+    if (/\b(overactive|hyperactive|spasm|hypertonic)\b/.test(lower)) return 'overactive';
+    if (/\b(weak|weakness|underactive|atrophy)\b/.test(lower)) return 'weak';
+    if (/\b(tight|tightness|shortened|contracture|stiff|restricted)\b/.test(lower)) return 'tight';
     return 'normal';
   }, []);
 
   const handleBiomechanicalLinkClick = useCallback((link: BiomechanicalLink | null) => {
-    setActiveVisualizationId(null);
     setVisualizationBoneHighlights([]);
     if (!link) {
       setActiveBiomechanicalLink(null);
+      setActiveVisualizationId(null);
       setBiomechanicalMuscleHighlights([]);
       setMuscleHighlightColors({});
       return;
     }
     setActiveBiomechanicalLink(link);
+    setActiveVisualizationId(`biolink-${link.primaryRegion}-${link.connectedRegion}`);
 
     const findMuscles = (regionName: string): string[] => {
       const lower = regionName.toLowerCase().trim();

@@ -470,10 +470,10 @@ export default function ClinicalReasoningPanel({
     const lower = text.toLowerCase();
     const hints: VisualizationRequest['muscleHints'] = [];
     const patterns: { keywords: string[]; status: 'weak' | 'tight' | 'overactive' | 'inhibited' }[] = [
-      { keywords: ['weak', 'weakness', 'inhibited', 'inhibition', 'underactive', 'atrophy'], status: 'weak' },
-      { keywords: ['tight', 'tightness', 'shortened', 'contracture', 'stiff', 'restricted'], status: 'tight' },
-      { keywords: ['overactive', 'hyperactive', 'spasm', 'hypertonic'], status: 'overactive' },
       { keywords: ['inhibited', 'inhibition', 'suppressed'], status: 'inhibited' },
+      { keywords: ['overactive', 'hyperactive', 'spasm', 'hypertonic'], status: 'overactive' },
+      { keywords: ['weak', 'weakness', 'underactive', 'atrophy'], status: 'weak' },
+      { keywords: ['tight', 'tightness', 'shortened', 'contracture', 'stiff', 'restricted'], status: 'tight' },
     ];
     const muscleNames = [
       'deltoid', 'trapezius', 'rotator cuff', 'supraspinatus', 'infraspinatus',

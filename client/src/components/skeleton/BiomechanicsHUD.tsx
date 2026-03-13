@@ -83,7 +83,7 @@ export default function BiomechanicsHUD({
     const prev = prevThresholdsRef.current;
     const curForceStatus = forceAnalysis?.joints?.[0]?.status || 'normal';
     const curChainScore = (() => { let min = 100; chainIntegrityScores.forEach(e => { if (e.score < min) min = e.score; }); return min; })();
-    const curSyndromes = muscleAnalysis ? computeMuscleBalanceRatios(muscleAnalysis).filter(r => r.syndrome).length : 0;
+    const curSyndromes = muscleAnalysis ? computeMuscleBalanceRatios(muscleAnalysis.allMuscles).filter(r => r.syndrome).length : 0;
 
     const newPulse = new Set<string>();
     if (curForceStatus !== prev.forceStatus && (curForceStatus === 'high' || curForceStatus === 'very_high')) newPulse.add('forces');

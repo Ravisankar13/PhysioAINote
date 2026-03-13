@@ -1374,20 +1374,22 @@ ${ddxList}`;
   }), []);
 
   const REGION_TO_BONE_NAMES: Record<string, string[]> = useMemo(() => ({
-    'shoulder': ['mixamorig:LeftShoulder', 'mixamorig:RightShoulder', 'mixamorig:LeftArm', 'mixamorig:RightArm'],
-    'knee': ['mixamorig:LeftLeg', 'mixamorig:RightLeg'],
-    'hip': ['mixamorig:LeftUpLeg', 'mixamorig:RightUpLeg', 'mixamorig:Hips'],
-    'ankle': ['mixamorig:LeftFoot', 'mixamorig:RightFoot'],
-    'neck': ['mixamorig:Neck', 'mixamorig:Head'],
-    'cervical': ['mixamorig:Neck', 'mixamorig:Head'],
-    'thoracic': ['mixamorig:Spine1', 'mixamorig:Spine2'],
-    'lumbar': ['mixamorig:Spine', 'mixamorig:Hips'],
-    'low back': ['mixamorig:Spine', 'mixamorig:Hips'],
-    'pelvis': ['mixamorig:Hips', 'mixamorig:LeftUpLeg', 'mixamorig:RightUpLeg'],
-    'spine': ['mixamorig:Spine', 'mixamorig:Spine1', 'mixamorig:Spine2'],
-    'elbow': ['mixamorig:LeftForeArm', 'mixamorig:RightForeArm'],
-    'wrist': ['mixamorig:LeftHand', 'mixamorig:RightHand'],
-    'sacroiliac': ['mixamorig:Hips'],
+    'shoulder': ['Shoulder_L', 'Shoulder_R'],
+    'knee': ['Knee_L', 'Knee_R'],
+    'hip': ['Hip_L', 'Hip_R', 'RootPart1_M'],
+    'ankle': ['Ankle_L', 'Ankle_R'],
+    'neck': ['Neck_M'],
+    'cervical': ['Neck_M'],
+    'thoracic': ['Spine1_M', 'Spine2_M'],
+    'lumbar': ['RootPart1_M'],
+    'low back': ['RootPart1_M'],
+    'pelvis': ['RootPart1_M', 'Hip_L', 'Hip_R'],
+    'spine': ['RootPart1_M', 'Spine1_M', 'Spine2_M'],
+    'elbow': ['Elbow_L', 'Elbow_R'],
+    'wrist': ['Elbow_L', 'Elbow_R'],
+    'sacroiliac': ['RootPart1_M', 'Hip_L', 'Hip_R'],
+    'foot': ['Ankle_L', 'Ankle_R'],
+    'hand': ['Elbow_L', 'Elbow_R'],
   }), []);
 
   const handleVisualizationRequest = useCallback((request: VisualizationRequest | null) => {

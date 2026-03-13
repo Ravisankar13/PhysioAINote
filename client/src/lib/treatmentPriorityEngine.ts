@@ -898,17 +898,19 @@ function buildRationale(
   return parts.join('. ') + '.';
 }
 
-const MOBILIZATION_TECHNIQUES: TreatmentTechnique[] = [
+const MAITLAND_REF: EvidenceReference = { authors: 'Maitland GD, Hengeveld E, Banks K', year: 2013, title: 'Maitland\'s Vertebral Manipulation', journal: 'Elsevier' };
+const MULLIGAN_REF: EvidenceReference = { authors: 'Mulligan BR', year: 2010, title: 'Manual Therapy: NAGS, SNAGS, MWMS etc.', journal: 'Plane View Services' };
+const KALTENBORN_REF: EvidenceReference = { authors: 'Kaltenborn FM', year: 2011, title: 'Manual Mobilization of the Joints', journal: 'Norli' };
+const BIALOSKY_REF: EvidenceReference = { authors: 'Bialosky JE, Bishop MD, Price DD', year: 2009, title: 'The mechanisms of manual therapy in the treatment of musculoskeletal pain', journal: 'Man Ther', pmid: '18983998' };
+
+const BASE_MOBILIZATION_TECHNIQUES: TreatmentTechnique[] = [
   {
     name: 'Maitland Grade I-II oscillations',
     type: 'manual',
     dosage: '3-4 sets × 30s oscillations, within pain-free range',
     rationale: 'Low-grade oscillatory mobilizations for pain modulation via gate control and descending inhibition — appropriate for acute/irritable joints',
     evidenceGrade: 'A',
-    references: [
-      { authors: 'Maitland GD, Hengeveld E, Banks K', year: 2013, title: 'Maitland\'s Vertebral Manipulation', journal: 'Elsevier' },
-      { authors: 'Gross A, Kay TM, Paquin JP et al', year: 2015, title: 'Exercises for mechanical neck disorders', journal: 'Cochrane Database Syst Rev', pmid: '25629215' },
-    ],
+    references: [MAITLAND_REF, { authors: 'Gross A, Kay TM, Paquin JP et al', year: 2015, title: 'Exercises for mechanical neck disorders', journal: 'Cochrane Database Syst Rev', pmid: '25629215' }],
   },
   {
     name: 'Maitland Grade III-IV mobilization',
@@ -916,21 +918,7 @@ const MOBILIZATION_TECHNIQUES: TreatmentTechnique[] = [
     dosage: '3-5 sets × 30-60s, into resistance/end-range',
     rationale: 'Higher-grade mobilizations to restore accessory glide and joint play — targets capsular restriction and adhesion',
     evidenceGrade: 'A',
-    references: [
-      { authors: 'Maitland GD, Hengeveld E, Banks K', year: 2013, title: 'Maitland\'s Vertebral Manipulation', journal: 'Elsevier' },
-      { authors: 'Bialosky JE, Bishop MD, Price DD', year: 2009, title: 'The mechanisms of manual therapy in the treatment of musculoskeletal pain', journal: 'Man Ther', pmid: '18983998' },
-    ],
-  },
-  {
-    name: 'Mulligan MWM (mobilization with movement)',
-    type: 'manual',
-    dosage: '3 × 6-10 reps with sustained glide during active movement',
-    rationale: 'Corrects positional fault while patient performs active movement — immediately reassessed for pain reduction and ROM improvement',
-    evidenceGrade: 'B',
-    references: [
-      { authors: 'Mulligan BR', year: 2010, title: 'Manual Therapy: NAGS, SNAGS, MWMS etc.', journal: 'Plane View Services' },
-      { authors: 'Vicenzino B, Paungmali A, Teys P', year: 2007, title: 'Mulligan\'s mobilization-with-movement, positional faults and pain relief', journal: 'J Bodyw Mov Ther', pmid: '19083664' },
-    ],
+    references: [MAITLAND_REF, BIALOSKY_REF],
   },
   {
     name: 'Joint distraction / long-axis traction',
@@ -938,48 +926,146 @@ const MOBILIZATION_TECHNIQUES: TreatmentTechnique[] = [
     dosage: '3-4 × 15-30s sustained traction, grade II-III',
     rationale: 'Separates articular surfaces to reduce compression and improve synovial fluid circulation in loaded joints',
     evidenceGrade: 'B',
-    references: [
-      { authors: 'Kaltenborn FM', year: 2011, title: 'Manual Mobilization of the Joints', journal: 'Norli' },
-    ],
+    references: [KALTENBORN_REF],
   },
 ];
 
-const JOINT_BONE_MAP: Record<string, string> = {
-  cervical_spine: 'Neck_M',
-  thoracic_spine: 'Spine2_M',
-  lumbar_spine: 'Spine1_M',
-  thoracolumbar_junction: 'Spine1Part2_M',
-  left_shoulder: 'Shoulder_L',
-  right_shoulder: 'Shoulder_R',
-  left_hip: 'Hip_L',
-  right_hip: 'Hip_R',
-  left_knee: 'Knee_L',
-  right_knee: 'Knee_R',
-  left_ankle: 'Ankle_L',
-  right_ankle: 'Ankle_R',
-  left_elbow: 'Elbow_L',
-  right_elbow: 'Elbow_R',
-  left_wrist: 'Wrist_L',
-  right_wrist: 'Wrist_R',
-  sacroiliac: 'RootPart1_M',
+interface JointMobilizationProfile {
+  specificTechniques: TreatmentTechnique[];
+  specificContraindications: Contraindication[];
+}
+
+const JOINT_SPECIFIC_PROFILES: Record<string, JointMobilizationProfile> = {
+  cervical: {
+    specificTechniques: [
+      { name: 'Cervical PA glide (unilateral)', type: 'manual', dosage: 'Grade II-III, 3 × 30s per segment C2-C7', rationale: 'Posteroanterior pressure on articular pillars to restore facet joint glide — direction-specific for each segmental level', evidenceGrade: 'A', references: [MAITLAND_REF] },
+      { name: 'Cervical SNAG (C2-C7)', type: 'manual', dosage: '3 × 6 reps sustained natural apophyseal glide with active ROM', rationale: 'Sustained vertebral glide during active cervical movement per Mulligan — restores pain-free motion through positional fault correction', evidenceGrade: 'B', references: [MULLIGAN_REF] },
+      { name: 'Cervical lateral glide', type: 'manual', dosage: 'Grade II-III, 3 × 30s, contralateral to restriction', rationale: 'Transverse oscillation restoring lateral flexibility — especially effective for neural tension and radiculopathy symptoms', evidenceGrade: 'B', references: [MAITLAND_REF, BIALOSKY_REF] },
+    ],
+    specificContraindications: [
+      { flag: 'Screen for vertebral artery insufficiency', severity: 'warning', reason: 'Pre-manipulative testing required for upper cervical mobilization. Assess for dizziness, nystagmus, diplopia. Avoid Grade V thrust techniques.' },
+      { flag: 'Rule out upper cervical instability', severity: 'warning', reason: 'Sharp-Purser test and alar ligament stress tests recommended before C0-C2 mobilization, especially in RA patients or post-trauma.' },
+    ],
+  },
+  thoracic: {
+    specificTechniques: [
+      { name: 'Thoracic PA glide (central & unilateral)', type: 'manual', dosage: 'Grade III-IV, 3-5 × 30-60s per segment', rationale: 'Central PA on spinous process restores extension; unilateral PA on transverse process restores rotation — both reduce thoracic hypomobility contributing to compensatory cervical/lumbar overload', evidenceGrade: 'A', references: [MAITLAND_REF] },
+      { name: 'Thoracic SNAG (T1-T12)', type: 'manual', dosage: '3 × 6 reps sustained AP glide during active flexion/extension', rationale: 'Mulligan SNAG for thoracic segments during active movement — effective for restoring segmental mobility in stiff thoracic spine', evidenceGrade: 'B', references: [MULLIGAN_REF] },
+      { name: 'Rib mobilization (AP/PA)', type: 'manual', dosage: 'Grade II-III, 3 × 30s on restricted rib angle', rationale: 'Accessory rib glide restoring costovertebral and costotransverse joint motion — addresses rib cage mobility restrictions contributing to breathing dysfunction', evidenceGrade: 'B', references: [KALTENBORN_REF] },
+    ],
+    specificContraindications: [
+      { flag: 'Osteoporosis screening recommended', severity: 'caution', reason: 'Thoracic vertebrae are common osteoporotic fracture sites. Avoid high-grade PA mobilization in patients with known osteoporosis, prolonged steroid use, or post-menopausal women without bone density screening.' },
+    ],
+  },
+  lumbar: {
+    specificTechniques: [
+      { name: 'Lumbar PA glide (central & unilateral)', type: 'manual', dosage: 'Grade III-IV, 3-5 × 30-60s per segment L1-L5', rationale: 'Central PA restores extension mobility; unilateral PA restores rotation — essential for reducing segmental hypomobility and disc-related stiffness', evidenceGrade: 'A', references: [MAITLAND_REF, BIALOSKY_REF] },
+      { name: 'Lumbar rotation mobilization (sidelying)', type: 'manual', dosage: 'Grade III-IV, 3 × 30-60s, segmentally locked', rationale: 'Rotation mobilization with segmental locking above and below target — restores rotational mobility at specific motion segment', evidenceGrade: 'A', references: [MAITLAND_REF] },
+      { name: 'Lumbar SNAG (L1-L5)', type: 'manual', dosage: '3 × 6 reps sustained glide during active flexion', rationale: 'Mulligan SNAG for lumbar flexion restriction — sustained AP glide on spinous process during forward flexion to restore pain-free movement', evidenceGrade: 'B', references: [MULLIGAN_REF] },
+      { name: 'Lumbar traction (manual)', type: 'manual', dosage: '3-5 × 30-60s sustained or intermittent traction', rationale: 'Longitudinal traction to decompress disc and widen foramina — effective adjunct for discogenic and facetogenic pain', evidenceGrade: 'B', references: [KALTENBORN_REF] },
+    ],
+    specificContraindications: [
+      { flag: 'Screen for cauda equina signs', severity: 'stop', reason: 'Bilateral leg symptoms, saddle anaesthesia, or bladder dysfunction require immediate referral — do not mobilize.' },
+      { flag: 'Spondylolisthesis precaution', severity: 'caution', reason: 'If spondylolisthesis suspected, avoid extension-biased mobilization. Focus on flexion-based approaches and core stabilization.' },
+    ],
+  },
+  shoulder: {
+    specificTechniques: [
+      { name: 'Glenohumeral AP/PA glide', type: 'manual', dosage: 'Grade II-IV, 3 × 30-60s, humeral head stabilized', rationale: 'AP glide for flexion/IR restriction (posterior capsule tightness); PA glide for extension/ER restriction — convex-on-concave rule for GH joint', evidenceGrade: 'A', references: [KALTENBORN_REF, MAITLAND_REF] },
+      { name: 'Glenohumeral inferior glide', type: 'manual', dosage: 'Grade II-III, 3 × 30s in progressive abduction positions', rationale: 'Inferior glide of humeral head restores subacromial space and addresses capsular restriction limiting elevation — essential for frozen shoulder', evidenceGrade: 'A', references: [KALTENBORN_REF] },
+      { name: 'Shoulder MWM (lateral glide)', type: 'manual', dosage: '3 × 10 reps lateral humeral glide during active elevation', rationale: 'Mulligan MWM correcting lateral translation of humeral head during arm elevation — immediate assessment of pain-free ROM gain', evidenceGrade: 'B', references: [MULLIGAN_REF, { authors: 'Vicenzino B, Paungmali A, Teys P', year: 2007, title: 'Mulligan\'s mobilization-with-movement, positional faults and pain relief', journal: 'J Bodyw Mov Ther', pmid: '19083664' }] },
+    ],
+    specificContraindications: [
+      { flag: 'Hypermobility precaution', severity: 'caution', reason: 'Assess Beighton score before mobilization. Hypermobile shoulders need stabilization-focused approach — avoid end-range mobilization that may increase instability.' },
+    ],
+  },
+  hip: {
+    specificTechniques: [
+      { name: 'Hip AP glide (supine)', type: 'manual', dosage: 'Grade III-IV, 3 × 30-60s, belt-assisted femoral AP mobilization', rationale: 'Anterior-posterior femoral glide restores hip extension and external rotation — concave-on-convex rule for acetabulofemoral joint', evidenceGrade: 'A', references: [KALTENBORN_REF] },
+      { name: 'Hip lateral distraction', type: 'manual', dosage: 'Grade II-III, 3 × 30s sustained lateral traction with belt', rationale: 'Lateral distraction separates joint surfaces to reduce compression and improve capsular extensibility — useful for hip OA and impingement', evidenceGrade: 'B', references: [KALTENBORN_REF, MAITLAND_REF] },
+      { name: 'Hip MWM (posterolateral glide)', type: 'manual', dosage: '3 × 10 reps posterior glide during active flexion/IR', rationale: 'Mulligan MWM with posterior-lateral femoral glide during hip flexion — addresses anterior impingement and restores pain-free flexion ROM', evidenceGrade: 'B', references: [MULLIGAN_REF] },
+    ],
+    specificContraindications: [
+      { flag: 'Hip prosthesis precaution', severity: 'stop', reason: 'Post-total hip replacement — do not apply traction or end-range mobilization. Follow surgeon\'s specific ROM precautions.' },
+      { flag: 'Inflammatory arthropathy', severity: 'caution', reason: 'Active inflammatory flare (hot, swollen joint) — use only Grade I-II for pain relief. Avoid end-range or forceful mobilization during acute inflammation.' },
+    ],
+  },
+  knee: {
+    specificTechniques: [
+      { name: 'Tibiofemoral AP/PA glide', type: 'manual', dosage: 'Grade II-IV, 3 × 30-60s, proximal tibia mobilized on femur', rationale: 'AP tibial glide restores knee extension; PA glide restores flexion — fundamental accessory motion for knee joint play', evidenceGrade: 'A', references: [MAITLAND_REF, KALTENBORN_REF] },
+      { name: 'Patellofemoral mobilization (medial/lateral/superior/inferior)', type: 'manual', dosage: 'Grade II-III, 3 × 30s per direction of restriction', rationale: 'Patellar glide in restricted direction restores patellofemoral tracking — addresses anterior knee pain and quad inhibition from patellar hypomobility', evidenceGrade: 'A', references: [MAITLAND_REF] },
+      { name: 'Knee MWM (tibial rotation)', type: 'manual', dosage: '3 × 10 reps tibial IR/ER glide during active flexion/extension', rationale: 'Mulligan MWM correcting rotational positional fault of tibia — effective for meniscal and ligamentous pain patterns', evidenceGrade: 'B', references: [MULLIGAN_REF] },
+    ],
+    specificContraindications: [
+      { flag: 'Ligament integrity check', severity: 'caution', reason: 'If ACL/PCL/collateral ligament laxity present, avoid translational mobilization in the direction of instability. Focus on stabilization instead.' },
+    ],
+  },
+  ankle: {
+    specificTechniques: [
+      { name: 'Talocrural AP glide (weight-bearing)', type: 'manual', dosage: 'Grade III-IV, 3 × 30-60s posterior talar glide with dorsiflexion', rationale: 'Posterior talar glide during weight-bearing dorsiflexion restores talocrural mobility — critical for squat depth and gait mechanics', evidenceGrade: 'A', references: [MAITLAND_REF, { authors: 'Denegar CR, Hertel J, Fonseca J', year: 2002, title: 'The effect of lateral ankle sprain on dorsiflexion range of motion, posterior talar glide, and joint laxity', journal: 'J Orthop Sports Phys Ther', pmid: '12164401' }] },
+      { name: 'Subtalar medial/lateral glide', type: 'manual', dosage: 'Grade II-III, 3 × 30s per direction', rationale: 'Subtalar glides restore inversion/eversion accessory motion — addresses post-sprain stiffness and compensatory gait patterns', evidenceGrade: 'B', references: [KALTENBORN_REF] },
+      { name: 'Ankle MWM (AP talar glide)', type: 'manual', dosage: '3 × 10 reps AP glide with belt during active dorsiflexion', rationale: 'Mulligan MWM for ankle dorsiflexion restriction — belt-assisted posterior talar glide during weight-bearing lunge', evidenceGrade: 'B', references: [MULLIGAN_REF] },
+    ],
+    specificContraindications: [],
+  },
+  elbow: {
+    specificTechniques: [
+      { name: 'Humero-ulnar distraction', type: 'manual', dosage: 'Grade II-III, 3 × 30s long-axis traction', rationale: 'Long-axis traction separates humero-ulnar joint surfaces — decompresses and restores flexion/extension mobility', evidenceGrade: 'B', references: [KALTENBORN_REF] },
+      { name: 'Lateral elbow MWM (lateral glide)', type: 'manual', dosage: '3 × 10 reps lateral glide during pain-free gripping', rationale: 'Mulligan MWM with sustained lateral glide of ulna on humerus during gripping — specific technique for lateral epicondylalgia (tennis elbow)', evidenceGrade: 'A', references: [MULLIGAN_REF, { authors: 'Vicenzino B', year: 2003, title: 'Lateral epicondylalgia: a musculoskeletal physiotherapy perspective', journal: 'Man Ther', pmid: '12890436' }] },
+      { name: 'Radio-ulnar AP/PA glide', type: 'manual', dosage: 'Grade II-III, 3 × 30s for proximal and distal radioulnar joints', rationale: 'Accessory radioulnar glides restore pronation/supination — addresses forearm rotation restrictions', evidenceGrade: 'B', references: [KALTENBORN_REF] },
+    ],
+    specificContraindications: [],
+  },
+  wrist: {
+    specificTechniques: [
+      { name: 'Radiocarpal AP/PA glide', type: 'manual', dosage: 'Grade II-III, 3 × 30s, carpal row mobilized on radius', rationale: 'Dorsal/palmar carpal glides restoring wrist flexion/extension accessory motion — addresses post-fracture/cast stiffness', evidenceGrade: 'B', references: [KALTENBORN_REF] },
+      { name: 'Intercarpal mobilization', type: 'manual', dosage: 'Grade II-III, 3 × 20-30s per restricted intercarpal joint', rationale: 'Individual carpal bone mobilization restoring intracarpal kinematics — important for scaphoid-lunate and lunate-triquetral mechanics', evidenceGrade: 'B', references: [KALTENBORN_REF] },
+    ],
+    specificContraindications: [],
+  },
 };
+
+function classifyJointRegion(jointId: string, jointLabel: string): string {
+  const combined = `${jointId}_${jointLabel}`.toLowerCase();
+  if (combined.includes('cervic') || combined.includes('c1') || combined.includes('c2') || combined.includes('c3') || combined.includes('c4') || combined.includes('c5') || combined.includes('c6') || combined.includes('c7') || combined.includes('neck')) return 'cervical';
+  if (combined.includes('thorac') || combined.includes('t1') || combined.includes('t12') || combined.includes('rib')) return 'thoracic';
+  if (combined.includes('lumbar') || combined.includes('l1') || combined.includes('l2') || combined.includes('l3') || combined.includes('l4') || combined.includes('l5') || combined.includes('sacr') || combined.includes('si_')) return 'lumbar';
+  if (combined.includes('shoulder') || combined.includes('glenohumeral') || combined.includes('gh_') || combined.includes('acromioclavicular')) return 'shoulder';
+  if (combined.includes('hip') || combined.includes('acetabul') || combined.includes('femoral')) return 'hip';
+  if (combined.includes('knee') || combined.includes('tibiofe') || combined.includes('patello')) return 'knee';
+  if (combined.includes('ankle') || combined.includes('talocrural') || combined.includes('subtalar')) return 'ankle';
+  if (combined.includes('elbow') || combined.includes('humeroulnar') || combined.includes('radioulnar')) return 'elbow';
+  if (combined.includes('wrist') || combined.includes('radiocarpal') || combined.includes('carpal')) return 'wrist';
+  return '';
+}
 
 export function computeJointMobilizationTargets(forceAnalysis: ForceAnalysisResult): TreatmentTarget[] {
   const targets: TreatmentTarget[] = [];
-  const highForceJoints = forceAnalysis.joints.filter(
+  const elevatedJoints = forceAnalysis.joints.filter(
     j => j.status === 'high' || j.status === 'very_high'
   );
 
-  for (const joint of highForceJoints) {
+  for (const joint of elevatedJoints) {
     const isVeryHigh = joint.status === 'very_high';
     const severity = isVeryHigh ? 85 : 60;
     const priority = isVeryHigh ? 8 : 6;
 
-    const applicableTechniques = isVeryHigh
-      ? MOBILIZATION_TECHNIQUES.slice(0, 2)
-      : MOBILIZATION_TECHNIQUES;
+    const region = classifyJointRegion(joint.id, joint.label);
+    const profile = JOINT_SPECIFIC_PROFILES[region];
+
+    let techniques: TreatmentTechnique[];
+    if (profile) {
+      if (isVeryHigh) {
+        techniques = [BASE_MOBILIZATION_TECHNIQUES[0], ...profile.specificTechniques.slice(0, 2)];
+      } else {
+        techniques = [...profile.specificTechniques, ...BASE_MOBILIZATION_TECHNIQUES];
+      }
+    } else {
+      techniques = isVeryHigh ? BASE_MOBILIZATION_TECHNIQUES.slice(0, 2) : BASE_MOBILIZATION_TECHNIQUES;
+    }
 
     const contraindications: Contraindication[] = [];
+
     if (isVeryHigh) {
       contraindications.push({
         flag: 'Very high joint loading',
@@ -991,9 +1077,21 @@ export function computeJointMobilizationTargets(forceAnalysis: ForceAnalysisResu
       contraindications.push({
         flag: 'Elevated shear component',
         severity: 'caution',
-        reason: 'Shear force exceeds 40% of compression — suggests instability. Prioritize stabilization exercises alongside mobilization.',
+        reason: 'Shear force exceeds 40% of compression — suggests segmental instability. Prioritize stabilization exercises alongside mobilization. Avoid translational mobilization in shear direction.',
       });
     }
+    if (joint.tension > joint.compression * 0.5) {
+      contraindications.push({
+        flag: 'Elevated tensile loading',
+        severity: 'caution',
+        reason: 'High tensile component may indicate ligamentous strain. Assess joint stability before end-range mobilization — consider Beighton score for generalized hypermobility.',
+      });
+    }
+    if (profile) {
+      contraindications.push(...profile.specificContraindications);
+    }
+
+    const regionLabel = region ? ` (${region} region)` : '';
 
     targets.push({
       targetId: `joint_${joint.id}`,
@@ -1005,8 +1103,8 @@ export function computeJointMobilizationTargets(forceAnalysis: ForceAnalysisResu
       actionLabel: isVeryHigh ? 'Mobilize (Graded)' : 'Joint Mobilization',
       isRootCause: false,
       isCompensation: false,
-      rationale: `${joint.label} under ${isVeryHigh ? 'very high' : 'high'} loading (${joint.totalForce.toFixed(0)}% BW). ${joint.clinical}. Joint mobilization indicated to restore accessory motion and reduce compressive symptoms.`,
-      techniques: applicableTechniques,
+      rationale: `${joint.label}${regionLabel} under ${isVeryHigh ? 'very high' : 'high'} loading (${joint.totalForce.toFixed(0)}% BW). ${joint.clinical}. Joint mobilization indicated to restore accessory motion, reduce compressive symptoms, and normalize joint mechanics.`,
+      techniques,
       painCorrelations: [],
       chainContext: [],
       influenceCount: 0,

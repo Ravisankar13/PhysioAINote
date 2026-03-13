@@ -2755,7 +2755,20 @@ ${ddxList}`;
     }
     const integrityObj: Record<string, number> = {};
     chainIntegrityScores.forEach((val, key) => { integrityObj[key] = val.score; });
-    const base = computeFullTreatmentPriorities(analysis, influenceMap, integrityObj, painMarkers);
+
+    const combinedPainMarkers = [...painMarkers];
+    if (predictedPainSpots.length > 0) {
+      for (const spot of predictedPainSpots) {
+        combinedPainMarkers.push({
+          id: spot.id,
+          position: spot.position,
+          label: spot.label,
+          severity: Math.max(1, Math.round(spot.severity * 0.6)),
+        } as any);
+      }
+    }
+
+    const base = computeFullTreatmentPriorities(analysis, influenceMap, integrityObj, combinedPainMarkers);
 
     const forces = hudForceAnalysis;
     if (forces) {
@@ -2772,7 +2785,7 @@ ${ddxList}`;
     }
 
     return base;
-  }, [muscleAnalysis, hudMuscleAnalysis, influenceMap, chainIntegrityScores, painMarkers, hudForceAnalysis]);
+  }, [muscleAnalysis, hudMuscleAnalysis, influenceMap, chainIntegrityScores, painMarkers, predictedPainSpots, hudForceAnalysis]);
 
   const [treatmentPanelOpen, setTreatmentPanelOpen] = useState(true);
   const [compensationPanelOpen, setCompensationPanelOpen] = useState(true);
@@ -2797,8 +2810,7 @@ ${ddxList}`;
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
 
-    const hasContent = treatmentPriorities.targets.length > 0 || predictedPainSpots.length > 0;
-    if ((!showTreatmentOverlay && !showPredictedPain) || !hasContent) return;
+    if (!showTreatmentOverlay && !showPredictedPain) return;
 
     debounceTimerRef.current = setTimeout(() => {
       if (poseRevisionRef.current !== currentRevision) return;
@@ -2816,7 +2828,7 @@ ${ddxList}`;
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [muscleAnalysis, showTreatmentOverlay, showPredictedPain, treatmentPriorities.targets.length, predictedPainSpots.length]);
+  }, [effectiveModelConfig, showTreatmentOverlay, showPredictedPain]);
 
   const liveTreatmentPriorities = useMemo((): TreatmentPriorityResult => {
     void stableReevalCounter;
@@ -2827,7 +2839,20 @@ ${ddxList}`;
     }
     const integrityObj: Record<string, number> = {};
     chainIntegrityScores.forEach((val, key) => { integrityObj[key] = val.score; });
-    const base = computeFullTreatmentPriorities(analysis, influenceMap, integrityObj, painMarkers);
+
+    const combinedPainMarkers = [...painMarkers];
+    if (predictedPainSpots.length > 0) {
+      for (const spot of predictedPainSpots) {
+        combinedPainMarkers.push({
+          id: spot.id,
+          position: spot.position,
+          label: spot.label,
+          severity: Math.max(1, Math.round(spot.severity * 0.6)),
+        } as any);
+      }
+    }
+
+    const base = computeFullTreatmentPriorities(analysis, influenceMap, integrityObj, combinedPainMarkers);
 
     const forces = hudForceAnalysis;
     if (forces) {
@@ -2844,7 +2869,7 @@ ${ddxList}`;
     }
 
     return base;
-  }, [stableReevalCounter, muscleAnalysis, hudMuscleAnalysis, influenceMap, chainIntegrityScores, painMarkers, hudForceAnalysis]);
+  }, [stableReevalCounter, muscleAnalysis, hudMuscleAnalysis, influenceMap, chainIntegrityScores, painMarkers, predictedPainSpots, hudForceAnalysis]);
 
   useEffect(() => {
     if (treatmentPriorities.targets.length === 0) {

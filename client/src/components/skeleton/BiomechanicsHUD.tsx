@@ -146,7 +146,7 @@ export default function BiomechanicsHUD({
       bgColor: 'bg-amber-500/15',
       ringColor: 'ring-amber-500/30',
       label: 'Forces',
-      value: topJoint ? `${abbreviateJoint(topJoint.name)} ${(topJoint.totalForce * 100).toFixed(0)}%` : '--',
+      value: topJoint ? `${abbreviateJoint(topJoint.label)} ${(topJoint.totalForce * 100).toFixed(0)}%` : '--',
       valueColor: topJoint ? getForceColor(topJoint.status) : '#6b7280',
       onClick: onOpenForceOverlay,
     },

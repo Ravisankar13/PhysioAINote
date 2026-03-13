@@ -105,7 +105,7 @@ import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
-import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJointMobilizationTargets, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol } from "@/lib/treatmentPriorityEngine";
+import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJointMobilizationTargets, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol, type PainMarkerSimple } from "@/lib/treatmentPriorityEngine";
 import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPainEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
@@ -2756,16 +2756,23 @@ ${ddxList}`;
     const integrityObj: Record<string, number> = {};
     chainIntegrityScores.forEach((val, key) => { integrityObj[key] = val.score; });
 
-    const combinedPainMarkers = [...painMarkers];
-    if (predictedPainSpots.length > 0) {
-      for (const spot of predictedPainSpots) {
-        combinedPainMarkers.push({
-          id: spot.id,
-          position: spot.position,
-          label: spot.label,
-          severity: Math.max(1, Math.round(spot.severity * 0.6)),
-        } as any);
-      }
+    const combinedPainMarkers: PainMarkerSimple[] = painMarkers.map(pm => ({
+      id: pm.id,
+      position: pm.position,
+      label: pm.anatomicalLabel || pm.nearestBone,
+      severity: (pm as unknown as { severity?: number }).severity ?? 5,
+      weight: 1.0,
+      isPredicted: false,
+    }));
+    for (const spot of predictedPainSpots) {
+      combinedPainMarkers.push({
+        id: spot.id,
+        position: spot.position,
+        label: spot.label,
+        severity: Math.max(1, Math.round(spot.severity * 0.6)),
+        weight: 0.4,
+        isPredicted: true,
+      });
     }
 
     const base = computeFullTreatmentPriorities(analysis, influenceMap, integrityObj, combinedPainMarkers);
@@ -2840,16 +2847,23 @@ ${ddxList}`;
     const integrityObj: Record<string, number> = {};
     chainIntegrityScores.forEach((val, key) => { integrityObj[key] = val.score; });
 
-    const combinedPainMarkers = [...painMarkers];
-    if (predictedPainSpots.length > 0) {
-      for (const spot of predictedPainSpots) {
-        combinedPainMarkers.push({
-          id: spot.id,
-          position: spot.position,
-          label: spot.label,
-          severity: Math.max(1, Math.round(spot.severity * 0.6)),
-        } as any);
-      }
+    const combinedPainMarkers: PainMarkerSimple[] = painMarkers.map(pm => ({
+      id: pm.id,
+      position: pm.position,
+      label: pm.anatomicalLabel || pm.nearestBone,
+      severity: (pm as unknown as { severity?: number }).severity ?? 5,
+      weight: 1.0,
+      isPredicted: false,
+    }));
+    for (const spot of predictedPainSpots) {
+      combinedPainMarkers.push({
+        id: spot.id,
+        position: spot.position,
+        label: spot.label,
+        severity: Math.max(1, Math.round(spot.severity * 0.6)),
+        weight: 0.4,
+        isPredicted: true,
+      });
     }
 
     const base = computeFullTreatmentPriorities(analysis, influenceMap, integrityObj, combinedPainMarkers);

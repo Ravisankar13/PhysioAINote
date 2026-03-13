@@ -80,11 +80,13 @@ export interface TreatmentPriorityResult {
   summary: TreatmentSummary;
 }
 
-interface PainMarkerSimple {
+export interface PainMarkerSimple {
   id: string;
   position: { x: number; y: number; z: number };
   label: string;
   severity?: number;
+  weight?: number;
+  isPredicted?: boolean;
 }
 
 const STATUS_TO_ACTION: Record<ClinicalStatus, { action: TreatmentAction; label: string }> = {
@@ -735,7 +737,12 @@ export function computeTreatmentPriorities(
       }
     }
 
-    const painWeight = painCorrelations.length > 0 ? 2 : 0;
+    const maxPainWeight = painCorrelations.reduce((max, pc) => {
+      const marker = painMarkers.find(pm => pm.id === pc.painMarkerId);
+      const w = marker?.weight ?? 1.0;
+      return Math.max(max, w);
+    }, 0);
+    const painWeight = painCorrelations.length > 0 ? 2 * maxPainWeight : 0;
     const rootCauseWeight = isRootCause ? 3 : 0;
     const influenceWeight = Math.min(influencesOutCount * 0.5, 2);
     const severityWeight = data.maxSeverity / 25;

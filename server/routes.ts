@@ -6166,8 +6166,22 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
         if (forceAnalysis && forceAnalysis.length > 0) {
           for (const f of forceAnalysis) clinicalTextParts.push(`${f.joint || ''} ${f.status || ''} force loading`);
         }
+        if (romMeasurements && typeof romMeasurements === 'object') {
+          for (const [joint, movements] of Object.entries(romMeasurements)) {
+            if (movements && typeof movements === 'object') {
+              for (const [movement, value] of Object.entries(movements as Record<string, any>)) {
+                if (value !== undefined && value !== null) {
+                  clinicalTextParts.push(`${joint} ${movement} ROM range of motion ${typeof value === 'number' && value < 80 ? 'limited restricted' : ''}`);
+                }
+              }
+            }
+          }
+        }
         if (fascialChainAnalysis && fascialChainAnalysis.length > 0) {
-          for (const fc of fascialChainAnalysis) clinicalTextParts.push(`${fc.chainName || ''} fascial chain tension myofascial`);
+          for (const fc of fascialChainAnalysis) {
+            const tensionLevel = fc.level || (fc.avgTension >= 75 ? 'critical' : fc.avgTension >= 65 ? 'high' : 'moderate');
+            clinicalTextParts.push(`${fc.chainName || ''} fascial chain ${tensionLevel} tension avgTension:${fc.avgTension || ''} myofascial ${tensionLevel === 'critical' ? 'fascial restriction' : ''}`);
+          }
         }
         if (scarTissueAnalysis && scarTissueAnalysis.length > 0) {
           for (const sc of scarTissueAnalysis) clinicalTextParts.push(`${sc.location || ''} ${sc.type || ''} scar tissue adhesion fascial restriction`);

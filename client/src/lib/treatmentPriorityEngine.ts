@@ -1,5 +1,6 @@
 import type { MuscleAnalysisResult, IndividualMuscle, ClinicalStatus } from './muscleBiomechanicsEngine';
 import type { InfluenceMap, InfluencePathway } from './muscleInfluenceMap';
+import type { JointSurfaceForce, ForceAnalysisResult } from './posturalForceEngine';
 
 export type TreatmentAction = 'release' | 'stretch' | 'strengthen' | 'activate' | 'mobilize' | 'stabilize';
 export type EvidenceGrade = 'A' | 'B' | 'C' | 'Expert';
@@ -895,4 +896,124 @@ function buildRationale(
   }
 
   return parts.join('. ') + '.';
+}
+
+const MOBILIZATION_TECHNIQUES: TreatmentTechnique[] = [
+  {
+    name: 'Maitland Grade I-II oscillations',
+    type: 'manual',
+    dosage: '3-4 sets × 30s oscillations, within pain-free range',
+    rationale: 'Low-grade oscillatory mobilizations for pain modulation via gate control and descending inhibition — appropriate for acute/irritable joints',
+    evidenceGrade: 'A',
+    references: [
+      { authors: 'Maitland GD, Hengeveld E, Banks K', year: 2013, title: 'Maitland\'s Vertebral Manipulation', journal: 'Elsevier' },
+      { authors: 'Gross A, Kay TM, Paquin JP et al', year: 2015, title: 'Exercises for mechanical neck disorders', journal: 'Cochrane Database Syst Rev', pmid: '25629215' },
+    ],
+  },
+  {
+    name: 'Maitland Grade III-IV mobilization',
+    type: 'manual',
+    dosage: '3-5 sets × 30-60s, into resistance/end-range',
+    rationale: 'Higher-grade mobilizations to restore accessory glide and joint play — targets capsular restriction and adhesion',
+    evidenceGrade: 'A',
+    references: [
+      { authors: 'Maitland GD, Hengeveld E, Banks K', year: 2013, title: 'Maitland\'s Vertebral Manipulation', journal: 'Elsevier' },
+      { authors: 'Bialosky JE, Bishop MD, Price DD', year: 2009, title: 'The mechanisms of manual therapy in the treatment of musculoskeletal pain', journal: 'Man Ther', pmid: '18983998' },
+    ],
+  },
+  {
+    name: 'Mulligan MWM (mobilization with movement)',
+    type: 'manual',
+    dosage: '3 × 6-10 reps with sustained glide during active movement',
+    rationale: 'Corrects positional fault while patient performs active movement — immediately reassessed for pain reduction and ROM improvement',
+    evidenceGrade: 'B',
+    references: [
+      { authors: 'Mulligan BR', year: 2010, title: 'Manual Therapy: NAGS, SNAGS, MWMS etc.', journal: 'Plane View Services' },
+      { authors: 'Vicenzino B, Paungmali A, Teys P', year: 2007, title: 'Mulligan\'s mobilization-with-movement, positional faults and pain relief', journal: 'J Bodyw Mov Ther', pmid: '19083664' },
+    ],
+  },
+  {
+    name: 'Joint distraction / long-axis traction',
+    type: 'manual',
+    dosage: '3-4 × 15-30s sustained traction, grade II-III',
+    rationale: 'Separates articular surfaces to reduce compression and improve synovial fluid circulation in loaded joints',
+    evidenceGrade: 'B',
+    references: [
+      { authors: 'Kaltenborn FM', year: 2011, title: 'Manual Mobilization of the Joints', journal: 'Norli' },
+    ],
+  },
+];
+
+const JOINT_BONE_MAP: Record<string, string> = {
+  cervical_spine: 'Neck_M',
+  thoracic_spine: 'Spine2_M',
+  lumbar_spine: 'Spine1_M',
+  thoracolumbar_junction: 'Spine1Part2_M',
+  left_shoulder: 'Shoulder_L',
+  right_shoulder: 'Shoulder_R',
+  left_hip: 'Hip_L',
+  right_hip: 'Hip_R',
+  left_knee: 'Knee_L',
+  right_knee: 'Knee_R',
+  left_ankle: 'Ankle_L',
+  right_ankle: 'Ankle_R',
+  left_elbow: 'Elbow_L',
+  right_elbow: 'Elbow_R',
+  left_wrist: 'Wrist_L',
+  right_wrist: 'Wrist_R',
+  sacroiliac: 'RootPart1_M',
+};
+
+export function computeJointMobilizationTargets(forceAnalysis: ForceAnalysisResult): TreatmentTarget[] {
+  const targets: TreatmentTarget[] = [];
+  const highForceJoints = forceAnalysis.joints.filter(
+    j => j.status === 'high' || j.status === 'very_high'
+  );
+
+  for (const joint of highForceJoints) {
+    const isVeryHigh = joint.status === 'very_high';
+    const severity = isVeryHigh ? 85 : 60;
+    const priority = isVeryHigh ? 8 : 6;
+
+    const applicableTechniques = isVeryHigh
+      ? MOBILIZATION_TECHNIQUES.slice(0, 2)
+      : MOBILIZATION_TECHNIQUES;
+
+    const contraindications: Contraindication[] = [];
+    if (isVeryHigh) {
+      contraindications.push({
+        flag: 'Very high joint loading',
+        severity: 'warning',
+        reason: `Joint force at ${joint.totalForce.toFixed(0)}% BW — use Grade I-II initially. Avoid Grade IV thrust techniques until loading is reduced through postural correction.`,
+      });
+    }
+    if (joint.shear > joint.compression * 0.4) {
+      contraindications.push({
+        flag: 'Elevated shear component',
+        severity: 'caution',
+        reason: 'Shear force exceeds 40% of compression — suggests instability. Prioritize stabilization exercises alongside mobilization.',
+      });
+    }
+
+    targets.push({
+      targetId: `joint_${joint.id}`,
+      targetName: joint.label,
+      targetType: 'joint',
+      priority,
+      clinicalStatus: 'overactive' as ClinicalStatus,
+      treatmentAction: 'mobilize',
+      actionLabel: isVeryHigh ? 'Mobilize (Graded)' : 'Joint Mobilization',
+      isRootCause: false,
+      isCompensation: false,
+      rationale: `${joint.label} under ${isVeryHigh ? 'very high' : 'high'} loading (${joint.totalForce.toFixed(0)}% BW). ${joint.clinical}. Joint mobilization indicated to restore accessory motion and reduce compressive symptoms.`,
+      techniques: applicableTechniques,
+      painCorrelations: [],
+      chainContext: [],
+      influenceCount: 0,
+      dysfunctionScore: severity,
+      contraindications,
+    });
+  }
+
+  return targets;
 }

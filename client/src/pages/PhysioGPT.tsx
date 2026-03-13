@@ -105,7 +105,8 @@ import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
-import { computeTreatmentPriorities as computeFullTreatmentPriorities, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol } from "@/lib/treatmentPriorityEngine";
+import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJointMobilizationTargets, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol } from "@/lib/treatmentPriorityEngine";
+import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPainEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 
@@ -2740,15 +2741,38 @@ ${ddxList}`;
     return scores;
   }, [hudMuscleAnalysis, chainExplorerMode, chainIntegrityMode, chainIntegrityScores]);
 
+  const predictedPainSpots = useMemo((): PredictedPainSpot[] => {
+    return computePredictedPain(effectiveModelConfig);
+  }, [effectiveModelConfig]);
+
+  const [showPredictedPain, setShowPredictedPain] = useState(true);
+
   const treatmentPriorities = useMemo((): TreatmentPriorityResult => {
-    const hasOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
-    if (!muscleAnalysis || !hasOverrides) {
-      return { targets: [], summary: { totalTargets: 0, rootCauses: 0, compensations: 0, criticalChain: null, syndromes: [], treatmentSequence: [] } };
+    const analysis = muscleAnalysis ?? hudMuscleAnalysis;
+    const hasNonNormal = analysis?.allMuscles?.some(m => m.clinicalStatus !== 'normal');
+    if (!analysis || !hasNonNormal) {
+      return { targets: [], summary: { totalTargets: 0, rootCauses: 0, compensations: 0, criticalChain: null, syndromes: [], treatmentSequence: [], syndromeProtocols: [] } };
     }
     const integrityObj: Record<string, number> = {};
     chainIntegrityScores.forEach((val, key) => { integrityObj[key] = val.score; });
-    return computeFullTreatmentPriorities(muscleAnalysis, influenceMap, integrityObj, painMarkers);
-  }, [muscleAnalysis, muscleOverrides, influenceMap, chainIntegrityScores, painMarkers]);
+    const base = computeFullTreatmentPriorities(analysis, influenceMap, integrityObj, painMarkers);
+
+    const forces = hudForceAnalysis;
+    if (forces) {
+      const mobilizationTargets = computeJointMobilizationTargets(forces);
+      if (mobilizationTargets.length > 0) {
+        base.targets.push(...mobilizationTargets);
+        base.targets.sort((a, b) => {
+          if (a.isRootCause && !b.isRootCause) return -1;
+          if (!a.isRootCause && b.isRootCause) return 1;
+          return b.priority - a.priority;
+        });
+        base.summary.totalTargets = base.targets.length;
+      }
+    }
+
+    return base;
+  }, [muscleAnalysis, hudMuscleAnalysis, influenceMap, chainIntegrityScores, painMarkers, hudForceAnalysis]);
 
   const [treatmentPanelOpen, setTreatmentPanelOpen] = useState(true);
   const [compensationPanelOpen, setCompensationPanelOpen] = useState(true);
@@ -2773,7 +2797,8 @@ ${ddxList}`;
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
 
-    if (!showTreatmentOverlay || treatmentPriorities.targets.length === 0) return;
+    const hasContent = treatmentPriorities.targets.length > 0 || predictedPainSpots.length > 0;
+    if ((!showTreatmentOverlay && !showPredictedPain) || !hasContent) return;
 
     debounceTimerRef.current = setTimeout(() => {
       if (poseRevisionRef.current !== currentRevision) return;
@@ -2791,18 +2816,35 @@ ${ddxList}`;
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [muscleAnalysis, showTreatmentOverlay, treatmentPriorities.targets.length]);
+  }, [muscleAnalysis, showTreatmentOverlay, showPredictedPain, treatmentPriorities.targets.length, predictedPainSpots.length]);
 
   const liveTreatmentPriorities = useMemo((): TreatmentPriorityResult => {
     void stableReevalCounter;
-    const hasOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
-    if (!muscleAnalysis || !hasOverrides) {
-      return { targets: [], summary: { totalTargets: 0, rootCauses: 0, compensations: 0, criticalChain: null, syndromes: [], treatmentSequence: [] } };
+    const analysis = muscleAnalysis ?? hudMuscleAnalysis;
+    const hasNonNormal = analysis?.allMuscles?.some(m => m.clinicalStatus !== 'normal');
+    if (!analysis || !hasNonNormal) {
+      return { targets: [], summary: { totalTargets: 0, rootCauses: 0, compensations: 0, criticalChain: null, syndromes: [], treatmentSequence: [], syndromeProtocols: [] } };
     }
     const integrityObj: Record<string, number> = {};
     chainIntegrityScores.forEach((val, key) => { integrityObj[key] = val.score; });
-    return computeFullTreatmentPriorities(muscleAnalysis, influenceMap, integrityObj, painMarkers);
-  }, [stableReevalCounter, muscleAnalysis, muscleOverrides, influenceMap, chainIntegrityScores, painMarkers]);
+    const base = computeFullTreatmentPriorities(analysis, influenceMap, integrityObj, painMarkers);
+
+    const forces = hudForceAnalysis;
+    if (forces) {
+      const mobilizationTargets = computeJointMobilizationTargets(forces);
+      if (mobilizationTargets.length > 0) {
+        base.targets.push(...mobilizationTargets);
+        base.targets.sort((a, b) => {
+          if (a.isRootCause && !b.isRootCause) return -1;
+          if (!a.isRootCause && b.isRootCause) return 1;
+          return b.priority - a.priority;
+        });
+        base.summary.totalTargets = base.targets.length;
+      }
+    }
+
+    return base;
+  }, [stableReevalCounter, muscleAnalysis, hudMuscleAnalysis, influenceMap, chainIntegrityScores, painMarkers, hudForceAnalysis]);
 
   useEffect(() => {
     if (treatmentPriorities.targets.length === 0) {
@@ -2828,9 +2870,17 @@ ${ddxList}`;
   }, [treatmentPriorities.targets.length]);
 
   const treatmentBoneNames = useMemo((): string[] => {
-    if (!showTreatmentOverlay || liveTreatmentPriorities.targets.length === 0) return [];
-    return getRequiredBoneNames(liveTreatmentPriorities.targets);
-  }, [showTreatmentOverlay, liveTreatmentPriorities.targets]);
+    const boneNames: string[] = [];
+    if (showTreatmentOverlay && liveTreatmentPriorities.targets.length > 0) {
+      boneNames.push(...getRequiredBoneNames(liveTreatmentPriorities.targets));
+    }
+    if (showPredictedPain && predictedPainSpots.length > 0) {
+      for (const spot of predictedPainSpots) {
+        if (!boneNames.includes(spot.boneName)) boneNames.push(spot.boneName);
+      }
+    }
+    return boneNames;
+  }, [showTreatmentOverlay, liveTreatmentPriorities.targets, showPredictedPain, predictedPainSpots]);
 
   useEffect(() => {
     if (!skeletonContainerRef.current) return;
@@ -6859,18 +6909,35 @@ ${ddxList}`;
               onOpenChainExplorer={() => { setChainExplorerMode(true); setChainIntegrityMode(true); }}
             />
 
-            {liveTreatmentPriorities.targets.length > 0 && (
-              <button
-                onClick={() => setShowTreatmentOverlay(prev => !prev)}
-                className={`absolute top-4 right-4 z-20 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                  showTreatmentOverlay
-                    ? 'bg-teal-500/30 ring-1 ring-teal-500/50 hover:bg-teal-500/40'
-                    : 'bg-gray-700/50 ring-1 ring-gray-600/50 hover:bg-gray-600/50'
-                }`}
-                title={showTreatmentOverlay ? 'Hide treatment overlay' : 'Show treatment overlay'}
-              >
-                <Pill className={`h-3.5 w-3.5 ${showTreatmentOverlay ? 'text-teal-300' : 'text-gray-400'}`} />
-              </button>
+            {(liveTreatmentPriorities.targets.length > 0 || predictedPainSpots.length > 0) && (
+              <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5">
+                {liveTreatmentPriorities.targets.length > 0 && (
+                  <button
+                    onClick={() => setShowTreatmentOverlay(prev => !prev)}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                      showTreatmentOverlay
+                        ? 'bg-teal-500/30 ring-1 ring-teal-500/50 hover:bg-teal-500/40'
+                        : 'bg-gray-700/50 ring-1 ring-gray-600/50 hover:bg-gray-600/50'
+                    }`}
+                    title={showTreatmentOverlay ? 'Hide treatment overlay' : 'Show treatment overlay'}
+                  >
+                    <Pill className={`h-3.5 w-3.5 ${showTreatmentOverlay ? 'text-teal-300' : 'text-gray-400'}`} />
+                  </button>
+                )}
+                {predictedPainSpots.length > 0 && (
+                  <button
+                    onClick={() => setShowPredictedPain(prev => !prev)}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                      showPredictedPain
+                        ? 'bg-amber-500/30 ring-1 ring-amber-500/50 hover:bg-amber-500/40'
+                        : 'bg-gray-700/50 ring-1 ring-gray-600/50 hover:bg-gray-600/50'
+                    }`}
+                    title={showPredictedPain ? 'Hide predicted pain spots' : 'Show predicted pain spots'}
+                  >
+                    <AlertTriangle className={`h-3.5 w-3.5 ${showPredictedPain ? 'text-amber-300' : 'text-gray-400'}`} />
+                  </button>
+                )}
+              </div>
             )}
 
             <TreatmentOverlayBridge
@@ -6879,6 +6946,8 @@ ${ddxList}`;
               containerWidth={skeletonContainerSize.width}
               containerHeight={skeletonContainerSize.height}
               visible={showTreatmentOverlay && liveTreatmentPriorities.targets.length > 0}
+              predictedPainSpots={predictedPainSpots}
+              showPredictedPain={showPredictedPain && predictedPainSpots.length > 0}
             />
 
           </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { ChevronDown, ChevronUp, Dumbbell, Zap, Shield, RotateCcw, Crosshair } from 'lucide-react';
+import { ChevronDown, ChevronUp, Dumbbell, Zap, Shield, RotateCcw, Crosshair, AlertTriangle } from 'lucide-react';
 import type { TreatmentPriorityResult, TreatmentTarget, TreatmentAction, EvidenceGrade } from '@/lib/treatmentPriorityEngine';
+import type { PredictedPainSpot } from '@/lib/predictedPainEngine';
 import { MUSCLE_BONE_POSITIONS } from '@/lib/myofascialChains';
 
 export interface BoneScreenPosition {
@@ -81,6 +82,17 @@ const EXTENDED_BONE_MAP: Record<string, string> = {
   wrist_extensor_l: 'Elbow_L', wrist_extensor_r: 'Elbow_R',
   glute_med_l: 'Hip_L', glute_med_r: 'Hip_R',
   glute_min_l: 'Hip_L', glute_min_r: 'Hip_R',
+  joint_cervical_spine: 'Neck_M', joint_cervical: 'Neck_M',
+  joint_thoracic_spine: 'Spine2_M', joint_thoracic: 'Spine2_M',
+  joint_lumbar_spine: 'Spine1_M', joint_lumbar: 'Spine1_M',
+  joint_thoracolumbar: 'Spine1Part2_M',
+  joint_left_shoulder: 'Shoulder_L', joint_right_shoulder: 'Shoulder_R',
+  joint_left_hip: 'Hip_L', joint_right_hip: 'Hip_R',
+  joint_left_knee: 'Knee_L', joint_right_knee: 'Knee_R',
+  joint_left_ankle: 'Ankle_L', joint_right_ankle: 'Ankle_R',
+  joint_left_elbow: 'Elbow_L', joint_right_elbow: 'Elbow_R',
+  joint_left_wrist: 'Wrist_L', joint_right_wrist: 'Wrist_R',
+  joint_sacroiliac: 'RootPart1_M', joint_si: 'RootPart1_M',
 };
 
 export function resolveBoneName(targetId: string): string {
@@ -406,12 +418,133 @@ function positionsChanged(prev: BoneScreenPosition[], next: BoneScreenPosition[]
   return false;
 }
 
+const CATEGORY_COLORS: Record<string, { bg: string; ring: string; text: string; glow: string }> = {
+  postural: { bg: 'bg-amber-500/25', ring: 'ring-amber-400/60', text: 'text-amber-300', glow: 'rgba(245,158,11,0.5)' },
+  muscular: { bg: 'bg-orange-500/25', ring: 'ring-orange-400/60', text: 'text-orange-300', glow: 'rgba(249,115,22,0.5)' },
+  neural: { bg: 'bg-red-500/25', ring: 'ring-red-400/60', text: 'text-red-300', glow: 'rgba(239,68,68,0.5)' },
+};
+
+function PredictedPainMarker({ spot, screenX, screenY }: {
+  spot: PredictedPainSpot;
+  screenX: number;
+  screenY: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [animating, setAnimating] = useState(true);
+  const colors = CATEGORY_COLORS[spot.category] || CATEGORY_COLORS.postural;
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnimating(false), 500);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div
+      className={`absolute z-10 transition-all duration-300 ${animating ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`}
+      style={{ left: screenX - 14, top: screenY - 14 }}
+    >
+      <button
+        onClick={(e) => { e.stopPropagation(); setExpanded(prev => !prev); }}
+        className={`relative w-7 h-7 rounded-full ${colors.bg} ring-2 ${colors.ring} flex items-center justify-center cursor-pointer hover:scale-110 transition-transform`}
+        style={{ boxShadow: `0 0 10px ${colors.glow}, 0 0 20px ${colors.glow}` }}
+        title={`Predicted: ${spot.label}`}
+      >
+        <AlertTriangle className={`h-3.5 w-3.5 ${colors.text}`} />
+        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping opacity-75" />
+        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400" />
+      </button>
+
+      {expanded && (
+        <div className="absolute left-8 top-0 w-[220px] bg-gray-900/95 backdrop-blur-xl rounded-lg border border-amber-500/30 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-left-2 duration-200 z-20">
+          <div className="px-3 py-2 border-b border-amber-500/20 bg-amber-500/10">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className={`h-3 w-3 ${colors.text}`} />
+              <span className={`text-[10px] font-bold ${colors.text} uppercase tracking-wider`}>Predicted Pain</span>
+            </div>
+            <span className="text-[11px] font-semibold text-white mt-1 block">{spot.label}</span>
+          </div>
+          <div className="px-3 py-2 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-gray-500 w-16">Confidence</span>
+              <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-full bg-amber-400 rounded-full transition-all" style={{ width: `${spot.confidence * 100}%` }} />
+              </div>
+              <span className="text-[9px] text-amber-300 font-medium w-8 text-right">{(spot.confidence * 100).toFixed(0)}%</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-gray-500 w-16">Severity</span>
+              <div className="flex gap-0.5">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <div key={i} className={`w-1.5 h-3 rounded-sm ${i < spot.severity ? 'bg-amber-400' : 'bg-gray-700'}`} />
+                ))}
+              </div>
+              <span className="text-[9px] text-amber-300 font-medium">{spot.severity}/10</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-gray-500 w-16">Type</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${colors.bg} ${colors.text} font-medium capitalize`}>{spot.category}</span>
+            </div>
+            <p className="text-[9px] text-gray-400 mt-1 leading-relaxed">{spot.rationale}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface PredictedPainOverlayProps {
+  spots: PredictedPainSpot[];
+  boneScreenPositions: BoneScreenPosition[];
+  containerWidth: number;
+  containerHeight: number;
+  visible: boolean;
+}
+
+function PredictedPainOverlay({
+  spots,
+  boneScreenPositions,
+  containerWidth,
+  containerHeight,
+  visible,
+}: PredictedPainOverlayProps) {
+  const boneMap = useMemo(() => {
+    const map = new Map<string, BoneScreenPosition>();
+    for (const bp of boneScreenPositions) map.set(bp.boneName, bp);
+    return map;
+  }, [boneScreenPositions]);
+
+  const positionedSpots = useMemo(() => {
+    if (!visible || containerWidth === 0) return [];
+    return spots.map(spot => {
+      const bonePos = boneMap.get(spot.boneName);
+      if (!bonePos || !bonePos.visible) return null;
+      return { spot, screenX: bonePos.screenX, screenY: bonePos.screenY };
+    }).filter(Boolean) as Array<{ spot: PredictedPainSpot; screenX: number; screenY: number }>;
+  }, [spots, boneMap, containerWidth, containerHeight, visible]);
+
+  if (!visible || positionedSpots.length === 0) return null;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-14" style={{ width: containerWidth, height: containerHeight }}>
+      {positionedSpots.map(({ spot, screenX, screenY }) => (
+        <div key={spot.id} className="pointer-events-auto">
+          <PredictedPainMarker spot={spot} screenX={screenX} screenY={screenY} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export { PredictedPainOverlay };
+
 interface TreatmentOverlayBridgeProps {
   treatmentPriorities: TreatmentPriorityResult;
   containerWidth: number;
   containerHeight: number;
   visible: boolean;
   positionsRef: React.MutableRefObject<BoneScreenPosition[]>;
+  predictedPainSpots?: PredictedPainSpot[];
+  showPredictedPain?: boolean;
 }
 
 export const TreatmentOverlayBridge = memo(function TreatmentOverlayBridge({
@@ -420,13 +553,15 @@ export const TreatmentOverlayBridge = memo(function TreatmentOverlayBridge({
   containerHeight,
   visible,
   positionsRef,
+  predictedPainSpots = [],
+  showPredictedPain = false,
 }: TreatmentOverlayBridgeProps) {
   const [positions, setPositions] = useState<BoneScreenPosition[]>([]);
   const prevPositionsRef = useRef<BoneScreenPosition[]>([]);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible && !showPredictedPain) return;
     let active = true;
     const tick = () => {
       if (!active) return;
@@ -442,15 +577,24 @@ export const TreatmentOverlayBridge = memo(function TreatmentOverlayBridge({
       active = false;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [visible, positionsRef]);
+  }, [visible, showPredictedPain, positionsRef]);
 
   return (
-    <TreatmentOverlay
-      treatmentPriorities={treatmentPriorities}
-      boneScreenPositions={positions}
-      containerWidth={containerWidth}
-      containerHeight={containerHeight}
-      visible={visible}
-    />
+    <>
+      <TreatmentOverlay
+        treatmentPriorities={treatmentPriorities}
+        boneScreenPositions={positions}
+        containerWidth={containerWidth}
+        containerHeight={containerHeight}
+        visible={visible}
+      />
+      <PredictedPainOverlay
+        spots={predictedPainSpots}
+        boneScreenPositions={positions}
+        containerWidth={containerWidth}
+        containerHeight={containerHeight}
+        visible={showPredictedPain}
+      />
+    </>
   );
 });

@@ -1393,6 +1393,22 @@ ${ddxList}`;
     'hand': ['Elbow_L', 'Elbow_R'],
   }), []);
 
+  const FASCIAL_CHAIN_TO_MUSCLES: Record<string, string[]> = useMemo(() => ({
+    'superficial back line': ['calf_r', 'calf_l', 'quad_r', 'quad_l', 'glute_r', 'glute_l', 'core', 'neck'],
+    'posterior chain': ['calf_r', 'calf_l', 'quad_r', 'quad_l', 'glute_r', 'glute_l', 'core', 'neck'],
+    'superficial front line': ['shin_r', 'shin_l', 'quad_r', 'quad_l', 'core', 'chest', 'neck'],
+    'anterior chain': ['shin_r', 'shin_l', 'quad_r', 'quad_l', 'core', 'chest', 'neck'],
+    'lateral line': ['shin_r', 'shin_l', 'quad_r', 'quad_l', 'glute_r', 'glute_l', 'core', 'deltoid_r', 'deltoid_l', 'neck'],
+    'spiral line': ['shin_r', 'shin_l', 'quad_r', 'quad_l', 'core', 'scapula_r', 'scapula_l', 'neck'],
+    'deep front line': ['shin_r', 'shin_l', 'quad_r', 'quad_l', 'core', 'chest', 'neck'],
+    'arm lines': ['deltoid_r', 'deltoid_l', 'bicep_l', 'scapula_r', 'scapula_l', 'chest'],
+    'functional line': ['glute_r', 'glute_l', 'core', 'chest', 'deltoid_r', 'deltoid_l'],
+    'posterior oblique sling': ['glute_r', 'glute_l', 'core', 'scapula_r', 'scapula_l'],
+    'anterior oblique sling': ['core', 'quad_r', 'quad_l', 'chest'],
+    'lateral sling': ['glute_r', 'glute_l', 'core', 'quad_r', 'quad_l'],
+    'deep longitudinal sling': ['shin_r', 'shin_l', 'glute_r', 'glute_l', 'core'],
+  }), []);
+
   const handleVisualizationRequest = useCallback((request: VisualizationRequest | null) => {
     setActiveBiomechanicalLink(null);
     if (!request) {
@@ -1425,10 +1441,20 @@ ${ddxList}`;
       if (BIOMECHANICAL_REGION_TO_MUSCLES[lower]) {
         BIOMECHANICAL_REGION_TO_MUSCLES[lower].forEach(m => muscleGroupIds.add(m));
       } else {
+        let matched = false;
         for (const [key, muscles] of Object.entries(BIOMECHANICAL_REGION_TO_MUSCLES)) {
           if (key.includes(lower) || lower.includes(key)) {
             muscles.forEach(m => muscleGroupIds.add(m));
+            matched = true;
             break;
+          }
+        }
+        if (!matched) {
+          for (const [chainKey, muscles] of Object.entries(FASCIAL_CHAIN_TO_MUSCLES)) {
+            if (lower.includes(chainKey) || chainKey.includes(lower)) {
+              muscles.forEach(m => muscleGroupIds.add(m));
+              break;
+            }
           }
         }
       }
@@ -1439,6 +1465,13 @@ ${ddxList}`;
       for (const [key, muscles] of Object.entries(BIOMECHANICAL_REGION_TO_MUSCLES)) {
         if (textLower.includes(key)) {
           muscles.forEach(m => muscleGroupIds.add(m));
+        }
+      }
+      if (muscleGroupIds.size === 0) {
+        for (const [chainKey, muscles] of Object.entries(FASCIAL_CHAIN_TO_MUSCLES)) {
+          if (textLower.includes(chainKey)) {
+            muscles.forEach(m => muscleGroupIds.add(m));
+          }
         }
       }
     }
@@ -1473,7 +1506,7 @@ ${ddxList}`;
     setBiomechanicalMuscleHighlights(Array.from(muscleGroupIds));
     setMuscleHighlightColors(colorMap);
     setVisualizationBoneHighlights(boneHighlights);
-  }, [BIOMECHANICAL_REGION_TO_MUSCLES, VISUALIZATION_MUSCLE_MAP, MUSCLE_STATUS_COLORS, REGION_TO_BONE_NAMES]);
+  }, [BIOMECHANICAL_REGION_TO_MUSCLES, VISUALIZATION_MUSCLE_MAP, MUSCLE_STATUS_COLORS, REGION_TO_BONE_NAMES, FASCIAL_CHAIN_TO_MUSCLES]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;

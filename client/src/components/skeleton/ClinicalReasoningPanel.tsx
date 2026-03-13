@@ -505,13 +505,16 @@ export default function ClinicalReasoningPanel({
     return hints.slice(0, 8);
   }, []);
 
-  const handleVisualizationClick = useCallback((id: string, type: VisualizationRequest['type'], label: string, textForParsing: string) => {
+  const handleVisualizationClick = useCallback((id: string, type: VisualizationRequest['type'], label: string, textForParsing: string, explicitRegions?: string[]) => {
     if (!onVisualizationRequest) return;
     if (activeVisualizationId === id) {
       onVisualizationRequest(null);
       return;
     }
-    const regions = extractRegionsFromText(textForParsing);
+    const parsedRegions = extractRegionsFromText(textForParsing);
+    const regions = explicitRegions
+      ? Array.from(new Set([...explicitRegions, ...parsedRegions]))
+      : parsedRegions;
     const muscleHints = extractMuscleHints(textForParsing);
     onVisualizationRequest({ id, type, label, regions, muscleHints });
   }, [onVisualizationRequest, activeVisualizationId, extractRegionsFromText, extractMuscleHints]);
@@ -905,7 +908,7 @@ export default function ClinicalReasoningPanel({
                               <div
                                 key={driver.id}
                                 className={`rounded p-1.5 border transition-colors ${onVisualizationRequest ? 'cursor-pointer' : ''} ${driverActive ? 'bg-emerald-900/30 border-emerald-500/40 ring-1 ring-emerald-500/20' : `${colors} bg-opacity-30 hover:brightness-125`}`}
-                                onClick={() => handleVisualizationClick(driverVizId, categoryToVizType[driver.category] || 'painDriver', driver.label, driverText)}
+                                onClick={() => handleVisualizationClick(driverVizId, categoryToVizType[driver.category] || 'painDriver', driver.label, driverText, driver.relatedStructures)}
                               >
                                 <div className="flex items-center gap-1">
                                   <span className="text-[10px]">{categoryIcons[driver.category] || '•'}</span>

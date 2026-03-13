@@ -1642,6 +1642,7 @@ interface PureThreeGLBViewerProps {
   enableMuscleInteraction?: boolean;
   onMuscleGroupClick?: (groupId: string, screenX: number, screenY: number) => void;
   highlightMuscleGroups?: string[];
+  muscleHighlightColors?: Record<string, string>;
   environmentPreset?: string;
   fascialChainVisualization?: {
     enabled: boolean;
@@ -2107,6 +2108,7 @@ export default function PureThreeGLBViewer({
   enableMuscleInteraction = false,
   onMuscleGroupClick,
   highlightMuscleGroups,
+  muscleHighlightColors,
   environmentPreset = 'clinical_dark',
   fascialChainVisualization,
   onChainNodeClick,
@@ -6366,12 +6368,13 @@ export default function PureThreeGLBViewer({
     for (const groupId of highlightMuscleGroups) {
       const group = splitMuscleGroupsRef.current.get(groupId);
       if (!group) continue;
+      const colorHex = muscleHighlightColors?.[groupId] || '#00ffff';
       for (const mesh of group.meshes) {
         if (mesh instanceof THREE.Mesh) {
           const origMat = mesh.material as THREE.MeshStandardMaterial;
           if (origMat) {
             const clonedMat = origMat.clone() as THREE.MeshStandardMaterial;
-            clonedMat.emissive = new THREE.Color(0x00ffff);
+            clonedMat.emissive = new THREE.Color(colorHex);
             clonedMat.emissiveIntensity = 0.5;
             clonedMat.transparent = true;
             clonedMat.opacity = 0.85;
@@ -6389,7 +6392,7 @@ export default function PureThreeGLBViewer({
         }
       }
     }
-  }, [highlightMuscleGroups]);
+  }, [highlightMuscleGroups, muscleHighlightColors]);
 
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {

@@ -498,6 +498,7 @@ export default function PhysioGPT() {
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
+  const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
   const [activeVisualizationId, setActiveVisualizationId] = useState<string | null>(null);
   const lastReasoningTriggerRef = useRef<string>('');
   const compensationDataRef = useRef<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
@@ -1257,6 +1258,8 @@ ${ddxList}`;
   }), []);
 
   const handleBiomechanicalLinkClick = useCallback((link: BiomechanicalLink | null) => {
+    setActiveVisualizationId(null);
+    setMuscleHighlightColors({});
     if (!link) {
       setActiveBiomechanicalLink(null);
       setBiomechanicalMuscleHighlights([]);
@@ -1350,19 +1353,28 @@ ${ddxList}`;
   }), []);
 
   const handleVisualizationRequest = useCallback((request: VisualizationRequest | null) => {
+    setActiveBiomechanicalLink(null);
     if (!request) {
       setActiveVisualizationId(null);
       setBiomechanicalMuscleHighlights([]);
+      setMuscleHighlightColors({});
       return;
     }
     setActiveVisualizationId(request.id);
 
     const muscleGroupIds = new Set<string>();
+    const colorMap: Record<string, string> = {};
 
     for (const hint of request.muscleHints) {
       const mapped = VISUALIZATION_MUSCLE_MAP[hint.muscle];
       if (mapped) {
-        mapped.forEach(m => muscleGroupIds.add(m));
+        const statusColor = MUSCLE_STATUS_COLORS[hint.status] || MUSCLE_STATUS_COLORS.normal;
+        mapped.forEach(m => {
+          muscleGroupIds.add(m);
+          if (!colorMap[m]) {
+            colorMap[m] = statusColor;
+          }
+        });
       }
     }
 
@@ -1390,7 +1402,8 @@ ${ddxList}`;
     }
 
     setBiomechanicalMuscleHighlights(Array.from(muscleGroupIds));
-  }, [BIOMECHANICAL_REGION_TO_MUSCLES, VISUALIZATION_MUSCLE_MAP]);
+    setMuscleHighlightColors(colorMap);
+  }, [BIOMECHANICAL_REGION_TO_MUSCLES, VISUALIZATION_MUSCLE_MAP, MUSCLE_STATUS_COLORS]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;
@@ -3129,6 +3142,7 @@ ${ddxList}`;
                 setClickedMusclePopup(prev => prev?.groupId === groupId ? null : { groupId, screenX, screenY });
               }}
               highlightMuscleGroups={biomechanicalMuscleHighlights.length > 0 ? biomechanicalMuscleHighlights : undefined}
+              muscleHighlightColors={Object.keys(muscleHighlightColors).length > 0 ? muscleHighlightColors : undefined}
               animationState={animationState}
               onAnimationProgress={handleAnimationProgress}
               animationConstraints={animationConstraints}
@@ -7800,6 +7814,8 @@ ${ddxList}`;
           setClinicalReasoningPaused(false);
           lastReasoningTriggerRef.current = '';
           setActiveVisualizationId(null);
+          setMuscleHighlightColors({});
+          setBiomechanicalMuscleHighlights([]);
           setTimeout(() => triggerClinicalReasoningAnalysis(true), 100);
         }}
         subjectiveHistory={subjectiveHistoryInput}

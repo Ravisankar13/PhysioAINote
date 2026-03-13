@@ -6142,21 +6142,53 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
       const openai = new OpenAI({ apiKey, baseURL });
 
-      const { fetchClinicalEvidence, extractClinicalTerms } = await import("./services/clinicalEvidenceService");
+      const { fetchClinicalEvidenceMulti, extractClinicalTermsMulti } = await import("./services/clinicalEvidenceService");
       let evidencePapers: any[] = [];
       let evidenceContext = '';
       try {
-        const clinicalText = [
-          ...(painMarkers || []).map((m: any) => `${m.label || m.nearestBone || ''} ${m.description || ''} ${m.subjectiveHistory || ''}`),
-          subjectiveHistory || '',
-          ...(detectedSyndromes || []).map((s: any) => s.name || ''),
-        ].join(' ');
-        const terms = extractClinicalTerms(clinicalText);
-        if (terms.region || terms.condition) {
-          const evidenceResult = await fetchClinicalEvidence(terms.region, terms.condition, terms.treatment);
+        const clinicalTextParts: string[] = [];
+
+        if (painMarkers && painMarkers.length > 0) {
+          for (const m of painMarkers) {
+            clinicalTextParts.push(`${m.label || m.nearestBone || ''} ${m.type || ''} ${m.description || ''} ${m.subjectiveHistory || ''}`);
+          }
+        }
+        if (subjectiveHistory) clinicalTextParts.push(subjectiveHistory);
+        if (detectedSyndromes && detectedSyndromes.length > 0) {
+          for (const s of detectedSyndromes) clinicalTextParts.push(`${s.name || ''} ${s.description || ''}`);
+        }
+        if (postureDeviations && postureDeviations.length > 0) {
+          for (const pd of postureDeviations) clinicalTextParts.push(`${pd.region || ''} ${pd.parameter || ''} ${pd.label || ''} posture deviation postural dysfunction`);
+        }
+        if (muscleAnalysis && muscleAnalysis.length > 0) {
+          for (const m of muscleAnalysis) clinicalTextParts.push(`${m.muscle || ''} ${m.status || ''} muscle ${m.status === 'overactive' ? 'tightness overactive' : ''} ${m.status === 'inhibited' ? 'weakness inhibition underactive' : ''}`);
+        }
+        if (forceAnalysis && forceAnalysis.length > 0) {
+          for (const f of forceAnalysis) clinicalTextParts.push(`${f.joint || ''} ${f.status || ''} force loading`);
+        }
+        if (fascialChainAnalysis && fascialChainAnalysis.length > 0) {
+          for (const fc of fascialChainAnalysis) clinicalTextParts.push(`${fc.chainName || ''} fascial chain tension myofascial`);
+        }
+        if (scarTissueAnalysis && scarTissueAnalysis.length > 0) {
+          for (const sc of scarTissueAnalysis) clinicalTextParts.push(`${sc.location || ''} ${sc.type || ''} scar tissue adhesion fascial restriction`);
+        }
+        if (painDriverSummary && painDriverSummary.length > 0) {
+          for (const pd of painDriverSummary) clinicalTextParts.push(`${pd.label || ''} ${pd.category || ''} ${pd.mechanism || ''}`);
+        }
+        if (compensationAnalysis) {
+          if (compensationAnalysis.movementName) clinicalTextParts.push(compensationAnalysis.movementName);
+          if (compensationAnalysis.compensations) {
+            for (const c of compensationAnalysis.compensations) clinicalTextParts.push(`${c.source || ''} ${c.compensator || ''} compensation`);
+          }
+        }
+
+        const clinicalText = clinicalTextParts.join(' ');
+        const terms = extractClinicalTermsMulti(clinicalText);
+        if (terms.regions.length > 0 || terms.conditions.length > 0) {
+          const evidenceResult = await fetchClinicalEvidenceMulti(terms.regions, terms.conditions, terms.treatments);
           evidencePapers = evidenceResult.papers.slice(0, 8);
           if (evidencePapers.length > 0) {
-            evidenceContext = `\n\nPUBMED EVIDENCE (${evidencePapers.length} papers retrieved — cite these using [Author, Year] format with PMIDs):\n${evidencePapers.map((p: any, i: number) => `${i+1}. ${p.authors} (${p.year}). "${p.title}". ${p.journal}. PMID: ${p.pmid}. [Grade ${p.evidenceGrade}, ${p.studyType}]${p.abstract ? '\n   Abstract: ' + p.abstract.substring(0, 300) + '...' : ''}`).join('\n')}`;
+            evidenceContext = `\n\nPUBMED EVIDENCE (${evidencePapers.length} papers retrieved for: regions=[${terms.regions.join(', ')}], conditions=[${terms.conditions.join(', ')}] — cite these using [Author, Year] format with PMIDs):\n${evidencePapers.map((p: any, i: number) => `${i+1}. ${p.authors} (${p.year}). "${p.title}". ${p.journal}. PMID: ${p.pmid}. [Grade ${p.evidenceGrade}, ${p.studyType}]${p.abstract ? '\n   Abstract: ' + p.abstract.substring(0, 300) + '...' : ''}`).join('\n')}`;
           }
         }
       } catch (evidenceErr: any) {

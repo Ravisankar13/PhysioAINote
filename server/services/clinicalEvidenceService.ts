@@ -241,21 +241,152 @@ export async function fetchClinicalEvidence(
   }
 }
 
+export async function fetchClinicalEvidenceMulti(
+  regions: string[],
+  conditions: string[],
+  treatments: string[]
+): Promise<ClinicalEvidenceResult> {
+  const regionPart = regions.filter(Boolean).slice(0, 3);
+  const conditionPart = conditions.filter(Boolean).slice(0, 3);
+  const treatmentPart = treatments.filter(Boolean).slice(0, 2);
+
+  const queryParts: string[] = [];
+  if (regionPart.length > 0) queryParts.push(regionPart.length === 1 ? regionPart[0] : `(${regionPart.join(' OR ')})`);
+  if (conditionPart.length > 0) queryParts.push(conditionPart.length === 1 ? conditionPart[0] : `(${conditionPart.join(' OR ')})`);
+  if (treatmentPart.length > 0) queryParts.push(treatmentPart.length === 1 ? treatmentPart[0] : `(${treatmentPart.join(' OR ')})`);
+
+  if (queryParts.length === 0) {
+    return { papers: [], overallGrade: 'D', confidence: 'Very Low', searchQuery: '', source: 'fallback' };
+  }
+
+  const combinedRegion = regionPart.join(' ');
+  const combinedCondition = conditionPart.join(' ');
+  const combinedTreatment = treatmentPart.join(' ');
+
+  const cacheKey = makeCacheKey(combinedRegion, combinedCondition, combinedTreatment);
+  const cached = evidenceCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.result;
+  }
+
+  const base = queryParts.join(' AND ');
+  const searchQuery = `(${base}) AND (physiotherapy OR "physical therapy" OR rehabilitation) AND (Randomized Controlled Trial[pt] OR systematic review[ti] OR meta-analysis[ti] OR clinical trial[pt])`;
+  const searchTerms = [...regionPart, ...conditionPart, ...treatmentPart];
+
+  try {
+    const searchResponse = await axios.get(`${PUBMED_BASE}/esearch.fcgi`, {
+      params: {
+        db: 'pubmed',
+        term: searchQuery,
+        retmax: 8,
+        retmode: 'json',
+        sort: 'relevance',
+        datetype: 'pdat',
+        mindate: '2015',
+        maxdate: new Date().getFullYear(),
+      },
+      timeout: 6000,
+    });
+
+    const ids: string[] = searchResponse.data?.esearchresult?.idlist || [];
+    if (ids.length === 0) throw new Error('No PubMed results');
+
+    const fetchResponse = await axios.get(`${PUBMED_BASE}/efetch.fcgi`, {
+      params: { db: 'pubmed', id: ids.join(','), retmode: 'xml' },
+      timeout: 8000,
+    });
+
+    const parsed = parseEfetchXml(fetchResponse.data);
+    if (parsed.length === 0) throw new Error('XML parse returned 0 articles');
+
+    const papers: ClinicalPaper[] = parsed.map(p => {
+      const studyType = classifyStudyType(p.title, p.abstract);
+      const grade = gradeFromStudyType(studyType, p.year);
+      return {
+        title: p.title,
+        authors: p.authors,
+        journal: p.journal,
+        year: p.year,
+        pmid: p.pmid,
+        abstract: p.abstract,
+        studyType,
+        evidenceGrade: grade,
+        relevanceScore: computeRelevance(p.title, p.abstract, searchTerms),
+        pubmedUrl: `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/`,
+      };
+    }).sort((a, b) => {
+      const gradeOrder = { A: 0, B: 1, C: 2, D: 3 };
+      if (gradeOrder[a.evidenceGrade] !== gradeOrder[b.evidenceGrade]) {
+        return gradeOrder[a.evidenceGrade] - gradeOrder[b.evidenceGrade];
+      }
+      return b.relevanceScore - a.relevanceScore;
+    });
+
+    const { grade, confidence } = overallGradeFromPapers(papers);
+    const result: ClinicalEvidenceResult = { papers: papers.slice(0, 5), overallGrade: grade, confidence, searchQuery, source: 'pubmed' };
+    evidenceCache.set(cacheKey, { result, timestamp: Date.now() });
+    return result;
+
+  } catch (err: any) {
+    console.warn('PubMed multi-term fetch failed, using fallback:', err.message);
+    const fallback = getFallbackPapers(regionPart[0] || '', conditionPart[0] || '');
+    const { grade, confidence } = overallGradeFromPapers(fallback);
+    const result: ClinicalEvidenceResult = { papers: fallback, overallGrade: grade, confidence, searchQuery, source: 'fallback' };
+    evidenceCache.set(cacheKey, { result, timestamp: Date.now() });
+    return result;
+  }
+}
+
 export function extractClinicalTerms(message: string): { region: string; condition: string; treatment: string } {
+  const multi = extractClinicalTermsMulti(message);
+  return {
+    region: multi.regions[0] || '',
+    condition: multi.conditions[0] || '',
+    treatment: multi.treatments[0] || '',
+  };
+}
+
+export function extractClinicalTermsMulti(message: string): { regions: string[]; conditions: string[]; treatments: string[] } {
   const lower = message.toLowerCase();
-  const regions = ['shoulder', 'knee', 'hip', 'ankle', 'neck', 'cervical', 'thoracic', 'lumbar', 'low back', 'elbow', 'wrist', 'foot', 'sacroiliac', 'pelvis'];
-  const conditions = ['tendinopathy', 'tendinitis', 'impingement', 'tear', 'sprain', 'strain', 'fracture', 'arthritis', 'osteoarthritis', 'bursitis', 'radiculopathy', 'disc', 'meniscus', 'ligament', 'fasciitis', 'syndrome', 'stenosis', 'instability', 'dislocation', 'frozen shoulder', 'adhesive capsulitis', 'plantar fasciitis', 'carpal tunnel', 'patellofemoral'];
-  const treatments = ['exercise', 'manual therapy', 'mobilization', 'manipulation', 'stretching', 'strengthening', 'eccentric', 'isometric', 'dry needling', 'taping', 'ultrasound', 'shockwave', 'laser', 'massage'];
+  const regions = [
+    'shoulder', 'knee', 'hip', 'ankle', 'neck', 'cervical', 'thoracic', 'lumbar',
+    'low back', 'elbow', 'wrist', 'foot', 'sacroiliac', 'pelvis', 'spine',
+    'scapula', 'clavicle', 'rib', 'jaw', 'tmj', 'head', 'hamstring', 'quadriceps',
+    'calf', 'shin', 'groin', 'glute', 'forearm', 'hand', 'finger', 'thumb', 'toe',
+  ];
+  const conditions = [
+    'tendinopathy', 'tendinitis', 'impingement', 'tear', 'sprain', 'strain',
+    'fracture', 'arthritis', 'osteoarthritis', 'bursitis', 'radiculopathy',
+    'disc', 'meniscus', 'ligament', 'fasciitis', 'syndrome', 'stenosis',
+    'instability', 'dislocation', 'frozen shoulder', 'adhesive capsulitis',
+    'plantar fasciitis', 'carpal tunnel', 'patellofemoral',
+    'kyphosis', 'lordosis', 'scoliosis', 'anterior pelvic tilt', 'posterior pelvic tilt',
+    'forward head posture', 'lateral shift', 'upper cross syndrome', 'lower cross syndrome',
+    'trigger point', 'myofascial pain', 'muscle spasm', 'muscle weakness',
+    'muscle inhibition', 'muscle tightness', 'overactive', 'underactive',
+    'compensation', 'postural dysfunction', 'malalignment',
+    'rotator cuff', 'labral', 'nerve entrapment', 'neuropathy',
+    'sciatica', 'piriformis', 'thoracic outlet', 'whiplash',
+    'scar tissue', 'adhesion', 'fibrosis', 'fascial restriction',
+  ];
+  const treatments = [
+    'exercise', 'manual therapy', 'mobilization', 'manipulation', 'stretching',
+    'strengthening', 'eccentric', 'isometric', 'dry needling', 'taping',
+    'ultrasound', 'shockwave', 'laser', 'massage',
+    'myofascial release', 'soft tissue', 'postural correction', 'motor control',
+    'proprioception', 'neuromuscular', 'stabilization', 'core stability',
+    'balance training', 'gait training', 'ergonomic',
+  ];
 
-  let region = '';
-  let condition = '';
-  let treatment = '';
+  const foundRegions: string[] = [];
+  const foundConditions: string[] = [];
+  const foundTreatments: string[] = [];
 
-  for (const r of regions) { if (lower.includes(r)) { region = r; break; } }
-  for (const c of conditions) { if (lower.includes(c)) { condition = c; break; } }
-  for (const t of treatments) { if (lower.includes(t)) { treatment = t; break; } }
+  for (const r of regions) { if (lower.includes(r) && !foundRegions.includes(r)) foundRegions.push(r); }
+  for (const c of conditions) { if (lower.includes(c) && !foundConditions.includes(c)) foundConditions.push(c); }
+  for (const t of treatments) { if (lower.includes(t) && !foundTreatments.includes(t)) foundTreatments.push(t); }
 
-  return { region, condition, treatment };
+  return { regions: foundRegions.slice(0, 4), conditions: foundConditions.slice(0, 4), treatments: foundTreatments.slice(0, 3) };
 }
 
 export function formatPapersForPrompt(papers: ClinicalPaper[]): string {

@@ -2810,6 +2810,19 @@ ${ddxList}`;
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const latestAnalysisRef = useRef<{ analysis: typeof muscleAnalysis; forces: typeof hudForceAnalysis; predicted: PredictedPainSpot[]; pain: typeof painMarkers; integrity: typeof chainIntegrityScores; influence: typeof influenceMap } | null>(null);
+
+  latestAnalysisRef.current = {
+    analysis: muscleAnalysis ?? hudMuscleAnalysis,
+    forces: hudForceAnalysis,
+    predicted: predictedPainSpots,
+    pain: painMarkers,
+    integrity: chainIntegrityScores,
+    influence: influenceMap,
+  };
+
+  const [debouncedSnapshot, setDebouncedSnapshot] = useState<typeof latestAnalysisRef.current>(null);
+
   useEffect(() => {
     poseRevisionRef.current += 1;
     const currentRevision = poseRevisionRef.current;
@@ -2819,15 +2832,22 @@ ${ddxList}`;
 
     if (!showTreatmentOverlay && !showPredictedPain) return;
 
-    debounceTimerRef.current = setTimeout(() => {
+    const captureSnapshot = () => {
       if (poseRevisionRef.current !== currentRevision) return;
+      if (latestAnalysisRef.current) {
+        setDebouncedSnapshot({ ...latestAnalysisRef.current });
+      }
       setStableReevalCounter(c => c + 1);
+    };
+
+    debounceTimerRef.current = setTimeout(() => {
+      captureSnapshot();
       intervalRef.current = setInterval(() => {
         if (poseRevisionRef.current !== currentRevision) {
           if (intervalRef.current) clearInterval(intervalRef.current);
           return;
         }
-        setStableReevalCounter(c => c + 1);
+        captureSnapshot();
       }, 3000);
     }, 2500);
 
@@ -2839,15 +2859,19 @@ ${ddxList}`;
 
   const liveTreatmentPriorities = useMemo((): TreatmentPriorityResult => {
     void stableReevalCounter;
-    const analysis = muscleAnalysis ?? hudMuscleAnalysis;
+    const snap = debouncedSnapshot;
+    if (!snap) {
+      return { targets: [], summary: { totalTargets: 0, rootCauses: 0, compensations: 0, criticalChain: null, syndromes: [], treatmentSequence: [], syndromeProtocols: [] } };
+    }
+    const analysis = snap.analysis;
     const hasNonNormal = analysis?.allMuscles?.some(m => m.clinicalStatus !== 'normal');
     if (!analysis || !hasNonNormal) {
       return { targets: [], summary: { totalTargets: 0, rootCauses: 0, compensations: 0, criticalChain: null, syndromes: [], treatmentSequence: [], syndromeProtocols: [] } };
     }
     const integrityObj: Record<string, number> = {};
-    chainIntegrityScores.forEach((val, key) => { integrityObj[key] = val.score; });
+    snap.integrity.forEach((val, key) => { integrityObj[key] = val.score; });
 
-    const combinedPainMarkers: PainMarkerSimple[] = painMarkers.map(pm => ({
+    const combinedPainMarkers: PainMarkerSimple[] = snap.pain.map(pm => ({
       id: pm.id,
       position: pm.position,
       label: pm.anatomicalLabel || pm.nearestBone,
@@ -2855,7 +2879,7 @@ ${ddxList}`;
       weight: 1.0,
       isPredicted: false,
     }));
-    for (const spot of predictedPainSpots) {
+    for (const spot of snap.predicted) {
       combinedPainMarkers.push({
         id: spot.id,
         position: spot.position,
@@ -2866,9 +2890,9 @@ ${ddxList}`;
       });
     }
 
-    const base = computeFullTreatmentPriorities(analysis, influenceMap, integrityObj, combinedPainMarkers);
+    const base = computeFullTreatmentPriorities(analysis, snap.influence, integrityObj, combinedPainMarkers);
 
-    const forces = hudForceAnalysis;
+    const forces = snap.forces;
     if (forces) {
       const mobilizationTargets = computeJointMobilizationTargets(forces);
       if (mobilizationTargets.length > 0) {
@@ -2883,7 +2907,7 @@ ${ddxList}`;
     }
 
     return base;
-  }, [stableReevalCounter, muscleAnalysis, hudMuscleAnalysis, influenceMap, chainIntegrityScores, painMarkers, predictedPainSpots, hudForceAnalysis]);
+  }, [stableReevalCounter, debouncedSnapshot]);
 
   useEffect(() => {
     if (treatmentPriorities.targets.length === 0) {

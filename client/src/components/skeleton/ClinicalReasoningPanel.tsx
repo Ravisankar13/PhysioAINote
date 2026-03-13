@@ -890,25 +890,16 @@ export default function ClinicalReasoningPanel({
                           <span className="text-[9px] text-gray-500 ml-auto">{report.totalDriverCount} driver{report.totalDriverCount !== 1 ? 's' : ''}</span>
                         </div>
                         <div className="space-y-1">
-                          {report.drivers.slice(0, 5).map((driver, idx) => {
+                          {(expandedSections[`drivers_${report.markerId}`] ? report.drivers : report.drivers.slice(0, 5)).map((driver, idx) => {
                             const colors = severityColors[driver.severity] || severityColors.low;
                             const driverVizId = `paindriver-${driver.id}`;
                             const driverActive = activeVisualizationId === driverVizId;
                             const driverText = `${driver.label} ${driver.mechanism} ${driver.relatedStructures.join(' ')}`;
-                            const categoryToVizType: Record<string, VisualizationRequest['type']> = {
-                              structural: 'painDriver',
-                              biomechanical: 'painDriver',
-                              myofascial: 'painDriver',
-                              fascial_chain: 'painDriver',
-                              scar_tissue: 'painDriver',
-                              referred: 'painDriver',
-                              compensatory: 'painDriver',
-                            };
                             return (
                               <div
                                 key={driver.id}
                                 className={`rounded p-1.5 border transition-colors ${onVisualizationRequest ? 'cursor-pointer' : ''} ${driverActive ? 'bg-emerald-900/30 border-emerald-500/40 ring-1 ring-emerald-500/20' : `${colors} bg-opacity-30 hover:brightness-125`}`}
-                                onClick={() => handleVisualizationClick(driverVizId, categoryToVizType[driver.category] || 'painDriver', driver.label, driverText, driver.relatedStructures)}
+                                onClick={() => handleVisualizationClick(driverVizId, 'painDriver', driver.label, driverText, driver.relatedStructures)}
                               >
                                 <div className="flex items-center gap-1">
                                   <span className="text-[10px]">{categoryIcons[driver.category] || '•'}</span>
@@ -925,6 +916,14 @@ export default function ClinicalReasoningPanel({
                               </div>
                             );
                           })}
+                          {report.drivers.length > 5 && (
+                            <button
+                              className="text-[9px] text-rose-400 hover:text-rose-300 w-full text-center py-0.5"
+                              onClick={() => toggleSection(`drivers_${report.markerId}`)}
+                            >
+                              {expandedSections[`drivers_${report.markerId}`] ? 'Show less' : `Show all ${report.drivers.length} drivers`}
+                            </button>
+                          )}
                         </div>
                         {report.narrative && (
                           <p className="text-[9px] text-gray-500 mt-1.5 italic border-t border-gray-700/30 pt-1">{report.narrative}</p>

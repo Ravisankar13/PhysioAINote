@@ -160,7 +160,7 @@ export interface PosturalAnalysis {
 
 export interface VisualizationRequest {
   id: string;
-  type: 'hypothesis' | 'rootCause' | 'treatment' | 'biomechanical';
+  type: 'hypothesis' | 'rootCause' | 'treatment' | 'biomechanical' | 'painDriver';
   label: string;
   regions: string[];
   muscleHints: { muscle: string; status: 'weak' | 'tight' | 'overactive' | 'inhibited' | 'normal' }[];
@@ -889,13 +889,34 @@ export default function ClinicalReasoningPanel({
                         <div className="space-y-1">
                           {report.drivers.slice(0, 5).map((driver, idx) => {
                             const colors = severityColors[driver.severity] || severityColors.low;
+                            const driverVizId = `paindriver-${driver.id}`;
+                            const driverActive = activeVisualizationId === driverVizId;
+                            const driverText = `${driver.label} ${driver.mechanism} ${driver.relatedStructures.join(' ')}`;
+                            const categoryToVizType: Record<string, VisualizationRequest['type']> = {
+                              structural: 'painDriver',
+                              biomechanical: 'painDriver',
+                              myofascial: 'painDriver',
+                              fascial_chain: 'painDriver',
+                              scar_tissue: 'painDriver',
+                              referred: 'painDriver',
+                              compensatory: 'painDriver',
+                            };
                             return (
-                              <div key={driver.id} className={`rounded p-1.5 border ${colors} bg-opacity-30`}>
+                              <div
+                                key={driver.id}
+                                className={`rounded p-1.5 border transition-colors ${onVisualizationRequest ? 'cursor-pointer' : ''} ${driverActive ? 'bg-emerald-900/30 border-emerald-500/40 ring-1 ring-emerald-500/20' : `${colors} bg-opacity-30 hover:brightness-125`}`}
+                                onClick={() => handleVisualizationClick(driverVizId, categoryToVizType[driver.category] || 'painDriver', driver.label, driverText)}
+                              >
                                 <div className="flex items-center gap-1">
                                   <span className="text-[10px]">{categoryIcons[driver.category] || '•'}</span>
                                   <span className="text-[10px] font-medium flex-1">{driver.label}</span>
                                   <span className="text-[8px] px-1 py-0.5 rounded bg-gray-900/50 text-gray-400">#{idx + 1}</span>
                                   <span className="text-[8px] font-mono">{driver.evidenceScore}%</span>
+                                  {onVisualizationRequest && (
+                                    <span className={`flex-shrink-0 ${driverActive ? 'text-emerald-400' : 'text-gray-500'}`}>
+                                      {driverActive ? <Eye className="h-2.5 w-2.5" /> : <EyeOff className="h-2.5 w-2.5" />}
+                                    </span>
+                                  )}
                                 </div>
                                 <p className="text-[9px] text-gray-400 mt-0.5">{driver.mechanism}</p>
                               </div>

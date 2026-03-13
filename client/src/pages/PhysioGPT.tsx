@@ -1444,7 +1444,7 @@ ${ddxList}`;
     }
 
     const boneHighlights: Array<{ boneName: string; color: number; intensity: number }> = [];
-    if (request.type === 'rootCause' || request.type === 'biomechanical') {
+    if (request.type === 'rootCause' || request.type === 'biomechanical' || request.type === 'painDriver') {
       const statusColorHex = request.muscleHints.length > 0
         ? MUSCLE_STATUS_COLORS[request.muscleHints[0].status] || MUSCLE_STATUS_COLORS.normal
         : MUSCLE_STATUS_COLORS.normal;

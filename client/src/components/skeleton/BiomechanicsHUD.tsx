@@ -73,28 +73,30 @@ export default function BiomechanicsHUD({
       dissolveTimerRef.current = window.setTimeout(() => {
         setVisible(false);
       }, 3000);
-
-      const newPulse = new Set<string>();
-      const prev = prevThresholdsRef.current;
-      const curForceStatus = forceAnalysis?.joints?.[0]?.status || 'normal';
-      const curChainScore = (() => { let min = 100; chainIntegrityScores.forEach(e => { if (e.score < min) min = e.score; }); return min; })();
-      const curSyndromes = muscleAnalysis ? computeMuscleBalanceRatios(muscleAnalysis).filter(r => r.syndrome).length : 0;
-
-      if (curForceStatus !== prev.forceStatus && (curForceStatus === 'high' || curForceStatus === 'very_high')) newPulse.add('forces');
-      if (curChainScore < 60 && prev.chainScore >= 60) newPulse.add('chains');
-      if (curSyndromes > prev.syndromes) newPulse.add('muscle');
-
-      prevThresholdsRef.current = { forceStatus: curForceStatus, chainScore: curChainScore, syndromes: curSyndromes };
-
-      if (newPulse.size > 0) {
-        setPulsingIds(newPulse);
-        setTimeout(() => setPulsingIds(new Set()), 600);
-      }
     }
     return () => {
       if (dissolveTimerRef.current) clearTimeout(dissolveTimerRef.current);
     };
-  }, [manipulationCounter, forceAnalysis, chainIntegrityScores, muscleAnalysis]);
+  }, [manipulationCounter]);
+
+  useEffect(() => {
+    const prev = prevThresholdsRef.current;
+    const curForceStatus = forceAnalysis?.joints?.[0]?.status || 'normal';
+    const curChainScore = (() => { let min = 100; chainIntegrityScores.forEach(e => { if (e.score < min) min = e.score; }); return min; })();
+    const curSyndromes = muscleAnalysis ? computeMuscleBalanceRatios(muscleAnalysis).filter(r => r.syndrome).length : 0;
+
+    const newPulse = new Set<string>();
+    if (curForceStatus !== prev.forceStatus && (curForceStatus === 'high' || curForceStatus === 'very_high')) newPulse.add('forces');
+    if (curChainScore < 60 && prev.chainScore >= 60) newPulse.add('chains');
+    if (curSyndromes > prev.syndromes) newPulse.add('muscle');
+
+    prevThresholdsRef.current = { forceStatus: curForceStatus, chainScore: curChainScore, syndromes: curSyndromes };
+
+    if (newPulse.size > 0) {
+      setPulsingIds(newPulse);
+      setTimeout(() => setPulsingIds(new Set()), 600);
+    }
+  }, [forceAnalysis, chainIntegrityScores, muscleAnalysis]);
 
   const topJoint = useMemo(() => {
     if (!forceAnalysis) return null;

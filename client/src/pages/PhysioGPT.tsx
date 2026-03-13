@@ -499,6 +499,7 @@ export default function PhysioGPT() {
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
+  const [visualizationBoneHighlights, setVisualizationBoneHighlights] = useState<Array<{ boneName: string; color: number; intensity: number }>>([]);
   const [activeVisualizationId, setActiveVisualizationId] = useState<string | null>(null);
   const lastReasoningTriggerRef = useRef<string>('');
   const compensationDataRef = useRef<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
@@ -1257,12 +1258,30 @@ ${ddxList}`;
     'si joint': ['core', 'glute_r', 'glute_l'],
   }), []);
 
+  const MUSCLE_STATUS_COLORS: Record<string, string> = useMemo(() => ({
+    weak: '#4488ff',
+    tight: '#ff4444',
+    overactive: '#ff8800',
+    inhibited: '#9944ff',
+    normal: '#44ccaa',
+  }), []);
+
+  const inferMuscleStatusFromText = useCallback((text: string): 'weak' | 'tight' | 'overactive' | 'inhibited' | 'normal' => {
+    const lower = text.toLowerCase();
+    if (/\b(weak|weakness|underactive|atrophy|inhibit)\b/.test(lower)) return 'weak';
+    if (/\b(tight|tightness|shortened|contracture|stiff|restricted)\b/.test(lower)) return 'tight';
+    if (/\b(overactive|hyperactive|spasm|hypertonic)\b/.test(lower)) return 'overactive';
+    if (/\b(inhibited|inhibition|suppressed)\b/.test(lower)) return 'inhibited';
+    return 'normal';
+  }, []);
+
   const handleBiomechanicalLinkClick = useCallback((link: BiomechanicalLink | null) => {
     setActiveVisualizationId(null);
-    setMuscleHighlightColors({});
+    setVisualizationBoneHighlights([]);
     if (!link) {
       setActiveBiomechanicalLink(null);
       setBiomechanicalMuscleHighlights([]);
+      setMuscleHighlightColors({});
       return;
     }
     setActiveBiomechanicalLink(link);
@@ -1290,16 +1309,18 @@ ${ddxList}`;
     const primaryMuscles = findMuscles(link.primaryRegion);
     const connectedMuscles = findMuscles(link.connectedRegion);
     const allMuscles = Array.from(new Set([...primaryMuscles, ...connectedMuscles]));
-    setBiomechanicalMuscleHighlights(allMuscles);
-  }, [BIOMECHANICAL_REGION_TO_MUSCLES]);
 
-  const MUSCLE_STATUS_COLORS: Record<string, string> = useMemo(() => ({
-    weak: '#4488ff',
-    tight: '#ff4444',
-    overactive: '#ff8800',
-    inhibited: '#9944ff',
-    normal: '#44ccaa',
-  }), []);
+    const linkText = `${link.mechanism} ${link.clinicalRelevance}`;
+    const inferredStatus = inferMuscleStatusFromText(linkText);
+    const statusColor = MUSCLE_STATUS_COLORS[inferredStatus] || MUSCLE_STATUS_COLORS.normal;
+    const colorMap: Record<string, string> = {};
+    for (const m of allMuscles) {
+      colorMap[m] = statusColor;
+    }
+
+    setBiomechanicalMuscleHighlights(allMuscles);
+    setMuscleHighlightColors(colorMap);
+  }, [BIOMECHANICAL_REGION_TO_MUSCLES, inferMuscleStatusFromText, MUSCLE_STATUS_COLORS]);
 
   const VISUALIZATION_MUSCLE_MAP: Record<string, string[]> = useMemo(() => ({
     'deltoid': ['deltoid_r', 'deltoid_l'],
@@ -1352,12 +1373,30 @@ ${ddxList}`;
     'diaphragm': ['core', 'chest'],
   }), []);
 
+  const REGION_TO_BONE_NAMES: Record<string, string[]> = useMemo(() => ({
+    'shoulder': ['mixamorig:LeftShoulder', 'mixamorig:RightShoulder', 'mixamorig:LeftArm', 'mixamorig:RightArm'],
+    'knee': ['mixamorig:LeftLeg', 'mixamorig:RightLeg'],
+    'hip': ['mixamorig:LeftUpLeg', 'mixamorig:RightUpLeg', 'mixamorig:Hips'],
+    'ankle': ['mixamorig:LeftFoot', 'mixamorig:RightFoot'],
+    'neck': ['mixamorig:Neck', 'mixamorig:Head'],
+    'cervical': ['mixamorig:Neck', 'mixamorig:Head'],
+    'thoracic': ['mixamorig:Spine1', 'mixamorig:Spine2'],
+    'lumbar': ['mixamorig:Spine', 'mixamorig:Hips'],
+    'low back': ['mixamorig:Spine', 'mixamorig:Hips'],
+    'pelvis': ['mixamorig:Hips', 'mixamorig:LeftUpLeg', 'mixamorig:RightUpLeg'],
+    'spine': ['mixamorig:Spine', 'mixamorig:Spine1', 'mixamorig:Spine2'],
+    'elbow': ['mixamorig:LeftForeArm', 'mixamorig:RightForeArm'],
+    'wrist': ['mixamorig:LeftHand', 'mixamorig:RightHand'],
+    'sacroiliac': ['mixamorig:Hips'],
+  }), []);
+
   const handleVisualizationRequest = useCallback((request: VisualizationRequest | null) => {
     setActiveBiomechanicalLink(null);
     if (!request) {
       setActiveVisualizationId(null);
       setBiomechanicalMuscleHighlights([]);
       setMuscleHighlightColors({});
+      setVisualizationBoneHighlights([]);
       return;
     }
     setActiveVisualizationId(request.id);
@@ -1401,9 +1440,37 @@ ${ddxList}`;
       }
     }
 
+    const boneHighlights: Array<{ boneName: string; color: number; intensity: number }> = [];
+    if (request.type === 'rootCause' || request.type === 'biomechanical') {
+      const statusColorHex = request.muscleHints.length > 0
+        ? MUSCLE_STATUS_COLORS[request.muscleHints[0].status] || MUSCLE_STATUS_COLORS.normal
+        : MUSCLE_STATUS_COLORS.normal;
+      const boneColor = parseInt(statusColorHex.replace('#', ''), 16);
+
+      const allText = `${request.label} ${request.regions.join(' ')}`.toLowerCase();
+      const boneNames = new Set<string>();
+      for (const [key, bones] of Object.entries(REGION_TO_BONE_NAMES)) {
+        if (allText.includes(key)) {
+          bones.forEach(b => boneNames.add(b));
+        }
+      }
+      for (const region of request.regions) {
+        const lower = region.toLowerCase().trim();
+        for (const [key, bones] of Object.entries(REGION_TO_BONE_NAMES)) {
+          if (key.includes(lower) || lower.includes(key)) {
+            bones.forEach(b => boneNames.add(b));
+          }
+        }
+      }
+      for (const boneName of boneNames) {
+        boneHighlights.push({ boneName, color: boneColor, intensity: 0.6 });
+      }
+    }
+
     setBiomechanicalMuscleHighlights(Array.from(muscleGroupIds));
     setMuscleHighlightColors(colorMap);
-  }, [BIOMECHANICAL_REGION_TO_MUSCLES, VISUALIZATION_MUSCLE_MAP, MUSCLE_STATUS_COLORS]);
+    setVisualizationBoneHighlights(boneHighlights);
+  }, [BIOMECHANICAL_REGION_TO_MUSCLES, VISUALIZATION_MUSCLE_MAP, MUSCLE_STATUS_COLORS, REGION_TO_BONE_NAMES]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;
@@ -3109,10 +3176,11 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 ? [
+              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 ? [
                 ...(chainHighlightBones || []),
                 ...muscleOverrideHighlights,
                 ...influenceHighlights,
+                ...visualizationBoneHighlights,
               ] : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
@@ -7816,6 +7884,7 @@ ${ddxList}`;
           setActiveVisualizationId(null);
           setMuscleHighlightColors({});
           setBiomechanicalMuscleHighlights([]);
+          setVisualizationBoneHighlights([]);
           setTimeout(() => triggerClinicalReasoningAnalysis(true), 100);
         }}
         subjectiveHistory={subjectiveHistoryInput}

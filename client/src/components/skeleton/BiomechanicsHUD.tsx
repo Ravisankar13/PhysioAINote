@@ -18,7 +18,6 @@ interface BiomechanicsHUDProps {
   onOpenForceOverlay: () => void;
   onOpenMuscleOverlay: () => void;
   onOpenChainExplorer: () => void;
-  manipulationCounter: number;
 }
 
 function getForceColor(status: string): string {
@@ -57,27 +56,9 @@ export default function BiomechanicsHUD({
   onOpenForceOverlay,
   onOpenMuscleOverlay,
   onOpenChainExplorer,
-  manipulationCounter,
 }: BiomechanicsHUDProps) {
-  const [visible, setVisible] = useState(false);
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
-  const dissolveTimerRef = useRef<number | null>(null);
-  const prevCounterRef = useRef(manipulationCounter);
   const prevThresholdsRef = useRef<{ forceStatus: string; chainScore: number; syndromes: number }>({ forceStatus: 'normal', chainScore: 100, syndromes: 0 });
-
-  useEffect(() => {
-    if (manipulationCounter !== prevCounterRef.current) {
-      prevCounterRef.current = manipulationCounter;
-      setVisible(true);
-      if (dissolveTimerRef.current) clearTimeout(dissolveTimerRef.current);
-      dissolveTimerRef.current = window.setTimeout(() => {
-        setVisible(false);
-      }, 3000);
-    }
-    return () => {
-      if (dissolveTimerRef.current) clearTimeout(dissolveTimerRef.current);
-    };
-  }, [manipulationCounter]);
 
   useEffect(() => {
     const prev = prevThresholdsRef.current;
@@ -124,9 +105,6 @@ export default function BiomechanicsHUD({
     const ratios = computeMuscleBalanceRatios(muscleAnalysis.allMuscles);
     return ratios.filter(r => r.status !== 'balanced').length;
   }, [muscleAnalysis]);
-
-  const hasData = forceAnalysis || muscleAnalysis || chainIntegrityScores.size > 0 || weightDistribution;
-  if (!hasData) return null;
 
   const circles: Array<{
     id: string;
@@ -199,12 +177,6 @@ export default function BiomechanicsHUD({
     <style>{`@keyframes hud-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }`}</style>
     <div
       className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3"
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: `translateX(-50%) scale(${visible ? 1 : 0.85})`,
-        transition: 'opacity 0.4s ease-in-out, transform 0.4s ease-in-out',
-        pointerEvents: visible ? 'auto' : 'none',
-      }}
     >
       {circles.map((c) => {
         const Icon = c.icon;

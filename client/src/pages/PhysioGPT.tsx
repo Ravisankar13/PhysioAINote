@@ -477,7 +477,7 @@ export default function PhysioGPT() {
   const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
   const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment'>('chat');
-  const [manipulationCounter, setManipulationCounter] = useState(0);
+
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
   const skeletonContainerRef = useRef<HTMLDivElement>(null);
@@ -2686,20 +2686,6 @@ ${ddxList}`;
     }
     return scores;
   }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, compensatedOverrides, crossMuscleEffects]);
-
-  const prevConfigRef = useRef(effectiveModelConfig);
-  useEffect(() => {
-    if (prevConfigRef.current !== effectiveModelConfig) {
-      prevConfigRef.current = effectiveModelConfig;
-      setManipulationCounter(c => c + 1);
-    }
-  }, [effectiveModelConfig]);
-
-  useEffect(() => {
-    if (showJointControls || muscleMode || cameraPoseActive) {
-      setManipulationCounter(c => c + 1);
-    }
-  }, [showJointControls, muscleMode, cameraPoseActive]);
 
   const hudForceAnalysis = useMemo(() => {
     if (forceMode && forceAnalysis) return forceAnalysis;
@@ -6797,7 +6783,6 @@ ${ddxList}`;
               weightDistribution={hudWeightDistribution}
               muscleAnalysis={hudMuscleAnalysis}
               chainIntegrityScores={hudChainIntegrity}
-              manipulationCounter={manipulationCounter}
               onOpenForceOverlay={() => { setForceMode(true); }}
               onOpenMuscleOverlay={() => { setMuscleMode(true); }}
               onOpenChainExplorer={() => { setChainExplorerMode(true); setChainIntegrityMode(true); }}

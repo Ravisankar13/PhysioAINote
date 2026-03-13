@@ -198,11 +198,12 @@ export default function BiomechanicsHUD({
     <>
     <style>{`@keyframes hud-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }`}</style>
     <div
-      className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 pointer-events-none"
+      className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3"
       style={{
         opacity: visible ? 1 : 0,
         transform: `translateX(-50%) scale(${visible ? 1 : 0.85})`,
         transition: 'opacity 0.4s ease-in-out, transform 0.4s ease-in-out',
+        pointerEvents: visible ? 'auto' : 'none',
       }}
     >
       {circles.map((c) => {
@@ -212,7 +213,7 @@ export default function BiomechanicsHUD({
           <button
             key={c.id}
             onClick={c.onClick}
-            className={`pointer-events-auto w-[60px] h-[60px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
+            className={`w-[60px] h-[60px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
             style={isPulsing ? { animation: 'hud-pulse 0.3s ease-in-out 2' } : undefined}
             title={c.label}
           >

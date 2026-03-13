@@ -32,6 +32,8 @@ import {
   ClipboardCheck,
   ScrollText,
   RotateCcw,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
@@ -156,6 +158,14 @@ export interface PosturalAnalysis {
   recommendedCorrections: string[];
 }
 
+export interface VisualizationRequest {
+  id: string;
+  type: 'hypothesis' | 'rootCause' | 'treatment' | 'biomechanical';
+  label: string;
+  regions: string[];
+  muscleHints: { muscle: string; status: 'weak' | 'tight' | 'overactive' | 'inhibited' | 'normal' }[];
+}
+
 export interface ClinicalReasoningData {
   hypotheses: ClinicalHypothesis[];
   findings: ClinicalFinding[];
@@ -184,6 +194,8 @@ interface ClinicalReasoningPanelProps {
   onBiomechanicalLinkClick?: (link: BiomechanicalLink | null) => void;
   activeBiomechanicalLinkId?: string | null;
   painDriverReports?: import("@/lib/painDriverEngine").PainDriverReport[];
+  onVisualizationRequest?: (request: VisualizationRequest | null) => void;
+  activeVisualizationId?: string | null;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -260,7 +272,7 @@ function SectionHeader({
   );
 }
 
-function TreatmentPhaseCard({ phase, idx }: { phase: TreatmentPhase; idx: number }) {
+function TreatmentPhaseCard({ phase, idx, onVisualizationClick, activeVisualizationId, hasVisualization }: { phase: TreatmentPhase; idx: number; onVisualizationClick?: (id: string, type: VisualizationRequest['type'], label: string, text: string) => void; activeVisualizationId?: string | null; hasVisualization?: boolean }) {
   const [expanded, setExpanded] = useState(idx === 0);
   const phaseColors = ["from-teal-500/10 to-teal-600/5 border-teal-500/20", "from-blue-500/10 to-blue-600/5 border-blue-500/20", "from-purple-500/10 to-purple-600/5 border-purple-500/20"];
   const colorSet = phaseColors[idx % phaseColors.length];
@@ -296,9 +308,24 @@ function TreatmentPhaseCard({ phase, idx }: { phase: TreatmentPhase; idx: number
             <div>
               <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1"><Hand className="h-2.5 w-2.5" />Manual Therapy</p>
               <div className="space-y-1.5">
-                {phase.manualTherapy.map((mt, i) => (
-                  <div key={i} className="bg-black/20 rounded p-2 border border-white/5">
-                    <p className="text-[10px] font-medium text-cyan-300">{mt.technique}</p>
+                {phase.manualTherapy.map((mt, i) => {
+                  const mtVizId = `tx-mt-${idx}-${i}`;
+                  const mtActive = activeVisualizationId === mtVizId;
+                  const mtText = `${mt.technique} ${mt.target} ${mt.reasoning} ${mt.dosage}`;
+                  return (
+                  <div
+                    key={i}
+                    className={`rounded p-2 border transition-colors ${onVisualizationClick ? 'cursor-pointer' : ''} ${mtActive ? 'bg-emerald-900/20 border-emerald-500/30 ring-1 ring-emerald-500/15' : 'bg-black/20 border-white/5 hover:border-cyan-500/20'}`}
+                    onClick={() => onVisualizationClick?.(mtVizId, 'treatment', mt.technique, mtText)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <p className="text-[10px] font-medium text-cyan-300">{mt.technique}</p>
+                      {hasVisualization && (
+                        <span className={`p-0.5 shrink-0 ${mtActive ? 'text-emerald-400' : 'text-gray-600'}`}>
+                          {mtActive ? <Eye className="h-2.5 w-2.5" /> : <EyeOff className="h-2.5 w-2.5" />}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[9px] text-gray-500">Target: <span className="text-gray-400">{mt.target}</span></span>
                       <span className="text-[9px] text-gray-500">Dose: <span className="text-gray-400">{mt.dosage}</span></span>
@@ -311,7 +338,8 @@ function TreatmentPhaseCard({ phase, idx }: { phase: TreatmentPhase; idx: number
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -319,9 +347,24 @@ function TreatmentPhaseCard({ phase, idx }: { phase: TreatmentPhase; idx: number
             <div>
               <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1"><Dumbbell className="h-2.5 w-2.5" />Exercises</p>
               <div className="space-y-1.5">
-                {phase.exercises.map((ex, i) => (
-                  <div key={i} className="bg-black/20 rounded p-2 border border-white/5">
-                    <p className="text-[10px] font-medium text-green-300">{ex.name}</p>
+                {phase.exercises.map((ex, i) => {
+                  const exVizId = `tx-ex-${idx}-${i}`;
+                  const exActive = activeVisualizationId === exVizId;
+                  const exText = `${ex.name} ${ex.target} ${ex.reasoning} ${ex.dosage} ${ex.progression || ''}`;
+                  return (
+                  <div
+                    key={i}
+                    className={`rounded p-2 border transition-colors ${onVisualizationClick ? 'cursor-pointer' : ''} ${exActive ? 'bg-emerald-900/20 border-emerald-500/30 ring-1 ring-emerald-500/15' : 'bg-black/20 border-white/5 hover:border-cyan-500/20'}`}
+                    onClick={() => onVisualizationClick?.(exVizId, 'treatment', ex.name, exText)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <p className="text-[10px] font-medium text-green-300">{ex.name}</p>
+                      {hasVisualization && (
+                        <span className={`p-0.5 shrink-0 ${exActive ? 'text-emerald-400' : 'text-gray-600'}`}>
+                          {exActive ? <Eye className="h-2.5 w-2.5" /> : <EyeOff className="h-2.5 w-2.5" />}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[9px] text-gray-500">Target: <span className="text-gray-400">{ex.target}</span></span>
                       <span className="text-[9px] text-gray-500">Dose: <span className="text-gray-400">{ex.dosage}</span></span>
@@ -329,7 +372,8 @@ function TreatmentPhaseCard({ phase, idx }: { phase: TreatmentPhase; idx: number
                     <p className="text-[9px] text-gray-500 mt-1 italic">{ex.reasoning}</p>
                     {ex.progression && <p className="text-[9px] text-teal-400/70 mt-0.5">Progression: {ex.progression}</p>}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -354,6 +398,8 @@ export default function ClinicalReasoningPanel({
   onBiomechanicalLinkClick,
   activeBiomechanicalLinkId,
   painDriverReports,
+  onVisualizationRequest,
+  activeVisualizationId,
 }: ClinicalReasoningPanelProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
@@ -401,6 +447,74 @@ export default function ClinicalReasoningPanel({
       }
     }
   }, [subjectiveHistory, onSubjectiveHistorySubmit]);
+
+  const extractRegionsFromText = useCallback((text: string): string[] => {
+    const lower = text.toLowerCase();
+    const regionKeywords = [
+      'shoulder', 'knee', 'hip', 'ankle', 'neck', 'cervical', 'thoracic', 'lumbar',
+      'low back', 'elbow', 'wrist', 'foot', 'sacroiliac', 'pelvis', 'spine',
+      'scapula', 'calf', 'hamstring', 'quadriceps', 'glute', 'groin', 'forearm',
+      'rotator cuff', 'supraspinatus', 'infraspinatus', 'subscapularis', 'deltoid',
+      'trapezius', 'pectoralis', 'biceps', 'triceps', 'latissimus', 'rhomboid',
+      'piriformis', 'psoas', 'iliacus', 'gastrocnemius', 'soleus', 'tibialis',
+      'achilles', 'plantar', 'patella', 'meniscus', 'labrum', 'acl', 'mcl',
+    ];
+    const found: string[] = [];
+    for (const r of regionKeywords) {
+      if (lower.includes(r) && !found.includes(r)) found.push(r);
+    }
+    return found.slice(0, 6);
+  }, []);
+
+  const extractMuscleHints = useCallback((text: string): VisualizationRequest['muscleHints'] => {
+    const lower = text.toLowerCase();
+    const hints: VisualizationRequest['muscleHints'] = [];
+    const patterns: { keywords: string[]; status: 'weak' | 'tight' | 'overactive' | 'inhibited' }[] = [
+      { keywords: ['weak', 'weakness', 'inhibited', 'inhibition', 'underactive', 'atrophy'], status: 'weak' },
+      { keywords: ['tight', 'tightness', 'shortened', 'contracture', 'stiff', 'restricted'], status: 'tight' },
+      { keywords: ['overactive', 'hyperactive', 'spasm', 'hypertonic'], status: 'overactive' },
+      { keywords: ['inhibited', 'inhibition', 'suppressed'], status: 'inhibited' },
+    ];
+    const muscleNames = [
+      'deltoid', 'trapezius', 'rotator cuff', 'supraspinatus', 'infraspinatus',
+      'subscapularis', 'pectoralis', 'biceps', 'triceps', 'latissimus',
+      'rhomboid', 'serratus', 'levator scapulae', 'sternocleidomastoid',
+      'scalene', 'upper trapezius', 'lower trapezius', 'middle trapezius',
+      'gluteus maximus', 'gluteus medius', 'gluteus minimus', 'piriformis',
+      'psoas', 'iliacus', 'hip flexor', 'tensor fasciae latae', 'tfl',
+      'quadriceps', 'rectus femoris', 'vastus lateralis', 'vastus medialis',
+      'hamstring', 'biceps femoris', 'semitendinosus', 'semimembranosus',
+      'gastrocnemius', 'soleus', 'tibialis anterior', 'tibialis posterior',
+      'peroneal', 'adductor', 'abductor', 'erector spinae', 'multifidus',
+      'transverse abdominis', 'oblique', 'rectus abdominis', 'diaphragm',
+    ];
+    for (const muscle of muscleNames) {
+      if (lower.includes(muscle)) {
+        let foundStatus: 'weak' | 'tight' | 'overactive' | 'inhibited' | 'normal' = 'normal';
+        const idx = lower.indexOf(muscle);
+        const context = lower.substring(Math.max(0, idx - 60), Math.min(lower.length, idx + muscle.length + 60));
+        for (const p of patterns) {
+          if (p.keywords.some(k => context.includes(k))) {
+            foundStatus = p.status;
+            break;
+          }
+        }
+        hints.push({ muscle, status: foundStatus });
+      }
+    }
+    return hints.slice(0, 8);
+  }, []);
+
+  const handleVisualizationClick = useCallback((id: string, type: VisualizationRequest['type'], label: string, textForParsing: string) => {
+    if (!onVisualizationRequest) return;
+    if (activeVisualizationId === id) {
+      onVisualizationRequest(null);
+      return;
+    }
+    const regions = extractRegionsFromText(textForParsing);
+    const muscleHints = extractMuscleHints(textForParsing);
+    onVisualizationRequest({ id, type, label, regions, muscleHints });
+  }, [onVisualizationRequest, activeVisualizationId, extractRegionsFromText, extractMuscleHints]);
 
   const generateClinicalNotes = useCallback(async () => {
     if (!hasContent || isGeneratingNotes) return;
@@ -474,6 +588,17 @@ export default function ClinicalReasoningPanel({
                 <Loader2 className="h-2.5 w-2.5 animate-spin text-cyan-400" />
                 <span className="text-[9px] text-cyan-400">Analyzing</span>
               </div>
+            )}
+            {activeVisualizationId && onVisualizationRequest && (
+              <button
+                onClick={() => onVisualizationRequest(null)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors group"
+                title="Clear skeleton visualization"
+              >
+                <Eye className="h-2.5 w-2.5 text-emerald-400" />
+                <span className="text-[9px] text-emerald-400">Showing</span>
+                <X className="h-2 w-2 text-emerald-400/60 group-hover:text-emerald-300" />
+              </button>
             )}
             {onReset && (
               <button
@@ -602,11 +727,16 @@ export default function ClinicalReasoningPanel({
                   {d.hypotheses
                     .filter((h) => h.status !== "ruled_out")
                     .sort((a, b) => b.confidence - a.confidence)
-                    .map((hypothesis, idx) => (
+                    .map((hypothesis, idx) => {
+                      const vizId = `hyp-${hypothesis.id}`;
+                      const isVizActive = activeVisualizationId === vizId;
+                      const fullText = [hypothesis.condition, ...hypothesis.supportingEvidence, ...hypothesis.rulingOutFactors].join(' ');
+                      return (
                       <div
                         key={hypothesis.id}
-                        className="bg-gray-800/40 rounded-lg p-2 border border-gray-700/30 animate-in fade-in-0 slide-in-from-right-1 duration-300"
+                        className={`rounded-lg p-2 border animate-in fade-in-0 slide-in-from-right-1 duration-300 transition-colors cursor-pointer ${isVizActive ? 'bg-emerald-900/30 border-emerald-500/40 ring-1 ring-emerald-500/20' : 'bg-gray-800/40 border-gray-700/30 hover:border-cyan-500/30'}`}
                         style={{ animationDelay: `${idx * 50}ms` }}
+                        onClick={() => handleVisualizationClick(vizId, 'hypothesis', hypothesis.condition, fullText)}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -615,11 +745,18 @@ export default function ClinicalReasoningPanel({
                               {hypothesis.condition}
                             </p>
                           </div>
-                          {hypothesis.status === "confirmed" && (
-                            <span className="text-[8px] px-1 py-0.5 bg-teal-500/20 text-teal-400 rounded">
-                              Confirmed
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {hypothesis.status === "confirmed" && (
+                              <span className="text-[8px] px-1 py-0.5 bg-teal-500/20 text-teal-400 rounded">
+                                Confirmed
+                              </span>
+                            )}
+                            {onVisualizationRequest && (
+                              <span className={`p-0.5 rounded transition-colors ${isVizActive ? 'text-emerald-400' : 'text-gray-600 hover:text-cyan-400'}`} title="Visualize on skeleton">
+                                {isVizActive ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <ConfidenceBar value={hypothesis.confidence} />
                         {hypothesis.supportingEvidence.length > 0 && (
@@ -643,7 +780,8 @@ export default function ClinicalReasoningPanel({
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   {d.hypotheses.filter((h) => h.status === "ruled_out").length > 0 && (
                     <div className="mt-1">
                       <p className="text-[9px] text-gray-600 mb-1">Ruled Out:</p>
@@ -686,17 +824,25 @@ export default function ClinicalReasoningPanel({
                       functional: "text-cyan-400 bg-cyan-500/10",
                     };
                     const colors = categoryColors[finding.category] || "text-gray-400 bg-gray-500/10";
+                    const fVizId = `finding-${finding.id}`;
+                    const fActive = activeVisualizationId === fVizId;
                     return (
                       <div
                         key={finding.id}
-                        className={`flex items-start gap-1.5 px-2 py-1 rounded ${finding.isNew ? "animate-in fade-in-0 slide-in-from-right-2 duration-500 bg-blue-500/5" : ""}`}
+                        className={`flex items-start gap-1.5 px-2 py-1 rounded transition-colors ${onVisualizationRequest ? 'cursor-pointer' : ''} ${fActive ? 'bg-emerald-900/20 ring-1 ring-emerald-500/20' : ''} ${finding.isNew ? "animate-in fade-in-0 slide-in-from-right-2 duration-500 bg-blue-500/5" : "hover:bg-white/5"}`}
+                        onClick={() => handleVisualizationClick(fVizId, 'hypothesis', finding.text.substring(0, 40), finding.text)}
                       >
                         <span
                           className={`text-[8px] px-1 py-0.5 rounded mt-0.5 flex-shrink-0 ${colors}`}
                         >
                           {finding.category.charAt(0).toUpperCase() + finding.category.slice(1)}
                         </span>
-                        <span className="text-[10px] text-gray-300">{finding.text}</span>
+                        <span className="text-[10px] text-gray-300 flex-1">{finding.text}</span>
+                        {onVisualizationRequest && (
+                          <span className={`p-0.5 shrink-0 mt-0.5 ${fActive ? 'text-emerald-400' : 'text-gray-600'}`}>
+                            {fActive ? <Eye className="h-2.5 w-2.5" /> : <EyeOff className="h-2.5 w-2.5" />}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
@@ -999,11 +1145,25 @@ export default function ClinicalReasoningPanel({
                     </div>
                   )}
 
-                  {tp.rootCauseTreatment && (
-                    <div className="bg-orange-500/5 rounded-lg p-2 border border-orange-500/10">
-                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                        <Zap className="h-2.5 w-2.5 text-orange-400" />Root Cause
-                      </p>
+                  {tp.rootCauseTreatment && (() => {
+                    const rcVizId = 'rootcause-primary';
+                    const rcActive = activeVisualizationId === rcVizId;
+                    const rcFullText = [tp.rootCauseTreatment.primaryCause, ...tp.rootCauseTreatment.contributingFactors, ...tp.rootCauseTreatment.targetedInterventions.map(t => `${t.intervention} ${t.target} ${t.reasoning}`)].join(' ');
+                    return (
+                    <div
+                      className={`rounded-lg p-2 border transition-colors cursor-pointer ${rcActive ? 'bg-emerald-900/30 border-emerald-500/40 ring-1 ring-emerald-500/20' : 'bg-orange-500/5 border-orange-500/10 hover:border-orange-500/30'}`}
+                      onClick={() => handleVisualizationClick(rcVizId, 'rootCause', tp.rootCauseTreatment.primaryCause, rcFullText)}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[9px] text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                          <Zap className="h-2.5 w-2.5 text-orange-400" />Root Cause
+                        </p>
+                        {onVisualizationRequest && (
+                          <span className={`p-0.5 rounded transition-colors ${rcActive ? 'text-emerald-400' : 'text-gray-600'}`}>
+                            {rcActive ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] font-medium text-orange-300">{tp.rootCauseTreatment.primaryCause}</p>
                       {tp.rootCauseTreatment.contributingFactors.length > 0 && (
                         <div className="mt-1 space-y-0.5">
@@ -1027,13 +1187,14 @@ export default function ClinicalReasoningPanel({
                         </div>
                       )}
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {tp.phases && tp.phases.length > 0 && (
                     <div className="space-y-1.5">
                       <p className="text-[9px] text-gray-500 uppercase tracking-wider px-1">Phase-Based Plan</p>
                       {tp.phases.map((phase, idx) => (
-                        <TreatmentPhaseCard key={idx} phase={phase} idx={idx} />
+                        <TreatmentPhaseCard key={idx} phase={phase} idx={idx} onVisualizationClick={handleVisualizationClick} activeVisualizationId={activeVisualizationId} hasVisualization={!!onVisualizationRequest} />
                       ))}
                     </div>
                   )}
@@ -1044,13 +1205,29 @@ export default function ClinicalReasoningPanel({
                         <Home className="h-2.5 w-2.5 text-blue-400" />Home Program
                       </p>
                       <div className="space-y-1">
-                        {tp.homeProgram.map((hp, i) => (
-                          <div key={i} className="bg-black/20 rounded p-1.5">
-                            <p className="text-[10px] font-medium text-blue-300">{hp.exercise}</p>
+                        {tp.homeProgram.map((hp, i) => {
+                          const hpVizId = `tx-hp-${i}`;
+                          const hpActive = activeVisualizationId === hpVizId;
+                          const hpText = `${hp.exercise} ${hp.dosage} ${hp.instructions}`;
+                          return (
+                          <div
+                            key={i}
+                            className={`rounded p-1.5 transition-colors ${onVisualizationRequest ? 'cursor-pointer' : ''} ${hpActive ? 'bg-emerald-900/20 ring-1 ring-emerald-500/15' : 'bg-black/20 hover:bg-black/30'}`}
+                            onClick={() => handleVisualizationClick(hpVizId, 'treatment', hp.exercise, hpText)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <p className="text-[10px] font-medium text-blue-300">{hp.exercise}</p>
+                              {onVisualizationRequest && (
+                                <span className={`p-0.5 shrink-0 ${hpActive ? 'text-emerald-400' : 'text-gray-600'}`}>
+                                  {hpActive ? <Eye className="h-2.5 w-2.5" /> : <EyeOff className="h-2.5 w-2.5" />}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[9px] text-gray-400">{hp.dosage}</p>
                             <p className="text-[9px] text-gray-500 italic">{hp.instructions}</p>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

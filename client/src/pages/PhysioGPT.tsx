@@ -89,7 +89,7 @@ import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToContro
 import type { Skeleton3DPose, PartialSkeleton3DPose, PosturalMetrics, CameraViewType } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
-import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink } from "@/components/skeleton/ClinicalReasoningPanel";
+import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink, type VisualizationRequest } from "@/components/skeleton/ClinicalReasoningPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
@@ -498,6 +498,7 @@ export default function PhysioGPT() {
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
+  const [activeVisualizationId, setActiveVisualizationId] = useState<string | null>(null);
   const lastReasoningTriggerRef = useRef<string>('');
   const compensationDataRef = useRef<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
   const voiceStreamRef = useRef<MediaStream | null>(null);
@@ -1288,6 +1289,108 @@ ${ddxList}`;
     const allMuscles = Array.from(new Set([...primaryMuscles, ...connectedMuscles]));
     setBiomechanicalMuscleHighlights(allMuscles);
   }, [BIOMECHANICAL_REGION_TO_MUSCLES]);
+
+  const MUSCLE_STATUS_COLORS: Record<string, string> = useMemo(() => ({
+    weak: '#4488ff',
+    tight: '#ff4444',
+    overactive: '#ff8800',
+    inhibited: '#9944ff',
+    normal: '#44ccaa',
+  }), []);
+
+  const VISUALIZATION_MUSCLE_MAP: Record<string, string[]> = useMemo(() => ({
+    'deltoid': ['deltoid_r', 'deltoid_l'],
+    'trapezius': ['scapula_r', 'scapula_l', 'neck'],
+    'upper trapezius': ['neck', 'scapula_r', 'scapula_l'],
+    'lower trapezius': ['scapula_r', 'scapula_l'],
+    'middle trapezius': ['scapula_r', 'scapula_l'],
+    'rotator cuff': ['deltoid_r', 'deltoid_l', 'scapula_r', 'scapula_l'],
+    'supraspinatus': ['deltoid_r', 'deltoid_l'],
+    'infraspinatus': ['scapula_r', 'scapula_l'],
+    'subscapularis': ['scapula_r', 'scapula_l'],
+    'pectoralis': ['chest'],
+    'biceps': ['bicep_r', 'bicep_l'],
+    'triceps': ['bicep_r', 'bicep_l'],
+    'latissimus': ['spine', 'scapula_r', 'scapula_l'],
+    'rhomboid': ['scapula_r', 'scapula_l'],
+    'serratus': ['chest', 'scapula_r', 'scapula_l'],
+    'levator scapulae': ['neck', 'scapula_r', 'scapula_l'],
+    'sternocleidomastoid': ['neck'],
+    'scalene': ['neck'],
+    'gluteus maximus': ['glute_r', 'glute_l'],
+    'gluteus medius': ['glute_r', 'glute_l'],
+    'gluteus minimus': ['glute_r', 'glute_l'],
+    'piriformis': ['glute_r', 'glute_l'],
+    'psoas': ['core', 'quad_r', 'quad_l'],
+    'iliacus': ['core', 'quad_r', 'quad_l'],
+    'hip flexor': ['core', 'quad_r', 'quad_l'],
+    'tensor fasciae latae': ['glute_r', 'glute_l', 'quad_r', 'quad_l'],
+    'tfl': ['glute_r', 'glute_l', 'quad_r', 'quad_l'],
+    'quadriceps': ['quad_r', 'quad_l'],
+    'rectus femoris': ['quad_r', 'quad_l'],
+    'vastus lateralis': ['quad_r', 'quad_l'],
+    'vastus medialis': ['quad_r', 'quad_l'],
+    'hamstring': ['quad_r', 'quad_l'],
+    'biceps femoris': ['quad_r', 'quad_l'],
+    'semitendinosus': ['quad_r', 'quad_l'],
+    'semimembranosus': ['quad_r', 'quad_l'],
+    'gastrocnemius': ['calf_r', 'calf_l'],
+    'soleus': ['calf_r', 'calf_l'],
+    'tibialis anterior': ['shin_r', 'shin_l'],
+    'tibialis posterior': ['shin_r', 'shin_l'],
+    'peroneal': ['shin_r', 'shin_l'],
+    'adductor': ['quad_r', 'quad_l'],
+    'abductor': ['glute_r', 'glute_l'],
+    'erector spinae': ['spine', 'core'],
+    'multifidus': ['spine', 'core'],
+    'transverse abdominis': ['core'],
+    'oblique': ['core'],
+    'rectus abdominis': ['core'],
+    'diaphragm': ['core', 'chest'],
+  }), []);
+
+  const handleVisualizationRequest = useCallback((request: VisualizationRequest | null) => {
+    if (!request) {
+      setActiveVisualizationId(null);
+      setBiomechanicalMuscleHighlights([]);
+      return;
+    }
+    setActiveVisualizationId(request.id);
+
+    const muscleGroupIds = new Set<string>();
+
+    for (const hint of request.muscleHints) {
+      const mapped = VISUALIZATION_MUSCLE_MAP[hint.muscle];
+      if (mapped) {
+        mapped.forEach(m => muscleGroupIds.add(m));
+      }
+    }
+
+    for (const region of request.regions) {
+      const lower = region.toLowerCase().trim();
+      if (BIOMECHANICAL_REGION_TO_MUSCLES[lower]) {
+        BIOMECHANICAL_REGION_TO_MUSCLES[lower].forEach(m => muscleGroupIds.add(m));
+      } else {
+        for (const [key, muscles] of Object.entries(BIOMECHANICAL_REGION_TO_MUSCLES)) {
+          if (key.includes(lower) || lower.includes(key)) {
+            muscles.forEach(m => muscleGroupIds.add(m));
+            break;
+          }
+        }
+      }
+    }
+
+    if (muscleGroupIds.size === 0) {
+      const textLower = request.label.toLowerCase();
+      for (const [key, muscles] of Object.entries(BIOMECHANICAL_REGION_TO_MUSCLES)) {
+        if (textLower.includes(key)) {
+          muscles.forEach(m => muscleGroupIds.add(m));
+        }
+      }
+    }
+
+    setBiomechanicalMuscleHighlights(Array.from(muscleGroupIds));
+  }, [BIOMECHANICAL_REGION_TO_MUSCLES, VISUALIZATION_MUSCLE_MAP]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;
@@ -7696,6 +7799,7 @@ ${ddxList}`;
           setClinicalReasoningData(null);
           setClinicalReasoningPaused(false);
           lastReasoningTriggerRef.current = '';
+          setActiveVisualizationId(null);
           setTimeout(() => triggerClinicalReasoningAnalysis(true), 100);
         }}
         subjectiveHistory={subjectiveHistoryInput}
@@ -7704,6 +7808,8 @@ ${ddxList}`;
         onBiomechanicalLinkClick={handleBiomechanicalLinkClick}
         activeBiomechanicalLinkId={activeBiomechanicalLink?.id || null}
         painDriverReports={painDriverReports}
+        onVisualizationRequest={handleVisualizationRequest}
+        activeVisualizationId={activeVisualizationId}
       />
     </div>
   );

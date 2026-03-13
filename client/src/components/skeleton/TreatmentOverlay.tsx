@@ -515,10 +515,36 @@ function PredictedPainOverlay({
 
   const positionedSpots = useMemo(() => {
     if (!visible || containerWidth === 0) return [];
+
+    const boneGroupCounts = new Map<string, number>();
+    const boneGroupIndex = new Map<string, number>();
+
+    for (const spot of spots) {
+      boneGroupCounts.set(spot.boneName, (boneGroupCounts.get(spot.boneName) || 0) + 1);
+    }
+
     return spots.map(spot => {
       const bonePos = boneMap.get(spot.boneName);
       if (!bonePos || !bonePos.visible) return null;
-      return { spot, screenX: bonePos.screenX, screenY: bonePos.screenY };
+
+      const count = boneGroupCounts.get(spot.boneName) || 1;
+      const idx = boneGroupIndex.get(spot.boneName) || 0;
+      boneGroupIndex.set(spot.boneName, idx + 1);
+
+      let offsetX = 0;
+      let offsetY = 0;
+      if (count > 1) {
+        const angle = (idx / count) * 2 * Math.PI - Math.PI / 2;
+        const radius = 20 + count * 4;
+        offsetX = Math.cos(angle) * radius;
+        offsetY = Math.sin(angle) * radius;
+      }
+
+      return {
+        spot,
+        screenX: bonePos.screenX + offsetX,
+        screenY: bonePos.screenY + offsetY,
+      };
     }).filter(Boolean) as Array<{ spot: PredictedPainSpot; screenX: number; screenY: number }>;
   }, [spots, boneMap, containerWidth, containerHeight, visible]);
 

@@ -198,7 +198,7 @@ export default function BiomechanicsHUD({
     <>
     <style>{`@keyframes hud-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }`}</style>
     <div
-      className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3"
+      className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3"
       style={{
         opacity: visible ? 1 : 0,
         transform: `translateX(-50%) scale(${visible ? 1 : 0.85})`,

@@ -477,7 +477,7 @@ export default function PhysioGPT() {
   const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
   const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment'>('chat');
-  const [hudVisible, setHudVisible] = useState(true);
+  const [manipulationCounter, setManipulationCounter] = useState(0);
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
   const skeletonContainerRef = useRef<HTMLDivElement>(null);
@@ -2689,6 +2689,21 @@ ${ddxList}`;
 
   const isManipulating = showJointControls || muscleMode || cameraPoseActive;
   const hudActive = isManipulating;
+
+  const prevConfigRef = useRef(effectiveModelConfig);
+  useEffect(() => {
+    if (!hudActive) return;
+    if (prevConfigRef.current !== effectiveModelConfig) {
+      prevConfigRef.current = effectiveModelConfig;
+      setManipulationCounter(c => c + 1);
+    }
+  }, [effectiveModelConfig, hudActive]);
+
+  useEffect(() => {
+    if (hudActive) {
+      setManipulationCounter(c => c + 1);
+    }
+  }, [hudActive]);
 
   const hudForceAnalysis = useMemo(() => {
     if (forceMode && forceAnalysis) return forceAnalysis;
@@ -6799,8 +6814,7 @@ ${ddxList}`;
                 muscleAnalysis={hudMuscleAnalysis}
                 chainIntegrityScores={hudChainIntegrity}
                 chainLabels={hudChainLabels}
-                visible={hudVisible}
-                onToggleVisibility={() => setHudVisible(prev => !prev)}
+                manipulationCounter={manipulationCounter}
                 onOpenForceOverlay={() => { setForceMode(true); }}
                 onOpenMuscleOverlay={() => { setMuscleMode(true); }}
                 onOpenChainExplorer={() => { setChainExplorerMode(true); setChainIntegrityMode(true); }}

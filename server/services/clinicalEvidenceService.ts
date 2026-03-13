@@ -259,9 +259,9 @@ export async function fetchClinicalEvidenceMulti(
     return { papers: [], overallGrade: 'D', confidence: 'Very Low', searchQuery: '', source: 'fallback' };
   }
 
-  const combinedRegion = regionPart.join(' ');
-  const combinedCondition = conditionPart.join(' ');
-  const combinedTreatment = treatmentPart.join(' ');
+  const combinedRegion = [...regionPart].sort().join(' ');
+  const combinedCondition = [...conditionPart].sort().join(' ');
+  const combinedTreatment = [...treatmentPart].sort().join(' ');
 
   const cacheKey = makeCacheKey(combinedRegion, combinedCondition, combinedTreatment);
   const cached = evidenceCache.get(cacheKey);

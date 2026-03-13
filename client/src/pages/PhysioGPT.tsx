@@ -2687,46 +2687,39 @@ ${ddxList}`;
     return scores;
   }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, compensatedOverrides, crossMuscleEffects]);
 
-  const isManipulating = showJointControls || muscleMode || cameraPoseActive;
-  const hudActive = isManipulating;
-
   const prevConfigRef = useRef(effectiveModelConfig);
   useEffect(() => {
-    if (!hudActive) return;
     if (prevConfigRef.current !== effectiveModelConfig) {
       prevConfigRef.current = effectiveModelConfig;
       setManipulationCounter(c => c + 1);
     }
-  }, [effectiveModelConfig, hudActive]);
+  }, [effectiveModelConfig]);
 
   useEffect(() => {
-    if (hudActive) {
+    if (showJointControls || muscleMode || cameraPoseActive) {
       setManipulationCounter(c => c + 1);
     }
-  }, [hudActive]);
+  }, [showJointControls, muscleMode, cameraPoseActive]);
 
   const hudForceAnalysis = useMemo(() => {
     if (forceMode && forceAnalysis) return forceAnalysis;
-    if (!hudActive) return null;
     return calculatePosturalForces(effectiveModelConfig);
-  }, [effectiveModelConfig, hudActive, forceMode, forceAnalysis]);
+  }, [effectiveModelConfig, forceMode, forceAnalysis]);
 
   const hudWeightDistribution = useMemo(() => {
     if (forceMode && weightDistribution) return weightDistribution;
-    if (!hudActive) return null;
     return computeWeightDistribution(effectiveModelConfig, bodyWeightKg);
-  }, [effectiveModelConfig, hudActive, bodyWeightKg, forceMode, weightDistribution]);
+  }, [effectiveModelConfig, bodyWeightKg, forceMode, weightDistribution]);
 
   const hudMuscleAnalysis = useMemo(() => {
     if (muscleMode && muscleAnalysis) return muscleAnalysis;
-    if (!hudActive) return null;
     const base = computeFullMuscleAnalysis(effectiveModelConfig);
     return applyOverridesToAnalysis(base, compensatedOverrides, crossMuscleEffects);
-  }, [effectiveModelConfig, hudActive, muscleMode, muscleAnalysis, compensatedOverrides, crossMuscleEffects]);
+  }, [effectiveModelConfig, muscleMode, muscleAnalysis, compensatedOverrides, crossMuscleEffects]);
 
   const hudChainIntegrity = useMemo(() => {
     if ((chainExplorerMode || chainIntegrityMode) && chainIntegrityScores.size > 0) return chainIntegrityScores;
-    if (!hudActive || !hudMuscleAnalysis) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
+    if (!hudMuscleAnalysis) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     for (const chain of KINETIC_CHAINS) {
       let totalScore = 100;
@@ -2757,7 +2750,7 @@ ${ddxList}`;
       scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
     }
     return scores;
-  }, [hudActive, hudMuscleAnalysis, chainExplorerMode, chainIntegrityMode, chainIntegrityScores]);
+  }, [hudMuscleAnalysis, chainExplorerMode, chainIntegrityMode, chainIntegrityScores]);
 
   const hudChainLabels = useMemo(() => {
     const labels = new Map<string, string>();
@@ -6807,19 +6800,17 @@ ${ddxList}`;
               </div>
             )}
 
-            {hudActive && (
-              <BiomechanicsHUD
-                forceAnalysis={hudForceAnalysis}
-                weightDistribution={hudWeightDistribution}
-                muscleAnalysis={hudMuscleAnalysis}
-                chainIntegrityScores={hudChainIntegrity}
-                chainLabels={hudChainLabels}
-                manipulationCounter={manipulationCounter}
-                onOpenForceOverlay={() => { setForceMode(true); }}
-                onOpenMuscleOverlay={() => { setMuscleMode(true); }}
-                onOpenChainExplorer={() => { setChainExplorerMode(true); setChainIntegrityMode(true); }}
-              />
-            )}
+            <BiomechanicsHUD
+              forceAnalysis={hudForceAnalysis}
+              weightDistribution={hudWeightDistribution}
+              muscleAnalysis={hudMuscleAnalysis}
+              chainIntegrityScores={hudChainIntegrity}
+              chainLabels={hudChainLabels}
+              manipulationCounter={manipulationCounter}
+              onOpenForceOverlay={() => { setForceMode(true); }}
+              onOpenMuscleOverlay={() => { setMuscleMode(true); }}
+              onOpenChainExplorer={() => { setChainExplorerMode(true); setChainIntegrityMode(true); }}
+            />
 
           </div>
           </div>

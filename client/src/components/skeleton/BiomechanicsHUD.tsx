@@ -15,7 +15,6 @@ interface BiomechanicsHUDProps {
   weightDistribution: WeightDistribution | null;
   muscleAnalysis: MuscleAnalysisResult | null;
   chainIntegrityScores: Map<string, ChainIntegrityEntry>;
-  chainLabels: Map<string, string>;
   onOpenForceOverlay: () => void;
   onOpenMuscleOverlay: () => void;
   onOpenChainExplorer: () => void;
@@ -38,6 +37,18 @@ function getIntegrityColor(score: number): string {
   return '#ef4444';
 }
 
+function abbreviateJoint(name: string): string {
+  return name
+    .replace(/_[LR]$/, (m) => m === '_L' ? ' L' : ' R')
+    .replace(/_M$/, '')
+    .replace(/Spine\d/, 'Sp')
+    .replace('Shoulder', 'Shld')
+    .replace('Elbow', 'Elb')
+    .replace('Wrist', 'Wrs')
+    .replace('Neck', 'Nck')
+    .slice(0, 7);
+}
+
 export default function BiomechanicsHUD({
   forceAnalysis,
   weightDistribution,
@@ -49,8 +60,10 @@ export default function BiomechanicsHUD({
   manipulationCounter,
 }: BiomechanicsHUDProps) {
   const [visible, setVisible] = useState(false);
+  const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
   const dissolveTimerRef = useRef<number | null>(null);
   const prevCounterRef = useRef(manipulationCounter);
+  const prevThresholdsRef = useRef<{ forceStatus: string; chainScore: number; syndromes: number }>({ forceStatus: 'normal', chainScore: 100, syndromes: 0 });
 
   useEffect(() => {
     if (manipulationCounter !== prevCounterRef.current) {
@@ -60,11 +73,28 @@ export default function BiomechanicsHUD({
       dissolveTimerRef.current = window.setTimeout(() => {
         setVisible(false);
       }, 3000);
+
+      const newPulse = new Set<string>();
+      const prev = prevThresholdsRef.current;
+      const curForceStatus = forceAnalysis?.joints?.[0]?.status || 'normal';
+      const curChainScore = (() => { let min = 100; chainIntegrityScores.forEach(e => { if (e.score < min) min = e.score; }); return min; })();
+      const curSyndromes = muscleAnalysis ? computeMuscleBalanceRatios(muscleAnalysis).filter(r => r.syndrome).length : 0;
+
+      if (curForceStatus !== prev.forceStatus && (curForceStatus === 'high' || curForceStatus === 'very_high')) newPulse.add('forces');
+      if (curChainScore < 60 && prev.chainScore >= 60) newPulse.add('chains');
+      if (curSyndromes > prev.syndromes) newPulse.add('muscle');
+
+      prevThresholdsRef.current = { forceStatus: curForceStatus, chainScore: curChainScore, syndromes: curSyndromes };
+
+      if (newPulse.size > 0) {
+        setPulsingIds(newPulse);
+        setTimeout(() => setPulsingIds(new Set()), 600);
+      }
     }
     return () => {
       if (dissolveTimerRef.current) clearTimeout(dissolveTimerRef.current);
     };
-  }, [manipulationCounter]);
+  }, [manipulationCounter, forceAnalysis, chainIntegrityScores, muscleAnalysis]);
 
   const topJoint = useMemo(() => {
     if (!forceAnalysis) return null;
@@ -114,7 +144,7 @@ export default function BiomechanicsHUD({
       bgColor: 'bg-amber-500/15',
       ringColor: 'ring-amber-500/30',
       label: 'Forces',
-      value: topJoint ? `${(topJoint.totalForce * 100).toFixed(0)}%` : '--',
+      value: topJoint ? `${abbreviateJoint(topJoint.name)} ${(topJoint.totalForce * 100).toFixed(0)}%` : '--',
       valueColor: topJoint ? getForceColor(topJoint.status) : '#6b7280',
       onClick: onOpenForceOverlay,
     },
@@ -163,6 +193,8 @@ export default function BiomechanicsHUD({
   ];
 
   return (
+    <>
+    <style>{`@keyframes hud-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }`}</style>
     <div
       className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 pointer-events-none"
       style={{
@@ -173,11 +205,13 @@ export default function BiomechanicsHUD({
     >
       {circles.map((c) => {
         const Icon = c.icon;
+        const isPulsing = pulsingIds.has(c.id);
         return (
           <button
             key={c.id}
             onClick={c.onClick}
             className={`pointer-events-auto w-[60px] h-[60px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
+            style={isPulsing ? { animation: 'hud-pulse 0.3s ease-in-out 2' } : undefined}
             title={c.label}
           >
             <Icon className={`h-3.5 w-3.5 ${c.color}`} />
@@ -194,5 +228,6 @@ export default function BiomechanicsHUD({
         );
       })}
     </div>
+    </>
   );
 }

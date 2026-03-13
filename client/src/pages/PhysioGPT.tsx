@@ -2752,14 +2752,6 @@ ${ddxList}`;
     return scores;
   }, [hudMuscleAnalysis, chainExplorerMode, chainIntegrityMode, chainIntegrityScores]);
 
-  const hudChainLabels = useMemo(() => {
-    const labels = new Map<string, string>();
-    for (const chain of KINETIC_CHAINS) {
-      labels.set(chain.id, chain.label);
-    }
-    return labels;
-  }, []);
-
   const treatmentPriorities = useMemo((): TreatmentPriorityResult => {
     const hasOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
     if (!muscleAnalysis || !hasOverrides) {
@@ -6805,7 +6797,6 @@ ${ddxList}`;
               weightDistribution={hudWeightDistribution}
               muscleAnalysis={hudMuscleAnalysis}
               chainIntegrityScores={hudChainIntegrity}
-              chainLabels={hudChainLabels}
               manipulationCounter={manipulationCounter}
               onOpenForceOverlay={() => { setForceMode(true); }}
               onOpenMuscleOverlay={() => { setMuscleMode(true); }}

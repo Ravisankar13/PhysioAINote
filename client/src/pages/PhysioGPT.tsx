@@ -105,6 +105,7 @@ import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, T
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
 import { computeTreatmentPriorities as computeFullTreatmentPriorities, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol } from "@/lib/treatmentPriorityEngine";
+import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 
 const BODY_REGIONS = {
   cervical: {
@@ -476,6 +477,7 @@ export default function PhysioGPT() {
   const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
   const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment'>('chat');
+  const [hudVisible, setHudVisible] = useState(true);
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
   const skeletonContainerRef = useRef<HTMLDivElement>(null);
@@ -2684,6 +2686,71 @@ ${ddxList}`;
     }
     return scores;
   }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, compensatedOverrides, crossMuscleEffects]);
+
+  const isManipulating = showJointControls || muscleMode || cameraPoseActive;
+  const hudActive = isManipulating;
+
+  const hudForceAnalysis = useMemo(() => {
+    if (forceMode && forceAnalysis) return forceAnalysis;
+    if (!hudActive) return null;
+    return calculatePosturalForces(effectiveModelConfig);
+  }, [effectiveModelConfig, hudActive, forceMode, forceAnalysis]);
+
+  const hudWeightDistribution = useMemo(() => {
+    if (forceMode && weightDistribution) return weightDistribution;
+    if (!hudActive) return null;
+    return computeWeightDistribution(effectiveModelConfig, bodyWeightKg);
+  }, [effectiveModelConfig, hudActive, bodyWeightKg, forceMode, weightDistribution]);
+
+  const hudMuscleAnalysis = useMemo(() => {
+    if (muscleMode && muscleAnalysis) return muscleAnalysis;
+    if (!hudActive) return null;
+    const base = computeFullMuscleAnalysis(effectiveModelConfig);
+    return applyOverridesToAnalysis(base, compensatedOverrides, crossMuscleEffects);
+  }, [effectiveModelConfig, hudActive, muscleMode, muscleAnalysis, compensatedOverrides, crossMuscleEffects]);
+
+  const hudChainIntegrity = useMemo(() => {
+    if ((chainExplorerMode || chainIntegrityMode) && chainIntegrityScores.size > 0) return chainIntegrityScores;
+    if (!hudActive || !hudMuscleAnalysis) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
+    const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
+    for (const chain of KINETIC_CHAINS) {
+      let totalScore = 100;
+      const issues: string[] = [];
+      const problematicLinks: string[] = [];
+      const exercises: string[] = [];
+      for (const link of chain.links) {
+        for (const muscName of link.muscles) {
+          const muscLower = muscName.toLowerCase();
+          const matchedMuscle = hudMuscleAnalysis.allMuscles.find(m => {
+            const mLabel = m.label.toLowerCase();
+            const mId = m.id.toLowerCase();
+            return mLabel.includes(muscLower) || muscLower.includes(mLabel.replace(/^[lr] /, '')) || mId.includes(muscLower.replace(/ /g, '_')) || muscLower.replace(/ /g, '_').includes(mId.replace(/^[lr]_/, ''));
+          });
+          if (matchedMuscle && matchedMuscle.clinicalStatus !== 'normal') {
+            const penalty = matchedMuscle.clinicalStatus === 'spasm' ? 15 : matchedMuscle.clinicalStatus === 'inhibited' ? 12 : matchedMuscle.clinicalStatus === 'overactive' ? 10 : matchedMuscle.clinicalStatus === 'shortened' ? 8 : matchedMuscle.clinicalStatus === 'weak' ? 10 : matchedMuscle.clinicalStatus === 'lengthened' ? 6 : 3;
+            totalScore -= penalty;
+            issues.push(`${matchedMuscle.label}: ${matchedMuscle.clinicalStatus}`);
+            if (!problematicLinks.includes(link.label)) problematicLinks.push(link.label);
+            if (matchedMuscle.clinicalStatus === 'shortened' || matchedMuscle.clinicalStatus === 'overactive') exercises.push(`Stretch/release ${muscName}`);
+            else if (matchedMuscle.clinicalStatus === 'inhibited' || matchedMuscle.clinicalStatus === 'weak') exercises.push(`Strengthen/activate ${muscName}`);
+            else if (matchedMuscle.clinicalStatus === 'spasm') exercises.push(`Release/manual therapy for ${muscName}`);
+          }
+          if (matchedMuscle && matchedMuscle.tightnessPercent > 50) totalScore -= 3;
+          if (matchedMuscle && matchedMuscle.inhibitionPercent > 40) totalScore -= 4;
+        }
+      }
+      scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
+    }
+    return scores;
+  }, [hudActive, hudMuscleAnalysis, chainExplorerMode, chainIntegrityMode, chainIntegrityScores]);
+
+  const hudChainLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const chain of KINETIC_CHAINS) {
+      labels.set(chain.id, chain.label);
+    }
+    return labels;
+  }, []);
 
   const treatmentPriorities = useMemo((): TreatmentPriorityResult => {
     const hasOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
@@ -6723,6 +6790,21 @@ ${ddxList}`;
                   )}
                 </div>
               </div>
+            )}
+
+            {hudActive && (
+              <BiomechanicsHUD
+                forceAnalysis={hudForceAnalysis}
+                weightDistribution={hudWeightDistribution}
+                muscleAnalysis={hudMuscleAnalysis}
+                chainIntegrityScores={hudChainIntegrity}
+                chainLabels={hudChainLabels}
+                visible={hudVisible}
+                onToggleVisibility={() => setHudVisible(prev => !prev)}
+                onOpenForceOverlay={() => { setForceMode(true); }}
+                onOpenMuscleOverlay={() => { setMuscleMode(true); }}
+                onOpenChainExplorer={() => { setChainExplorerMode(true); setChainIntegrityMode(true); }}
+              />
             )}
 
           </div>

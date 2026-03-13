@@ -6133,7 +6133,7 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
   app.post("/api/physiogpt/clinical-reasoning-analyze", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements, postureDeviations, forceAnalysis, muscleAnalysis, detectedSyndromes, compensationAnalysis, fascialChainAnalysis, scarTissueAnalysis, painDriverSummary } = req.body;
-      if (!painMarkers && !skeletonConfig && !subjectiveHistory && !postureDeviations && !compensationAnalysis) {
+      if (!painMarkers && !skeletonConfig && !subjectiveHistory && !postureDeviations && !compensationAnalysis && !muscleAnalysis && !forceAnalysis && !fascialChainAnalysis && !scarTissueAnalysis && !painDriverSummary && !romMeasurements && !detectedSyndromes) {
         return res.status(400).json({ error: "At least one clinical input is required" });
       }
 

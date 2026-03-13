@@ -34,6 +34,20 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
+
+export interface EvidenceReference {
+  title: string;
+  authors: string;
+  journal: string;
+  year: number;
+  pmid: string;
+  doi?: string;
+  abstract?: string;
+  studyType: string;
+  evidenceGrade: 'A' | 'B' | 'C' | 'D';
+  pubmedUrl: string;
+}
 
 export interface ClinicalHypothesis {
   id: string;
@@ -152,6 +166,7 @@ export interface ClinicalReasoningData {
   assessmentPriorities: string[];
   treatmentPlan?: TreatmentPlan | null;
   posturalAnalysis?: PosturalAnalysis | null;
+  evidenceReferences?: EvidenceReference[];
 }
 
 interface ClinicalReasoningPanelProps {
@@ -1060,6 +1075,29 @@ export default function ClinicalReasoningPanel({
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {d.evidenceReferences && d.evidenceReferences.length > 0 && (
+                    <div className="bg-violet-500/5 rounded-lg p-2 border border-violet-500/10">
+                      <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                        <ScrollText className="h-2.5 w-2.5 text-violet-400" />Evidence Base ({d.evidenceReferences.length} papers from PubMed)
+                      </p>
+                      <EvidenceCitationInline
+                        papers={d.evidenceReferences.map(ref => ({
+                          title: ref.title,
+                          authors: ref.authors,
+                          journal: ref.journal,
+                          year: ref.year,
+                          pmid: ref.pmid,
+                          doi: ref.doi,
+                          abstract: ref.abstract,
+                          studyType: ref.studyType,
+                          evidenceGrade: ref.evidenceGrade,
+                          pubmedUrl: ref.pubmedUrl,
+                        }))}
+                        compact={false}
+                      />
                     </div>
                   )}
                 </div>

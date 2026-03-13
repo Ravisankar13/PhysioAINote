@@ -6142,6 +6142,27 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
       const openai = new OpenAI({ apiKey, baseURL });
 
+      const { fetchClinicalEvidence, extractClinicalTerms } = await import("./services/clinicalEvidenceService");
+      let evidencePapers: any[] = [];
+      let evidenceContext = '';
+      try {
+        const clinicalText = [
+          ...(painMarkers || []).map((m: any) => `${m.label || m.nearestBone || ''} ${m.description || ''} ${m.subjectiveHistory || ''}`),
+          subjectiveHistory || '',
+          ...(detectedSyndromes || []).map((s: any) => s.name || ''),
+        ].join(' ');
+        const terms = extractClinicalTerms(clinicalText);
+        if (terms.region || terms.condition) {
+          const evidenceResult = await fetchClinicalEvidence(terms.region, terms.condition, terms.treatment);
+          evidencePapers = evidenceResult.papers.slice(0, 8);
+          if (evidencePapers.length > 0) {
+            evidenceContext = `\n\nPUBMED EVIDENCE (${evidencePapers.length} papers retrieved — cite these using [Author, Year] format with PMIDs):\n${evidencePapers.map((p: any, i: number) => `${i+1}. ${p.authors} (${p.year}). "${p.title}". ${p.journal}. PMID: ${p.pmid}. [Grade ${p.evidenceGrade}, ${p.studyType}]${p.abstract ? '\n   Abstract: ' + p.abstract.substring(0, 300) + '...' : ''}`).join('\n')}`;
+          }
+        }
+      } catch (evidenceErr: any) {
+        console.warn("Evidence fetch for clinical reasoning failed:", evidenceErr.message);
+      }
+
       const markerContext = painMarkers && painMarkers.length > 0
         ? `\n\nPAIN MARKERS (${painMarkers.length}):\n${painMarkers.map((m: any, i: number) => `${i+1}. Region: ${m.label || m.nearestBone || 'unknown'}, Type: ${m.type || 'point'}, Severity: ${m.severity || 5}/10${m.description ? ', Description: ' + m.description : ''}${m.subjectiveHistory ? ', History: ' + m.subjectiveHistory : ''}`).join('\n')}`
         : '';
@@ -6208,7 +6229,7 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
 
       const prompt = `You are an expert musculoskeletal physiotherapist performing a comprehensive clinical reasoning analysis. Analyze ALL provided clinical data and produce a complete assessment with treatment plan. Pay special attention to posture deviations and their biomechanical consequences.
 
-${markerContext}${skeletonContext}${historyContext}${romContext}${postureContext}${forceContext}${muscleContext}${syndromeContext}${compensationContext}${fascialChainContext}${scarTissueContext}${painDriverContext}
+${markerContext}${skeletonContext}${historyContext}${romContext}${postureContext}${forceContext}${muscleContext}${syndromeContext}${compensationContext}${fascialChainContext}${scarTissueContext}${painDriverContext}${evidenceContext}
 
 Return ONLY valid JSON with this structure:
 {
@@ -6289,7 +6310,8 @@ GUIDELINES:
 - "posturalAnalysis": CRITICAL - If posture deviations, force data, or muscle analysis data is provided, you MUST analyze how these postural changes create biomechanical stress. For EACH significant posture deviation, explain the force impact on joints, the muscle adaptation, and how it connects to the patient's pain. Think like a biomechanist - trace the kinetic chain from the postural fault to the symptomatic region.
 - "posturalAnalysis.correlations": Create one correlation entry for each significant posture deviation. Even if there are no pain markers, explain the potential clinical consequences of the posture. If pain markers exist, explicitly connect posture to pain.
 - MOVEMENT COMPENSATION ANALYSIS: If movement compensation data is provided, this is CRITICAL clinical information. Analyze the full compensation chain: explain WHY the restricted joint causes the compensating joint to overload, WHAT anatomical structures are at risk (e.g., subacromial impingement from GH compensation, facet loading from lumbar compensation), and HOW the additional load percentages translate to clinical consequences. Integrate compensation findings into your hypotheses, biomechanical links, and treatment plan. The treatment should address BOTH the restricted joint AND protect the compensating structures.
-- PAIN DRIVER INTEGRATION: Consider ALL pain drivers including fascial chain tension propagation, scar tissue restrictions, and compensatory patterns. Explain how each driver contributes to the patient's presentation. Identify which is the PRIMARY cause vs contributing factors. If fascial chain tension data is provided, reference specific chains by name and explain how their elevated tension propagates load through the kinetic chain. If scar tissue data is provided, explain how scars restrict mobility and disrupt fascial continuity. If ranked pain drivers are provided, use them to prioritize your clinical reasoning and treatment approach — address the highest-scoring drivers first.`;
+- PAIN DRIVER INTEGRATION: Consider ALL pain drivers including fascial chain tension propagation, scar tissue restrictions, and compensatory patterns. Explain how each driver contributes to the patient's presentation. Identify which is the PRIMARY cause vs contributing factors. If fascial chain tension data is provided, reference specific chains by name and explain how their elevated tension propagates load through the kinetic chain. If scar tissue data is provided, explain how scars restrict mobility and disrupt fascial continuity. If ranked pain drivers are provided, use them to prioritize your clinical reasoning and treatment approach — address the highest-scoring drivers first.
+- EVIDENCE-BASED PRACTICE: If PUBMED EVIDENCE papers are provided above, you MUST cite them in your treatment reasoning and manual therapy rationale using [Author, Year] format. Explain which papers support your treatment choices. Reference the evidence grade (A/B/C/D) when discussing treatment recommendations. This is critical for evidence-based practice.`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -6361,6 +6383,18 @@ GUIDELINES:
           compensatoryPatterns: parsed.posturalAnalysis.compensatoryPatterns || [],
           recommendedCorrections: parsed.posturalAnalysis.recommendedCorrections || [],
         } : null,
+        evidenceReferences: evidencePapers.map((p: any) => ({
+          title: p.title,
+          authors: p.authors,
+          journal: p.journal,
+          year: p.year,
+          pmid: p.pmid,
+          doi: p.doi || '',
+          abstract: p.abstract || '',
+          studyType: p.studyType,
+          evidenceGrade: p.evidenceGrade,
+          pubmedUrl: p.pubmedUrl,
+        })),
       });
     } catch (error: any) {
       console.error("Clinical reasoning analyze error:", error);

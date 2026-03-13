@@ -2251,6 +2251,7 @@ ${ddxList}`;
         assessmentPriorities: data.assessmentPriorities || [],
         treatmentPlan: data.treatmentPlan || null,
         posturalAnalysis: data.posturalAnalysis || null,
+        evidenceReferences: data.evidenceReferences || [],
       });
 
       if (!clinicalReasoningOpen) {

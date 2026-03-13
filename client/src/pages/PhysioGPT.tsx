@@ -68,7 +68,8 @@ import {
   Scissors,
   Grid2X2,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Pill
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -99,13 +100,14 @@ import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPrese
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
-import { MYOFASCIAL_CHAINS, MUSCLE_BONE_POSITIONS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState } from "@/lib/myofascialChains";
+import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState } from "@/lib/myofascialChains";
 import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel, getInfluencePathwayAbbrev, getDominantPathway, type InfluenceMap, type InfluencePathway } from "@/lib/muscleInfluenceMap";
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
 import { computeTreatmentPriorities as computeFullTreatmentPriorities, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol } from "@/lib/treatmentPriorityEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
+import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 
 const BODY_REGIONS = {
   cervical: {
@@ -2755,6 +2757,52 @@ ${ddxList}`;
   const [treatmentEvidenceRefs, setTreatmentEvidenceRefs] = useState<PubMedPaper[]>([]);
   const [liveTargetEvidence, setLiveTargetEvidence] = useState<PubMedPaper[]>([]);
   const [aiTreatmentLoading, setAiTreatmentLoading] = useState(false);
+  const [showTreatmentOverlay, setShowTreatmentOverlay] = useState(true);
+  const boneScreenPositionsRef = useRef<BoneScreenPosition[]>([]);
+  const [skeletonContainerSize, setSkeletonContainerSize] = useState({ width: 0, height: 0 });
+
+  const [stableReevalCounter, setStableReevalCounter] = useState(0);
+  const poseRevisionRef = useRef(0);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    poseRevisionRef.current += 1;
+    const currentRevision = poseRevisionRef.current;
+
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+
+    if (!showTreatmentOverlay || treatmentPriorities.targets.length === 0) return;
+
+    debounceTimerRef.current = setTimeout(() => {
+      if (poseRevisionRef.current !== currentRevision) return;
+      setStableReevalCounter(c => c + 1);
+      intervalRef.current = setInterval(() => {
+        if (poseRevisionRef.current !== currentRevision) {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          return;
+        }
+        setStableReevalCounter(c => c + 1);
+      }, 3000);
+    }, 2500);
+
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [muscleAnalysis, showTreatmentOverlay, treatmentPriorities.targets.length]);
+
+  const liveTreatmentPriorities = useMemo((): TreatmentPriorityResult => {
+    void stableReevalCounter;
+    const hasOverrides = Object.values(muscleOverrides).some(o => o?.isManual);
+    if (!muscleAnalysis || !hasOverrides) {
+      return { targets: [], summary: { totalTargets: 0, rootCauses: 0, compensations: 0, criticalChain: null, syndromes: [], treatmentSequence: [] } };
+    }
+    const integrityObj: Record<string, number> = {};
+    chainIntegrityScores.forEach((val, key) => { integrityObj[key] = val.score; });
+    return computeFullTreatmentPriorities(muscleAnalysis, influenceMap, integrityObj, painMarkers);
+  }, [stableReevalCounter, muscleAnalysis, muscleOverrides, influenceMap, chainIntegrityScores, painMarkers]);
 
   useEffect(() => {
     if (treatmentPriorities.targets.length === 0) {
@@ -2778,6 +2826,27 @@ ${ddxList}`;
     };
     fetchEvidence();
   }, [treatmentPriorities.targets.length]);
+
+  const treatmentBoneNames = useMemo((): string[] => {
+    if (!showTreatmentOverlay || liveTreatmentPriorities.targets.length === 0) return [];
+    return getRequiredBoneNames(liveTreatmentPriorities.targets);
+  }, [showTreatmentOverlay, liveTreatmentPriorities.targets]);
+
+  useEffect(() => {
+    if (!skeletonContainerRef.current) return;
+    const el = skeletonContainerRef.current;
+    const update = () => {
+      setSkeletonContainerSize({ width: el.clientWidth, height: el.clientHeight });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const handleBoneScreenPositions = useCallback((positions: BoneScreenPosition[]) => {
+    boneScreenPositionsRef.current = positions;
+  }, []);
 
   const painAffectedChainIds = useMemo(() => {
     if (!showChainVisualization || painMarkers.length === 0) return [];
@@ -3309,6 +3378,8 @@ ${ddxList}`;
               scarMarkers={scarMarkers}
               adhesionBands={adhesionBands}
               onScarMarkerClick={(id) => setEditingScar(id)}
+              treatmentBoneNames={treatmentBoneNames}
+              onBoneScreenPositions={handleBoneScreenPositions}
               enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle'}
               onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
                 if (scarPlacementMode) {
@@ -6786,6 +6857,28 @@ ${ddxList}`;
               onOpenForceOverlay={() => { setForceMode(true); }}
               onOpenMuscleOverlay={() => { setMuscleMode(true); }}
               onOpenChainExplorer={() => { setChainExplorerMode(true); setChainIntegrityMode(true); }}
+            />
+
+            {liveTreatmentPriorities.targets.length > 0 && (
+              <button
+                onClick={() => setShowTreatmentOverlay(prev => !prev)}
+                className={`absolute top-4 right-4 z-20 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                  showTreatmentOverlay
+                    ? 'bg-teal-500/30 ring-1 ring-teal-500/50 hover:bg-teal-500/40'
+                    : 'bg-gray-700/50 ring-1 ring-gray-600/50 hover:bg-gray-600/50'
+                }`}
+                title={showTreatmentOverlay ? 'Hide treatment overlay' : 'Show treatment overlay'}
+              >
+                <Pill className={`h-3.5 w-3.5 ${showTreatmentOverlay ? 'text-teal-300' : 'text-gray-400'}`} />
+              </button>
+            )}
+
+            <TreatmentOverlayBridge
+              treatmentPriorities={liveTreatmentPriorities}
+              positionsRef={boneScreenPositionsRef}
+              containerWidth={skeletonContainerSize.width}
+              containerHeight={skeletonContainerSize.height}
+              visible={showTreatmentOverlay && liveTreatmentPriorities.targets.length > 0}
             />
 
           </div>

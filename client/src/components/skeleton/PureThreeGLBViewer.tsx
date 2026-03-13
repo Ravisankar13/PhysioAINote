@@ -1659,6 +1659,8 @@ interface PureThreeGLBViewerProps {
   onScarMarkerClick?: (id: string) => void;
   onSkeletonClick?: (position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => void;
   enableSkeletonClick?: boolean;
+  treatmentBoneNames?: string[];
+  onBoneScreenPositions?: (positions: Array<{ boneName: string; screenX: number; screenY: number; visible: boolean }>) => void;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2117,6 +2119,8 @@ export default function PureThreeGLBViewer({
   onScarMarkerClick,
   onSkeletonClick,
   enableSkeletonClick = false,
+  treatmentBoneNames,
+  onBoneScreenPositions,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -2158,6 +2162,11 @@ export default function PureThreeGLBViewer({
   onSkeletonClickRef.current = onSkeletonClick;
   const enableSkeletonClickRef = useRef(enableSkeletonClick);
   enableSkeletonClickRef.current = enableSkeletonClick;
+  const onBoneScreenPositionsRef = useRef(onBoneScreenPositions);
+  onBoneScreenPositionsRef.current = onBoneScreenPositions;
+  const treatmentBoneNamesRef = useRef(treatmentBoneNames);
+  treatmentBoneNamesRef.current = treatmentBoneNames;
+  const treatmentFrameCounter = useRef(0);
   const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
   const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh; hasMoved: boolean } | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -4864,6 +4873,30 @@ export default function PureThreeGLBViewer({
             } else {
               setLandmarkLabels(prev => prev.length > 0 ? [] : prev);
             }
+          }
+
+          treatmentFrameCounter.current++;
+          if (treatmentFrameCounter.current % 5 === 0 && treatmentBoneNamesRef.current && treatmentBoneNamesRef.current.length > 0 && onBoneScreenPositionsRef.current && containerRef.current) {
+            const bones = bonesRef.current;
+            const cam = sceneRef.current.camera;
+            const rect = containerRef.current.getBoundingClientRect();
+            const tmpV = new THREE.Vector3();
+            const projV2 = new THREE.Vector3();
+            const positions: Array<{ boneName: string; screenX: number; screenY: number; visible: boolean }> = [];
+            const seenTreatmentBones = new Set<string>();
+            for (const boneName of treatmentBoneNamesRef.current) {
+              if (seenTreatmentBones.has(boneName)) continue;
+              seenTreatmentBones.add(boneName);
+              const bone = bones[boneName];
+              if (!bone) continue;
+              bone.getWorldPosition(tmpV);
+              projV2.copy(tmpV).project(cam);
+              const sx = (projV2.x * 0.5 + 0.5) * rect.width;
+              const sy = (-projV2.y * 0.5 + 0.5) * rect.height;
+              const isVisible = projV2.z > 0 && projV2.z < 1 && sx > -50 && sx < rect.width + 50 && sy > -50 && sy < rect.height + 50;
+              positions.push({ boneName, screenX: sx, screenY: sy, visible: isVisible });
+            }
+            onBoneScreenPositionsRef.current(positions);
           }
 
           forceFrameCounter.current++;

@@ -52,8 +52,8 @@ export default function ClinicalResponseDisplay({
   cptCodes,
   professionalMode
 }: ClinicalResponseProps) {
-  // Parse content for clinical structure if sections not provided
-  const parsedSections = clinicalSections || parseContentForSections(content);
+  const cleanContent = stripPoseBlocks(content);
+  const parsedSections = clinicalSections || parseContentForSections(cleanContent);
   
   return (
     <div className="space-y-4">
@@ -84,7 +84,7 @@ export default function ClinicalResponseDisplay({
       {/* Main Content */}
       <div className="prose prose-sm max-w-none">
         {!parsedSections.assessment && !parsedSections.clinicalReasoning && !parsedSections.treatmentPlan && !parsedSections.sessionSummary && !parsedSections.clinicalFindings ? (
-          <div className="text-sm whitespace-pre-wrap leading-relaxed">{renderMarkdown(content)}</div>
+          <div className="text-sm whitespace-pre-wrap leading-relaxed">{renderMarkdown(cleanContent)}</div>
         ) : (
           <div className="space-y-3">
             {/* Session Summary */}
@@ -321,9 +321,9 @@ export default function ClinicalResponseDisplay({
             )}
 
             {/* Remaining content that doesn't fit sections */}
-            {content && !containsAllContent(parsedSections, content) && (
+            {cleanContent && !containsAllContent(parsedSections, cleanContent) && (
               <div className="mt-3 text-sm whitespace-pre-wrap leading-relaxed">
-                {renderMarkdown(extractRemainingContent(parsedSections, content))}
+                {renderMarkdown(extractRemainingContent(parsedSections, cleanContent))}
               </div>
             )}
           </div>
@@ -392,7 +392,12 @@ function renderMarkdown(text: string): JSX.Element {
   return <>{elements}</>;
 }
 
+function stripPoseBlocks(text: string): string {
+  return text.replace(/```pose\s*\n[\s\S]*?\n```/g, '').trim();
+}
+
 function parseContentForSections(content: string): ClinicalSections {
+  content = stripPoseBlocks(content);
   const sections: ClinicalSections = {};
 
   const headerKeyMap: [RegExp, string][] = [

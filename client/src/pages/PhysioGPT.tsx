@@ -97,6 +97,7 @@ import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnal
 import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS, type MuscleRestrictionEffect } from "@/lib/bidirectionalMuscleJoint";
 import { computePathologyCompensation, type PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
 import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
+import { getClinicalPresetCategories, applyPresetToConfig, type ClinicalPosturePreset } from "@/lib/clinicalPosturePresets";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
@@ -398,6 +399,7 @@ export default function PhysioGPT() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatPanelOpen, setChatPanelOpen] = useState(true);
   const [showJointControls, setShowJointControls] = useState(false);
+  const [showClinicalPresets, setShowClinicalPresets] = useState(false);
   const [openControlSections, setOpenControlSections] = useState<Set<string>>(new Set());
   const [environmentPreset, setEnvironmentPreset] = useState(DEFAULT_ENVIRONMENT);
   const [showEnvironmentPicker, setShowEnvironmentPicker] = useState(false);
@@ -824,7 +826,8 @@ export default function PhysioGPT() {
           clinicalContext: {
             bodyRegion: selectedRegion ? BODY_REGIONS[selectedRegion].name : undefined,
             professionalMode: true
-          }
+          },
+          currentPoseState: modelConfig
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -877,6 +880,9 @@ export default function PhysioGPT() {
                     break;
                   case 'clinicalSections':
                     evidenceDataReceived.clinicalSections = data.data;
+                    break;
+                  case 'poseCommand':
+                    applyPoseCommand(data.data);
                     break;
                   case 'done':
                     if (Object.keys(evidenceDataReceived).length > 0 && newConversationId) {
@@ -1977,6 +1983,52 @@ ${ddxList}`;
       return next;
     });
   };
+
+  const applyPoseCommand = useCallback((poseData: Record<string, any>) => {
+    if (!poseData || typeof poseData !== 'object') return;
+    const isIncremental = poseData.mode === 'incremental';
+    const isReset = Object.keys(poseData).length === 0 || (Object.keys(poseData).length === 1 && poseData.mode);
+
+    if (isReset) {
+      setModelConfig({ ...DEFAULT_MODEL_CONFIG });
+      toast({ title: "Pose Reset", description: "Skeleton returned to neutral position" });
+      return;
+    }
+
+    const validGroups = Object.keys(DEFAULT_MODEL_CONFIG);
+    let appliedCount = 0;
+
+    setModelConfig(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      for (const [jointKey, params] of Object.entries(poseData)) {
+        if (jointKey === 'mode') continue;
+        if (!validGroups.includes(jointKey)) continue;
+        if (typeof params !== 'object' || params === null) continue;
+        const validParams = Object.keys((DEFAULT_MODEL_CONFIG as any)[jointKey]);
+        for (const [param, value] of Object.entries(params as Record<string, number>)) {
+          if (typeof value !== 'number') continue;
+          if (!validParams.includes(param)) continue;
+          if (isIncremental) {
+            next[jointKey][param] = (next[jointKey][param] || 0) + value;
+          } else {
+            next[jointKey][param] = value;
+          }
+          appliedCount++;
+        }
+      }
+      return next;
+    });
+
+    if (appliedCount > 0) {
+      toast({ title: "Pose Updated", description: isIncremental ? "Skeleton adjusted incrementally" : "Skeleton pose applied from AI" });
+    }
+  }, [toast]);
+
+  const applyClinicalPreset = useCallback((preset: ClinicalPosturePreset) => {
+    const newConfig = applyPresetToConfig(modelConfig, preset, DEFAULT_MODEL_CONFIG);
+    setModelConfig(newConfig as ModelConfig);
+    toast({ title: "Preset Applied", description: `${preset.name} posture loaded` });
+  }, [modelConfig, toast]);
 
   const applyVoiceFindings = useCallback((data: any) => {
     const newFindings: any[] = [];
@@ -3544,6 +3596,49 @@ ${ddxList}`;
               modelConfig={finalModelConfig as any}
               muscleRestrictionEffects={muscleRestrictionEffects}
             />
+
+            {/* Clinical Presets Panel */}
+            {showClinicalPresets && (
+              <div className="absolute top-2 left-2 w-60 bg-white/95 backdrop-blur rounded-lg shadow-lg max-h-[calc(100%-16px)] overflow-y-auto z-10">
+                <div className="sticky top-0 bg-white/95 backdrop-blur rounded-t-lg px-3 py-2 border-b border-gray-200 flex items-center justify-between z-10">
+                  <span className="text-xs font-bold text-gray-800">Clinical Presets</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setModelConfig({ ...DEFAULT_MODEL_CONFIG });
+                        toast({ title: "Reset", description: "Skeleton returned to neutral" });
+                      }}
+                      className="text-[9px] text-blue-500 hover:text-blue-700 px-1"
+                    >
+                      Reset
+                    </button>
+                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowClinicalPresets(false)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="px-2 py-1">
+                  {getClinicalPresetCategories().map(category => (
+                    <div key={category.id} className="mb-2">
+                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-1 py-1">{category.label}</div>
+                      <div className="space-y-0.5">
+                        {category.presets.map(preset => (
+                          <button
+                            key={preset.id}
+                            onClick={() => applyClinicalPreset(preset)}
+                            className="w-full text-left px-2 py-1.5 rounded-md hover:bg-emerald-50 transition-colors group"
+                            title={preset.description}
+                          >
+                            <div className="text-[11px] font-medium text-gray-700 group-hover:text-emerald-700">{preset.name}</div>
+                            <div className="text-[9px] text-gray-400 group-hover:text-emerald-500 leading-tight line-clamp-2">{preset.description}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Joint Controls Overlay */}
             {showJointControls && (() => {
@@ -6351,6 +6446,15 @@ ${ddxList}`;
                 )}
               </Button>
               <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${showClinicalPresets ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => setShowClinicalPresets(!showClinicalPresets)}
+              >
+                <Layers className="h-3 w-3 mr-1" />
+                Presets
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"

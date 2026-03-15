@@ -25,6 +25,7 @@ interface StreamRequest {
   patientContext?: any;
   virtualPatient?: any;
   clinicalContext?: any;
+  currentPoseState?: Record<string, Record<string, number>>;
   isVoiceSession?: boolean;
   isInterimAnalysis?: boolean;
   userId: number;
@@ -32,7 +33,7 @@ interface StreamRequest {
 
 export class PhysioGptStreamService {
   
-  private buildSystemPrompt(clinicalContext?: any, virtualPatient?: any): string {
+  private buildSystemPrompt(clinicalContext?: any, virtualPatient?: any, currentPoseState?: Record<string, Record<string, number>>): string {
     const professionalMode = clinicalContext?.professionalMode;
     const bodyRegion = clinicalContext?.bodyRegion;
     const conditionType = clinicalContext?.conditionType;
@@ -49,6 +50,25 @@ export class PhysioGptStreamService {
     }
     if (clinicalContext?.activityLevel) {
       contextPrompt += `ACTIVITY LEVEL: ${clinicalContext.activityLevel} athlete/individual\n`;
+    }
+
+    if (currentPoseState && Object.keys(currentPoseState).length > 0) {
+      const nonNeutral: Record<string, Record<string, number>> = {};
+      for (const [group, params] of Object.entries(currentPoseState)) {
+        if (typeof params !== 'object' || params === null) continue;
+        const activeParams: Record<string, number> = {};
+        for (const [param, val] of Object.entries(params)) {
+          if (typeof val === 'number' && val !== 0) {
+            activeParams[param] = val;
+          }
+        }
+        if (Object.keys(activeParams).length > 0) {
+          nonNeutral[group] = activeParams;
+        }
+      }
+      if (Object.keys(nonNeutral).length > 0) {
+        contextPrompt += `\nCURRENT SKELETON POSE STATE (non-neutral joints):\n${JSON.stringify(nonNeutral, null, 2)}\nUse this as context when analyzing the current posture or suggesting modifications. For incremental adjustments, reference these values.\n`;
+      }
     }
 
     const clinicalReasoningFramework = `
@@ -200,6 +220,51 @@ When analyzing shoulder presentations, apply these advanced frameworks:
    - Scapular winging = serratus anterior weakness or long thoracic nerve palsy
    - Positive Scapular Assistance Test = scapular rehabilitation should be treatment priority
 
+SKELETON POSING CAPABILITY:
+You can adjust the 3D skeleton model to match a patient's posture. When the user describes a posture, body position, or asks you to adjust the skeleton, include a JSON pose block in your response using this exact format:
+
+\`\`\`pose
+{
+  "spine": { "thoracicKyphosis": 30, "forwardHead": 20 },
+  "pelvis": { "tilt": 15 },
+  "leftShoulder": { "internalRotation": 20 }
+}
+\`\`\`
+
+Available joint groups and parameters (all values in degrees):
+- "spine": cervicalLordosis, thoracicKyphosis, lumbarLordosis, scoliosis, forwardHead, lateralShift, cervicalRotation, cervicalLateralFlexion, thoracicRotation, lumbarRotation, flexion, lateralFlexion, lumbarScoliosis, thoracicScoliosis, cervicalScoliosis
+- "neck": flexion, extension, rotation, lateralFlexion, forwardHead
+- "pelvis": tilt (positive=anterior), obliquity (positive=right side up), rotation, drop
+- "leftHip"/"rightHip": flexion, extension, abduction, adduction, internalRotation, externalRotation, anteversion, neckShaftAngle
+- "leftKnee"/"rightKnee": flexion, varus (positive=varus, negative=valgus), tibialTorsion, recurvatum
+- "leftAnkle"/"rightAnkle": dorsiflexion, plantarflexion, inversion, eversion, forefootVarus, toeExtension
+- "leftShoulder"/"rightShoulder": flexion, abduction, internalRotation, externalRotation, protraction, elevation, winging
+- "leftScapula"/"rightScapula": protraction, retraction, elevation, depression, upwardRotation, downwardRotation, anteriorTilt, posteriorTilt, winging
+- "leftElbow"/"rightElbow": flexion, carryingAngle, pronation
+- "leftWrist"/"rightWrist": deviation, flexion
+
+Clinical language mapping for degree values:
+- "slight" / "mild" = 5-10 degrees
+- "moderate" = 15-25 degrees
+- "significant" / "marked" = 25-35 degrees
+- "severe" / "pronounced" = 35-50 degrees
+
+When making INCREMENTAL adjustments (user says "increase X" or "add more Y"), use the "mode" field:
+\`\`\`pose
+{
+  "mode": "incremental",
+  "spine": { "thoracicKyphosis": 10 }
+}
+\`\`\`
+Without "mode" or with "mode": "absolute", values replace the current pose.
+
+IMPORTANT POSING RULES:
+1. Always include a pose block when the user asks to adjust, set, or modify the skeleton posture
+2. Use clinically realistic angle ranges based on the descriptions above
+3. For named conditions (e.g., "upper crossed syndrome"), apply all relevant joint changes together
+4. Explain what you're doing and why alongside the pose block
+5. When the user asks to "reset" or return to neutral, emit an empty pose block: \`\`\`pose\n{}\n\`\`\`
+
 RESPONSE QUALITY REQUIREMENTS:
 1. Always explain WHY you're recommending something, not just WHAT to do
 2. Reference tissue healing timelines when relevant
@@ -294,7 +359,7 @@ Keep responses concise, practical, and directly applicable to clinical practice.
       }
 
       // Build messages for OpenAI
-      let systemPrompt = this.buildSystemPrompt(request.clinicalContext, request.virtualPatient);
+      let systemPrompt = this.buildSystemPrompt(request.clinicalContext, request.virtualPatient, request.currentPoseState);
       if (pubmedEvidence && pubmedEvidence.papers.length > 0) {
         systemPrompt += formatPapersForPrompt(pubmedEvidence.papers);
         systemPrompt += '\n\nIMPORTANT: When making clinical recommendations, cite the relevant papers above using [Author, Year] format. Include the PMID where possible. Base your evidence grades on these actual studies.';
@@ -341,6 +406,12 @@ Keep responses concise, practical, and directly applicable to clinical practice.
         role: 'assistant', 
         content: fullResponse
       });
+
+      // Extract pose commands from the response
+      const poseData = this.extractPoseCommand(fullResponse);
+      if (poseData) {
+        res.write(`data: ${JSON.stringify({ type: 'poseCommand', data: poseData })}\n\n`);
+      }
       
       // Start parallel processing for enhancements
       const enhancementsPromises = [];
@@ -626,6 +697,21 @@ Keep responses concise, practical, and directly applicable to clinical practice.
     return sections;
   }
   
+  private extractPoseCommand(response: string): any | null {
+    const poseBlockRegex = /```pose\s*\n([\s\S]*?)\n```/g;
+    const matches = [...response.matchAll(poseBlockRegex)];
+    if (matches.length === 0) return null;
+
+    const lastMatch = matches[matches.length - 1];
+    try {
+      const parsed = JSON.parse(lastMatch[1]);
+      return parsed;
+    } catch (e) {
+      console.warn('Failed to parse pose command JSON:', e);
+      return null;
+    }
+  }
+
   private generateConversationTitle(message: string): string {
     const words = message.toLowerCase().split(' ');
     const clinicalTerms = [

@@ -6959,7 +6959,7 @@ Guidelines:
   app.post("/api/physiogpt/chat/stream", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       console.log("PhysioGPT stream request received");
-      const { message, conversationId, patientContext, virtualPatient, clinicalContext, isVoiceSession, isInterimAnalysis } = req.body;
+      const { message, conversationId, patientContext, virtualPatient, clinicalContext, currentPoseState, isVoiceSession, isInterimAnalysis } = req.body;
       
       if (!message || typeof message !== 'string') {
         return res.status(400).json({ error: "Message is required" });
@@ -6976,6 +6976,7 @@ Guidelines:
         patientContext,
         virtualPatient,
         clinicalContext,
+        currentPoseState,
         isVoiceSession: !!isVoiceSession,
         isInterimAnalysis: !!isInterimAnalysis,
         userId

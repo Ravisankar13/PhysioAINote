@@ -202,10 +202,10 @@ function SectionCard({ sectionDef, content, isStreaming, isUpcoming, showAlways,
   const hasContent = content.length > 0;
 
   useEffect(() => {
-    if (hasContent && defaultExpanded) {
+    if (hasContent && isStreaming) {
       setIsExpanded(true);
     }
-  }, [hasContent, defaultExpanded]);
+  }, [hasContent, isStreaming]);
 
   if (!hasContent && !isStreaming && !isUpcoming && !showAlways) {
     return null;
@@ -294,7 +294,7 @@ function StructuredSummaryView({ content, isStreaming }: { content: string; isSt
             isStreaming={isActivelyStreaming}
             isUpcoming={isUpcoming && !sectionContent}
             showAlways={showAlways}
-            defaultExpanded={idx === 0 || idx === activeSectionIdx}
+            defaultExpanded={idx === 0}
           />
         );
       })}

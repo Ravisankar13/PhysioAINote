@@ -1941,6 +1941,7 @@ ${ddxList}`;
     setSelectedConversationId(null);
     setSuggestions([]);
     setMessage("");
+    setChatPanelOpen(true);
   };
 
   const handleRegionSelect = (region: keyof typeof BODY_REGIONS) => {
@@ -7159,7 +7160,7 @@ ${ddxList}`;
                     className={`group relative flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer transition-colors ${
                       selectedConversationId === conv.id ? 'bg-teal-500/20 border border-teal-500/30' : 'hover:bg-white/5'
                     }`}
-                    onClick={() => setSelectedConversationId(conv.id)}
+                    onClick={() => { setSelectedConversationId(conv.id); setChatPanelOpen(true); }}
                   >
                     <MessageCircle className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
                     <div className="flex-1 min-w-0">

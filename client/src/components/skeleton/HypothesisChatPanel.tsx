@@ -164,7 +164,20 @@ export default function HypothesisChatPanel({
       setInputValue("");
       fetchInitialSummary(hypothesis);
     }
+    if (!isOpen && abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
   }, [hypothesis?.id, isOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+    };
+  }, []);
 
   const streamRequest = useCallback(async (
     hyp: HypothesisData,

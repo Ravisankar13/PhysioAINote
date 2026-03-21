@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Send, ToggleLeft, ToggleRight, Move3D, Loader2, Sparkles, AlertTriangle, Stethoscope } from "lucide-react";
+import { X, Send, ToggleLeft, ToggleRight, Move3D, Loader2, Sparkles, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 
 export interface HypothesisData {
@@ -42,6 +41,81 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
+function renderMarkdownLine(line: string, key: number) {
+  const parts: Array<string | JSX.Element> = [];
+  let remaining = line;
+  let partIdx = 0;
+
+  while (remaining.length > 0) {
+    const boldMatch = remaining.match(/\*\*(.*?)\*\*/);
+    const codeMatch = remaining.match(/`(.*?)`/);
+    const italicMatch = remaining.match(/\*(.*?)\*/);
+
+    let firstMatch: { idx: number; len: number; el: JSX.Element } | null = null;
+
+    if (boldMatch && boldMatch.index !== undefined) {
+      const el = <strong key={`b${partIdx}`} className="text-teal-300 font-semibold">{boldMatch[1]}</strong>;
+      if (!firstMatch || boldMatch.index < firstMatch.idx) {
+        firstMatch = { idx: boldMatch.index, len: boldMatch[0].length, el };
+      }
+    }
+    if (codeMatch && codeMatch.index !== undefined) {
+      const el = <code key={`c${partIdx}`} className="bg-gray-700/50 px-1 rounded text-xs">{codeMatch[1]}</code>;
+      if (!firstMatch || codeMatch.index < firstMatch.idx) {
+        firstMatch = { idx: codeMatch.index, len: codeMatch[0].length, el };
+      }
+    }
+    if (italicMatch && italicMatch.index !== undefined && (!boldMatch || italicMatch.index !== boldMatch.index)) {
+      const el = <em key={`i${partIdx}`}>{italicMatch[1]}</em>;
+      if (!firstMatch || italicMatch.index < firstMatch.idx) {
+        firstMatch = { idx: italicMatch.index, len: italicMatch[0].length, el };
+      }
+    }
+
+    if (!firstMatch) {
+      parts.push(remaining);
+      break;
+    }
+
+    if (firstMatch.idx > 0) {
+      parts.push(remaining.slice(0, firstMatch.idx));
+    }
+    parts.push(firstMatch.el);
+    partIdx++;
+    remaining = remaining.slice(firstMatch.idx + firstMatch.len);
+  }
+
+  return <span key={key}>{parts}</span>;
+}
+
+function FormattedContent({ text }: { text: string }) {
+  const lines = text.split('\n');
+  return (
+    <div className="whitespace-pre-wrap leading-relaxed text-sm">
+      {lines.map((line, idx) => {
+        const bulletMatch = line.match(/^- (.*)/);
+        if (bulletMatch) {
+          return (
+            <div key={idx} className="block pl-2 border-l-2 border-teal-500/30 ml-1 mb-1">
+              {renderMarkdownLine(bulletMatch[1], idx)}
+            </div>
+          );
+        }
+        const numberedMatch = line.match(/^(\d+)\. (.*)/);
+        if (numberedMatch) {
+          return (
+            <div key={idx} className="block pl-2 ml-1 mb-1">
+              <span className="text-teal-400 mr-1">{numberedMatch[1]}.</span>
+              {renderMarkdownLine(numberedMatch[2], idx)}
+            </div>
+          );
+        }
+        return <div key={idx}>{renderMarkdownLine(line, idx)}</div>;
+      })}
+    </div>
+  );
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
   return (
@@ -51,22 +125,10 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           ? "bg-teal-600/30 border border-teal-500/30 text-gray-100"
           : "bg-gray-800/60 border border-gray-700/30 text-gray-200"
       }`}>
-        <div className="whitespace-pre-wrap leading-relaxed prose prose-invert prose-sm max-w-none
-          [&_strong]:text-teal-300 [&_strong]:font-semibold"
-          dangerouslySetInnerHTML={{ __html: formatMarkdown(message.content) }}
-        />
+        <FormattedContent text={message.content} />
       </div>
     </div>
   );
-}
-
-function formatMarkdown(text: string): string {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code class="bg-gray-700/50 px-1 rounded text-xs">$1</code>')
-    .replace(/^- (.*)/gm, '<span class="block pl-2 border-l-2 border-teal-500/30 ml-1 mb-1">$1</span>')
-    .replace(/^(\d+)\. (.*)/gm, '<span class="block pl-2 ml-1 mb-1"><span class="text-teal-400 mr-1">$1.</span>$2</span>');
 }
 
 export default function HypothesisChatPanel({
@@ -291,10 +353,7 @@ export default function HypothesisChatPanel({
         {streamingContent && (
           <div className="flex justify-start mb-3">
             <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-gray-800/60 border border-gray-700/30 text-gray-200">
-              <div className="whitespace-pre-wrap leading-relaxed prose prose-invert prose-sm max-w-none
-                [&_strong]:text-teal-300 [&_strong]:font-semibold"
-                dangerouslySetInnerHTML={{ __html: formatMarkdown(streamingContent) }}
-              />
+              <FormattedContent text={streamingContent} />
               <span className="inline-block w-1.5 h-4 bg-teal-400 animate-pulse ml-0.5" />
             </div>
           </div>

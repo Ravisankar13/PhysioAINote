@@ -34,7 +34,6 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
-  MessageSquareText,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
@@ -742,7 +741,7 @@ export default function ClinicalReasoningPanel({
                         key={hypothesis.id}
                         className={`rounded-lg p-2 border animate-in fade-in-0 slide-in-from-right-1 duration-300 transition-colors cursor-pointer ${isVizActive ? 'bg-emerald-900/30 border-emerald-500/40 ring-1 ring-emerald-500/20' : 'bg-gray-800/40 border-gray-700/30 hover:border-cyan-500/30'}`}
                         style={{ animationDelay: `${idx * 50}ms` }}
-                        onClick={() => handleVisualizationClick(vizId, 'hypothesis', hypothesis.condition, fullText)}
+                        onClick={() => { if (onHypothesisClick) { onHypothesisClick(hypothesis); } else { handleVisualizationClick(vizId, 'hypothesis', hypothesis.condition, fullText); } }}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -757,17 +756,12 @@ export default function ClinicalReasoningPanel({
                                 Confirmed
                               </span>
                             )}
-                            {onHypothesisClick && (
-                              <span
-                                className="p-0.5 rounded transition-colors text-gray-600 hover:text-amber-400 cursor-pointer"
-                                title="Explore hypothesis"
-                                onClick={(e) => { e.stopPropagation(); onHypothesisClick(hypothesis); }}
-                              >
-                                <MessageSquareText className="h-3 w-3" />
-                              </span>
-                            )}
                             {onVisualizationRequest && (
-                              <span className={`p-0.5 rounded transition-colors ${isVizActive ? 'text-emerald-400' : 'text-gray-600 hover:text-cyan-400'}`} title="Visualize on skeleton">
+                              <span
+                                className={`p-0.5 rounded transition-colors cursor-pointer ${isVizActive ? 'text-emerald-400' : 'text-gray-600 hover:text-cyan-400'}`}
+                                title="Visualize on skeleton"
+                                onClick={(e) => { e.stopPropagation(); handleVisualizationClick(vizId, 'hypothesis', hypothesis.condition, fullText); }}
+                              >
                                 {isVizActive ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                               </span>
                             )}

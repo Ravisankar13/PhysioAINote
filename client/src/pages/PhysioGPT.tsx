@@ -8344,7 +8344,7 @@ ${ddxList}`;
             anatomicalLabel: pm.anatomicalLabel,
             nearestBone: pm.nearestBone,
             type: pm.type,
-            severity: (pm as any).severity ?? 5,
+            severity: 5,
           })),
           forces: hudForceAnalysis?.joints?.map((f: JointSurfaceForce) => ({
             label: f.label,

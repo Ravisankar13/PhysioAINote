@@ -90,7 +90,8 @@ import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToContro
 import type { Skeleton3DPose, PartialSkeleton3DPose, PosturalMetrics, CameraViewType } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
-import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink, type VisualizationRequest } from "@/components/skeleton/ClinicalReasoningPanel";
+import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink, type VisualizationRequest, type ClinicalHypothesis } from "@/components/skeleton/ClinicalReasoningPanel";
+import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
@@ -398,6 +399,8 @@ export default function PhysioGPT() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatPanelOpen, setChatPanelOpen] = useState(true);
+  const [hypothesisChatOpen, setHypothesisChatOpen] = useState(false);
+  const [selectedHypothesisForChat, setSelectedHypothesisForChat] = useState<HypothesisData | null>(null);
   const [showJointControls, setShowJointControls] = useState(false);
   const [showClinicalPresets, setShowClinicalPresets] = useState(false);
   const [openControlSections, setOpenControlSections] = useState<Set<string>>(new Set());
@@ -1518,6 +1521,17 @@ ${ddxList}`;
     setMuscleHighlightColors(colorMap);
     setVisualizationBoneHighlights(boneHighlights);
   }, [BIOMECHANICAL_REGION_TO_MUSCLES, VISUALIZATION_MUSCLE_MAP, MUSCLE_STATUS_COLORS, REGION_TO_BONE_NAMES, FASCIAL_CHAIN_TO_MUSCLES]);
+
+  const handleHypothesisClick = useCallback((hypothesis: ClinicalHypothesis) => {
+    setSelectedHypothesisForChat({
+      id: hypothesis.id,
+      condition: hypothesis.condition,
+      confidence: hypothesis.confidence,
+      supportingEvidence: hypothesis.supportingEvidence,
+      rulingOutFactors: hypothesis.rulingOutFactors,
+    });
+    setHypothesisChatOpen(true);
+  }, []);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;
@@ -8314,6 +8328,37 @@ ${ddxList}`;
         painDriverReports={painDriverReports}
         onVisualizationRequest={handleVisualizationRequest}
         activeVisualizationId={activeVisualizationId}
+        onHypothesisClick={handleHypothesisClick}
+      />
+
+      <HypothesisChatPanel
+        hypothesis={selectedHypothesisForChat}
+        isOpen={hypothesisChatOpen}
+        onClose={() => setHypothesisChatOpen(false)}
+        onPoseCommand={applyPoseCommand}
+        subjectiveHistory={subjectiveHistoryInput}
+        skeletonData={{
+          posture: modelConfig,
+          painMarkers: painMarkers.map(pm => ({
+            label: pm.anatomicalLabel || pm.nearestBone,
+            anatomicalLabel: pm.anatomicalLabel,
+            nearestBone: pm.nearestBone,
+            type: pm.type,
+            severity: (pm as any).severity ?? 5,
+          })),
+          forces: hudForceAnalysis?.joints?.map((f: JointSurfaceForce) => ({
+            label: f.label,
+            totalForce: f.totalForce,
+            status: f.status,
+          })) || [],
+          muscles: hudMuscleAnalysis?.groups?.flatMap((g: MuscleGroupAnalysis) =>
+            g.muscles.map((m: IndividualMuscle) => ({
+              name: m.label,
+              status: m.clinicalStatus,
+              activation: m.activationPercent,
+            }))
+          ) || [],
+        }}
       />
     </div>
   );

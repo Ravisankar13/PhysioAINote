@@ -712,6 +712,140 @@ Keep responses concise, practical, and directly applicable to clinical practice.
     }
   }
 
+  async streamHypothesisChat(request: {
+    hypothesis: { condition: string; confidence: number; supportingEvidence: string[]; rulingOutFactors: string[] };
+    messages: Array<{ role: string; content: string }>;
+    subjectiveHistory?: string;
+    skeletonData?: any;
+    includeSkeletonData: boolean;
+    poseToHypothesis?: boolean;
+  }, res: Response) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    try {
+      const { hypothesis, messages, subjectiveHistory, skeletonData, includeSkeletonData, poseToHypothesis } = request;
+
+      let systemPrompt = `You are an expert musculoskeletal physiotherapist providing a focused clinical analysis of a specific diagnostic hypothesis.
+
+HYPOTHESIS UNDER ANALYSIS:
+- Condition: ${hypothesis.condition}
+- Confidence: ${hypothesis.confidence}%
+- Supporting Evidence: ${hypothesis.supportingEvidence.join('; ')}
+- Factors to Rule Out: ${hypothesis.rulingOutFactors.join('; ')}
+`;
+
+      if (subjectiveHistory) {
+        systemPrompt += `\nSUBJECTIVE HISTORY PROVIDED:\n${subjectiveHistory}\n`;
+      }
+
+      if (includeSkeletonData && skeletonData) {
+        if (skeletonData.posture && Object.keys(skeletonData.posture).length > 0) {
+          const nonNeutral: Record<string, Record<string, number>> = {};
+          for (const [group, params] of Object.entries(skeletonData.posture)) {
+            if (typeof params !== 'object' || params === null) continue;
+            const activeParams: Record<string, number> = {};
+            for (const [param, val] of Object.entries(params as Record<string, number>)) {
+              if (typeof val === 'number' && val !== 0) activeParams[param] = val;
+            }
+            if (Object.keys(activeParams).length > 0) nonNeutral[group] = activeParams;
+          }
+          if (Object.keys(nonNeutral).length > 0) {
+            systemPrompt += `\nCURRENT SKELETON POSTURE (non-neutral):\n${JSON.stringify(nonNeutral, null, 2)}\n`;
+          }
+        }
+        if (skeletonData.painMarkers?.length > 0) {
+          systemPrompt += `\nPAIN MARKERS:\n${skeletonData.painMarkers.map((pm: any) => `- ${pm.label || pm.anatomicalLabel || pm.nearestBone}: ${pm.type || 'pain'}, severity ${pm.severity ?? 5}/10`).join('\n')}\n`;
+        }
+        if (skeletonData.forces?.length > 0) {
+          const highForces = skeletonData.forces.filter((f: any) => f.status === 'high' || f.status === 'critical');
+          if (highForces.length > 0) {
+            systemPrompt += `\nELEVATED JOINT FORCES:\n${highForces.map((f: any) => `- ${f.label}: ${f.totalForce?.toFixed(1)}% BW (${f.status})`).join('\n')}\n`;
+          }
+        }
+        if (skeletonData.muscles?.length > 0) {
+          const abnormal = skeletonData.muscles.filter((m: any) => m.status !== 'normal');
+          if (abnormal.length > 0) {
+            systemPrompt += `\nABNORMAL MUSCLE STATES:\n${abnormal.map((m: any) => `- ${m.name}: ${m.status} (activation ${m.activation}%)`).join('\n')}\n`;
+          }
+        }
+      }
+
+      if (poseToHypothesis) {
+        systemPrompt += `\nIMPORTANT: The user wants you to pose the 3D skeleton to match the typical clinical presentation of "${hypothesis.condition}".
+You MUST include a pose command block in your response using this format:
+\`\`\`pose
+{
+  "spine": { "thoracicKyphosis": 0 },
+  "leftShoulder": { "flexion": 0 }
+}
+\`\`\`
+Available joint groups: spine, pelvis, leftShoulder, rightShoulder, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, leftElbow, rightElbow, neck, head.
+Available params per group: flexion, extension, abduction, adduction, internalRotation, externalRotation, lateralFlexionLeft, lateralFlexionRight, rotationLeft, rotationRight, anteriorTilt, lateralTilt, thoracicKyphosis, lumbarLordosis, dorsiflexion, plantarflexion.
+Set only the joints relevant to the condition. Use clinically realistic angle values.\n`;
+      }
+
+      systemPrompt += `\nRESPONSE GUIDELINES:
+- For the INITIAL summary (when no prior messages), structure your response with these sections:
+  **Clinical Narrative**: A clear explanation of the condition and why it's suspected based on the findings
+  **Key Findings Connection**: How the current clinical data supports or relates to this diagnosis
+  **Confirmatory Tests**: Specific assessment tests to confirm or rule out this condition
+  **Treatment Approach**: Evidence-based treatment strategy for this condition
+  **Red Flags**: Warning signs that would require urgent action or referral
+- For follow-up questions, respond conversationally while maintaining clinical accuracy
+- Always explain your clinical reasoning
+- Cite evidence where possible using [Author, Year] format`;
+
+      const openaiMessages: Array<{ role: string; content: string }> = [
+        { role: 'system', content: systemPrompt },
+        ...messages.map(m => ({ role: m.role, content: m.content }))
+      ];
+
+      let stream;
+      try {
+        stream = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: openaiMessages as any,
+          max_tokens: 3000,
+          temperature: 0.6,
+          stream: true,
+        });
+      } catch (openaiErr) {
+        console.error("Hypothesis chat OpenAI error:", openaiErr);
+        res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI service temporarily unavailable.' })}\n\n`);
+        res.end();
+        return;
+      }
+
+      let fullResponse = '';
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          fullResponse += content;
+          res.write(`data: ${JSON.stringify({ type: 'chunk', data: content })}\n\n`);
+        }
+      }
+
+      const poseData = this.extractPoseCommand(fullResponse);
+      if (poseData) {
+        res.write(`data: ${JSON.stringify({ type: 'poseCommand', data: poseData })}\n\n`);
+      }
+
+      res.write(`data: ${JSON.stringify({ type: 'done', data: null })}\n\n`);
+      res.end();
+    } catch (error: any) {
+      console.error("Hypothesis chat streaming error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to process hypothesis chat" });
+      } else {
+        res.write(`data: ${JSON.stringify({ type: 'error', data: 'Streaming error occurred.' })}\n\n`);
+        res.end();
+      }
+    }
+  }
+
   private generateConversationTitle(message: string): string {
     const words = message.toLowerCase().split(' ');
     const clinicalTerms = [

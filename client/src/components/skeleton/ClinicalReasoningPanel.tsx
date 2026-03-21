@@ -34,6 +34,7 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
+  MessageSquareText,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
@@ -196,6 +197,7 @@ interface ClinicalReasoningPanelProps {
   painDriverReports?: import("@/lib/painDriverEngine").PainDriverReport[];
   onVisualizationRequest?: (request: VisualizationRequest | null) => void;
   activeVisualizationId?: string | null;
+  onHypothesisClick?: (hypothesis: ClinicalHypothesis) => void;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -400,6 +402,7 @@ export default function ClinicalReasoningPanel({
   painDriverReports,
   onVisualizationRequest,
   activeVisualizationId,
+  onHypothesisClick,
 }: ClinicalReasoningPanelProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
@@ -752,6 +755,15 @@ export default function ClinicalReasoningPanel({
                             {hypothesis.status === "confirmed" && (
                               <span className="text-[8px] px-1 py-0.5 bg-teal-500/20 text-teal-400 rounded">
                                 Confirmed
+                              </span>
+                            )}
+                            {onHypothesisClick && (
+                              <span
+                                className="p-0.5 rounded transition-colors text-gray-600 hover:text-amber-400 cursor-pointer"
+                                title="Explore hypothesis"
+                                onClick={(e) => { e.stopPropagation(); onHypothesisClick(hypothesis); }}
+                              >
+                                <MessageSquareText className="h-3 w-3" />
                               </span>
                             )}
                             {onVisualizationRequest && (

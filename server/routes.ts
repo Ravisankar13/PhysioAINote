@@ -6995,6 +6995,35 @@ Guidelines:
     }
   });
 
+  app.post("/api/physiogpt/hypothesis-chat/stream", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { hypothesis, messages, subjectiveHistory, skeletonData, includeSkeletonData, poseToHypothesis } = req.body;
+
+      if (!hypothesis || !hypothesis.condition) {
+        return res.status(400).json({ error: "Hypothesis data is required" });
+      }
+
+      await physioGptStreamService.streamHypothesisChat({
+        hypothesis,
+        messages: messages || [],
+        subjectiveHistory,
+        skeletonData,
+        includeSkeletonData: !!includeSkeletonData,
+        poseToHypothesis: !!poseToHypothesis,
+      }, res);
+    } catch (error: any) {
+      console.error("Hypothesis chat streaming error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Unable to process hypothesis chat" });
+      } else {
+        try {
+          res.write(`data: ${JSON.stringify({ type: 'error', data: 'An error occurred.' })}\n\n`);
+          res.end();
+        } catch (e) {}
+      }
+    }
+  });
+
   app.get("/api/physiogpt/conversations", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const conversations = await physioGptService.getUserConversations(req.user!.id);

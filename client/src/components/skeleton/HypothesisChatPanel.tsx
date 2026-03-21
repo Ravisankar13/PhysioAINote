@@ -145,7 +145,6 @@ export default function HypothesisChatPanel({
   const [streamingContent, setStreamingContent] = useState("");
   const [includeSkeletonData, setIncludeSkeletonData] = useState(true);
   const [isPosing, setIsPosing] = useState(false);
-  const [initialSummaryLoaded, setInitialSummaryLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const prevHypothesisIdRef = useRef<string | null>(null);
@@ -163,7 +162,6 @@ export default function HypothesisChatPanel({
       setMessages([]);
       setStreamingContent("");
       setInputValue("");
-      setInitialSummaryLoaded(false);
       fetchInitialSummary(hypothesis);
     }
   }, [hypothesis?.id, isOpen]);
@@ -203,14 +201,16 @@ export default function HypothesisChatPanel({
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
+      let buffer = "";
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
             if (line.startsWith("data: ")) {
@@ -255,7 +255,6 @@ export default function HypothesisChatPanel({
       content: `Provide a comprehensive clinical summary for the hypothesis: "${hyp.condition}" (${hyp.confidence}% confidence). Include clinical narrative, how findings connect, confirmatory tests, treatment approach, and red flags.`
     };
     await streamRequest(hyp, [initialMsg]);
-    setInitialSummaryLoaded(true);
   }, [streamRequest]);
 
   const handleSend = useCallback(async () => {

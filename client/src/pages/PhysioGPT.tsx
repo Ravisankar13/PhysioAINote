@@ -8242,16 +8242,6 @@ ${ddxList}`;
         </div>
       </div>
 
-      {/* Toggle buttons for panels */}
-      {!chatPanelOpen && (
-        <button
-          onClick={() => setChatPanelOpen(true)}
-          className="absolute top-3 right-3 z-30 flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg shadow-lg transition-colors text-xs font-medium"
-        >
-          <MessageCircle className="h-3.5 w-3.5" />
-          Chat
-        </button>
-      )}
       {!sidebarOpen && (
         <div className="absolute top-3 left-3 z-30 flex items-center gap-2">
           <button

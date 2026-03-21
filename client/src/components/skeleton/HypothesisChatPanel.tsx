@@ -59,13 +59,14 @@ function parseSections(text: string): ParsedSections {
     },
   };
 
-  const headerPattern = /^## (Clinical Narrative|Key Findings|Confirmatory Tests|Treatment Approach|Red Flags)\s*$/m;
+  const headerPattern = /^##\s+(Clinical Narrative|Key Findings(?:\s+Connection)?|Confirmatory Tests|Treatment Approach|Red Flags)[:\s]*$/im;
   const headerMap: Record<string, SectionKey> = {
-    "Clinical Narrative": "clinical_narrative",
-    "Key Findings": "key_findings",
-    "Confirmatory Tests": "confirmatory_tests",
-    "Treatment Approach": "treatment_approach",
-    "Red Flags": "red_flags",
+    "clinical narrative": "clinical_narrative",
+    "key findings": "key_findings",
+    "key findings connection": "key_findings",
+    "confirmatory tests": "confirmatory_tests",
+    "treatment approach": "treatment_approach",
+    "red flags": "red_flags",
   };
 
   const lines = text.split("\n");
@@ -82,7 +83,7 @@ function parseSections(text: string): ParsedSections {
   for (const line of lines) {
     const match = line.match(headerPattern);
     if (match) {
-      currentSection = headerMap[match[1]];
+      currentSection = headerMap[match[1].toLowerCase()] || null;
     } else if (currentSection) {
       sectionLines[currentSection].push(line);
     } else {
@@ -99,7 +100,7 @@ function parseSections(text: string): ParsedSections {
 }
 
 function hasAnySections(text: string): boolean {
-  return /^## (Clinical Narrative|Key Findings|Confirmatory Tests|Treatment Approach|Red Flags)\s*$/m.test(text);
+  return /^##\s+(Clinical Narrative|Key Findings(?:\s+Connection)?|Confirmatory Tests|Treatment Approach|Red Flags)[:\s]*$/im.test(text);
 }
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
@@ -296,17 +297,6 @@ function StructuredSummaryView({ content, isStreaming }: { content: string; isSt
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
-
-  if (!isUser && message.isInitialSummary && hasAnySections(message.content)) {
-    return (
-      <div className="mb-3">
-        <StructuredSummaryView content={message.content} isStreaming={false} />
-      </div>
-    );
-  }
-
-  if (isUser && message.isInitialSummary) return null;
-
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3`}>
       <div className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${

@@ -389,19 +389,16 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
       return { flexion: 0, abduction: 0 };
     }
 
-    const clampedFwd = Math.max(-0.999, Math.min(0.999, dotFwd));
-    const flexion = Math.asin(clampedFwd);
-    const cosFlex = Math.cos(flexion);
+    const flexion = Math.atan2(dotFwd, -dotUp);
 
+    const horizontalMag = Math.sqrt(dotFwd * dotFwd + lateral * lateral);
     let abduction: number;
-    if (cosFlex > 0.15) {
-      const by = Math.atan2(-dotUp, lateral);
-      abduction = Math.PI / 2 - by;
+    if (horizontalMag > 0.05) {
+      const planeAngle = Math.atan2(dotFwd, lateral);
+      const lateralWeight = Math.cos(planeAngle);
+      abduction = elevation * lateralWeight;
     } else {
-      const blendT = Math.max(0, (cosFlex - 0.05) / 0.10);
-      const byFallback = Math.atan2(-dotUp, lateral);
-      const abdEuler = Math.PI / 2 - byFallback;
-      abduction = abdEuler * blendT;
+      abduction = 0;
     }
 
     return { flexion, abduction };
@@ -507,11 +504,19 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const leftShin = normalize(createVector(leftKnee, leftAnkle));
   const rightShin = normalize(createVector(rightKnee, rightAnkle));
 
-  const leftHipFlexion = Math.atan2(leftThigh.z * 0.3, -leftThigh.y);
-  const rightHipFlexion = Math.atan2(rightThigh.z * 0.3, -rightThigh.y);
-  
-  const leftHipAbduction = Math.atan2(leftThigh.x, -leftThigh.y);
-  const rightHipAbduction = Math.atan2(-rightThigh.x, -rightThigh.y);
+  const dotProduct = (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + a.z * b.z;
+
+  const leftThighDotUp = dotProduct(leftThigh, torsoUp);
+  const leftThighDotFwd = dotProduct(leftThigh, torsoForward);
+  const leftThighDotRight = dotProduct(leftThigh, torsoRight);
+  const leftHipFlexion = Math.atan2(leftThighDotFwd, -leftThighDotUp);
+  const leftHipAbduction = Math.atan2(-leftThighDotRight, -leftThighDotUp);
+
+  const rightThighDotUp = dotProduct(rightThigh, torsoUp);
+  const rightThighDotFwd = dotProduct(rightThigh, torsoForward);
+  const rightThighDotRight = dotProduct(rightThigh, torsoRight);
+  const rightHipFlexion = Math.atan2(rightThighDotFwd, -rightThighDotUp);
+  const rightHipAbduction = Math.atan2(rightThighDotRight, -rightThighDotUp);
 
   const leftKneeFlexion = calculateJointFlexion(leftHip, leftKnee, leftAnkle);
   const rightKneeFlexion = calculateJointFlexion(rightHip, rightKnee, rightAnkle);

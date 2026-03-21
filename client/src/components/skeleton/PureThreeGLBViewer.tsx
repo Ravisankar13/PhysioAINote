@@ -5169,8 +5169,6 @@ export default function PureThreeGLBViewer({
     });
   }, [compensatingJoints, status]);
 
-  // Apply live pose from camera capture using BONE_MAPPING directly
-  // Converts Skeleton3DPose to controller values and applies using the same infrastructure as sliders
   useEffect(() => {
     if (status !== 'ready' || !livePose) return;
     
@@ -5179,32 +5177,23 @@ export default function PureThreeGLBViewer({
     
     if (Object.keys(bones).length === 0) return;
 
-    /**
-     * BONE_MAPPING-BASED LIVE POSE APPLICATION
-     * 
-     * Converts the MediaPipe pose to controller values, then applies
-     * using the exact same BONE_MAPPING infrastructure as the sliders.
-     * 
-     * This guarantees consistency because we're using the same code path.
-     */
-    
-    // Convert raw pose to controller-compatible values
     const controllerValues = poseToControllerValues(livePose);
     
     if (!defaultShoulderAnglesRef.current) {
-      const lShoulder = modelConfig?.leftShoulder as any;
-      const rShoulder = modelConfig?.rightShoulder as any;
+      const lShoulder = modelConfig?.leftShoulder as Record<string, number> | undefined;
+      const rShoulder = modelConfig?.rightShoulder as Record<string, number> | undefined;
+      const T_POSE_ABDUCTION = -90;
       defaultShoulderAnglesRef.current = {
         left: {
           flexionRad: ((lShoulder?.flexion ?? 0) * Math.PI) / 180,
-          abductionRad: ((lShoulder?.abduction ?? -80) * Math.PI) / 180,
+          abductionRad: ((lShoulder?.abduction ?? T_POSE_ABDUCTION) * Math.PI) / 180,
           intRotRad: ((lShoulder?.internalRotation ?? 0) * Math.PI) / 180,
           extRotRad: ((lShoulder?.externalRotation ?? 0) * Math.PI) / 180,
           retroversionRad: ((lShoulder?.retroversion ?? 0) * Math.PI) / 180,
         },
         right: {
           flexionRad: ((rShoulder?.flexion ?? 0) * Math.PI) / 180,
-          abductionRad: ((rShoulder?.abduction ?? -80) * Math.PI) / 180,
+          abductionRad: ((rShoulder?.abduction ?? T_POSE_ABDUCTION) * Math.PI) / 180,
           intRotRad: ((rShoulder?.internalRotation ?? 0) * Math.PI) / 180,
           extRotRad: ((rShoulder?.externalRotation ?? 0) * Math.PI) / 180,
           retroversionRad: ((rShoulder?.retroversion ?? 0) * Math.PI) / 180,
@@ -5370,27 +5359,36 @@ export default function PureThreeGLBViewer({
     // Update ref
     prevLivePoseRef.current = livePose;
     
-    // If we just exited live mode, restore ALL controlled bones to bind + slider state
     if (wasLivePoseActive && isNowInactive && status === 'ready') {
       const bones = bonesRef.current;
       const initialRotations = initialRotationsRef.current;
       const sliderRotations = sliderRotationsRef.current;
+      const quatComposeBones = new Set(['Hip_L', 'Hip_R', 'Shoulder_L', 'Shoulder_R']);
       
-      // Reset ALL bones that were controlled by live pose
       LIVE_CONTROLLED_BONES.forEach(boneName => {
         const bone = bones[boneName] as THREE.Bone;
         const initial = initialRotations[boneName];
         if (!bone || !initial) return;
         
-        // Get slider offset if any, otherwise use zero
         const sliderOffset = sliderRotations[boneName] || { x: 0, y: 0, z: 0 };
         
-        // Restore to initial (bind) pose + any slider adjustments
-        bone.rotation.set(
-          initial.x + sliderOffset.x,
-          initial.y + sliderOffset.y,
-          initial.z + sliderOffset.z
-        );
+        if (quatComposeBones.has(boneName)) {
+          const initialQuat = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(initial.x, initial.y, initial.z, 'XYZ')
+          );
+          const deltaQuat = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(sliderOffset.x, sliderOffset.y, sliderOffset.z, 'XYZ')
+          );
+          const targetQuat = initialQuat.clone().multiply(deltaQuat);
+          const targetEuler = new THREE.Euler().setFromQuaternion(targetQuat, 'XYZ');
+          bone.rotation.set(targetEuler.x, targetEuler.y, targetEuler.z);
+        } else {
+          bone.rotation.set(
+            initial.x + sliderOffset.x,
+            initial.y + sliderOffset.y,
+            initial.z + sliderOffset.z
+          );
+        }
       });
     }
   }, [livePose, status]);

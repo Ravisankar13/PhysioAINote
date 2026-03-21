@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { X, Send, ToggleLeft, ToggleRight, Move3D, Loader2, Sparkles, Stethoscope, Link2, ClipboardCheck, HeartPulse, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 
 export interface HypothesisData {
@@ -32,11 +33,11 @@ interface HypothesisChatPanelProps {
 }
 
 const SECTION_DEFS = [
-  { key: "clinical_narrative", header: "## Clinical Narrative", label: "Clinical Narrative", icon: Stethoscope, color: "teal", borderColor: "border-teal-500/30", bgColor: "bg-teal-500/10", iconColor: "text-teal-400", headerBg: "bg-teal-500/15" },
-  { key: "key_findings", header: "## Key Findings", label: "Key Findings", icon: Link2, color: "blue", borderColor: "border-blue-500/30", bgColor: "bg-blue-500/10", iconColor: "text-blue-400", headerBg: "bg-blue-500/15" },
-  { key: "confirmatory_tests", header: "## Confirmatory Tests", label: "Confirmatory Tests", icon: ClipboardCheck, color: "amber", borderColor: "border-amber-500/30", bgColor: "bg-amber-500/10", iconColor: "text-amber-400", headerBg: "bg-amber-500/15" },
-  { key: "treatment_approach", header: "## Treatment Approach", label: "Treatment Approach", icon: HeartPulse, color: "emerald", borderColor: "border-emerald-500/30", bgColor: "bg-emerald-500/10", iconColor: "text-emerald-400", headerBg: "bg-emerald-500/15" },
-  { key: "red_flags", header: "## Red Flags", label: "Red Flags", icon: AlertTriangle, color: "red", borderColor: "border-red-500/30", bgColor: "bg-red-500/10", iconColor: "text-red-400", headerBg: "bg-red-500/15" },
+  { key: "clinical_narrative", label: "Clinical Narrative", icon: Stethoscope, borderColor: "border-teal-500/30", bgColor: "bg-teal-500/10", iconColor: "text-teal-400", headerBg: "bg-teal-500/15" },
+  { key: "key_findings", label: "Key Findings", icon: Link2, borderColor: "border-blue-500/30", bgColor: "bg-blue-500/10", iconColor: "text-blue-400", headerBg: "bg-blue-500/15" },
+  { key: "confirmatory_tests", label: "Confirmatory Tests", icon: ClipboardCheck, borderColor: "border-amber-500/30", bgColor: "bg-amber-500/10", iconColor: "text-amber-400", headerBg: "bg-amber-500/15" },
+  { key: "treatment_approach", label: "Treatment Approach", icon: HeartPulse, borderColor: "border-emerald-500/30", bgColor: "bg-emerald-500/10", iconColor: "text-emerald-400", headerBg: "bg-emerald-500/15" },
+  { key: "red_flags", label: "Red Flags", icon: AlertTriangle, borderColor: "border-red-500/30", bgColor: "bg-red-500/10", iconColor: "text-red-400", headerBg: "bg-red-500/15" },
 ] as const;
 
 type SectionKey = typeof SECTION_DEFS[number]["key"];
@@ -206,37 +207,40 @@ function SectionCard({ sectionDef, content, isStreaming, defaultExpanded }: {
   if (!hasContent && !isStreaming) return null;
 
   return (
-    <div className={`rounded-lg border ${sectionDef.borderColor} overflow-hidden mb-2`}>
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={`w-full flex items-center gap-2 px-3 py-2 ${sectionDef.headerBg} hover:brightness-110 transition-all`}
-      >
-        <Icon className={`h-3.5 w-3.5 ${sectionDef.iconColor} flex-shrink-0`} />
-        <span className="text-xs font-semibold text-gray-100 flex-1 text-left">{sectionDef.label}</span>
-        {isStreaming && hasContent && (
-          <span className="inline-block w-1.5 h-3 bg-teal-400 animate-pulse rounded-sm" />
-        )}
-        {isExpanded ? (
-          <ChevronDown className="h-3 w-3 text-gray-400 flex-shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 text-gray-400 flex-shrink-0" />
-        )}
-      </button>
-      {isExpanded && (
-        <div className={`px-3 py-2 ${sectionDef.bgColor}`}>
-          {hasContent ? (
-            <div className="text-xs text-gray-200 leading-relaxed">
-              <FormattedContent text={content} />
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-xs text-gray-400">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span>Generating...</span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <div className={`rounded-lg border ${sectionDef.borderColor} overflow-hidden mb-2`}>
+        <CollapsibleTrigger asChild>
+          <button
+            className={`w-full flex items-center gap-2 px-3 py-2 ${sectionDef.headerBg} hover:brightness-110 transition-all`}
+          >
+            <Icon className={`h-3.5 w-3.5 ${sectionDef.iconColor} flex-shrink-0`} />
+            <span className="text-xs font-semibold text-gray-100 flex-1 text-left">{sectionDef.label}</span>
+            {isStreaming && hasContent && (
+              <span className="inline-block w-1.5 h-3 bg-teal-400 animate-pulse rounded-sm" />
+            )}
+            {isExpanded ? (
+              <ChevronDown className="h-3 w-3 text-gray-400 flex-shrink-0" />
+            ) : (
+              <ChevronRight className="h-3 w-3 text-gray-400 flex-shrink-0" />
+            )}
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className={`px-3 py-2 ${sectionDef.bgColor}`}>
+            {hasContent ? (
+              <div className="text-xs text-gray-200 leading-relaxed">
+                <FormattedContent text={content} />
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Generating...</span>
+              </div>
+            )}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 }
 

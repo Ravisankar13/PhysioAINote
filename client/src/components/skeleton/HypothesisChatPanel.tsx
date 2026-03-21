@@ -189,11 +189,12 @@ function FormattedContent({ text }: { text: string }) {
   );
 }
 
-function SectionCard({ sectionDef, content, isStreaming, isUpcoming, defaultExpanded }: {
+function SectionCard({ sectionDef, content, isStreaming, isUpcoming, showAlways, defaultExpanded }: {
   sectionDef: typeof SECTION_DEFS[number];
   content: string;
   isStreaming: boolean;
   isUpcoming?: boolean;
+  showAlways?: boolean;
   defaultExpanded: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -206,7 +207,9 @@ function SectionCard({ sectionDef, content, isStreaming, isUpcoming, defaultExpa
     }
   }, [hasContent, defaultExpanded]);
 
-  if (!hasContent && !isStreaming && !isUpcoming) return null;
+  if (!hasContent && !isStreaming && !isUpcoming && !showAlways) {
+    return null;
+  }
 
   if (isUpcoming && !hasContent) {
     return (
@@ -245,11 +248,13 @@ function SectionCard({ sectionDef, content, isStreaming, isUpcoming, defaultExpa
               <div className="text-xs text-gray-200 leading-relaxed">
                 <FormattedContent text={content} />
               </div>
-            ) : (
+            ) : isStreaming ? (
               <div className="flex items-center gap-1.5 text-xs text-gray-400">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span>Generating...</span>
               </div>
+            ) : (
+              <div className="text-xs text-gray-500 italic">No data available for this section.</div>
             )}
           </div>
         </CollapsibleContent>
@@ -279,6 +284,7 @@ function StructuredSummaryView({ content, isStreaming }: { content: string; isSt
         const sectionContent = parsed.sections[def.key];
         const isActivelyStreaming = isStreaming && idx === activeSectionIdx;
         const isUpcoming = isStreaming && idx > activeSectionIdx;
+        const showAlways = !isStreaming;
 
         return (
           <SectionCard
@@ -287,6 +293,7 @@ function StructuredSummaryView({ content, isStreaming }: { content: string; isSt
             content={sectionContent}
             isStreaming={isActivelyStreaming}
             isUpcoming={isUpcoming && !sectionContent}
+            showAlways={showAlways}
             defaultExpanded={idx === 0 || idx === activeSectionIdx}
           />
         );

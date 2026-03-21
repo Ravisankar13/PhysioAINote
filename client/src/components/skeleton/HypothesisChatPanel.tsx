@@ -188,10 +188,11 @@ function FormattedContent({ text }: { text: string }) {
   );
 }
 
-function SectionCard({ sectionDef, content, isStreaming, defaultExpanded }: {
+function SectionCard({ sectionDef, content, isStreaming, isUpcoming, defaultExpanded }: {
   sectionDef: typeof SECTION_DEFS[number];
   content: string;
   isStreaming: boolean;
+  isUpcoming?: boolean;
   defaultExpanded: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -204,7 +205,19 @@ function SectionCard({ sectionDef, content, isStreaming, defaultExpanded }: {
     }
   }, [hasContent, defaultExpanded]);
 
-  if (!hasContent && !isStreaming) return null;
+  if (!hasContent && !isStreaming && !isUpcoming) return null;
+
+  if (isUpcoming && !hasContent) {
+    return (
+      <div className={`rounded-lg border ${sectionDef.borderColor} overflow-hidden mb-2 opacity-40`}>
+        <div className={`flex items-center gap-2 px-3 py-2 ${sectionDef.headerBg}`}>
+          <Icon className={`h-3.5 w-3.5 ${sectionDef.iconColor} flex-shrink-0`} />
+          <span className="text-xs font-semibold text-gray-100 flex-1 text-left">{sectionDef.label}</span>
+          <div className="h-1.5 w-8 bg-gray-600/50 rounded-full animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -264,16 +277,15 @@ function StructuredSummaryView({ content, isStreaming }: { content: string; isSt
       {SECTION_DEFS.map((def, idx) => {
         const sectionContent = parsed.sections[def.key];
         const isActivelyStreaming = isStreaming && idx === activeSectionIdx;
-        const isWaiting = isStreaming && idx === activeSectionIdx + 1 && sectionContent.length === 0;
-
-        if (!sectionContent && !isWaiting) return null;
+        const isUpcoming = isStreaming && idx > activeSectionIdx;
 
         return (
           <SectionCard
             key={def.key}
             sectionDef={def}
             content={sectionContent}
-            isStreaming={isActivelyStreaming || isWaiting}
+            isStreaming={isActivelyStreaming}
+            isUpcoming={isUpcoming && !sectionContent}
             defaultExpanded={idx === 0 || idx === activeSectionIdx}
           />
         );

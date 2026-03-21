@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Send, ToggleLeft, ToggleRight, Move3D, Loader2, Sparkles, Stethoscope } from "lucide-react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { X, Send, ToggleLeft, ToggleRight, Move3D, Loader2, Sparkles, Stethoscope, Link2, ClipboardCheck, HeartPulse, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -14,6 +14,7 @@ export interface HypothesisData {
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  isInitialSummary?: boolean;
 }
 
 interface HypothesisChatPanelProps {
@@ -28,6 +29,76 @@ interface HypothesisChatPanelProps {
     forces: Array<{ label: string; totalForce?: number; status: string }>;
     muscles: Array<{ name: string; status: string; activation: number }>;
   };
+}
+
+const SECTION_DEFS = [
+  { key: "clinical_narrative", header: "## Clinical Narrative", label: "Clinical Narrative", icon: Stethoscope, color: "teal", borderColor: "border-teal-500/30", bgColor: "bg-teal-500/10", iconColor: "text-teal-400", headerBg: "bg-teal-500/15" },
+  { key: "key_findings", header: "## Key Findings", label: "Key Findings", icon: Link2, color: "blue", borderColor: "border-blue-500/30", bgColor: "bg-blue-500/10", iconColor: "text-blue-400", headerBg: "bg-blue-500/15" },
+  { key: "confirmatory_tests", header: "## Confirmatory Tests", label: "Confirmatory Tests", icon: ClipboardCheck, color: "amber", borderColor: "border-amber-500/30", bgColor: "bg-amber-500/10", iconColor: "text-amber-400", headerBg: "bg-amber-500/15" },
+  { key: "treatment_approach", header: "## Treatment Approach", label: "Treatment Approach", icon: HeartPulse, color: "emerald", borderColor: "border-emerald-500/30", bgColor: "bg-emerald-500/10", iconColor: "text-emerald-400", headerBg: "bg-emerald-500/15" },
+  { key: "red_flags", header: "## Red Flags", label: "Red Flags", icon: AlertTriangle, color: "red", borderColor: "border-red-500/30", bgColor: "bg-red-500/10", iconColor: "text-red-400", headerBg: "bg-red-500/15" },
+] as const;
+
+type SectionKey = typeof SECTION_DEFS[number]["key"];
+
+interface ParsedSections {
+  preamble: string;
+  sections: Record<SectionKey, string>;
+}
+
+function parseSections(text: string): ParsedSections {
+  const result: ParsedSections = {
+    preamble: "",
+    sections: {
+      clinical_narrative: "",
+      key_findings: "",
+      confirmatory_tests: "",
+      treatment_approach: "",
+      red_flags: "",
+    },
+  };
+
+  const headerPattern = /^## (Clinical Narrative|Key Findings|Confirmatory Tests|Treatment Approach|Red Flags)\s*$/m;
+  const headerMap: Record<string, SectionKey> = {
+    "Clinical Narrative": "clinical_narrative",
+    "Key Findings": "key_findings",
+    "Confirmatory Tests": "confirmatory_tests",
+    "Treatment Approach": "treatment_approach",
+    "Red Flags": "red_flags",
+  };
+
+  const lines = text.split("\n");
+  let currentSection: SectionKey | null = null;
+  const sectionLines: Record<SectionKey | "preamble", string[]> = {
+    preamble: [],
+    clinical_narrative: [],
+    key_findings: [],
+    confirmatory_tests: [],
+    treatment_approach: [],
+    red_flags: [],
+  };
+
+  for (const line of lines) {
+    const match = line.match(headerPattern);
+    if (match) {
+      currentSection = headerMap[match[1]];
+    } else if (currentSection) {
+      sectionLines[currentSection].push(line);
+    } else {
+      sectionLines.preamble.push(line);
+    }
+  }
+
+  result.preamble = sectionLines.preamble.join("\n").trim();
+  for (const def of SECTION_DEFS) {
+    result.sections[def.key] = sectionLines[def.key].join("\n").trim();
+  }
+
+  return result;
+}
+
+function hasAnySections(text: string): boolean {
+  return /^## (Clinical Narrative|Key Findings|Confirmatory Tests|Treatment Approach|Red Flags)\s*$/m.test(text);
 }
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
@@ -116,8 +187,110 @@ function FormattedContent({ text }: { text: string }) {
   );
 }
 
+function SectionCard({ sectionDef, content, isStreaming, defaultExpanded }: {
+  sectionDef: typeof SECTION_DEFS[number];
+  content: string;
+  isStreaming: boolean;
+  defaultExpanded: boolean;
+}) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const Icon = sectionDef.icon;
+  const hasContent = content.length > 0;
+
+  useEffect(() => {
+    if (hasContent && defaultExpanded) {
+      setIsExpanded(true);
+    }
+  }, [hasContent, defaultExpanded]);
+
+  if (!hasContent && !isStreaming) return null;
+
+  return (
+    <div className={`rounded-lg border ${sectionDef.borderColor} overflow-hidden mb-2`}>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className={`w-full flex items-center gap-2 px-3 py-2 ${sectionDef.headerBg} hover:brightness-110 transition-all`}
+      >
+        <Icon className={`h-3.5 w-3.5 ${sectionDef.iconColor} flex-shrink-0`} />
+        <span className="text-xs font-semibold text-gray-100 flex-1 text-left">{sectionDef.label}</span>
+        {isStreaming && hasContent && (
+          <span className="inline-block w-1.5 h-3 bg-teal-400 animate-pulse rounded-sm" />
+        )}
+        {isExpanded ? (
+          <ChevronDown className="h-3 w-3 text-gray-400 flex-shrink-0" />
+        ) : (
+          <ChevronRight className="h-3 w-3 text-gray-400 flex-shrink-0" />
+        )}
+      </button>
+      {isExpanded && (
+        <div className={`px-3 py-2 ${sectionDef.bgColor}`}>
+          {hasContent ? (
+            <div className="text-xs text-gray-200 leading-relaxed">
+              <FormattedContent text={content} />
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Generating...</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StructuredSummaryView({ content, isStreaming }: { content: string; isStreaming: boolean }) {
+  const parsed = useMemo(() => parseSections(content), [content]);
+
+  const activeSectionIdx = useMemo(() => {
+    for (let i = SECTION_DEFS.length - 1; i >= 0; i--) {
+      if (parsed.sections[SECTION_DEFS[i].key].length > 0) return i;
+    }
+    return -1;
+  }, [parsed]);
+
+  return (
+    <div className="space-y-0">
+      {parsed.preamble && (
+        <div className="text-xs text-gray-300 mb-2 leading-relaxed">
+          <FormattedContent text={parsed.preamble} />
+        </div>
+      )}
+      {SECTION_DEFS.map((def, idx) => {
+        const sectionContent = parsed.sections[def.key];
+        const isActivelyStreaming = isStreaming && idx === activeSectionIdx;
+        const isWaiting = isStreaming && idx === activeSectionIdx + 1 && sectionContent.length === 0;
+
+        if (!sectionContent && !isWaiting) return null;
+
+        return (
+          <SectionCard
+            key={def.key}
+            sectionDef={def}
+            content={sectionContent}
+            isStreaming={isActivelyStreaming || isWaiting}
+            defaultExpanded={idx === 0 || idx === activeSectionIdx}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
+
+  if (!isUser && message.isInitialSummary && hasAnySections(message.content)) {
+    return (
+      <div className="mb-3">
+        <StructuredSummaryView content={message.content} isStreaming={false} />
+      </div>
+    );
+  }
+
+  if (isUser && message.isInitialSummary) return null;
+
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3`}>
       <div className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${
@@ -145,6 +318,7 @@ export default function HypothesisChatPanel({
   const [streamingContent, setStreamingContent] = useState("");
   const [includeSkeletonData, setIncludeSkeletonData] = useState(true);
   const [isPosing, setIsPosing] = useState(false);
+  const [isInitialStream, setIsInitialStream] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const prevHypothesisIdRef = useRef<string | null>(null);
@@ -162,6 +336,7 @@ export default function HypothesisChatPanel({
       setMessages([]);
       setStreamingContent("");
       setInputValue("");
+      setIsInitialStream(false);
       fetchInitialSummary(hypothesis);
     }
     if (!isOpen && abortRef.current) {
@@ -182,12 +357,13 @@ export default function HypothesisChatPanel({
   const streamRequest = useCallback(async (
     hyp: HypothesisData,
     chatMessages: ChatMessage[],
-    opts?: { poseToHypothesis?: boolean }
+    opts?: { poseToHypothesis?: boolean; isInitial?: boolean }
   ) => {
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
     setIsStreaming(true);
     setStreamingContent("");
+    if (opts?.isInitial) setIsInitialStream(true);
 
     try {
       const response = await fetch("/api/physiogpt/hypothesis-chat/stream", {
@@ -250,7 +426,11 @@ export default function HypothesisChatPanel({
       }
 
       if (accumulated) {
-        setMessages(prev => [...prev, { role: "assistant", content: accumulated }]);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: accumulated,
+          isInitialSummary: opts?.isInitial,
+        }]);
       }
       setStreamingContent("");
     } catch (error: any) {
@@ -259,15 +439,17 @@ export default function HypothesisChatPanel({
       }
     } finally {
       setIsStreaming(false);
+      setIsInitialStream(false);
     }
   }, [includeSkeletonData, skeletonData, subjectiveHistory, onPoseCommand, toast]);
 
   const fetchInitialSummary = useCallback(async (hyp: HypothesisData) => {
     const initialMsg: ChatMessage = {
       role: "user",
-      content: `Provide a comprehensive clinical summary for the hypothesis: "${hyp.condition}" (${hyp.confidence}% confidence). Include clinical narrative, how findings connect, confirmatory tests, treatment approach, and red flags.`
+      content: `Provide a comprehensive clinical summary for the hypothesis: "${hyp.condition}" (${hyp.confidence}% confidence). Include clinical narrative, how findings connect, confirmatory tests, treatment approach, and red flags.`,
+      isInitialSummary: true,
     };
-    await streamRequest(hyp, [initialMsg]);
+    await streamRequest(hyp, [initialMsg], { isInitial: true });
   }, [streamRequest]);
 
   const handleSend = useCallback(async () => {
@@ -300,6 +482,10 @@ export default function HypothesisChatPanel({
   };
 
   if (!isOpen || !hypothesis) return null;
+
+  const initialSummaryMsg = messages.find(m => m.isInitialSummary && m.role === "assistant");
+  const followUpMessages = messages.filter(m => !m.isInitialSummary);
+  const hasFollowUps = followUpMessages.length > 0;
 
   return (
     <div className="fixed right-0 top-0 h-full w-[420px] bg-gray-900/95 backdrop-blur-xl border-l border-gray-700/50 z-50 flex flex-col shadow-2xl animate-in slide-in-from-right-5 duration-300">
@@ -358,11 +544,59 @@ export default function HypothesisChatPanel({
           </div>
         )}
 
-        {messages.map((msg, idx) => (
-          <MessageBubble key={idx} message={msg} />
+        {isInitialStream && isStreaming && !streamingContent && (
+          <div className="flex justify-start mb-3">
+            <div className="rounded-lg px-3 py-2 bg-gray-800/60 border border-gray-700/30">
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Analyzing hypothesis...
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isInitialStream && streamingContent && (
+          hasAnySections(streamingContent) ? (
+            <div className="mb-3">
+              <StructuredSummaryView content={streamingContent} isStreaming={true} />
+            </div>
+          ) : (
+            <div className="flex justify-start mb-3">
+              <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-gray-800/60 border border-gray-700/30 text-gray-200">
+                <FormattedContent text={streamingContent} />
+                <span className="inline-block w-1.5 h-4 bg-teal-400 animate-pulse ml-0.5" />
+              </div>
+            </div>
+          )
+        )}
+
+        {!isInitialStream && initialSummaryMsg && hasAnySections(initialSummaryMsg.content) && (
+          <div className="mb-3">
+            <StructuredSummaryView content={initialSummaryMsg.content} isStreaming={false} />
+          </div>
+        )}
+
+        {!isInitialStream && initialSummaryMsg && !hasAnySections(initialSummaryMsg.content) && (
+          <div className="flex justify-start mb-3">
+            <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-gray-800/60 border border-gray-700/30 text-gray-200">
+              <FormattedContent text={initialSummaryMsg.content} />
+            </div>
+          </div>
+        )}
+
+        {!isInitialStream && hasFollowUps && initialSummaryMsg && (
+          <div className="flex items-center gap-2 my-3">
+            <div className="flex-1 h-px bg-gray-700/50" />
+            <span className="text-[10px] text-gray-500 font-medium">Follow-up</span>
+            <div className="flex-1 h-px bg-gray-700/50" />
+          </div>
+        )}
+
+        {!isInitialStream && followUpMessages.map((msg, idx) => (
+          <MessageBubble key={`followup-${idx}`} message={msg} />
         ))}
 
-        {streamingContent && (
+        {!isInitialStream && streamingContent && (
           <div className="flex justify-start mb-3">
             <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-gray-800/60 border border-gray-700/30 text-gray-200">
               <FormattedContent text={streamingContent} />
@@ -371,12 +605,12 @@ export default function HypothesisChatPanel({
           </div>
         )}
 
-        {isStreaming && !streamingContent && (
+        {!isInitialStream && isStreaming && !streamingContent && (
           <div className="flex justify-start mb-3">
             <div className="rounded-lg px-3 py-2 bg-gray-800/60 border border-gray-700/30">
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Analyzing hypothesis...
+                Analyzing...
               </div>
             </div>
           </div>

@@ -788,13 +788,25 @@ Set only the joints relevant to the condition. Use clinically realistic angle va
       }
 
       systemPrompt += `\nRESPONSE GUIDELINES:
-- For the INITIAL summary (when no prior messages), structure your response with these sections:
-  **Clinical Narrative**: A clear explanation of the condition and why it's suspected based on the findings
-  **Key Findings Connection**: How the current clinical data supports or relates to this diagnosis
-  **Confirmatory Tests**: Specific assessment tests to confirm or rule out this condition
-  **Treatment Approach**: Evidence-based treatment strategy for this condition
-  **Red Flags**: Warning signs that would require urgent action or referral
-- For follow-up questions, respond conversationally while maintaining clinical accuracy
+- For the INITIAL summary (when no prior messages), you MUST structure your response using EXACTLY these 5 section headers on their own line. Each header must start with "## " followed by the exact section name:
+
+## Clinical Narrative
+A clear explanation of the condition and why it's suspected based on the findings. Write 2-4 concise paragraphs.
+
+## Key Findings
+How the current clinical data (posture, pain markers, muscle states, forces) supports or relates to this diagnosis. Use bullet points for clarity.
+
+## Confirmatory Tests
+Specific clinical assessment tests to confirm or rule out this condition. List each test with brief rationale.
+
+## Treatment Approach
+Evidence-based treatment strategy for this condition. Include phases if appropriate.
+
+## Red Flags
+Warning signs that would require urgent action or referral. Be specific about what to watch for.
+
+- You MUST use all 5 section headers in order. Do not skip any section. Do not add extra sections.
+- For follow-up questions, respond conversationally WITHOUT section headers while maintaining clinical accuracy
 - Always explain your clinical reasoning
 - Cite evidence where possible using [Author, Year] format`;
 

@@ -65,8 +65,7 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
     }
     setLoading(true);
     try {
-      const res = await apiRequest("POST", "/api/clinical-text/parse", { text: text.trim() });
-      const result: ClinicalParseResult = await res.json();
+      const result: ClinicalParseResult = await apiRequest("/api/clinical-text/parse", "POST", { text: text.trim() });
       setLastResult(result);
       onParseResult(result);
 

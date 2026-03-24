@@ -1129,7 +1129,13 @@ export default function PhysioGPT() {
       setClinicalHighlights(prev => [...prev, ...highlights]);
     }
 
-    clinicalTextAppliedRef.current = applied;
+    const prev = clinicalTextAppliedRef.current;
+    clinicalTextAppliedRef.current = {
+      markerIds: [...(prev?.markerIds || []), ...applied.markerIds],
+      muscleIds: [...(prev?.muscleIds || []), ...applied.muscleIds],
+      deviationKeys: [...(prev?.deviationKeys || []), ...applied.deviationKeys],
+      highlightLabels: [...(prev?.highlightLabels || []), ...applied.highlightLabels],
+    };
   }, [APPROX_BONE_POSITIONS]);
 
   const handleClinicalTextClear = useCallback(() => {

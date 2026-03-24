@@ -1009,19 +1009,43 @@ export default function PhysioGPT() {
     setClinicalBubbleSeverity("moderate");
   }, []);
 
+  const clinicalTextAppliedRef = useRef<{
+    markerIds: string[];
+    muscleIds: string[];
+    deviationKeys: string[];
+    highlightCount: number;
+  } | null>(null);
+
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
+    const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightCount: number } = {
+      markerIds: [], muscleIds: [], deviationKeys: [], highlightCount: 0,
+    };
+
     if (result.pain_markers.length > 0) {
       const newMarkers: PainMarker[] = result.pain_markers.map((pm, idx) => {
         const vp = ANATOMICAL_VIRTUAL_POINTS.find(
           p => p.label.toLowerCase().includes(pm.anatomical_label.toLowerCase()) ||
                pm.anatomical_label.toLowerCase().includes(p.label.toLowerCase().split(' (')[0])
         );
+        const markerId = `ctp_${Date.now()}_${idx}`;
+        applied.markerIds.push(markerId);
+        if (vp) {
+          return {
+            id: markerId,
+            type: (pm.type || 'point') as PainMarkerType,
+            symptomType: (pm.symptom_type || 'pain') as SymptomType,
+            position: { x: 0, y: 0, z: 0 },
+            nearestBone: vp.boneName,
+            anatomicalLabel: vp.label,
+            description: pm.description,
+          };
+        }
         return {
-          id: `ctp_${Date.now()}_${idx}`,
+          id: markerId,
           type: (pm.type || 'point') as PainMarkerType,
           symptomType: (pm.symptom_type || 'pain') as SymptomType,
-          position: { x: vp?.offsetX || 0, y: 0, z: vp?.offsetZ || 0 },
-          nearestBone: vp?.boneA || 'Root_M',
+          position: { x: 0, y: 0, z: 0 },
+          nearestBone: 'Root_M',
           anatomicalLabel: pm.anatomical_label,
           description: pm.description,
         };
@@ -1033,6 +1057,7 @@ export default function PhysioGPT() {
       setMuscleOverrides(prev => {
         const updated = { ...prev };
         for (const ms of result.muscle_states) {
+          applied.muscleIds.push(ms.muscle_id);
           updated[ms.muscle_id] = {
             tensionOffset: ms.tension_offset || 0,
             activationOffset: ms.activation_offset || 0,
@@ -1047,6 +1072,7 @@ export default function PhysioGPT() {
     }
 
     if (Object.keys(result.postural_deviations).length > 0) {
+      applied.deviationKeys = Object.keys(result.postural_deviations);
       setModelConfig(prev => {
         const updated = JSON.parse(JSON.stringify(prev));
         for (const [dotPath, value] of Object.entries(result.postural_deviations)) {
@@ -1063,6 +1089,7 @@ export default function PhysioGPT() {
     }
 
     if (result.region_highlights.length > 0) {
+      applied.highlightCount = result.region_highlights.length;
       const typeMap: Record<string, HighlightType> = {
         pain: 'pain', pathology: 'dysfunction', movement_loss: 'stiffness',
         weakness: 'weakness', instability: 'dysfunction', stiffness: 'stiffness',
@@ -1076,6 +1103,47 @@ export default function PhysioGPT() {
       }));
       setClinicalHighlights(prev => [...prev, ...highlights]);
     }
+
+    clinicalTextAppliedRef.current = applied;
+  }, []);
+
+  const handleClinicalTextClear = useCallback(() => {
+    const applied = clinicalTextAppliedRef.current;
+    if (!applied) return;
+
+    if (applied.markerIds.length > 0) {
+      setPainMarkers(prev => prev.filter(m => !applied.markerIds.includes(m.id)));
+    }
+    if (applied.muscleIds.length > 0) {
+      setMuscleOverrides(prev => {
+        const updated = { ...prev };
+        for (const id of applied.muscleIds) {
+          delete updated[id];
+        }
+        return updated;
+      });
+    }
+    if (applied.deviationKeys.length > 0) {
+      setModelConfig(prev => {
+        const updated = JSON.parse(JSON.stringify(prev));
+        const defaults = JSON.parse(JSON.stringify(DEFAULT_MODEL_CONFIG));
+        for (const dotPath of applied.deviationKeys) {
+          const parts = dotPath.split('.');
+          if (parts.length === 2) {
+            const [joint, param] = parts;
+            if (updated[joint] && defaults[joint]) {
+              updated[joint][param] = defaults[joint][param] ?? 0;
+            }
+          }
+        }
+        return updated;
+      });
+    }
+    if (applied.highlightCount > 0) {
+      setClinicalHighlights([]);
+    }
+
+    clinicalTextAppliedRef.current = null;
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
@@ -7301,7 +7369,7 @@ ${ddxList}`;
           </div>
 
           <div className="px-2 py-1.5 border-b border-gray-100">
-            <ClinicalTextInput onParseResult={handleClinicalTextParse} />
+            <ClinicalTextInput onParseResult={handleClinicalTextParse} onClearFindings={handleClinicalTextClear} />
           </div>
 
           {/* Treatment Panel */}

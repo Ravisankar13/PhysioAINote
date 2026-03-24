@@ -39,6 +39,7 @@ export interface ClinicalParseResult {
 
 interface ClinicalTextInputProps {
   onParseResult: (result: ClinicalParseResult) => void;
+  onClearFindings?: () => void;
   disabled?: boolean;
 }
 
@@ -49,7 +50,7 @@ const EXAMPLE_DESCRIPTIONS = [
   "Tennis player with right lateral epicondyle pain and grip weakness",
 ];
 
-export default function ClinicalTextInput({ onParseResult, disabled }: ClinicalTextInputProps) {
+export default function ClinicalTextInput({ onParseResult, onClearFindings, disabled }: ClinicalTextInputProps) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<ClinicalParseResult | null>(null);
@@ -96,7 +97,8 @@ export default function ClinicalTextInput({ onParseResult, disabled }: ClinicalT
   const handleClear = useCallback(() => {
     setText("");
     setLastResult(null);
-  }, []);
+    if (onClearFindings) onClearFindings();
+  }, [onClearFindings]);
 
   return (
     <Card className="border-blue-500/30 bg-gradient-to-b from-blue-950/20 to-transparent">
@@ -181,9 +183,17 @@ export default function ClinicalTextInput({ onParseResult, disabled }: ClinicalT
 
           {lastResult && (
             <div className="space-y-1.5 pt-1 border-t border-gray-700/50">
-              {lastResult.clinical_summary && (
-                <p className="text-[10px] text-blue-300 italic">{lastResult.clinical_summary}</p>
-              )}
+              <div className="flex items-center justify-between">
+                {lastResult.clinical_summary && (
+                  <p className="text-[10px] text-blue-300 italic flex-1">{lastResult.clinical_summary}</p>
+                )}
+                <button
+                  onClick={handleClear}
+                  className="text-[9px] text-red-400 hover:text-red-300 whitespace-nowrap ml-2 px-1.5 py-0.5 rounded hover:bg-red-900/30 transition-colors"
+                >
+                  Clear All Findings
+                </button>
+              </div>
               <div className="flex flex-wrap gap-1">
                 {lastResult.pain_markers.length > 0 && (
                   <Badge variant="secondary" className="text-[9px] bg-red-900/30 text-red-300 border-red-700/30">

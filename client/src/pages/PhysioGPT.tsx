@@ -7411,10 +7411,6 @@ ${ddxList}`;
             </Button>
           </div>
 
-          <div className="px-2 py-1.5 border-b border-gray-100">
-            <ClinicalTextInput onParseResult={handleClinicalTextParse} onClearFindings={handleClinicalTextClear} />
-          </div>
-
           {/* Treatment Panel */}
           {rightPanelTab === 'treatment' && (
             <ScrollArea className="flex-1">
@@ -8484,6 +8480,12 @@ ${ddxList}`;
               <Loader2 className="h-3 w-3 animate-spin text-cyan-300" />
             )}
           </button>
+        </div>
+      )}
+
+      {!sidebarOpen && (
+        <div className="absolute top-14 left-3 z-30 w-72">
+          <ClinicalTextInput onParseResult={handleClinicalTextParse} onClearFindings={handleClinicalTextClear} />
         </div>
       )}
 

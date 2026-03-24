@@ -216,7 +216,9 @@ function getEffectiveMuscleForce(
 
   if (override.pathology !== 'none') {
     const pathEffect = PATHOLOGY_EFFECTS[override.pathology];
-    force += pathEffect.tensionMod;
+    if (pathEffect) {
+      force += pathEffect.tensionMod;
+    }
   }
 
   if (override.inhibition > 0) {
@@ -460,7 +462,9 @@ export function computeMuscleRestrictionEffects(
 
       if (ov.pathology !== 'none') {
         const pathEffect = PATHOLOGY_EFFECTS[ov.pathology];
-        dysfunction += Math.abs(pathEffect.tensionMod) * 1.5;
+        if (pathEffect) {
+          dysfunction += Math.abs(pathEffect.tensionMod) * 1.5;
+        }
         reasons.push(ov.pathology.replace(/_/g, ' '));
       }
 

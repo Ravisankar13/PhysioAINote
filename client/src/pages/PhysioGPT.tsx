@@ -92,7 +92,7 @@ import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/s
 import { pdfGenerator } from "@/services/pdfGenerator";
 import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink, type VisualizationRequest, type ClinicalHypothesis } from "@/components/skeleton/ClinicalReasoningPanel";
 import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
-import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
+import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS, type MuscleRestrictionEffect } from "@/lib/bidirectionalMuscleJoint";
@@ -111,6 +111,7 @@ import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJo
 import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPainEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
+import ClinicalTextInput, { type ClinicalParseResult } from "@/components/skeleton/ClinicalTextInput";
 
 const BODY_REGIONS = {
   cervical: {
@@ -1006,6 +1007,75 @@ export default function PhysioGPT() {
     setPainMarkers(prev => [...prev, markerWithSymptom]);
     setClinicalBubbleMarker(markerWithSymptom);
     setClinicalBubbleSeverity("moderate");
+  }, []);
+
+  const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
+    if (result.pain_markers.length > 0) {
+      const newMarkers: PainMarker[] = result.pain_markers.map((pm, idx) => {
+        const vp = ANATOMICAL_VIRTUAL_POINTS.find(
+          p => p.label.toLowerCase().includes(pm.anatomical_label.toLowerCase()) ||
+               pm.anatomical_label.toLowerCase().includes(p.label.toLowerCase().split(' (')[0])
+        );
+        return {
+          id: `ctp_${Date.now()}_${idx}`,
+          type: (pm.type || 'point') as PainMarkerType,
+          symptomType: (pm.symptom_type || 'pain') as SymptomType,
+          position: { x: vp?.offsetX || 0, y: 0, z: vp?.offsetZ || 0 },
+          nearestBone: vp?.boneA || 'Root_M',
+          anatomicalLabel: pm.anatomical_label,
+          description: pm.description,
+        };
+      });
+      setPainMarkers(prev => [...prev, ...newMarkers]);
+    }
+
+    if (result.muscle_states.length > 0) {
+      setMuscleOverrides(prev => {
+        const updated = { ...prev };
+        for (const ms of result.muscle_states) {
+          updated[ms.muscle_id] = {
+            tensionOffset: ms.tension_offset || 0,
+            activationOffset: ms.activation_offset || 0,
+            lengthOverride: 'normal' as LengthOverride,
+            inhibition: ms.inhibition || 0,
+            pathology: (ms.pathology || 'none') as PathologyType,
+            isManual: true,
+          };
+        }
+        return updated;
+      });
+    }
+
+    if (Object.keys(result.postural_deviations).length > 0) {
+      setModelConfig(prev => {
+        const updated = JSON.parse(JSON.stringify(prev));
+        for (const [dotPath, value] of Object.entries(result.postural_deviations)) {
+          const parts = dotPath.split('.');
+          if (parts.length === 2) {
+            const [joint, param] = parts;
+            if (updated[joint] && typeof updated[joint] === 'object') {
+              updated[joint][param] = value;
+            }
+          }
+        }
+        return updated;
+      });
+    }
+
+    if (result.region_highlights.length > 0) {
+      const typeMap: Record<string, HighlightType> = {
+        pain: 'pain', pathology: 'dysfunction', movement_loss: 'stiffness',
+        weakness: 'weakness', instability: 'dysfunction', stiffness: 'stiffness',
+        dysfunction: 'dysfunction', referral: 'referral',
+      };
+      const highlights: RegionHighlight[] = result.region_highlights.map(rh => ({
+        region: rh.region as AnatomicalRegion,
+        type: typeMap[rh.type] || 'pain',
+        severity: rh.severity,
+        label: rh.label,
+      }));
+      setClinicalHighlights(prev => [...prev, ...highlights]);
+    }
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
@@ -7228,6 +7298,10 @@ ${ddxList}`;
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setChatPanelOpen(false)}>
               <X className="h-3.5 w-3.5" />
             </Button>
+          </div>
+
+          <div className="px-2 py-1.5 border-b border-gray-100">
+            <ClinicalTextInput onParseResult={handleClinicalTextParse} />
           </div>
 
           {/* Treatment Panel */}

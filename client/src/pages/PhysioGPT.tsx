@@ -1009,16 +1009,31 @@ export default function PhysioGPT() {
     setClinicalBubbleSeverity("moderate");
   }, []);
 
+  const APPROX_BONE_POSITIONS: Record<string, { x: number; y: number; z: number }> = useMemo(() => ({
+    Head_M: { x: 0, y: 16, z: 0 }, NeckPart1_M: { x: 0, y: 15.2, z: 0 },
+    NeckPart2_M: { x: 0, y: 14.5, z: 0 }, Chest_M: { x: 0, y: 13, z: 0 },
+    Spine1Part2_M: { x: 0, y: 11.5, z: 0 }, Spine1Part1_M: { x: 0, y: 10.5, z: 0 },
+    Spine1_M: { x: 0, y: 9.5, z: 0 }, RootPart1_M: { x: 0, y: 8.5, z: 0 },
+    RootPart2_M: { x: 0, y: 7.5, z: 0 }, Root_M: { x: 0, y: 7, z: 0 },
+    Shoulder_L: { x: -2, y: 14, z: 0 }, Shoulder_R: { x: 2, y: 14, z: 0 },
+    Elbow_L: { x: -3.5, y: 11.5, z: 0 }, Elbow_R: { x: 3.5, y: 11.5, z: 0 },
+    Wrist_L: { x: -4.5, y: 9, z: 0 }, Wrist_R: { x: 4.5, y: 9, z: 0 },
+    Hip_L: { x: -1.2, y: 6.5, z: 0 }, Hip_R: { x: 1.2, y: 6.5, z: 0 },
+    HipPart1_L: { x: -1.5, y: 5.5, z: 0 }, HipPart1_R: { x: 1.5, y: 5.5, z: 0 },
+    Knee_L: { x: -1.5, y: 3.5, z: 0 }, Knee_R: { x: 1.5, y: 3.5, z: 0 },
+    Ankle_L: { x: -1.5, y: 0.5, z: 0 }, Ankle_R: { x: 1.5, y: 0.5, z: 0 },
+  }), []);
+
   const clinicalTextAppliedRef = useRef<{
     markerIds: string[];
     muscleIds: string[];
     deviationKeys: string[];
-    highlightCount: number;
+    highlightLabels: string[];
   } | null>(null);
 
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
-    const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightCount: number } = {
-      markerIds: [], muscleIds: [], deviationKeys: [], highlightCount: 0,
+    const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightLabels: string[] } = {
+      markerIds: [], muscleIds: [], deviationKeys: [], highlightLabels: [],
     };
 
     if (result.pain_markers.length > 0) {
@@ -1030,12 +1045,19 @@ export default function PhysioGPT() {
         const markerId = `ctp_${Date.now()}_${idx}`;
         applied.markerIds.push(markerId);
         if (vp) {
+          const pA = APPROX_BONE_POSITIONS[vp.boneA] || { x: 0, y: 7, z: 0 };
+          const pB = APPROX_BONE_POSITIONS[vp.boneB] || pA;
+          const interpPos = {
+            x: pA.x + (pB.x - pA.x) * vp.t + (vp.offsetX || 0),
+            y: pA.y + (pB.y - pA.y) * vp.t + (vp.offsetY || 0),
+            z: pA.z + (pB.z - pA.z) * vp.t + (vp.offsetZ || 0),
+          };
           return {
             id: markerId,
             type: (pm.type || 'point') as PainMarkerType,
             symptomType: (pm.symptom_type || 'pain') as SymptomType,
-            position: { x: 0, y: 0, z: 0 },
-            nearestBone: vp.boneName,
+            position: interpPos,
+            nearestBone: vp.boneA,
             anatomicalLabel: vp.label,
             description: pm.description,
           };
@@ -1044,7 +1066,7 @@ export default function PhysioGPT() {
           id: markerId,
           type: (pm.type || 'point') as PainMarkerType,
           symptomType: (pm.symptom_type || 'pain') as SymptomType,
-          position: { x: 0, y: 0, z: 0 },
+          position: { x: 0, y: 7, z: 0 },
           nearestBone: 'Root_M',
           anatomicalLabel: pm.anatomical_label,
           description: pm.description,
@@ -1089,23 +1111,26 @@ export default function PhysioGPT() {
     }
 
     if (result.region_highlights.length > 0) {
-      applied.highlightCount = result.region_highlights.length;
       const typeMap: Record<string, HighlightType> = {
         pain: 'pain', pathology: 'dysfunction', movement_loss: 'stiffness',
         weakness: 'weakness', instability: 'dysfunction', stiffness: 'stiffness',
         dysfunction: 'dysfunction', referral: 'referral',
       };
-      const highlights: RegionHighlight[] = result.region_highlights.map(rh => ({
-        region: rh.region as AnatomicalRegion,
-        type: typeMap[rh.type] || 'pain',
-        severity: rh.severity,
-        label: rh.label,
-      }));
+      const highlights: RegionHighlight[] = result.region_highlights.map(rh => {
+        const label = rh.label || `ctp_${rh.region}_${rh.type}`;
+        applied.highlightLabels.push(label);
+        return {
+          region: rh.region as AnatomicalRegion,
+          type: typeMap[rh.type] || 'pain',
+          severity: rh.severity,
+          label,
+        };
+      });
       setClinicalHighlights(prev => [...prev, ...highlights]);
     }
 
     clinicalTextAppliedRef.current = applied;
-  }, []);
+  }, [APPROX_BONE_POSITIONS]);
 
   const handleClinicalTextClear = useCallback(() => {
     const applied = clinicalTextAppliedRef.current;
@@ -1139,8 +1164,9 @@ export default function PhysioGPT() {
         return updated;
       });
     }
-    if (applied.highlightCount > 0) {
-      setClinicalHighlights([]);
+    if (applied.highlightLabels.length > 0) {
+      const labelsToRemove = new Set(applied.highlightLabels);
+      setClinicalHighlights(prev => prev.filter(h => !labelsToRemove.has(h.label || '')));
     }
 
     clinicalTextAppliedRef.current = null;

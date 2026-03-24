@@ -93,7 +93,11 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
     setShowExamples(false);
   }, []);
 
-  const handleClear = useCallback(() => {
+  const handleClearText = useCallback(() => {
+    setText("");
+  }, []);
+
+  const handleClearFindings = useCallback(() => {
     setText("");
     setLastResult(null);
     if (onClearFindings) onClearFindings();
@@ -129,7 +133,7 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
             />
             {text && (
               <button
-                onClick={handleClear}
+                onClick={handleClearText}
                 className="absolute top-1.5 right-1.5 p-0.5 rounded hover:bg-gray-700/60 text-gray-500 hover:text-gray-300 transition-colors"
               >
                 <X className="h-3.5 w-3.5" />
@@ -187,7 +191,7 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
                   <p className="text-[10px] text-blue-300 italic flex-1">{lastResult.clinical_summary}</p>
                 )}
                 <button
-                  onClick={handleClear}
+                  onClick={handleClearFindings}
                   className="text-[9px] text-red-400 hover:text-red-300 whitespace-nowrap ml-2 px-1.5 py-0.5 rounded hover:bg-red-900/30 transition-colors"
                 >
                   Clear All Findings

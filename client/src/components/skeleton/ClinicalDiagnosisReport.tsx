@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { X, ChevronDown, ChevronUp, Stethoscope, Target, Activity, ClipboardList, TrendingUp, BookOpen, AlertTriangle, Shield, Dumbbell, GraduationCap, Zap } from "lucide-react";
@@ -102,7 +102,7 @@ const INTERVENTION_ICONS: Record<string, typeof Dumbbell> = {
   modality: Zap,
 };
 
-function SectionHeader({ icon: Icon, title, color, children }: { icon: typeof Stethoscope; title: string; color: string; children?: React.ReactNode }) {
+function SectionHeader({ icon: Icon, title, color, children }: { icon: typeof Stethoscope; title: string; color: string; children?: ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
     <div className="border-b border-gray-700/50 pb-2">

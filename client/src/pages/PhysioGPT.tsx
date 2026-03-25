@@ -7336,9 +7336,6 @@ ${ddxList}`;
               New Consultation
             </Button>
           </div>
-          <div className="px-2 pb-2 border-b border-white/10">
-            <ClinicalTextInput onParseResult={handleClinicalTextParse} onClearFindings={handleClinicalTextClear} />
-          </div>
           <ScrollArea className="flex-1 px-2">
             <div className="space-y-1">
               {loadingConversations ? (
@@ -8485,6 +8482,10 @@ ${ddxList}`;
           </button>
         </div>
       )}
+
+      <div className={`absolute top-14 z-30 transition-all duration-300 ${sidebarOpen ? 'left-[270px]' : 'left-3'}`}>
+        <ClinicalTextInput onParseResult={handleClinicalTextParse} onClearFindings={handleClinicalTextClear} />
+      </div>
 
       <ClinicalReasoningPanel
         data={clinicalReasoningData}

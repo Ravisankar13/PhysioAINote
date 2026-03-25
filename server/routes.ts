@@ -9925,10 +9925,12 @@ Important:
   
   app.post('/api/clinical-text/parse', async (req: Request, res: Response) => {
     try {
-      const { text } = req.body;
-      if (!text || typeof text !== 'string' || text.trim().length < 5) {
-        return res.status(400).json({ error: 'Clinical description text is required (minimum 5 characters)' });
+      const { text, context } = req.body;
+      if (!text || typeof text !== 'string' || text.trim().length < 3) {
+        return res.status(400).json({ error: 'Clinical description text is required (minimum 3 characters)' });
       }
+
+      const qaContext = Array.isArray(context) ? context as Array<{question: string; answer: string}> : [];
 
       const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
       const replitOpenai = new OpenAI({
@@ -9936,30 +9938,45 @@ Important:
         baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
       });
 
+      let contextBlock = '';
+      if (qaContext.length > 0) {
+        contextBlock = '\n\n--- FOLLOW-UP ANSWERS PROVIDED ---\n' +
+          qaContext.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n') +
+          '\n--- END FOLLOW-UP ANSWERS ---\n\nUse these answers to REFINE your predictions. Reduce follow_up_questions to only those still unanswered. Increase confidence for findings confirmed by the answers.';
+      }
+
       const response = await replitOpenai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content: `You are a clinical physiotherapy AI. Parse the patient description into structured data for 3D skeleton visualization.
+            content: `You are an expert clinical physiotherapy AI and diagnostic prediction engine. Your job is to take a patient description — which may be a diagnosis name, symptoms, body type clues, or any combination — and PREDICT the full skeletal presentation for 3D visualization.
 
-Return a JSON object with these arrays/objects:
+CRITICAL INSTRUCTION: You are a PREDICTION engine, not just an extractor. When given a diagnosis (e.g., "Baastrup's disease"), you must use your clinical knowledge to predict ALL the postural, muscular, and pain findings that would typically present with that condition. When given body type clues (e.g., "big bum", "tall and thin", "elderly", "obese"), factor those into the predicted presentation.
 
-1. "pain_markers": Array of pain locations. Each has:
-   - "anatomical_label": exact match from this list of anatomical points: C1-C2, C3-C4, C5-C6, C7-T1, T1-T4, T5-T8, T9-T10, T11-T12, L1-L2, L3, L4-L5, L5-S1, Sacrum, Left SI Joint, Right SI Joint, Left Greater Trochanter, Right Greater Trochanter, Left IT Band, Right IT Band, Left Calf, Right Calf, Left Achilles Tendon, Right Achilles Tendon, Left Forearm, Right Forearm, Left Biceps, Right Biceps, Left ASIS, Right ASIS, Left PSIS, Right PSIS, Left Patella, Right Patella, Left Medial Knee Joint Line, Right Medial Knee Joint Line, Left Lateral Knee Joint Line, Right Lateral Knee Joint Line, Left Popliteal Fossa, Right Popliteal Fossa, Left Medial Malleolus, Right Medial Malleolus, Left Lateral Malleolus, Right Lateral Malleolus, Left Calcaneus, Right Calcaneus, Left Plantar Fascia, Right Plantar Fascia, Left Acromioclavicular Joint, Right Acromioclavicular Joint, Left Glenohumeral Joint, Right Glenohumeral Joint, Left Subacromial Space, Right Subacromial Space, Left Lateral Epicondyle, Right Lateral Epicondyle, Left Medial Epicondyle, Right Medial Epicondyle, Left Radial Head, Right Radial Head, TMJ Left, TMJ Right, Occiput, Sternum, Left Carpal Tunnel, Right Carpal Tunnel
+For each finding, mark its "confidence" as:
+- "confirmed" = explicitly stated by the patient/user
+- "predicted" = you inferred this based on clinical knowledge of the condition
+
+Return a JSON object with:
+
+1. "pain_markers": Array of pain/symptom locations (both confirmed AND predicted). Each has:
+   - "anatomical_label": exact match from: C1-C2, C3-C4, C5-C6, C7-T1, T1-T4, T5-T8, T9-T10, T11-T12, L1-L2, L3, L4-L5, L5-S1, Sacrum, Left SI Joint, Right SI Joint, Left Greater Trochanter, Right Greater Trochanter, Left IT Band, Right IT Band, Left Calf, Right Calf, Left Achilles Tendon, Right Achilles Tendon, Left Forearm, Right Forearm, Left Biceps, Right Biceps, Left ASIS, Right ASIS, Left PSIS, Right PSIS, Left Patella, Right Patella, Left Medial Knee Joint Line, Right Medial Knee Joint Line, Left Lateral Knee Joint Line, Right Lateral Knee Joint Line, Left Popliteal Fossa, Right Popliteal Fossa, Left Medial Malleolus, Right Medial Malleolus, Left Lateral Malleolus, Right Lateral Malleolus, Left Calcaneus, Right Calcaneus, Left Plantar Fascia, Right Plantar Fascia, Left Acromioclavicular Joint, Right Acromioclavicular Joint, Left Glenohumeral Joint, Right Glenohumeral Joint, Left Subacromial Space, Right Subacromial Space, Left Lateral Epicondyle, Right Lateral Epicondyle, Left Medial Epicondyle, Right Medial Epicondyle, Left Radial Head, Right Radial Head, TMJ Left, TMJ Right, Occiput, Sternum, Left Carpal Tunnel, Right Carpal Tunnel
    - "type": one of "point", "area", "referred"
    - "symptom_type": one of "pain", "pins_needles", "numbness", "stiffness", "tightness", "weakness", "instability", "clicking", "locking", "swelling", "burning", "heaviness", "spasm", "radiating", "catching"
-   - "description": brief clinical description
+   - "description": brief clinical description explaining why this finding is expected
+   - "confidence": "confirmed" or "predicted"
 
-2. "muscle_states": Array of affected muscles. Each has:
+2. "muscle_states": Array of affected muscles (both confirmed AND predicted). Each has:
    - "muscle_id": exact match from: l_glut_max, r_glut_max, l_glut_med, r_glut_med, l_glut_min, r_glut_min, l_piriformis, r_piriformis, l_rect_fem, r_rect_fem, l_vast_lat, r_vast_lat, l_vast_med, r_vast_med, l_hamstrings, r_hamstrings, l_gastroc, r_gastroc, l_soleus, r_soleus, l_tib_ant, r_tib_ant, l_peroneals, r_peroneals, l_tib_post, r_tib_post, l_ant_deltoid, r_ant_deltoid, l_mid_deltoid, r_mid_deltoid, l_post_deltoid, r_post_deltoid, l_supraspinatus, r_supraspinatus, l_infraspinatus, r_infraspinatus, l_upper_trap, r_upper_trap, l_lower_trap, r_lower_trap, l_rhomboids, r_rhomboids, l_pec_major, r_pec_major, l_pec_minor, r_pec_minor, l_biceps, r_biceps, l_triceps, r_triceps, l_hip_flexors, r_hip_flexors, l_adductors, r_adductors, l_tfl, r_tfl, erector_spinae, rectus_abdominis, obliques, multifidus, l_subscapularis, r_subscapularis, l_teres_minor, r_teres_minor, l_serratus_ant, r_serratus_ant, l_levator_scap, r_levator_scap, l_wrist_flex, r_wrist_flex, l_wrist_ext, r_wrist_ext, l_scm, r_scm, l_scalenes, r_scalenes, suboccipitals
    - "pathology": one of "none", "strain", "spasm", "trigger_point", "weakness", "fibrosis", "inflammation"
    - "tension_offset": number -50 to 50 (positive = increased tension)
    - "activation_offset": number -50 to 50 (positive = increased activation)
    - "inhibition": number 0-100
+   - "confidence": "confirmed" or "predicted"
 
-3. "postural_deviations": Object mapping posture parameters to degree values. Keys are dot-notation paths like:
-   - "spine.thoracicKyphosis", "spine.lumbarLordosis", "spine.forwardHead", "spine.scoliosis", "spine.lateralShift"
+3. "postural_deviations": Object mapping posture parameters to degree values. Predict ALL postural changes associated with the condition. Keys are dot-notation paths:
+   - "spine.thoracicKyphosis", "spine.lumbarLordosis", "spine.forwardHead", "spine.scoliosis", "spine.lateralShift", "spine.flexion"
    - "neck.forwardHead", "neck.flexion", "neck.lateralFlexion", "neck.rotation"
    - "pelvis.tilt" (positive=anterior), "pelvis.obliquity", "pelvis.rotation"
    - "leftHip.flexion", "rightHip.flexion", "leftHip.internalRotation", "rightHip.externalRotation"
@@ -9967,26 +9984,40 @@ Return a JSON object with these arrays/objects:
    - "leftAnkle.dorsiflexion", "leftAnkle.eversion", "rightAnkle.dorsiflexion", "rightAnkle.eversion"
    - "leftShoulder.flexion", "leftShoulder.internalRotation", "rightShoulder.flexion", "rightShoulder.internalRotation"
    - "leftScapula.protraction", "leftScapula.elevation", "rightScapula.protraction", "rightScapula.elevation"
-   Values should be realistic clinical degrees (e.g. 15 for moderate kyphosis, -10 for posterior tilt).
+   Values should be realistic clinical degrees (e.g. 20 for moderate kyphosis, 15 for anterior pelvic tilt).
 
 4. "region_highlights": Array of regions to highlight. Each has:
    - "region": one of "cervical_spine", "thoracic_spine", "lumbar_spine", "left_shoulder", "right_shoulder", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle", "pelvis", "left_elbow", "right_elbow", "left_scapula", "right_scapula", "head", "left_wrist", "right_wrist", "left_foot", "right_foot"
    - "type": one of "pain", "pathology", "movement_loss", "weakness", "instability"
    - "severity": 0.0 to 1.0
    - "label": brief label
+   - "confidence": "confirmed" or "predicted"
 
-5. "clinical_summary": A one-line summary of the clinical picture.
+5. "clinical_summary": A 1-2 sentence summary of the predicted clinical picture, explaining the diagnosis and its typical presentation.
 
-Only include items that are clearly indicated or strongly implied by the text. Do not fabricate findings.`
+6. "predictions_confidence": Overall confidence in your predictions — "high" (well-known condition with clear presentation), "moderate" (some ambiguity), or "low" (unusual or vague description).
+
+7. "follow_up_questions": Array of questions to ask the clinician to refine the prediction. Each has:
+   - "id": unique string like "q1", "q2", etc.
+   - "question": the question to ask (concise, clinical)
+   - "options": optional array of preset answer choices (e.g., ["Acute (<2 weeks)", "Subacute (2-6 weeks)", "Chronic (>6 weeks)"])
+   - "clinical_relevance": brief explanation of why this question matters for the prediction
+
+Generate 2-5 follow-up questions when important clinical details are missing. Questions should help determine: severity, chronicity, laterality, aggravating/easing factors, or associated conditions that would change the skeletal presentation. Do NOT ask questions if the description is already comprehensive.
+
+EXAMPLES of good predictions:
+- "Baastrup's disease" → predict increased lumbar lordosis (spine.lumbarLordosis: 25), pain at L4-L5 interspinous area, erector spinae hypertonicity, potential hip flexor tightness, ask about chronicity and extension vs flexion preference
+- "Frozen shoulder" → predict restricted GH ROM, compensatory scapular elevation, potential upper trap spasm, ask about which shoulder and stage (freezing/frozen/thawing)
+- "Elderly with kyphosis" → predict increased thoracic kyphosis, forward head posture, potential cervical lordosis loss, weakened lower traps and deep neck flexors`
           },
           {
             role: "user",
-            content: text
+            content: text + contextBlock
           }
         ],
         response_format: { type: "json_object" },
-        max_tokens: 2000,
-        temperature: 0.3,
+        max_tokens: 3000,
+        temperature: 0.4,
       });
 
       const parsed = JSON.parse(response.choices[0].message.content || '{}');
@@ -9996,6 +10027,8 @@ Only include items that are clearly indicated or strongly implied by the text. D
         postural_deviations: parsed.postural_deviations || {},
         region_highlights: parsed.region_highlights || [],
         clinical_summary: parsed.clinical_summary || '',
+        follow_up_questions: parsed.follow_up_questions || [],
+        predictions_confidence: parsed.predictions_confidence || 'moderate',
       });
     } catch (error: unknown) {
       console.error('Error parsing clinical text:', error);

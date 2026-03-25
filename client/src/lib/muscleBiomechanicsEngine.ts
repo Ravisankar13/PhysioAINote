@@ -1178,8 +1178,10 @@ export function applyOverridesToAnalysis(
 
       if (override.pathology !== 'none') {
         const eff = PATHOLOGY_EFFECTS[override.pathology];
-        tightness = clamp(tightness + eff.tensionMod, 0, 100);
-        activation = clamp(activation + eff.activationMod, 0, 100);
+        if (eff) {
+          tightness = clamp(tightness + eff.tensionMod, 0, 100);
+          activation = clamp(activation + eff.activationMod, 0, 100);
+        }
       }
     }
 

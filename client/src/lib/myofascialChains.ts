@@ -293,7 +293,7 @@ export function propagateChainEffects(
       let effectiveTension = baseTension + (override?.tensionOffset ?? 0);
       if (override?.lengthOverride === 'shortened') effectiveTension = Math.max(effectiveTension, 70);
       else if (override?.lengthOverride === 'lengthened') effectiveTension = Math.min(effectiveTension, 30);
-      if (override?.pathology && override.pathology !== 'none') effectiveTension += PATHOLOGY_EFFECTS[override.pathology].tensionMod;
+      if (override?.pathology && override.pathology !== 'none' && PATHOLOGY_EFFECTS[override.pathology]) effectiveTension += PATHOLOGY_EFFECTS[override.pathology].tensionMod;
       const deviation = effectiveTension - 50;
 
       if (Math.abs(deviation) < 5) continue;
@@ -340,7 +340,7 @@ export function propagateChainEffects(
         let effectiveTension = baseTension + (override?.tensionOffset ?? 0);
         if (override?.lengthOverride === 'shortened') effectiveTension = Math.max(effectiveTension, 70);
         else if (override?.lengthOverride === 'lengthened') effectiveTension = Math.min(effectiveTension, 30);
-        if (override?.pathology && override.pathology !== 'none') effectiveTension += PATHOLOGY_EFFECTS[override.pathology].tensionMod;
+        if (override?.pathology && override.pathology !== 'none' && PATHOLOGY_EFFECTS[override.pathology]) effectiveTension += PATHOLOGY_EFFECTS[override.pathology].tensionMod;
         const deviation = effectiveTension - 50;
 
         if (Math.abs(deviation) < 5) return;
@@ -393,7 +393,7 @@ export function computeWholeBodyTensionScore(
     if (override?.lengthOverride === 'shortened') effective = Math.max(effective, 70);
     else if (override?.lengthOverride === 'lengthened') effective = Math.min(effective, 30);
     if (override?.pathology && override.pathology !== 'none') {
-      effective += PATHOLOGY_EFFECTS[override.pathology].tensionMod;
+      if (PATHOLOGY_EFFECTS[override.pathology]) effective += PATHOLOGY_EFFECTS[override.pathology].tensionMod;
       pathologyCount++;
     }
     if (override?.inhibition && override.inhibition > 0) {

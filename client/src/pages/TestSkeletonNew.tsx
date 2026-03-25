@@ -3011,7 +3011,7 @@ export default function TestSkeletonNew() {
                               </button>
                             ))}
                           </div>
-                          {override?.pathology && override.pathology !== 'none' && (
+                          {override?.pathology && override.pathology !== 'none' && PATHOLOGY_EFFECTS[override.pathology] && (
                             <div className="mt-1.5 text-[9px] text-slate-500 bg-slate-800/50 rounded p-1.5">
                               <span className="text-red-400 font-medium">{PATHOLOGY_LABELS[override.pathology]}:</span>{' '}
                               {PATHOLOGY_EFFECTS[override.pathology].tensionMod > 0 ? '+' : ''}{PATHOLOGY_EFFECTS[override.pathology].tensionMod}% tension,{' '}

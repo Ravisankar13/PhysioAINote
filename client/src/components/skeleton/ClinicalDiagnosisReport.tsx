@@ -7,6 +7,7 @@ interface RootCause {
   cause: string;
   type: string;
   severity: string;
+  confidence?: string;
   evidence: string;
   downstream_effects: string;
 }
@@ -190,6 +191,11 @@ export default function ClinicalDiagnosisReport({ report, isOpen, onClose }: Cli
                     <div className="flex items-center gap-1 mb-0.5">
                       <div className={`w-1.5 h-1.5 rounded-full ${rc.severity === 'severe' ? 'bg-red-500' : rc.severity === 'moderate' ? 'bg-amber-500' : 'bg-green-500'}`} />
                       <span className="text-[8px] text-gray-500">{rc.severity}</span>
+                      {rc.confidence && (
+                        <Badge variant="outline" className={`text-[7px] px-1 py-0 ml-1 ${rc.confidence === 'confirmed' ? 'border-green-600/50 text-green-400' : 'border-amber-600/50 text-amber-400'}`}>
+                          {rc.confidence === 'confirmed' ? 'Confirmed' : 'Predicted'}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-[9px] text-gray-400 leading-snug mb-0.5">
                       <span className="text-gray-500">Evidence: </span>{rc.evidence}

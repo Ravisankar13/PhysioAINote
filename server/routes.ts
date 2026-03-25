@@ -10115,7 +10115,8 @@ Based on ALL the above skeleton-specific findings (confirmed and predicted), pro
    - "cause": specific description (e.g. "Tight bilateral hip flexors (iliopsoas)")
    - "type": one of "muscle_tightness", "muscle_weakness", "fascial_tension", "joint_restriction", "postural_deviation", "neural_tension", "motor_control_deficit"
    - "severity": "mild", "moderate", or "severe"
-   - "evidence": which skeleton finding confirms this (reference the specific muscle_id, pain marker, or postural deviation)
+   - "confidence": "confirmed" if directly observed in the skeleton findings, or "predicted" if inferred from clinical reasoning
+   - "evidence": which skeleton finding confirms this (reference the specific muscle_id, pain marker, or postural deviation). Prefix with [CONFIRMED] or [PREDICTED] to indicate whether this was directly observed or inferred.
    - "downstream_effects": brief description of what this root cause is causing
 
 4. "biomechanical_analysis": object with:

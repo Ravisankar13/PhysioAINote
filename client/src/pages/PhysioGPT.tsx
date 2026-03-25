@@ -8489,7 +8489,22 @@ ${ddxList}`;
       )}
 
       <div className={`absolute top-14 z-30 transition-all duration-300 ${sidebarOpen ? 'left-[270px]' : 'left-3'}`}>
-        <ClinicalTextInput onParseResult={handleClinicalTextParse} onClearFindings={handleClinicalTextClear} />
+        <ClinicalTextInput
+          onParseResult={handleClinicalTextParse}
+          onClearFindings={handleClinicalTextClear}
+          chainIntegrityScores={(() => {
+            const integrity = hudChainIntegrity;
+            if (!integrity || integrity.size === 0) return undefined;
+            const arr: Array<{ chainId: string; score: number; issues: string[] }> = [];
+            integrity.forEach((val, key) => { arr.push({ chainId: key, score: val.score, issues: val.issues }); });
+            return arr;
+          })()}
+          forceAnalysis={(() => {
+            const forces = hudForceAnalysis;
+            if (!forces || !forces.joints) return undefined;
+            return forces.joints.filter((j: { status: string }) => j.status === 'high' || j.status === 'very_high').map((j: { label: string; totalForce: number }) => ({ joint: j.label, force_percent: Math.round(j.totalForce * 100) }));
+          })()}
+        />
       </div>
 
       <ClinicalReasoningPanel

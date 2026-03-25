@@ -55,10 +55,23 @@ interface QAEntry {
   answer: string;
 }
 
+export interface ChainIntegrityData {
+  chainId: string;
+  score: number;
+  issues: string[];
+}
+
+export interface ForceAnalysisData {
+  joint: string;
+  force_percent: number;
+}
+
 interface ClinicalTextInputProps {
   onParseResult: (result: ClinicalParseResult) => void;
   onClearFindings?: () => void;
   disabled?: boolean;
+  chainIntegrityScores?: ChainIntegrityData[];
+  forceAnalysis?: ForceAnalysisData[];
 }
 
 const EXAMPLE_DESCRIPTIONS = [
@@ -69,7 +82,7 @@ const EXAMPLE_DESCRIPTIONS = [
   "Elderly patient with lumbar spinal stenosis and kyphosis",
 ];
 
-export default function ClinicalTextInput({ onParseResult, onClearFindings, disabled }: ClinicalTextInputProps) {
+export default function ClinicalTextInput({ onParseResult, onClearFindings, disabled, chainIntegrityScores, forceAnalysis }: ClinicalTextInputProps) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<ClinicalParseResult | null>(null);
@@ -184,6 +197,8 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
         qa_context: qaHistory.length > 0 ? qaHistory : undefined,
         clinical_summary: lastResult.clinical_summary,
         original_description: originalTextRef.current,
+        chain_integrity: chainIntegrityScores && chainIntegrityScores.length > 0 ? chainIntegrityScores : undefined,
+        force_analysis: forceAnalysis && forceAnalysis.length > 0 ? forceAnalysis : undefined,
       });
       setDiagnosisReport(reportData);
       setReportOpen(true);
@@ -194,7 +209,7 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
     } finally {
       setReportLoading(false);
     }
-  }, [lastResult, qaHistory, toast]);
+  }, [lastResult, qaHistory, toast, chainIntegrityScores, forceAnalysis]);
 
   const confirmedCount = lastResult ? {
     pain: lastResult.pain_markers.filter(p => p.confidence === 'confirmed').length,

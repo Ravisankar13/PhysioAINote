@@ -10039,7 +10039,7 @@ EXAMPLES of good predictions:
 
   app.post('/api/clinical-diagnosis/report', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { pain_markers, muscle_states, postural_deviations, region_highlights, qa_context, clinical_summary, original_description } = req.body;
+      const { pain_markers, muscle_states, postural_deviations, region_highlights, qa_context, clinical_summary, original_description, chain_integrity, force_analysis } = req.body;
 
       if (!pain_markers && !muscle_states && !postural_deviations) {
         return res.status(400).json({ error: 'Clinical findings are required to generate a diagnosis report' });
@@ -10087,11 +10087,19 @@ EXAMPLES of good predictions:
         ? `\nCLINICIAN FOLLOW-UP Q&A:\n${qa_context.map((qa: any) => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n')}`
         : '';
 
+      const chainSection = Array.isArray(chain_integrity) && chain_integrity.length > 0
+        ? `\nFASCIAL CHAIN INTEGRITY SCORES:\n${chain_integrity.map((c: any) => `- ${c.chainId}: ${c.score}% integrity${c.issues?.length > 0 ? ` — Issues: ${c.issues.join('; ')}` : ''}`).join('\n')}`
+        : '';
+
+      const forceSection = Array.isArray(force_analysis) && force_analysis.length > 0
+        ? `\nJOINT FORCE ANALYSIS (% body weight):\n${force_analysis.map((f: any) => `- ${f.joint}: ${f.force_percent}% BW`).join('\n')}`
+        : '';
+
       const prompt = `You are an expert musculoskeletal physiotherapist producing a comprehensive clinical diagnosis and treatment report based on a 3D biomechanical skeleton assessment.${evidenceSection}
 
 ORIGINAL PATIENT DESCRIPTION: "${original_description || 'Not provided'}"
 CLINICAL SUMMARY: ${clinical_summary || 'Not provided'}
-${painSection}${muscleSection}${posturalSection}${regionSection}${qaSection}
+${painSection}${muscleSection}${posturalSection}${regionSection}${chainSection}${forceSection}${qaSection}
 
 Based on ALL the above skeleton-specific findings (confirmed and predicted), produce a structured clinical diagnosis and treatment report as a JSON object with these fields:
 

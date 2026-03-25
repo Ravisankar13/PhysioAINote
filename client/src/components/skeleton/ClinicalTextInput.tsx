@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Brain, Sparkles, X, ChevronDown, ChevronUp, MessageCircle, HelpCircle, CheckCircle2, Lightbulb } from "lucide-react";
+import { Loader2, Brain, Sparkles, X, ChevronDown, ChevronUp, MessageCircle, HelpCircle, CheckCircle2, Lightbulb, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import ClinicalDiagnosisReport, { type DiagnosisReport } from "./ClinicalDiagnosisReport";
 
 export interface ParsedPainMarker {
   anatomical_label: string;
@@ -78,6 +79,9 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
   const [qaHistory, setQaHistory] = useState<QAEntry[]>([]);
   const [answerText, setAnswerText] = useState("");
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
+  const [diagnosisReport, setDiagnosisReport] = useState<DiagnosisReport | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const originalTextRef = useRef("");
   const { toast } = useToast();
 
@@ -162,9 +166,35 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
     setFollowUpQuestions([]);
     setQaHistory([]);
     setActiveQuestionId(null);
+    setDiagnosisReport(null);
+    setReportOpen(false);
     originalTextRef.current = "";
     if (onClearFindings) onClearFindings();
   }, [onClearFindings]);
+
+  const handleGenerateReport = useCallback(async () => {
+    if (!lastResult) return;
+    setReportLoading(true);
+    try {
+      const reportData: DiagnosisReport = await apiRequest("/api/clinical-diagnosis/report", "POST", {
+        pain_markers: lastResult.pain_markers,
+        muscle_states: lastResult.muscle_states,
+        postural_deviations: lastResult.postural_deviations,
+        region_highlights: lastResult.region_highlights,
+        qa_context: qaHistory.length > 0 ? qaHistory : undefined,
+        clinical_summary: lastResult.clinical_summary,
+        original_description: originalTextRef.current,
+      });
+      setDiagnosisReport(reportData);
+      setReportOpen(true);
+      toast({ title: "Report Generated", description: "Clinical diagnosis and treatment plan ready." });
+    } catch (err) {
+      console.error("Diagnosis report error:", err);
+      toast({ title: "Report Error", description: "Failed to generate diagnosis report. Please try again.", variant: "destructive" });
+    } finally {
+      setReportLoading(false);
+    }
+  }, [lastResult, qaHistory, toast]);
 
   const confirmedCount = lastResult ? {
     pain: lastResult.pain_markers.filter(p => p.confidence === 'confirmed').length,
@@ -436,8 +466,51 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
                   ))}
                 </div>
               )}
+
+              <Button
+                size="sm"
+                onClick={handleGenerateReport}
+                disabled={reportLoading || !lastResult}
+                className="w-full h-7 text-[10px] gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white mt-1"
+              >
+                {reportLoading ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Generating Report...
+                  </>
+                ) : diagnosisReport ? (
+                  <>
+                    <FileText className="h-3 w-3" />
+                    Regenerate Diagnosis & Treatment Plan
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-3 w-3" />
+                    Generate Diagnosis & Treatment Plan
+                  </>
+                )}
+              </Button>
+
+              {diagnosisReport && !reportOpen && (
+                <button
+                  onClick={() => setReportOpen(true)}
+                  className="w-full text-[9px] text-emerald-400 hover:text-emerald-300 underline text-center py-0.5"
+                >
+                  View Report: {diagnosisReport.primary_diagnosis?.name || 'Diagnosis Report'}
+                </button>
+              )}
             </div>
           )}
+        </div>
+      )}
+
+      {diagnosisReport && reportOpen && (
+        <div className="absolute top-0 left-[calc(100%+8px)] z-40">
+          <ClinicalDiagnosisReport
+            report={diagnosisReport}
+            isOpen={reportOpen}
+            onClose={() => setReportOpen(false)}
+          />
         </div>
       )}
     </div>

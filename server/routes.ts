@@ -10037,6 +10037,139 @@ EXAMPLES of good predictions:
     }
   });
 
+  app.post('/api/clinical-diagnosis/report', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { pain_markers, muscle_states, postural_deviations, region_highlights, qa_context, clinical_summary, original_description } = req.body;
+
+      if (!pain_markers && !muscle_states && !postural_deviations) {
+        return res.status(400).json({ error: 'Clinical findings are required to generate a diagnosis report' });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const openai = new OpenAI({ apiKey, baseURL });
+
+      let treatmentEvidence: any[] = [];
+      try {
+        const { fetchClinicalEvidence } = await import("./services/clinicalEvidenceService");
+        const regionTerms = (pain_markers || []).map((p: any) => p.anatomical_label).join(' ');
+        const muscleTerms = (muscle_states || []).filter((m: any) => m.pathology !== 'none').map((m: any) => m.muscle_id.replace(/_/g, ' ')).slice(0, 5).join(' ');
+        const evidence = await fetchClinicalEvidence(`${regionTerms} ${muscleTerms}`.trim(), original_description || '', 'treatment rehabilitation diagnosis');
+        if (evidence && evidence.papers.length > 0) {
+          treatmentEvidence = evidence.papers;
+        }
+      } catch (evErr) {
+        console.warn("Evidence fetch for diagnosis report failed:", evErr);
+      }
+
+      const evidenceSection = treatmentEvidence.length > 0
+        ? `\n\nRELEVANT PUBMED EVIDENCE (cite these papers using [Author, Year] format with PMIDs):\n${treatmentEvidence.map((p: any, i: number) => `[${i+1}] ${p.authors} (${p.year}). "${p.title}" ${p.journal}. PMID: ${p.pmid}. Evidence Grade: ${p.evidenceGrade}.`).join('\n')}`
+        : '';
+
+      const painSection = (pain_markers || []).length > 0
+        ? `\nPAIN/SYMPTOM MARKERS:\n${(pain_markers || []).map((p: any, i: number) => `${i+1}. ${p.anatomical_label} — ${p.symptom_type} (${p.type}) [${p.confidence || 'predicted'}]: ${p.description || ''}`).join('\n')}`
+        : '';
+
+      const muscleSection = (muscle_states || []).length > 0
+        ? `\nMUSCLE STATES:\n${(muscle_states || []).map((m: any, i: number) => `${i+1}. ${m.muscle_id.replace(/_/g, ' ')} — pathology: ${m.pathology}, tension offset: ${m.tension_offset > 0 ? '+' : ''}${m.tension_offset}, activation offset: ${m.activation_offset > 0 ? '+' : ''}${m.activation_offset}, inhibition: ${m.inhibition}% [${m.confidence || 'predicted'}]`).join('\n')}`
+        : '';
+
+      const posturalSection = postural_deviations && Object.keys(postural_deviations).length > 0
+        ? `\nPOSTURAL DEVIATIONS:\n${Object.entries(postural_deviations).map(([key, val]) => `- ${key}: ${val}°`).join('\n')}`
+        : '';
+
+      const regionSection = (region_highlights || []).length > 0
+        ? `\nREGION HIGHLIGHTS:\n${(region_highlights || []).map((r: any) => `- ${r.region}: ${r.type} (severity ${r.severity}) — ${r.label} [${r.confidence || 'predicted'}]`).join('\n')}`
+        : '';
+
+      const qaSection = Array.isArray(qa_context) && qa_context.length > 0
+        ? `\nCLINICIAN FOLLOW-UP Q&A:\n${qa_context.map((qa: any) => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n')}`
+        : '';
+
+      const prompt = `You are an expert musculoskeletal physiotherapist producing a comprehensive clinical diagnosis and treatment report based on a 3D biomechanical skeleton assessment.${evidenceSection}
+
+ORIGINAL PATIENT DESCRIPTION: "${original_description || 'Not provided'}"
+CLINICAL SUMMARY: ${clinical_summary || 'Not provided'}
+${painSection}${muscleSection}${posturalSection}${regionSection}${qaSection}
+
+Based on ALL the above skeleton-specific findings (confirmed and predicted), produce a structured clinical diagnosis and treatment report as a JSON object with these fields:
+
+1. "primary_diagnosis": object with:
+   - "name": the primary clinical diagnosis
+   - "icd_code": ICD-10 code if applicable
+   - "confidence": "high", "moderate", or "low"
+   - "clinical_reasoning": 2-3 sentences explaining how the skeleton findings support this diagnosis
+
+2. "differential_diagnoses": array of up to 3 alternative diagnoses, each with "name" and "reasoning" (1 sentence)
+
+3. "root_causes": array of skeleton-specific root causes driving the condition. Each has:
+   - "cause": specific description (e.g. "Tight bilateral hip flexors (iliopsoas)")
+   - "type": one of "muscle_tightness", "muscle_weakness", "fascial_tension", "joint_restriction", "postural_deviation", "neural_tension", "motor_control_deficit"
+   - "severity": "mild", "moderate", or "severe"
+   - "evidence": which skeleton finding confirms this (reference the specific muscle_id, pain marker, or postural deviation)
+   - "downstream_effects": brief description of what this root cause is causing
+
+4. "biomechanical_analysis": object with:
+   - "postural_summary": 2-3 sentences describing the overall postural pattern
+   - "kinetic_chain_issues": array of strings describing connected chain problems
+   - "compensation_patterns": array of strings describing compensatory patterns observed
+   - "force_distribution": 1-2 sentences on how forces are being distributed abnormally
+
+5. "treatment_plan": object with:
+   - "phase_1_acute": object with "duration" (e.g. "Weeks 1-2"), "goals" (array of strings), "interventions" (array of objects each with "type" (manual_therapy/exercise/education/modality), "name", "target" (which root cause this addresses), "dosage", "rationale")
+   - "phase_2_recovery": same structure for recovery phase
+   - "phase_3_maintenance": same structure for long-term maintenance
+   - "contraindications": array of strings
+   - "red_flags": array of strings to monitor
+
+6. "prognosis": object with:
+   - "expected_timeline": e.g. "6-12 weeks"
+   - "favorable_factors": array of strings
+   - "risk_factors": array of strings
+   - "milestones": array of objects with "week", "milestone", "measure"
+
+7. "evidence_citations": array of objects with "claim", "citation" (Author, Year format), "pmid", "grade" (A-D)
+
+Be specific to THIS skeleton's findings. Every root cause must reference a specific finding from the assessment data. Treatment interventions must directly target identified root causes.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: prompt },
+          { role: "user", content: "Generate the comprehensive clinical diagnosis and treatment report based on the skeleton assessment findings provided." }
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 4000,
+        temperature: 0.5,
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+      res.json({
+        primary_diagnosis: parsed.primary_diagnosis || null,
+        differential_diagnoses: parsed.differential_diagnoses || [],
+        root_causes: parsed.root_causes || [],
+        biomechanical_analysis: parsed.biomechanical_analysis || null,
+        treatment_plan: parsed.treatment_plan || null,
+        prognosis: parsed.prognosis || null,
+        evidence_citations: parsed.evidence_citations || [],
+        evidence_references: treatmentEvidence.map((p: any) => ({
+          title: p.title,
+          authors: p.authors,
+          journal: p.journal,
+          year: p.year,
+          pmid: p.pmid,
+          evidenceGrade: p.evidenceGrade,
+          pubmedUrl: p.pubmedUrl,
+        })),
+      });
+    } catch (error: unknown) {
+      console.error('Error generating diagnosis report:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate diagnosis report', details: message });
+    }
+  });
+
   // Document generation endpoint for automatic triggers
   app.post('/api/documents/generate', ensureAuthenticated, async (req, res) => {
     try {

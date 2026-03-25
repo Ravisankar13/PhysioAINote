@@ -399,6 +399,7 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
 
               {lastResult.pain_markers.length > 0 && (
                 <div className="space-y-0.5">
+                  <span className="text-[8px] text-gray-500">Pain Markers:</span>
                   {lastResult.pain_markers.map((pm, i) => (
                     <div key={i} className="flex items-center gap-1 text-[9px]">
                       {pm.confidence === 'predicted' ? (
@@ -406,9 +407,31 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
                       ) : (
                         <CheckCircle2 className="h-2.5 w-2.5 text-green-400 flex-shrink-0" />
                       )}
+                      <span className={`text-[7px] px-1 py-0 rounded ${pm.confidence === 'predicted' ? 'bg-amber-900/40 text-amber-300' : 'bg-green-900/40 text-green-300'}`}>
+                        {pm.confidence === 'predicted' ? 'Predicted' : 'Confirmed'}
+                      </span>
                       <span className="text-gray-300 truncate">{pm.anatomical_label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {lastResult.muscle_states.length > 0 && (
+                <div className="space-y-0.5">
+                  <span className="text-[8px] text-gray-500">Muscle States:</span>
+                  {lastResult.muscle_states.map((ms, i) => (
+                    <div key={i} className="flex items-center gap-1 text-[9px]">
+                      {ms.confidence === 'predicted' ? (
+                        <Lightbulb className="h-2.5 w-2.5 text-amber-400 flex-shrink-0" />
+                      ) : (
+                        <CheckCircle2 className="h-2.5 w-2.5 text-green-400 flex-shrink-0" />
+                      )}
+                      <span className={`text-[7px] px-1 py-0 rounded ${ms.confidence === 'predicted' ? 'bg-amber-900/40 text-amber-300' : 'bg-green-900/40 text-green-300'}`}>
+                        {ms.confidence === 'predicted' ? 'Predicted' : 'Confirmed'}
+                      </span>
+                      <span className="text-gray-300 truncate">{ms.muscle_id.replace(/_/g, ' ')}</span>
                       <span className="text-gray-500">·</span>
-                      <span className="text-gray-400 truncate">{pm.description}</span>
+                      <span className="text-gray-400">{ms.pathology}</span>
                     </div>
                   ))}
                 </div>

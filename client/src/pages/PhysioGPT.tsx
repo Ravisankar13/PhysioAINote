@@ -6723,7 +6723,12 @@ ${ddxList}`;
                 onClick={() => {
                   setModelConfig({ ...DEFAULT_MODEL_CONFIG });
                   setPainMarkers([]);
-                  toast({ title: "Skeleton Reset", description: "All joints and pain markers cleared." });
+                  setMuscleOverrides({});
+                  setClinicalHighlights([]);
+                  setScarMarkers([]);
+                  setAdhesionBands([]);
+                  clinicalTextAppliedRef.current = null;
+                  toast({ title: "Skeleton Reset", description: "All joints, pain markers, muscle states, and clinical findings cleared." });
                 }}
               >
                 <Bone className="h-3 w-3 mr-1" />

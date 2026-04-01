@@ -3231,12 +3231,46 @@ ${ddxList}`;
       });
     };
 
+    const getClinicallyAffectedNerves = (): Set<string> => {
+      const affected = new Set<string>();
+      for (const pm of painMarkers) {
+        const mechanism = classifyPainMechanism(
+          pm.anatomicalLabel || pm.nearestBone,
+          pm.description || `Pain at ${pm.anatomicalLabel || pm.nearestBone}`,
+          pm.type
+        );
+        if (mechanism === 'neuropathic') {
+          for (const nerve of NERVE_PATHWAY_DATA) {
+            const pmBone = pm.nearestBone;
+            if (nerve.bones.includes(pmBone) || nerve.pathway.includes(pmBone)) {
+              affected.add(nerve.id);
+            }
+          }
+        }
+      }
+      return affected;
+    };
+
     const buildNervePathways = (entries: NervePathwayEntry[]): OverlayResult['pathwayLines'] => {
+      const clinicallyAffected = getClinicallyAffectedNerves();
       return entries.map(n => ({
         boneSequence: n.pathway,
-        color: 0xaacc33,
-        label: n.label,
+        color: clinicallyAffected.has(n.id) ? 0xff4444 : 0xaacc33,
+        label: n.label + (clinicallyAffected.has(n.id) ? ' ⚠ Clinical finding' : ''),
       }));
+    };
+
+    const buildNerveEntrapmentMarkers = (entries: NervePathwayEntry[]): OverlayResult['markers'] => {
+      const clinicallyAffected = getClinicallyAffectedNerves();
+      return entries.flatMap(n => {
+        if (!clinicallyAffected.has(n.id) && !selectedTissueEntry) return [];
+        return n.entrapmentSites.map(site => ({
+          boneName: site.boneName,
+          color: clinicallyAffected.has(n.id) ? 0xff4444 : 0xff6600,
+          size: 0.012,
+          label: `${site.name} (${site.clinicalTest.split(',')[0]})`,
+        }));
+      });
     };
 
     const buildJointLoadIndicators = (): OverlayResult['loadIndicators'] => {
@@ -3269,11 +3303,71 @@ ${ddxList}`;
     };
 
     const buildFasciaChainLines = (entries: FascialLayerEntry[]): OverlayResult['pathwayLines'] => {
-      return entries.map(f => ({
-        boneSequence: f.bones,
-        color: 0xcc66cc,
-        label: f.chainName,
-      }));
+      return entries.map(f => {
+        const chainScore = hudChainIntegrity.size > 0
+          ? Array.from(hudChainIntegrity.entries()).find(([key]) =>
+              key.toLowerCase().includes(f.chainName.toLowerCase().split(' ')[0]) ||
+              f.chainName.toLowerCase().includes(key.toLowerCase().split(' ')[0])
+            )
+          : null;
+        const hasIssues = chainScore && chainScore[1].score < 80;
+        return {
+          boneSequence: f.bones,
+          color: hasIssues ? (chainScore[1].score < 60 ? 0xff3333 : 0xffaa33) : 0xcc66cc,
+          label: f.chainName + (hasIssues ? ` (${chainScore[1].score}% integrity)` : ''),
+        };
+      });
+    };
+
+    const buildFasciaRestrictionMarkers = (entries: FascialLayerEntry[]): OverlayResult['markers'] => {
+      if (hudChainIntegrity.size === 0) return [];
+      const markers: OverlayResult['markers'] = [];
+      for (const f of entries) {
+        const chainScore = Array.from(hudChainIntegrity.entries()).find(([key]) =>
+          key.toLowerCase().includes(f.chainName.toLowerCase().split(' ')[0]) ||
+          f.chainName.toLowerCase().includes(key.toLowerCase().split(' ')[0])
+        );
+        if (!chainScore || chainScore[1].score >= 80) continue;
+        const problematic = chainScore[1].problematicLinks || [];
+        for (const bone of f.bones) {
+          const isProblematic = problematic.some(pl =>
+            pl.toLowerCase().includes(bone.replace(/_[LRM]$/, '').toLowerCase())
+          );
+          if (isProblematic) {
+            markers.push({
+              boneName: bone,
+              color: chainScore[1].score < 60 ? 0xff3333 : 0xffaa33,
+              size: 0.012,
+              label: `Restriction: ${f.chainName}`,
+            });
+          }
+        }
+        if (markers.length === 0 && chainScore[1].score < 60) {
+          const midBone = f.bones[Math.floor(f.bones.length / 2)];
+          markers.push({
+            boneName: midBone,
+            color: 0xff3333,
+            size: 0.014,
+            label: `Chain dysfunction: ${f.chainName}`,
+          });
+        }
+      }
+      return markers;
+    };
+
+    const deriveJointDegeneration = (joint: JointSurfaceEntry): { klGrade: 0|1|2|3|4; label: string; color: number } => {
+      const forces = hudForceAnalysis;
+      if (!forces || !forces.joints) return { klGrade: 0, label: 'Normal', color: 0x33cc33 };
+      const matchedForce = forces.joints.find((f: JointSurfaceForce) =>
+        joint.bones.includes(f.boneName)
+      );
+      if (!matchedForce) return { klGrade: 0, label: 'Normal', color: 0x33cc33 };
+      const bw = matchedForce.totalForce;
+      if (bw > 3.5) return { klGrade: 4, label: 'Severe (KL-4)', color: 0xff0000 };
+      if (bw > 2.5) return { klGrade: 3, label: 'Moderate (KL-3)', color: 0xff6633 };
+      if (bw > 1.5) return { klGrade: 2, label: 'Mild (KL-2)', color: 0xffaa33 };
+      if (bw > 0.8) return { klGrade: 1, label: 'Doubtful (KL-1)', color: 0xcccc33 };
+      return { klGrade: 0, label: 'Normal', color: 0x33cc33 };
     };
 
     const buildJointInstabilityMarkers = (entries: JointSurfaceEntry[]): OverlayResult['markers'] => {
@@ -3283,18 +3377,30 @@ ${ddxList}`;
         const matchedForce = forces.joints.find((f: JointSurfaceForce) =>
           joint.bones.includes(f.boneName)
         );
-        if (!matchedForce || matchedForce.status === 'low') return [];
-        const severityColors: Record<string, number> = {
-          moderate: 0xffaa33,
-          high: 0xff6633,
-          very_high: 0xff0000,
-        };
-        return [{
-          boneName: joint.bones[0],
-          color: severityColors[matchedForce.status] || 0xffaa33,
-          size: matchedForce.status === 'very_high' ? 0.015 : 0.012,
-          label: `${joint.label} — ${matchedForce.status} load`,
-        }];
+        const degen = deriveJointDegeneration(joint);
+        const markers: Array<{ boneName: string; color: number; size: number; label: string }> = [];
+        if (degen.klGrade > 0) {
+          markers.push({
+            boneName: joint.bones[0],
+            color: degen.color,
+            size: 0.008 + degen.klGrade * 0.002,
+            label: `${joint.label} — ${degen.label}`,
+          });
+        }
+        if (matchedForce && matchedForce.status !== 'low') {
+          const severityColors: Record<string, number> = {
+            moderate: 0xffaa33,
+            high: 0xff6633,
+            very_high: 0xff0000,
+          };
+          markers.push({
+            boneName: joint.bones[joint.bones.length > 1 ? 1 : 0],
+            color: severityColors[matchedForce.status] || 0xffaa33,
+            size: matchedForce.status === 'very_high' ? 0.015 : 0.012,
+            label: `${joint.label} — ${matchedForce.status} load`,
+          });
+        }
+        return markers;
       });
     };
 
@@ -3307,11 +3413,13 @@ ${ddxList}`;
           result.markers = buildTendonMarkers([entry as TendonEntry]);
         } else if (tissueViewMode === 'nerve') {
           result.pathwayLines = buildNervePathways([entry as NervePathwayEntry]);
+          result.markers = buildNerveEntrapmentMarkers([entry as NervePathwayEntry]);
         } else if (tissueViewMode === 'joint') {
           result.loadIndicators = buildJointLoadIndicators();
           result.markers = buildJointInstabilityMarkers([entry as JointSurfaceEntry]);
         } else if (tissueViewMode === 'fascia') {
           result.pathwayLines = buildFasciaChainLines([entry as FascialLayerEntry]);
+          result.markers = buildFasciaRestrictionMarkers([entry as FascialLayerEntry]);
         }
         return result;
       }
@@ -3323,14 +3431,36 @@ ${ddxList}`;
       result.markers = buildTendonMarkers(TENDON_DATA);
     } else if (tissueViewMode === 'nerve') {
       result.pathwayLines = buildNervePathways(NERVE_PATHWAY_DATA);
+      result.markers = buildNerveEntrapmentMarkers(NERVE_PATHWAY_DATA);
     } else if (tissueViewMode === 'joint') {
       result.loadIndicators = buildJointLoadIndicators();
       result.markers = buildJointInstabilityMarkers(JOINT_SURFACE_DATA);
     } else if (tissueViewMode === 'fascia') {
       result.pathwayLines = buildFasciaChainLines(FASCIAL_LAYER_DATA);
+      result.markers = buildFasciaRestrictionMarkers(FASCIAL_LAYER_DATA);
     }
     return result;
-  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis, compensatedOverrides]);
+  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis, compensatedOverrides, painMarkers, hudChainIntegrity]);
+
+  const clinicallyAffectedNerves = useMemo(() => {
+    const affected = new Set<string>();
+    for (const pm of painMarkers) {
+      const mechanism = classifyPainMechanism(
+        pm.anatomicalLabel || pm.nearestBone,
+        pm.description || `Pain at ${pm.anatomicalLabel || pm.nearestBone}`,
+        pm.type
+      );
+      if (mechanism === 'neuropathic') {
+        for (const nerve of NERVE_PATHWAY_DATA) {
+          const pmBone = pm.nearestBone;
+          if (nerve.bones.includes(pmBone) || nerve.pathway.includes(pmBone)) {
+            affected.add(nerve.id);
+          }
+        }
+      }
+    }
+    return affected;
+  }, [painMarkers]);
 
   useEffect(() => {
     if (!skeletonContainerRef.current) return;
@@ -3884,7 +4014,7 @@ ${ddxList}`;
               nerveRootLabels={nerveRootLabels}
               referralZoneBones={referralZoneBones}
               tissueViewOverlay={tissueViewOverlay}
-              onTissueBoneClick={tissueViewMode ? (boneName: string) => {
+              onTissueBoneClick={tissueViewMode && tissueViewMode !== 'muscle' ? (boneName: string) => {
                 const matches = getAllEntriesForBone(tissueViewMode, boneName);
                 if (matches.length === 0) return;
                 if (matches.length === 1) {
@@ -3894,7 +4024,7 @@ ${ddxList}`;
                   setTissueDisambiguationEntries(matches.map(m => ({ id: m.id, label: m.label })));
                 }
               } : undefined}
-              enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle' || !!tissueViewMode}
+              enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle' || (!!tissueViewMode && tissueViewMode !== 'muscle')}
               onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
                 if (scarPlacementMode) {
                   const newScar: ScarMarker = {
@@ -7412,6 +7542,7 @@ ${ddxList}`;
                       label: f.label,
                     }))}
                     musclePathologyData={compensatedOverrides}
+                    clinicallyAffectedNerves={clinicallyAffectedNerves}
                   />
                   {tissueDisambiguationEntries.length > 1 && (
                     <div className="rounded-lg border bg-background/95 backdrop-blur-sm shadow-lg p-2 space-y-1">

@@ -41,6 +41,7 @@ interface TissueViewSelectorProps {
   chainIntegrityScores?: Map<string, { score: number; issues: string[]; problematicLinks: string[] }>;
   jointForceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }>;
   musclePathologyData?: Record<string, MuscleOverrideData>;
+  clinicallyAffectedNerves?: Set<string>;
 }
 
 const MODE_ICONS: Record<Exclude<TissueViewMode, null>, typeof Dumbbell> = {
@@ -131,8 +132,20 @@ function TendonInfoCard({ entry, musclePathologyData }: { entry: TendonEntry; mu
   );
 }
 
-function JointInfoCard({ entry }: { entry: JointSurfaceEntry }) {
-  const kl = entry.kellgrenLawrence !== undefined ? KELLGREN_LAWRENCE[entry.kellgrenLawrence] : null;
+function JointInfoCard({ entry, forceData }: { entry: JointSurfaceEntry; forceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }> }) {
+  const derivedKL = (() => {
+    if (!forceData) return entry.kellgrenLawrence ?? 0;
+    const matchedForce = forceData.find(f => entry.bones.includes(f.boneName));
+    if (!matchedForce) return entry.kellgrenLawrence ?? 0;
+    const bw = matchedForce.totalForce;
+    if (bw > 3.5) return 4;
+    if (bw > 2.5) return 3;
+    if (bw > 1.5) return 2;
+    if (bw > 0.8) return 1;
+    return 0;
+  })() as 0|1|2|3|4;
+  const kl = KELLGREN_LAWRENCE[derivedKL];
+  const isDerived = forceData && derivedKL !== (entry.kellgrenLawrence ?? 0);
 
   return (
     <div className="space-y-3">
@@ -144,36 +157,43 @@ function JointInfoCard({ entry }: { entry: JointSurfaceEntry }) {
         <div className="text-xs text-muted-foreground">Normal ROM</div>
         <div className="text-sm">{entry.normalROM}</div>
       </div>
-      {kl && (
-        <>
-          <Separator />
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className={
-                  entry.kellgrenLawrence === 0 ? 'border-green-500 text-green-500' :
-                  entry.kellgrenLawrence === 1 ? 'border-blue-500 text-blue-500' :
-                  entry.kellgrenLawrence === 2 ? 'border-yellow-500 text-yellow-500' :
-                  entry.kellgrenLawrence === 3 ? 'border-orange-500 text-orange-500' :
-                  'border-red-500 text-red-500'
-                }
-              >
-                K-L {entry.kellgrenLawrence}
-              </Badge>
-              <span className="text-xs">{kl.grade}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">{kl.description}</p>
-          </div>
-        </>
-      )}
+      <Separator />
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className={
+              derivedKL === 0 ? 'border-green-500 text-green-500' :
+              derivedKL === 1 ? 'border-blue-500 text-blue-500' :
+              derivedKL === 2 ? 'border-yellow-500 text-yellow-500' :
+              derivedKL === 3 ? 'border-orange-500 text-orange-500' :
+              'border-red-500 text-red-500'
+            }
+          >
+            K-L {derivedKL}
+          </Badge>
+          <span className="text-xs">{kl.grade}</span>
+          {isDerived && (
+            <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 bg-blue-500/10 text-blue-400 border-blue-500/30">
+              Force-derived
+            </Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{kl.description}</p>
+      </div>
     </div>
   );
 }
 
-function NerveInfoCard({ entry }: { entry: NervePathwayEntry }) {
+function NerveInfoCard({ entry, isClinicallyAffected }: { entry: NervePathwayEntry; isClinicallyAffected?: boolean }) {
   return (
     <div className="space-y-3">
+      {isClinicallyAffected && (
+        <div className="flex items-center gap-2 p-1.5 rounded bg-red-500/10 border border-red-500/30">
+          <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+          <span className="text-xs font-medium text-red-400">Clinical finding: neuropathic pain in territory</span>
+        </div>
+      )}
       <div className="space-y-1">
         <div className="text-xs text-muted-foreground">Motor Function</div>
         <div className="text-sm">{entry.motorFunction}</div>
@@ -292,12 +312,13 @@ function JointForceIndicator({ entry, forceData }: { entry: JointSurfaceEntry; f
   );
 }
 
-function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData, musclePathologyData }: {
+function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData, musclePathologyData, clinicallyAffectedNerves }: {
   entry: TissueOverlayEntry;
   mode: TissueViewMode;
   chainIntegrityScores?: Map<string, { score: number; issues: string[]; problematicLinks: string[] }>;
   jointForceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }>;
   musclePathologyData?: Record<string, MuscleOverrideData>;
+  clinicallyAffectedNerves?: Set<string>;
 }) {
   return (
     <div
@@ -319,11 +340,11 @@ function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData, mus
       {mode === 'tendon' && <TendonInfoCard entry={entry as TendonEntry} musclePathologyData={musclePathologyData} />}
       {mode === 'joint' && (
         <>
-          <JointInfoCard entry={entry as JointSurfaceEntry} />
+          <JointInfoCard entry={entry as JointSurfaceEntry} forceData={jointForceData} />
           <JointForceIndicator entry={entry as JointSurfaceEntry} forceData={jointForceData} />
         </>
       )}
-      {mode === 'nerve' && <NerveInfoCard entry={entry as NervePathwayEntry} />}
+      {mode === 'nerve' && <NerveInfoCard entry={entry as NervePathwayEntry} isClinicallyAffected={clinicallyAffectedNerves?.has((entry as NervePathwayEntry).id)} />}
       {mode === 'fascia' && <FasciaInfoCard entry={entry as FascialLayerEntry} chainIntegrityScores={chainIntegrityScores} />}
     </div>
   );
@@ -337,6 +358,7 @@ export default function TissueViewSelector({
   chainIntegrityScores,
   jointForceData,
   musclePathologyData,
+  clinicallyAffectedNerves,
 }: TissueViewSelectorProps) {
   const [showList, setShowList] = useState(false);
   const entries = activeMode ? getTissueEntriesForMode(activeMode) : [];
@@ -434,6 +456,7 @@ export default function TissueViewSelector({
           chainIntegrityScores={chainIntegrityScores}
           jointForceData={jointForceData}
           musclePathologyData={musclePathologyData}
+          clinicallyAffectedNerves={clinicallyAffectedNerves}
         />
       )}
     </div>

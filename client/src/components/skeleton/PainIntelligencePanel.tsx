@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Brain, Zap, Activity, X, ChevronDown, ChevronUp, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import type { PainMarker, PainMechanismType } from "@/components/skeleton/PureThreeGLBViewer";
+import type { PainMarker } from "@/components/skeleton/PureThreeGLBViewer";
 import {
   MECHANISM_COLORS,
   findDermatomeForBone,

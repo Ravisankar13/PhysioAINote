@@ -6231,6 +6231,7 @@ ${ddxList}`;
                     position: { x: 0, y: 0, z: 0 },
                     nearestBone: '',
                     anatomicalLabel: label,
+                    painMechanism: classifyPainMechanism(label, undefined, 'point'),
                   };
                   setPainMarkers(prev => [...prev, newMarker]);
                   setClinicalBubbleMarker(newMarker);

@@ -539,12 +539,10 @@ export default function ClinicalBubble({
                     setBehaviourLoading(true);
                     try {
                       const mechanism = classifyPainMechanism(region, undefined, markerType);
-                      const nerveRoots = getNerveRootForRegion(region);
                       const result = await apiRequest('/api/pain-intelligence/behaviour', 'POST', {
                         anatomical_label: region,
                         marker_type: markerType,
                         pain_mechanism: mechanism,
-                        nearest_bone: undefined,
                       });
                       setBehaviourData(result);
                     } catch {

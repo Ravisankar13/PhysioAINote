@@ -1,6 +1,6 @@
-import { calculatePosturalForces, type ForceAnalysisResult, type JointSurfaceForce } from './posturalForceEngine';
-import type { PathologyCompensationResult, PosturalDeviation, RomRestriction } from './pathologyCompensationEngine';
-import type { CrossSystemCorrelationResult, CompensationPattern, PainCorrelation } from './crossSystemCorrelation';
+import { calculatePosturalForces, type ForceAnalysisResult } from './posturalForceEngine';
+import type { PathologyCompensationResult } from './pathologyCompensationEngine';
+import type { CrossSystemCorrelationResult } from './crossSystemCorrelation';
 import type { MuscleOverride } from './muscleBiomechanicsEngine';
 import { KINETIC_CHAINS } from './kineticChainExplorer';
 

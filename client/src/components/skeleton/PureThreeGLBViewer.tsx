@@ -2770,6 +2770,12 @@ export default function PureThreeGLBViewer({
       glowMesh.position.copy(worldPos);
       glowMesh.renderOrder = 997;
       glowMesh.userData.isChainHighlight = true;
+      const isMechanismGlow = glowSize > 0.25 && highlight.color === 0xff6b35;
+      if (isMechanismGlow) {
+        glowMesh.userData.isMechanismPulse = true;
+        glowMesh.userData.baseOpacity = intensity * 0.5;
+        glowMesh.userData.baseScale = 1.0;
+      }
       scene.add(glowMesh);
       chainHighlightOverlaysRef.current.push(glowMesh);
 
@@ -2786,9 +2792,37 @@ export default function PureThreeGLBViewer({
       outerGlow.position.copy(worldPos);
       outerGlow.renderOrder = 996;
       outerGlow.userData.isChainHighlight = true;
+      if (isMechanismGlow) {
+        outerGlow.userData.isMechanismPulse = true;
+        outerGlow.userData.baseOpacity = intensity * 0.15;
+        outerGlow.userData.baseScale = 1.0;
+      }
       scene.add(outerGlow);
       chainHighlightOverlaysRef.current.push(outerGlow);
     }
+  }, [highlightBoneNames]);
+
+  useEffect(() => {
+    const overlays = chainHighlightOverlaysRef.current;
+    const hasPulse = overlays.some(m => m.userData.isMechanismPulse);
+    if (!hasPulse) return;
+
+    let pulseFrameId: number;
+    const animatePulse = () => {
+      const t = performance.now() / 1000;
+      for (const mesh of overlays) {
+        if (!mesh.userData.isMechanismPulse) continue;
+        const pulse = 0.6 + Math.sin(t * 2.5) * 0.4;
+        if (mesh.material instanceof THREE.MeshBasicMaterial) {
+          mesh.material.opacity = mesh.userData.baseOpacity * pulse;
+        }
+        const scale = 1.0 + Math.sin(t * 2.5) * 0.15;
+        mesh.scale.setScalar(scale);
+      }
+      pulseFrameId = requestAnimationFrame(animatePulse);
+    };
+    pulseFrameId = requestAnimationFrame(animatePulse);
+    return () => cancelAnimationFrame(pulseFrameId);
   }, [highlightBoneNames]);
 
   useEffect(() => {

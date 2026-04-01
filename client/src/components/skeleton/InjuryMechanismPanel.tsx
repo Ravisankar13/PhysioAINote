@@ -8,7 +8,6 @@ import {
   ChevronUp,
   Copy,
   Check,
-  Zap,
   ArrowRight,
   Target,
   AlertTriangle,

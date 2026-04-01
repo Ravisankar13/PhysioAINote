@@ -133,9 +133,15 @@ export default function ClinicalBubble({
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [expandedConnection, setExpandedConnection] = useState<string | null>(null);
   const [behaviourData, setBehaviourData] = useState<{
-    flexion: string; extension: string; loading: string; rest: string;
-    morning: string; fatigue: string; aggravatingFactors: string[];
-    easingFactors: string[]; clinicalPattern: string;
+    flexion: { effect: string; explanation: string };
+    extension: { effect: string; explanation: string };
+    loading: { effect: string; explanation: string };
+    rest: { effect: string; explanation: string };
+    morning: { effect: string; explanation: string };
+    fatigue: { effect: string; explanation: string };
+    aggravating_factors: string[];
+    easing_factors: string[];
+    clinical_pattern: string;
   } | null>(null);
   const [behaviourLoading, setBehaviourLoading] = useState(false);
   const localHistoryRef = useRef(localHistory);
@@ -535,8 +541,10 @@ export default function ClinicalBubble({
                       const mechanism = classifyPainMechanism(region, undefined, markerType);
                       const nerveRoots = getNerveRootForRegion(region);
                       const result = await apiRequest('/api/pain-intelligence/behaviour', 'POST', {
-                        region, markerType, mechanism,
-                        nerveRoot: nerveRoots[0]?.root,
+                        anatomical_label: region,
+                        marker_type: markerType,
+                        pain_mechanism: mechanism,
+                        nearest_bone: undefined,
                       });
                       setBehaviourData(result);
                     } catch {
@@ -561,7 +569,7 @@ export default function ClinicalBubble({
                 <div className="space-y-2">
                   <div className="bg-purple-500/10 rounded-lg p-2 border border-purple-500/20">
                     <span className="text-[9px] text-purple-300 font-semibold uppercase tracking-wide">Clinical Pattern</span>
-                    <p className="text-[11px] text-white mt-0.5 leading-relaxed">{behaviourData.clinicalPattern}</p>
+                    <p className="text-[11px] text-white mt-0.5 leading-relaxed">{behaviourData.clinical_pattern}</p>
                   </div>
                   {[
                     { label: 'Flexion', val: behaviourData.flexion },
@@ -572,15 +580,22 @@ export default function ClinicalBubble({
                     { label: 'Fatigue', val: behaviourData.fatigue },
                   ].map(({ label, val }) => (
                     <div key={label} className="bg-white/5 rounded-lg p-2">
-                      <span className="text-[10px] text-purple-300 font-medium">{label}</span>
-                      <p className="text-[10px] text-gray-300 mt-0.5 leading-relaxed">{val}</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-purple-300 font-medium">{label}</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                          val.effect === 'worse' ? 'bg-red-500/20 text-red-300' :
+                          val.effect === 'better' ? 'bg-green-500/20 text-green-300' :
+                          'bg-gray-500/20 text-gray-300'
+                        }`}>{val.effect}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-300 mt-0.5 leading-relaxed">{val.explanation}</p>
                     </div>
                   ))}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-red-500/10 rounded-lg p-2 border border-red-500/20">
                       <span className="text-[9px] text-red-300 font-semibold">Aggravating</span>
                       <ul className="mt-1 space-y-0.5">
-                        {behaviourData.aggravatingFactors.map((f, i) => (
+                        {behaviourData.aggravating_factors.map((f, i) => (
                           <li key={i} className="text-[9px] text-gray-400 flex items-start gap-1">
                             <span className="text-red-400 mt-0.5">•</span> {f}
                           </li>
@@ -590,7 +605,7 @@ export default function ClinicalBubble({
                     <div className="bg-green-500/10 rounded-lg p-2 border border-green-500/20">
                       <span className="text-[9px] text-green-300 font-semibold">Easing</span>
                       <ul className="mt-1 space-y-0.5">
-                        {behaviourData.easingFactors.map((f, i) => (
+                        {behaviourData.easing_factors.map((f, i) => (
                           <li key={i} className="text-[9px] text-gray-400 flex items-start gap-1">
                             <span className="text-green-400 mt-0.5">•</span> {f}
                           </li>
@@ -607,8 +622,9 @@ export default function ClinicalBubble({
                 return (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: mc, boxShadow: `0 0 6px ${mc}` }} />
-                      <span className="text-[11px] text-white font-medium capitalize">{mechanism.replace(/_/g, ' ')}</span>
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: mc.css, boxShadow: `0 0 6px ${mc.css}` }} />
+                      <span className="text-[11px] text-white font-medium">{mc.label}</span>
+                      <span className="text-[9px] text-gray-400">{mc.badge}</span>
                     </div>
                     {nerveRoots.length > 0 && (
                       <div className="bg-blue-500/10 rounded-lg p-2 border border-blue-500/20">

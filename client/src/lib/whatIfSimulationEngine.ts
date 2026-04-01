@@ -418,9 +418,10 @@ export function computeWhatIfComparison(
   scenarios: WhatIfScenario[]
 ): WhatIfComparisonResult {
   const { modelConfig: simConfig, overrides: simOverrides, forceMultiplier } = applyScenarios(baseModelConfig, baseOverrides, scenarios);
+  const effectiveBodyWeightKg = bodyWeightKg * forceMultiplier;
 
   const before = buildCorrelationInput(baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, 1.0);
-  const after = buildCorrelationInput(simConfig, simOverrides, painMarkers, bodyWeightKg, forceMultiplier);
+  const after = buildCorrelationInput(simConfig, simOverrides, painMarkers, effectiveBodyWeightKg, forceMultiplier);
 
   const forceDeltas: ForceDelta[] = [];
   for (const bj of before.forces.joints) {
@@ -479,7 +480,7 @@ export function computeWhatIfComparison(
   let afterRisk: InjuryRiskResult | null = null;
   try {
     beforeRisk = calculateInjuryRisks(calculateFullBiomechanics(170, bodyWeightKg, safeModel(baseModelConfig)));
-    afterRisk = calculateInjuryRisks(calculateFullBiomechanics(170, bodyWeightKg, safeModel(simConfig)));
+    afterRisk = calculateInjuryRisks(calculateFullBiomechanics(170, effectiveBodyWeightKg, safeModel(simConfig)));
   } catch (e) {
     console.warn('[WhatIf] Risk computation failed:', e instanceof Error ? e.message : e);
   }
@@ -541,7 +542,7 @@ export function computeWhatIfComparison(
       pathologyCompensation: afterPathology,
       correlationResult: after.correlation,
       compensatedOverrides: simOverrides,
-      bodyWeightKg,
+      bodyWeightKg: effectiveBodyWeightKg,
     });
     causalChainsTotal = mechanismBefore.causalChains.length;
     causalChainsResolved = causalChainsTotal - mechanismAfter.causalChains.length;

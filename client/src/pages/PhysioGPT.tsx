@@ -483,7 +483,6 @@ export default function PhysioGPT() {
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showWhatIfSimulation, setShowWhatIfSimulation] = useState(false);
-  const [globalForceMultiplier, setGlobalForceMultiplier] = useState(1.0);
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
   const mechanismHighlightBones = useMemo(() => {
@@ -2993,7 +2992,7 @@ ${ddxList}`;
       setMuscleOverrides(prev => ({ ...prev, [key]: { ...prev[key], ...val } }));
     }
     if (whatIfSimulatedConfig.forceMultiplier !== 1.0) {
-      setGlobalForceMultiplier(whatIfSimulatedConfig.forceMultiplier);
+      setBodyWeightKg(prev => Math.round(prev * whatIfSimulatedConfig.forceMultiplier));
     }
     setWhatIfScenarios([]);
     setShowWhatIfSimulation(false);
@@ -3036,14 +3035,12 @@ ${ddxList}`;
   }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, compensatedOverrides, crossMuscleEffects]);
 
   const hudForceAnalysis = useMemo(() => {
-    const useSimulatedForces = showWhatIfSimulation && whatIfSimulatedConfig;
-    const base = (forceMode && forceAnalysis && !useSimulatedForces)
+    const hasActiveSimulation = whatIfSimulatedConfig && whatIfScenarios.length > 0;
+    const base = (forceMode && forceAnalysis && !hasActiveSimulation)
       ? forceAnalysis
       : calculatePosturalForces(finalModelConfig);
-    const multiplier = useSimulatedForces
-      ? (whatIfSimulatedConfig.forceMultiplier ?? 1.0)
-      : globalForceMultiplier;
-    if (multiplier !== 1.0) {
+    if (hasActiveSimulation && whatIfSimulatedConfig.forceMultiplier !== 1.0) {
+      const multiplier = whatIfSimulatedConfig.forceMultiplier;
       const adjusted = JSON.parse(JSON.stringify(base));
       for (const j of adjusted.joints) {
         j.compression *= multiplier;
@@ -3058,7 +3055,7 @@ ${ddxList}`;
       return adjusted;
     }
     return base;
-  }, [finalModelConfig, forceMode, forceAnalysis, globalForceMultiplier, showWhatIfSimulation, whatIfSimulatedConfig]);
+  }, [finalModelConfig, forceMode, forceAnalysis, whatIfScenarios, whatIfSimulatedConfig]);
 
   const hudWeightDistribution = useMemo(() => {
     if (forceMode && weightDistribution) return weightDistribution;

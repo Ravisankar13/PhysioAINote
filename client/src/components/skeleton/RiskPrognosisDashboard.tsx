@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   AlertTriangle,
@@ -21,9 +20,40 @@ import {
 } from "lucide-react";
 import type { ForceAnalysisResult, JointSurfaceForce } from "@/lib/posturalForceEngine";
 import type { PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
-import type { MuscleOverride, PathologyType } from "@/lib/muscleBiomechanicsEngine";
+import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
+import type { IndividualMuscle } from "@/lib/muscleBiomechanicsEngine";
+import { calculateFullBiomechanics, type BiomechanicsResult } from "@/lib/biomechanicsEngine";
+import { calculateInjuryRisks, type InjuryRiskResult, type RiskLevel, type RiskScore, type BilateralRisk } from "@/lib/injuryRiskEngine";
+import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type TreatmentInput } from "@/lib/treatmentPathwayEngine";
+import type { CrossSystemCorrelationResult } from "@/lib/crossSystemCorrelation";
 
-type RiskLevel = 'minimal' | 'low' | 'moderate' | 'high' | 'critical';
+const CLINICAL_FORCE_THRESHOLDS = {
+  lumbarCritical: 6400,
+  kneePFCritical: 4000,
+  generic: 5000,
+};
+
+interface ModelConfig {
+  limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
+  spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number; cervicalRotation: number; cervicalLateralFlexion: number; thoracicRotation: number; lumbarRotation: number; flexion: number; lateralFlexion: number; lumbarScoliosis: number; thoracicScoliosis: number; cervicalScoliosis: number };
+  neck: { flexion: number; extension: number; rotation: number; lateralFlexion: number; forwardHead: number };
+  pelvis: { tilt: number; obliquity: number; rotation: number; drop: number; leftInnominateRotation: number; rightInnominateRotation: number };
+  sacrum: { nutation: number; counternutation: number; torsion: number; lateralFlexion: number };
+  leftHip: { flexion: number; extension: number; abduction: number; adduction: number; internalRotation: number; externalRotation: number; anteversion: number; neckShaftAngle: number };
+  rightHip: { flexion: number; extension: number; abduction: number; adduction: number; internalRotation: number; externalRotation: number; anteversion: number; neckShaftAngle: number };
+  leftKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
+  rightKnee: { flexion: number; varus: number; tibialTorsion: number; recurvatum: number; tibialSlope: number; patellaAlta: number };
+  leftAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; forefootVarus: number; toeExtension: number; archHeight: number };
+  rightAnkle: { dorsiflexion: number; plantarflexion: number; inversion: number; eversion: number; forefootVarus: number; toeExtension: number; archHeight: number };
+  leftShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
+  rightShoulder: { flexion: number; abduction: number; internalRotation: number; externalRotation: number; retroversion: number; elevation: number; protraction: number; winging: number; clavicleLength: number };
+  leftScapula: { protraction: number; retraction: number; elevation: number; depression: number; upwardRotation: number; downwardRotation: number; anteriorTilt: number; posteriorTilt: number; winging: number; clavicleRotation: number };
+  rightScapula: { protraction: number; retraction: number; elevation: number; depression: number; upwardRotation: number; downwardRotation: number; anteriorTilt: number; posteriorTilt: number; winging: number; clavicleRotation: number };
+  leftElbow: { flexion: number; carryingAngle: number; pronation: number };
+  rightElbow: { flexion: number; carryingAngle: number; pronation: number };
+  leftWrist: { deviation: number; flexion: number };
+  rightWrist: { deviation: number; flexion: number };
+}
 
 interface RiskItem {
   id: string;
@@ -32,12 +62,6 @@ interface RiskItem {
   score: number;
   level: RiskLevel;
   factors: string[];
-}
-
-interface RecoveryPhase {
-  label: string;
-  weeks: string;
-  isCurrent: boolean;
 }
 
 interface PrognosticFactor {
@@ -51,8 +75,10 @@ interface RiskPrognosisDashboardProps {
   pathologyCompensation: PathologyCompensationResult | null;
   chainIntegrityScores: Map<string, { score: number; issues: string[]; problematicLinks: string[] }>;
   painMarkers: Array<{ id: string; nearestBone: string; anatomicalLabel?: string; type: string; description?: string; severity?: number }>;
-  modelConfig: Record<string, any>;
+  modelConfig: ModelConfig;
   bodyWeightKg?: number;
+  muscleAnalysis?: IndividualMuscle[];
+  correlationResult?: CrossSystemCorrelationResult | null;
 }
 
 const RISK_COLORS: Record<RiskLevel, string> = {
@@ -71,15 +97,23 @@ const RISK_BAR_COLORS: Record<RiskLevel, string> = {
   critical: 'bg-red-500',
 };
 
-function getRiskLevel(score: number): RiskLevel {
-  if (score < 20) return 'minimal';
-  if (score < 40) return 'low';
-  if (score < 60) return 'moderate';
-  if (score < 80) return 'high';
-  return 'critical';
+function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
+
+function flattenBilateralRisk(name: string, region: string, bilateral: BilateralRisk): RiskItem[] {
+  const items: RiskItem[] = [];
+  if (bilateral.left.risk > 10) {
+    items.push({ id: `${name}_left`, label: `Left ${name}`, region: `Left ${region}`, score: bilateral.left.risk, level: bilateral.left.level, factors: bilateral.factors });
+  }
+  if (bilateral.right.risk > 10) {
+    items.push({ id: `${name}_right`, label: `Right ${name}`, region: `Right ${region}`, score: bilateral.right.risk, level: bilateral.right.level, factors: bilateral.factors });
+  }
+  return items;
 }
 
-function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
+function flattenRiskScore(name: string, region: string, risk: RiskScore): RiskItem | null {
+  if (risk.risk <= 10) return null;
+  return { id: name, label: name, region, score: risk.risk, level: risk.level, factors: risk.factors };
+}
 
 export default function RiskPrognosisDashboard({
   forceAnalysis,
@@ -89,6 +123,8 @@ export default function RiskPrognosisDashboard({
   painMarkers,
   modelConfig,
   bodyWeightKg = 75,
+  muscleAnalysis,
+  correlationResult,
 }: RiskPrognosisDashboardProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     risks: true,
@@ -103,166 +139,97 @@ export default function RiskPrognosisDashboard({
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  const injuryRiskResult = useMemo((): InjuryRiskResult | null => {
+    try {
+      const biomechanics = calculateFullBiomechanics(175, bodyWeightKg, modelConfig);
+      return calculateInjuryRisks(biomechanics);
+    } catch {
+      return null;
+    }
+  }, [modelConfig, bodyWeightKg]);
+
+  const treatmentPlan = useMemo((): TreatmentPlan | null => {
+    if (!forceAnalysis) return null;
+    try {
+      const forces = forceAnalysis.joints || [];
+      const muscles = muscleAnalysis || [];
+      const markers = painMarkers.map(pm => ({
+        id: pm.id,
+        label: pm.anatomicalLabel || pm.nearestBone,
+        severity: pm.severity || 5,
+        region: pm.nearestBone,
+        type: pm.type,
+      }));
+      const input: TreatmentInput = {
+        correlationResult: correlationResult || null,
+        muscles,
+        forces,
+        painMarkers: markers,
+        chainIntegrityScores: chainIntegrityScores as Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>,
+        bodyWeightKg,
+      };
+      return generateTreatmentPlan(input);
+    } catch {
+      return null;
+    }
+  }, [forceAnalysis, muscleAnalysis, painMarkers, chainIntegrityScores, bodyWeightKg, correlationResult]);
+
   const riskItems = useMemo((): RiskItem[] => {
-    const risks: RiskItem[] = [];
-    const joints = forceAnalysis?.joints || [];
-    const spine = modelConfig?.spine || {};
-    const pelvis = modelConfig?.pelvis || {};
-    const leftKnee = modelConfig?.leftKnee || {};
-    const rightKnee = modelConfig?.rightKnee || {};
-    const leftHip = modelConfig?.leftHip || {};
-    const rightHip = modelConfig?.rightHip || {};
-    const leftAnkle = modelConfig?.leftAnkle || {};
-    const rightAnkle = modelConfig?.rightAnkle || {};
-    const leftShoulder = modelConfig?.leftShoulder || {};
-    const rightShoulder = modelConfig?.rightShoulder || {};
+    if (!injuryRiskResult) return [];
+    const items: RiskItem[] = [];
+    const jr = injuryRiskResult.jointRisks;
 
-    const pathologyCount = Object.values(compensatedOverrides).filter(
-      v => v?.pathology && v.pathology !== 'none'
-    ).length;
-    const hasCompensation = pathologyCompensation && pathologyCompensation.clinicalFindings.length > 0;
+    const lumbar = jr.lumbarSpine;
+    const discItem = flattenRiskScore('Disc Herniation', 'Lumbar Spine', lumbar.discHerniation);
+    if (discItem) items.push(discItem);
+    const facetItem = flattenRiskScore('Facet Joint Dysfunction', 'Lumbar Spine', lumbar.facetJointDysfunction);
+    if (facetItem) items.push(facetItem);
+    const spondyItem = flattenRiskScore('Spondylolisthesis', 'Lumbar Spine', lumbar.spondylolisthesis);
+    if (spondyItem) items.push(spondyItem);
+    const strainItem = flattenRiskScore('Muscle Strain', 'Lumbar Spine', lumbar.muscleStrain);
+    if (strainItem) items.push(strainItem);
 
-    const lumbarForces = joints.filter((j: JointSurfaceForce) => j.category === 'lumbar_spine');
-    const maxLumbarLoad = lumbarForces.reduce((max: number, j: JointSurfaceForce) => Math.max(max, j.totalForce), 0);
-    let discRisk = 0;
-    const discFactors: string[] = [];
-    if (maxLumbarLoad > 1.5) { discRisk += 25; discFactors.push(`High lumbar loading (${maxLumbarLoad.toFixed(1)}× BW)`); }
-    if (Math.abs(spine.lumbarLordosis || 0) > 20) { discRisk += 15; discFactors.push('Excessive lumbar lordosis'); }
-    if (Math.abs(spine.flexion || 0) > 30) { discRisk += 20; discFactors.push('Significant forward flexion'); }
-    if (Math.abs(spine.scoliosis || 0) > 10) { discRisk += 10; discFactors.push('Scoliotic deviation'); }
-    const spinePathology = Object.entries(compensatedOverrides).filter(([k]) => k.includes('spine') || k.includes('erector'));
-    if (spinePathology.some(([, v]) => v?.pathology && v.pathology !== 'none')) { discRisk += 20; discFactors.push('Spinal muscle pathology'); }
-    if (discRisk > 0) {
-      risks.push({ id: 'disc_herniation', label: 'Lumbar Disc Risk', region: 'Lumbar Spine', score: clamp(discRisk, 0, 100), level: getRiskLevel(discRisk), factors: discFactors });
-    }
+    items.push(...flattenBilateralRisk('ACL Injury', 'Knee', jr.knee.aclInjury));
+    items.push(...flattenBilateralRisk('PF Syndrome', 'Knee', jr.knee.patellofemoralSyndrome));
+    items.push(...flattenBilateralRisk('Meniscus Tear', 'Knee', jr.knee.meniscusTear));
+    items.push(...flattenBilateralRisk('IT Band Syndrome', 'Knee', jr.knee.itBandSyndrome));
+    items.push(...flattenBilateralRisk('Patellar Tendinopathy', 'Knee', jr.knee.patellarTendinopathy));
 
-    for (const side of ['left', 'right'] as const) {
-      const knee = side === 'left' ? leftKnee : rightKnee;
-      const hip = side === 'left' ? leftHip : rightHip;
-      const sideLabel = side === 'left' ? 'Left' : 'Right';
-      let aclRisk = 0;
-      const aclFactors: string[] = [];
-      if ((knee.varus || 0) < -10) { aclRisk += 30; aclFactors.push('Dynamic knee valgus'); }
-      if ((knee.flexion || 0) > 60) { aclRisk += 15; aclFactors.push('Deep knee flexion'); }
-      const quadKey = `quad_${side[0]}`;
-      const hamKey = `calf_${side[0]}`;
-      const quadOverride = compensatedOverrides[quadKey];
-      const hamOverride = compensatedOverrides[hamKey];
-      if (quadOverride?.tension && quadOverride.tension > 70 && (!hamOverride?.tension || hamOverride.tension < 40)) {
-        aclRisk += 20; aclFactors.push('Quad-dominant activation');
-      }
-      const gluteKey = `glute_${side[0]}`;
-      if (compensatedOverrides[gluteKey]?.pathology === 'weakness') {
-        aclRisk += 15; aclFactors.push('Gluteal weakness');
-      }
-      if (aclRisk > 0) {
-        risks.push({ id: `acl_${side}`, label: `${sideLabel} ACL Risk`, region: `${sideLabel} Knee`, score: clamp(aclRisk, 0, 100), level: getRiskLevel(aclRisk), factors: aclFactors });
-      }
+    items.push(...flattenBilateralRisk('Labral Tear', 'Hip', jr.hip.labralTear));
+    items.push(...flattenBilateralRisk('FAI', 'Hip', jr.hip.femoralAcetabularImpingement));
+    items.push(...flattenBilateralRisk('Hip Flexor Strain', 'Hip', jr.hip.hipFlexorStrain));
+    items.push(...flattenBilateralRisk('Trochanteric Bursitis', 'Hip', jr.hip.greaterTrochanterBursitis));
 
-      let shoulderRisk = 0;
-      const shoulderFactors: string[] = [];
-      const shoulder = side === 'left' ? leftShoulder : rightShoulder;
-      if (Math.abs(shoulder.abduction || 0) > 60 || Math.abs(shoulder.flexion || 0) > 60) {
-        shoulderRisk += 15; shoulderFactors.push('Elevated arm position');
-      }
-      const scapKey = `scapula_${side[0]}`;
-      if (compensatedOverrides[scapKey]?.pathology && compensatedOverrides[scapKey]?.pathology !== 'none') {
-        shoulderRisk += 20; shoulderFactors.push('Scapular dysfunction');
-      }
-      const shoulderForces = joints.filter((j: JointSurfaceForce) => j.category === `${side}_shoulder`);
-      const maxShoulderLoad = shoulderForces.reduce((max: number, j: JointSurfaceForce) => Math.max(max, j.totalForce), 0);
-      if (maxShoulderLoad > 1.0) { shoulderRisk += 15; shoulderFactors.push('High shoulder loading'); }
-      if (shoulderRisk > 0) {
-        risks.push({ id: `shoulder_${side}`, label: `${sideLabel} Rotator Cuff Risk`, region: `${sideLabel} Shoulder`, score: clamp(shoulderRisk, 0, 100), level: getRiskLevel(shoulderRisk), factors: shoulderFactors });
-      }
+    items.push(...flattenBilateralRisk('Lateral Ankle Sprain', 'Ankle', jr.ankle.lateralAnkleSprain));
+    items.push(...flattenBilateralRisk('Achilles Tendinopathy', 'Ankle', jr.ankle.achillesTendinopathy));
+    items.push(...flattenBilateralRisk('Plantar Fasciitis', 'Ankle', jr.ankle.plantarFasciitis));
+    items.push(...flattenBilateralRisk('Tibial Stress Fracture', 'Ankle', jr.ankle.tibialStressFracture));
 
-      let ankleRisk = 0;
-      const ankleFactors: string[] = [];
-      const ankle = side === 'left' ? leftAnkle : rightAnkle;
-      if ((ankle.inversion || 0) > 15) { ankleRisk += 25; ankleFactors.push('Excessive inversion'); }
-      if ((ankle.dorsiflexion || 0) < 5 && (ankle.dorsiflexion || 0) !== 0) { ankleRisk += 15; ankleFactors.push('Limited dorsiflexion'); }
-      if (ankleRisk > 0) {
-        risks.push({ id: `ankle_${side}`, label: `${sideLabel} Ankle Sprain Risk`, region: `${sideLabel} Ankle`, score: clamp(ankleRisk, 0, 100), level: getRiskLevel(ankleRisk), factors: ankleFactors });
-      }
+    items.push(...flattenBilateralRisk('Rotator Cuff Tear', 'Shoulder', jr.shoulder.rotatorCuffTear));
+    items.push(...flattenBilateralRisk('Impingement', 'Shoulder', jr.shoulder.impingementSyndrome));
+    items.push(...flattenBilateralRisk('Instability', 'Shoulder', jr.shoulder.instability));
+    items.push(...flattenBilateralRisk('Biceps Tendinopathy', 'Shoulder', jr.shoulder.bicepsTendinopathy));
 
-      let hipRisk = 0;
-      const hipFactors: string[] = [];
-      if ((hip.flexion || 0) > 90) { hipRisk += 15; hipFactors.push('Deep hip flexion'); }
-      if (Math.abs(hip.internalRotation || 0) > 30) { hipRisk += 15; hipFactors.push('Excessive hip rotation'); }
-      if (compensatedOverrides[gluteKey]?.pathology && compensatedOverrides[gluteKey]?.pathology !== 'none') {
-        hipRisk += 20; hipFactors.push('Gluteal pathology');
-      }
-      if (hipRisk > 0) {
-        risks.push({ id: `hip_${side}`, label: `${sideLabel} Hip Risk`, region: `${sideLabel} Hip`, score: clamp(hipRisk, 0, 100), level: getRiskLevel(hipRisk), factors: hipFactors });
-      }
-    }
+    items.sort((a, b) => b.score - a.score);
+    return items.slice(0, 5);
+  }, [injuryRiskResult]);
 
-    if (hasCompensation) {
-      for (const finding of pathologyCompensation!.clinicalFindings) {
-        let compRisk = finding.severity === 'severe' ? 40 : finding.severity === 'moderate' ? 25 : 10;
-        compRisk += pathologyCount * 5;
-        risks.push({
-          id: `comp_${finding.muscleSource}`,
-          label: `${finding.title} Compensation`,
-          region: finding.muscleSource,
-          score: clamp(compRisk, 0, 100),
-          level: getRiskLevel(compRisk),
-          factors: [finding.description],
-        });
-      }
-    }
+  const overallRiskScore = injuryRiskResult?.overallRiskScore ?? 0;
+  const overallRiskLevel = injuryRiskResult?.overallRiskLevel ?? 'minimal';
 
-    risks.sort((a, b) => b.score - a.score);
-    return risks.slice(0, 8);
-  }, [forceAnalysis, compensatedOverrides, pathologyCompensation, modelConfig]);
-
-  const overallRiskScore = useMemo(() => {
-    if (riskItems.length === 0) return 0;
-    const topScores = riskItems.slice(0, 5);
-    return Math.round(topScores.reduce((sum, r) => sum + r.score, 0) / topScores.length);
-  }, [riskItems]);
-  const overallRiskLevel = getRiskLevel(overallRiskScore);
-
-  const recoveryTimeline = useMemo((): RecoveryPhase[] => {
-    const pathologyCount = Object.values(compensatedOverrides).filter(
-      v => v?.pathology && v.pathology !== 'none'
-    ).length;
-    const hasSevere = pathologyCompensation?.clinicalFindings.some(f => f.severity === 'severe');
-    const hasModerate = pathologyCompensation?.clinicalFindings.some(f => f.severity === 'moderate');
-
-    if (pathologyCount === 0 && painMarkers.length === 0) {
+  const recoveryPhases = useMemo(() => {
+    if (!treatmentPlan) {
       return [
-        { label: 'Prevention', weeks: '1-2', isCurrent: true },
-        { label: 'Optimization', weeks: '3-6', isCurrent: false },
-        { label: 'Maintenance', weeks: '6+', isCurrent: false },
+        { label: 'Prevention & Optimization', weeks: '1-4', isCurrent: true },
+        { label: 'Maintenance', weeks: '4+', isCurrent: false },
       ];
     }
-
-    if (hasSevere) {
-      return [
-        { label: 'Acute Protection', weeks: '0-2', isCurrent: true },
-        { label: 'Early Loading', weeks: '2-6', isCurrent: false },
-        { label: 'Progressive Loading', weeks: '6-12', isCurrent: false },
-        { label: 'Return to Activity', weeks: '12-16', isCurrent: false },
-        { label: 'Maintenance', weeks: '16+', isCurrent: false },
-      ];
-    }
-
-    if (hasModerate || pathologyCount > 2) {
-      return [
-        { label: 'Acute Management', weeks: '0-1', isCurrent: true },
-        { label: 'Subacute Loading', weeks: '1-4', isCurrent: false },
-        { label: 'Progressive Rehab', weeks: '4-8', isCurrent: false },
-        { label: 'Return to Activity', weeks: '8-12', isCurrent: false },
-      ];
-    }
-
-    return [
-      { label: 'Active Recovery', weeks: '0-1', isCurrent: true },
-      { label: 'Progressive Loading', weeks: '1-3', isCurrent: false },
-      { label: 'Return to Activity', weeks: '3-6', isCurrent: false },
-    ];
-  }, [compensatedOverrides, pathologyCompensation, painMarkers]);
+    return treatmentPlan.phases.map((phase: PhaseBlock, i: number) => ({
+      label: phase.label,
+      weeks: phase.timeframe.replace(/^Weeks?\s*/i, ''),
+      isCurrent: i === 0,
+    }));
+  }, [treatmentPlan]);
 
   const reinjuryProbability = useMemo(() => {
     let prob = 10;
@@ -285,53 +252,64 @@ export default function RiskPrognosisDashboard({
 
     prob += painMarkers.length * 4;
 
-    const highForceJoints = forceAnalysis?.joints?.filter((j: JointSurfaceForce) => j.status === 'very_high' || j.status === 'high') || [];
-    prob += highForceJoints.length * 2;
+    if (injuryRiskResult) {
+      const warnings = injuryRiskResult.thresholdWarnings;
+      prob += warnings.jointWarnings.filter(w => w.severity === 'critical').length * 8;
+      prob += warnings.jointWarnings.filter(w => w.severity === 'high').length * 4;
+      prob += warnings.postureWarnings.filter(w => w.severity === 'high' || w.severity === 'critical').length * 3;
+    }
 
     return clamp(prob, 5, 95);
-  }, [compensatedOverrides, pathologyCompensation, chainIntegrityScores, painMarkers, forceAnalysis]);
+  }, [compensatedOverrides, pathologyCompensation, chainIntegrityScores, painMarkers, injuryRiskResult]);
 
   const loadTolerance = useMemo(() => {
     if (!forceAnalysis?.joints?.length) return null;
     const sorted = [...forceAnalysis.joints].sort((a: JointSurfaceForce, b: JointSurfaceForce) => b.totalForce - a.totalForce);
     const worstJoint = sorted[0];
-    const currentLoad = worstJoint.totalForce;
-    const threshold = worstJoint.status === 'very_high' ? 3.0 : worstJoint.status === 'high' ? 2.5 : 2.0;
+    const currentLoadNewtons = worstJoint.totalForce * bodyWeightKg * 9.81;
+
+    let thresholdNewtons = CLINICAL_FORCE_THRESHOLDS.generic;
+    const cat = worstJoint.category;
+    if (cat.includes('lumbar') || cat.includes('thoracic') || cat.includes('cervical')) {
+      thresholdNewtons = CLINICAL_FORCE_THRESHOLDS.lumbarCritical;
+    } else if (cat.includes('knee')) {
+      thresholdNewtons = CLINICAL_FORCE_THRESHOLDS.kneePFCritical;
+    }
+
+    const percent = clamp((currentLoadNewtons / thresholdNewtons) * 100, 0, 150);
+
     return {
       joint: worstJoint.label,
-      currentBW: currentLoad,
-      thresholdBW: threshold,
-      percent: clamp((currentLoad / threshold) * 100, 0, 150),
+      currentN: Math.round(currentLoadNewtons),
+      thresholdN: thresholdNewtons,
+      currentBW: worstJoint.totalForce,
+      percent,
       status: worstJoint.status,
     };
-  }, [forceAnalysis]);
+  }, [forceAnalysis, bodyWeightKg]);
 
   const prognosticFactors = useMemo((): PrognosticFactor[] => {
     const factors: PrognosticFactor[] = [];
 
-    const pathologies = Object.entries(compensatedOverrides).filter(
-      ([, v]) => v?.pathology && v.pathology !== 'none'
-    );
-    if (pathologies.length === 0) {
-      factors.push({ factor: 'No active pathology', impact: 'positive' });
-    } else if (pathologies.length > 3) {
-      factors.push({ factor: `Multiple pathologies (${pathologies.length} regions)`, impact: 'negative' });
+    if (treatmentPlan) {
+      for (const pf of treatmentPlan.clinicalReasoning.prognosticFactors) {
+        if (pf.impact === 'positive') {
+          factors.push({ factor: pf.factor, impact: 'positive' });
+        } else if (pf.impact === 'negative') {
+          factors.push({ factor: pf.factor, impact: 'negative' });
+        }
+      }
     }
 
-    const highTensionCount = Object.values(compensatedOverrides).filter(v => (v?.tension ?? 50) > 75).length;
-    if (highTensionCount > 3) {
-      factors.push({ factor: 'Widespread muscle tension', impact: 'negative' });
-    }
-
-    if (pathologyCompensation) {
-      if (pathologyCompensation.posturalDeviations.length > 3) {
-        factors.push({ factor: 'Multiple postural compensations', impact: 'negative' });
+    if (injuryRiskResult) {
+      if (injuryRiskResult.riskFactors.biomechanical.length > 2) {
+        factors.push({ factor: `${injuryRiskResult.riskFactors.biomechanical.length} biomechanical risk factors`, impact: 'negative' });
       }
-      if (pathologyCompensation.romRestrictions.length > 2) {
-        factors.push({ factor: `ROM restrictions (${pathologyCompensation.romRestrictions.length} joints)`, impact: 'negative' });
+      if (injuryRiskResult.riskFactors.postural.length > 2) {
+        factors.push({ factor: `${injuryRiskResult.riskFactors.postural.length} postural risk factors`, impact: 'negative' });
       }
-      if (pathologyCompensation.clinicalFindings.every(f => f.severity === 'mild')) {
-        factors.push({ factor: 'All findings mild severity', impact: 'positive' });
+      if (injuryRiskResult.riskFactors.biomechanical.length === 0 && injuryRiskResult.riskFactors.postural.length === 0) {
+        factors.push({ factor: 'No biomechanical/postural risk factors', impact: 'positive' });
       }
     }
 
@@ -349,20 +327,8 @@ export default function RiskPrognosisDashboard({
       factors.push({ factor: `Multiple pain regions (${painMarkers.length})`, impact: 'negative' });
     }
 
-    const highLoadJoints = forceAnalysis?.joints?.filter((j: JointSurfaceForce) => j.status === 'very_high') || [];
-    if (highLoadJoints.length === 0) {
-      factors.push({ factor: 'No critically loaded joints', impact: 'positive' });
-    } else {
-      factors.push({ factor: `${highLoadJoints.length} joint(s) at critical load`, impact: 'negative' });
-    }
-
-    const spine = modelConfig?.spine || {};
-    if (Math.abs(spine.forwardHead || 0) < 5 && Math.abs(spine.thoracicKyphosis || 0) < 15 && Math.abs(spine.lumbarLordosis || 0) < 15) {
-      factors.push({ factor: 'Good spinal alignment', impact: 'positive' });
-    }
-
     return factors;
-  }, [compensatedOverrides, pathologyCompensation, chainIntegrityScores, painMarkers, forceAnalysis, modelConfig]);
+  }, [treatmentPlan, injuryRiskResult, chainIntegrityScores, painMarkers]);
 
   const exportSummary = useCallback(() => {
     const lines: string[] = [];
@@ -373,15 +339,18 @@ export default function RiskPrognosisDashboard({
 
     lines.push('── TOP INJURY RISKS ──');
     riskItems.forEach(r => {
-      lines.push(`  ${r.label}: ${r.score}% (${r.level})`);
+      lines.push(`  ${r.label} (${r.region}): ${r.score}% (${r.level})`);
       r.factors.forEach(f => lines.push(`    • ${f}`));
     });
     lines.push('');
 
     lines.push('── RECOVERY TIMELINE ──');
-    recoveryTimeline.forEach(p => {
-      lines.push(`  ${p.isCurrent ? '▶ ' : '  '}${p.label} (Wk ${p.weeks})`);
+    recoveryPhases.forEach(p => {
+      lines.push(`  ${p.isCurrent ? '▶ ' : '  '}${p.label} (${p.weeks})`);
     });
+    if (treatmentPlan) {
+      lines.push(`  Overall: ${treatmentPlan.overallTimeline}`);
+    }
     lines.push('');
 
     lines.push(`── RE-INJURY PROBABILITY: ${reinjuryProbability}% ──`);
@@ -389,7 +358,7 @@ export default function RiskPrognosisDashboard({
 
     if (loadTolerance) {
       lines.push('── LOAD TOLERANCE ──');
-      lines.push(`  ${loadTolerance.joint}: ${loadTolerance.currentBW.toFixed(1)}× BW / ${loadTolerance.thresholdBW.toFixed(1)}× BW threshold (${loadTolerance.percent.toFixed(0)}%)`);
+      lines.push(`  ${loadTolerance.joint}: ${loadTolerance.currentN}N / ${loadTolerance.thresholdN}N threshold (${loadTolerance.percent.toFixed(0)}%)`);
       lines.push('');
     }
 
@@ -409,7 +378,7 @@ export default function RiskPrognosisDashboard({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [overallRiskScore, overallRiskLevel, riskItems, recoveryTimeline, reinjuryProbability, loadTolerance, prognosticFactors]);
+  }, [overallRiskScore, overallRiskLevel, riskItems, recoveryPhases, treatmentPlan, reinjuryProbability, loadTolerance, prognosticFactors]);
 
   return (
     <div className="space-y-2">
@@ -452,7 +421,7 @@ export default function RiskPrognosisDashboard({
         <CollapsibleTrigger className="flex items-center justify-between w-full px-2 py-1.5 rounded hover:bg-gray-800/50 transition-colors">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />
-            <span className="text-xs font-medium text-gray-200">Injury Risks ({riskItems.length})</span>
+            <span className="text-xs font-medium text-gray-200">Top 5 Injury Risks</span>
           </div>
           {expandedSections.risks ? <ChevronUp className="w-3 h-3 text-gray-500" /> : <ChevronDown className="w-3 h-3 text-gray-500" />}
         </CollapsibleTrigger>
@@ -480,9 +449,12 @@ export default function RiskPrognosisDashboard({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-2 px-1">
+            {treatmentPlan && (
+              <div className="text-[10px] text-gray-400 mb-2 italic">Overall: {treatmentPlan.overallTimeline}</div>
+            )}
             <div className="relative">
               <div className="absolute left-2 top-2 bottom-2 w-0.5 bg-gray-700" />
-              {recoveryTimeline.map((phase, i) => (
+              {recoveryPhases.map((phase, i) => (
                 <div key={i} className="relative flex items-start gap-3 mb-3">
                   <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 z-10 ${
                     phase.isCurrent
@@ -498,9 +470,9 @@ export default function RiskPrognosisDashboard({
                       </span>
                       {phase.isCurrent && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-cyan-500/40 text-cyan-400">Current</Badge>}
                     </div>
-                    <span className="text-[10px] text-gray-500">Week {phase.weeks}</span>
+                    <span className="text-[10px] text-gray-500">{phase.weeks}</span>
                   </div>
-                  {i < recoveryTimeline.length - 1 && <ArrowRight className="w-3 h-3 text-gray-600 flex-shrink-0 mt-0.5" />}
+                  {i < recoveryPhases.length - 1 && <ArrowRight className="w-3 h-3 text-gray-600 flex-shrink-0 mt-0.5" />}
                 </div>
               ))}
             </div>
@@ -554,8 +526,8 @@ export default function RiskPrognosisDashboard({
                   {painMarkers.length > 0 && (
                     <div className="text-[10px] text-gray-400">• Current pain presentation</div>
                   )}
-                  {Array.from(chainIntegrityScores.values()).some(c => c.score < 70) && (
-                    <div className="text-[10px] text-gray-400">• Chain integrity deficits</div>
+                  {(injuryRiskResult?.thresholdWarnings.jointWarnings.length ?? 0) > 0 && (
+                    <div className="text-[10px] text-gray-400">• Clinical threshold warnings</div>
                   )}
                 </div>
               </div>
@@ -588,20 +560,16 @@ export default function RiskPrognosisDashboard({
                     }`}
                     style={{ width: `${Math.min(loadTolerance.percent, 100)}%` }}
                   />
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-white/60"
-                    style={{ left: '100%', transform: 'translateX(-1px)' }}
-                  />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <span className="text-[10px] font-bold text-white drop-shadow">
-                      {loadTolerance.currentBW.toFixed(1)}× / {loadTolerance.thresholdBW.toFixed(1)}× BW
+                      {loadTolerance.currentN}N / {loadTolerance.thresholdN}N
                     </span>
                   </div>
                 </div>
                 <div className="flex justify-between text-[10px] text-gray-500">
-                  <span>0×</span>
-                  <span className="text-white/50">Threshold</span>
-                  <span>{loadTolerance.thresholdBW.toFixed(1)}×</span>
+                  <span>0N</span>
+                  <span className="text-white/50">Clinical Threshold</span>
+                  <span>{loadTolerance.thresholdN}N</span>
                 </div>
               </div>
             ) : (
@@ -623,6 +591,9 @@ export default function RiskPrognosisDashboard({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-2 space-y-1 px-1">
+            {prognosticFactors.length === 0 && (
+              <div className="text-xs text-gray-500 py-1">No prognostic data available</div>
+            )}
             {prognosticFactors.map((f, i) => (
               <div key={i} className="flex items-start gap-2">
                 {f.impact === 'positive' ? (

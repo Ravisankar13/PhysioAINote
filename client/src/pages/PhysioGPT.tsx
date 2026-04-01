@@ -1009,32 +1009,6 @@ export default function PhysioGPT() {
     setClinicalBubbleSeverity("moderate");
   }, []);
 
-  const APPROX_BONE_POSITIONS: Record<string, { x: number; y: number; z: number }> = useMemo(() => ({
-    Head_M: { x: 0, y: 16, z: 0 }, HeadEnd_M: { x: 0, y: 17, z: 0 },
-    NeckPart1_M: { x: 0, y: 15.2, z: 0 }, NeckPart2_M: { x: 0, y: 14.5, z: 0 },
-    Chest_M: { x: 0, y: 13, z: 0 },
-    Spine1Part2_M: { x: 0, y: 11.5, z: 0 }, Spine1Part1_M: { x: 0, y: 10.5, z: 0 },
-    Spine1_M: { x: 0, y: 9.5, z: 0 },
-    RootPart1_M: { x: 0, y: 8.5, z: 0 }, RootPart2_M: { x: 0, y: 7.5, z: 0 },
-    Root_M: { x: 0, y: 7, z: 0 },
-    Scapula_L: { x: -1.8, y: 14.2, z: -0.3 }, Scapula_R: { x: 1.8, y: 14.2, z: -0.3 },
-    Shoulder_L: { x: -2, y: 14, z: 0 }, Shoulder_R: { x: 2, y: 14, z: 0 },
-    ShoulderPart1_L: { x: -2.5, y: 13.5, z: 0 }, ShoulderPart1_R: { x: 2.5, y: 13.5, z: 0 },
-    ShoulderPart2_L: { x: -3, y: 12.8, z: 0 }, ShoulderPart2_R: { x: 3, y: 12.8, z: 0 },
-    Elbow_L: { x: -3.5, y: 11.5, z: 0 }, Elbow_R: { x: 3.5, y: 11.5, z: 0 },
-    ElbowPart1_L: { x: -3.8, y: 10.8, z: 0 }, ElbowPart1_R: { x: 3.8, y: 10.8, z: 0 },
-    Wrist_L: { x: -4.5, y: 9, z: 0 }, Wrist_R: { x: 4.5, y: 9, z: 0 },
-    MiddleFinger1_L: { x: -4.8, y: 8.5, z: 0 }, MiddleFinger1_R: { x: 4.8, y: 8.5, z: 0 },
-    ThumbFinger1_L: { x: -4.6, y: 8.7, z: 0.2 }, ThumbFinger1_R: { x: 4.6, y: 8.7, z: 0.2 },
-    Hip_L: { x: -1.2, y: 6.5, z: 0 }, Hip_R: { x: 1.2, y: 6.5, z: 0 },
-    HipPart1_L: { x: -1.5, y: 5.5, z: 0 }, HipPart1_R: { x: 1.5, y: 5.5, z: 0 },
-    HipPart2_L: { x: -1.5, y: 4.5, z: 0 }, HipPart2_R: { x: 1.5, y: 4.5, z: 0 },
-    Knee_L: { x: -1.5, y: 3.5, z: 0 }, Knee_R: { x: 1.5, y: 3.5, z: 0 },
-    Ankle_L: { x: -1.5, y: 0.5, z: 0 }, Ankle_R: { x: 1.5, y: 0.5, z: 0 },
-    Toes_L: { x: -1.5, y: 0.1, z: 0.5 }, Toes_R: { x: 1.5, y: 0.1, z: 0.5 },
-    ToesEnd_L: { x: -1.5, y: 0, z: 0.8 }, ToesEnd_R: { x: 1.5, y: 0, z: 0.8 },
-  }), []);
-
   const clinicalTextAppliedRef = useRef<{
     markerIds: string[];
     muscleIds: string[];

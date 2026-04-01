@@ -10037,6 +10037,58 @@ EXAMPLES of good predictions:
     }
   });
 
+  app.post('/api/pain-intelligence/behaviour', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { anatomical_label, pain_mechanism, marker_type, description, nearest_bone, severity } = req.body;
+
+      if (!anatomical_label) {
+        return res.status(400).json({ error: 'Anatomical label is required' });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const prompt = `You are a clinical physiotherapy expert. Analyze the symptom behaviour for a pain marker at: "${anatomical_label}".
+
+Pain mechanism: ${pain_mechanism || 'nociceptive'}
+Marker type: ${marker_type || 'point'}
+Description: ${description || 'Pain at ' + anatomical_label}
+Severity: ${severity || 'moderate'}
+
+Provide a structured JSON analysis of how this symptom behaves with different activities. Return ONLY valid JSON:
+{
+  "flexion": { "effect": "better|worse|neutral", "explanation": "1-2 sentence clinical explanation" },
+  "extension": { "effect": "better|worse|neutral", "explanation": "1-2 sentence clinical explanation" },
+  "loading": { "effect": "better|worse|neutral", "explanation": "1-2 sentence clinical explanation" },
+  "rest": { "effect": "better|worse|neutral", "explanation": "1-2 sentence clinical explanation" },
+  "morning": { "effect": "better|worse|neutral", "explanation": "1-2 sentence clinical explanation" },
+  "fatigue": { "effect": "better|worse|neutral", "explanation": "1-2 sentence clinical explanation" },
+  "aggravating_factors": ["factor1", "factor2", "factor3"],
+  "easing_factors": ["factor1", "factor2"],
+  "clinical_pattern": "mechanical|inflammatory|neuropathic|central",
+  "pattern_confidence": "high|medium|low"
+}`;
+
+      const completion = await aiClient.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        max_tokens: 1000,
+        temperature: 0.4,
+      });
+
+      const content = completion.choices[0]?.message?.content || '{}';
+      const parsed = JSON.parse(content);
+      res.json(parsed);
+    } catch (error) {
+      console.error('Pain behaviour analysis error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to analyze pain behaviour', details: message });
+    }
+  });
+
   app.post('/api/clinical-diagnosis/report', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { pain_markers, muscle_states, postural_deviations, region_highlights, qa_context, clinical_summary, original_description, chain_integrity, force_analysis } = req.body;

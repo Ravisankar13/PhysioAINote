@@ -107,11 +107,13 @@ import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
+import { classifyPainMechanism } from "@/lib/neurologyMap";
 import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJointMobilizationTargets, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol, type PainMarkerSimple } from "@/lib/treatmentPriorityEngine";
 import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPainEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 import ClinicalTextInput, { type ClinicalParseResult } from "@/components/skeleton/ClinicalTextInput";
+import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
 
 const BODY_REGIONS = {
   cervical: {
@@ -462,6 +464,8 @@ export default function PhysioGPT() {
   const [clinicalBubbleMarker, setClinicalBubbleMarker] = useState<PainMarker | null>(null);
   const [clinicalBubbleSeverity, setClinicalBubbleSeverity] = useState<string>("moderate");
   const [clinicalBubbleResults, setClinicalBubbleResults] = useState<Record<string, { data: ClinicalBubbleData; severity: string; region: string }>>({});
+  const [showPainIntelligence, setShowPainIntelligence] = useState(false);
+  const [dermatomeHighlightBones, setDermatomeHighlightBones] = useState<string[]>([]);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
@@ -985,6 +989,7 @@ export default function PhysioGPT() {
   ], []);
 
   const handleLandmarkSelect = useCallback((landmark: { label: string; boneName: string; position: { x: number; y: number; z: number } }) => {
+    const mechanism = classifyPainMechanism(landmark.label, `Pain at ${landmark.label}`, 'point');
     const newMarker: PainMarker = {
       id: `landmark-${Date.now()}`,
       type: 'point',
@@ -992,6 +997,7 @@ export default function PhysioGPT() {
       nearestBone: landmark.boneName,
       anatomicalLabel: landmark.label,
       description: `Pain at ${landmark.label}`,
+      painMechanism: mechanism,
     };
     setPainMarkers(prev => [...prev, newMarker]);
     setClinicalBubbleMarker(newMarker);
@@ -1003,7 +1009,13 @@ export default function PhysioGPT() {
   activeSymptomTypeRef.current = activeSymptomType;
 
   const handlePainMarkerAdd = useCallback((marker: PainMarker) => {
-    const markerWithSymptom = { ...marker, symptomType: activeSymptomTypeRef.current };
+    const mechanism = classifyPainMechanism(
+      marker.anatomicalLabel,
+      marker.description,
+      marker.type,
+      activeSymptomTypeRef.current
+    );
+    const markerWithSymptom = { ...marker, symptomType: activeSymptomTypeRef.current, painMechanism: mechanism };
     setPainMarkers(prev => [...prev, markerWithSymptom]);
     setClinicalBubbleMarker(markerWithSymptom);
     setClinicalBubbleSeverity("moderate");
@@ -1029,25 +1041,35 @@ export default function PhysioGPT() {
         );
         const markerId = `ctp_${Date.now()}_${idx}`;
         applied.markerIds.push(markerId);
+        const mType = (pm.type || 'point') as PainMarkerType;
+        const sType = (pm.symptom_type || 'pain') as SymptomType;
+        const mechanism = classifyPainMechanism(
+          vp ? vp.label : pm.anatomical_label,
+          pm.description,
+          mType,
+          sType
+        );
         if (vp) {
           return {
             id: markerId,
-            type: (pm.type || 'point') as PainMarkerType,
-            symptomType: (pm.symptom_type || 'pain') as SymptomType,
+            type: mType,
+            symptomType: sType,
             position: { x: 0, y: 0, z: 0 },
             nearestBone: vp.boneName,
             anatomicalLabel: vp.label,
             description: pm.description,
+            painMechanism: mechanism,
           };
         }
         return {
           id: markerId,
-          type: (pm.type || 'point') as PainMarkerType,
-          symptomType: (pm.symptom_type || 'pain') as SymptomType,
+          type: mType,
+          symptomType: sType,
           position: { x: 0, y: 0, z: 0 },
           nearestBone: 'Root_M',
           anatomicalLabel: pm.anatomical_label,
           description: pm.description,
+          painMechanism: mechanism,
         };
       });
       setPainMarkers(prev => [...prev, ...newMarkers]);
@@ -3708,6 +3730,7 @@ ${ddxList}`;
               onScarMarkerClick={(id) => setEditingScar(id)}
               treatmentBoneNames={treatmentBoneNames}
               onBoneScreenPositions={handleBoneScreenPositions}
+              dermatomeHighlightBones={dermatomeHighlightBones}
               enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle'}
               onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
                 if (scarPlacementMode) {
@@ -6069,8 +6092,13 @@ ${ddxList}`;
                             className="text-[11px] text-white truncate block font-medium cursor-pointer hover:text-teal-300 transition-colors"
                             onClick={(e) => { e.stopPropagation(); setClinicalBubbleMarker(m); setClinicalBubbleSeverity("moderate"); }}
                           >{m.anatomicalLabel}</span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 flex-wrap">
                             <span className="text-[9px] text-gray-400 uppercase">{tc.label}</span>
+                            {m.painMechanism && (
+                              <span className={`text-[8px] px-1 rounded ${m.painMechanism === 'neuropathic' ? 'bg-blue-900/40 text-blue-300' : m.painMechanism === 'myofascial' ? 'bg-orange-900/40 text-orange-300' : m.painMechanism === 'central_sensitization' ? 'bg-pink-900/40 text-pink-300' : 'bg-red-900/40 text-red-300'}`}>
+                                {m.painMechanism === 'central_sensitization' ? 'central' : m.painMechanism}
+                              </span>
+                            )}
                             {m.type === 'referred' && m.referralTargetLabel && (
                               <span className="text-[9px] text-purple-300">→ {m.referralTargetLabel}</span>
                             )}
@@ -6082,6 +6110,13 @@ ${ddxList}`;
                             )}
                           </div>
                         </div>
+                        <button
+                          className="text-blue-400/70 hover:text-blue-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Pain intelligence"
+                          onClick={(e) => { e.stopPropagation(); setClinicalBubbleMarker(m); setShowPainIntelligence(true); }}
+                        >
+                          <Brain className="h-3 w-3" />
+                        </button>
                         <button
                           className="text-teal-400/70 hover:text-teal-300 opacity-0 group-hover:opacity-100 transition-opacity"
                           title="Open clinical analysis"
@@ -6208,6 +6243,17 @@ ${ddxList}`;
                   setPainMarkers(prev => prev.map(m => m.id === mId ? { ...m, subjectiveHistory: history } : m));
                 }}
               />
+            )}
+
+            {showPainIntelligence && clinicalBubbleMarker && (
+              <div className="absolute top-2 right-2 z-50 animate-in slide-in-from-right-2 duration-200">
+                <PainIntelligencePanel
+                  marker={clinicalBubbleMarker}
+                  onClose={() => { setShowPainIntelligence(false); setDermatomeHighlightBones([]); }}
+                  onHighlightBones={setDermatomeHighlightBones}
+                  onClearHighlights={() => setDermatomeHighlightBones([])}
+                />
+              </div>
             )}
 
             {/* Test the Chain panel */}

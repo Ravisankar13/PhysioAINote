@@ -681,6 +681,8 @@ export const SYMPTOM_TYPES: Record<SymptomType, { label: string; color: number; 
   catching: { label: 'Catching', color: 0xddaa44, hexColor: '#ddaa44', icon: '⏸️', description: 'Brief catch during movement' },
 };
 
+export type PainMechanismType = 'nociceptive' | 'neuropathic' | 'central_sensitization' | 'myofascial';
+
 export interface PainMarker {
   id: string;
   type: PainMarkerType;
@@ -696,6 +698,9 @@ export interface PainMarker {
   referralTargetLabel?: string;
   linePoints?: Array<{ x: number; y: number; z: number }>;
   paintPoints?: Array<{ x: number; y: number; z: number }>;
+  painMechanism?: PainMechanismType;
+  nerveRoot?: string;
+  severity?: number;
 }
 
 export interface RomMovement {
@@ -1661,6 +1666,7 @@ interface PureThreeGLBViewerProps {
   enableSkeletonClick?: boolean;
   treatmentBoneNames?: string[];
   onBoneScreenPositions?: (positions: Array<{ boneName: string; screenX: number; screenY: number; visible: boolean }>) => void;
+  dermatomeHighlightBones?: string[];
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2121,6 +2127,7 @@ export default function PureThreeGLBViewer({
   enableSkeletonClick = false,
   treatmentBoneNames,
   onBoneScreenPositions,
+  dermatomeHighlightBones,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -6424,6 +6431,48 @@ export default function PureThreeGLBViewer({
       }
     }
   }, [highlightMuscleGroups, muscleHighlightColors]);
+
+  const dermatomeHighlightRef = useRef<Array<{ mesh: THREE.Mesh; origMaterial: THREE.Material; wasVisible: boolean }>>([]);
+
+  useEffect(() => {
+    for (const entry of dermatomeHighlightRef.current) {
+      entry.mesh.material = entry.origMaterial;
+      if (!entry.wasVisible) entry.mesh.visible = false;
+    }
+    dermatomeHighlightRef.current = [];
+
+    if (!dermatomeHighlightBones || dermatomeHighlightBones.length === 0) return;
+    if (!sceneRef.current) return;
+
+    const bRef = bonesRef.current;
+    const highlightColor = new THREE.Color(0x44aaff);
+
+    for (const boneName of dermatomeHighlightBones) {
+      const bone = bRef[boneName];
+      if (!bone) continue;
+
+      bone.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const origMat = child.material as THREE.MeshStandardMaterial;
+          const clonedMat = origMat.clone() as THREE.MeshStandardMaterial;
+          clonedMat.emissive = highlightColor;
+          clonedMat.emissiveIntensity = 0.6;
+          clonedMat.transparent = true;
+          clonedMat.opacity = 0.7;
+          clonedMat.needsUpdate = true;
+
+          dermatomeHighlightRef.current.push({
+            mesh: child,
+            origMaterial: origMat,
+            wasVisible: child.visible,
+          });
+
+          child.material = clonedMat;
+          child.visible = true;
+        }
+      });
+    }
+  }, [dermatomeHighlightBones]);
 
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {

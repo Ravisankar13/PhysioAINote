@@ -3263,11 +3263,10 @@ ${ddxList}`;
     const buildNerveEntrapmentMarkers = (entries: NervePathwayEntry[]): OverlayResult['markers'] => {
       const clinicallyAffected = getClinicallyAffectedNerves();
       return entries.flatMap(n => {
-        if (!clinicallyAffected.has(n.id) && !selectedTissueEntry) return [];
         return n.entrapmentSites.map(site => ({
           boneName: site.boneName,
           color: clinicallyAffected.has(n.id) ? 0xff4444 : 0xff6600,
-          size: 0.012,
+          size: clinicallyAffected.has(n.id) ? 0.014 : 0.01,
           label: `${site.name} (${site.clinicalTest.split(',')[0]})`,
         }));
       });
@@ -6959,7 +6958,7 @@ ${ddxList}`;
                     setTissueViewMode(null);
                     setSelectedTissueEntry(null);
                   } else {
-                    setTissueViewMode('tendon');
+                    setTissueViewMode('muscle');
                   }
                 }}
               >

@@ -71,7 +71,8 @@ import {
   ExternalLink,
   Pill,
   Microscope,
-  Link2
+  Link2,
+  FlaskConical
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -119,6 +120,8 @@ import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
 import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
 import RiskPrognosisDashboard from "@/components/skeleton/RiskPrognosisDashboard";
 import InjuryMechanismPanel from "@/components/skeleton/InjuryMechanismPanel";
+import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
+import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 
 const BODY_REGIONS = {
@@ -479,6 +482,8 @@ export default function PhysioGPT() {
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
+  const [showWhatIfSimulation, setShowWhatIfSimulation] = useState(false);
+  const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
   const mechanismHighlightBones = useMemo(() => {
     if (!showInjuryMechanism || mechanismBoneIds.length === 0) return [];
@@ -2913,6 +2918,44 @@ ${ddxList}`;
       bodyWeightKg,
     });
   }, [effectiveModelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode, showInjuryMechanism]);
+
+  const whatIfComparison = useMemo((): WhatIfComparisonResult | null => {
+    if (!showWhatIfSimulation || whatIfScenarios.length === 0) return null;
+    const pmForComparison = painMarkers.map(pm => ({
+      id: pm.id,
+      position: pm.position,
+      label: pm.anatomicalLabel || pm.nearestBone,
+      type: pm.type as 'point' | 'area' | 'referred' | 'line' | 'paint',
+      severity: (pm as any).severity ?? 5,
+      description: pm.description,
+    }));
+    return computeWhatIfComparison(effectiveModelConfig, compensatedOverrides, pmForComparison, bodyWeightKg, whatIfScenarios);
+  }, [showWhatIfSimulation, whatIfScenarios, effectiveModelConfig, compensatedOverrides, painMarkers, bodyWeightKg]);
+
+  const handleAddWhatIfScenario = useCallback((scenario: WhatIfScenario) => {
+    setWhatIfScenarios(prev => {
+      if (prev.find(s => s.id === scenario.id)) return prev;
+      return [...prev, scenario];
+    });
+  }, []);
+
+  const handleRemoveWhatIfScenario = useCallback((id: string) => {
+    setWhatIfScenarios(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  const handleClearWhatIfScenarios = useCallback(() => {
+    setWhatIfScenarios([]);
+  }, []);
+
+  const handleApplyWhatIfToSkeleton = useCallback(() => {
+    if (!whatIfComparison) return;
+    setModelConfig(whatIfComparison.simulatedModelConfig);
+    for (const [key, val] of Object.entries(whatIfComparison.simulatedOverrides)) {
+      setMuscleOverrides(prev => ({ ...prev, [key]: { ...prev[key], ...val } }));
+    }
+    setWhatIfScenarios([]);
+    setShowWhatIfSimulation(false);
+  }, [whatIfComparison]);
 
   const chainIntegrityScores = useMemo(() => {
     if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
@@ -7658,14 +7701,40 @@ ${ddxList}`;
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <InjuryMechanismPanel
-                    forceAnalysis={hudForceAnalysis}
-                    compensatedOverrides={compensatedOverrides}
-                    pathologyCompensation={pathologyCompensation}
-                    correlationResult={correlationResult}
-                    bodyWeightKg={bodyWeightKg}
-                    onHighlightBones={setMechanismBoneIds}
-                  />
+                  <div className="flex gap-1 mb-2">
+                    <button
+                      onClick={() => setShowWhatIfSimulation(false)}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors ${!showWhatIfSimulation ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                    >
+                      Mechanism
+                    </button>
+                    <button
+                      onClick={() => setShowWhatIfSimulation(true)}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${showWhatIfSimulation ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                    >
+                      <FlaskConical className="h-3 w-3" />
+                      What-If
+                    </button>
+                  </div>
+                  {!showWhatIfSimulation ? (
+                    <InjuryMechanismPanel
+                      forceAnalysis={hudForceAnalysis}
+                      compensatedOverrides={compensatedOverrides}
+                      pathologyCompensation={pathologyCompensation}
+                      correlationResult={correlationResult}
+                      bodyWeightKg={bodyWeightKg}
+                      onHighlightBones={setMechanismBoneIds}
+                    />
+                  ) : (
+                    <WhatIfSimulationPanel
+                      comparison={whatIfComparison}
+                      activeScenarios={whatIfScenarios}
+                      onAddScenario={handleAddWhatIfScenario}
+                      onRemoveScenario={handleRemoveWhatIfScenario}
+                      onClearAll={handleClearWhatIfScenarios}
+                      onApplyToSkeleton={handleApplyWhatIfToSkeleton}
+                    />
+                  )}
                 </div>
               </div>
             )}

@@ -479,7 +479,16 @@ export default function PhysioGPT() {
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
-  const [mechanismHighlightBones, setMechanismHighlightBones] = useState<string[]>([]);
+  const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
+  const mechanismHighlightBones = useMemo(() => {
+    if (!showInjuryMechanism || mechanismBoneIds.length === 0) return [];
+    return mechanismBoneIds.map(boneName => ({
+      boneName,
+      color: 0xff6b35,
+      intensity: 0.9,
+      glowSize: 0.28,
+    }));
+  }, [showInjuryMechanism, mechanismBoneIds]);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
@@ -3974,7 +3983,7 @@ ${ddxList}`;
                 ...muscleOverrideHighlights,
                 ...influenceHighlights,
                 ...visualizationBoneHighlights,
-                ...mechanismHighlightBones,
+                ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
               ] : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
@@ -3994,7 +4003,22 @@ ${ddxList}`;
               onModelConfigChange={updateModelConfig}
               enableZoomTool={zoomToolMode}
               onLandmarkSelect={handleLandmarkSelect}
-              forceOverlay={forceMode && forceAnalysis ? forceAnalysis.joints.filter(j => enabledForceJoints.has(j.id)) : null}
+              forceOverlay={(() => {
+                if (forceMode && forceAnalysis) {
+                  const base = forceAnalysis.joints.filter(j => enabledForceJoints.has(j.id));
+                  if (showInjuryMechanism && mechanismBoneIds.length > 0) {
+                    const boneSet = new Set(mechanismBoneIds);
+                    const mechanismJoints = forceAnalysis.joints.filter(j => boneSet.has(j.boneName) && !enabledForceJoints.has(j.id));
+                    return [...base, ...mechanismJoints];
+                  }
+                  return base;
+                }
+                if (showInjuryMechanism && mechanismBoneIds.length > 0 && hudForceAnalysis) {
+                  const boneSet = new Set(mechanismBoneIds);
+                  return hudForceAnalysis.joints.filter((j: { boneName: string }) => boneSet.has(j.boneName));
+                }
+                return null;
+              })()}
               bodyWeightKg={bodyWeightKg}
               selectedForceJoint={selectedForceJoint}
               onForceJointSelect={(joint) => setSelectedForceJoint(prev => prev === joint ? null : joint)}
@@ -7640,7 +7664,7 @@ ${ddxList}`;
                     pathologyCompensation={pathologyCompensation}
                     correlationResult={correlationResult}
                     bodyWeightKg={bodyWeightKg}
-                    onHighlightBones={setMechanismHighlightBones}
+                    onHighlightBones={setMechanismBoneIds}
                   />
                 </div>
               </div>

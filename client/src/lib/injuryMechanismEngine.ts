@@ -1,4 +1,4 @@
-import type { ForceAnalysisResult, JointSurfaceForce } from './posturalForceEngine';
+import { calculatePosturalForces, type ForceAnalysisResult, type JointSurfaceForce } from './posturalForceEngine';
 import type { PathologyCompensationResult, PosturalDeviation, RomRestriction } from './pathologyCompensationEngine';
 import type { CrossSystemCorrelationResult, CompensationPattern, PainCorrelation } from './crossSystemCorrelation';
 import type { MuscleOverride } from './muscleBiomechanicsEngine';
@@ -292,16 +292,27 @@ function buildCausalChainsFromPathology(
   return chains;
 }
 
+let _neutralBaseline: ForceAnalysisResult | null = null;
+function getNeutralBaseline(): ForceAnalysisResult {
+  if (!_neutralBaseline) {
+    _neutralBaseline = calculatePosturalForces({});
+  }
+  return _neutralBaseline;
+}
+
 function buildLoadRedistribution(
   forceAnalysis: ForceAnalysisResult,
   bodyWeightKg: number
 ): LoadRedistribution[] {
   const items: LoadRedistribution[] = [];
   const g = 9.81;
+  const neutral = getNeutralBaseline();
+  const neutralJointMap = new Map(neutral.joints.map(j => [j.id, j]));
 
   for (const joint of forceAnalysis.joints) {
-    const baseline = BASELINE_FORCES[joint.category] ?? 0.4;
-    const baselineN = baseline * bodyWeightKg * g;
+    const neutralJoint = neutralJointMap.get(joint.id);
+    const baselineBW = neutralJoint ? neutralJoint.totalForce : (BASELINE_FORCES[joint.category] ?? 0.4);
+    const baselineN = baselineBW * bodyWeightKg * g;
     const currentN = joint.totalForce * bodyWeightKg * g;
     const changePct = baselineN > 0 ? ((currentN - baselineN) / baselineN) * 100 : 0;
 

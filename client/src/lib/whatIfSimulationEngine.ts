@@ -59,6 +59,13 @@ export interface MuscleDelta {
   statusAfter: string;
 }
 
+export interface PainPredictionDelta {
+  region: string;
+  beforeLikelihood: number;
+  afterLikelihood: number;
+  delta: number;
+}
+
 export interface WhatIfComparisonResult {
   scenarios: WhatIfScenario[];
   overallRiskBefore: number;
@@ -70,11 +77,13 @@ export interface WhatIfComparisonResult {
   riskDeltas: RiskDelta[];
   compensationDeltas: CompensationDelta[];
   muscleDeltas: MuscleDelta[];
+  painPredictions: PainPredictionDelta[];
   correlationBefore: CrossSystemCorrelationResult | null;
   correlationAfter: CrossSystemCorrelationResult | null;
   topImprovements: string[];
   simulatedModelConfig: Record<string, Record<string, number>>;
   simulatedOverrides: Record<string, Partial<MuscleOverride>>;
+  forceMultiplier: number;
 }
 
 const SCENARIO_TO_MUSCLE_IDS: Record<string, string[]> = {
@@ -202,12 +211,13 @@ function applyOverrideToMuscleIds(
     for (const mId of muscleIds) {
       const existing = overrides[mId] || {};
       overrides[mId] = {
-        ...existing,
         tensionOffset: (existing.tensionOffset ?? 0) + (overrideValues.tensionOffset ?? 0),
         activationOffset: (existing.activationOffset ?? 0) + (overrideValues.activationOffset ?? 0),
         inhibition: overrideValues.inhibition !== undefined
           ? clamp((existing.inhibition ?? 0) + (overrideValues.inhibition ?? 0), 0, 100)
           : (existing.inhibition ?? 0),
+        lengthOverride: existing.lengthOverride ?? 'none',
+        pathology: existing.pathology ?? 'none',
         isManual: true,
       };
     }
@@ -505,6 +515,33 @@ export function computeWhatIfComparison(
     });
   }
 
+  const painPredictions: PainPredictionDelta[] = [];
+  const painRegions = ['lumbar', 'cervical', 'knee', 'hip', 'ankle', 'shoulder'];
+  for (const region of painRegions) {
+    const beforeRegionRisks = riskDeltas.filter(rd => rd.region.toLowerCase().includes(region) || rd.label.toLowerCase().includes(region));
+    const beforeForceRegion = forceDeltas.filter(fd => fd.jointId.toLowerCase().includes(region));
+    if (beforeRegionRisks.length === 0 && beforeForceRegion.length === 0) continue;
+    const avgRiskBefore = beforeRegionRisks.length > 0
+      ? beforeRegionRisks.reduce((s, r) => s + r.before, 0) / beforeRegionRisks.length
+      : 0;
+    const avgRiskAfter = beforeRegionRisks.length > 0
+      ? beforeRegionRisks.reduce((s, r) => s + r.after, 0) / beforeRegionRisks.length
+      : 0;
+    const avgForceDeltaPct = beforeForceRegion.length > 0
+      ? beforeForceRegion.reduce((s, f) => s + f.deltaPercent, 0) / beforeForceRegion.length
+      : 0;
+    const beforeLikelihood = clamp(avgRiskBefore * 0.7 + (avgForceDeltaPct > 0 ? 10 : 0), 0, 100);
+    const afterLikelihood = clamp(avgRiskAfter * 0.7 + (avgForceDeltaPct > 0 ? avgForceDeltaPct * 0.3 : avgForceDeltaPct * 0.2), 0, 100);
+    if (Math.abs(beforeLikelihood - afterLikelihood) > 1) {
+      painPredictions.push({
+        region: region.charAt(0).toUpperCase() + region.slice(1),
+        beforeLikelihood: Math.round(beforeLikelihood),
+        afterLikelihood: Math.round(afterLikelihood),
+        delta: Math.round(afterLikelihood - beforeLikelihood),
+      });
+    }
+  }
+
   const topImprovements: string[] = [];
   if (overallAfter < overallBefore) {
     topImprovements.push(`Overall risk: ${overallBefore.toFixed(0)} → ${overallAfter.toFixed(0)} (↓${(overallBefore - overallAfter).toFixed(0)})`);
@@ -525,6 +562,9 @@ export function computeWhatIfComparison(
   for (const rc of resolvedComps.slice(0, 2)) {
     topImprovements.push(`${rc.pattern}: ${rc.resolvedPercent.toFixed(0)}% resolved`);
   }
+  for (const pp of painPredictions.filter(p => p.delta < 0).slice(0, 2)) {
+    topImprovements.push(`${pp.region} pain: ↓${Math.abs(pp.delta)}% predicted`);
+  }
 
   return {
     scenarios,
@@ -537,10 +577,12 @@ export function computeWhatIfComparison(
     riskDeltas: riskDeltas.sort((a, b) => a.delta - b.delta),
     compensationDeltas,
     muscleDeltas: muscleDeltas.sort((a, b) => (a.activationAfter - a.activationBefore) - (b.activationAfter - b.activationBefore)),
+    painPredictions: painPredictions.sort((a, b) => a.delta - b.delta),
     correlationBefore: before.correlation,
     correlationAfter: after.correlation,
     topImprovements,
     simulatedModelConfig: simConfig,
     simulatedOverrides: simOverrides,
+    forceMultiplier,
   };
 }

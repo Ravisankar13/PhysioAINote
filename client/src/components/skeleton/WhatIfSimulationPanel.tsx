@@ -152,7 +152,7 @@ export default function WhatIfSimulationPanel({
               Muscle
             </button>
             <button
-              onClick={() => { setCustomTargetType('joint'); setCustomIntervention('mobilize'); setCustomTarget(JOINT_TARGETS[0].id); }}
+              onClick={() => { setCustomTargetType('joint'); setCustomTarget(JOINT_TARGETS[0].id); }}
               className={`flex-1 text-[9px] py-1 rounded ${customTargetType === 'joint' ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/40' : 'bg-gray-700/50 text-gray-400 border border-gray-600/30'}`}
             >
               Joint
@@ -169,25 +169,23 @@ export default function WhatIfSimulationPanel({
             ))}
           </select>
 
-          {customTargetType === 'muscle' && (
-            <div className="flex gap-1">
-              {(['strengthen', 'stretch', 'offload'] as InterventionType[]).map(type => {
-                const Icon = INTERVENTION_ICONS[type];
-                return (
-                  <button
-                    key={type}
-                    onClick={() => setCustomIntervention(type)}
-                    className={`flex-1 flex items-center justify-center gap-0.5 text-[9px] py-1 rounded border ${
-                      customIntervention === type ? INTERVENTION_COLORS[type] : 'bg-gray-700/40 text-gray-400 border-gray-600/30'
-                    }`}
-                  >
-                    <Icon className="h-2.5 w-2.5" />
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="flex gap-1">
+            {(['strengthen', 'stretch', 'mobilize', 'offload'] as InterventionType[]).map(type => {
+              const Icon = INTERVENTION_ICONS[type];
+              return (
+                <button
+                  key={type}
+                  onClick={() => setCustomIntervention(type)}
+                  className={`flex-1 flex items-center justify-center gap-0.5 text-[9px] py-1 rounded border ${
+                    customIntervention === type ? INTERVENTION_COLORS[type] : 'bg-gray-700/40 text-gray-400 border-gray-600/30'
+                  }`}
+                >
+                  <Icon className="h-2.5 w-2.5" />
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </button>
+              );
+            })}
+          </div>
 
           <div className="space-y-1">
             <div className="flex justify-between text-[9px] text-gray-400">
@@ -402,6 +400,27 @@ export default function WhatIfSimulationPanel({
               </div>
             )}
           </div>
+
+          {comparison.painPredictions && comparison.painPredictions.length > 0 && (
+            <div>
+              <span className="text-[10px] font-semibold text-gray-300 mb-1 block">Pain Predictions</span>
+              <div className="space-y-1">
+                {comparison.painPredictions.slice(0, 4).map((pp, i) => (
+                  <div key={i} className="flex items-center gap-1 text-[9px]">
+                    <span className="text-gray-400 flex-1 truncate">{pp.region}</span>
+                    <span className="font-mono text-gray-500">{pp.beforeLikelihood}%</span>
+                    <ArrowRight className="h-2.5 w-2.5 text-gray-600" />
+                    <span className={`font-mono font-bold ${pp.delta < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pp.afterLikelihood}%
+                    </span>
+                    <Badge variant="outline" className={`text-[7px] px-0.5 py-0 ${pp.delta < 0 ? 'text-green-400 border-green-500/30' : 'text-red-400 border-red-500/30'}`}>
+                      {pp.delta < 0 ? '↓' : '↑'}{Math.abs(pp.delta)}%
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <Separator className="bg-gray-700/50" />
 

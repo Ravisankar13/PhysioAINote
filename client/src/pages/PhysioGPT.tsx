@@ -483,6 +483,7 @@ export default function PhysioGPT() {
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showWhatIfSimulation, setShowWhatIfSimulation] = useState(false);
+  const [globalForceMultiplier, setGlobalForceMultiplier] = useState(1.0);
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
   const mechanismHighlightBones = useMemo(() => {
@@ -2964,6 +2965,9 @@ ${ddxList}`;
     for (const [key, val] of Object.entries(whatIfSimulatedConfig.simulatedOverrides)) {
       setMuscleOverrides(prev => ({ ...prev, [key]: { ...prev[key], ...val } }));
     }
+    if (whatIfSimulatedConfig.forceMultiplier !== 1.0) {
+      setGlobalForceMultiplier(whatIfSimulatedConfig.forceMultiplier);
+    }
     setWhatIfScenarios([]);
     setShowWhatIfSimulation(false);
   }, [whatIfSimulatedConfig]);
@@ -3005,9 +3009,26 @@ ${ddxList}`;
   }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, compensatedOverrides, crossMuscleEffects]);
 
   const hudForceAnalysis = useMemo(() => {
-    if (forceMode && forceAnalysis) return forceAnalysis;
-    return calculatePosturalForces(finalModelConfig);
-  }, [finalModelConfig, forceMode, forceAnalysis]);
+    const base = (forceMode && forceAnalysis) ? forceAnalysis : calculatePosturalForces(finalModelConfig);
+    const multiplier = (showWhatIfSimulation && whatIfSimulatedConfig?.forceMultiplier !== undefined)
+      ? whatIfSimulatedConfig.forceMultiplier
+      : globalForceMultiplier;
+    if (multiplier !== 1.0) {
+      const adjusted = JSON.parse(JSON.stringify(base));
+      for (const j of adjusted.joints) {
+        j.compression *= multiplier;
+        j.tension *= multiplier;
+        j.shear *= multiplier;
+        j.totalForce *= multiplier;
+        if (j.totalForce < 500) j.status = 'low';
+        else if (j.totalForce < 1500) j.status = 'moderate';
+        else if (j.totalForce < 3000) j.status = 'high';
+        else j.status = 'very_high';
+      }
+      return adjusted;
+    }
+    return base;
+  }, [finalModelConfig, forceMode, forceAnalysis, globalForceMultiplier, showWhatIfSimulation, whatIfSimulatedConfig]);
 
   const hudWeightDistribution = useMemo(() => {
     if (forceMode && weightDistribution) return weightDistribution;

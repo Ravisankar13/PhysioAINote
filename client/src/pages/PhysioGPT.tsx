@@ -1056,19 +1056,12 @@ export default function PhysioGPT() {
         const markerId = `ctp_${Date.now()}_${idx}`;
         applied.markerIds.push(markerId);
         if (vp) {
-          const pA = APPROX_BONE_POSITIONS[vp.boneA] || { x: 0, y: 7, z: 0 };
-          const pB = APPROX_BONE_POSITIONS[vp.boneB] || pA;
-          const interpPos = {
-            x: pA.x + (pB.x - pA.x) * vp.t + (vp.offsetX || 0),
-            y: pA.y + (pB.y - pA.y) * vp.t + (vp.offsetY || 0),
-            z: pA.z + (pB.z - pA.z) * vp.t + (vp.offsetZ || 0),
-          };
           return {
             id: markerId,
             type: (pm.type || 'point') as PainMarkerType,
             symptomType: (pm.symptom_type || 'pain') as SymptomType,
-            position: interpPos,
-            nearestBone: vp.boneA,
+            position: { x: 0, y: 0, z: 0 },
+            nearestBone: vp.boneName,
             anatomicalLabel: vp.label,
             description: pm.description,
           };
@@ -1077,7 +1070,7 @@ export default function PhysioGPT() {
           id: markerId,
           type: (pm.type || 'point') as PainMarkerType,
           symptomType: (pm.symptom_type || 'pain') as SymptomType,
-          position: { x: 0, y: 7, z: 0 },
+          position: { x: 0, y: 0, z: 0 },
           nearestBone: 'Root_M',
           anatomicalLabel: pm.anatomical_label,
           description: pm.description,
@@ -1147,7 +1140,7 @@ export default function PhysioGPT() {
       deviationKeys: [...(prev?.deviationKeys || []), ...applied.deviationKeys],
       highlightLabels: [...(prev?.highlightLabels || []), ...applied.highlightLabels],
     };
-  }, [APPROX_BONE_POSITIONS]);
+  }, []);
 
   const handleClinicalTextClear = useCallback(() => {
     const applied = clinicalTextAppliedRef.current;

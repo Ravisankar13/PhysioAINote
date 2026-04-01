@@ -69,7 +69,8 @@ import {
   Grid2X2,
   RefreshCw,
   ExternalLink,
-  Pill
+  Pill,
+  Microscope
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -114,6 +115,8 @@ import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 import ClinicalTextInput, { type ClinicalParseResult } from "@/components/skeleton/ClinicalTextInput";
 import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
+import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
+import { type TissueViewMode, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode } from "@/lib/tissueViewData";
 
 const BODY_REGIONS = {
   cervical: {
@@ -468,6 +471,8 @@ export default function PhysioGPT() {
   const [dermatomeHighlightBones, setDermatomeHighlightBones] = useState<string[]>([]);
   const [nerveRootLabels, setNerveRootLabels] = useState<Array<{ root: string; boneName: string }>>([]);
   const [referralZoneBones, setReferralZoneBones] = useState<string[]>([]);
+  const [tissueViewMode, setTissueViewMode] = useState<TissueViewMode>(null);
+  const [selectedTissueEntry, setSelectedTissueEntry] = useState<string | null>(null);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
@@ -3184,6 +3189,20 @@ ${ddxList}`;
     return boneNames;
   }, [showTreatmentOverlay, liveTreatmentPriorities.targets, showPredictedPain, predictedPainSpots]);
 
+  const tissueViewOverlay = useMemo(() => {
+    if (!tissueViewMode || tissueViewMode === 'muscle') return null;
+    const modeColor = TISSUE_MODE_COLORS[tissueViewMode];
+    if (selectedTissueEntry) {
+      const entries = getTissueEntriesForMode(tissueViewMode);
+      const entry = entries.find(e => e.id === selectedTissueEntry);
+      if (entry) {
+        return { bones: entry.bones, color: modeColor.hex, label: entry.label };
+      }
+    }
+    const allBones = getAllHighlightBonesForMode(tissueViewMode);
+    return { bones: allBones, color: modeColor.hex, label: modeColor.label };
+  }, [tissueViewMode, selectedTissueEntry]);
+
   useEffect(() => {
     if (!skeletonContainerRef.current) return;
     const el = skeletonContainerRef.current;
@@ -3735,6 +3754,7 @@ ${ddxList}`;
               dermatomeHighlightBones={dermatomeHighlightBones}
               nerveRootLabels={nerveRootLabels}
               referralZoneBones={referralZoneBones}
+              tissueViewOverlay={tissueViewOverlay}
               enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle'}
               onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
                 if (scarPlacementMode) {
@@ -6661,6 +6681,22 @@ ${ddxList}`;
                   <span className="ml-1 bg-pink-400 text-white text-[9px] rounded-full px-1 leading-tight">{scarMarkers.length}</span>
                 )}
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${tissueViewMode ? 'bg-teal-500 text-white hover:bg-teal-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  if (tissueViewMode) {
+                    setTissueViewMode(null);
+                    setSelectedTissueEntry(null);
+                  } else {
+                    setTissueViewMode('tendon');
+                  }
+                }}
+              >
+                <Microscope className="h-3 w-3 mr-1" />
+                Tissue
+              </Button>
               <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
               <Button
                 variant="secondary"
@@ -7206,6 +7242,31 @@ ${ddxList}`;
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {tissueViewMode && (
+              <div className="absolute top-2 left-2 z-30 w-[280px] animate-in slide-in-from-left-2 duration-200">
+                <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Microscope className="h-3.5 w-3.5 text-teal-400" />
+                      <span className="text-xs font-semibold text-gray-200">Tissue View</span>
+                    </div>
+                    <button
+                      onClick={() => { setTissueViewMode(null); setSelectedTissueEntry(null); }}
+                      className="text-gray-400 hover:text-white p-0.5"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <TissueViewSelector
+                    activeMode={tissueViewMode}
+                    onModeChange={setTissueViewMode}
+                    selectedEntryId={selectedTissueEntry}
+                    onEntrySelect={setSelectedTissueEntry}
+                  />
+                </div>
               </div>
             )}
 

@@ -1669,6 +1669,7 @@ interface PureThreeGLBViewerProps {
   dermatomeHighlightBones?: string[];
   nerveRootLabels?: Array<{ root: string; boneName: string }>;
   referralZoneBones?: string[];
+  tissueViewOverlay?: { bones: string[]; color: number; label: string } | null;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2132,6 +2133,7 @@ export default function PureThreeGLBViewer({
   dermatomeHighlightBones,
   nerveRootLabels,
   referralZoneBones,
+  tissueViewOverlay,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -6578,6 +6580,50 @@ export default function PureThreeGLBViewer({
       });
     }
   }, [referralZoneBones]);
+
+  const tissueViewHighlightRef = useRef<Array<{ mesh: THREE.Mesh; origMaterial: THREE.Material; wasVisible: boolean }>>([]);
+
+  useEffect(() => {
+    for (const entry of tissueViewHighlightRef.current) {
+      const clonedMat = entry.mesh.material as THREE.MeshStandardMaterial;
+      entry.mesh.material = entry.origMaterial;
+      if (!entry.wasVisible) entry.mesh.visible = false;
+      clonedMat.dispose();
+    }
+    tissueViewHighlightRef.current = [];
+
+    if (!tissueViewOverlay || !tissueViewOverlay.bones || tissueViewOverlay.bones.length === 0) return;
+    if (!sceneRef.current) return;
+
+    const bRef = bonesRef.current;
+    const overlayColor = new THREE.Color(tissueViewOverlay.color);
+
+    for (const boneName of tissueViewOverlay.bones) {
+      const bone = bRef[boneName];
+      if (!bone) continue;
+
+      bone.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh && child.material && !Array.isArray(child.material) && child.material instanceof THREE.MeshStandardMaterial) {
+          const origMat = child.material;
+          const clonedMat = origMat.clone();
+          clonedMat.emissive = overlayColor;
+          clonedMat.emissiveIntensity = 0.45;
+          clonedMat.transparent = true;
+          clonedMat.opacity = 0.65;
+          clonedMat.needsUpdate = true;
+
+          tissueViewHighlightRef.current.push({
+            mesh: child,
+            origMaterial: origMat,
+            wasVisible: child.visible,
+          });
+
+          child.material = clonedMat;
+          child.visible = true;
+        }
+      });
+    }
+  }, [tissueViewOverlay]);
 
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {

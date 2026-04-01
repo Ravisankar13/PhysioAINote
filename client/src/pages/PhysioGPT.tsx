@@ -7597,6 +7597,7 @@ ${ddxList}`;
                     chainIntegrityScores={hudChainIntegrity}
                     painMarkers={painMarkers}
                     modelConfig={modelConfig}
+                    bodyWeightKg={bodyWeightKg}
                     muscleAnalysis={hudMuscleAnalysis?.allMuscles}
                     correlationResult={correlationResult}
                   />

@@ -76,7 +76,8 @@ interface RiskPrognosisDashboardProps {
   chainIntegrityScores: Map<string, { score: number; issues: string[]; problematicLinks: string[] }>;
   painMarkers: Array<{ id: string; nearestBone: string; anatomicalLabel?: string; type: string; description?: string; severity?: number }>;
   modelConfig: ModelConfig;
-  bodyWeightKg?: number;
+  bodyWeightKg: number;
+  heightCm?: number;
   muscleAnalysis?: IndividualMuscle[];
   correlationResult?: CrossSystemCorrelationResult | null;
 }
@@ -122,7 +123,8 @@ export default function RiskPrognosisDashboard({
   chainIntegrityScores,
   painMarkers,
   modelConfig,
-  bodyWeightKg = 75,
+  bodyWeightKg,
+  heightCm = 175,
   muscleAnalysis,
   correlationResult,
 }: RiskPrognosisDashboardProps) {
@@ -134,6 +136,7 @@ export default function RiskPrognosisDashboard({
     prognostic: false,
   });
   const [copied, setCopied] = useState(false);
+  const [engineErrors, setEngineErrors] = useState<Record<string, string>>({});
 
   const toggleSection = useCallback((key: string) => {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -141,12 +144,24 @@ export default function RiskPrognosisDashboard({
 
   const injuryRiskResult = useMemo((): InjuryRiskResult | null => {
     try {
-      const biomechanics = calculateFullBiomechanics(175, bodyWeightKg, modelConfig);
-      return calculateInjuryRisks(biomechanics);
-    } catch {
+      const biomechanics = calculateFullBiomechanics(heightCm, bodyWeightKg, modelConfig);
+      const result = calculateInjuryRisks(biomechanics);
+      setEngineErrors(prev => {
+        if (prev.injuryRisk) {
+          const next = { ...prev };
+          delete next.injuryRisk;
+          return next;
+        }
+        return prev;
+      });
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error computing injury risks';
+      console.error('[RiskDashboard] Injury risk engine error:', msg);
+      setEngineErrors(prev => ({ ...prev, injuryRisk: msg }));
       return null;
     }
-  }, [modelConfig, bodyWeightKg]);
+  }, [modelConfig, bodyWeightKg, heightCm]);
 
   const treatmentPlan = useMemo((): TreatmentPlan | null => {
     if (!forceAnalysis) return null;
@@ -168,8 +183,20 @@ export default function RiskPrognosisDashboard({
         chainIntegrityScores: chainIntegrityScores as Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>,
         bodyWeightKg,
       };
-      return generateTreatmentPlan(input);
-    } catch {
+      const result = generateTreatmentPlan(input);
+      setEngineErrors(prev => {
+        if (prev.treatmentPlan) {
+          const next = { ...prev };
+          delete next.treatmentPlan;
+          return next;
+        }
+        return prev;
+      });
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error generating treatment plan';
+      console.error('[RiskDashboard] Treatment plan engine error:', msg);
+      setEngineErrors(prev => ({ ...prev, treatmentPlan: msg }));
       return null;
     }
   }, [forceAnalysis, muscleAnalysis, painMarkers, chainIntegrityScores, bodyWeightKg, correlationResult]);
@@ -427,7 +454,13 @@ export default function RiskPrognosisDashboard({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="space-y-1.5 mt-1">
-            {riskItems.length === 0 && (
+            {engineErrors.injuryRisk && (
+              <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5 flex items-center gap-1.5">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                <span>Risk engine unavailable: {engineErrors.injuryRisk}</span>
+              </div>
+            )}
+            {!engineErrors.injuryRisk && riskItems.length === 0 && (
               <div className="text-xs text-gray-500 px-2 py-2">No significant risks detected</div>
             )}
             {riskItems.map(risk => (
@@ -449,6 +482,12 @@ export default function RiskPrognosisDashboard({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-2 px-1">
+            {engineErrors.treatmentPlan && (
+              <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5 flex items-center gap-1.5 mb-2">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                <span>Treatment engine unavailable: {engineErrors.treatmentPlan}</span>
+              </div>
+            )}
             {treatmentPlan && (
               <div className="text-[10px] text-gray-400 mb-2 italic">Overall: {treatmentPlan.overallTimeline}</div>
             )}

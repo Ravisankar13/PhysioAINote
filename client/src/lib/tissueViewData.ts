@@ -472,3 +472,8 @@ export function getEntryByBone(mode: TissueViewMode, boneName: string): TissueOv
   const entries = getTissueEntriesForMode(mode);
   return entries.find(entry => entry.bones.includes(boneName));
 }
+
+export function getAllEntriesForBone(mode: TissueViewMode, boneName: string): TissueOverlayEntry[] {
+  const entries = getTissueEntriesForMode(mode);
+  return entries.filter(entry => entry.bones.includes(boneName));
+}

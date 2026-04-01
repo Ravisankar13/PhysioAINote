@@ -27,6 +27,12 @@ import {
   getTissueEntriesForMode,
 } from '@/lib/tissueViewData';
 
+interface MuscleOverrideData {
+  tension?: number;
+  isManual?: boolean;
+  pathology?: string;
+}
+
 interface TissueViewSelectorProps {
   activeMode: TissueViewMode;
   onModeChange: (mode: TissueViewMode) => void;
@@ -34,6 +40,7 @@ interface TissueViewSelectorProps {
   onEntrySelect: (id: string | null) => void;
   chainIntegrityScores?: Map<string, { score: number; issues: string[]; problematicLinks: string[] }>;
   jointForceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }>;
+  musclePathologyData?: Record<string, MuscleOverrideData>;
 }
 
 const MODE_ICONS: Record<Exclude<TissueViewMode, null>, typeof Dumbbell> = {
@@ -52,8 +59,24 @@ const MODE_DESCRIPTIONS: Record<Exclude<TissueViewMode, null>, string> = {
   fascia: 'Myofascial chain layers & tension lines',
 };
 
-function TendonInfoCard({ entry }: { entry: TendonEntry }) {
-  const stage = entry.cookStage ? COOK_STAGING[entry.cookStage] : null;
+function TendonInfoCard({ entry, musclePathologyData }: { entry: TendonEntry; musclePathologyData?: Record<string, MuscleOverrideData> }) {
+  const derivedStage = (() => {
+    if (!musclePathologyData) return entry.cookStage;
+    const regionMuscles = Object.entries(musclePathologyData).filter(([key]) => {
+      const entryRegion = entry.region.toLowerCase();
+      const keyLower = key.toLowerCase();
+      return keyLower.includes(entryRegion) ||
+        entry.bones.some(b => keyLower.includes(b.replace(/_[LR]$/, '').toLowerCase()));
+    });
+    const hasPathology = regionMuscles.some(([, v]) => v.pathology && v.pathology !== 'none');
+    const hasHighTension = regionMuscles.some(([, v]) => (v.tension ?? 50) > 75);
+    if (hasPathology) return 3 as const;
+    if (hasHighTension) return 2 as const;
+    return entry.cookStage;
+  })();
+
+  const stage = derivedStage ? COOK_STAGING[derivedStage] : null;
+  const isPathologyDriven = musclePathologyData && derivedStage !== entry.cookStage;
 
   return (
     <div className="space-y-3">
@@ -65,22 +88,27 @@ function TendonInfoCard({ entry }: { entry: TendonEntry }) {
         <div className="text-xs text-muted-foreground">Insertion</div>
         <div className="text-sm">{entry.insertion}</div>
       </div>
-      {stage && entry.cookStage && (
+      {stage && derivedStage && (
         <>
           <Separator />
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge
                 variant="outline"
                 className={
-                  entry.cookStage === 1 ? 'border-green-500 text-green-500' :
-                  entry.cookStage === 2 ? 'border-yellow-500 text-yellow-500' :
+                  derivedStage === 1 ? 'border-green-500 text-green-500' :
+                  derivedStage === 2 ? 'border-yellow-500 text-yellow-500' :
                   'border-red-500 text-red-500'
                 }
               >
-                Stage {entry.cookStage}
+                Stage {derivedStage}
               </Badge>
               <span className="text-sm font-medium">{stage.name}</span>
+              {isPathologyDriven && (
+                <Badge variant="secondary" className="text-xs bg-orange-500/20 text-orange-400">
+                  Pathology-driven
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">{stage.description}</p>
             <div className="space-y-1">
@@ -264,11 +292,12 @@ function JointForceIndicator({ entry, forceData }: { entry: JointSurfaceEntry; f
   );
 }
 
-function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData }: {
+function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData, musclePathologyData }: {
   entry: TissueOverlayEntry;
   mode: TissueViewMode;
   chainIntegrityScores?: Map<string, { score: number; issues: string[]; problematicLinks: string[] }>;
   jointForceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }>;
+  musclePathologyData?: Record<string, MuscleOverrideData>;
 }) {
   return (
     <div
@@ -287,7 +316,7 @@ function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData }: {
 
       <Separator />
 
-      {mode === 'tendon' && <TendonInfoCard entry={entry as TendonEntry} />}
+      {mode === 'tendon' && <TendonInfoCard entry={entry as TendonEntry} musclePathologyData={musclePathologyData} />}
       {mode === 'joint' && (
         <>
           <JointInfoCard entry={entry as JointSurfaceEntry} />
@@ -307,6 +336,7 @@ export default function TissueViewSelector({
   onEntrySelect,
   chainIntegrityScores,
   jointForceData,
+  musclePathologyData,
 }: TissueViewSelectorProps) {
   const [showList, setShowList] = useState(false);
   const entries = activeMode ? getTissueEntriesForMode(activeMode) : [];
@@ -403,6 +433,7 @@ export default function TissueViewSelector({
           mode={activeMode}
           chainIntegrityScores={chainIntegrityScores}
           jointForceData={jointForceData}
+          musclePathologyData={musclePathologyData}
         />
       )}
     </div>

@@ -116,7 +116,7 @@ import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames }
 import ClinicalTextInput, { type ClinicalParseResult } from "@/components/skeleton/ClinicalTextInput";
 import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
 import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
-import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
+import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 
 const BODY_REGIONS = {
   cervical: {
@@ -473,6 +473,7 @@ export default function PhysioGPT() {
   const [referralZoneBones, setReferralZoneBones] = useState<string[]>([]);
   const [tissueViewMode, setTissueViewMode] = useState<TissueViewMode>(null);
   const [selectedTissueEntry, setSelectedTissueEntry] = useState<string | null>(null);
+  const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
@@ -3202,15 +3203,30 @@ ${ddxList}`;
       loadIndicators?: Array<{ boneName: string; loadPercent: number; color: number }>;
     };
 
+    const deriveCookStage = (t: TendonEntry): 1 | 2 | 3 | undefined => {
+      const regionMuscles = Object.entries(compensatedOverrides).filter(([key]) => {
+        const entryRegion = t.region.toLowerCase();
+        const keyLower = key.toLowerCase();
+        return keyLower.includes(entryRegion) ||
+          t.bones.some(b => keyLower.includes(b.replace(/_[LR]$/, '').toLowerCase()));
+      });
+      const hasPathology = regionMuscles.some(([, v]) => v?.pathology && v.pathology !== 'none');
+      const hasHighTension = regionMuscles.some(([, v]) => (v?.tension ?? 50) > 75);
+      if (hasPathology) return 3;
+      if (hasHighTension) return 2;
+      return t.cookStage;
+    };
+
     const buildTendonMarkers = (entries: TendonEntry[]): OverlayResult['markers'] => {
       return entries.flatMap(t => {
         const stageColors: Record<number, number> = { 1: 0x33cc33, 2: 0xffaa33, 3: 0xff3333 };
-        const color = t.cookStage ? stageColors[t.cookStage] : 0xe6a832;
+        const effectiveStage = deriveCookStage(t);
+        const color = effectiveStage ? stageColors[effectiveStage] : 0xe6a832;
         return t.bones.map(boneName => ({
           boneName,
           color,
           size: 0.01,
-          label: t.label + (t.cookStage ? ` (Stage ${t.cookStage})` : ''),
+          label: t.label + (effectiveStage ? ` (Stage ${effectiveStage})` : ''),
         }));
       });
     };
@@ -3252,6 +3268,36 @@ ${ddxList}`;
       return indicators;
     };
 
+    const buildFasciaChainLines = (entries: FascialLayerEntry[]): OverlayResult['pathwayLines'] => {
+      return entries.map(f => ({
+        boneSequence: f.bones,
+        color: 0xcc66cc,
+        label: f.chainName,
+      }));
+    };
+
+    const buildJointInstabilityMarkers = (entries: JointSurfaceEntry[]): OverlayResult['markers'] => {
+      const forces = hudForceAnalysis;
+      if (!forces || !forces.joints) return [];
+      return entries.flatMap(joint => {
+        const matchedForce = forces.joints.find((f: JointSurfaceForce) =>
+          joint.bones.includes(f.boneName)
+        );
+        if (!matchedForce || matchedForce.status === 'low') return [];
+        const severityColors: Record<string, number> = {
+          moderate: 0xffaa33,
+          high: 0xff6633,
+          very_high: 0xff0000,
+        };
+        return [{
+          boneName: joint.bones[0],
+          color: severityColors[matchedForce.status] || 0xffaa33,
+          size: matchedForce.status === 'very_high' ? 0.015 : 0.012,
+          label: `${joint.label} — ${matchedForce.status} load`,
+        }];
+      });
+    };
+
     if (selectedTissueEntry) {
       const entries = getTissueEntriesForMode(tissueViewMode);
       const entry = entries.find(e => e.id === selectedTissueEntry);
@@ -3263,6 +3309,9 @@ ${ddxList}`;
           result.pathwayLines = buildNervePathways([entry as NervePathwayEntry]);
         } else if (tissueViewMode === 'joint') {
           result.loadIndicators = buildJointLoadIndicators();
+          result.markers = buildJointInstabilityMarkers([entry as JointSurfaceEntry]);
+        } else if (tissueViewMode === 'fascia') {
+          result.pathwayLines = buildFasciaChainLines([entry as FascialLayerEntry]);
         }
         return result;
       }
@@ -3276,9 +3325,12 @@ ${ddxList}`;
       result.pathwayLines = buildNervePathways(NERVE_PATHWAY_DATA);
     } else if (tissueViewMode === 'joint') {
       result.loadIndicators = buildJointLoadIndicators();
+      result.markers = buildJointInstabilityMarkers(JOINT_SURFACE_DATA);
+    } else if (tissueViewMode === 'fascia') {
+      result.pathwayLines = buildFasciaChainLines(FASCIAL_LAYER_DATA);
     }
     return result;
-  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis]);
+  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis, compensatedOverrides]);
 
   useEffect(() => {
     if (!skeletonContainerRef.current) return;
@@ -3833,9 +3885,13 @@ ${ddxList}`;
               referralZoneBones={referralZoneBones}
               tissueViewOverlay={tissueViewOverlay}
               onTissueBoneClick={tissueViewMode ? (boneName: string) => {
-                const entry = getEntryByBone(tissueViewMode, boneName);
-                if (entry) {
-                  setSelectedTissueEntry(entry.id === selectedTissueEntry ? null : entry.id);
+                const matches = getAllEntriesForBone(tissueViewMode, boneName);
+                if (matches.length === 0) return;
+                if (matches.length === 1) {
+                  setSelectedTissueEntry(matches[0].id === selectedTissueEntry ? null : matches[0].id);
+                  setTissueDisambiguationEntries([]);
+                } else {
+                  setTissueDisambiguationEntries(matches.map(m => ({ id: m.id, label: m.label })));
                 }
               } : undefined}
               enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle' || !!tissueViewMode}
@@ -7347,7 +7403,7 @@ ${ddxList}`;
                     activeMode={tissueViewMode}
                     onModeChange={setTissueViewMode}
                     selectedEntryId={selectedTissueEntry}
-                    onEntrySelect={setSelectedTissueEntry}
+                    onEntrySelect={(id) => { setSelectedTissueEntry(id); setTissueDisambiguationEntries([]); }}
                     chainIntegrityScores={hudChainIntegrity}
                     jointForceData={hudForceAnalysis?.joints?.map((f: JointSurfaceForce) => ({
                       boneName: f.boneName,
@@ -7355,7 +7411,25 @@ ${ddxList}`;
                       status: f.status,
                       label: f.label,
                     }))}
+                    musclePathologyData={compensatedOverrides}
                   />
+                  {tissueDisambiguationEntries.length > 1 && (
+                    <div className="rounded-lg border bg-background/95 backdrop-blur-sm shadow-lg p-2 space-y-1">
+                      <div className="text-xs font-medium text-muted-foreground px-1">Select structure:</div>
+                      {tissueDisambiguationEntries.map(e => (
+                        <button
+                          key={e.id}
+                          className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-muted/70 transition-colors"
+                          onClick={() => {
+                            setSelectedTissueEntry(e.id);
+                            setTissueDisambiguationEntries([]);
+                          }}
+                        >
+                          {e.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

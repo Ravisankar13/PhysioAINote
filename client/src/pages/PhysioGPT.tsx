@@ -2900,7 +2900,7 @@ ${ddxList}`;
   }, [effectiveModelConfig, forceMode, bodyWeightKg]);
 
   const correlationResult = useMemo(() => {
-    if (!correlationMode && !chainIntegrityMode && !chainExplorerMode) return null;
+    if (!correlationMode && !chainIntegrityMode && !chainExplorerMode && !showInjuryMechanism) return null;
     const forces = calculatePosturalForces(effectiveModelConfig);
     const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
     return computeCrossSystemCorrelation({
@@ -2912,7 +2912,7 @@ ${ddxList}`;
       kineticChains: KINETIC_CHAINS,
       bodyWeightKg,
     });
-  }, [effectiveModelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode]);
+  }, [effectiveModelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode, showInjuryMechanism]);
 
   const chainIntegrityScores = useMemo(() => {
     if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();

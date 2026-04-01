@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -142,29 +142,21 @@ export default function RiskPrognosisDashboard({
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  const injuryRiskResult = useMemo((): InjuryRiskResult | null => {
+  const injuryRiskComputed = useMemo((): { result: InjuryRiskResult | null; error: string | null } => {
     try {
       const biomechanics = calculateFullBiomechanics(heightCm, bodyWeightKg, modelConfig);
-      const result = calculateInjuryRisks(biomechanics);
-      setEngineErrors(prev => {
-        if (prev.injuryRisk) {
-          const next = { ...prev };
-          delete next.injuryRisk;
-          return next;
-        }
-        return prev;
-      });
-      return result;
+      return { result: calculateInjuryRisks(biomechanics), error: null };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error computing injury risks';
       console.error('[RiskDashboard] Injury risk engine error:', msg);
-      setEngineErrors(prev => ({ ...prev, injuryRisk: msg }));
-      return null;
+      return { result: null, error: msg };
     }
   }, [modelConfig, bodyWeightKg, heightCm]);
 
-  const treatmentPlan = useMemo((): TreatmentPlan | null => {
-    if (!forceAnalysis) return null;
+  const injuryRiskResult = injuryRiskComputed.result;
+
+  const treatmentPlanComputed = useMemo((): { result: TreatmentPlan | null; error: string | null } => {
+    if (!forceAnalysis) return { result: null, error: null };
     try {
       const forces = forceAnalysis.joints || [];
       const muscles = muscleAnalysis || [];
@@ -183,23 +175,27 @@ export default function RiskPrognosisDashboard({
         chainIntegrityScores: chainIntegrityScores as Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>,
         bodyWeightKg,
       };
-      const result = generateTreatmentPlan(input);
-      setEngineErrors(prev => {
-        if (prev.treatmentPlan) {
-          const next = { ...prev };
-          delete next.treatmentPlan;
-          return next;
-        }
-        return prev;
-      });
-      return result;
+      return { result: generateTreatmentPlan(input), error: null };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error generating treatment plan';
       console.error('[RiskDashboard] Treatment plan engine error:', msg);
-      setEngineErrors(prev => ({ ...prev, treatmentPlan: msg }));
-      return null;
+      return { result: null, error: msg };
     }
   }, [forceAnalysis, muscleAnalysis, painMarkers, chainIntegrityScores, bodyWeightKg, correlationResult]);
+
+  const treatmentPlan = treatmentPlanComputed.result;
+
+  useEffect(() => {
+    setEngineErrors(prev => {
+      const next: Record<string, string> = {};
+      if (injuryRiskComputed.error) next.injuryRisk = injuryRiskComputed.error;
+      if (treatmentPlanComputed.error) next.treatmentPlan = treatmentPlanComputed.error;
+      const prevKeys = Object.keys(prev).sort().join(',');
+      const nextKeys = Object.keys(next).sort().join(',');
+      if (prevKeys === nextKeys && Object.entries(next).every(([k, v]) => prev[k] === v)) return prev;
+      return next;
+    });
+  }, [injuryRiskComputed.error, treatmentPlanComputed.error]);
 
   const riskItems = useMemo((): RiskItem[] => {
     if (!injuryRiskResult) return [];

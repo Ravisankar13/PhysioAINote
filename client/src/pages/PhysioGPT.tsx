@@ -116,6 +116,7 @@ import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames }
 import ClinicalTextInput, { type ClinicalParseResult } from "@/components/skeleton/ClinicalTextInput";
 import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
 import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
+import RiskPrognosisDashboard from "@/components/skeleton/RiskPrognosisDashboard";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 
 const BODY_REGIONS = {
@@ -474,6 +475,7 @@ export default function PhysioGPT() {
   const [tissueViewMode, setTissueViewMode] = useState<TissueViewMode>(null);
   const [selectedTissueEntry, setSelectedTissueEntry] = useState<string | null>(null);
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
+  const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
@@ -6965,6 +6967,15 @@ ${ddxList}`;
                 <Microscope className="h-3 w-3 mr-1" />
                 Tissue
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${showRiskDashboard ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => setShowRiskDashboard(!showRiskDashboard)}
+              >
+                <Shield className="h-3 w-3 mr-1" />
+                Risk
+              </Button>
               <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
               <Button
                 variant="secondary"
@@ -7560,6 +7571,33 @@ ${ddxList}`;
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {showRiskDashboard && (
+              <div className="absolute top-2 right-2 z-30 w-[280px] max-h-[calc(100%-50px)] overflow-y-auto animate-in slide-in-from-right-2 duration-200">
+                <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-3.5 w-3.5 text-cyan-400" />
+                      <span className="text-xs font-semibold text-gray-200">Risk Dashboard</span>
+                    </div>
+                    <button
+                      onClick={() => setShowRiskDashboard(false)}
+                      className="text-gray-400 hover:text-white p-0.5"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <RiskPrognosisDashboard
+                    forceAnalysis={hudForceAnalysis}
+                    compensatedOverrides={compensatedOverrides}
+                    pathologyCompensation={pathologyCompensation}
+                    chainIntegrityScores={hudChainIntegrity}
+                    painMarkers={painMarkers}
+                    modelConfig={modelConfig}
+                  />
                 </div>
               </div>
             )}

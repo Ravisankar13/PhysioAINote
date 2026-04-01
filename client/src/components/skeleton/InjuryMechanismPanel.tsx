@@ -15,6 +15,8 @@ import {
   Activity,
   Crosshair,
   Link2,
+  Lightbulb,
+  Footprints,
 } from "lucide-react";
 import type { ForceAnalysisResult } from "@/lib/posturalForceEngine";
 import type { PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
@@ -26,6 +28,7 @@ import {
   type CausalChainStep,
   type LoadRedistribution,
   type COMShiftData,
+  type FootPressureData,
   type CompensationCard,
   type KineticChainDysfunction,
 } from "@/lib/injuryMechanismEngine";
@@ -36,6 +39,7 @@ interface InjuryMechanismPanelProps {
   pathologyCompensation: PathologyCompensationResult | null;
   correlationResult: CrossSystemCorrelationResult | null;
   bodyWeightKg: number;
+  onHighlightBones?: (boneIds: string[]) => void;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -54,6 +58,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   root_cause: 'Root Cause',
   intermediate: 'Mechanism',
   symptom: 'Symptom',
+};
+
+const FORCE_STATUS_COLORS: Record<string, string> = {
+  low: 'text-green-400',
+  moderate: 'text-yellow-400',
+  high: 'text-orange-400',
+  very_high: 'text-red-400',
 };
 
 const LOAD_STATUS_COLORS: Record<string, string> = {
@@ -76,6 +87,11 @@ function CausalChainFlow({ chain }: { chain: CausalChainStep[] }) {
               <Badge variant="outline" className={`text-[9px] px-1 py-0 h-3.5 ${SEVERITY_COLORS[step.severity]}`}>
                 {step.severity}
               </Badge>
+              {step.forceN !== null && step.forceStatus && (
+                <span className={`text-[9px] font-mono ml-auto ${FORCE_STATUS_COLORS[step.forceStatus]}`}>
+                  {step.forceN}N
+                </span>
+              )}
             </div>
             <div className="text-xs font-medium text-gray-100">{step.structure}</div>
             <div className="text-[11px] text-gray-400">{step.finding}</div>
@@ -123,6 +139,58 @@ function LoadBar({ item }: { item: LoadRedistribution }) {
   );
 }
 
+function FootPressureDiagram({ data }: { data: FootPressureData }) {
+  const leftH = Math.max(10, data.leftPct);
+  const rightH = Math.max(10, data.rightPct);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-end justify-center gap-6">
+        <div className="flex flex-col items-center">
+          <span className="text-[11px] font-mono text-gray-200 mb-1">{data.leftPct}%</span>
+          <div className="w-8 bg-gray-800 rounded-t relative overflow-hidden" style={{ height: '50px' }}>
+            <div
+              className="absolute bottom-0 w-full rounded-t transition-all"
+              style={{
+                height: `${leftH}%`,
+                backgroundColor: data.leftPct > 55 ? '#f97316' : data.leftPct < 45 ? '#3b82f6' : '#22c55e',
+              }}
+            />
+          </div>
+          <svg width="20" height="30" viewBox="0 0 20 30" className="mt-0.5">
+            <ellipse cx="10" cy="8" rx="6" ry="7" fill="#374151" stroke="#4B5563" strokeWidth="0.5" />
+            <ellipse cx="10" cy="22" rx="4" ry="5" fill="#374151" stroke="#4B5563" strokeWidth="0.5" />
+          </svg>
+          <span className="text-[9px] text-gray-500">Left</span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-[11px] font-mono text-gray-200 mb-1">{data.rightPct}%</span>
+          <div className="w-8 bg-gray-800 rounded-t relative overflow-hidden" style={{ height: '50px' }}>
+            <div
+              className="absolute bottom-0 w-full rounded-t transition-all"
+              style={{
+                height: `${rightH}%`,
+                backgroundColor: data.rightPct > 55 ? '#f97316' : data.rightPct < 45 ? '#3b82f6' : '#22c55e',
+              }}
+            />
+          </div>
+          <svg width="20" height="30" viewBox="0 0 20 30" className="mt-0.5">
+            <ellipse cx="10" cy="8" rx="6" ry="7" fill="#374151" stroke="#4B5563" strokeWidth="0.5" />
+            <ellipse cx="10" cy="22" rx="4" ry="5" fill="#374151" stroke="#4B5563" strokeWidth="0.5" />
+          </svg>
+          <span className="text-[9px] text-gray-500">Right</span>
+        </div>
+      </div>
+      <div className="text-center">
+        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 text-gray-300 border-gray-600">
+          A/P: {data.anteriorPosterior} ({data.apShiftMm > 0 ? '+' : ''}{data.apShiftMm}mm)
+        </Badge>
+      </div>
+      <div className="text-[10px] text-gray-500 text-center">{data.clinicalNote}</div>
+    </div>
+  );
+}
+
 function COMDiagram({ data }: { data: COMShiftData }) {
   const cx = 40 + Math.max(-30, Math.min(30, data.x * 5));
   const cy = 40 + Math.max(-30, Math.min(30, data.y * 5));
@@ -156,10 +224,12 @@ export default function InjuryMechanismPanel({
   pathologyCompensation,
   correlationResult,
   bodyWeightKg,
+  onHighlightBones,
 }: InjuryMechanismPanelProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     causal: true,
     load: false,
+    footPressure: false,
     com: false,
     compensation: false,
     kinetic: false,
@@ -203,6 +273,17 @@ export default function InjuryMechanismPanel({
     }
   }, [analysis, selectedChainIdx]);
 
+  useEffect(() => {
+    if (onHighlightBones && analysis) {
+      onHighlightBones(analysis.causalChainBoneIds);
+    }
+    return () => {
+      if (onHighlightBones) {
+        onHighlightBones([]);
+      }
+    };
+  }, [analysis, onHighlightBones]);
+
   const exportSummary = useCallback(() => {
     if (!analysis) return;
     const lines: string[] = [];
@@ -222,17 +303,25 @@ export default function InjuryMechanismPanel({
       analysis.causalChains.forEach((chain, ci) => {
         lines.push(`  Chain ${ci + 1}:`);
         chain.forEach(step => {
-          lines.push(`    ${step.step}. [${step.category}] ${step.structure}: ${step.finding}`);
+          const forceStr = step.forceN !== null ? ` [${step.forceN}N]` : '';
+          lines.push(`    ${step.step}. [${step.category}] ${step.structure}: ${step.finding}${forceStr}`);
           lines.push(`       ${step.mechanism}`);
         });
       });
       lines.push('');
     }
 
+    if (analysis.footPressure) {
+      lines.push('── FOOT PRESSURE ──');
+      lines.push(`  L: ${analysis.footPressure.leftPct}% / R: ${analysis.footPressure.rightPct}%`);
+      lines.push(`  A/P: ${analysis.footPressure.anteriorPosterior} (${analysis.footPressure.apShiftMm}mm)`);
+      lines.push('');
+    }
+
     if (analysis.loadRedistribution.length > 0) {
       lines.push('── LOAD REDISTRIBUTION ──');
       analysis.loadRedistribution.forEach(l => {
-        lines.push(`  ${l.joint}: ${l.changePct > 0 ? '+' : ''}${l.changePct}% (${l.status})`);
+        lines.push(`  ${l.joint}: ${l.changePct > 0 ? '+' : ''}${l.changePct}% (${l.currentForce}N / baseline ${l.baselineForce}N) [${l.status}]`);
       });
       lines.push('');
     }
@@ -249,7 +338,12 @@ export default function InjuryMechanismPanel({
       analysis.compensationCards.forEach(c => {
         lines.push(`  ${c.title} (${c.severity})`);
         lines.push(`    Dysfunction: ${c.primaryDysfunction}`);
-        lines.push(`    Significance: ${c.clinicalSignificance}`);
+        if (c.forceImpacts.length > 0) {
+          c.forceImpacts.forEach(fi => {
+            lines.push(`    Force: ${fi.joint} ${fi.forceChangeN > 0 ? '+' : ''}${fi.forceChangeN}N (${fi.direction})`);
+          });
+        }
+        lines.push(`    Rx: ${c.recommendation}`);
       });
     }
 
@@ -263,14 +357,15 @@ export default function InjuryMechanismPanel({
     analysis.causalChains.length > 0 ||
     analysis.loadRedistribution.length > 0 ||
     analysis.compensationCards.length > 0 ||
-    analysis.comShift
+    analysis.comShift ||
+    analysis.footPressure
   );
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4 text-amber-400" />
+          <Link2 className="w-4 h-4 text-amber-400" />
           <span className="text-sm font-semibold text-white">Injury Mechanism</span>
         </div>
         <Button
@@ -353,6 +448,26 @@ export default function InjuryMechanismPanel({
         </>
       )}
 
+      {analysis && analysis.footPressure && (
+        <>
+          <Separator className="bg-gray-700/50" />
+          <Collapsible open={expandedSections.footPressure} onOpenChange={() => toggleSection('footPressure')}>
+            <CollapsibleTrigger className="flex items-center justify-between w-full px-2 py-1.5 rounded hover:bg-gray-800/50 transition-colors">
+              <div className="flex items-center gap-2">
+                <Footprints className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-xs font-medium text-gray-200">Foot Pressure Distribution</span>
+              </div>
+              {expandedSections.footPressure ? <ChevronUp className="w-3 h-3 text-gray-500" /> : <ChevronDown className="w-3 h-3 text-gray-500" />}
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-1 px-1">
+                <FootPressureDiagram data={analysis.footPressure} />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      )}
+
       {analysis && analysis.loadRedistribution.length > 0 && (
         <>
           <Separator className="bg-gray-700/50" />
@@ -422,13 +537,33 @@ export default function InjuryMechanismPanel({
                         {card.severity}
                       </Badge>
                     </div>
-                    <div className="text-[11px] text-gray-300 mb-1">{card.primaryDysfunction}</div>
+                    <div className="text-[11px] text-gray-300 mb-1">
+                      <ArrowRight className="w-2.5 h-2.5 inline mr-0.5 opacity-50" />
+                      {card.primaryDysfunction}
+                    </div>
                     {card.compensatingStructures.length > 0 && (
                       <div className="text-[10px] text-gray-500">
-                        Compensators: {card.compensatingStructures.join(', ')}
+                        Compensators: {card.compensatingStructures.join(' → ')}
                       </div>
                     )}
-                    <div className="text-[10px] text-gray-500 mt-0.5 italic">{card.clinicalSignificance}</div>
+                    {card.forceImpacts.length > 0 && (
+                      <div className="mt-1 space-y-0.5">
+                        {card.forceImpacts.map((fi, idx) => (
+                          <div key={idx} className="flex items-center gap-1 text-[10px]">
+                            <Activity className="w-2.5 h-2.5 opacity-50" />
+                            <span className="text-gray-400">{fi.joint}:</span>
+                            <span className={fi.direction === 'increased' ? 'text-orange-400' : 'text-blue-400'}>
+                              {fi.forceChangeN > 0 ? '+' : ''}{fi.forceChangeN}N
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="text-[10px] text-gray-500 mt-1 italic">{card.clinicalSignificance}</div>
+                    <div className="mt-1.5 flex items-start gap-1 text-[10px] text-emerald-400/80">
+                      <Lightbulb className="w-3 h-3 shrink-0 mt-0.5" />
+                      <span>{card.recommendation}</span>
+                    </div>
                   </div>
                 ))}
               </div>

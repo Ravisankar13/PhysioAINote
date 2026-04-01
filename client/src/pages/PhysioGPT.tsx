@@ -70,7 +70,8 @@ import {
   RefreshCw,
   ExternalLink,
   Pill,
-  Microscope
+  Microscope,
+  Link2
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -478,6 +479,7 @@ export default function PhysioGPT() {
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
+  const [mechanismHighlightBones, setMechanismHighlightBones] = useState<string[]>([]);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
@@ -3967,11 +3969,12 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 ? [
+              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 ? [
                 ...(chainHighlightBones || []),
                 ...muscleOverrideHighlights,
                 ...influenceHighlights,
                 ...visualizationBoneHighlights,
+                ...mechanismHighlightBones,
               ] : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
@@ -6984,7 +6987,7 @@ ${ddxList}`;
                 className={`h-7 text-xs shadow-sm ${showInjuryMechanism ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => setShowInjuryMechanism(!showInjuryMechanism)}
               >
-                <Zap className="h-3 w-3 mr-1" />
+                <Link2 className="h-3 w-3 mr-1" />
                 Mechanism
               </Button>
               <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
@@ -7637,6 +7640,7 @@ ${ddxList}`;
                     pathologyCompensation={pathologyCompensation}
                     correlationResult={correlationResult}
                     bodyWeightKg={bodyWeightKg}
+                    onHighlightBones={setMechanismHighlightBones}
                   />
                 </div>
               </div>

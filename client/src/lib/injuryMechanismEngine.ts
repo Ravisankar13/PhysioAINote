@@ -11,6 +11,9 @@ export interface CausalChainStep {
   mechanism: string;
   category: 'root_cause' | 'intermediate' | 'symptom';
   severity: 'mild' | 'moderate' | 'severe';
+  boneId: string | null;
+  forceN: number | null;
+  forceStatus: 'low' | 'moderate' | 'high' | 'very_high' | null;
 }
 
 export interface LoadRedistribution {
@@ -29,6 +32,20 @@ export interface COMShiftData {
   clinicalMeaning: string;
 }
 
+export interface FootPressureData {
+  leftPct: number;
+  rightPct: number;
+  anteriorPosterior: 'anterior' | 'neutral' | 'posterior';
+  apShiftMm: number;
+  clinicalNote: string;
+}
+
+export interface CompensationForceImpact {
+  joint: string;
+  forceChangeN: number;
+  direction: 'increased' | 'decreased';
+}
+
 export interface CompensationCard {
   id: string;
   title: string;
@@ -37,6 +54,8 @@ export interface CompensationCard {
   severity: 'mild' | 'moderate' | 'severe';
   clinicalSignificance: string;
   affectedChains: string[];
+  forceImpacts: CompensationForceImpact[];
+  recommendation: string;
 }
 
 export interface KineticChainDysfunction {
@@ -51,10 +70,82 @@ export interface InjuryMechanismResult {
   causalChains: CausalChainStep[][];
   loadRedistribution: LoadRedistribution[];
   comShift: COMShiftData | null;
+  footPressure: FootPressureData | null;
   compensationCards: CompensationCard[];
   kineticChainDysfunctions: KineticChainDysfunction[];
   topContributors: string[];
   overallMechanismSummary: string;
+  causalChainBoneIds: string[];
+}
+
+const STRUCTURE_TO_BONE: Record<string, string> = {
+  'lumbar': 'Spine1_M', 'lower back': 'Spine1_M', 'erector spinae': 'Spine1_M', 'multifidus': 'Spine1_M',
+  'thoracic': 'Chest_M', 'mid back': 'Chest_M', 'rhomboid': 'Chest_M',
+  'cervical': 'Neck_M', 'neck': 'Neck_M', 'sternocleidomastoid': 'Neck_M',
+  'pelvis': 'Root_M', 'sacrum': 'Root_M', 'core': 'Root_M',
+  'left hip': 'Hip_L', 'hip_l': 'Hip_L', 'left glute': 'Hip_L', 'glute_l': 'Hip_L', 'gluteus_l': 'Hip_L',
+  'right hip': 'Hip_R', 'hip_r': 'Hip_R', 'right glute': 'Hip_R', 'glute_r': 'Hip_R', 'gluteus_r': 'Hip_R',
+  'left knee': 'Knee_L', 'quad_l': 'Knee_L', 'left quad': 'Knee_L',
+  'right knee': 'Knee_R', 'quad_r': 'Knee_R', 'right quad': 'Knee_R',
+  'left ankle': 'Ankle_L', 'calf_l': 'Ankle_L', 'left calf': 'Ankle_L',
+  'right ankle': 'Ankle_R', 'calf_r': 'Ankle_R', 'right calf': 'Ankle_R',
+  'left shoulder': 'Shoulder_L', 'deltoid_l': 'Shoulder_L', 'scapula_l': 'Scapula_L',
+  'right shoulder': 'Shoulder_R', 'deltoid_r': 'Shoulder_R', 'scapula_r': 'Scapula_R',
+  'head': 'Head_M',
+};
+
+const STRUCTURE_TO_FORCE_CATEGORY: Record<string, string> = {
+  'lumbar': 'lumbar_spine', 'lower back': 'lumbar_spine', 'erector spinae': 'lumbar_spine',
+  'thoracic': 'thoracic_spine', 'mid back': 'thoracic_spine',
+  'cervical': 'cervical_spine', 'neck': 'cervical_spine',
+  'pelvis': 'pelvis_sacrum', 'sacrum': 'pelvis_sacrum',
+  'left hip': 'left_hip', 'hip_l': 'left_hip', 'glute_l': 'left_hip',
+  'right hip': 'right_hip', 'hip_r': 'right_hip', 'glute_r': 'right_hip',
+  'left knee': 'left_knee', 'quad_l': 'left_knee',
+  'right knee': 'right_knee', 'quad_r': 'right_knee',
+  'left ankle': 'left_ankle', 'calf_l': 'left_ankle',
+  'right ankle': 'right_ankle', 'calf_r': 'right_ankle',
+  'left shoulder': 'left_shoulder', 'deltoid_l': 'left_shoulder',
+  'right shoulder': 'right_shoulder', 'deltoid_r': 'right_shoulder',
+};
+
+function resolveStructureBone(structure: string): string | null {
+  const lower = structure.toLowerCase();
+  for (const [key, bone] of Object.entries(STRUCTURE_TO_BONE)) {
+    if (lower.includes(key)) return bone;
+  }
+  return null;
+}
+
+function resolveForceForStructure(
+  structure: string,
+  forceAnalysis: ForceAnalysisResult | null,
+  bodyWeightKg: number
+): { forceN: number; status: 'low' | 'moderate' | 'high' | 'very_high' } | null {
+  if (!forceAnalysis) return null;
+  const lower = structure.toLowerCase();
+  for (const [key, category] of Object.entries(STRUCTURE_TO_FORCE_CATEGORY)) {
+    if (lower.includes(key)) {
+      const joint = forceAnalysis.joints.find(j => j.category === category);
+      if (joint) {
+        return {
+          forceN: Math.round(joint.totalForce * bodyWeightKg * 9.81),
+          status: joint.status,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function generateRecommendation(severity: 'mild' | 'moderate' | 'severe', primaryDysfunction: string): string {
+  if (severity === 'severe') {
+    return `Address ${primaryDysfunction} as priority — consider manual therapy, corrective exercise, and load modification`;
+  }
+  if (severity === 'moderate') {
+    return `Monitor ${primaryDysfunction} — targeted strengthening and mobility work recommended`;
+  }
+  return `Maintain awareness of ${primaryDysfunction} — preventive exercises may help`;
 }
 
 const BASELINE_FORCES: Record<string, number> = {
@@ -95,19 +186,29 @@ function severityFromScore(score: number): 'mild' | 'moderate' | 'severe' {
   return 'severe';
 }
 
-function buildCausalChainsFromCorrelation(correlationResult: CrossSystemCorrelationResult): CausalChainStep[][] {
+function buildCausalChainsFromCorrelation(
+  correlationResult: CrossSystemCorrelationResult,
+  forceAnalysis: ForceAnalysisResult | null,
+  bodyWeightKg: number
+): CausalChainStep[][] {
   const chains: CausalChainStep[][] = [];
 
   for (const pc of correlationResult.painCorrelations) {
     if (pc.rootCauseChain.length >= 2) {
-      const chain: CausalChainStep[] = pc.rootCauseChain.map((step, i) => ({
-        step: step.step,
-        structure: step.structure,
-        finding: step.finding,
-        mechanism: step.mechanism,
-        category: i === 0 ? 'root_cause' as const : i === pc.rootCauseChain.length - 1 ? 'symptom' as const : 'intermediate' as const,
-        severity: i === pc.rootCauseChain.length - 1 ? severityFromScore((pc.severity || 5) * 10) : 'moderate' as const,
-      }));
+      const chain: CausalChainStep[] = pc.rootCauseChain.map((step, i) => {
+        const forceData = resolveForceForStructure(step.structure, forceAnalysis, bodyWeightKg);
+        return {
+          step: step.step,
+          structure: step.structure,
+          finding: step.finding,
+          mechanism: step.mechanism,
+          category: i === 0 ? 'root_cause' as const : i === pc.rootCauseChain.length - 1 ? 'symptom' as const : 'intermediate' as const,
+          severity: i === pc.rootCauseChain.length - 1 ? severityFromScore((pc.severity || 5) * 10) : 'moderate' as const,
+          boneId: resolveStructureBone(step.structure),
+          forceN: forceData?.forceN ?? null,
+          forceStatus: forceData?.status ?? null,
+        };
+      });
       chains.push(chain);
     }
   }
@@ -117,7 +218,9 @@ function buildCausalChainsFromCorrelation(correlationResult: CrossSystemCorrelat
 
 function buildCausalChainsFromPathology(
   pathologyCompensation: PathologyCompensationResult,
-  compensatedOverrides: Record<string, Partial<MuscleOverride>>
+  compensatedOverrides: Record<string, Partial<MuscleOverride>>,
+  forceAnalysis: ForceAnalysisResult | null,
+  bodyWeightKg: number
 ): CausalChainStep[][] {
   const chains: CausalChainStep[][] = [];
 
@@ -127,42 +230,57 @@ function buildCausalChainsFromPathology(
 
   for (const [muscleId, override] of pathologicalMuscles) {
     const chain: CausalChainStep[] = [];
+    const muscleName = muscleId.replace(/_/g, ' ');
+    const rootForce = resolveForceForStructure(muscleName, forceAnalysis, bodyWeightKg);
     chain.push({
       step: 1,
-      structure: muscleId.replace(/_/g, ' '),
+      structure: muscleName,
       finding: `${override.pathology} detected`,
       mechanism: 'Primary tissue pathology',
       category: 'root_cause',
       severity: 'severe',
+      boneId: resolveStructureBone(muscleName),
+      forceN: rootForce?.forceN ?? null,
+      forceStatus: rootForce?.status ?? null,
     });
 
     const relatedROM = pathologyCompensation.romRestrictions.filter(r =>
-      r.reason.toLowerCase().includes(muscleId.replace(/_/g, ' ').toLowerCase())
+      r.reason.toLowerCase().includes(muscleName.toLowerCase())
     );
     if (relatedROM.length > 0) {
       const rom = relatedROM[0];
+      const romStructure = `${rom.joint} — ${rom.parameter}`;
+      const romForce = resolveForceForStructure(rom.joint, forceAnalysis, bodyWeightKg);
       chain.push({
         step: 2,
-        structure: `${rom.joint} — ${rom.parameter}`,
+        structure: romStructure,
         finding: `ROM restricted by ${rom.restrictionPercent}%`,
         mechanism: rom.reason,
         category: 'intermediate',
         severity: rom.restrictionPercent > 30 ? 'severe' : rom.restrictionPercent > 15 ? 'moderate' : 'mild',
+        boneId: resolveStructureBone(rom.joint),
+        forceN: romForce?.forceN ?? null,
+        forceStatus: romForce?.status ?? null,
       });
     }
 
     const relatedPostural = pathologyCompensation.posturalDeviations.filter(d =>
-      d.reason.toLowerCase().includes(muscleId.replace(/_/g, ' ').toLowerCase())
+      d.reason.toLowerCase().includes(muscleName.toLowerCase())
     );
     if (relatedPostural.length > 0) {
       const dev = relatedPostural[0];
+      const devStructure = `${dev.joint} — ${dev.parameter}`;
+      const devForce = resolveForceForStructure(dev.joint, forceAnalysis, bodyWeightKg);
       chain.push({
         step: chain.length + 1,
-        structure: `${dev.joint} — ${dev.parameter}`,
+        structure: devStructure,
         finding: `Deviated ${Math.abs(dev.deviationDegrees).toFixed(1)}°`,
         mechanism: dev.reason,
         category: 'symptom',
         severity: Math.abs(dev.deviationDegrees) > 10 ? 'severe' : Math.abs(dev.deviationDegrees) > 5 ? 'moderate' : 'mild',
+        boneId: resolveStructureBone(dev.joint),
+        forceN: devForce?.forceN ?? null,
+        forceStatus: devForce?.status ?? null,
       });
     }
 
@@ -218,14 +336,65 @@ function buildCOMShift(forceAnalysis: ForceAnalysisResult): COMShiftData | null 
   };
 }
 
+function buildFootPressure(forceAnalysis: ForceAnalysisResult): FootPressureData | null {
+  const com = forceAnalysis.totalBodyCOM;
+  if (!com) return null;
+
+  const shift = forceAnalysis.baseSupportShift ?? 0;
+  const leftPct = Math.round(Math.max(10, Math.min(90, 50 + com.x * -5)));
+  const rightPct = 100 - leftPct;
+
+  const apShiftMm = Math.round(com.y * 10);
+  let ap: FootPressureData['anteriorPosterior'] = 'neutral';
+  if (apShiftMm > 3) ap = 'anterior';
+  else if (apShiftMm < -3) ap = 'posterior';
+
+  let clinicalNote = 'Symmetrical weight distribution';
+  const asymmetry = Math.abs(leftPct - 50);
+  if (asymmetry > 15) {
+    clinicalNote = `Significant ${leftPct > 50 ? 'left' : 'right'}-side loading — assess for lateral shift, hip drop, or scoliosis`;
+  } else if (asymmetry > 5) {
+    clinicalNote = `Mild ${leftPct > 50 ? 'left' : 'right'}-side predominance`;
+  }
+  if (ap !== 'neutral') {
+    clinicalNote += `. ${ap === 'anterior' ? 'Anterior shift — forefoot loading' : 'Posterior shift — heel loading'}`;
+  }
+
+  return { leftPct, rightPct, anteriorPosterior: ap, apShiftMm, clinicalNote };
+}
+
 function buildCompensationCards(
   correlationResult: CrossSystemCorrelationResult | null,
-  pathologyCompensation: PathologyCompensationResult | null
+  pathologyCompensation: PathologyCompensationResult | null,
+  forceAnalysis: ForceAnalysisResult | null,
+  bodyWeightKg: number
 ): CompensationCard[] {
   const cards: CompensationCard[] = [];
+  const g = 9.81;
 
   if (correlationResult?.globalCompensations) {
     for (const comp of correlationResult.globalCompensations) {
+      const forceImpacts: CompensationForceImpact[] = [];
+      if (forceAnalysis) {
+        for (const structure of comp.compensatingStructures) {
+          const forceData = resolveForceForStructure(structure, forceAnalysis, bodyWeightKg);
+          const baseline = BASELINE_FORCES[
+            Object.entries(STRUCTURE_TO_FORCE_CATEGORY).find(([k]) => structure.toLowerCase().includes(k))?.[1] ?? ''
+          ];
+          if (forceData && baseline) {
+            const baselineN = Math.round(baseline * bodyWeightKg * g);
+            const changeN = forceData.forceN - baselineN;
+            if (Math.abs(changeN) > 20) {
+              forceImpacts.push({
+                joint: structure,
+                forceChangeN: changeN,
+                direction: changeN > 0 ? 'increased' : 'decreased',
+              });
+            }
+          }
+        }
+      }
+
       cards.push({
         id: comp.id,
         title: comp.label,
@@ -234,6 +403,8 @@ function buildCompensationCards(
         severity: comp.severity,
         clinicalSignificance: comp.clinicalSignificance,
         affectedChains: comp.affectedChains,
+        forceImpacts,
+        recommendation: generateRecommendation(comp.severity, comp.primaryDysfunction),
       });
     }
   }
@@ -250,6 +421,8 @@ function buildCompensationCards(
           severity: finding.severity,
           clinicalSignificance: finding.description,
           affectedChains: [],
+          forceImpacts: [],
+          recommendation: generateRecommendation(finding.severity, finding.title),
         });
       }
     }
@@ -383,10 +556,10 @@ export function analyzeInjuryMechanism(input: {
 
   let causalChains: CausalChainStep[][] = [];
   if (correlationResult) {
-    causalChains = buildCausalChainsFromCorrelation(correlationResult);
+    causalChains = buildCausalChainsFromCorrelation(correlationResult, forceAnalysis, bodyWeightKg);
   }
   if (pathologyCompensation) {
-    const pathChains = buildCausalChainsFromPathology(pathologyCompensation, compensatedOverrides);
+    const pathChains = buildCausalChainsFromPathology(pathologyCompensation, compensatedOverrides, forceAnalysis, bodyWeightKg);
     for (const pc of pathChains) {
       const isDuplicate = causalChains.some(
         existing => existing[0]?.structure === pc[0]?.structure && existing[0]?.finding === pc[0]?.finding
@@ -400,8 +573,9 @@ export function analyzeInjuryMechanism(input: {
     : [];
 
   const comShift = forceAnalysis ? buildCOMShift(forceAnalysis) : null;
+  const footPressure = forceAnalysis ? buildFootPressure(forceAnalysis) : null;
 
-  const compensationCards = buildCompensationCards(correlationResult, pathologyCompensation);
+  const compensationCards = buildCompensationCards(correlationResult, pathologyCompensation, forceAnalysis, bodyWeightKg);
 
   const kineticChainDysfunctions = matchKineticChainDysfunctions(
     correlationResult, pathologyCompensation, compensatedOverrides
@@ -411,13 +585,24 @@ export function analyzeInjuryMechanism(input: {
 
   const overallMechanismSummary = buildMechanismSummary(causalChains, compensationCards, comShift, loadRedistribution);
 
+  const causalChainBoneIds: string[] = [];
+  for (const chain of causalChains) {
+    for (const step of chain) {
+      if (step.boneId && !causalChainBoneIds.includes(step.boneId)) {
+        causalChainBoneIds.push(step.boneId);
+      }
+    }
+  }
+
   return {
     causalChains,
     loadRedistribution,
     comShift,
+    footPressure,
     compensationCards,
     kineticChainDysfunctions,
     topContributors,
     overallMechanismSummary,
+    causalChainBoneIds,
   };
 }

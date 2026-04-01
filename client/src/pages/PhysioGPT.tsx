@@ -3009,9 +3009,12 @@ ${ddxList}`;
   }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, compensatedOverrides, crossMuscleEffects]);
 
   const hudForceAnalysis = useMemo(() => {
-    const base = (forceMode && forceAnalysis) ? forceAnalysis : calculatePosturalForces(finalModelConfig);
-    const multiplier = (showWhatIfSimulation && whatIfSimulatedConfig?.forceMultiplier !== undefined)
-      ? whatIfSimulatedConfig.forceMultiplier
+    const useSimulatedForces = showWhatIfSimulation && whatIfSimulatedConfig;
+    const base = (forceMode && forceAnalysis && !useSimulatedForces)
+      ? forceAnalysis
+      : calculatePosturalForces(finalModelConfig);
+    const multiplier = useSimulatedForces
+      ? (whatIfSimulatedConfig.forceMultiplier ?? 1.0)
       : globalForceMultiplier;
     if (multiplier !== 1.0) {
       const adjusted = JSON.parse(JSON.stringify(base));

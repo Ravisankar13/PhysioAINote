@@ -146,7 +146,7 @@ export default function WhatIfSimulationPanel({
         <div className="bg-gray-800/60 rounded-md p-2 space-y-2 border border-gray-700/50">
           <div className="flex gap-1">
             <button
-              onClick={() => setCustomTargetType('muscle')}
+              onClick={() => { setCustomTargetType('muscle'); setCustomTarget(MUSCLE_TARGETS[0].id); }}
               className={`flex-1 text-[9px] py-1 rounded ${customTargetType === 'muscle' ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/40' : 'bg-gray-700/50 text-gray-400 border border-gray-600/30'}`}
             >
               Muscle

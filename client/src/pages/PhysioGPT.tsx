@@ -3034,9 +3034,10 @@ ${ddxList}`;
         j.tension *= multiplier;
         j.shear *= multiplier;
         j.totalForce *= multiplier;
-        if (j.totalForce < 500) j.status = 'low';
-        else if (j.totalForce < 1500) j.status = 'moderate';
-        else if (j.totalForce < 3000) j.status = 'high';
+        const maxBw = Math.max(j.compression, j.tension);
+        if (maxBw < 0.8) j.status = 'low';
+        else if (maxBw < 1.5) j.status = 'moderate';
+        else if (maxBw < 3.0) j.status = 'high';
         else j.status = 'very_high';
       }
       return adjusted;

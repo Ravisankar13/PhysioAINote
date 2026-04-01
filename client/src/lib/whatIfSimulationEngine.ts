@@ -102,8 +102,8 @@ const SCENARIO_TO_MUSCLE_IDS: Record<string, string[]> = {
   scapula_l: ['l_lower_trap', 'l_rhomboids', 'l_serratus_ant'],
   scapula_r: ['r_lower_trap', 'r_rhomboids', 'r_serratus_ant'],
   spine: ['erector_spinae_thoracic', 'erector_spinae_lumbar', 'multifidus'],
-  deltoid_l: ['l_deltoid'],
-  deltoid_r: ['r_deltoid'],
+  deltoid_l: ['l_ant_deltoid', 'l_mid_deltoid', 'l_post_deltoid'],
+  deltoid_r: ['r_ant_deltoid', 'r_mid_deltoid', 'r_post_deltoid'],
   neck: ['deep_neck_flexors', 'l_upper_trap', 'r_upper_trap'],
   chest: ['l_pec_major', 'r_pec_major', 'l_pec_minor', 'r_pec_minor'],
   shin_l: ['l_tib_ant'],
@@ -380,9 +380,10 @@ function buildCorrelationInput(
       j.tension *= forceMultiplier;
       j.shear *= forceMultiplier;
       j.totalForce *= forceMultiplier;
-      if (j.totalForce < 500) j.status = 'low';
-      else if (j.totalForce < 1500) j.status = 'moderate';
-      else if (j.totalForce < 3000) j.status = 'high';
+      const maxBw = Math.max(j.compression, j.tension);
+      if (maxBw < 0.8) j.status = 'low';
+      else if (maxBw < 1.5) j.status = 'moderate';
+      else if (maxBw < 3.0) j.status = 'high';
       else j.status = 'very_high';
     }
   }

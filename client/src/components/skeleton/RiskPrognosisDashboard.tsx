@@ -16,13 +16,11 @@ import {
   Zap,
   Heart,
   Target,
-  ArrowRight,
 } from "lucide-react";
 import type { ForceAnalysisResult, JointSurfaceForce } from "@/lib/posturalForceEngine";
 import type { PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
-import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
-import type { IndividualMuscle } from "@/lib/muscleBiomechanicsEngine";
-import { calculateFullBiomechanics, type BiomechanicsResult } from "@/lib/biomechanicsEngine";
+import type { MuscleOverride, IndividualMuscle } from "@/lib/muscleBiomechanicsEngine";
+import { calculateFullBiomechanics } from "@/lib/biomechanicsEngine";
 import { calculateInjuryRisks, type InjuryRiskResult, type RiskLevel, type RiskScore, type BilateralRisk } from "@/lib/injuryRiskEngine";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type TreatmentInput } from "@/lib/treatmentPathwayEngine";
 import type { CrossSystemCorrelationResult } from "@/lib/crossSystemCorrelation";
@@ -156,9 +154,8 @@ export default function RiskPrognosisDashboard({
   const injuryRiskResult = injuryRiskComputed.result;
 
   const treatmentPlanComputed = useMemo((): { result: TreatmentPlan | null; error: string | null } => {
-    if (!forceAnalysis) return { result: null, error: null };
     try {
-      const forces = forceAnalysis.joints || [];
+      const forces = forceAnalysis?.joints || [];
       const muscles = muscleAnalysis || [];
       const markers = painMarkers.map(pm => ({
         id: pm.id,

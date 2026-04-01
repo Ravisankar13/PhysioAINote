@@ -403,7 +403,9 @@ function buildCorrelationInput(
       kineticChains: KINETIC_CHAINS,
       bodyWeightKg,
     });
-  } catch (_e) { /* optional */ }
+  } catch (e) {
+    console.warn('[WhatIf] Correlation computation failed:', e instanceof Error ? e.message : e);
+  }
 
   return { forces, muscles, correlation };
 }
@@ -478,7 +480,9 @@ export function computeWhatIfComparison(
   try {
     beforeRisk = calculateInjuryRisks(calculateFullBiomechanics(170, bodyWeightKg, safeModel(baseModelConfig)));
     afterRisk = calculateInjuryRisks(calculateFullBiomechanics(170, bodyWeightKg, safeModel(simConfig)));
-  } catch (_e) { /* optional */ }
+  } catch (e) {
+    console.warn('[WhatIf] Risk computation failed:', e instanceof Error ? e.message : e);
+  }
 
   const riskDeltas: RiskDelta[] = [];
   const overallBefore = beforeRisk?.overallRiskScore ?? 0;
@@ -542,7 +546,9 @@ export function computeWhatIfComparison(
     causalChainsTotal = mechanismBefore.causalChains.length;
     causalChainsResolved = causalChainsTotal - mechanismAfter.causalChains.length;
     if (causalChainsResolved < 0) causalChainsResolved = 0;
-  } catch (_e) { /* optional */ }
+  } catch (e) {
+    console.warn('[WhatIf] Mechanism computation failed:', e instanceof Error ? e.message : e);
+  }
 
   const painPredictions: PainPredictionDelta[] = [];
   const painRegions = ['lumbar', 'cervical', 'knee', 'hip', 'ankle', 'shoulder'];

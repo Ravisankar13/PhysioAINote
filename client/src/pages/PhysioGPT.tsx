@@ -4079,11 +4079,12 @@ ${ddxList}`;
               enableZoomTool={zoomToolMode}
               onLandmarkSelect={handleLandmarkSelect}
               forceOverlay={(() => {
-                if (forceMode && forceAnalysis) {
-                  const base = forceAnalysis.joints.filter(j => enabledForceJoints.has(j.id));
+                const activeForceData = hudForceAnalysis ?? (forceMode && forceAnalysis ? forceAnalysis : null);
+                if (forceMode && activeForceData) {
+                  const base = activeForceData.joints.filter(j => enabledForceJoints.has(j.id));
                   if (showInjuryMechanism && mechanismBoneIds.length > 0) {
                     const boneSet = new Set(mechanismBoneIds);
-                    const mechanismJoints = forceAnalysis.joints.filter(j => boneSet.has(j.boneName) && !enabledForceJoints.has(j.id));
+                    const mechanismJoints = activeForceData.joints.filter(j => boneSet.has(j.boneName) && !enabledForceJoints.has(j.id));
                     return [...base, ...mechanismJoints];
                   }
                   return base;

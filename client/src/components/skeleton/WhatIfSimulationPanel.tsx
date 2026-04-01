@@ -401,6 +401,30 @@ export default function WhatIfSimulationPanel({
             )}
           </div>
 
+          {comparison.causalChainsTotal > 0 && (
+            <div>
+              <span className="text-[10px] font-semibold text-gray-300 mb-1 block">Injury Mechanism</span>
+              <div className="flex items-center gap-2 text-[9px]">
+                <span className="text-gray-400">Causal Chains</span>
+                <span className="font-mono text-gray-500">{comparison.causalChainsTotal}</span>
+                <ArrowRight className="h-2.5 w-2.5 text-gray-600" />
+                <span className={`font-mono font-bold ${comparison.causalChainsResolved > 0 ? 'text-green-400' : 'text-gray-400'}`}>
+                  {comparison.causalChainsTotal - comparison.causalChainsResolved}
+                </span>
+                {comparison.causalChainsResolved > 0 && (
+                  <Badge variant="outline" className="text-[7px] px-0.5 py-0 text-green-400 border-green-500/30">
+                    {comparison.causalChainsResolved} resolved
+                  </Badge>
+                )}
+              </div>
+              {comparison.mechanismAfter && (
+                <p className="text-[8px] text-gray-500 mt-1 line-clamp-2">
+                  {comparison.mechanismAfter.overallMechanismSummary}
+                </p>
+              )}
+            </div>
+          )}
+
           {comparison.painPredictions && comparison.painPredictions.length > 0 && (
             <div>
               <span className="text-[10px] font-semibold text-gray-300 mb-1 block">Pain Predictions</span>

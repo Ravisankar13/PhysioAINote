@@ -4,6 +4,7 @@ import { computePathologyCompensation } from './pathologyCompensationEngine';
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult } from './crossSystemCorrelation';
 import { calculateFullBiomechanics } from './biomechanicsEngine';
 import { calculateInjuryRisks, type InjuryRiskResult, type RiskScore, type BilateralRisk } from './injuryRiskEngine';
+import { analyzeInjuryMechanism, type InjuryMechanismResult } from './injuryMechanismEngine';
 import { KINETIC_CHAINS } from './kineticChainExplorer';
 
 export type InterventionType = 'strengthen' | 'stretch' | 'mobilize' | 'offload';
@@ -80,6 +81,10 @@ export interface WhatIfComparisonResult {
   painPredictions: PainPredictionDelta[];
   correlationBefore: CrossSystemCorrelationResult | null;
   correlationAfter: CrossSystemCorrelationResult | null;
+  mechanismBefore: InjuryMechanismResult | null;
+  mechanismAfter: InjuryMechanismResult | null;
+  causalChainsResolved: number;
+  causalChainsTotal: number;
   topImprovements: string[];
   simulatedModelConfig: Record<string, Record<string, number>>;
   simulatedOverrides: Record<string, Partial<MuscleOverride>>;
@@ -89,7 +94,7 @@ export interface WhatIfComparisonResult {
 const SCENARIO_TO_MUSCLE_IDS: Record<string, string[]> = {
   glute_l: ['l_glut_max', 'l_glut_med', 'l_glut_min'],
   glute_r: ['r_glut_max', 'r_glut_med', 'r_glut_min'],
-  core: ['rectus_abdominis', 'l_int_oblique', 'r_int_oblique', 'l_ext_oblique', 'r_ext_oblique', 'transversus_abdominis'],
+  core: ['rectus_abdominis', 'obliques', 'transverse_abdominis'],
   quad_l: ['l_rect_fem', 'l_vast_lat', 'l_vast_med', 'l_vast_int'],
   quad_r: ['r_rect_fem', 'r_vast_lat', 'r_vast_med', 'r_vast_int'],
   calf_l: ['l_gastroc', 'l_soleus'],
@@ -100,7 +105,7 @@ const SCENARIO_TO_MUSCLE_IDS: Record<string, string[]> = {
   deltoid_l: ['l_deltoid'],
   deltoid_r: ['r_deltoid'],
   neck: ['deep_neck_flexors', 'l_upper_trap', 'r_upper_trap'],
-  chest: ['l_pectoralis', 'r_pectoralis'],
+  chest: ['l_pec_major', 'r_pec_major', 'l_pec_minor', 'r_pec_minor'],
   shin_l: ['l_tib_ant'],
   shin_r: ['r_tib_ant'],
 };
@@ -515,6 +520,30 @@ export function computeWhatIfComparison(
     });
   }
 
+  let mechanismBefore: InjuryMechanismResult | null = null;
+  let mechanismAfter: InjuryMechanismResult | null = null;
+  let causalChainsResolved = 0;
+  let causalChainsTotal = 0;
+  try {
+    mechanismBefore = analyzeInjuryMechanism({
+      forceAnalysis: before.forces,
+      pathologyCompensation: beforePathology,
+      correlationResult: before.correlation,
+      compensatedOverrides: baseOverrides,
+      bodyWeightKg,
+    });
+    mechanismAfter = analyzeInjuryMechanism({
+      forceAnalysis: after.forces,
+      pathologyCompensation: afterPathology,
+      correlationResult: after.correlation,
+      compensatedOverrides: simOverrides,
+      bodyWeightKg,
+    });
+    causalChainsTotal = mechanismBefore.causalChains.length;
+    causalChainsResolved = causalChainsTotal - mechanismAfter.causalChains.length;
+    if (causalChainsResolved < 0) causalChainsResolved = 0;
+  } catch (_e) { /* optional */ }
+
   const painPredictions: PainPredictionDelta[] = [];
   const painRegions = ['lumbar', 'cervical', 'knee', 'hip', 'ankle', 'shoulder'];
   for (const region of painRegions) {
@@ -565,6 +594,9 @@ export function computeWhatIfComparison(
   for (const pp of painPredictions.filter(p => p.delta < 0).slice(0, 2)) {
     topImprovements.push(`${pp.region} pain: ↓${Math.abs(pp.delta)}% predicted`);
   }
+  if (causalChainsResolved > 0) {
+    topImprovements.push(`${causalChainsResolved}/${causalChainsTotal} causal chains resolved`);
+  }
 
   return {
     scenarios,
@@ -580,6 +612,10 @@ export function computeWhatIfComparison(
     painPredictions: painPredictions.sort((a, b) => a.delta - b.delta),
     correlationBefore: before.correlation,
     correlationAfter: after.correlation,
+    mechanismBefore,
+    mechanismAfter,
+    causalChainsResolved,
+    causalChainsTotal,
     topImprovements,
     simulatedModelConfig: simConfig,
     simulatedOverrides: simOverrides,

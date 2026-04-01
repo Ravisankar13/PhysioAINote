@@ -20,7 +20,10 @@ import {
   Zap,
   FileText,
   Save,
+  Brain,
 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { classifyPainMechanism, getNerveRootForRegion, MECHANISM_COLORS } from "@/lib/neurologyMap";
 import { getKineticChainConnections, type KineticChainConnection } from "@/lib/kineticChainMap";
 import type { AnatomicalRegion } from "@/components/skeleton/PureThreeGLBViewer";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
@@ -90,7 +93,7 @@ interface ClinicalBubbleProps {
   onSubjectiveHistoryChange?: (markerId: string, history: string) => void;
 }
 
-type TabType = "ddx" | "questions" | "subjective" | "assessment" | "treatment" | "exercises";
+type TabType = "ddx" | "questions" | "subjective" | "assessment" | "treatment" | "exercises" | "behaviour";
 
 const TABS: { id: TabType; label: string; icon: any }[] = [
   { id: "ddx", label: "DDx", icon: Stethoscope },
@@ -99,6 +102,7 @@ const TABS: { id: TabType; label: string; icon: any }[] = [
   { id: "assessment", label: "Obj", icon: ClipboardCheck },
   { id: "treatment", label: "Tx", icon: Pill },
   { id: "exercises", label: "Ex", icon: Dumbbell },
+  { id: "behaviour", label: "Sx", icon: Brain },
 ];
 
 export default function ClinicalBubble({
@@ -128,6 +132,12 @@ export default function ClinicalBubble({
   const [refining, setRefining] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [expandedConnection, setExpandedConnection] = useState<string | null>(null);
+  const [behaviourData, setBehaviourData] = useState<{
+    flexion: string; extension: string; loading: string; rest: string;
+    morning: string; fatigue: string; aggravatingFactors: string[];
+    easingFactors: string[]; clinicalPattern: string;
+  } | null>(null);
+  const [behaviourLoading, setBehaviourLoading] = useState(false);
   const localHistoryRef = useRef(localHistory);
   localHistoryRef.current = localHistory;
 
@@ -514,6 +524,110 @@ export default function ClinicalBubble({
               )}
             </>
           ) : null}
+
+          {activeTab === "behaviour" && (
+            <div className="space-y-2">
+              {!behaviourData && !behaviourLoading && (
+                <button
+                  onClick={async () => {
+                    setBehaviourLoading(true);
+                    try {
+                      const mechanism = classifyPainMechanism(region, undefined, markerType);
+                      const nerveRoots = getNerveRootForRegion(region);
+                      const result = await apiRequest('/api/pain-intelligence/behaviour', 'POST', {
+                        region, markerType, mechanism,
+                        nerveRoot: nerveRoots[0]?.root,
+                      });
+                      setBehaviourData(result);
+                    } catch {
+                      setBehaviourData(null);
+                    } finally {
+                      setBehaviourLoading(false);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 text-[11px] font-medium rounded-lg py-2 transition-colors"
+                >
+                  <Brain className="h-3 w-3" />
+                  Analyze Symptom Behaviour
+                </button>
+              )}
+              {behaviourLoading && (
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <Loader2 className="h-4 w-4 text-purple-400 animate-spin" />
+                  <span className="text-[11px] text-gray-400">Analyzing behaviour patterns...</span>
+                </div>
+              )}
+              {behaviourData && (
+                <div className="space-y-2">
+                  <div className="bg-purple-500/10 rounded-lg p-2 border border-purple-500/20">
+                    <span className="text-[9px] text-purple-300 font-semibold uppercase tracking-wide">Clinical Pattern</span>
+                    <p className="text-[11px] text-white mt-0.5 leading-relaxed">{behaviourData.clinicalPattern}</p>
+                  </div>
+                  {[
+                    { label: 'Flexion', val: behaviourData.flexion },
+                    { label: 'Extension', val: behaviourData.extension },
+                    { label: 'Loading', val: behaviourData.loading },
+                    { label: 'Rest', val: behaviourData.rest },
+                    { label: 'Morning', val: behaviourData.morning },
+                    { label: 'Fatigue', val: behaviourData.fatigue },
+                  ].map(({ label, val }) => (
+                    <div key={label} className="bg-white/5 rounded-lg p-2">
+                      <span className="text-[10px] text-purple-300 font-medium">{label}</span>
+                      <p className="text-[10px] text-gray-300 mt-0.5 leading-relaxed">{val}</p>
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-red-500/10 rounded-lg p-2 border border-red-500/20">
+                      <span className="text-[9px] text-red-300 font-semibold">Aggravating</span>
+                      <ul className="mt-1 space-y-0.5">
+                        {behaviourData.aggravatingFactors.map((f, i) => (
+                          <li key={i} className="text-[9px] text-gray-400 flex items-start gap-1">
+                            <span className="text-red-400 mt-0.5">•</span> {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="bg-green-500/10 rounded-lg p-2 border border-green-500/20">
+                      <span className="text-[9px] text-green-300 font-semibold">Easing</span>
+                      <ul className="mt-1 space-y-0.5">
+                        {behaviourData.easingFactors.map((f, i) => (
+                          <li key={i} className="text-[9px] text-gray-400 flex items-start gap-1">
+                            <span className="text-green-400 mt-0.5">•</span> {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {(() => {
+                const mechanism = classifyPainMechanism(region, undefined, markerType);
+                const mc = MECHANISM_COLORS[mechanism];
+                const nerveRoots = getNerveRootForRegion(region);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: mc, boxShadow: `0 0 6px ${mc}` }} />
+                      <span className="text-[11px] text-white font-medium capitalize">{mechanism.replace(/_/g, ' ')}</span>
+                    </div>
+                    {nerveRoots.length > 0 && (
+                      <div className="bg-blue-500/10 rounded-lg p-2 border border-blue-500/20">
+                        <span className="text-[9px] text-blue-300 font-semibold uppercase tracking-wide">Nerve Roots</span>
+                        <div className="mt-1 space-y-1">
+                          {nerveRoots.slice(0, 3).map(nr => (
+                            <div key={nr.root} className="text-[10px]">
+                              <span className="text-blue-200 font-medium">{nr.root}</span>
+                              <span className="text-gray-400 ml-1.5">{nr.dermatome.sensoryTerritory}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         <div className="px-3 py-2 border-t border-gray-700/50 flex gap-2">

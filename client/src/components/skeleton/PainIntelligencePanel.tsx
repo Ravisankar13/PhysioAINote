@@ -37,6 +37,8 @@ interface PainIntelligencePanelProps {
   onClose: () => void;
   onHighlightBones?: (bones: string[]) => void;
   onClearHighlights?: () => void;
+  onNerveRootLabels?: (labels: Array<{ root: string; boneName: string }>) => void;
+  onReferralZoneBones?: (bones: string[]) => void;
 }
 
 const EFFECT_ICONS: Record<string, typeof ArrowUp> = {
@@ -51,7 +53,7 @@ const EFFECT_COLORS: Record<string, string> = {
   neutral: 'text-gray-400',
 };
 
-export default function PainIntelligencePanel({ marker, onClose, onHighlightBones, onClearHighlights }: PainIntelligencePanelProps) {
+export default function PainIntelligencePanel({ marker, onClose, onHighlightBones, onClearHighlights, onNerveRootLabels, onReferralZoneBones }: PainIntelligencePanelProps) {
   const [behaviourData, setBehaviourData] = useState<BehaviourData | null>(null);
   const [behaviourLoading, setBehaviourLoading] = useState(false);
   const [behaviourExpanded, setBehaviourExpanded] = useState(false);
@@ -69,14 +71,28 @@ export default function PainIntelligencePanel({ marker, onClose, onHighlightBone
     : [];
 
   useEffect(() => {
-    if (mechanism === 'neuropathic' && nerveRoots.length > 0 && onHighlightBones) {
+    if (mechanism === 'neuropathic' && nerveRoots.length > 0) {
       const bones = nerveRoots.flatMap(nr => nr.dermatome.skeletonBones);
       const unique = [...new Set(bones)];
-      onHighlightBones(unique);
-    } else if (mechanism === 'myofascial' && triggerReferrals.length > 0 && onHighlightBones) {
-      const bones = triggerReferrals.flatMap(tr => tr.referralZoneBones);
-      const unique = [...new Set(bones)];
-      onHighlightBones(unique);
+      onHighlightBones?.(unique);
+
+      const labels = nerveRoots.map(nr => ({
+        root: nr.root,
+        boneName: nr.dermatome.skeletonBones[0],
+      }));
+      onNerveRootLabels?.(labels);
+      onReferralZoneBones?.([]);
+    } else if (mechanism === 'myofascial' && triggerReferrals.length > 0) {
+      const refBones = triggerReferrals.flatMap(tr => tr.referralZoneBones);
+      const uniqueRef = [...new Set(refBones)];
+      onReferralZoneBones?.(uniqueRef);
+
+      onHighlightBones?.([]);
+      onNerveRootLabels?.([]);
+    } else {
+      onHighlightBones?.([]);
+      onNerveRootLabels?.([]);
+      onReferralZoneBones?.([]);
     }
     return () => {
       if (onClearHighlights) onClearHighlights();

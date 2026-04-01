@@ -1667,6 +1667,8 @@ interface PureThreeGLBViewerProps {
   treatmentBoneNames?: string[];
   onBoneScreenPositions?: (positions: Array<{ boneName: string; screenX: number; screenY: number; visible: boolean }>) => void;
   dermatomeHighlightBones?: string[];
+  nerveRootLabels?: Array<{ root: string; boneName: string }>;
+  referralZoneBones?: string[];
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2128,6 +2130,8 @@ export default function PureThreeGLBViewer({
   treatmentBoneNames,
   onBoneScreenPositions,
   dermatomeHighlightBones,
+  nerveRootLabels,
+  referralZoneBones,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -6473,6 +6477,103 @@ export default function PureThreeGLBViewer({
       });
     }
   }, [dermatomeHighlightBones]);
+
+  const nerveRootLabelSpritesRef = useRef<THREE.Sprite[]>([]);
+
+  useEffect(() => {
+    for (const sprite of nerveRootLabelSpritesRef.current) {
+      sprite.parent?.remove(sprite);
+      sprite.material.map?.dispose();
+      sprite.material.dispose();
+    }
+    nerveRootLabelSpritesRef.current = [];
+
+    if (!nerveRootLabels || nerveRootLabels.length === 0) return;
+    if (!sceneRef.current) return;
+
+    const bRef = bonesRef.current;
+
+    for (const { root, boneName } of nerveRootLabels) {
+      const bone = bRef[boneName];
+      if (!bone) continue;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) continue;
+
+      ctx.fillStyle = 'rgba(30, 30, 60, 0.85)';
+      ctx.beginPath();
+      ctx.roundRect(4, 4, 120, 56, 10);
+      ctx.fill();
+      ctx.strokeStyle = '#44aaff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(4, 4, 120, 56, 10);
+      ctx.stroke();
+
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillStyle = '#88ccff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(root, 64, 32);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(0.08, 0.04, 1);
+      sprite.position.set(0.03, 0.02, 0);
+      sprite.renderOrder = 999;
+
+      bone.add(sprite);
+      nerveRootLabelSpritesRef.current.push(sprite);
+    }
+  }, [nerveRootLabels]);
+
+  const referralZoneHighlightRef = useRef<Array<{ mesh: THREE.Mesh; origMaterial: THREE.Material; wasVisible: boolean }>>([]);
+
+  useEffect(() => {
+    for (const entry of referralZoneHighlightRef.current) {
+      entry.mesh.material = entry.origMaterial;
+      if (!entry.wasVisible) entry.mesh.visible = false;
+    }
+    referralZoneHighlightRef.current = [];
+
+    if (!referralZoneBones || referralZoneBones.length === 0) return;
+    if (!sceneRef.current) return;
+
+    const bRef = bonesRef.current;
+    const referralColor = new THREE.Color(0xff6644);
+
+    for (const boneName of referralZoneBones) {
+      const bone = bRef[boneName];
+      if (!bone) continue;
+
+      bone.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const origMat = child.material as THREE.MeshStandardMaterial;
+          const clonedMat = origMat.clone() as THREE.MeshStandardMaterial;
+          clonedMat.emissive = referralColor;
+          clonedMat.emissiveIntensity = 0.5;
+          clonedMat.transparent = true;
+          clonedMat.opacity = 0.5;
+          clonedMat.needsUpdate = true;
+
+          referralZoneHighlightRef.current.push({
+            mesh: child,
+            origMaterial: origMat,
+            wasVisible: child.visible,
+          });
+
+          child.material = clonedMat;
+          child.visible = true;
+        }
+      });
+    }
+  }, [referralZoneBones]);
 
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {

@@ -466,6 +466,8 @@ export default function PhysioGPT() {
   const [clinicalBubbleResults, setClinicalBubbleResults] = useState<Record<string, { data: ClinicalBubbleData; severity: string; region: string }>>({});
   const [showPainIntelligence, setShowPainIntelligence] = useState(false);
   const [dermatomeHighlightBones, setDermatomeHighlightBones] = useState<string[]>([]);
+  const [nerveRootLabels, setNerveRootLabels] = useState<Array<{ root: string; boneName: string }>>([]);
+  const [referralZoneBones, setReferralZoneBones] = useState<string[]>([]);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
@@ -3731,6 +3733,8 @@ ${ddxList}`;
               treatmentBoneNames={treatmentBoneNames}
               onBoneScreenPositions={handleBoneScreenPositions}
               dermatomeHighlightBones={dermatomeHighlightBones}
+              nerveRootLabels={nerveRootLabels}
+              referralZoneBones={referralZoneBones}
               enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle'}
               onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
                 if (scarPlacementMode) {
@@ -6249,9 +6253,11 @@ ${ddxList}`;
               <div className="absolute top-2 right-2 z-50 animate-in slide-in-from-right-2 duration-200">
                 <PainIntelligencePanel
                   marker={clinicalBubbleMarker}
-                  onClose={() => { setShowPainIntelligence(false); setDermatomeHighlightBones([]); }}
+                  onClose={() => { setShowPainIntelligence(false); setDermatomeHighlightBones([]); setNerveRootLabels([]); setReferralZoneBones([]); }}
                   onHighlightBones={setDermatomeHighlightBones}
-                  onClearHighlights={() => setDermatomeHighlightBones([])}
+                  onClearHighlights={() => { setDermatomeHighlightBones([]); setNerveRootLabels([]); setReferralZoneBones([]); }}
+                  onNerveRootLabels={setNerveRootLabels}
+                  onReferralZoneBones={setReferralZoneBones}
                 />
               </div>
             )}

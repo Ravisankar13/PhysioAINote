@@ -578,24 +578,28 @@ export default function ClinicalBubble({
                     { label: 'Rest', val: behaviourData.rest },
                     { label: 'Morning', val: behaviourData.morning },
                     { label: 'Fatigue', val: behaviourData.fatigue },
-                  ].map(({ label, val }) => (
-                    <div key={label} className="bg-white/5 rounded-lg p-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-purple-300 font-medium">{label}</span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                          val.effect === 'worse' ? 'bg-red-500/20 text-red-300' :
-                          val.effect === 'better' ? 'bg-green-500/20 text-green-300' :
-                          'bg-gray-500/20 text-gray-300'
-                        }`}>{val.effect}</span>
+                  ].filter(({ val }) => val && typeof val === 'object').map(({ label, val }) => {
+                    const effect = val?.effect || 'neutral';
+                    const explanation = val?.explanation || '';
+                    return (
+                      <div key={label} className="bg-white/5 rounded-lg p-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-purple-300 font-medium">{label}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                            effect === 'worse' ? 'bg-red-500/20 text-red-300' :
+                            effect === 'better' ? 'bg-green-500/20 text-green-300' :
+                            'bg-gray-500/20 text-gray-300'
+                          }`}>{effect}</span>
+                        </div>
+                        {explanation && <p className="text-[10px] text-gray-300 mt-0.5 leading-relaxed">{explanation}</p>}
                       </div>
-                      <p className="text-[10px] text-gray-300 mt-0.5 leading-relaxed">{val.explanation}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-red-500/10 rounded-lg p-2 border border-red-500/20">
                       <span className="text-[9px] text-red-300 font-semibold">Aggravating</span>
                       <ul className="mt-1 space-y-0.5">
-                        {behaviourData.aggravating_factors.map((f, i) => (
+                        {(behaviourData.aggravating_factors || []).map((f, i) => (
                           <li key={i} className="text-[9px] text-gray-400 flex items-start gap-1">
                             <span className="text-red-400 mt-0.5">•</span> {f}
                           </li>
@@ -605,7 +609,7 @@ export default function ClinicalBubble({
                     <div className="bg-green-500/10 rounded-lg p-2 border border-green-500/20">
                       <span className="text-[9px] text-green-300 font-semibold">Easing</span>
                       <ul className="mt-1 space-y-0.5">
-                        {behaviourData.easing_factors.map((f, i) => (
+                        {(behaviourData.easing_factors || []).map((f, i) => (
                           <li key={i} className="text-[9px] text-gray-400 flex items-start gap-1">
                             <span className="text-green-400 mt-0.5">•</span> {f}
                           </li>

@@ -6440,8 +6440,10 @@ export default function PureThreeGLBViewer({
 
   useEffect(() => {
     for (const entry of dermatomeHighlightRef.current) {
+      const clonedMat = entry.mesh.material as THREE.MeshStandardMaterial;
       entry.mesh.material = entry.origMaterial;
       if (!entry.wasVisible) entry.mesh.visible = false;
+      clonedMat.dispose();
     }
     dermatomeHighlightRef.current = [];
 
@@ -6537,8 +6539,10 @@ export default function PureThreeGLBViewer({
 
   useEffect(() => {
     for (const entry of referralZoneHighlightRef.current) {
+      const clonedMat = entry.mesh.material as THREE.MeshStandardMaterial;
       entry.mesh.material = entry.origMaterial;
       if (!entry.wasVisible) entry.mesh.visible = false;
+      clonedMat.dispose();
     }
     referralZoneHighlightRef.current = [];
 

@@ -6458,9 +6458,9 @@ export default function PureThreeGLBViewer({
       if (!bone) continue;
 
       bone.traverse((child: THREE.Object3D) => {
-        if (child instanceof THREE.Mesh && child.material) {
-          const origMat = child.material as THREE.MeshStandardMaterial;
-          const clonedMat = origMat.clone() as THREE.MeshStandardMaterial;
+        if (child instanceof THREE.Mesh && child.material && !Array.isArray(child.material) && child.material instanceof THREE.MeshStandardMaterial) {
+          const origMat = child.material;
+          const clonedMat = origMat.clone();
           clonedMat.emissive = highlightColor;
           clonedMat.emissiveIntensity = 0.6;
           clonedMat.transparent = true;
@@ -6557,9 +6557,9 @@ export default function PureThreeGLBViewer({
       if (!bone) continue;
 
       bone.traverse((child: THREE.Object3D) => {
-        if (child instanceof THREE.Mesh && child.material) {
-          const origMat = child.material as THREE.MeshStandardMaterial;
-          const clonedMat = origMat.clone() as THREE.MeshStandardMaterial;
+        if (child instanceof THREE.Mesh && child.material && !Array.isArray(child.material) && child.material instanceof THREE.MeshStandardMaterial) {
+          const origMat = child.material;
+          const clonedMat = origMat.clone();
           clonedMat.emissive = referralColor;
           clonedMat.emissiveIntensity = 0.5;
           clonedMat.transparent = true;

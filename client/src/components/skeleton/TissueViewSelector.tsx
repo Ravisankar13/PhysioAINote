@@ -32,6 +32,8 @@ interface TissueViewSelectorProps {
   onModeChange: (mode: TissueViewMode) => void;
   selectedEntryId: string | null;
   onEntrySelect: (id: string | null) => void;
+  chainIntegrityScores?: Map<string, { score: number; issues: string[]; problematicLinks: string[] }>;
+  jointForceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }>;
 }
 
 const MODE_ICONS: Record<Exclude<TissueViewMode, null>, typeof Dumbbell> = {
@@ -173,23 +175,101 @@ function NerveInfoCard({ entry }: { entry: NervePathwayEntry }) {
   );
 }
 
-function FasciaInfoCard({ entry }: { entry: FascialLayerEntry }) {
+function FasciaInfoCard({ entry, chainIntegrityScores }: { entry: FascialLayerEntry; chainIntegrityScores?: Map<string, { score: number; issues: string[]; problematicLinks: string[] }> }) {
+  const chainScore = chainIntegrityScores
+    ? Array.from(chainIntegrityScores.entries()).find(([key]) =>
+        key.toLowerCase().includes(entry.chainName.toLowerCase().split(' ')[0]) ||
+        entry.chainName.toLowerCase().includes(key.toLowerCase().split(' ')[0])
+      )
+    : null;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Badge variant="outline" className="text-xs">
           {entry.depth}
         </Badge>
+        {chainScore && (
+          <Badge
+            variant="outline"
+            className={`text-xs ${
+              chainScore[1].score >= 80 ? 'border-green-500 text-green-500' :
+              chainScore[1].score >= 60 ? 'border-yellow-500 text-yellow-500' :
+              'border-red-500 text-red-500'
+            }`}
+          >
+            Integrity: {chainScore[1].score}%
+          </Badge>
+        )}
       </div>
       <div className="space-y-1">
         <div className="text-xs text-muted-foreground">Tension Direction</div>
         <div className="text-sm">{entry.tensionDirection}</div>
       </div>
+      {chainScore && chainScore[1].issues.length > 0 && (
+        <>
+          <Separator />
+          <div className="space-y-1">
+            <div className="flex items-center gap-1 text-xs font-medium">
+              <AlertTriangle className="w-3 h-3 text-orange-500" />
+              Chain Issues
+            </div>
+            {chainScore[1].issues.slice(0, 4).map((issue, idx) => (
+              <div key={idx} className="text-xs text-muted-foreground pl-2 border-l-2 border-orange-500/30">
+                {issue}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function TissueInfoCard({ entry, mode }: { entry: TissueOverlayEntry; mode: TissueViewMode }) {
+function JointForceIndicator({ entry, forceData }: { entry: JointSurfaceEntry; forceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }> }) {
+  if (!forceData || forceData.length === 0) return null;
+  const matchedForce = forceData.find(f =>
+    entry.bones.includes(f.boneName) || f.label.toLowerCase().includes(entry.region)
+  );
+  if (!matchedForce) return null;
+
+  const loadPct = Math.min(100, (matchedForce.totalForce / 4.0) * 100);
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-muted-foreground">Current Joint Loading</div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${loadPct}%`,
+              backgroundColor: loadPct > 75 ? '#ef4444' : loadPct > 50 ? '#f59e0b' : '#22c55e',
+            }}
+          />
+        </div>
+        <span className="text-xs font-mono">{matchedForce.totalForce.toFixed(1)}x BW</span>
+        <Badge
+          variant="outline"
+          className={`text-xs ${
+            matchedForce.status === 'low' ? 'border-green-500 text-green-500' :
+            matchedForce.status === 'moderate' ? 'border-yellow-500 text-yellow-500' :
+            matchedForce.status === 'high' ? 'border-orange-500 text-orange-500' :
+            'border-red-500 text-red-500'
+          }`}
+        >
+          {matchedForce.status}
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
+function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData }: {
+  entry: TissueOverlayEntry;
+  mode: TissueViewMode;
+  chainIntegrityScores?: Map<string, { score: number; issues: string[]; problematicLinks: string[] }>;
+  jointForceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }>;
+}) {
   return (
     <div
       className="rounded-lg border bg-background/95 backdrop-blur-sm shadow-lg p-3 space-y-2"
@@ -208,9 +288,14 @@ function TissueInfoCard({ entry, mode }: { entry: TissueOverlayEntry; mode: Tiss
       <Separator />
 
       {mode === 'tendon' && <TendonInfoCard entry={entry as TendonEntry} />}
-      {mode === 'joint' && <JointInfoCard entry={entry as JointSurfaceEntry} />}
+      {mode === 'joint' && (
+        <>
+          <JointInfoCard entry={entry as JointSurfaceEntry} />
+          <JointForceIndicator entry={entry as JointSurfaceEntry} forceData={jointForceData} />
+        </>
+      )}
       {mode === 'nerve' && <NerveInfoCard entry={entry as NervePathwayEntry} />}
-      {mode === 'fascia' && <FasciaInfoCard entry={entry as FascialLayerEntry} />}
+      {mode === 'fascia' && <FasciaInfoCard entry={entry as FascialLayerEntry} chainIntegrityScores={chainIntegrityScores} />}
     </div>
   );
 }
@@ -220,6 +305,8 @@ export default function TissueViewSelector({
   onModeChange,
   selectedEntryId,
   onEntrySelect,
+  chainIntegrityScores,
+  jointForceData,
 }: TissueViewSelectorProps) {
   const [showList, setShowList] = useState(false);
   const entries = activeMode ? getTissueEntriesForMode(activeMode) : [];
@@ -311,7 +398,12 @@ export default function TissueViewSelector({
       )}
 
       {selectedEntry && activeMode && (
-        <TissueInfoCard entry={selectedEntry} mode={activeMode} />
+        <TissueInfoCard
+          entry={selectedEntry}
+          mode={activeMode}
+          chainIntegrityScores={chainIntegrityScores}
+          jointForceData={jointForceData}
+        />
       )}
     </div>
   );

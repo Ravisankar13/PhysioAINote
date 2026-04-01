@@ -116,7 +116,7 @@ import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames }
 import ClinicalTextInput, { type ClinicalParseResult } from "@/components/skeleton/ClinicalTextInput";
 import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
 import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
-import { type TissueViewMode, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode } from "@/lib/tissueViewData";
+import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 
 const BODY_REGIONS = {
   cervical: {
@@ -3192,16 +3192,93 @@ ${ddxList}`;
   const tissueViewOverlay = useMemo(() => {
     if (!tissueViewMode || tissueViewMode === 'muscle') return null;
     const modeColor = TISSUE_MODE_COLORS[tissueViewMode];
+
+    type OverlayResult = {
+      bones: string[];
+      color: number;
+      label: string;
+      markers?: Array<{ boneName: string; color: number; size: number; label: string }>;
+      pathwayLines?: Array<{ boneSequence: string[]; color: number; label: string }>;
+      loadIndicators?: Array<{ boneName: string; loadPercent: number; color: number }>;
+    };
+
+    const buildTendonMarkers = (entries: TendonEntry[]): OverlayResult['markers'] => {
+      return entries.flatMap(t => {
+        const stageColors: Record<number, number> = { 1: 0x33cc33, 2: 0xffaa33, 3: 0xff3333 };
+        const color = t.cookStage ? stageColors[t.cookStage] : 0xe6a832;
+        return t.bones.map(boneName => ({
+          boneName,
+          color,
+          size: 0.01,
+          label: t.label + (t.cookStage ? ` (Stage ${t.cookStage})` : ''),
+        }));
+      });
+    };
+
+    const buildNervePathways = (entries: NervePathwayEntry[]): OverlayResult['pathwayLines'] => {
+      return entries.map(n => ({
+        boneSequence: n.pathway,
+        color: 0xaacc33,
+        label: n.label,
+      }));
+    };
+
+    const buildJointLoadIndicators = (): OverlayResult['loadIndicators'] => {
+      const forces = hudForceAnalysis;
+      if (!forces || !forces.joints) return [];
+      const jointEntries = selectedTissueEntry
+        ? JOINT_SURFACE_DATA.filter(j => j.id === selectedTissueEntry)
+        : JOINT_SURFACE_DATA;
+      const indicators: OverlayResult['loadIndicators'] = [];
+      for (const joint of jointEntries) {
+        const matchedForce = forces.joints.find((f: JointSurfaceForce) =>
+          joint.bones.includes(f.boneName) || f.label.toLowerCase().includes(joint.region)
+        );
+        if (matchedForce) {
+          const loadPct = Math.min(100, (matchedForce.totalForce / 4.0) * 100);
+          indicators.push({
+            boneName: joint.bones[0],
+            loadPercent: loadPct,
+            color: modeColor.hex,
+          });
+        } else {
+          indicators.push({
+            boneName: joint.bones[0],
+            loadPercent: 25,
+            color: modeColor.hex,
+          });
+        }
+      }
+      return indicators;
+    };
+
     if (selectedTissueEntry) {
       const entries = getTissueEntriesForMode(tissueViewMode);
       const entry = entries.find(e => e.id === selectedTissueEntry);
       if (entry) {
-        return { bones: entry.bones, color: modeColor.hex, label: entry.label };
+        const result: OverlayResult = { bones: entry.bones, color: modeColor.hex, label: entry.label };
+        if (tissueViewMode === 'tendon') {
+          result.markers = buildTendonMarkers([entry as TendonEntry]);
+        } else if (tissueViewMode === 'nerve') {
+          result.pathwayLines = buildNervePathways([entry as NervePathwayEntry]);
+        } else if (tissueViewMode === 'joint') {
+          result.loadIndicators = buildJointLoadIndicators();
+        }
+        return result;
       }
     }
+
     const allBones = getAllHighlightBonesForMode(tissueViewMode);
-    return { bones: allBones, color: modeColor.hex, label: modeColor.label };
-  }, [tissueViewMode, selectedTissueEntry]);
+    const result: OverlayResult = { bones: allBones, color: modeColor.hex, label: modeColor.label };
+    if (tissueViewMode === 'tendon') {
+      result.markers = buildTendonMarkers(TENDON_DATA);
+    } else if (tissueViewMode === 'nerve') {
+      result.pathwayLines = buildNervePathways(NERVE_PATHWAY_DATA);
+    } else if (tissueViewMode === 'joint') {
+      result.loadIndicators = buildJointLoadIndicators();
+    }
+    return result;
+  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis]);
 
   useEffect(() => {
     if (!skeletonContainerRef.current) return;
@@ -3755,7 +3832,13 @@ ${ddxList}`;
               nerveRootLabels={nerveRootLabels}
               referralZoneBones={referralZoneBones}
               tissueViewOverlay={tissueViewOverlay}
-              enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle'}
+              onTissueBoneClick={tissueViewMode ? (boneName: string) => {
+                const entry = getEntryByBone(tissueViewMode, boneName);
+                if (entry) {
+                  setSelectedTissueEntry(entry.id === selectedTissueEntry ? null : entry.id);
+                }
+              } : undefined}
+              enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle' || !!tissueViewMode}
               onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
                 if (scarPlacementMode) {
                   const newScar: ScarMarker = {
@@ -7265,6 +7348,13 @@ ${ddxList}`;
                     onModeChange={setTissueViewMode}
                     selectedEntryId={selectedTissueEntry}
                     onEntrySelect={setSelectedTissueEntry}
+                    chainIntegrityScores={hudChainIntegrity}
+                    jointForceData={hudForceAnalysis?.joints?.map((f: JointSurfaceForce) => ({
+                      boneName: f.boneName,
+                      totalForce: f.totalForce,
+                      status: f.status,
+                      label: f.label,
+                    }))}
                   />
                 </div>
               </div>

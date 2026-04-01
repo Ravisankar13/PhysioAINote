@@ -1669,7 +1669,15 @@ interface PureThreeGLBViewerProps {
   dermatomeHighlightBones?: string[];
   nerveRootLabels?: Array<{ root: string; boneName: string }>;
   referralZoneBones?: string[];
-  tissueViewOverlay?: { bones: string[]; color: number; label: string } | null;
+  tissueViewOverlay?: {
+    bones: string[];
+    color: number;
+    label: string;
+    markers?: Array<{ boneName: string; color: number; size: number; label: string }>;
+    pathwayLines?: Array<{ boneSequence: string[]; color: number; label: string }>;
+    loadIndicators?: Array<{ boneName: string; loadPercent: number; color: number }>;
+  } | null;
+  onTissueBoneClick?: (boneName: string) => void;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2134,6 +2142,7 @@ export default function PureThreeGLBViewer({
   nerveRootLabels,
   referralZoneBones,
   tissueViewOverlay,
+  onTissueBoneClick,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -2173,6 +2182,8 @@ export default function PureThreeGLBViewer({
   onChainNodeClickRef.current = onChainNodeClick;
   const onSkeletonClickRef = useRef(onSkeletonClick);
   onSkeletonClickRef.current = onSkeletonClick;
+  const onTissueBoneClickRef = useRef(onTissueBoneClick);
+  onTissueBoneClickRef.current = onTissueBoneClick;
   const enableSkeletonClickRef = useRef(enableSkeletonClick);
   enableSkeletonClickRef.current = enableSkeletonClick;
   const onBoneScreenPositionsRef = useRef(onBoneScreenPositions);
@@ -3729,6 +3740,11 @@ export default function PureThreeGLBViewer({
         const hitPoint = raycastModel(ndc);
         if (hitPoint) {
           const boneInfo = findNearestBone(hitPoint);
+          if (onTissueBoneClickRef.current) {
+            onTissueBoneClickRef.current(boneInfo.boneName);
+            e.preventDefault();
+            return;
+          }
           onSkeletonClickRef.current?.({ x: hitPoint.x, y: hitPoint.y, z: hitPoint.z }, boneInfo.boneName, boneInfo.label);
           e.preventDefault();
           return;
@@ -6582,6 +6598,9 @@ export default function PureThreeGLBViewer({
   }, [referralZoneBones]);
 
   const tissueViewHighlightRef = useRef<Array<{ mesh: THREE.Mesh; origMaterial: THREE.Material; wasVisible: boolean }>>([]);
+  const tissueMarkerMeshesRef = useRef<THREE.Object3D[]>([]);
+  const tissuePathwayLinesRef = useRef<THREE.Object3D[]>([]);
+  const tissueLoadIndicatorsRef = useRef<THREE.Object3D[]>([]);
 
   useEffect(() => {
     for (const entry of tissueViewHighlightRef.current) {
@@ -6591,6 +6610,39 @@ export default function PureThreeGLBViewer({
       clonedMat.dispose();
     }
     tissueViewHighlightRef.current = [];
+
+    for (const obj of tissueMarkerMeshesRef.current) {
+      obj.parent?.remove(obj);
+      obj.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry?.dispose();
+          if (child.material instanceof THREE.Material) child.material.dispose();
+        }
+        if (child instanceof THREE.Sprite) {
+          child.material.map?.dispose();
+          child.material.dispose();
+        }
+      });
+    }
+    tissueMarkerMeshesRef.current = [];
+
+    for (const obj of tissuePathwayLinesRef.current) {
+      obj.parent?.remove(obj);
+      if ((obj as THREE.Line).geometry) (obj as THREE.Line).geometry.dispose();
+      if ((obj as THREE.Line).material instanceof THREE.Material) ((obj as THREE.Line).material as THREE.Material).dispose();
+    }
+    tissuePathwayLinesRef.current = [];
+
+    for (const obj of tissueLoadIndicatorsRef.current) {
+      obj.parent?.remove(obj);
+      obj.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry?.dispose();
+          if (child.material instanceof THREE.Material) child.material.dispose();
+        }
+      });
+    }
+    tissueLoadIndicatorsRef.current = [];
 
     if (!tissueViewOverlay || !tissueViewOverlay.bones || tissueViewOverlay.bones.length === 0) return;
     if (!sceneRef.current) return;
@@ -6622,6 +6674,143 @@ export default function PureThreeGLBViewer({
           child.visible = true;
         }
       });
+    }
+
+    if (tissueViewOverlay.markers) {
+      for (const marker of tissueViewOverlay.markers) {
+        const bone = bRef[marker.boneName];
+        if (!bone) continue;
+
+        const group = new THREE.Group();
+
+        const sphereGeo = new THREE.SphereGeometry(marker.size, 12, 12);
+        const sphereMat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(marker.color),
+          emissive: new THREE.Color(marker.color),
+          emissiveIntensity: 0.7,
+          transparent: true,
+          opacity: 0.85,
+          depthTest: true,
+        });
+        const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+        group.add(sphere);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.beginPath();
+          ctx.roundRect(4, 4, 248, 56, 8);
+          ctx.fill();
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const shortLabel = marker.label.length > 24 ? marker.label.slice(0, 22) + '...' : marker.label;
+          ctx.fillText(shortLabel, 128, 32);
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.needsUpdate = true;
+          const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+          const sprite = new THREE.Sprite(spriteMat);
+          sprite.scale.set(0.12, 0.03, 1);
+          sprite.position.set(0, marker.size + 0.02, 0);
+          sprite.renderOrder = 998;
+          group.add(sprite);
+        }
+
+        group.position.set(0, 0.01, 0);
+        bone.add(group);
+        tissueMarkerMeshesRef.current.push(group);
+      }
+    }
+
+    if (tissueViewOverlay.pathwayLines) {
+      for (const pathway of tissueViewOverlay.pathwayLines) {
+        const points: THREE.Vector3[] = [];
+        for (const boneName of pathway.boneSequence) {
+          const bone = bRef[boneName];
+          if (bone) {
+            const worldPos = new THREE.Vector3();
+            bone.getWorldPosition(worldPos);
+            points.push(worldPos);
+          }
+        }
+        if (points.length < 2) continue;
+
+        const curve = new THREE.CatmullRomCurve3(points);
+        const curvePoints = curve.getPoints(points.length * 10);
+        const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+        const material = new THREE.LineBasicMaterial({
+          color: new THREE.Color(pathway.color),
+          linewidth: 2,
+          transparent: true,
+          opacity: 0.8,
+          depthTest: true,
+        });
+        const line = new THREE.Line(geometry, material);
+        line.renderOrder = 997;
+
+        sceneRef.current.add(line);
+        tissuePathwayLinesRef.current.push(line);
+
+        const entrapmentGeo = new THREE.OctahedronGeometry(0.012, 0);
+        for (let i = 0; i < pathway.boneSequence.length; i++) {
+          const bone = bRef[pathway.boneSequence[i]];
+          if (!bone) continue;
+          const entrapmentMat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(0xff6600),
+            emissive: new THREE.Color(0xff6600),
+            emissiveIntensity: 0.8,
+            transparent: true,
+            opacity: 0.9,
+          });
+          const diamond = new THREE.Mesh(entrapmentGeo, entrapmentMat);
+          diamond.position.set(0, 0.02, 0);
+          bone.add(diamond);
+          tissuePathwayLinesRef.current.push(diamond);
+        }
+      }
+    }
+
+    if (tissueViewOverlay.loadIndicators) {
+      for (const indicator of tissueViewOverlay.loadIndicators) {
+        const bone = bRef[indicator.boneName];
+        if (!bone) continue;
+
+        const ringGeo = new THREE.RingGeometry(0.025, 0.035, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(indicator.color),
+          transparent: true,
+          opacity: 0.7,
+          side: THREE.DoubleSide,
+          depthTest: false,
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(0, 0, 0);
+        ring.renderOrder = 996;
+        bone.add(ring);
+        tissueLoadIndicatorsRef.current.push(ring);
+
+        const arcAngle = (indicator.loadPercent / 100) * Math.PI * 2;
+        const arcGeo = new THREE.RingGeometry(0.026, 0.034, 32, 1, 0, arcAngle);
+        const arcColor = indicator.loadPercent > 75 ? 0xff3333 : indicator.loadPercent > 50 ? 0xffaa33 : 0x33cc33;
+        const arcMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(arcColor),
+          transparent: true,
+          opacity: 0.9,
+          side: THREE.DoubleSide,
+          depthTest: false,
+        });
+        const arc = new THREE.Mesh(arcGeo, arcMat);
+        arc.rotation.x = -Math.PI / 2;
+        arc.position.set(0, 0.001, 0);
+        arc.renderOrder = 997;
+        bone.add(arc);
+        tissueLoadIndicatorsRef.current.push(arc);
+      }
     }
   }, [tissueViewOverlay]);
 

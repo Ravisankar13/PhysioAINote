@@ -2906,14 +2906,21 @@ ${ddxList}`;
     return computeInfluenceMap(muscleOverrides, crossMuscleEffects);
   }, [muscleOverrides, crossMuscleEffects, muscleMode]);
 
+  const effectiveOverrides = useMemo(() => {
+    if (whatIfSimulatedConfig?.simulatedOverrides) {
+      return whatIfSimulatedConfig.simulatedOverrides as Record<string, MuscleOverride>;
+    }
+    return compensatedOverrides;
+  }, [compensatedOverrides, whatIfSimulatedConfig]);
+
   const muscleAnalysis = useMemo(() => {
     if (!muscleMode) return null;
-    const base = computeFullMuscleAnalysis(effectiveModelConfig);
+    const base = computeFullMuscleAnalysis(finalModelConfig);
     if (enabledMuscleGroups.size === 0 && base.groups.length > 0) {
       setEnabledMuscleGroups(new Set(base.groups.map(g => g.id)));
     }
-    return applyOverridesToAnalysis(base, compensatedOverrides, crossMuscleEffects);
-  }, [effectiveModelConfig, muscleMode, compensatedOverrides, crossMuscleEffects]);
+    return applyOverridesToAnalysis(base, effectiveOverrides, crossMuscleEffects);
+  }, [finalModelConfig, muscleMode, effectiveOverrides, crossMuscleEffects]);
 
   const weightDistribution = useMemo(() => {
     if (!forceMode) return null;
@@ -2922,10 +2929,11 @@ ${ddxList}`;
 
   const correlationResult = useMemo(() => {
     if (!correlationMode && !chainIntegrityMode && !chainExplorerMode && !showInjuryMechanism) return null;
-    const forces = calculatePosturalForces(effectiveModelConfig);
-    const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
+    const forces = calculatePosturalForces(finalModelConfig);
+    const baseAnalysis = computeFullMuscleAnalysis(finalModelConfig);
+    const muscles = applyOverridesToAnalysis(baseAnalysis, effectiveOverrides);
     return computeCrossSystemCorrelation({
-      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
+      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as Record<string, unknown>).severity as number ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
       forces: forces.joints,
       muscles: muscles.allMuscles,
       muscleGroups: muscles.groups,
@@ -2933,7 +2941,7 @@ ${ddxList}`;
       kineticChains: KINETIC_CHAINS,
       bodyWeightKg,
     });
-  }, [effectiveModelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode, showInjuryMechanism]);
+  }, [finalModelConfig, effectiveOverrides, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode, showInjuryMechanism]);
 
   const handleAddWhatIfScenario = useCallback((scenario: WhatIfScenario) => {
     setWhatIfScenarios(prev => {
@@ -2998,19 +3006,19 @@ ${ddxList}`;
 
   const hudForceAnalysis = useMemo(() => {
     if (forceMode && forceAnalysis) return forceAnalysis;
-    return calculatePosturalForces(effectiveModelConfig);
-  }, [effectiveModelConfig, forceMode, forceAnalysis]);
+    return calculatePosturalForces(finalModelConfig);
+  }, [finalModelConfig, forceMode, forceAnalysis]);
 
   const hudWeightDistribution = useMemo(() => {
     if (forceMode && weightDistribution) return weightDistribution;
-    return computeWeightDistribution(effectiveModelConfig, bodyWeightKg);
-  }, [effectiveModelConfig, bodyWeightKg, forceMode, weightDistribution]);
+    return computeWeightDistribution(finalModelConfig, bodyWeightKg);
+  }, [finalModelConfig, bodyWeightKg, forceMode, weightDistribution]);
 
   const hudMuscleAnalysis = useMemo(() => {
     if (muscleMode && muscleAnalysis) return muscleAnalysis;
-    const base = computeFullMuscleAnalysis(effectiveModelConfig);
-    return applyOverridesToAnalysis(base, compensatedOverrides, crossMuscleEffects);
-  }, [effectiveModelConfig, muscleMode, muscleAnalysis, compensatedOverrides, crossMuscleEffects]);
+    const base = computeFullMuscleAnalysis(finalModelConfig);
+    return applyOverridesToAnalysis(base, effectiveOverrides, crossMuscleEffects);
+  }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects]);
 
   const hudChainIntegrity = useMemo(() => {
     if ((chainExplorerMode || chainIntegrityMode) && chainIntegrityScores.size > 0) return chainIntegrityScores;

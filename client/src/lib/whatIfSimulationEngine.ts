@@ -1,9 +1,9 @@
 import { calculatePosturalForces, type ForceAnalysisResult } from './posturalForceEngine';
 import { computeFullMuscleAnalysis, applyOverridesToAnalysis, type MuscleOverride, type MuscleAnalysisResult } from './muscleBiomechanicsEngine';
-import { computePathologyCompensation, type PathologyCompensationResult } from './pathologyCompensationEngine';
+import { computePathologyCompensation } from './pathologyCompensationEngine';
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult } from './crossSystemCorrelation';
 import { calculateFullBiomechanics } from './biomechanicsEngine';
-import { calculateInjuryRisks, type InjuryRiskResult } from './injuryRiskEngine';
+import { calculateInjuryRisks, type InjuryRiskResult, type RiskScore, type BilateralRisk } from './injuryRiskEngine';
 import { KINETIC_CHAINS } from './kineticChainExplorer';
 
 export type InterventionType = 'strengthen' | 'stretch' | 'mobilize' | 'offload';
@@ -73,9 +73,28 @@ export interface WhatIfComparisonResult {
   correlationBefore: CrossSystemCorrelationResult | null;
   correlationAfter: CrossSystemCorrelationResult | null;
   topImprovements: string[];
-  simulatedModelConfig: Record<string, any>;
+  simulatedModelConfig: Record<string, Record<string, number>>;
   simulatedOverrides: Record<string, Partial<MuscleOverride>>;
 }
+
+const SCENARIO_TO_MUSCLE_IDS: Record<string, string[]> = {
+  glute_l: ['l_glut_max', 'l_glut_med', 'l_glut_min'],
+  glute_r: ['r_glut_max', 'r_glut_med', 'r_glut_min'],
+  core: ['rectus_abdominis', 'l_int_oblique', 'r_int_oblique', 'l_ext_oblique', 'r_ext_oblique', 'transversus_abdominis'],
+  quad_l: ['l_rect_fem', 'l_vast_lat', 'l_vast_med', 'l_vast_int'],
+  quad_r: ['r_rect_fem', 'r_vast_lat', 'r_vast_med', 'r_vast_int'],
+  calf_l: ['l_gastroc', 'l_soleus'],
+  calf_r: ['r_gastroc', 'r_soleus'],
+  scapula_l: ['l_lower_trap', 'l_rhomboids', 'l_serratus_ant'],
+  scapula_r: ['r_lower_trap', 'r_rhomboids', 'r_serratus_ant'],
+  spine: ['erector_spinae_thoracic', 'erector_spinae_lumbar', 'multifidus'],
+  deltoid_l: ['l_deltoid'],
+  deltoid_r: ['r_deltoid'],
+  neck: ['deep_neck_flexors', 'l_upper_trap', 'r_upper_trap'],
+  chest: ['l_pectoralis', 'r_pectoralis'],
+  shin_l: ['l_tib_ant'],
+  shin_r: ['r_tib_ant'],
+};
 
 const STRENGTHEN_EFFECTS: Record<string, (mag: number) => Record<string, Record<string, number>>> = {
   glute_l: (m) => ({ pelvis: { obliquity: -(m * 0.15), tilt: -(m * 0.1) }, leftHip: { extension: m * 0.2, abduction: m * 0.15 } }),
@@ -173,10 +192,27 @@ function expandBilateralTarget(target: string): string[] {
   return [target];
 }
 
-const CADENCE_FORCE_REDUCTION_JOINTS = [
-  'left_knee', 'right_knee', 'left_ankle', 'right_ankle',
-  'left_hip', 'right_hip', 'lumbar_spine',
-];
+function applyOverrideToMuscleIds(
+  overrides: Record<string, Partial<MuscleOverride>>,
+  scenarioTarget: string,
+  overrideValues: Partial<MuscleOverride>
+): void {
+  const muscleIds = SCENARIO_TO_MUSCLE_IDS[scenarioTarget];
+  if (muscleIds) {
+    for (const mId of muscleIds) {
+      const existing = overrides[mId] || {};
+      overrides[mId] = {
+        ...existing,
+        tensionOffset: (existing.tensionOffset ?? 0) + (overrideValues.tensionOffset ?? 0),
+        activationOffset: (existing.activationOffset ?? 0) + (overrideValues.activationOffset ?? 0),
+        inhibition: overrideValues.inhibition !== undefined
+          ? clamp((existing.inhibition ?? 0) + (overrideValues.inhibition ?? 0), 0, 100)
+          : (existing.inhibition ?? 0),
+        isManual: true,
+      };
+    }
+  }
+}
 
 export function applyScenarios(
   baseModelConfig: Record<string, any>,
@@ -207,14 +243,11 @@ export function applyScenarios(
             }
           }
         }
-        const existing = overrides[target] || {};
-        overrides[target] = {
-          ...existing,
-          tensionOffset: (existing.tensionOffset ?? 0) - scenario.magnitude * 0.3,
-          activationOffset: (existing.activationOffset ?? 0) + scenario.magnitude * 0.4,
-          inhibition: clamp((existing.inhibition ?? 0) - scenario.magnitude * 0.5, 0, 100),
-          isManual: true,
-        };
+        applyOverrideToMuscleIds(overrides, target, {
+          tensionOffset: -(scenario.magnitude * 0.3),
+          activationOffset: scenario.magnitude * 0.4,
+          inhibition: -(scenario.magnitude * 0.5),
+        });
       }
 
       if (scenario.interventionType === 'stretch') {
@@ -228,13 +261,10 @@ export function applyScenarios(
             }
           }
         }
-        const existing = overrides[target] || {};
-        overrides[target] = {
-          ...existing,
-          tensionOffset: (existing.tensionOffset ?? 0) - scenario.magnitude * 0.5,
-          activationOffset: (existing.activationOffset ?? 0) - scenario.magnitude * 0.1,
-          isManual: true,
-        };
+        applyOverrideToMuscleIds(overrides, target, {
+          tensionOffset: -(scenario.magnitude * 0.5),
+          activationOffset: -(scenario.magnitude * 0.1),
+        });
       }
 
       if (scenario.interventionType === 'mobilize') {
@@ -251,18 +281,74 @@ export function applyScenarios(
       }
 
       if (scenario.interventionType === 'offload') {
-        const existing = overrides[target] || {};
-        overrides[target] = {
-          ...existing,
-          tensionOffset: (existing.tensionOffset ?? 0) - scenario.magnitude * 0.4,
-          activationOffset: (existing.activationOffset ?? 0) - scenario.magnitude * 0.2,
-          isManual: true,
-        };
+        applyOverrideToMuscleIds(overrides, target, {
+          tensionOffset: -(scenario.magnitude * 0.4),
+          activationOffset: -(scenario.magnitude * 0.2),
+        });
       }
     }
   }
 
   return { modelConfig: config, overrides, forceMultiplier };
+}
+
+interface FlattenedRisk {
+  key: string;
+  label: string;
+  region: string;
+  score: number;
+  level: string;
+}
+
+function isRiskScore(obj: unknown): obj is RiskScore {
+  return typeof obj === 'object' && obj !== null && 'risk' in obj && 'level' in obj && !('left' in obj);
+}
+
+function isBilateralRisk(obj: unknown): obj is BilateralRisk {
+  return typeof obj === 'object' && obj !== null && 'left' in obj && 'right' in obj;
+}
+
+function flattenRisks(jointRisks: InjuryRiskResult['jointRisks']): FlattenedRisk[] {
+  const results: FlattenedRisk[] = [];
+  const regionLabels: Record<string, string> = {
+    lumbarSpine: 'Lumbar Spine',
+    hip: 'Hip',
+    knee: 'Knee',
+    ankle: 'Ankle',
+    shoulder: 'Shoulder',
+  };
+
+  for (const [regionKey, regionRisks] of Object.entries(jointRisks)) {
+    const regionLabel = regionLabels[regionKey] || regionKey;
+    for (const [riskKey, riskValue] of Object.entries(regionRisks as Record<string, unknown>)) {
+      const readableLabel = riskKey.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
+      if (isRiskScore(riskValue)) {
+        results.push({
+          key: `${regionKey}.${riskKey}`,
+          label: `${regionLabel}: ${readableLabel}`,
+          region: regionKey,
+          score: riskValue.risk,
+          level: riskValue.level,
+        });
+      } else if (isBilateralRisk(riskValue)) {
+        results.push({
+          key: `${regionKey}.${riskKey}.left`,
+          label: `L ${regionLabel}: ${readableLabel}`,
+          region: regionKey,
+          score: riskValue.left.risk,
+          level: riskValue.left.level,
+        });
+        results.push({
+          key: `${regionKey}.${riskKey}.right`,
+          label: `R ${regionLabel}: ${readableLabel}`,
+          region: regionKey,
+          score: riskValue.right.risk,
+          level: riskValue.right.level,
+        });
+      }
+    }
+  }
+  return results;
 }
 
 function buildCorrelationInput(
@@ -384,25 +470,20 @@ export function computeWhatIfComparison(
   const overallAfter = afterRisk?.overallRiskScore ?? 0;
 
   if (beforeRisk && afterRisk) {
-    const regions = Object.keys(beforeRisk.jointRisks) as Array<keyof typeof beforeRisk.jointRisks>;
-    for (const region of regions) {
-      const br = beforeRisk.jointRisks[region];
-      const ar = afterRisk.jointRisks[region];
-      if (br && ar) {
-        for (const risk of br.risks) {
-          const afterMatch = ar.risks.find((r: { id: string }) => r.id === risk.id);
-          if (afterMatch) {
-            riskDeltas.push({
-              region,
-              label: risk.label,
-              before: risk.score,
-              after: afterMatch.score,
-              delta: afterMatch.score - risk.score,
-              levelBefore: risk.level,
-              levelAfter: afterMatch.level,
-            });
-          }
-        }
+    const beforeFlat = flattenRisks(beforeRisk.jointRisks);
+    const afterFlat = flattenRisks(afterRisk.jointRisks);
+    for (const br of beforeFlat) {
+      const ar = afterFlat.find(r => r.key === br.key);
+      if (ar) {
+        riskDeltas.push({
+          region: br.region,
+          label: br.label,
+          before: br.score,
+          after: ar.score,
+          delta: ar.score - br.score,
+          levelBefore: br.level,
+          levelAfter: ar.level,
+        });
       }
     }
   }

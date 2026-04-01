@@ -1,7 +1,7 @@
-import { calculatePosturalForces, type ForceAnalysisResult, type JointSurfaceForce } from './posturalForceEngine';
+import { calculatePosturalForces, type ForceAnalysisResult } from './posturalForceEngine';
 import { computeFullMuscleAnalysis, applyOverridesToAnalysis, type MuscleOverride, type MuscleAnalysisResult } from './muscleBiomechanicsEngine';
 import { computePathologyCompensation, type PathologyCompensationResult } from './pathologyCompensationEngine';
-import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type CorrelationInput } from './crossSystemCorrelation';
+import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult } from './crossSystemCorrelation';
 import { calculateFullBiomechanics } from './biomechanicsEngine';
 import { calculateInjuryRisks, type InjuryRiskResult } from './injuryRiskEngine';
 import { KINETIC_CHAINS } from './kineticChainExplorer';
@@ -48,6 +48,17 @@ export interface CompensationDelta {
   after: number;
 }
 
+export interface MuscleDelta {
+  muscleId: string;
+  label: string;
+  activationBefore: number;
+  activationAfter: number;
+  tightnessBefore: number;
+  tightnessAfter: number;
+  statusBefore: string;
+  statusAfter: string;
+}
+
 export interface WhatIfComparisonResult {
   scenarios: WhatIfScenario[];
   overallRiskBefore: number;
@@ -58,31 +69,13 @@ export interface WhatIfComparisonResult {
   forceDeltas: ForceDelta[];
   riskDeltas: RiskDelta[];
   compensationDeltas: CompensationDelta[];
+  muscleDeltas: MuscleDelta[];
+  correlationBefore: CrossSystemCorrelationResult | null;
+  correlationAfter: CrossSystemCorrelationResult | null;
   topImprovements: string[];
-  simulatedModelConfig: Record<string, Record<string, number>>;
+  simulatedModelConfig: Record<string, any>;
   simulatedOverrides: Record<string, Partial<MuscleOverride>>;
 }
-
-const MUSCLE_JOINT_MAP: Record<string, string[]> = {
-  glute_l: ['leftHip'],
-  glute_r: ['rightHip'],
-  quad_l: ['leftKnee', 'leftHip'],
-  quad_r: ['rightKnee', 'rightHip'],
-  calf_l: ['leftAnkle', 'leftKnee'],
-  calf_r: ['rightAnkle', 'rightKnee'],
-  core: ['spine', 'pelvis'],
-  spine: ['spine', 'pelvis'],
-  deltoid_l: ['leftShoulder'],
-  deltoid_r: ['rightShoulder'],
-  scapula_l: ['leftShoulder', 'leftScapula'],
-  scapula_r: ['rightShoulder', 'rightScapula'],
-  neck: ['neck', 'spine'],
-  chest: ['leftShoulder', 'rightShoulder'],
-  bicep_l: ['leftElbow'],
-  bicep_r: ['rightElbow'],
-  shin_l: ['leftAnkle'],
-  shin_r: ['rightAnkle'],
-};
 
 const STRENGTHEN_EFFECTS: Record<string, (mag: number) => Record<string, Record<string, number>>> = {
   glute_l: (m) => ({ pelvis: { obliquity: -(m * 0.15), tilt: -(m * 0.1) }, leftHip: { extension: m * 0.2, abduction: m * 0.15 } }),
@@ -131,7 +124,7 @@ export const PRESET_SCENARIOS: WhatIfScenario[] = [
   { id: 'thoracic_mob', label: 'T-Spine Mob', description: 'Improve thoracic spine mobility', interventionType: 'mobilize', target: 'spine', targetType: 'joint', magnitude: 10, unit: '°', color: '#06b6d4' },
   { id: 'scap_strengthen', label: 'Scapular +25%', description: 'Strengthen scapular stabilizers bilaterally', interventionType: 'strengthen', target: 'scapula', targetType: 'muscle', magnitude: 25, unit: '%', color: '#ec4899' },
   { id: 'pec_stretch', label: 'Pec Stretch', description: 'Stretch pectoral muscles to improve posture', interventionType: 'stretch', target: 'chest', targetType: 'muscle', magnitude: 12, unit: '°', color: '#f97316' },
-  { id: 'neck_strengthen', label: 'Deep Neck +20%', description: 'Strengthen deep neck flexors', interventionType: 'strengthen', target: 'neck', targetType: 'muscle', magnitude: 20, unit: '%', color: '#8b5cf6' },
+  { id: 'cadence_increase', label: 'Cadence ↑10%', description: 'Increase step cadence by 10% (reduces ground contact time and joint loading)', interventionType: 'offload', target: 'cadence', targetType: 'joint', magnitude: 10, unit: '%', color: '#8b5cf6' },
 ];
 
 export const MUSCLE_TARGETS = [
@@ -180,15 +173,26 @@ function expandBilateralTarget(target: string): string[] {
   return [target];
 }
 
+const CADENCE_FORCE_REDUCTION_JOINTS = [
+  'left_knee', 'right_knee', 'left_ankle', 'right_ankle',
+  'left_hip', 'right_hip', 'lumbar_spine',
+];
+
 export function applyScenarios(
   baseModelConfig: Record<string, any>,
   baseOverrides: Record<string, Partial<MuscleOverride>>,
   scenarios: WhatIfScenario[]
-): { modelConfig: Record<string, any>; overrides: Record<string, Partial<MuscleOverride>> } {
+): { modelConfig: Record<string, any>; overrides: Record<string, Partial<MuscleOverride>>; forceMultiplier: number } {
   const config: Record<string, any> = JSON.parse(JSON.stringify(baseModelConfig));
   const overrides: Record<string, Partial<MuscleOverride>> = JSON.parse(JSON.stringify(baseOverrides));
+  let forceMultiplier = 1.0;
 
   for (const scenario of scenarios) {
+    if (scenario.target === 'cadence' && scenario.interventionType === 'offload') {
+      forceMultiplier *= (1 - scenario.magnitude * 0.008);
+      continue;
+    }
+
     const targets = expandBilateralTarget(scenario.target);
 
     for (const target of targets) {
@@ -206,8 +210,10 @@ export function applyScenarios(
         const existing = overrides[target] || {};
         overrides[target] = {
           ...existing,
-          tension: clamp((existing.tension ?? 50) - scenario.magnitude * 0.3, 0, 100),
-          activation: clamp((existing.activation ?? 50) + scenario.magnitude * 0.4, 0, 100),
+          tensionOffset: (existing.tensionOffset ?? 0) - scenario.magnitude * 0.3,
+          activationOffset: (existing.activationOffset ?? 0) + scenario.magnitude * 0.4,
+          inhibition: clamp((existing.inhibition ?? 0) - scenario.magnitude * 0.5, 0, 100),
+          isManual: true,
         };
       }
 
@@ -225,8 +231,9 @@ export function applyScenarios(
         const existing = overrides[target] || {};
         overrides[target] = {
           ...existing,
-          tension: clamp((existing.tension ?? 50) - scenario.magnitude * 0.5, 0, 100),
-          activation: clamp((existing.activation ?? 50) - scenario.magnitude * 0.1, 0, 100),
+          tensionOffset: (existing.tensionOffset ?? 0) - scenario.magnitude * 0.5,
+          activationOffset: (existing.activationOffset ?? 0) - scenario.magnitude * 0.1,
+          isManual: true,
         };
       }
 
@@ -247,14 +254,57 @@ export function applyScenarios(
         const existing = overrides[target] || {};
         overrides[target] = {
           ...existing,
-          tension: clamp((existing.tension ?? 50) - scenario.magnitude * 0.4, 0, 100),
-          activation: clamp((existing.activation ?? 50) - scenario.magnitude * 0.2, 0, 100),
+          tensionOffset: (existing.tensionOffset ?? 0) - scenario.magnitude * 0.4,
+          activationOffset: (existing.activationOffset ?? 0) - scenario.magnitude * 0.2,
+          isManual: true,
         };
       }
     }
   }
 
-  return { modelConfig: config, overrides };
+  return { modelConfig: config, overrides, forceMultiplier };
+}
+
+function buildCorrelationInput(
+  modelConfig: Record<string, any>,
+  overrides: Record<string, Partial<MuscleOverride>>,
+  painMarkers: Array<{ id: string; position: { x: number; y: number; z: number }; label: string; type: 'point' | 'area' | 'referred' | 'line' | 'paint'; severity?: number; description?: string }>,
+  bodyWeightKg: number,
+  forceMultiplier: number
+): { forces: ForceAnalysisResult; muscles: MuscleAnalysisResult; correlation: CrossSystemCorrelationResult | null } {
+  const forces = calculatePosturalForces(modelConfig);
+  if (forceMultiplier !== 1.0) {
+    for (const j of forces.joints) {
+      j.compression *= forceMultiplier;
+      j.tension *= forceMultiplier;
+      j.shear *= forceMultiplier;
+      j.totalForce *= forceMultiplier;
+      if (j.totalForce < 500) j.status = 'low';
+      else if (j.totalForce < 1500) j.status = 'moderate';
+      else if (j.totalForce < 3000) j.status = 'high';
+      else j.status = 'very_high';
+    }
+  }
+  const muscleBase = computeFullMuscleAnalysis(modelConfig);
+  const muscles = applyOverridesToAnalysis(muscleBase, overrides as Record<string, MuscleOverride>);
+
+  let correlation: CrossSystemCorrelationResult | null = null;
+  try {
+    correlation = computeCrossSystemCorrelation({
+      painMarkers: painMarkers.map(pm => ({
+        id: pm.id, position: pm.position, label: pm.label, type: pm.type,
+        severity: pm.severity ?? 5, description: pm.description,
+      })),
+      forces: forces.joints,
+      muscles: muscles.allMuscles,
+      muscleGroups: muscles.groups,
+      syndromes: muscles.syndromes,
+      kineticChains: KINETIC_CHAINS,
+      bodyWeightKg,
+    });
+  } catch (_e) { /* optional */ }
+
+  return { forces, muscles, correlation };
 }
 
 export function computeWhatIfComparison(
@@ -264,14 +314,14 @@ export function computeWhatIfComparison(
   bodyWeightKg: number,
   scenarios: WhatIfScenario[]
 ): WhatIfComparisonResult {
-  const { modelConfig: simConfig, overrides: simOverrides } = applyScenarios(baseModelConfig, baseOverrides, scenarios);
+  const { modelConfig: simConfig, overrides: simOverrides, forceMultiplier } = applyScenarios(baseModelConfig, baseOverrides, scenarios);
 
-  const beforeForces = calculatePosturalForces(baseModelConfig);
-  const afterForces = calculatePosturalForces(simConfig);
+  const before = buildCorrelationInput(baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, 1.0);
+  const after = buildCorrelationInput(simConfig, simOverrides, painMarkers, bodyWeightKg, forceMultiplier);
 
   const forceDeltas: ForceDelta[] = [];
-  for (const bj of beforeForces.joints) {
-    const aj = afterForces.joints.find(j => j.id === bj.id);
+  for (const bj of before.forces.joints) {
+    const aj = after.forces.joints.find(j => j.id === bj.id);
     if (aj) {
       forceDeltas.push({
         jointId: bj.id,
@@ -282,6 +332,27 @@ export function computeWhatIfComparison(
         deltaPercent: bj.totalForce > 0 ? ((aj.totalForce - bj.totalForce) / bj.totalForce) * 100 : 0,
         statusBefore: bj.status,
         statusAfter: aj.status,
+      });
+    }
+  }
+
+  const muscleDeltas: MuscleDelta[] = [];
+  for (const bm of before.muscles.allMuscles) {
+    const am = after.muscles.allMuscles.find(m => m.id === bm.id);
+    if (am && (
+      Math.abs(am.activationPercent - bm.activationPercent) > 2 ||
+      Math.abs(am.tightnessPercent - bm.tightnessPercent) > 2 ||
+      am.clinicalStatus !== bm.clinicalStatus
+    )) {
+      muscleDeltas.push({
+        muscleId: bm.id,
+        label: bm.label,
+        activationBefore: bm.activationPercent,
+        activationAfter: am.activationPercent,
+        tightnessBefore: bm.tightnessPercent,
+        tightnessAfter: am.tightnessPercent,
+        statusBefore: bm.clinicalStatus,
+        statusAfter: am.clinicalStatus,
       });
     }
   }
@@ -303,15 +374,10 @@ export function computeWhatIfComparison(
 
   let beforeRisk: InjuryRiskResult | null = null;
   let afterRisk: InjuryRiskResult | null = null;
-
   try {
-    const beforeBio = calculateFullBiomechanics(170, bodyWeightKg, safeModel(baseModelConfig));
-    beforeRisk = calculateInjuryRisks(beforeBio);
-    const afterBio = calculateFullBiomechanics(170, bodyWeightKg, safeModel(simConfig));
-    afterRisk = calculateInjuryRisks(afterBio);
-  } catch (_e) {
-    // risk computation optional
-  }
+    beforeRisk = calculateInjuryRisks(calculateFullBiomechanics(170, bodyWeightKg, safeModel(baseModelConfig)));
+    afterRisk = calculateInjuryRisks(calculateFullBiomechanics(170, bodyWeightKg, safeModel(simConfig)));
+  } catch (_e) { /* optional */ }
 
   const riskDeltas: RiskDelta[] = [];
   const overallBefore = beforeRisk?.overallRiskScore ?? 0;
@@ -324,7 +390,7 @@ export function computeWhatIfComparison(
       const ar = afterRisk.jointRisks[region];
       if (br && ar) {
         for (const risk of br.risks) {
-          const afterMatch = ar.risks.find((r: any) => r.id === risk.id);
+          const afterMatch = ar.risks.find((r: { id: string }) => r.id === risk.id);
           if (afterMatch) {
             riskDeltas.push({
               region,
@@ -359,6 +425,9 @@ export function computeWhatIfComparison(
   }
 
   const topImprovements: string[] = [];
+  if (overallAfter < overallBefore) {
+    topImprovements.push(`Overall risk: ${overallBefore.toFixed(0)} → ${overallAfter.toFixed(0)} (↓${(overallBefore - overallAfter).toFixed(0)})`);
+  }
   const sortedForces = [...forceDeltas].sort((a, b) => a.delta - b.delta);
   for (const fd of sortedForces.slice(0, 3)) {
     if (fd.delta < 0) {
@@ -371,8 +440,9 @@ export function computeWhatIfComparison(
       topImprovements.push(`${rd.label}: risk ↓${Math.abs(rd.delta).toFixed(0)} pts`);
     }
   }
-  if (overallAfter < overallBefore) {
-    topImprovements.unshift(`Overall risk: ${overallBefore.toFixed(0)} → ${overallAfter.toFixed(0)} (↓${(overallBefore - overallAfter).toFixed(0)})`);
+  const resolvedComps = compensationDeltas.filter(c => c.resolvedPercent >= 50);
+  for (const rc of resolvedComps.slice(0, 2)) {
+    topImprovements.push(`${rc.pattern}: ${rc.resolvedPercent.toFixed(0)}% resolved`);
   }
 
   return {
@@ -385,6 +455,9 @@ export function computeWhatIfComparison(
     forceDeltas: forceDeltas.sort((a, b) => a.delta - b.delta),
     riskDeltas: riskDeltas.sort((a, b) => a.delta - b.delta),
     compensationDeltas,
+    muscleDeltas: muscleDeltas.sort((a, b) => (a.activationAfter - a.activationBefore) - (b.activationAfter - b.activationBefore)),
+    correlationBefore: before.correlation,
+    correlationAfter: after.correlation,
     topImprovements,
     simulatedModelConfig: simConfig,
     simulatedOverrides: simOverrides,

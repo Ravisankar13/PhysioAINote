@@ -2858,9 +2858,25 @@ ${ddxList}`;
     return computeChainDrivenJointEffects(chainPropagation);
   }, [chainPropagation, bidirectionalMode]);
 
+  const whatIfSimulatedConfig = useMemo(() => {
+    if (!showWhatIfSimulation || whatIfScenarios.length === 0) return null;
+    const pmForComparison = painMarkers.map(pm => ({
+      id: pm.id,
+      position: pm.position,
+      label: pm.anatomicalLabel || pm.nearestBone,
+      type: pm.type as 'point' | 'area' | 'referred' | 'line' | 'paint',
+      severity: (pm as Record<string, unknown>).severity as number ?? 5,
+      description: pm.description,
+    }));
+    return computeWhatIfComparison(effectiveModelConfig, compensatedOverrides, pmForComparison, bodyWeightKg, whatIfScenarios);
+  }, [showWhatIfSimulation, whatIfScenarios, effectiveModelConfig, compensatedOverrides, painMarkers, bodyWeightKg]);
+
   const finalModelConfig = useMemo(() => {
-    if (!chainDrivenJointEffects) return effectiveModelConfig;
-    const config = JSON.parse(JSON.stringify(effectiveModelConfig));
+    const baseConfig = (whatIfSimulatedConfig?.simulatedModelConfig)
+      ? whatIfSimulatedConfig.simulatedModelConfig
+      : effectiveModelConfig;
+    if (!chainDrivenJointEffects) return baseConfig;
+    const config = JSON.parse(JSON.stringify(baseConfig));
     for (const [joint, params] of Object.entries(chainDrivenJointEffects)) {
       if (!config[joint]) config[joint] = {};
       for (const [param, value] of Object.entries(params)) {
@@ -2869,7 +2885,7 @@ ${ddxList}`;
       }
     }
     return config;
-  }, [effectiveModelConfig, chainDrivenJointEffects]);
+  }, [effectiveModelConfig, chainDrivenJointEffects, whatIfSimulatedConfig]);
 
   const crossMuscleEffects = useMemo((): CrossMuscleEffects | undefined => {
     const ri = muscleDrivenEffects?.reciprocalInhibitions;
@@ -2919,19 +2935,6 @@ ${ddxList}`;
     });
   }, [effectiveModelConfig, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode, showInjuryMechanism]);
 
-  const whatIfComparison = useMemo((): WhatIfComparisonResult | null => {
-    if (!showWhatIfSimulation || whatIfScenarios.length === 0) return null;
-    const pmForComparison = painMarkers.map(pm => ({
-      id: pm.id,
-      position: pm.position,
-      label: pm.anatomicalLabel || pm.nearestBone,
-      type: pm.type as 'point' | 'area' | 'referred' | 'line' | 'paint',
-      severity: (pm as any).severity ?? 5,
-      description: pm.description,
-    }));
-    return computeWhatIfComparison(effectiveModelConfig, compensatedOverrides, pmForComparison, bodyWeightKg, whatIfScenarios);
-  }, [showWhatIfSimulation, whatIfScenarios, effectiveModelConfig, compensatedOverrides, painMarkers, bodyWeightKg]);
-
   const handleAddWhatIfScenario = useCallback((scenario: WhatIfScenario) => {
     setWhatIfScenarios(prev => {
       if (prev.find(s => s.id === scenario.id)) return prev;
@@ -2948,14 +2951,14 @@ ${ddxList}`;
   }, []);
 
   const handleApplyWhatIfToSkeleton = useCallback(() => {
-    if (!whatIfComparison) return;
-    setModelConfig(whatIfComparison.simulatedModelConfig);
-    for (const [key, val] of Object.entries(whatIfComparison.simulatedOverrides)) {
+    if (!whatIfSimulatedConfig) return;
+    setModelConfig(whatIfSimulatedConfig.simulatedModelConfig);
+    for (const [key, val] of Object.entries(whatIfSimulatedConfig.simulatedOverrides)) {
       setMuscleOverrides(prev => ({ ...prev, [key]: { ...prev[key], ...val } }));
     }
     setWhatIfScenarios([]);
     setShowWhatIfSimulation(false);
-  }, [whatIfComparison]);
+  }, [whatIfSimulatedConfig]);
 
   const chainIntegrityScores = useMemo(() => {
     if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
@@ -7727,7 +7730,7 @@ ${ddxList}`;
                     />
                   ) : (
                     <WhatIfSimulationPanel
-                      comparison={whatIfComparison}
+                      comparison={whatIfSimulatedConfig}
                       activeScenarios={whatIfScenarios}
                       onAddScenario={handleAddWhatIfScenario}
                       onRemoveScenario={handleRemoveWhatIfScenario}

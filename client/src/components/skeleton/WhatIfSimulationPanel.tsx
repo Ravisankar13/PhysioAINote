@@ -19,6 +19,7 @@ import {
   Move,
   ChevronDown,
   ChevronUp,
+  Activity,
 } from "lucide-react";
 import {
   type WhatIfScenario,
@@ -69,6 +70,7 @@ export default function WhatIfSimulationPanel({
   const [customMagnitude, setCustomMagnitude] = useState(20);
   const [showForceDetails, setShowForceDetails] = useState(false);
   const [showRiskDetails, setShowRiskDetails] = useState(false);
+  const [showMuscleDetails, setShowMuscleDetails] = useState(false);
 
   const activeIds = useMemo(() => new Set(activeScenarios.map(s => s.id)), [activeScenarios]);
 
@@ -317,6 +319,39 @@ export default function WhatIfSimulationPanel({
                         </span>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {comparison.muscleDeltas && comparison.muscleDeltas.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowMuscleDetails(!showMuscleDetails)}
+                  className="flex items-center justify-between w-full text-[10px] text-gray-300 hover:text-gray-100 mb-1"
+                >
+                  <span className="font-semibold">Muscle Changes</span>
+                  {showMuscleDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+                {showMuscleDetails && (
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {comparison.muscleDeltas.slice(0, 10).map((md) => {
+                      const actDelta = md.activationAfter - md.activationBefore;
+                      return (
+                        <div key={md.muscleId} className="flex items-center gap-1 text-[9px]">
+                          <Activity className="h-2.5 w-2.5 text-blue-400 flex-shrink-0" />
+                          <span className="text-gray-400 w-16 truncate">{md.label}</span>
+                          <span className={`w-12 text-right font-mono ${actDelta > 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                            {actDelta > 0 ? '↑' : '↓'}{Math.abs(actDelta).toFixed(0)}% act
+                          </span>
+                          {md.statusBefore !== md.statusAfter && (
+                            <Badge variant="outline" className="text-[7px] px-0.5 py-0 text-cyan-400 border-cyan-500/30">
+                              {md.statusAfter}
+                            </Badge>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -117,6 +117,7 @@ import ClinicalTextInput, { type ClinicalParseResult } from "@/components/skelet
 import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
 import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
 import RiskPrognosisDashboard from "@/components/skeleton/RiskPrognosisDashboard";
+import InjuryMechanismPanel from "@/components/skeleton/InjuryMechanismPanel";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 
 const BODY_REGIONS = {
@@ -476,6 +477,7 @@ export default function PhysioGPT() {
   const [selectedTissueEntry, setSelectedTissueEntry] = useState<string | null>(null);
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
+  const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
   const [zoomToolMode, setZoomToolMode] = useState(false);
@@ -6976,6 +6978,15 @@ ${ddxList}`;
                 <Shield className="h-3 w-3 mr-1" />
                 Risk
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${showInjuryMechanism ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => setShowInjuryMechanism(!showInjuryMechanism)}
+              >
+                <Zap className="h-3 w-3 mr-1" />
+                Mechanism
+              </Button>
               <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
               <Button
                 variant="secondary"
@@ -7600,6 +7611,32 @@ ${ddxList}`;
                     bodyWeightKg={bodyWeightKg}
                     muscleAnalysis={hudMuscleAnalysis?.allMuscles}
                     correlationResult={correlationResult}
+                  />
+                </div>
+              </div>
+            )}
+
+            {showInjuryMechanism && (
+              <div className="absolute top-2 right-2 z-30 w-[280px] max-h-[calc(100%-50px)] overflow-y-auto animate-in slide-in-from-right-2 duration-200">
+                <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-3.5 w-3.5 text-amber-400" />
+                      <span className="text-xs font-semibold text-gray-200">Injury Mechanism</span>
+                    </div>
+                    <button
+                      onClick={() => setShowInjuryMechanism(false)}
+                      className="text-gray-400 hover:text-white p-0.5"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <InjuryMechanismPanel
+                    forceAnalysis={hudForceAnalysis}
+                    compensatedOverrides={compensatedOverrides}
+                    pathologyCompensation={pathologyCompensation}
+                    correlationResult={correlationResult}
+                    bodyWeightKg={bodyWeightKg}
                   />
                 </div>
               </div>

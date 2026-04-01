@@ -2860,7 +2860,7 @@ ${ddxList}`;
   }, [chainPropagation, bidirectionalMode]);
 
   const whatIfSimulatedConfig = useMemo(() => {
-    if (!showWhatIfSimulation || whatIfScenarios.length === 0) return null;
+    if (whatIfScenarios.length === 0) return null;
     const pmForComparison = painMarkers.map(pm => ({
       id: pm.id,
       position: pm.position,
@@ -2869,13 +2869,35 @@ ${ddxList}`;
       severity: (pm as Record<string, unknown>).severity as number ?? 5,
       description: pm.description,
     }));
-    return computeWhatIfComparison(effectiveModelConfig, compensatedOverrides, pmForComparison, bodyWeightKg, whatIfScenarios);
-  }, [showWhatIfSimulation, whatIfScenarios, effectiveModelConfig, compensatedOverrides, painMarkers, bodyWeightKg]);
+    const rawOverrides: Record<string, Partial<MuscleOverride>> = {};
+    for (const [key, val] of Object.entries(muscleOverrides)) {
+      if (val.isManual) {
+        rawOverrides[key] = val;
+      }
+    }
+    return computeWhatIfComparison(modelConfig, rawOverrides, pmForComparison, bodyWeightKg, whatIfScenarios);
+  }, [whatIfScenarios, modelConfig, muscleOverrides, painMarkers, bodyWeightKg]);
 
   const finalModelConfig = useMemo(() => {
-    const baseConfig = (whatIfSimulatedConfig?.simulatedModelConfig)
-      ? whatIfSimulatedConfig.simulatedModelConfig
-      : effectiveModelConfig;
+    let baseConfig = effectiveModelConfig;
+    if (whatIfSimulatedConfig?.simulatedModelConfig) {
+      const simulated = whatIfSimulatedConfig.simulatedModelConfig;
+      const merged = JSON.parse(JSON.stringify(effectiveModelConfig));
+      for (const [joint, params] of Object.entries(simulated)) {
+        if (typeof params === 'object' && params !== null) {
+          if (!merged[joint]) merged[joint] = {};
+          for (const [param, simVal] of Object.entries(params as Record<string, number>)) {
+            const rawVal = (modelConfig[joint] as Record<string, number> | undefined)?.[param] ?? 0;
+            const delta = (simVal as number) - rawVal;
+            if (Math.abs(delta) > 0.001) {
+              const current = merged[joint][param] ?? 0;
+              merged[joint][param] = current + delta;
+            }
+          }
+        }
+      }
+      baseConfig = merged;
+    }
     if (!chainDrivenJointEffects) return baseConfig;
     const config = JSON.parse(JSON.stringify(baseConfig));
     for (const [joint, params] of Object.entries(chainDrivenJointEffects)) {
@@ -2886,7 +2908,7 @@ ${ddxList}`;
       }
     }
     return config;
-  }, [effectiveModelConfig, chainDrivenJointEffects, whatIfSimulatedConfig]);
+  }, [effectiveModelConfig, modelConfig, chainDrivenJointEffects, whatIfSimulatedConfig]);
 
   const crossMuscleEffects = useMemo((): CrossMuscleEffects | undefined => {
     const ri = muscleDrivenEffects?.reciprocalInhibitions;
@@ -2909,7 +2931,12 @@ ${ddxList}`;
 
   const effectiveOverrides = useMemo(() => {
     if (whatIfSimulatedConfig?.simulatedOverrides) {
-      return whatIfSimulatedConfig.simulatedOverrides as Record<string, MuscleOverride>;
+      const merged = { ...compensatedOverrides };
+      for (const [key, val] of Object.entries(whatIfSimulatedConfig.simulatedOverrides)) {
+        const existing = merged[key as keyof typeof merged];
+        merged[key as keyof typeof merged] = { ...existing, ...val } as MuscleOverride;
+      }
+      return merged;
     }
     return compensatedOverrides;
   }, [compensatedOverrides, whatIfSimulatedConfig]);

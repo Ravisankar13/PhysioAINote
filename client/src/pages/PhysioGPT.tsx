@@ -7581,7 +7581,7 @@ ${ddxList}`;
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <Shield className="h-3.5 w-3.5 text-cyan-400" />
-                      <span className="text-xs font-semibold text-gray-200">Risk Dashboard</span>
+                      <span className="text-xs font-semibold text-gray-200">Risk & Prognosis</span>
                     </div>
                     <button
                       onClick={() => setShowRiskDashboard(false)}

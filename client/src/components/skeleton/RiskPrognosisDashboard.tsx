@@ -286,8 +286,22 @@ export default function RiskPrognosisDashboard({
       prob += warnings.postureWarnings.filter(w => w.severity === 'high' || w.severity === 'critical').length * 3;
     }
 
+    if (forceAnalysis?.joints?.length) {
+      const sorted = [...forceAnalysis.joints].sort((a: JointSurfaceForce, b: JointSurfaceForce) => b.totalForce - a.totalForce);
+      const worstJoint = sorted[0];
+      const loadN = worstJoint.totalForce * bodyWeightKg * 9.81;
+      let threshN = CLINICAL_FORCE_THRESHOLDS.generic;
+      const cat = worstJoint.category;
+      if (cat.includes('lumbar') || cat.includes('thoracic') || cat.includes('cervical')) threshN = CLINICAL_FORCE_THRESHOLDS.lumbarCritical;
+      else if (cat.includes('knee')) threshN = CLINICAL_FORCE_THRESHOLDS.kneePFCritical;
+      const loadRatio = loadN / threshN;
+      if (loadRatio > 0.9) prob += 15;
+      else if (loadRatio > 0.7) prob += 8;
+      else if (loadRatio > 0.5) prob += 3;
+    }
+
     return clamp(prob, 5, 95);
-  }, [compensatedOverrides, pathologyCompensation, chainIntegrityScores, painMarkers, injuryRiskResult]);
+  }, [compensatedOverrides, pathologyCompensation, chainIntegrityScores, painMarkers, injuryRiskResult, forceAnalysis, bodyWeightKg]);
 
   const loadTolerance = useMemo(() => {
     if (!forceAnalysis?.joints?.length) return null;
@@ -492,28 +506,29 @@ export default function RiskPrognosisDashboard({
               <div className="text-[10px] text-gray-400 mb-2 italic">Overall: {treatmentPlan.overallTimeline}</div>
             )}
             <div className="relative">
-              <div className="absolute left-2 top-2 bottom-2 w-0.5 bg-gray-700" />
-              {recoveryPhases.map((phase, i) => (
-                <div key={i} className="relative flex items-start gap-3 mb-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 z-10 ${
-                    phase.isCurrent
-                      ? 'bg-cyan-500 border-cyan-400'
-                      : 'bg-gray-800 border-gray-600'
-                  }`}>
-                    {phase.isCurrent && <div className="w-1.5 h-1.5 bg-white rounded-full m-auto mt-0.5" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-medium ${phase.isCurrent ? 'text-cyan-300' : 'text-gray-400'}`}>
+              <div className="flex items-center gap-0 w-full">
+                {recoveryPhases.map((phase, i) => (
+                  <div key={i} className="flex items-center" style={{ flex: 1, minWidth: 0 }}>
+                    <div className="flex flex-col items-center flex-1 min-w-0">
+                      <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 z-10 flex items-center justify-center ${
+                        phase.isCurrent
+                          ? 'bg-cyan-500 border-cyan-400'
+                          : 'bg-gray-800 border-gray-600'
+                      }`}>
+                        {phase.isCurrent && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      </div>
+                      <span className={`text-[10px] font-medium mt-1 text-center leading-tight ${phase.isCurrent ? 'text-cyan-300' : 'text-gray-400'}`}>
                         {phase.label}
                       </span>
-                      {phase.isCurrent && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-cyan-500/40 text-cyan-400">Current</Badge>}
+                      <span className="text-[9px] text-gray-500 text-center">{phase.weeks}</span>
+                      {phase.isCurrent && <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-cyan-500/40 text-cyan-400 mt-0.5">Now</Badge>}
                     </div>
-                    <span className="text-[10px] text-gray-500">{phase.weeks}</span>
+                    {i < recoveryPhases.length - 1 && (
+                      <div className="h-0.5 bg-gray-700 flex-shrink-0" style={{ width: 12 }} />
+                    )}
                   </div>
-                  {i < recoveryPhases.length - 1 && <ArrowRight className="w-3 h-3 text-gray-600 flex-shrink-0 mt-0.5" />}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </CollapsibleContent>

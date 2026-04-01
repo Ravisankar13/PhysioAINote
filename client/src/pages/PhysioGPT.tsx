@@ -7721,11 +7721,11 @@ ${ddxList}`;
                   </div>
                   <RiskPrognosisDashboard
                     forceAnalysis={hudForceAnalysis}
-                    compensatedOverrides={compensatedOverrides}
+                    compensatedOverrides={effectiveOverrides}
                     pathologyCompensation={pathologyCompensation}
                     chainIntegrityScores={hudChainIntegrity}
                     painMarkers={painMarkers}
-                    modelConfig={modelConfig}
+                    modelConfig={finalModelConfig}
                     bodyWeightKg={bodyWeightKg}
                     muscleAnalysis={hudMuscleAnalysis?.allMuscles}
                     correlationResult={correlationResult}

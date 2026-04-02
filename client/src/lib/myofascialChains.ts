@@ -641,3 +641,68 @@ export function findChainsForBone(boneName: string): { chainId: string; muscleId
 
   return results;
 }
+
+export interface PainTensionContributor {
+  painMarkerId: string;
+  painLabel: string;
+  contributors: {
+    chainId: string;
+    chainName: string;
+    chainColor: string;
+    muscleId: string;
+    tension: number;
+    tensionDeviation: number;
+    score: number;
+  }[];
+}
+
+export function rankPainTensionContributors(
+  painMarkers: { id: string; nearestBone: string; anatomicalLabel?: string }[],
+  tensions: Record<string, number>,
+  chainEffects: { chainId: string; avgTension: number }[]
+): PainTensionContributor[] {
+  const results: PainTensionContributor[] = [];
+
+  for (const pm of painMarkers) {
+    if (!pm.nearestBone) continue;
+    const chainMatches = findChainsForBone(pm.nearestBone);
+    const contributorMap = new Map<string, PainTensionContributor['contributors'][number]>();
+
+    for (const match of chainMatches) {
+      const chain = MYOFASCIAL_CHAINS.find(c => c.id === match.chainId);
+      if (!chain) continue;
+      const effect = chainEffects.find(e => e.chainId === match.chainId);
+      const chainTension = effect?.avgTension ?? 50;
+      const muscleTension = tensions[match.muscleId] ?? 50;
+      const tensionDeviation = Math.abs(muscleTension - 50);
+      const chainDeviation = Math.abs(chainTension - 50);
+      const score = tensionDeviation * 0.6 + chainDeviation * 0.4;
+
+      if (score < 3) continue;
+
+      const key = `${match.chainId}_${match.muscleId}`;
+      if (!contributorMap.has(key) || (contributorMap.get(key)?.score ?? 0) < score) {
+        contributorMap.set(key, {
+          chainId: match.chainId,
+          chainName: chain.name,
+          chainColor: chain.color,
+          muscleId: match.muscleId,
+          tension: muscleTension,
+          tensionDeviation,
+          score,
+        });
+      }
+    }
+
+    const contributors = Array.from(contributorMap.values()).sort((a, b) => b.score - a.score);
+    if (contributors.length > 0) {
+      results.push({
+        painMarkerId: pm.id,
+        painLabel: pm.anatomicalLabel || pm.nearestBone,
+        contributors,
+      });
+    }
+  }
+
+  return results;
+}

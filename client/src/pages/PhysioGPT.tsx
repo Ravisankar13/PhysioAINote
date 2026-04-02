@@ -105,7 +105,8 @@ import { getClinicalPresetCategories, applyPresetToConfig, type ClinicalPostureP
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
-import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState } from "@/lib/myofascialChains";
+import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors } from "@/lib/myofascialChains";
+import UnifiedChainPanel from "@/components/skeleton/UnifiedChainPanel";
 import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel, getInfluencePathwayAbbrev, getDominantPathway, type InfluenceMap, type InfluencePathway } from "@/lib/muscleInfluenceMap";
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
@@ -452,9 +453,8 @@ export default function PhysioGPT() {
   const [muscleOverrides, setMuscleOverrides] = useState<Record<string, MuscleOverride>>({});
   const [showBalanceRatios, setShowBalanceRatios] = useState(false);
   const [showTreatmentPriority, setShowTreatmentPriority] = useState(false);
-  const [chainExplorerMode, setChainExplorerMode] = useState(false);
+  const [showUnifiedChainPanel, setShowUnifiedChainPanel] = useState(false);
   const [selectedChainId, setSelectedChainId] = useState<string | null>(null);
-  const [expandedChainLink, setExpandedChainLink] = useState<string | null>(null);
   const [forceAiSuggestions, setForceAiSuggestions] = useState<string | null>(null);
   const [forceAiLoading, setForceAiLoading] = useState(false);
   const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
@@ -501,14 +501,10 @@ export default function PhysioGPT() {
   const [correlationMode, setCorrelationMode] = useState(false);
   const [expandedCorrelation, setExpandedCorrelation] = useState<string | null>(null);
   const [correlationTab, setCorrelationTab] = useState<'overview' | 'chains' | 'muscles' | 'root_cause'>('overview');
-  const [chainIntegrityMode, setChainIntegrityMode] = useState(false);
-  const [expandedChainIntegrity, setExpandedChainIntegrity] = useState<string | null>(null);
   const [bidirectionalMode, setBidirectionalMode] = useState(true);
-  const [showChainVisualization, setShowChainVisualization] = useState(false);
   const [activeChainIds, setActiveChainIds] = useState<string[]>(() => MYOFASCIAL_CHAINS.map(c => c.id));
   const [showPropagation, setShowPropagation] = useState(false);
   const [selectedChainNode, setSelectedChainNode] = useState<{ chainId: string; muscleId: string; chainName: string } | null>(null);
-  const [showChainRecommendations, setShowChainRecommendations] = useState(false);
   const [manualChainTensions, setManualChainTensions] = useState<Record<string, number>>({});
   const [showScarPanel, setShowScarPanel] = useState(false);
   const [scarMarkers, setScarMarkers] = useState<ScarMarker[]>([]);
@@ -2928,7 +2924,7 @@ ${ddxList}`;
   }, [effectiveModelConfig, forceMode, bodyWeightKg]);
 
   const correlationResult = useMemo(() => {
-    if (!correlationMode && !chainIntegrityMode && !chainExplorerMode && !showInjuryMechanism) return null;
+    if (!correlationMode && !showUnifiedChainPanel && !showInjuryMechanism) return null;
     const forces = calculatePosturalForces(finalModelConfig);
     const baseAnalysis = computeFullMuscleAnalysis(finalModelConfig);
     const muscles = applyOverridesToAnalysis(baseAnalysis, effectiveOverrides);
@@ -2941,7 +2937,7 @@ ${ddxList}`;
       kineticChains: KINETIC_CHAINS,
       bodyWeightKg,
     });
-  }, [finalModelConfig, effectiveOverrides, painMarkers, bodyWeightKg, correlationMode, chainIntegrityMode, chainExplorerMode, showInjuryMechanism]);
+  }, [finalModelConfig, effectiveOverrides, painMarkers, bodyWeightKg, correlationMode, showUnifiedChainPanel, showInjuryMechanism]);
 
   const handleAddWhatIfScenario = useCallback((scenario: WhatIfScenario) => {
     setWhatIfScenarios(prev => {
@@ -2986,7 +2982,7 @@ ${ddxList}`;
   }, [whatIfSimulatedConfig, modelConfig, effectiveModelConfig]);
 
   const chainIntegrityScores = useMemo(() => {
-    if (!chainExplorerMode && !chainIntegrityMode) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
+    if (!showUnifiedChainPanel) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     const baseAnalysis = computeFullMuscleAnalysis(effectiveModelConfig);
     const muscles = applyOverridesToAnalysis(baseAnalysis, compensatedOverrides, crossMuscleEffects);
     const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
@@ -3019,7 +3015,7 @@ ${ddxList}`;
       scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
     }
     return scores;
-  }, [effectiveModelConfig, chainExplorerMode, chainIntegrityMode, compensatedOverrides, crossMuscleEffects]);
+  }, [effectiveModelConfig, showUnifiedChainPanel, compensatedOverrides, crossMuscleEffects]);
 
   const hudForceAnalysis = useMemo(() => {
     const hasActiveSimulation = whatIfSimulatedConfig && whatIfScenarios.length > 0;

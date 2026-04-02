@@ -877,7 +877,11 @@ Return ONLY valid JSON with this exact structure:
     };
   });
 
-  hypotheses.sort((a, b) => b.confidence - a.confidence);
+  hypotheses.sort((a, b) => {
+    const weightedA = a.confidence * 0.6 + a.fingerprintMatchScore * 0.4;
+    const weightedB = b.confidence * 0.6 + b.fingerprintMatchScore * 0.4;
+    return weightedB - weightedA;
+  });
 
   const dsd = result.dominantSymptomDriver || {};
   const rl = result.reasoningLayers || {};

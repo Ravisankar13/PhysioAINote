@@ -1733,11 +1733,11 @@ ${ddxList}`;
 
   const handleStructuredHypothesisClick = useCallback((hypothesis: StructuredHypothesis) => {
     setSelectedHypothesisForChat({
-      id: hypothesis.name.replace(/\s+/g, '-').toLowerCase(),
-      condition: hypothesis.name,
-      confidence: hypothesis.score,
-      supportingEvidence: hypothesis.supportingFactors,
-      rulingOutFactors: hypothesis.contradictingFactors,
+      id: hypothesis.id,
+      condition: hypothesis.condition,
+      confidence: hypothesis.confidence,
+      supportingEvidence: hypothesis.supporting.map(s => s.feature),
+      rulingOutFactors: hypothesis.contradicting.map(c => c.feature),
     });
     setHypothesisChatOpen(true);
   }, []);

@@ -1731,6 +1731,17 @@ ${ddxList}`;
     setHypothesisChatOpen(true);
   }, []);
 
+  const handleStructuredHypothesisClick = useCallback((hypothesis: StructuredHypothesis) => {
+    setSelectedHypothesisForChat({
+      id: hypothesis.name.replace(/\s+/g, '-').toLowerCase(),
+      condition: hypothesis.name,
+      confidence: hypothesis.score,
+      supportingEvidence: hypothesis.supportingFactors,
+      rulingOutFactors: hypothesis.contradictingFactors,
+    });
+    setHypothesisChatOpen(true);
+  }, []);
+
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;
     setPosturalMetrics(metrics);
@@ -8717,6 +8728,7 @@ ${ddxList}`;
         onHypothesisClick={handleHypothesisClick}
         structuredData={structuredReasoningData}
         structuredLoading={structuredReasoningLoading}
+        onStructuredHypothesisClick={handleStructuredHypothesisClick}
       />
 
       <HypothesisChatPanel

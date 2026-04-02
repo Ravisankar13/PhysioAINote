@@ -20,6 +20,7 @@ import {
   Settings,
   Search,
   ArrowRight,
+  Star,
 } from "lucide-react";
 
 export interface ReasoningHypothesis {
@@ -410,11 +411,17 @@ export default function StructuredReasoningTab({ data, isLoading, onHypothesisCl
       {missingData.length > 0 && (
         <Section icon={Search} title="Q8: Missing Data" color="text-orange-400" badge={missingData.length} defaultOpen={false}>
           {missingData.slice(0, 8).map((md, i) => (
-            <div key={i} className="rounded-lg p-2 border bg-gray-800/30 border-orange-500/15">
+            <div key={i} className={`rounded-lg p-2 border ${i === 0 ? 'bg-orange-500/10 border-orange-400/30 ring-1 ring-orange-400/20' : 'bg-gray-800/30 border-orange-500/15'}`}>
+              {i === 0 && (
+                <div className="flex items-center gap-1 mb-1.5">
+                  <Star className="h-2.5 w-2.5 text-orange-400 fill-orange-400" />
+                  <span className="text-[8px] font-bold text-orange-300 uppercase tracking-wider">Most Valuable Next Question</span>
+                </div>
+              )}
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-1.5 min-w-0">
                   <HelpCircle className="h-3 w-3 text-orange-400 mt-0.5 shrink-0" />
-                  <p className="text-[9px] text-gray-300">{md.question}</p>
+                  <p className={`text-[9px] ${i === 0 ? 'text-orange-200 font-medium' : 'text-gray-300'}`}>{md.question}</p>
                 </div>
                 <span className="text-[8px] px-1 py-0.5 bg-orange-500/10 text-orange-400 rounded shrink-0">{md.category}</span>
               </div>

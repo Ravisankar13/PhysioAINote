@@ -19,7 +19,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { KINETIC_CHAINS, CHAIN_BONE_MAPPING } from "@/lib/kineticChainExplorer";
 import type { KineticChainDefinition } from "@/lib/kineticChainExplorer";
-import { MYOFASCIAL_CHAINS, type ChainRecommendation, type PainTensionContributor } from "@/lib/myofascialChains";
+import { MYOFASCIAL_CHAINS, mapJointIdToMuscleIds, type ChainRecommendation, type PainTensionContributor } from "@/lib/myofascialChains";
 
 type TabId = 'explorer' | 'tension' | 'treatments';
 
@@ -437,23 +437,37 @@ function ExplorerTab({
                                     </div>
                                   );
                                 })()}
-                                <InlineTensionSlider
-                                  muscleId={link.jointId}
-                                  label={link.label}
-                                  baseTension={baseTensions[link.jointId] ?? 50}
-                                  manualTension={manualChainTensions[link.jointId]}
-                                  onTensionChange={(val) => {
-                                    setManualChainTensions(prev => ({ ...prev, [link.jointId]: val }));
-                                    setShowPropagation(() => true);
-                                  }}
-                                  onReset={() => {
-                                    setManualChainTensions(prev => {
-                                      const next = { ...prev };
-                                      delete next[link.jointId];
-                                      return next;
-                                    });
-                                  }}
-                                />
+                                {(() => {
+                                  const mappedIds = mapJointIdToMuscleIds(link.jointId);
+                                  const primaryId = mappedIds[0] || link.jointId;
+                                  return (
+                                    <InlineTensionSlider
+                                      muscleId={primaryId}
+                                      label={link.label}
+                                      baseTension={baseTensions[primaryId] ?? 50}
+                                      manualTension={manualChainTensions[primaryId]}
+                                      onTensionChange={(val) => {
+                                        setManualChainTensions(prev => {
+                                          const updates: Record<string, number> = { ...prev };
+                                          for (const mid of mappedIds) {
+                                            updates[mid] = val;
+                                          }
+                                          return updates;
+                                        });
+                                        setShowPropagation(() => true);
+                                      }}
+                                      onReset={() => {
+                                        setManualChainTensions(prev => {
+                                          const next = { ...prev };
+                                          for (const mid of mappedIds) {
+                                            delete next[mid];
+                                          }
+                                          return next;
+                                        });
+                                      }}
+                                    />
+                                  );
+                                })()}
                               </div>
                             )}
                           </div>

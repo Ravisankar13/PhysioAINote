@@ -5907,7 +5907,7 @@ ${ddxList}`;
                 showPropagation={showPropagation}
                 setShowPropagation={setShowPropagation}
                 onClose={() => { setShowUnifiedChainPanel(false); setSelectedChainNode(null); }}
-                onTensionTabActive={() => {}}
+                onTensionTabActive={(active) => { setShowPropagation(() => active); }}
                 painTensionContributors={painTensionContributors}
                 selectedChainId={selectedChainId}
                 setSelectedChainId={setSelectedChainId}

@@ -12,13 +12,9 @@ import {
   MapPin,
   Target,
   ChevronRight,
-  Network,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { KINETIC_CHAINS, CHAIN_BONE_MAPPING } from "@/lib/kineticChainExplorer";
-import type { KineticChainDefinition } from "@/lib/kineticChainExplorer";
 import { MYOFASCIAL_CHAINS, mapJointIdToMuscleIds, type ChainRecommendation, type PainTensionContributor } from "@/lib/myofascialChains";
 
 type TabId = 'explorer' | 'tension' | 'treatments';
@@ -107,15 +103,6 @@ export default function UnifiedChainPanel({
 
   const baseTensions = baseMuscleTensions.tensions;
   const hasManualTensions = Object.keys(manualChainTensions).length > 0;
-
-  const originalTensions = (() => {
-    if (!hasManualTensions) return baseTensions;
-    const orig: Record<string, number> = { ...baseTensions };
-    for (const key of Object.keys(manualChainTensions)) {
-      delete orig[key];
-    }
-    return orig;
-  })();
 
   return (
     <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[320px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
@@ -383,7 +370,6 @@ function ExplorerTab({
                       {chain.links.map((link, li) => {
                         const isExpanded = expandedChainLink === `${chain.id}_${li}`;
                         const isProblematic = integrity?.problematicLinks.includes(link.label);
-                        const linkMuscleIds = link.muscles.map(m => m.toLowerCase().replace(/\s+/g, '_'));
                         return (
                           <div key={li}>
                             <button
@@ -940,6 +926,33 @@ function TreatmentsTab({
               );
             })}
           </div>
+          {(() => {
+            const affectedChains = MYOFASCIAL_CHAINS.filter(ch =>
+              ch.links.some(l => manualChainTensions[l.muscleId] !== undefined)
+            );
+            if (affectedChains.length === 0) return null;
+            return (
+              <div className="mt-1.5 pt-1.5 border-t border-amber-500/15">
+                <span className="text-[7px] text-amber-400/80 font-medium">Chain-Level Impact</span>
+                <div className="mt-0.5 space-y-0.5">
+                  {affectedChains.map(ch => {
+                    const beforeAvg = ch.links.reduce((s, l) => s + (baseTensions[l.muscleId] ?? 50), 0) / ch.links.length;
+                    const afterAvg = ch.links.reduce((s, l) => s + (manualChainTensions[l.muscleId] ?? baseTensions[l.muscleId] ?? 50), 0) / ch.links.length;
+                    const d = afterAvg - beforeAvg;
+                    if (Math.abs(d) < 0.3) return null;
+                    return (
+                      <div key={ch.id} className="flex items-center justify-between text-[7px]">
+                        <span className="text-gray-300">{ch.name.replace(/ \([LR]\)$/, '')}</span>
+                        <span className={`font-bold ${d > 0 ? 'text-red-400' : 'text-cyan-400'}`}>
+                          {d > 0 ? '+' : ''}{d.toFixed(1)}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

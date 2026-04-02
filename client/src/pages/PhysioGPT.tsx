@@ -94,6 +94,7 @@ import type { Skeleton3DPose, PartialSkeleton3DPose, PosturalMetrics, CameraView
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import { pdfGenerator } from "@/services/pdfGenerator";
 import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink, type VisualizationRequest, type ClinicalHypothesis } from "@/components/skeleton/ClinicalReasoningPanel";
+import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypothesis } from "@/components/skeleton/StructuredReasoningTab";
 import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
@@ -533,6 +534,8 @@ export default function PhysioGPT() {
   const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
   const [clinicalReasoningProcessing, setClinicalReasoningProcessing] = useState(false);
   const [clinicalReasoningPaused, setClinicalReasoningPaused] = useState(false);
+  const [structuredReasoningData, setStructuredReasoningData] = useState<StructuredReasoningResult | null>(null);
+  const [structuredReasoningLoading, setStructuredReasoningLoading] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2702,6 +2705,54 @@ ${ddxList}`;
 
     lastReasoningTriggerRef.current = triggerKey;
     setClinicalReasoningProcessing(true);
+
+    const structuredInput: Record<string, unknown> = {
+      subjectiveHistory: subjectiveHistoryRef.current || '',
+      symptoms: markerData.map(m => m.label).filter(Boolean),
+      aggravatingFactors: [] as string[],
+      easingFactors: [] as string[],
+      painMarkers: markerData.map(m => ({
+        region: m.label || '',
+        severity: m.severity,
+        type: m.type,
+      })),
+      postureState: modelConfig,
+      duration: undefined,
+      onset: undefined,
+      nightPain: undefined,
+      restingPain: undefined,
+      sleepAffected: undefined,
+      previousEpisodes: undefined,
+    };
+
+    const subjectiveLower = (subjectiveHistoryRef.current || '').toLowerCase();
+    if (subjectiveLower.includes('night pain') || subjectiveLower.includes('wakes at night')) {
+      structuredInput.nightPain = true;
+    }
+    if (subjectiveLower.includes('rest pain') || subjectiveLower.includes('pain at rest')) {
+      structuredInput.restingPain = true;
+    }
+    if (subjectiveLower.includes('sleep') || subjectiveLower.includes('can\'t sleep')) {
+      structuredInput.sleepAffected = true;
+    }
+    if (subjectiveLower.includes('previous') || subjectiveLower.includes('recurrent') || subjectiveLower.includes('had before')) {
+      structuredInput.previousEpisodes = true;
+    }
+    const durationMatches = subjectiveLower.match(/(for|since|past|last)\s+([\w\s]+?(days?|weeks?|months?|years?))/);
+    if (durationMatches) {
+      structuredInput.duration = durationMatches[2];
+    }
+
+    setStructuredReasoningLoading(true);
+    fetch('/api/clinical-reasoning/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(structuredInput),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(result => { if (result) setStructuredReasoningData(result); })
+      .catch(err => console.error('Structured reasoning error:', err))
+      .finally(() => setStructuredReasoningLoading(false));
 
     try {
       const response = await fetch('/api/physiogpt/clinical-reasoning-analyze', {
@@ -8646,6 +8697,7 @@ ${ddxList}`;
         onPauseToggle={() => setClinicalReasoningPaused(prev => !prev)}
         onReset={() => {
           setClinicalReasoningData(null);
+          setStructuredReasoningData(null);
           setClinicalReasoningPaused(false);
           lastReasoningTriggerRef.current = '';
           setActiveVisualizationId(null);
@@ -8663,6 +8715,8 @@ ${ddxList}`;
         onVisualizationRequest={handleVisualizationRequest}
         activeVisualizationId={activeVisualizationId}
         onHypothesisClick={handleHypothesisClick}
+        structuredData={structuredReasoningData}
+        structuredLoading={structuredReasoningLoading}
       />
 
       <HypothesisChatPanel

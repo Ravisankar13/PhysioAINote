@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
+import StructuredReasoningTab, { type StructuredReasoningResult, type ReasoningHypothesis as StructuredHypothesis } from "./StructuredReasoningTab";
 
 export interface EvidenceReference {
   title: string;
@@ -198,6 +199,9 @@ interface ClinicalReasoningPanelProps {
   onVisualizationRequest?: (request: VisualizationRequest | null) => void;
   activeVisualizationId?: string | null;
   onHypothesisClick?: (hypothesis: ClinicalHypothesis) => void;
+  structuredData?: StructuredReasoningResult | null;
+  structuredLoading?: boolean;
+  onStructuredHypothesisClick?: (hypothesis: StructuredHypothesis) => void;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -403,7 +407,11 @@ export default function ClinicalReasoningPanel({
   onVisualizationRequest,
   activeVisualizationId,
   onHypothesisClick,
+  structuredData,
+  structuredLoading,
+  onStructuredHypothesisClick,
 }: ClinicalReasoningPanelProps) {
+  const [activeTab, setActiveTab] = useState<'analysis' | 'structured'>('analysis');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
     findings: true,
@@ -707,7 +715,33 @@ export default function ClinicalReasoningPanel({
           <p className="text-[8px] text-gray-600 mt-1 px-1">Press Enter to submit, Shift+Enter for new line</p>
         </div>
 
+        <div className="flex items-center border-b border-white/5 px-2">
+          <button
+            onClick={() => setActiveTab('analysis')}
+            className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'analysis' ? 'text-cyan-400 border-cyan-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
+          >
+            <Brain className="h-3 w-3" />
+            Analysis
+          </button>
+          <button
+            onClick={() => setActiveTab('structured')}
+            className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'structured' ? 'text-violet-400 border-violet-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
+          >
+            <Lightbulb className="h-3 w-3" />
+            Structured
+            {structuredData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-violet-400" />}
+          </button>
+        </div>
+
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">
+          {activeTab === 'structured' ? (
+            <StructuredReasoningTab
+              data={structuredData ?? null}
+              isLoading={structuredLoading ?? false}
+              onHypothesisClick={onStructuredHypothesisClick}
+            />
+          ) : (
+          <>
           {!hasContent && !isProcessing && (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
               <div className="p-3 rounded-full bg-cyan-500/10 mb-3">
@@ -1492,6 +1526,8 @@ export default function ClinicalReasoningPanel({
                 </div>
               )}
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

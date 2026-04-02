@@ -6448,6 +6448,21 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/clinical-reasoning/analyze", async (req: Request, res: Response) => {
+    try {
+      const { analyzeClinicalReasoning } = await import("./services/clinicalReasoningEngine");
+      const body = req.body;
+      if (!body || (!body.subjectiveHistory && !body.painMarkers?.length && !body.symptoms?.length)) {
+        return res.status(400).json({ error: "At least subjectiveHistory, symptoms, or painMarkers required" });
+      }
+      const result = await analyzeClinicalReasoning(body);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Structured clinical reasoning error:", error);
+      res.status(500).json({ error: "Failed to run structured clinical reasoning analysis" });
+    }
+  });
+
   app.post("/api/clinical-notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { reasoningData, subjectiveHistory } = req.body;

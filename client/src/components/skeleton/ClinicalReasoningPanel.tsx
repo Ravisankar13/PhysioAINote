@@ -621,7 +621,7 @@ export default function ClinicalReasoningPanel({
       className={`absolute z-30 w-[340px] ${dragPos ? '' : 'top-0 right-0 h-full animate-in slide-in-from-right-2 duration-300'}`}
       style={panelStyle}
     >
-      <div className="h-full bg-gray-950/95 backdrop-blur-xl border-l border-cyan-500/20 flex flex-col shadow-2xl shadow-cyan-500/5 rounded-lg">
+      <div className={`h-full bg-gray-950/95 backdrop-blur-xl border-l border-cyan-500/20 flex flex-col shadow-2xl shadow-cyan-500/5 ${dragPos ? 'rounded-lg border border-cyan-500/20' : ''}`}>
         <div
           className={`flex items-center justify-between px-3 py-2.5 border-b border-white/10 bg-gradient-to-r from-cyan-900/20 to-transparent select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           onMouseDown={handleDragStart}

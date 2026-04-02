@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { GripVertical } from "lucide-react";
 import {
   Brain,
   AlertTriangle,
@@ -563,16 +564,59 @@ export default function ClinicalReasoningPanel({
     }
   }, [d.reasoningChain.length, d.findings.length, hasContent]);
 
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    e.preventDefault();
+    const panelEl = (e.currentTarget as HTMLElement).closest('[data-drag-panel]') as HTMLElement;
+    if (!panelEl) return;
+    const rect = panelEl.getBoundingClientRect();
+    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    setIsDragging(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMove = (e: MouseEvent) => {
+      setDragPos({
+        x: e.clientX - dragOffset.current.x,
+        y: e.clientY - dragOffset.current.y,
+      });
+    };
+    const handleUp = () => setIsDragging(false);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+  }, [isDragging]);
+
   if (!isOpen) return null;
 
   const tp = d.treatmentPlan;
   const pa = d.posturalAnalysis;
 
+  const panelStyle: React.CSSProperties = dragPos
+    ? { position: 'fixed', left: dragPos.x, top: dragPos.y, right: 'auto', height: 'min(100vh - 4rem, 800px)' }
+    : {};
+
   return (
-    <div className="absolute top-0 right-0 h-full z-30 w-[340px] animate-in slide-in-from-right-2 duration-300">
-      <div className="h-full bg-gray-950/95 backdrop-blur-xl border-l border-cyan-500/20 flex flex-col shadow-2xl shadow-cyan-500/5">
-        <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/10 bg-gradient-to-r from-cyan-900/20 to-transparent">
+    <div
+      data-drag-panel
+      className={`${dragPos ? 'fixed' : 'absolute top-0 right-0 h-full'} z-30 w-[340px] ${dragPos ? '' : 'animate-in slide-in-from-right-2 duration-300'}`}
+      style={panelStyle}
+    >
+      <div className="h-full bg-gray-950/95 backdrop-blur-xl border-l border-cyan-500/20 flex flex-col shadow-2xl shadow-cyan-500/5 rounded-lg">
+        <div
+          className={`flex items-center justify-between px-3 py-2.5 border-b border-white/10 bg-gradient-to-r from-cyan-900/20 to-transparent select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          onMouseDown={handleDragStart}
+        >
           <div className="flex items-center gap-2">
+            <GripVertical className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
             <div className="p-1 bg-gradient-to-br from-cyan-500 to-blue-600 rounded">
               <Brain className="h-3.5 w-3.5 text-white" />
             </div>

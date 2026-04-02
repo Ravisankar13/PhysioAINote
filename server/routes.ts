@@ -6448,7 +6448,7 @@ GUIDELINES:
     }
   });
 
-  app.post("/api/clinical-reasoning/analyze", async (req: Request, res: Response) => {
+  app.post("/api/clinical-reasoning/analyze", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { analyzeClinicalReasoning } = await import("./services/clinicalReasoningEngine");
       const body = req.body;

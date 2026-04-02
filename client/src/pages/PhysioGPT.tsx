@@ -2728,6 +2728,15 @@ ${ddxList}`;
         type: m.type,
       })),
       postureState: modelConfig,
+      muscleOverrides: Object.entries(muscleOverrides || {}).map(([muscle, override]) => ({
+        muscle,
+        ...(override || {}),
+      })),
+      biomechanicalData: {
+        postureDeviations,
+        forceAnalysis: forcesSummary,
+        muscleAnalysis: muscleSummary,
+      },
       duration: undefined,
       onset: undefined,
       nightPain: undefined,
@@ -2758,6 +2767,7 @@ ${ddxList}`;
     fetch('/api/clinical-reasoning/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(structuredInput),
     })
       .then(r => r.ok ? r.json() : null)

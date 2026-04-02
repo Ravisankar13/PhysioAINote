@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { GripVertical } from "lucide-react";
 import {
+  GripVertical,
   Brain,
   AlertTriangle,
   Stethoscope,
@@ -591,11 +591,10 @@ export default function ClinicalReasoningPanel({
       const parent = panelEl.offsetParent as HTMLElement | null;
       const parentRect = parent?.getBoundingClientRect() ?? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
       const panelW = 340;
-      const panelH = panelEl.offsetHeight || 400;
       let left = e.clientX - dragOffset.current.x;
       let top = e.clientY - dragOffset.current.y;
       left = Math.max(0, Math.min(left, parentRect.width - panelW));
-      top = Math.max(0, Math.min(top, parentRect.height - 40));
+      top = Math.max(0, Math.min(top, parentRect.height - 100));
       setDragPos({ left, top });
     };
     const handleUp = () => setIsDragging(false);
@@ -613,7 +612,7 @@ export default function ClinicalReasoningPanel({
   const pa = d.posturalAnalysis;
 
   const panelStyle: React.CSSProperties = dragPos
-    ? { left: dragPos.left, top: dragPos.top, right: 'auto', bottom: 'auto', maxHeight: 'calc(100% - ' + dragPos.top + 'px)' }
+    ? { left: dragPos.left, top: dragPos.top, right: 'auto', bottom: 'auto', height: `calc(100% - ${dragPos.top}px)` }
     : {};
 
   return (

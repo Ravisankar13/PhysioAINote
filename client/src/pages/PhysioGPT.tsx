@@ -1732,15 +1732,25 @@ ${ddxList}`;
   }, []);
 
   const handleStructuredHypothesisClick = useCallback((hypothesis: StructuredHypothesis) => {
+    const ctx = structuredReasoningData;
     setSelectedHypothesisForChat({
       id: hypothesis.id,
       condition: hypothesis.condition,
       confidence: hypothesis.confidence,
       supportingEvidence: hypothesis.supporting.map(s => s.feature),
       rulingOutFactors: hypothesis.contradicting.map(c => c.feature),
+      structuredContext: {
+        dominantDriver: ctx?.dominantSymptomDriver?.driver,
+        mechanism: ctx?.dominantMechanism?.mechanism,
+        stage: ctx?.stage?.stage,
+        irritability: ctx?.irritability?.level,
+        modifiers: ctx?.modifiers?.flatMap(m => m.items.map(i => `${m.category}: ${i}`)),
+        mustNotMiss: ctx?.mustNotMiss?.map(m => m.condition),
+        fingerprintMatchScore: hypothesis.fingerprintMatchScore,
+      },
     });
     setHypothesisChatOpen(true);
-  }, []);
+  }, [structuredReasoningData]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;

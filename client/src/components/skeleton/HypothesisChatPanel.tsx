@@ -10,6 +10,15 @@ export interface HypothesisData {
   confidence: number;
   supportingEvidence: string[];
   rulingOutFactors: string[];
+  structuredContext?: {
+    dominantDriver?: string;
+    mechanism?: string;
+    stage?: string;
+    irritability?: string;
+    modifiers?: string[];
+    mustNotMiss?: string[];
+    fingerprintMatchScore?: number;
+  };
 }
 
 interface ChatMessage {
@@ -388,6 +397,7 @@ export default function HypothesisChatPanel({
             confidence: hyp.confidence,
             supportingEvidence: hyp.supportingEvidence,
             rulingOutFactors: hyp.rulingOutFactors,
+            structuredContext: hyp.structuredContext || undefined,
           },
           messages: chatMessages.map(m => ({ role: m.role, content: m.content })),
           subjectiveHistory,

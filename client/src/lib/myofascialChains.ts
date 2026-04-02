@@ -445,16 +445,22 @@ export interface ChainRecommendation {
   level: 'moderate' | 'high' | 'critical';
   stretches: string[];
   treatments: string[];
+  exercises: string[];
   description: string;
 }
 
-const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: Record<string, string[]> }> = {
+const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: Record<string, string[]>; exercises: Record<string, string[]> }> = {
   superficial_back_l: {
     stretches: ['Seated Forward Fold', 'Cat-Cow Stretch', 'Standing Calf Stretch', 'Downward Dog'],
     treatments: {
       moderate: ['Foam rolling along posterior chain', 'Gentle dynamic stretching pre-activity'],
       high: ['Myofascial release of erector spinae', 'Deep tissue massage of calves and hamstrings', 'Neural flossing for sciatic nerve'],
       critical: ['Manual therapy focusing on thoracolumbar fascia', 'Trigger point dry needling of paraspinals', 'Progressive eccentric loading program'],
+    },
+    exercises: {
+      moderate: ['Glute bridges 3×12', 'Bird-dog holds 3×10s'],
+      high: ['Romanian deadlift 3×10', 'Single-leg glute bridge 3×8/side'],
+      critical: ['Nordic hamstring curls 3×6', 'Prone back extension 3×12', 'Eccentric calf raises 3×15'],
     },
   },
   superficial_back_r: {
@@ -464,6 +470,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       high: ['Myofascial release of erector spinae', 'Deep tissue massage of calves and hamstrings', 'Neural flossing for sciatic nerve'],
       critical: ['Manual therapy focusing on thoracolumbar fascia', 'Trigger point dry needling of paraspinals', 'Progressive eccentric loading program'],
     },
+    exercises: {
+      moderate: ['Glute bridges 3×12', 'Bird-dog holds 3×10s'],
+      high: ['Romanian deadlift 3×10', 'Single-leg glute bridge 3×8/side'],
+      critical: ['Nordic hamstring curls 3×6', 'Prone back extension 3×12', 'Eccentric calf raises 3×15'],
+    },
   },
   superficial_front_l: {
     stretches: ['Standing Quad Stretch', 'Hip Flexor Lunge Stretch', 'Chest Doorway Stretch', 'Cobra Pose'],
@@ -471,6 +482,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       moderate: ['Self-massage of quadriceps and hip flexors', 'Active mobility drills for hip extension'],
       high: ['Soft tissue mobilization of rectus femoris', 'Psoas release technique', 'Anterior chain stretching protocol'],
       critical: ['Instrument-assisted soft tissue mobilization (IASTM)', 'PNF stretching of hip flexors and quads', 'Breathing re-education for diaphragm release'],
+    },
+    exercises: {
+      moderate: ['Wall sit 3×30s', 'Straight-leg raise 3×10'],
+      high: ['Step-ups 3×10/side', 'Split squat 3×8/side'],
+      critical: ['Bulgarian split squat 3×8', 'Eccentric quad lowering 3×10', 'TRX hip flexor march 3×12'],
     },
   },
   superficial_front_r: {
@@ -480,6 +496,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       high: ['Soft tissue mobilization of rectus femoris', 'Psoas release technique', 'Anterior chain stretching protocol'],
       critical: ['Instrument-assisted soft tissue mobilization (IASTM)', 'PNF stretching of hip flexors and quads', 'Breathing re-education for diaphragm release'],
     },
+    exercises: {
+      moderate: ['Wall sit 3×30s', 'Straight-leg raise 3×10'],
+      high: ['Step-ups 3×10/side', 'Split squat 3×8/side'],
+      critical: ['Bulgarian split squat 3×8', 'Eccentric quad lowering 3×10', 'TRX hip flexor march 3×12'],
+    },
   },
   lateral_line_l: {
     stretches: ['Side-Lying Lateral Stretch', 'IT Band Foam Roll', 'Standing Side Bend', 'Pigeon Pose Variation'],
@@ -487,6 +508,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       moderate: ['Lateral chain foam rolling', 'Balance training on unstable surfaces'],
       high: ['IT band release with sustained pressure', 'Gluteus medius activation exercises', 'Lateral hip mobilization'],
       critical: ['Manual fascial release of lateral line', 'Corrective exercise for frontal plane imbalance', 'Neuromuscular re-education for lateral stability'],
+    },
+    exercises: {
+      moderate: ['Side-lying hip abduction 3×12', 'Single-leg balance 3×30s'],
+      high: ['Banded lateral walks 3×15', 'Side plank 3×20s'],
+      critical: ['Copenhagen adductor plank 3×10s', 'Single-leg RDL 3×8', 'Lateral step-down 3×10'],
     },
   },
   lateral_line_r: {
@@ -496,6 +522,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       high: ['IT band release with sustained pressure', 'Gluteus medius activation exercises', 'Lateral hip mobilization'],
       critical: ['Manual fascial release of lateral line', 'Corrective exercise for frontal plane imbalance', 'Neuromuscular re-education for lateral stability'],
     },
+    exercises: {
+      moderate: ['Side-lying hip abduction 3×12', 'Single-leg balance 3×30s'],
+      high: ['Banded lateral walks 3×15', 'Side plank 3×20s'],
+      critical: ['Copenhagen adductor plank 3×10s', 'Single-leg RDL 3×8', 'Lateral step-down 3×10'],
+    },
   },
   spiral_line_l: {
     stretches: ['Seated Spinal Twist', 'Thread the Needle', 'Supine Trunk Rotation', 'World\'s Greatest Stretch'],
@@ -503,6 +534,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       moderate: ['Rotational mobility exercises', 'Cross-body foam rolling patterns'],
       high: ['Oblique and rotator cuff soft tissue work', 'Anti-rotation core stability exercises', 'Thoracic spine mobilization'],
       critical: ['Manual therapy for rotational restrictions', 'Spiral line fascial release', 'Functional rotational retraining program'],
+    },
+    exercises: {
+      moderate: ['Pallof press 3×10', 'Dead bug 3×8/side'],
+      high: ['Cable woodchop 3×10', 'Half-kneeling chop and lift 3×8/side'],
+      critical: ['Turkish get-up 3×3/side', 'Anti-rotation band walkout 3×8', 'Rotational med ball throw 3×6'],
     },
   },
   spiral_line_r: {
@@ -512,6 +548,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       high: ['Oblique and rotator cuff soft tissue work', 'Anti-rotation core stability exercises', 'Thoracic spine mobilization'],
       critical: ['Manual therapy for rotational restrictions', 'Spiral line fascial release', 'Functional rotational retraining program'],
     },
+    exercises: {
+      moderate: ['Pallof press 3×10', 'Dead bug 3×8/side'],
+      high: ['Cable woodchop 3×10', 'Half-kneeling chop and lift 3×8/side'],
+      critical: ['Turkish get-up 3×3/side', 'Anti-rotation band walkout 3×8', 'Rotational med ball throw 3×6'],
+    },
   },
   deep_front_l: {
     stretches: ['Diaphragmatic Breathing', 'Psoas March', 'Deep Squat Hold', 'Child\'s Pose with Breathing'],
@@ -519,6 +560,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       moderate: ['Breathing exercises and diaphragm mobility', 'Gentle psoas stretching with pelvic control'],
       high: ['Visceral mobilization techniques', 'Deep front line fascial release', 'Pelvic floor coordination exercises'],
       critical: ['Manual therapy for deep fascial restrictions', 'Craniosacral integration', 'Comprehensive core stability retraining'],
+    },
+    exercises: {
+      moderate: ['Diaphragm breathing drill 3×10 breaths', 'Pelvic tilt 3×12'],
+      high: ['Psoas march 3×10/side', 'Half-kneeling hip flexor activation 3×8'],
+      critical: ['90/90 breathing with ball squeeze 3×8 breaths', 'Bear crawl hold 3×20s', 'Deep squat to stand 3×8'],
     },
   },
   deep_front_r: {
@@ -528,6 +574,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       high: ['Visceral mobilization techniques', 'Deep front line fascial release', 'Pelvic floor coordination exercises'],
       critical: ['Manual therapy for deep fascial restrictions', 'Craniosacral integration', 'Comprehensive core stability retraining'],
     },
+    exercises: {
+      moderate: ['Diaphragm breathing drill 3×10 breaths', 'Pelvic tilt 3×12'],
+      high: ['Psoas march 3×10/side', 'Half-kneeling hip flexor activation 3×8'],
+      critical: ['90/90 breathing with ball squeeze 3×8 breaths', 'Bear crawl hold 3×20s', 'Deep squat to stand 3×8'],
+    },
   },
   arm_line_l: {
     stretches: ['Cross-Body Shoulder Stretch', 'Wrist Flexor/Extensor Stretch', 'Doorway Pec Stretch', 'Eagle Arms'],
@@ -536,6 +587,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       high: ['Shoulder girdle soft tissue mobilization', 'Neural gliding for median/ulnar nerve', 'Rotator cuff strengthening protocol'],
       critical: ['Manual therapy for shoulder capsule restrictions', 'Comprehensive upper quarter treatment', 'Graduated loading program for arm line'],
     },
+    exercises: {
+      moderate: ['Band pull-aparts 3×15', 'Prone Y-T-W raises 3×8'],
+      high: ['Face pulls 3×12', 'External rotation with band 3×10'],
+      critical: ['Scapular push-up plus 3×10', 'Eccentric wrist curls 3×15', 'Bottoms-up kettlebell press 3×6'],
+    },
   },
   arm_line_r: {
     stretches: ['Cross-Body Shoulder Stretch', 'Wrist Flexor/Extensor Stretch', 'Doorway Pec Stretch', 'Eagle Arms'],
@@ -543,6 +599,11 @@ const CHAIN_RECOMMENDATIONS: Record<string, { stretches: string[]; treatments: R
       moderate: ['Upper limb foam rolling and self-massage', 'Scapular stabilization exercises'],
       high: ['Shoulder girdle soft tissue mobilization', 'Neural gliding for median/ulnar nerve', 'Rotator cuff strengthening protocol'],
       critical: ['Manual therapy for shoulder capsule restrictions', 'Comprehensive upper quarter treatment', 'Graduated loading program for arm line'],
+    },
+    exercises: {
+      moderate: ['Band pull-aparts 3×15', 'Prone Y-T-W raises 3×8'],
+      high: ['Face pulls 3×12', 'External rotation with band 3×10'],
+      critical: ['Scapular push-up plus 3×10', 'Eccentric wrist curls 3×15', 'Bottoms-up kettlebell press 3×6'],
     },
   },
 };
@@ -579,6 +640,7 @@ export function getChainRecommendations(
       level,
       stretches: data.stretches.slice(0, 3),
       treatments: data.treatments[level] || [],
+      exercises: data.exercises[level] || [],
       description,
     });
   }
@@ -740,6 +802,7 @@ export const JOINT_TO_MUSCLE_MAP: Record<string, string[]> = {
   external_oblique: ['core'],
   ext_oblique: ['core'],
   internal_oblique_contra: ['core'],
+  contra_int_oblique: ['core'],
   adductors: ['quad_l', 'quad_r'],
   ipsi_adductors: ['quad_l', 'quad_r'],
   contra_adductors: ['quad_l', 'quad_r'],

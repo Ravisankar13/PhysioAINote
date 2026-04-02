@@ -504,6 +504,7 @@ export default function PhysioGPT() {
   const [bidirectionalMode, setBidirectionalMode] = useState(true);
   const [activeChainIds, setActiveChainIds] = useState<string[]>(() => MYOFASCIAL_CHAINS.map(c => c.id));
   const [showPropagation, setShowPropagation] = useState(false);
+  const [tensionTabActive, setTensionTabActive] = useState(false);
   const [selectedChainNode, setSelectedChainNode] = useState<{ chainId: string; muscleId: string; chainName: string } | null>(null);
   const [manualChainTensions, setManualChainTensions] = useState<Record<string, number>>({});
   const [showScarPanel, setShowScarPanel] = useState(false);
@@ -3702,8 +3703,10 @@ ${ddxList}`;
     return Array.from(ids);
   }, [painDriverReports]);
 
+  const hasManualTensions = Object.keys(manualChainTensions).length > 0;
   const fascialChainVizProp = useMemo(() => {
     if (!showUnifiedChainPanel) return undefined;
+    if (!tensionTabActive && !hasManualTensions) return undefined;
     const combinedPainChains = Array.from(new Set([...painAffectedChainIds, ...painDriverChainIds]));
     return {
       enabled: true,
@@ -3714,7 +3717,7 @@ ${ddxList}`;
       showPropagation,
       propagationDeltas,
     };
-  }, [showUnifiedChainPanel, baseMuscleTensions.tensions, activeChainIds, painAffectedChainIds, painDriverChainIds, showPropagation, propagationDeltas]);
+  }, [showUnifiedChainPanel, tensionTabActive, hasManualTensions, baseMuscleTensions.tensions, activeChainIds, painAffectedChainIds, painDriverChainIds, showPropagation, propagationDeltas]);
 
   const handleChainNodeClick = useCallback((data: { chainId: string; muscleId: string; chainName: string }) => {
     setSelectedChainNode(prev => prev?.muscleId === data.muscleId && prev?.chainId === data.chainId ? null : data);
@@ -5907,7 +5910,7 @@ ${ddxList}`;
                 showPropagation={showPropagation}
                 setShowPropagation={setShowPropagation}
                 onClose={() => { setShowUnifiedChainPanel(false); setSelectedChainNode(null); }}
-                onTensionTabActive={(active) => { setShowPropagation(() => active); }}
+                onTensionTabActive={(active) => { setTensionTabActive(active); if (active) setShowPropagation(() => true); }}
                 painTensionContributors={painTensionContributors}
                 selectedChainId={selectedChainId}
                 setSelectedChainId={setSelectedChainId}

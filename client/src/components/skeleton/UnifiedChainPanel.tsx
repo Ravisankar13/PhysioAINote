@@ -438,8 +438,9 @@ function ExplorerTab({
                                   );
                                 })()}
                                 {(() => {
-                                  const mappedIds = mapJointIdToMuscleIds(link.jointId);
-                                  const primaryId = mappedIds[0] || link.jointId;
+                                  const rawMapped = mapJointIdToMuscleIds(link.jointId);
+                                  const targetIds = rawMapped.length > 0 ? rawMapped : [link.jointId];
+                                  const primaryId = targetIds[0];
                                   return (
                                     <InlineTensionSlider
                                       muscleId={primaryId}
@@ -449,7 +450,7 @@ function ExplorerTab({
                                       onTensionChange={(val) => {
                                         setManualChainTensions(prev => {
                                           const updates: Record<string, number> = { ...prev };
-                                          for (const mid of mappedIds) {
+                                          for (const mid of targetIds) {
                                             updates[mid] = val;
                                           }
                                           return updates;
@@ -459,7 +460,7 @@ function ExplorerTab({
                                       onReset={() => {
                                         setManualChainTensions(prev => {
                                           const next = { ...prev };
-                                          for (const mid of mappedIds) {
+                                          for (const mid of targetIds) {
                                             delete next[mid];
                                           }
                                           return next;
@@ -1029,6 +1030,14 @@ function TreatmentsTab({
                           <span key={i} className="text-[7px] text-gray-300 block ml-1">- {t}</span>
                         ))}
                       </div>
+                      {rec.exercises.length > 0 && (
+                        <div>
+                          <span className="text-[7px] font-medium text-purple-400">Exercises:</span>
+                          {rec.exercises.map((ex, i) => (
+                            <span key={i} className="text-[7px] text-gray-300 block ml-1">- {ex}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>

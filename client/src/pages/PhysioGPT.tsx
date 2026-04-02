@@ -4341,6 +4341,15 @@ ${ddxList}`;
                     </Button>
                   </div>
                 </div>
+                {Object.keys(manualChainTensions).length > 0 && (
+                  <div className="mx-2 mt-1 px-2 py-1.5 rounded bg-amber-50 border border-amber-200">
+                    <div className="flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
+                      <span className="text-[9px] font-medium text-amber-700">Manual tension overrides active</span>
+                    </div>
+                    <span className="text-[8px] text-amber-600 mt-0.5 block">Slider values show baseline posture model. Amber-highlighted sliders have related tension overrides in the Chains panel.</span>
+                  </div>
+                )}
                 <div className="px-2 py-1">
 
                   <Section id="pelvis" title="Pelvis / Innominate">

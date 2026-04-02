@@ -4300,11 +4300,16 @@ ${ddxList}`;
                 const relatedMuscles = POSTURE_TO_MUSCLES[configPath] || [];
                 const affectedManualMuscles = relatedMuscles.filter(m => manualChainTensions[m] !== undefined);
                 const hasManualTensionOverride = affectedManualMuscles.length > 0;
-                const maxTensionVal = affectedManualMuscles.reduce((mx, m) => {
-                  const manual = manualChainTensions[m];
-                  const computed = baseMuscleTensions.computedTensions[m] ?? 50;
-                  return Math.max(mx, Math.abs(manual - computed));
-                }, 0);
+                let estDeg = 0;
+                if (hasManualTensionOverride) {
+                  const totalDelta = affectedManualMuscles.reduce((sum, m) => {
+                    const manual = manualChainTensions[m];
+                    const computed = baseMuscleTensions.computedTensions[m] ?? 50;
+                    return sum + (manual - computed);
+                  }, 0);
+                  const range = max - min;
+                  estDeg = Math.round((totalDelta / 50) * (range * 0.3));
+                }
                 return (
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] w-[90px] flex-shrink-0 truncate ${hasManualTensionOverride ? 'text-amber-600 font-medium' : 'text-gray-500'}`} title={hasManualTensionOverride ? `${label} — tension override active on ${affectedManualMuscles.join(', ')}` : label}>
@@ -4314,8 +4319,10 @@ ${ddxList}`;
                     <Slider min={min} max={max} step={step} value={[val]}
                       onValueChange={([v]) => updateModelConfig(configPath, v)} className="flex-1" />
                     <span className="text-[10px] text-gray-400 w-6 text-right">{val}</span>
-                    {hasManualTensionOverride && maxTensionVal > 3 && (
-                      <span className="text-[7px] text-amber-500 w-4 text-right" title="Tension delta">⚡</span>
+                    {hasManualTensionOverride && Math.abs(estDeg) > 0 && (
+                      <span className={`text-[7px] font-bold w-8 text-right ${estDeg > 0 ? 'text-red-500' : 'text-blue-500'}`} title={`Estimated posture equivalent from tension override`}>
+                        {estDeg > 0 ? '+' : ''}{estDeg}°
+                      </span>
                     )}
                   </div>
                 );

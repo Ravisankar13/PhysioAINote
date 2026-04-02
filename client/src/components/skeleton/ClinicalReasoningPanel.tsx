@@ -564,27 +564,39 @@ export default function ClinicalReasoningPanel({
     }
   }, [d.reasoningChain.length, d.findings.length, hasContent]);
 
-  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const [dragPos, setDragPos] = useState<{ left: number; top: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
+    if ((e.target as HTMLElement).closest('button, a, input, textarea, select, [role="button"]')) return;
     e.preventDefault();
-    const panelEl = (e.currentTarget as HTMLElement).closest('[data-drag-panel]') as HTMLElement;
+    const panelEl = panelRef.current;
     if (!panelEl) return;
     const rect = panelEl.getBoundingClientRect();
-    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const parentRect = panelEl.offsetParent?.getBoundingClientRect() ?? { left: 0, top: 0 };
+    dragOffset.current = {
+      x: e.clientX - rect.left + parentRect.left,
+      y: e.clientY - rect.top + parentRect.top,
+    };
     setIsDragging(true);
   }, []);
 
   useEffect(() => {
     if (!isDragging) return;
     const handleMove = (e: MouseEvent) => {
-      setDragPos({
-        x: e.clientX - dragOffset.current.x,
-        y: e.clientY - dragOffset.current.y,
-      });
+      const panelEl = panelRef.current;
+      if (!panelEl) return;
+      const parent = panelEl.offsetParent as HTMLElement | null;
+      const parentRect = parent?.getBoundingClientRect() ?? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+      const panelW = 340;
+      const panelH = panelEl.offsetHeight || 400;
+      let left = e.clientX - dragOffset.current.x;
+      let top = e.clientY - dragOffset.current.y;
+      left = Math.max(0, Math.min(left, parentRect.width - panelW));
+      top = Math.max(0, Math.min(top, parentRect.height - 40));
+      setDragPos({ left, top });
     };
     const handleUp = () => setIsDragging(false);
     document.addEventListener('mousemove', handleMove);
@@ -601,13 +613,13 @@ export default function ClinicalReasoningPanel({
   const pa = d.posturalAnalysis;
 
   const panelStyle: React.CSSProperties = dragPos
-    ? { position: 'fixed', left: dragPos.x, top: dragPos.y, right: 'auto', height: 'min(100vh - 4rem, 800px)' }
+    ? { left: dragPos.left, top: dragPos.top, right: 'auto', bottom: 'auto', maxHeight: 'calc(100% - ' + dragPos.top + 'px)' }
     : {};
 
   return (
     <div
-      data-drag-panel
-      className={`${dragPos ? 'fixed' : 'absolute top-0 right-0 h-full'} z-30 w-[340px] ${dragPos ? '' : 'animate-in slide-in-from-right-2 duration-300'}`}
+      ref={panelRef}
+      className={`absolute z-30 w-[340px] ${dragPos ? '' : 'top-0 right-0 h-full animate-in slide-in-from-right-2 duration-300'}`}
       style={panelStyle}
     >
       <div className="h-full bg-gray-950/95 backdrop-blur-xl border-l border-cyan-500/20 flex flex-col shadow-2xl shadow-cyan-500/5 rounded-lg">

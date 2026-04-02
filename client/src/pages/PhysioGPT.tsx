@@ -2809,12 +2809,13 @@ ${ddxList}`;
 
   const baseMuscleTensions = useMemo(() => {
     const base = computeAllMuscleStates(effectiveModelConfig);
-    const tensions: { [id: string]: number } = {};
-    Object.entries(base).forEach(([id, s]) => { tensions[id] = s.tension; });
+    const computedTensions: { [id: string]: number } = {};
+    Object.entries(base).forEach(([id, s]) => { computedTensions[id] = s.tension; });
+    const tensions = { ...computedTensions };
     Object.entries(manualChainTensions).forEach(([id, val]) => {
       tensions[id] = val;
     });
-    return { tensions };
+    return { tensions, computedTensions };
   }, [effectiveModelConfig, manualChainTensions]);
 
   const wholeBodyScore = useMemo(() => {
@@ -4256,15 +4257,66 @@ ${ddxList}`;
                 });
               };
               const isOpen = (id: string) => openControlSections.has(id);
+              const POSTURE_TO_MUSCLES: Record<string, string[]> = {
+                'pelvis.tilt': ['core', 'glute_l', 'glute_r', 'quad_l', 'quad_r', 'spine'],
+                'pelvis.obliquity': ['core', 'glute_l', 'glute_r'],
+                'pelvis.rotation': ['core', 'spine'],
+                'spine.lumbarLordosis': ['spine', 'core'],
+                'spine.thoracicKyphosis': ['spine', 'chest'],
+                'spine.scoliosis': ['spine', 'core'],
+                'spine.flexion': ['spine', 'core'],
+                'spine.lateralFlexion': ['spine', 'core'],
+                'spine.lumbarRotation': ['spine'],
+                'spine.lumbarScoliosis': ['spine', 'core'],
+                'spine.thoracicRotation': ['spine'],
+                'spine.thoracicScoliosis': ['spine'],
+                'spine.cervicalLordosis': ['neck'],
+                'spine.cervicalScoliosis': ['neck'],
+                'neck.flexion': ['neck'],
+                'neck.extension': ['neck'],
+                'neck.rotation': ['neck'],
+                'neck.lateralFlexion': ['neck'],
+                'neck.forwardHead': ['neck'],
+                'leftHip.flexion': ['glute_l', 'quad_l'],
+                'leftHip.extension': ['glute_l', 'quad_l'],
+                'leftHip.abduction': ['glute_l', 'quad_l'],
+                'leftHip.adduction': ['quad_l'],
+                'rightHip.flexion': ['glute_r', 'quad_r'],
+                'rightHip.extension': ['glute_r', 'quad_r'],
+                'rightHip.abduction': ['glute_r', 'quad_r'],
+                'rightHip.adduction': ['quad_r'],
+                'leftKnee.flexion': ['quad_l', 'calf_l'],
+                'rightKnee.flexion': ['quad_r', 'calf_r'],
+                'leftAnkle.dorsiflexion': ['calf_l', 'shin_l'],
+                'rightAnkle.dorsiflexion': ['calf_r', 'shin_r'],
+                'leftShoulder.flexion': ['deltoid_l', 'scapula_l'],
+                'leftShoulder.abduction': ['deltoid_l', 'scapula_l'],
+                'rightShoulder.flexion': ['deltoid_r', 'scapula_r'],
+                'rightShoulder.abduction': ['deltoid_r', 'scapula_r'],
+              };
               const S = ({ label, configPath, min, max, step = 1 }: { label: string; configPath: string; min: number; max: number; step?: number }) => {
                 const [group, prop] = configPath.split('.');
                 const val = (modelConfig as any)[group]?.[prop] ?? 0;
+                const relatedMuscles = POSTURE_TO_MUSCLES[configPath] || [];
+                const affectedManualMuscles = relatedMuscles.filter(m => manualChainTensions[m] !== undefined);
+                const hasManualTensionOverride = affectedManualMuscles.length > 0;
+                const maxTensionVal = affectedManualMuscles.reduce((mx, m) => {
+                  const manual = manualChainTensions[m];
+                  const computed = baseMuscleTensions.computedTensions[m] ?? 50;
+                  return Math.max(mx, Math.abs(manual - computed));
+                }, 0);
                 return (
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-500 w-[90px] flex-shrink-0 truncate" title={label}>{label}</span>
+                    <span className={`text-[10px] w-[90px] flex-shrink-0 truncate ${hasManualTensionOverride ? 'text-amber-600 font-medium' : 'text-gray-500'}`} title={hasManualTensionOverride ? `${label} — tension override active on ${affectedManualMuscles.join(', ')}` : label}>
+                      {hasManualTensionOverride && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mr-0.5 align-middle" />}
+                      {label}
+                    </span>
                     <Slider min={min} max={max} step={step} value={[val]}
                       onValueChange={([v]) => updateModelConfig(configPath, v)} className="flex-1" />
                     <span className="text-[10px] text-gray-400 w-6 text-right">{val}</span>
+                    {hasManualTensionOverride && maxTensionVal > 3 && (
+                      <span className="text-[7px] text-amber-500 w-4 text-right" title="Tension delta">⚡</span>
+                    )}
                   </div>
                 );
               };

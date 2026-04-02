@@ -45,7 +45,7 @@ export interface UnifiedChainPanelProps {
   correlationResult: { painCorrelations: { markerId: string; markerLabel: string; severity: number; relatedChains: { chainId: string; relevanceReason: string }[] }[] } | null;
   manualChainTensions: Record<string, number>;
   setManualChainTensions: (fn: (prev: Record<string, number>) => Record<string, number>) => void;
-  baseMuscleTensions: { tensions: Record<string, number> };
+  baseMuscleTensions: { tensions: Record<string, number>; computedTensions: Record<string, number> };
   chainRecommendations: ChainRecommendation[];
   selectedChainNode: { chainId: string; muscleId: string; chainName: string } | null;
   setSelectedChainNode: (v: { chainId: string; muscleId: string; chainName: string } | null) => void;
@@ -102,6 +102,7 @@ export default function UnifiedChainPanel({
   }, [onTensionTabActive]);
 
   const baseTensions = baseMuscleTensions.tensions;
+  const computedTensions = baseMuscleTensions.computedTensions;
   const hasManualTensions = Object.keys(manualChainTensions).length > 0;
 
   return (
@@ -171,6 +172,7 @@ export default function UnifiedChainPanel({
           setManualChainTensions={setManualChainTensions}
           chainRecommendations={chainRecommendations}
           baseTensions={baseTensions}
+          computedTensions={computedTensions}
           hasManualTensions={hasManualTensions}
         />
       )}
@@ -182,7 +184,7 @@ export default function UnifiedChainPanel({
           painMarkers={painMarkers}
           manualChainTensions={manualChainTensions}
           chainEffects={chainEffects}
-          baseTensions={baseTensions}
+          computedTensions={computedTensions}
           hasManualTensions={hasManualTensions}
         />
       )}
@@ -586,6 +588,7 @@ function TensionTab({
   setManualChainTensions,
   chainRecommendations,
   baseTensions,
+  computedTensions,
   hasManualTensions,
 }: {
   wholeBodyScore: { score: number; level: string; description: string };
@@ -605,8 +608,20 @@ function TensionTab({
   setManualChainTensions: (fn: (prev: Record<string, number>) => Record<string, number>) => void;
   chainRecommendations: ChainRecommendation[];
   baseTensions: Record<string, number>;
+  computedTensions: Record<string, number>;
   hasManualTensions: boolean;
 }) {
+  const [expandedTensionChain, setExpandedTensionChain] = useState<string | null>(null);
+
+  const topDeviations = (() => {
+    const entries = Object.entries(computedTensions)
+      .map(([id, tension]) => ({ id, tension, delta: tension - 50 }))
+      .filter(e => Math.abs(e.delta) > 5)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 3);
+    return entries;
+  })();
+
   return (
     <>
       <div className={`mb-3 p-2 rounded-lg border ${
@@ -632,6 +647,15 @@ function TensionTab({
             'bg-green-500'
           }`} style={{ width: `${wholeBodyScore.score}%` }} />
         </div>
+        {topDeviations.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {topDeviations.map(d => (
+              <span key={d.id} className={`text-[7px] px-1.5 py-0.5 rounded ${d.delta > 0 ? 'bg-red-500/20 text-red-300' : 'bg-cyan-500/20 text-cyan-300'}`}>
+                {d.id.replace(/_/g, ' ')} {d.delta > 0 ? '+' : ''}{Math.round(d.delta)}%
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-1 mb-2">
@@ -676,13 +700,18 @@ function TensionTab({
           const effect = chainEffects.find(e => e.chainId === chain.id);
           const isActive = activeChainIds.includes(chain.id);
           const isPainAffected = painAffectedChainIds.includes(chain.id);
+          const isExpanded = expandedTensionChain === chain.id;
           return (
+            <div key={chain.id}>
             <button
-              key={chain.id}
               className={`w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors ${isPainAffected ? 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/20' : isActive ? 'bg-white/10 hover:bg-white/15' : 'bg-white/3 hover:bg-white/8 opacity-50'}`}
-              onClick={() => setActiveChainIds(prev => prev.includes(chain.id) ? prev.filter(id => id !== chain.id) : [...prev, chain.id])}
+              onClick={() => {
+                setActiveChainIds(prev => prev.includes(chain.id) ? prev.filter(id => id !== chain.id) : [...prev, chain.id]);
+                setExpandedTensionChain(prev => prev === chain.id ? null : chain.id);
+              }}
             >
               <div className="flex items-center gap-1.5">
+                <ChevronRight className={`h-2.5 w-2.5 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: isPainAffected ? '#ff4444' : chain.color }} />
                 <span className="text-[9px] text-gray-200">{chain.name}</span>
                 {isPainAffected && <MapPin className="h-2.5 w-2.5 text-red-400" />}
@@ -707,6 +736,48 @@ function TensionTab({
                 )}
               </div>
             </button>
+            {isExpanded && (
+              <div className="ml-3 mt-0.5 mb-1 space-y-0.5 border-l border-white/10 pl-2">
+                {chain.links.map(link => {
+                  const tension = baseTensions[link.muscleId] ?? 50;
+                  const computed = computedTensions[link.muscleId] ?? 50;
+                  const delta = computed - 50;
+                  const manualVal = manualChainTensions[link.muscleId];
+                  const isManual = manualVal !== undefined;
+                  const displayLabel = link.muscleId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                  return (
+                    <div key={link.muscleId} className="py-0.5">
+                      <div className="flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: chain.color + '80' }} />
+                        <span className="text-[7px] text-gray-400 flex-1 truncate">{displayLabel}</span>
+                        <div className="w-14 bg-gray-700 rounded-full h-1 flex-shrink-0">
+                          <div className={`h-1 rounded-full transition-all ${tension > 65 ? 'bg-red-500' : tension > 55 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                            style={{ width: `${Math.min(100, tension)}%` }} />
+                        </div>
+                        <span className={`text-[7px] font-bold w-7 text-right ${tension > 65 ? 'text-red-400' : tension > 55 ? 'text-yellow-400' : 'text-green-400'}`}>
+                          {Math.round(tension)}%
+                        </span>
+                        {Math.abs(delta) > 3 && !isManual && (
+                          <span className={`text-[6px] w-5 text-right ${delta > 0 ? 'text-red-400' : 'text-cyan-400'}`}>
+                            {delta > 0 ? '↑' : '↓'}{Math.abs(Math.round(delta))}
+                          </span>
+                        )}
+                        {isManual && (
+                          <span className="text-[6px] text-amber-400 w-5 text-right" title={`Manual override (posture: ${Math.round(computed)}%)`}>⚡</span>
+                        )}
+                      </div>
+                      {isManual && (
+                        <div className="flex items-center gap-1 mt-0.5 ml-3">
+                          <span className="text-[6px] text-gray-500">Posture: {Math.round(computed)}%</span>
+                          <span className="text-[6px] text-amber-400">Manual: {Math.round(manualVal)}%</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            </div>
           );
         })}
       </div>
@@ -865,17 +936,52 @@ function TensionTab({
         </div>
       )}
 
-      {hasManualTensions && (
-        <div className="mt-2 flex items-center justify-between p-1.5 rounded border border-amber-500/20 bg-amber-500/10">
-          <span className="text-[8px] text-amber-300">{Object.keys(manualChainTensions).length} manual tension{Object.keys(manualChainTensions).length !== 1 ? 's' : ''} active</span>
-          <button
-            className="text-[7px] text-red-400 hover:text-red-300 underline"
-            onClick={() => setManualChainTensions(() => ({}))}
-          >
-            Reset All
-          </button>
-        </div>
-      )}
+      {hasManualTensions && (() => {
+        const MUSCLE_TO_POSTURE_HINT: Record<string, string[]> = {
+          spine: ['Lumbar Lordosis', 'Thoracic Kyphosis', 'Scoliosis'],
+          core: ['Pelvic Tilt', 'Lumbar Lordosis'],
+          neck: ['Forward Head', 'Cervical Flexion/Rotation'],
+          chest: ['Thoracic Kyphosis', 'Shoulder Protraction'],
+          glute_l: ['Pelvic Tilt', 'L Hip Flexion/Extension'],
+          glute_r: ['Pelvic Tilt', 'R Hip Flexion/Extension'],
+          quad_l: ['Pelvic Tilt', 'L Knee Flexion'],
+          quad_r: ['Pelvic Tilt', 'R Knee Flexion'],
+          calf_l: ['L Ankle Dorsiflexion'],
+          calf_r: ['R Ankle Dorsiflexion'],
+          deltoid_l: ['L Shoulder Flexion/Abduction'],
+          deltoid_r: ['R Shoulder Flexion/Abduction'],
+          scapula_l: ['L Scapula Protraction/Elevation'],
+          scapula_r: ['R Scapula Protraction/Elevation'],
+        };
+        const affectedParams = new Set<string>();
+        for (const muscleId of Object.keys(manualChainTensions)) {
+          const hints = MUSCLE_TO_POSTURE_HINT[muscleId];
+          if (hints) hints.forEach(h => affectedParams.add(h));
+        }
+        return (
+          <div className="mt-2 p-1.5 rounded border border-amber-500/20 bg-amber-500/10">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[8px] text-amber-300">{Object.keys(manualChainTensions).length} manual tension{Object.keys(manualChainTensions).length !== 1 ? 's' : ''} active</span>
+              <button
+                className="text-[7px] text-red-400 hover:text-red-300 underline"
+                onClick={() => setManualChainTensions(() => ({}))}
+              >
+                Reset All
+              </button>
+            </div>
+            {affectedParams.size > 0 && (
+              <div className="mt-1 pt-1 border-t border-amber-500/15">
+                <span className="text-[7px] text-amber-400 font-medium">Posture areas affected:</span>
+                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                  {Array.from(affectedParams).map(param => (
+                    <span key={param} className="text-[6px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-300">{param}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="mt-2 text-[7px] text-gray-500 text-center">
         Click chain nodes on skeleton to inspect & inject tension
@@ -890,7 +996,7 @@ function TreatmentsTab({
   painMarkers,
   manualChainTensions,
   chainEffects,
-  baseTensions,
+  computedTensions,
   hasManualTensions,
 }: {
   chainRecommendations: ChainRecommendation[];
@@ -898,7 +1004,7 @@ function TreatmentsTab({
   painMarkers: { id: string; nearestBone: string; anatomicalLabel?: string; type: string }[];
   manualChainTensions: Record<string, number>;
   chainEffects: { chainId: string; avgTension: number }[];
-  baseTensions: Record<string, number>;
+  computedTensions: Record<string, number>;
   hasManualTensions: boolean;
 }) {
   return (
@@ -908,7 +1014,7 @@ function TreatmentsTab({
           <span className="text-[8px] text-amber-300 font-medium">Before / After Tension Deltas</span>
           <div className="mt-1 space-y-0.5">
             {Object.entries(manualChainTensions).map(([muscleId, newVal]) => {
-              const originalVal = baseTensions[muscleId] ?? 50;
+              const originalVal = computedTensions[muscleId] ?? 50;
               const delta = newVal - originalVal;
               if (Math.abs(delta) < 0.5) return null;
               return (
@@ -936,8 +1042,8 @@ function TreatmentsTab({
                 <span className="text-[7px] text-amber-400/80 font-medium">Chain-Level Impact</span>
                 <div className="mt-0.5 space-y-0.5">
                   {affectedChains.map(ch => {
-                    const beforeAvg = ch.links.reduce((s, l) => s + (baseTensions[l.muscleId] ?? 50), 0) / ch.links.length;
-                    const afterAvg = ch.links.reduce((s, l) => s + (manualChainTensions[l.muscleId] ?? baseTensions[l.muscleId] ?? 50), 0) / ch.links.length;
+                    const beforeAvg = ch.links.reduce((s, l) => s + (computedTensions[l.muscleId] ?? 50), 0) / ch.links.length;
+                    const afterAvg = ch.links.reduce((s, l) => s + (manualChainTensions[l.muscleId] ?? computedTensions[l.muscleId] ?? 50), 0) / ch.links.length;
                     const d = afterAvg - beforeAvg;
                     if (Math.abs(d) < 0.3) return null;
                     return (

@@ -1744,7 +1744,7 @@ ${ddxList}`;
         mechanism: ctx?.dominantMechanism?.mechanism,
         stage: ctx?.stage?.stage,
         irritability: ctx?.irritability?.level,
-        modifiers: ctx?.modifiers?.flatMap(m => m.items.map(i => `${m.category}: ${i}`)),
+        modifiers: ctx?.modifiers?.flatMap(m => (m.modifiers ?? []).map(i => `${m.category}: ${i}`)),
         mustNotMiss: ctx?.mustNotMiss?.map(m => m.condition),
         fingerprintMatchScore: hypothesis.fingerprintMatchScore,
       },

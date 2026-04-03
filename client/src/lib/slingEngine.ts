@@ -94,109 +94,101 @@ export interface SlingAnalysisInput {
   movementTaskId?: string;
 }
 
-const SLING_KINETIC_MAP: Record<SlingId, string> = {
-  posterior_oblique: 'posterior_oblique_sling',
-  anterior_oblique: 'anterior_oblique_sling',
-  lateral: 'lateral_subsystem',
-  deep_longitudinal: 'deep_longitudinal',
-  scapular_shoulder: 'upper_extremity_chain',
-};
+interface SlingSpec {
+  id: SlingId;
+  kineticChainId: string;
+  functionalSlingId: string;
+  color: string;
+  muscles: string[];
+  joints: string[];
+  primaryFunction: string;
+  movementRole: string;
+  bonePathway: string[];
+}
 
-const SLING_FUNCTIONAL_MAP: Record<SlingId, string> = {
-  posterior_oblique: 'posterior_oblique',
-  anterior_oblique: 'anterior_oblique',
-  lateral: 'lateral_sling',
-  deep_longitudinal: 'deep_longitudinal',
-  scapular_shoulder: '',
-};
-
-const SLING_BONE_PATHWAYS: Record<SlingId, string[]> = {
-  posterior_oblique: ['Shoulder_L', 'ShoulderPart1_L', 'Chest_M', 'Spine1Part2_M', 'Spine1Part1_M', 'Spine1_M', 'RootPart2_M', 'RootPart1_M', 'Root_M', 'Hip_R', 'HipPart1_R'],
-  anterior_oblique: ['Shoulder_R', 'Chest_M', 'Spine1_M', 'RootPart2_M', 'Root_M', 'Hip_L', 'HipPart1_L'],
-  lateral: ['Hip_L', 'HipPart1_L', 'Root_M', 'RootPart1_M', 'Spine1_M', 'Hip_R', 'HipPart1_R', 'Knee_R'],
-  deep_longitudinal: ['Ankle_L', 'Knee_L', 'Hip_L', 'HipPart1_L', 'Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Chest_M', 'Neck_M'],
-  scapular_shoulder: ['Shoulder_L', 'ShoulderPart1_L', 'Chest_M', 'Spine1Part2_M', 'Shoulder_R', 'ShoulderPart1_R'],
-};
-
-const SLING_META: Record<SlingId, { label: string; color: string; muscles: string[]; joints: string[]; primaryFunction: string; movementRole: string }> = {
-  posterior_oblique: {
-    label: 'Posterior Oblique Sling',
+const SLING_SPECS: SlingSpec[] = [
+  {
+    id: 'posterior_oblique',
+    kineticChainId: 'posterior_oblique_sling',
+    functionalSlingId: 'posterior_oblique',
     color: '#f97316',
     muscles: ['latissimus_dorsi', 'thoracolumbar_fascia', 'gluteus_maximus', 'contralateral_gluteus_maximus'],
     joints: ['shoulder', 'thoracolumbar_junction', 'sacroiliac', 'hip'],
     primaryFunction: 'Contralateral upper-lower body force transfer during gait and rotation',
     movementRole: 'Gait propulsion, trunk counter-rotation, posterior chain power transfer',
+    bonePathway: ['Shoulder_L', 'ShoulderPart1_L', 'Chest_M', 'Spine1Part2_M', 'Spine1Part1_M', 'Spine1_M', 'RootPart2_M', 'RootPart1_M', 'Root_M', 'Hip_R', 'HipPart1_R'],
   },
-  anterior_oblique: {
-    label: 'Anterior Oblique Sling',
+  {
+    id: 'anterior_oblique',
+    kineticChainId: 'anterior_oblique_sling',
+    functionalSlingId: 'anterior_oblique',
     color: '#ec4899',
     muscles: ['external_oblique', 'anterior_abdominal_fascia', 'internal_oblique', 'adductors'],
     joints: ['pubic_symphysis', 'hip', 'anterior_trunk'],
     primaryFunction: 'Rotational power generation and deceleration, trunk stabilization',
     movementRole: 'Kicking, throwing deceleration, rotational sports, anti-rotation stability',
+    bonePathway: ['Shoulder_R', 'Chest_M', 'Spine1_M', 'RootPart2_M', 'Root_M', 'Hip_L', 'HipPart1_L'],
   },
-  lateral: {
-    label: 'Lateral Subsystem',
+  {
+    id: 'lateral',
+    kineticChainId: 'lateral_subsystem',
+    functionalSlingId: 'lateral_sling',
     color: '#06b6d4',
     muscles: ['gluteus_medius', 'gluteus_minimus', 'tensor_fasciae_latae', 'adductors', 'quadratus_lumborum'],
     joints: ['hip', 'knee', 'lumbar_spine'],
     primaryFunction: 'Frontal plane pelvic stability during single-leg stance',
     movementRole: 'Single-leg balance, gait stance phase, lateral stability, Trendelenburg prevention',
+    bonePathway: ['Hip_L', 'HipPart1_L', 'Root_M', 'RootPart1_M', 'Spine1_M', 'Hip_R', 'HipPart1_R', 'Knee_R'],
   },
-  deep_longitudinal: {
-    label: 'Deep Longitudinal Sling',
+  {
+    id: 'deep_longitudinal',
+    kineticChainId: 'deep_longitudinal',
+    functionalSlingId: 'deep_longitudinal',
     color: '#10b981',
     muscles: ['peroneus_longus', 'biceps_femoris', 'sacrotuberous_ligament', 'erector_spinae', 'thoracolumbar_fascia'],
     joints: ['ankle', 'knee', 'sacroiliac', 'lumbar_spine'],
     primaryFunction: 'Longitudinal force transfer from foot through pelvis to spine',
     movementRole: 'Shock absorption, ground reaction force transmission, spinal stabilization during gait',
+    bonePathway: ['Ankle_L', 'Knee_L', 'Hip_L', 'HipPart1_L', 'Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Chest_M', 'Neck_M'],
   },
-  scapular_shoulder: {
-    label: 'Scapular / Shoulder Sling',
+  {
+    id: 'scapular_shoulder',
+    kineticChainId: 'upper_extremity_chain',
+    functionalSlingId: '',
     color: '#8b5cf6',
     muscles: ['serratus_anterior', 'lower_trapezius', 'rhomboids', 'rotator_cuff'],
     joints: ['scapulothoracic', 'glenohumeral', 'acromioclavicular'],
     primaryFunction: 'Scapulothoracic rhythm, glenohumeral force couple, overhead stability',
     movementRole: 'Overhead reaching, throwing, pushing, pulling, scapular upward rotation',
+    bonePathway: ['Shoulder_L', 'ShoulderPart1_L', 'Chest_M', 'Spine1Part2_M', 'Shoulder_R', 'ShoulderPart1_R'],
   },
-};
+];
 
 function buildSlingDefinitions(): SlingDefinition[] {
-  const slingIds: SlingId[] = ['posterior_oblique', 'anterior_oblique', 'lateral', 'deep_longitudinal', 'scapular_shoulder'];
-
-  return slingIds.map(id => {
-    const meta = SLING_META[id];
-    const kineticChainId = SLING_KINETIC_MAP[id];
-    const functionalSlingId = SLING_FUNCTIONAL_MAP[id];
-
-    const kineticChainRef = KINETIC_CHAINS.find(kc => kc.id === kineticChainId) ?? null;
-    const functionalSlingRef = FUNCTIONAL_SLINGS.find(fs => fs.id === functionalSlingId) ?? null;
-
-    const commonDysfunctions = kineticChainRef?.commonDysfunctions ?? [];
-    const assessmentTests = kineticChainRef?.assessmentTests ?? [];
-    const clinicalRelevance = kineticChainRef?.clinicalRelevance ?? meta.primaryFunction;
-    const propagationWeight = functionalSlingRef?.propagationWeight ?? 0.35;
-    const musclePairs = functionalSlingRef?.pairs ?? [];
+  return SLING_SPECS.map(spec => {
+    const kineticChainRef = KINETIC_CHAINS.find(kc => kc.id === spec.kineticChainId) ?? null;
+    const functionalSlingRef = spec.functionalSlingId
+      ? FUNCTIONAL_SLINGS.find(fs => fs.id === spec.functionalSlingId) ?? null
+      : null;
 
     const jointsFromKC = kineticChainRef?.links.map(l => l.jointId) ?? [];
-    const mergedJoints = Array.from(new Set([...meta.joints, ...jointsFromKC]));
 
     return {
-      id,
-      label: meta.label,
-      color: meta.color,
-      muscles: meta.muscles,
-      joints: mergedJoints,
-      primaryFunction: meta.primaryFunction,
-      movementRole: meta.movementRole,
-      commonDysfunctions,
-      assessmentTests,
-      clinicalRelevance,
+      id: spec.id,
+      label: functionalSlingRef?.name ?? kineticChainRef?.name ?? spec.primaryFunction.split(',')[0],
+      color: spec.color,
+      muscles: spec.muscles,
+      joints: Array.from(new Set([...spec.joints, ...jointsFromKC])),
+      primaryFunction: spec.primaryFunction,
+      movementRole: spec.movementRole,
+      commonDysfunctions: kineticChainRef?.commonDysfunctions ?? [],
+      assessmentTests: kineticChainRef?.assessmentTests ?? [],
+      clinicalRelevance: kineticChainRef?.clinicalRelevance ?? spec.primaryFunction,
       functionalSlingRef,
       kineticChainRef,
-      propagationWeight,
-      musclePairs,
-      bonePathway: SLING_BONE_PATHWAYS[id],
+      propagationWeight: functionalSlingRef?.propagationWeight ?? 0.35,
+      musclePairs: functionalSlingRef?.pairs ?? [],
+      bonePathway: spec.bonePathway,
     };
   });
 }

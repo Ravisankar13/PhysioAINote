@@ -112,6 +112,9 @@ function SlingCard({
             <div className={`text-[11px] font-bold ${severityColor(sling.downstreamRisk)}`}>
               {sling.downstreamRisk}
             </div>
+            {sling.downstreamRiskArea && (
+              <div className="text-[9px] text-slate-500 mt-0.5">{sling.downstreamRiskArea}</div>
+            )}
           </div>
         </div>
 
@@ -299,7 +302,15 @@ export default function SlingAnalysisPanel({
             <div className="flex items-center gap-1 mt-1">
               <Shield className="w-3 h-3 text-red-400" />
               <span className="text-[10px] text-red-400">
-                Primary dysfunction: {analysis.slings.find(s => s.slingId === analysis.dominantDysfunction)?.label}
+                Primary: {analysis.slings.find(s => s.slingId === analysis.dominantDysfunction)?.label}
+              </span>
+            </div>
+          )}
+          {analysis.secondaryIssue && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <AlertTriangle className="w-3 h-3 text-amber-400" />
+              <span className="text-[10px] text-amber-400">
+                Secondary: {analysis.secondaryIssue.summary}
               </span>
             </div>
           )}

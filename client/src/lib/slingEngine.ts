@@ -68,6 +68,7 @@ export interface SlingResult {
   compensations: SlingCompensation[];
   forceReroutes: ForceReroute[];
   downstreamRisk: Severity | 'none';
+  downstreamRiskArea: string;
   confidence: number;
   treatmentTargets: SlingTreatmentTarget[];
   narrative: string;
@@ -83,6 +84,7 @@ export interface SlingAnalysisResult {
   systemSummary: string;
   overallForceTransferScore: number;
   dominantDysfunction: SlingId | null;
+  secondaryIssue: { slingId: SlingId; summary: string } | null;
   crossSlingCompensations: SlingCompensation[];
 }
 
@@ -222,6 +224,14 @@ const MUSCLE_ALIASES: Record<string, string[]> = {
   lower_trapezius: ['Lower trapezius', 'lower trapezius', 'Lower Trap', 'Trapezius'],
   rhomboids: ['Rhomboids', 'rhomboids', 'Rhomboid major', 'Rhomboid minor'],
   rotator_cuff: ['Infraspinatus', 'Supraspinatus', 'Subscapularis', 'Teres minor', 'rotator cuff'],
+};
+
+const SLING_DOWNSTREAM_RISK_AREAS: Record<SlingId, string> = {
+  posterior_oblique: 'Lumbar spine / contralateral hip',
+  anterior_oblique: 'Groin / pubic symphysis',
+  lateral: 'Knee (dynamic valgus) / hip',
+  deep_longitudinal: 'Lumbar spine / sacroiliac joint',
+  scapular_shoulder: 'Glenohumeral joint / subacromial space',
 };
 
 const SLING_JOINT_REGIONS: Record<string, string[]> = {
@@ -670,6 +680,7 @@ export function computeSlingAnalysis(
         compensations: [],
         forceReroutes: [],
         downstreamRisk: 'none' as const,
+        downstreamRiskArea: '',
         confidence: 0,
         treatmentTargets: [],
         narrative: `${def.label}: No biomechanical data available for analysis.`,
@@ -681,6 +692,7 @@ export function computeSlingAnalysis(
       systemSummary: 'No biomechanical data available. Adjust the skeleton posture to generate sling analysis.',
       overallForceTransferScore: 50,
       dominantDysfunction: null,
+      secondaryIssue: null,
       crossSlingCompensations: [],
     };
   }
@@ -740,6 +752,7 @@ export function computeSlingAnalysis(
       compensations: relevantCompensations,
       forceReroutes: ir.forceReroutes,
       downstreamRisk,
+      downstreamRiskArea: downstreamRisk !== 'none' ? SLING_DOWNSTREAM_RISK_AREAS[ir.def.id] : '',
       confidence,
       treatmentTargets,
       narrative,
@@ -751,8 +764,15 @@ export function computeSlingAnalysis(
   });
 
   const dysfunctionalSlings = slings.filter(s => s.status !== 'normal');
-  const dominantDysfunction = dysfunctionalSlings.length > 0
-    ? dysfunctionalSlings.sort((a, b) => a.activationScore - b.activationScore)[0].slingId
+  const sortedDysfunctional = [...dysfunctionalSlings].sort((a, b) => a.activationScore - b.activationScore);
+  const dominantDysfunction = sortedDysfunctional.length > 0
+    ? sortedDysfunctional[0].slingId
+    : null;
+  const secondaryIssue = sortedDysfunctional.length > 1
+    ? {
+        slingId: sortedDysfunctional[1].slingId,
+        summary: `${sortedDysfunctional[1].label} — ${sortedDysfunctional[1].status}${sortedDysfunctional[1].downstreamRiskArea ? `, risk area: ${sortedDysfunctional[1].downstreamRiskArea}` : ''}`,
+      }
     : null;
 
   const forceScores = slings.map(s =>
@@ -785,6 +805,7 @@ export function computeSlingAnalysis(
     systemSummary: summaryParts.join(' '),
     overallForceTransferScore,
     dominantDysfunction,
+    secondaryIssue,
     crossSlingCompensations: crossCompensations,
   };
 }

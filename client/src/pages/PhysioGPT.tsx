@@ -1792,6 +1792,8 @@ ${ddxList}`;
       setTreatmentDecisionData(null);
       return;
     }
+    const abortController = new AbortController();
+    setTreatmentDecisionData(null);
     setTreatmentDecisionLoading(true);
     const input: Record<string, unknown> = {
       structuredReasoning: structuredReasoningData,
@@ -1807,11 +1809,13 @@ ${ddxList}`;
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify(input),
+      signal: abortController.signal,
     })
       .then(r => r.ok ? r.json() : null)
-      .then(result => { if (result) setTreatmentDecisionData(result); })
-      .catch(err => console.error('Treatment decision error:', err))
-      .finally(() => setTreatmentDecisionLoading(false));
+      .then(result => { if (result && !abortController.signal.aborted) setTreatmentDecisionData(result); })
+      .catch(err => { if (err.name !== 'AbortError') console.error('Treatment decision error:', err); })
+      .finally(() => { if (!abortController.signal.aborted) setTreatmentDecisionLoading(false); });
+    return () => abortController.abort();
   }, [structuredReasoningData]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {

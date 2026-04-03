@@ -1,7 +1,6 @@
-import { SHARED_TECHNIQUE_DB, getLinkedEvidenceForCandidate, type ClinicalStatusKey } from '@shared/evidenceReferences';
+import { getLinkedEvidenceForCandidate, type ClinicalStatusKey } from '@shared/evidenceReferences';
 import type {
   ClinicalReasoningResult,
-  ReasoningHypothesis,
   IrritabilityLevel,
   ConditionStageType,
   ProblemClass,

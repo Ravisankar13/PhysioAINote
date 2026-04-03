@@ -222,6 +222,9 @@ export default function CaseIntakePanel({
     if (combinedVoice.length > 5) sources.push("voice_transcription");
 
     if (painMarkers.length > 0) sources.push("pain_markers");
+    if (sources.length === 0 && (mechanismOfInjury.length > 5 || relevantHistory.length > 5)) {
+      sources.push("free_text");
+    }
 
     return {
       sources,

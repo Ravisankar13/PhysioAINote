@@ -816,12 +816,12 @@ function buildMuscleAsymmetryOutput(biomechResult: BiomechanicsResult | null): M
     if (activation > 70) {
       role = 'overactive';
       clinical = 'Elevated activation — potential for fatigue and strain';
-    } else if (activation < 15) {
-      role = 'underactive';
-      clinical = 'Low activation — may indicate weakness or inhibition';
     } else if (activation < 5) {
       role = 'inhibited';
       clinical = 'Minimal activation — inhibited muscle, compensatory patterns likely';
+    } else if (activation < 15) {
+      role = 'underactive';
+      clinical = 'Low activation — may indicate weakness or inhibition';
     }
     muscles.push({ muscle: name, activationPct: Math.round(activation), role, clinical });
   };
@@ -1105,7 +1105,7 @@ const JOINT_ROM_NORMS: Record<string, { normal: [number, number]; plane: 'sagitt
 };
 
 function buildJointKinematics(
-  modelConfig: Record<string, number>,
+  modelConfig: Record<string, unknown>,
   romRestrictions: ROMRestriction[],
 ): JointKinematicsOutput {
   const joints: JointKinematicsEntry[] = [];
@@ -1138,8 +1138,20 @@ function buildJointKinematics(
 
     let currentAngle = midAngle;
     const configKey = JOINT_TO_CONFIG_KEY[joint];
-    if (configKey && modelConfig[configKey] !== undefined) {
-      currentAngle = modelConfig[configKey];
+    if (configKey) {
+      const parts = configKey.split('.');
+      let val: unknown = modelConfig;
+      for (const p of parts) {
+        if (val !== null && val !== undefined && typeof val === 'object') {
+          val = (val as Record<string, unknown>)[p];
+        } else {
+          val = undefined;
+          break;
+        }
+      }
+      if (typeof val === 'number') {
+        currentAngle = val;
+      }
     }
 
     const withinNormal = currentAngle >= normalRange[0] && currentAngle <= normalRange[1];

@@ -27,6 +27,8 @@ export interface RankedIntervention {
   tier: 'primary' | 'adjunct' | 'avoid_defer';
   intent: 'symptom_relief' | 'root_cause' | 'both';
   score: number;
+  confidence: number;
+  expectedTimeframe: string;
   description: string;
   dosage: string;
   rationale: string;
@@ -36,6 +38,7 @@ export interface RankedIntervention {
   explainability: string[];
   stageAppropriate: boolean;
   irritabilityAppropriate: boolean;
+  linkedTechniques: string[];
 }
 
 export interface ReviewSchedule {
@@ -119,6 +122,13 @@ function InterventionCard({ intervention, onTargetClick }: { intervention: Ranke
             <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${GRADE_COLOR[intervention.evidenceGrade]}`}>
               Grade {intervention.evidenceGrade}
             </span>
+            <span className="text-[8px] text-gray-500">{intervention.confidence}%</span>
+          </div>
+          <div className="w-full bg-gray-700/50 rounded-full h-1 mt-1">
+            <div
+              className={`h-1 rounded-full transition-all ${intervention.confidence >= 75 ? 'bg-emerald-500' : intervention.confidence >= 50 ? 'bg-blue-500' : 'bg-amber-500'}`}
+              style={{ width: `${intervention.confidence}%` }}
+            />
           </div>
         </div>
         {intervention.tier === 'avoid_defer' ? (
@@ -131,6 +141,14 @@ function InterventionCard({ intervention, onTargetClick }: { intervention: Ranke
       {expanded && (
         <div className="px-2.5 pb-2.5 space-y-2 border-t border-white/5 pt-2">
           <p className="text-[9px] text-gray-400 leading-relaxed">{intervention.description}</p>
+
+          <div className="flex items-start gap-1.5">
+            <Clock className="h-3 w-3 text-emerald-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-[8px] text-gray-500 uppercase tracking-wider">Expected Timeframe</p>
+              <p className="text-[9px] text-emerald-400 font-medium">{intervention.expectedTimeframe}</p>
+            </div>
+          </div>
 
           <div className="flex items-start gap-1.5">
             <Clock className="h-3 w-3 text-gray-500 mt-0.5 flex-shrink-0" />
@@ -184,6 +202,19 @@ function InterventionCard({ intervention, onTargetClick }: { intervention: Ranke
                   {e}
                 </p>
               ))}
+            </div>
+          )}
+
+          {intervention.linkedTechniques.length > 0 && (
+            <div className="mt-1">
+              <p className="text-[8px] text-gray-500 uppercase tracking-wider mb-0.5">Linked Techniques (TECHNIQUE_DB)</p>
+              <div className="flex flex-wrap gap-1">
+                {intervention.linkedTechniques.map((t, i) => (
+                  <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                    {t}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
         </div>

@@ -30,8 +30,10 @@ export interface TreatmentCandidate {
   contraindications: string[];
   stageRestrictions?: ConditionStageType[];
   irritabilityMax?: IrritabilityLevel;
+  expectedTimeframe: string;
   problemClassMatch: ProblemClass[];
   mechanismMatch: DominantMechanism[];
+  linkedTechniqueDbKeys?: string[];
 }
 
 export interface RankedIntervention {
@@ -41,6 +43,8 @@ export interface RankedIntervention {
   tier: InterventionTier;
   intent: InterventionIntent;
   score: number;
+  confidence: number;
+  expectedTimeframe: string;
   description: string;
   dosage: string;
   rationale: string;
@@ -50,6 +54,7 @@ export interface RankedIntervention {
   explainability: string[];
   stageAppropriate: boolean;
   irritabilityAppropriate: boolean;
+  linkedTechniques: string[];
 }
 
 export interface ReviewSchedule {
@@ -82,6 +87,18 @@ export interface TreatmentDecisionInput {
   postureState?: Record<string, Record<string, number>>;
 }
 
+const TECHNIQUE_DB_CROSS_REF: Record<string, string[]> = {
+  soft_tissue_release: ['Myofascial release (manual)', 'Sustained static stretch'],
+  trigger_point_therapy: ['Inhibitory trigger point pressure release'],
+  stretching_programme: ['Sustained static stretch', 'Contract-relax PNF stretching', 'Instrument-assisted soft tissue mobilization'],
+  eccentric_programme: ['Eccentric loading program'],
+  progressive_strengthening: ['Progressive resistance training', 'Functional compound strengthening', 'Blood flow restriction (BFR) training'],
+  isometric_loading: ['Isolated isometric activation'],
+  dry_needling: ['Dry needling'],
+  motor_control_retraining: ['Neuromuscular electrical stimulation (NMES)', 'Tactile cueing with biofeedback'],
+  taping_support: ['Postural taping / kinesiology tape'],
+};
+
 const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
   {
     id: 'joint_mob_grade_1_2',
@@ -94,6 +111,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
     contraindications: ['fracture', 'malignancy', 'active infection', 'vascular compromise'],
     irritabilityMax: 'high',
+    expectedTimeframe: 'Immediate pain relief; 2-4 sessions for sustained effect',
     problemClassMatch: ['mobility_restriction', 'compression', 'sensitivity_dominant'],
     mechanismMatch: ['compression', 'stiffness', 'sensitisation'],
   },
@@ -109,6 +127,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     contraindications: ['fracture', 'malignancy', 'acute inflammation', 'hypermobility', 'osteoporosis'],
     stageRestrictions: ['acute'],
     irritabilityMax: 'moderate',
+    expectedTimeframe: '2-6 weeks for ROM restoration',
     problemClassMatch: ['mobility_restriction', 'compression'],
     mechanismMatch: ['stiffness', 'compression'],
   },
@@ -122,8 +141,10 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     evidenceGrade: 'B',
     targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee'],
     contraindications: ['open wounds', 'DVT', 'acute inflammation'],
+    expectedTimeframe: 'Immediate tone reduction; 3-6 sessions for lasting change',
     problemClassMatch: ['mobility_restriction', 'load_capacity', 'compression', 'mixed'],
     mechanismMatch: ['stiffness', 'compression', 'tensile_load'],
+    linkedTechniqueDbKeys: ['shortened'],
   },
   {
     id: 'trigger_point_therapy',
@@ -135,8 +156,10 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     evidenceGrade: 'B',
     targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee'],
     contraindications: ['anticoagulant therapy', 'local infection'],
+    expectedTimeframe: '1-3 sessions for acute trigger points; 4-8 for chronic',
     problemClassMatch: ['load_capacity', 'sensitivity_dominant', 'mixed'],
     mechanismMatch: ['tensile_load', 'sensitisation'],
+    linkedTechniqueDbKeys: ['overactive'],
   },
   {
     id: 'neural_mobilisation',
@@ -148,6 +171,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     evidenceGrade: 'A',
     targetRegions: ['cervical', 'lumbar', 'shoulder', 'hip'],
     contraindications: ['active radiculopathy with progressive deficit', 'cauda equina', 'spinal cord compression'],
+    expectedTimeframe: '2-6 weeks for neural desensitisation',
     problemClassMatch: ['compression', 'sensitivity_dominant'],
     mechanismMatch: ['compression', 'sensitisation'],
   },
@@ -162,8 +186,10 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['shoulder', 'knee', 'ankle', 'hip', 'elbow'],
     contraindications: ['acute fracture', 'complete tendon rupture'],
     irritabilityMax: 'high',
+    expectedTimeframe: 'Immediate analgesic effect (45 min); 2-4 weeks for structural adaptation',
     problemClassMatch: ['load_capacity'],
     mechanismMatch: ['tensile_load'],
+    linkedTechniqueDbKeys: ['inhibited'],
   },
   {
     id: 'eccentric_programme',
@@ -177,8 +203,10 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     contraindications: ['reactive tendinopathy', 'acute inflammation'],
     stageRestrictions: ['acute', 'reactive'],
     irritabilityMax: 'moderate',
+    expectedTimeframe: '6-12 weeks for tendon remodelling',
     problemClassMatch: ['load_capacity'],
     mechanismMatch: ['tensile_load'],
+    linkedTechniqueDbKeys: ['shortened'],
   },
   {
     id: 'progressive_strengthening',
@@ -192,8 +220,10 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     contraindications: ['unstable fracture', 'acute inflammatory arthropathy'],
     stageRestrictions: ['acute'],
     irritabilityMax: 'moderate',
+    expectedTimeframe: '6-12 weeks for strength gains; 12+ weeks for hypertrophy',
     problemClassMatch: ['load_capacity', 'instability', 'coordination_control'],
     mechanismMatch: ['tensile_load', 'instability', 'motor_control'],
+    linkedTechniqueDbKeys: ['weak'],
   },
   {
     id: 'motor_control_retraining',
@@ -206,8 +236,10 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['lumbar', 'cervical', 'shoulder', 'hip', 'knee'],
     contraindications: [],
     irritabilityMax: 'high',
+    expectedTimeframe: '4-8 weeks for motor pattern correction',
     problemClassMatch: ['instability', 'coordination_control'],
     mechanismMatch: ['instability', 'motor_control'],
+    linkedTechniqueDbKeys: ['inhibited'],
   },
   {
     id: 'graded_exposure',
@@ -219,6 +251,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     evidenceGrade: 'A',
     targetRegions: ['lumbar', 'cervical', 'thoracic'],
     contraindications: ['structural instability', 'active pathology requiring rest'],
+    expectedTimeframe: '4-12 weeks for behavioural change',
     problemClassMatch: ['sensitivity_dominant', 'mixed'],
     mechanismMatch: ['sensitisation', 'motor_control'],
   },
@@ -233,6 +266,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee'],
     contraindications: [],
     irritabilityMax: 'high',
+    expectedTimeframe: '2-4 weeks for cognitive shift; ongoing reinforcement',
     problemClassMatch: ['sensitivity_dominant', 'mixed'],
     mechanismMatch: ['sensitisation'],
   },
@@ -247,6 +281,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
     contraindications: [],
     irritabilityMax: 'high',
+    expectedTimeframe: 'Immediate reduction in symptoms; 4-8 weeks for graded return',
     problemClassMatch: ['load_capacity', 'compression', 'sensitivity_dominant', 'mixed'],
     mechanismMatch: ['tensile_load', 'compression', 'sensitisation'],
   },
@@ -261,8 +296,10 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
     contraindications: ['hypermobility in target region', 'acute muscle tear'],
     stageRestrictions: ['acute'],
+    expectedTimeframe: '2-6 weeks for sustained flexibility gains',
     problemClassMatch: ['mobility_restriction'],
     mechanismMatch: ['stiffness'],
+    linkedTechniqueDbKeys: ['shortened'],
   },
   {
     id: 'thoracic_manipulation',
@@ -276,6 +313,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     contraindications: ['osteoporosis', 'fracture', 'malignancy', 'vascular disease', 'anticoagulant therapy'],
     stageRestrictions: ['acute'],
     irritabilityMax: 'moderate',
+    expectedTimeframe: 'Immediate session effect; 2-4 sessions for lasting change',
     problemClassMatch: ['mobility_restriction', 'compression'],
     mechanismMatch: ['stiffness', 'compression'],
   },
@@ -290,8 +328,10 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['shoulder', 'knee', 'ankle', 'lumbar', 'cervical'],
     contraindications: ['skin allergy to tape', 'open wounds'],
     irritabilityMax: 'high',
+    expectedTimeframe: 'Immediate proprioceptive effect; short-term adjunct',
     problemClassMatch: ['instability', 'coordination_control', 'load_capacity'],
     mechanismMatch: ['instability', 'motor_control', 'tensile_load'],
+    linkedTechniqueDbKeys: ['lengthened'],
   },
   {
     id: 'dry_needling',
@@ -305,8 +345,10 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     contraindications: ['needle phobia', 'anticoagulant therapy', 'local infection', 'pregnancy (specific regions)'],
     stageRestrictions: ['acute'],
     irritabilityMax: 'moderate',
+    expectedTimeframe: '1-3 sessions for acute trigger points; 4-8 for chronic',
     problemClassMatch: ['load_capacity', 'sensitivity_dominant', 'mixed'],
     mechanismMatch: ['tensile_load', 'sensitisation'],
+    linkedTechniqueDbKeys: ['overactive'],
   },
   {
     id: 'ergonomic_advice',
@@ -319,6 +361,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip'],
     contraindications: [],
     irritabilityMax: 'high',
+    expectedTimeframe: 'Immediate behavioural change; 2-4 weeks for habit formation',
     problemClassMatch: ['compression', 'load_capacity', 'mobility_restriction', 'mixed'],
     mechanismMatch: ['compression', 'stiffness', 'tensile_load'],
   },
@@ -333,6 +376,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['ankle', 'knee', 'hip', 'lumbar'],
     contraindications: ['acute fracture', 'severe vestibular dysfunction'],
     stageRestrictions: ['acute'],
+    expectedTimeframe: '4-8 weeks for proprioceptive restoration',
     problemClassMatch: ['instability', 'coordination_control'],
     mechanismMatch: ['instability', 'motor_control'],
   },
@@ -347,6 +391,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['lumbar', 'hip', 'knee', 'ankle', 'shoulder'],
     contraindications: ['open wounds', 'uncontrolled cardiac conditions', 'urinary incontinence'],
     irritabilityMax: 'high',
+    expectedTimeframe: '4-8 weeks for functional improvement',
     problemClassMatch: ['load_capacity', 'mobility_restriction', 'sensitivity_dominant'],
     mechanismMatch: ['compression', 'tensile_load', 'sensitisation'],
   },
@@ -361,6 +406,7 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
     contraindications: [],
     irritabilityMax: 'high',
+    expectedTimeframe: 'Urgent: within 24-48 hours; Routine: 2-6 weeks',
     problemClassMatch: ['compression', 'instability', 'sensitivity_dominant', 'mixed', 'load_capacity', 'mobility_restriction', 'coordination_control'],
     mechanismMatch: ['compression', 'tensile_load', 'instability', 'stiffness', 'motor_control', 'sensitisation', 'unknown'],
   },
@@ -559,6 +605,9 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     const intent = classifyIntent(candidate, mechanism);
     const explainability = buildExplainability(candidate, tier, score, riskFlags, problemClass, mechanism, stage, irritability);
 
+    const confidence = Math.min(100, Math.round((score / 80) * 100));
+    const linkedTechniques = TECHNIQUE_DB_CROSS_REF[candidate.id] || [];
+
     return {
       id: candidate.id,
       name: candidate.name,
@@ -566,6 +615,8 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
       tier,
       intent,
       score,
+      confidence,
+      expectedTimeframe: candidate.expectedTimeframe,
       description: candidate.description,
       dosage: candidate.dosage,
       rationale: candidate.rationale,
@@ -579,6 +630,7 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
         const order: IrritabilityLevel[] = ['low', 'moderate', 'high'];
         return order.indexOf(irritability) <= order.indexOf(candidate.irritabilityMax);
       })(),
+      linkedTechniques,
     };
   });
 

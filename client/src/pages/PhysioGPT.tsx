@@ -1723,6 +1723,38 @@ ${ddxList}`;
     setVisualizationBoneHighlights(boneHighlights);
   }, [BIOMECHANICAL_REGION_TO_MUSCLES, VISUALIZATION_MUSCLE_MAP, MUSCLE_STATUS_COLORS, REGION_TO_BONE_NAMES, FASCIAL_CHAIN_TO_MUSCLES]);
 
+  const handleDecisionTargetClick = useCallback((regions: string[]) => {
+    const muscleGroupIds = new Set<string>();
+    const boneHighlights: Array<{ boneName: string; color: number; intensity: number }> = [];
+    const highlightColor = 0x10b981;
+
+    for (const region of regions) {
+      const lower = region.toLowerCase().trim();
+      if (BIOMECHANICAL_REGION_TO_MUSCLES[lower]) {
+        BIOMECHANICAL_REGION_TO_MUSCLES[lower].forEach(m => muscleGroupIds.add(m));
+      } else {
+        for (const [key, muscles] of Object.entries(BIOMECHANICAL_REGION_TO_MUSCLES)) {
+          if (key.includes(lower) || lower.includes(key)) {
+            muscles.forEach(m => muscleGroupIds.add(m));
+            break;
+          }
+        }
+      }
+
+      for (const [key, bones] of Object.entries(REGION_TO_BONE_NAMES)) {
+        if (key.includes(lower) || lower.includes(key)) {
+          bones.forEach(b => boneHighlights.push({ boneName: b, color: highlightColor, intensity: 0.6 }));
+        }
+      }
+    }
+
+    const colorMap: Record<string, string> = {};
+    muscleGroupIds.forEach(m => { colorMap[m] = '#10b981'; });
+    setBiomechanicalMuscleHighlights(Array.from(muscleGroupIds));
+    setMuscleHighlightColors(colorMap);
+    setVisualizationBoneHighlights(boneHighlights);
+  }, [BIOMECHANICAL_REGION_TO_MUSCLES, REGION_TO_BONE_NAMES]);
+
   const handleHypothesisClick = useCallback((hypothesis: ClinicalHypothesis) => {
     setSelectedHypothesisForChat({
       id: hypothesis.id,
@@ -8782,6 +8814,7 @@ ${ddxList}`;
         onStructuredHypothesisClick={handleStructuredHypothesisClick}
         decisionData={treatmentDecisionData}
         decisionLoading={treatmentDecisionLoading}
+        onDecisionTargetClick={handleDecisionTargetClick}
       />
 
       <HypothesisChatPanel

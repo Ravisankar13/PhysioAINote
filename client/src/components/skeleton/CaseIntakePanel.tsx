@@ -25,7 +25,7 @@ import type {
   PainSide,
   MissingField,
   InputSourceLabel,
-} from "../../../shared/clinicalIntakeTypes";
+} from "@shared/clinicalIntakeTypes";
 
 const BODY_REGIONS = [
   { value: "cervical", label: "Neck / Cervical Spine" },
@@ -208,7 +208,7 @@ export default function CaseIntakePanel({
 
   const buildIntakePayload = useCallback((): UnifiedIntakeData => {
     const sources: InputSourceLabel[] = [];
-    const hasForm = manualForm.painLocation || manualForm.duration || manualForm.aggravatingFactors.length > 0 || manualForm.redFlags.length > 0;
+    const hasForm = manualForm.painLocation || manualForm.duration || manualForm.onset || manualForm.mainComplaint || manualForm.goals || manualForm.priorTreatment || manualForm.recurrence || manualForm.functionalLimitations || manualForm.aggravatingFactors.length > 0 || manualForm.redFlags.length > 0 || manualForm.easingFactors.length > 0;
     if (hasForm) sources.push("manual_form");
     if (freeText.length > 5) sources.push("free_text");
     if (voiceTranscription.length > 5) sources.push("voice_transcription");

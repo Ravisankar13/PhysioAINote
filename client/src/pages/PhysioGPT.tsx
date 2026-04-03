@@ -100,7 +100,7 @@ import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab"
 import type { TreatmentPlanResult } from "@/components/skeleton/PlanTab";
 import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
 import CaseIntakePanel from "@/components/skeleton/CaseIntakePanel";
-import type { ClinicalExtractionResult, PainMarkerSummary } from "../../shared/clinicalIntakeTypes";
+import type { ClinicalExtractionResult, PainMarkerSummary } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";

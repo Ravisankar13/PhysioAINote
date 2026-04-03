@@ -1254,10 +1254,11 @@ function buildCompensationPatterns(
 
   for (const dev of posture.deviations) {
     if (dev.severity !== 'mild') {
-      const compRegion = dev.region === 'lumbar' ? 'thoracic spine' :
-        dev.region === 'thoracic' ? 'cervical spine' :
-        dev.region === 'pelvis' ? 'lumbar spine' :
-        dev.region === 'cervical' ? 'thoracic spine' : 'adjacent region';
+      const rLower = dev.region.toLowerCase();
+      const compRegion = rLower.includes('lumbar') ? 'thoracic spine' :
+        rLower.includes('thoracic') ? 'cervical spine' :
+        rLower.includes('pelvis') || rLower.includes('pelvic') ? 'lumbar spine' :
+        rLower.includes('cervical') ? 'thoracic spine' : 'adjacent region';
       patterns.push({
         id: `comp_${nextId++}`,
         label: `${dev.pattern} compensation chain`,

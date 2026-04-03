@@ -16,7 +16,6 @@ import {
   Info, HelpCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import type {
   UnifiedIntakeData,
   ClinicalExtractionResult,
@@ -253,7 +252,15 @@ export default function CaseIntakePanel({
     setExtractionResult(null);
 
     try {
-      const result: ClinicalExtractionResult = await apiRequest("/api/clinical/extract", "POST", payload);
+      const response = await fetch("/api/clinical/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error("Extraction failed");
+      const result: ClinicalExtractionResult = await response.json();
       if (controller.signal.aborted) return;
       setExtractionResult(result);
       onExtractionComplete(result);

@@ -1684,6 +1684,17 @@ interface PureThreeGLBViewerProps {
     intensity: number;
     label: string;
   }>;
+  slingPathwayVisualization?: {
+    enabled: boolean;
+    activeSlingId: string | null;
+    slings: Array<{
+      id: string;
+      color: string;
+      bonePathway: string[];
+      status: string;
+      activationScore: number;
+    }>;
+  } | null;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2150,6 +2161,7 @@ export default function PureThreeGLBViewer({
   tissueViewOverlay,
   onTissueBoneClick,
   biomechanicsFaultHighlights,
+  slingPathwayVisualization,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -2182,6 +2194,7 @@ export default function PureThreeGLBViewer({
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const chainHighlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const fascialChainGroupRef = useRef<THREE.Group | null>(null);
+  const slingPathwayGroupRef = useRef<THREE.Group | null>(null);
   const scarMarkerGroupRef = useRef<THREE.Group | null>(null);
   const onScarMarkerClickRef = useRef(onScarMarkerClick);
   onScarMarkerClickRef.current = onScarMarkerClick;
@@ -3075,6 +3088,90 @@ export default function PureThreeGLBViewer({
     animFrameId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animFrameId);
   }, [fascialChainVisualization?.showPropagation, fascialChainVisualization?.painHighlightChains, fascialChainVisualization?.enabled]);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene, model } = sceneRef.current;
+
+    if (slingPathwayGroupRef.current) {
+      slingPathwayGroupRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+          child.geometry.dispose();
+          if (child.material instanceof THREE.Material) child.material.dispose();
+        }
+      });
+      scene.remove(slingPathwayGroupRef.current);
+      slingPathwayGroupRef.current = null;
+    }
+
+    if (!slingPathwayVisualization?.enabled || !model) return;
+    if (slingPathwayVisualization.slings.length === 0) return;
+
+    model.updateMatrixWorld(true);
+    const boneMap = new Map<string, THREE.Object3D>();
+    model.traverse((child: THREE.Object3D) => {
+      if (child.name) boneMap.set(child.name, child);
+    });
+
+    const group = new THREE.Group();
+    group.userData.isSlingGroup = true;
+
+    for (const sling of slingPathwayVisualization.slings) {
+      const isActive = slingPathwayVisualization.activeSlingId === sling.id;
+      const isDimmed = slingPathwayVisualization.activeSlingId !== null && !isActive;
+      const colorHex = parseInt(sling.color.replace('#', ''), 16);
+      const opacity = isDimmed ? 0.15 : isActive ? 0.9 : 0.5;
+      const lineWidth = isActive ? 3 : 1.5;
+
+      const positions: THREE.Vector3[] = [];
+      for (const boneName of sling.bonePathway) {
+        const bone = boneMap.get(boneName);
+        if (bone) {
+          const worldPos = new THREE.Vector3();
+          bone.getWorldPosition(worldPos);
+          positions.push(worldPos);
+        }
+      }
+
+      if (positions.length < 2) continue;
+
+      const curve = new THREE.CatmullRomCurve3(positions, false, 'catmullrom', 0.5);
+      const curvePoints = curve.getPoints(positions.length * 8);
+      const lineGeom = new THREE.BufferGeometry().setFromPoints(curvePoints);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: colorHex,
+        opacity,
+        transparent: true,
+        linewidth: lineWidth,
+        depthTest: false,
+      });
+      const line = new THREE.Line(lineGeom, lineMat);
+      line.renderOrder = 997;
+      group.add(line);
+
+      const statusColor = sling.status === 'underperforming' ? 0xff4444 :
+        sling.status === 'overloaded' ? 0xff9933 :
+        sling.status === 'compensating' ? 0xffcc00 : colorHex;
+
+      for (const pos of positions) {
+        const dotSize = isActive ? 0.012 : 0.008;
+        const dotGeom = new THREE.SphereGeometry(dotSize, 8, 8);
+        const dotMat = new THREE.MeshBasicMaterial({
+          color: statusColor,
+          opacity: isDimmed ? 0.2 : 0.8,
+          transparent: true,
+          depthTest: false,
+        });
+        const dot = new THREE.Mesh(dotGeom, dotMat);
+        dot.position.copy(pos);
+        dot.renderOrder = 998;
+        group.add(dot);
+      }
+    }
+
+    scene.add(group);
+    slingPathwayGroupRef.current = group;
+  }, [slingPathwayVisualization]);
 
   useEffect(() => {
     if (!sceneRef.current) return;

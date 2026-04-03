@@ -132,6 +132,8 @@ import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConf
 import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
+import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId } from "@/lib/slingEngine";
+import SlingAnalysisPanel from "@/components/skeleton/SlingAnalysisPanel";
 
 const BODY_REGIONS = {
   cervical: {
@@ -522,7 +524,8 @@ export default function PhysioGPT() {
   const [scarPlacementMode, setScarPlacementMode] = useState<ScarType | null>(null);
   const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
   const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
-  const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics'>('chat');
+  const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics' | 'slings'>('chat');
+  const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
   const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
@@ -1820,6 +1823,20 @@ ${ddxList}`;
       clinicalSummary: bioSrc.clinicalSummary,
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
     } : undefined;
+    const slingCtx = slingAnalysis ? {
+      overallForceTransferScore: slingAnalysis.overallForceTransferScore,
+      dominantDysfunction: slingAnalysis.dominantDysfunction,
+      dysfunctionalSlings: slingAnalysis.slings
+        .filter(s => s.status !== 'normal')
+        .map(s => ({
+          sling: s.label,
+          status: s.status,
+          activationScore: s.activationScore,
+          forceTransfer: s.forceTransferQuality,
+          weakLinks: s.weakLinks.map(w => w.muscle),
+          treatmentTargets: s.treatmentTargets.map(t => ({ muscle: t.muscle, intervention: t.intervention, rationale: t.rationale })),
+        })),
+    } : undefined;
     const input: Record<string, unknown> = {
       structuredReasoning: structuredReasoningData,
       painMarkers: painMarkers.map(pm => ({
@@ -1830,6 +1847,7 @@ ${ddxList}`;
       postureState: modelConfig,
       extractionContext: extractionResult ?? undefined,
       biomechanicsContext: biomechanicsCtx,
+      slingContext: slingCtx,
     };
     fetch('/api/treatment-decision/analyze', {
       method: 'POST',
@@ -3312,6 +3330,11 @@ ${ddxList}`;
     }
   }, [unifiedBiomechanicsOutput]);
 
+  const slingAnalysis = useMemo(() => {
+    const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
+    return computeSlingAnalysis(bioSrc);
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput]);
+
   const biomechanicsFaultHighlights = useMemo(() => {
     const FAULT_JOINT_TO_BONE: Record<string, string> = {
       left_hip: 'Hip_L', right_hip: 'Hip_R',
@@ -4432,6 +4455,17 @@ ${ddxList}`;
               referralZoneBones={referralZoneBones}
               tissueViewOverlay={tissueViewOverlay}
               biomechanicsFaultHighlights={biomechanicsFaultHighlights}
+              slingPathwayVisualization={rightPanelTab === 'slings' && slingAnalysis ? {
+                enabled: true,
+                activeSlingId: selectedSlingId,
+                slings: slingAnalysis.slings.map(s => ({
+                  id: s.slingId,
+                  color: s.color,
+                  bonePathway: getSlingBonePathway(s.slingId),
+                  status: s.status,
+                  activationScore: s.activationScore,
+                })),
+              } : null}
               onTissueBoneClick={tissueViewMode && tissueViewMode !== 'muscle' ? (boneName: string) => {
                 const matches = getAllEntriesForBone(tissueViewMode, boneName);
                 if (matches.length === 0) return;
@@ -7841,6 +7875,13 @@ ${ddxList}`;
                 <Activity className="h-3 w-3" />
                 Biomech
               </button>
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${rightPanelTab === 'slings' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setRightPanelTab('slings')}
+              >
+                <GitBranch className="h-3 w-3" />
+                Slings
+              </button>
             </div>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setChatPanelOpen(false)}>
               <X className="h-3.5 w-3.5" />
@@ -8437,6 +8478,16 @@ ${ddxList}`;
                 onFaultRuleOverride={setUnifiedBiomechanicsFaultOverrides}
                 selectedMovementTask={unifiedBiomechanicsMovementTask}
                 movementProgress={unifiedBiomechanicsProgress}
+              />
+            </div>
+          )}
+
+          {rightPanelTab === 'slings' && (
+            <div className="flex-1 overflow-hidden">
+              <SlingAnalysisPanel
+                analysis={slingAnalysis}
+                onSlingSelect={setSelectedSlingId}
+                selectedSling={selectedSlingId}
               />
             </div>
           )}

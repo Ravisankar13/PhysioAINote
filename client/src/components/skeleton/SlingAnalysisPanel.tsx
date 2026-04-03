@@ -211,6 +211,34 @@ function SlingCard({
             </div>
           )}
 
+          {sling.commonDysfunctions && sling.commonDysfunctions.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-[10px] text-purple-400 flex items-center gap-1">
+                <Activity className="w-3 h-3" /> Common Dysfunctions
+              </div>
+              {sling.commonDysfunctions.slice(0, 3).map((cd, i) => (
+                <div key={i} className="text-[9px] text-slate-500 pl-3 border-l border-purple-500/20">
+                  {cd}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {sling.assessmentTests && sling.assessmentTests.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-[10px] text-blue-400 flex items-center gap-1">
+                <Shield className="w-3 h-3" /> Assessment Tests
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {sling.assessmentTests.map((test, i) => (
+                  <Badge key={i} variant="outline" className="text-[8px] px-1.5 py-0 border-blue-500/30 text-blue-400">
+                    {test}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="text-[9px] text-slate-500 italic pt-1 border-t border-slate-700/20">
             {sling.narrative}
           </div>

@@ -132,7 +132,7 @@ import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConf
 import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
-import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId } from "@/lib/slingEngine";
+import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
 import SlingAnalysisPanel from "@/components/skeleton/SlingAnalysisPanel";
 
 const BODY_REGIONS = {
@@ -3332,8 +3332,13 @@ ${ddxList}`;
 
   const slingAnalysis = useMemo(() => {
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
-    return computeSlingAnalysis(bioSrc);
-  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput]);
+    const slingInput: SlingAnalysisInput = {
+      biomechanicsOutput: bioSrc,
+      muscleOverrides: muscleOverrides as Record<string, { tension?: number; pathology?: string }> | undefined,
+      movementTaskId: selectedMovementTask ?? undefined,
+    };
+    return computeSlingAnalysis(slingInput);
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, selectedMovementTask]);
 
   const biomechanicsFaultHighlights = useMemo(() => {
     const FAULT_JOINT_TO_BONE: Record<string, string> = {
@@ -4464,6 +4469,9 @@ ${ddxList}`;
                   bonePathway: getSlingBonePathway(s.slingId),
                   status: s.status,
                   activationScore: s.activationScore,
+                  weakLinkBoneIndices: s.weakLinks.flatMap(wl => wl.boneSegmentIndices),
+                  overloadedBoneIndices: s.overloadedBoneIndices,
+                  compensatingBoneIndices: s.compensatingBoneIndices,
                 })),
               } : null}
               onTissueBoneClick={tissueViewMode && tissueViewMode !== 'muscle' ? (boneName: string) => {

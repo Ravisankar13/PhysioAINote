@@ -1,4 +1,4 @@
-import type { BiomechanicsOutput, MuscleStateEntry, CompensationPattern as BiomechCompensation } from './unifiedBiomechanicsEngine';
+import type { BiomechanicsOutput, MuscleStateEntry } from './unifiedBiomechanicsEngine';
 import { FUNCTIONAL_SLINGS, type FunctionalSling } from './myofascialChains';
 import { KINETIC_CHAINS, type KineticChainDefinition } from './kineticChainExplorer';
 
@@ -12,10 +12,16 @@ export interface SlingDefinition {
   label: string;
   color: string;
   muscles: string[];
+  joints: string[];
   primaryFunction: string;
   movementRole: string;
-  functionalSlingRef: string | null;
-  kineticChainRef: string | null;
+  commonDysfunctions: string[];
+  assessmentTests: string[];
+  clinicalRelevance: string;
+  functionalSlingRef: FunctionalSling | null;
+  kineticChainRef: KineticChainDefinition | null;
+  propagationWeight: number;
+  musclePairs: [string, string][];
   bonePathway: string[];
 }
 
@@ -25,6 +31,7 @@ export interface WeakLink {
   role: MuscleStateEntry['role'];
   reason: string;
   impactOnSling: string;
+  boneSegmentIndices: number[];
 }
 
 export interface SlingCompensation {
@@ -64,6 +71,10 @@ export interface SlingResult {
   confidence: number;
   treatmentTargets: SlingTreatmentTarget[];
   narrative: string;
+  commonDysfunctions: string[];
+  assessmentTests: string[];
+  overloadedBoneIndices: number[];
+  compensatingBoneIndices: number[];
 }
 
 export interface SlingAnalysisResult {
@@ -75,63 +86,120 @@ export interface SlingAnalysisResult {
   crossSlingCompensations: SlingCompensation[];
 }
 
-const SLING_DEFINITIONS: SlingDefinition[] = [
-  {
-    id: 'posterior_oblique',
+export interface SlingAnalysisInput {
+  biomechanicsOutput: BiomechanicsOutput | null;
+  muscleOverrides?: Record<string, { tension?: number; pathology?: string }>;
+  movementTaskId?: string;
+}
+
+const SLING_KINETIC_MAP: Record<SlingId, string> = {
+  posterior_oblique: 'posterior_oblique_sling',
+  anterior_oblique: 'anterior_oblique_sling',
+  lateral: 'lateral_subsystem',
+  deep_longitudinal: 'deep_longitudinal',
+  scapular_shoulder: 'upper_extremity_chain',
+};
+
+const SLING_FUNCTIONAL_MAP: Record<SlingId, string> = {
+  posterior_oblique: 'posterior_oblique',
+  anterior_oblique: 'anterior_oblique',
+  lateral: 'lateral_sling',
+  deep_longitudinal: 'deep_longitudinal',
+  scapular_shoulder: '',
+};
+
+const SLING_BONE_PATHWAYS: Record<SlingId, string[]> = {
+  posterior_oblique: ['Shoulder_L', 'ShoulderPart1_L', 'Chest_M', 'Spine1Part2_M', 'Spine1Part1_M', 'Spine1_M', 'RootPart2_M', 'RootPart1_M', 'Root_M', 'Hip_R', 'HipPart1_R'],
+  anterior_oblique: ['Shoulder_R', 'Chest_M', 'Spine1_M', 'RootPart2_M', 'Root_M', 'Hip_L', 'HipPart1_L'],
+  lateral: ['Hip_L', 'HipPart1_L', 'Root_M', 'RootPart1_M', 'Spine1_M', 'Hip_R', 'HipPart1_R', 'Knee_R'],
+  deep_longitudinal: ['Ankle_L', 'Knee_L', 'Hip_L', 'HipPart1_L', 'Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Chest_M', 'Neck_M'],
+  scapular_shoulder: ['Shoulder_L', 'ShoulderPart1_L', 'Chest_M', 'Spine1Part2_M', 'Shoulder_R', 'ShoulderPart1_R'],
+};
+
+const SLING_META: Record<SlingId, { label: string; color: string; muscles: string[]; joints: string[]; primaryFunction: string; movementRole: string }> = {
+  posterior_oblique: {
     label: 'Posterior Oblique Sling',
     color: '#f97316',
     muscles: ['latissimus_dorsi', 'thoracolumbar_fascia', 'gluteus_maximus', 'contralateral_gluteus_maximus'],
+    joints: ['shoulder', 'thoracolumbar_junction', 'sacroiliac', 'hip'],
     primaryFunction: 'Contralateral upper-lower body force transfer during gait and rotation',
     movementRole: 'Gait propulsion, trunk counter-rotation, posterior chain power transfer',
-    functionalSlingRef: 'posterior_oblique',
-    kineticChainRef: 'posterior_oblique_sling',
-    bonePathway: ['Shoulder_L', 'ShoulderPart1_L', 'Chest_M', 'Spine1Part2_M', 'Spine1Part1_M', 'Spine1_M', 'RootPart2_M', 'RootPart1_M', 'Root_M', 'Hip_R', 'HipPart1_R'],
   },
-  {
-    id: 'anterior_oblique',
+  anterior_oblique: {
     label: 'Anterior Oblique Sling',
     color: '#ec4899',
     muscles: ['external_oblique', 'anterior_abdominal_fascia', 'internal_oblique', 'adductors'],
+    joints: ['pubic_symphysis', 'hip', 'anterior_trunk'],
     primaryFunction: 'Rotational power generation and deceleration, trunk stabilization',
     movementRole: 'Kicking, throwing deceleration, rotational sports, anti-rotation stability',
-    functionalSlingRef: 'anterior_oblique',
-    kineticChainRef: 'anterior_oblique_sling',
-    bonePathway: ['Shoulder_R', 'Chest_M', 'Spine1_M', 'RootPart2_M', 'Root_M', 'Hip_L', 'HipPart1_L'],
   },
-  {
-    id: 'lateral',
+  lateral: {
     label: 'Lateral Subsystem',
     color: '#06b6d4',
     muscles: ['gluteus_medius', 'gluteus_minimus', 'tensor_fasciae_latae', 'adductors', 'quadratus_lumborum'],
+    joints: ['hip', 'knee', 'lumbar_spine'],
     primaryFunction: 'Frontal plane pelvic stability during single-leg stance',
     movementRole: 'Single-leg balance, gait stance phase, lateral stability, Trendelenburg prevention',
-    functionalSlingRef: 'lateral_sling',
-    kineticChainRef: 'lateral_subsystem',
-    bonePathway: ['Hip_L', 'HipPart1_L', 'Root_M', 'RootPart1_M', 'Spine1_M', 'Hip_R', 'HipPart1_R', 'Knee_R'],
   },
-  {
-    id: 'deep_longitudinal',
+  deep_longitudinal: {
     label: 'Deep Longitudinal Sling',
     color: '#10b981',
     muscles: ['peroneus_longus', 'biceps_femoris', 'sacrotuberous_ligament', 'erector_spinae', 'thoracolumbar_fascia'],
+    joints: ['ankle', 'knee', 'sacroiliac', 'lumbar_spine'],
     primaryFunction: 'Longitudinal force transfer from foot through pelvis to spine',
     movementRole: 'Shock absorption, ground reaction force transmission, spinal stabilization during gait',
-    functionalSlingRef: 'deep_longitudinal',
-    kineticChainRef: 'deep_longitudinal',
-    bonePathway: ['Ankle_L', 'Knee_L', 'Hip_L', 'HipPart1_L', 'Root_M', 'RootPart1_M', 'RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Chest_M', 'Neck_M'],
   },
-  {
-    id: 'scapular_shoulder',
+  scapular_shoulder: {
     label: 'Scapular / Shoulder Sling',
     color: '#8b5cf6',
     muscles: ['serratus_anterior', 'lower_trapezius', 'rhomboids', 'rotator_cuff'],
+    joints: ['scapulothoracic', 'glenohumeral', 'acromioclavicular'],
     primaryFunction: 'Scapulothoracic rhythm, glenohumeral force couple, overhead stability',
     movementRole: 'Overhead reaching, throwing, pushing, pulling, scapular upward rotation',
-    functionalSlingRef: null,
-    kineticChainRef: null,
-    bonePathway: ['Shoulder_L', 'ShoulderPart1_L', 'Chest_M', 'Spine1Part2_M', 'Shoulder_R', 'ShoulderPart1_R'],
   },
-];
+};
+
+function buildSlingDefinitions(): SlingDefinition[] {
+  const slingIds: SlingId[] = ['posterior_oblique', 'anterior_oblique', 'lateral', 'deep_longitudinal', 'scapular_shoulder'];
+
+  return slingIds.map(id => {
+    const meta = SLING_META[id];
+    const kineticChainId = SLING_KINETIC_MAP[id];
+    const functionalSlingId = SLING_FUNCTIONAL_MAP[id];
+
+    const kineticChainRef = KINETIC_CHAINS.find(kc => kc.id === kineticChainId) ?? null;
+    const functionalSlingRef = FUNCTIONAL_SLINGS.find(fs => fs.id === functionalSlingId) ?? null;
+
+    const commonDysfunctions = kineticChainRef?.commonDysfunctions ?? [];
+    const assessmentTests = kineticChainRef?.assessmentTests ?? [];
+    const clinicalRelevance = kineticChainRef?.clinicalRelevance ?? meta.primaryFunction;
+    const propagationWeight = functionalSlingRef?.propagationWeight ?? 0.35;
+    const musclePairs = functionalSlingRef?.pairs ?? [];
+
+    const jointsFromKC = kineticChainRef?.links.map(l => l.jointId) ?? [];
+    const mergedJoints = Array.from(new Set([...meta.joints, ...jointsFromKC]));
+
+    return {
+      id,
+      label: meta.label,
+      color: meta.color,
+      muscles: meta.muscles,
+      joints: mergedJoints,
+      primaryFunction: meta.primaryFunction,
+      movementRole: meta.movementRole,
+      commonDysfunctions,
+      assessmentTests,
+      clinicalRelevance,
+      functionalSlingRef,
+      kineticChainRef,
+      propagationWeight,
+      musclePairs,
+      bonePathway: SLING_BONE_PATHWAYS[id],
+    };
+  });
+}
+
+const SLING_DEFINITIONS = buildSlingDefinitions();
 
 const MUSCLE_ALIASES: Record<string, string[]> = {
   latissimus_dorsi: ['Latissimus dorsi', 'latissimus dorsi', 'lat_dorsi', 'scapula_l', 'scapula_r'],
@@ -156,6 +224,14 @@ const MUSCLE_ALIASES: Record<string, string[]> = {
   rotator_cuff: ['Infraspinatus', 'Supraspinatus', 'Subscapularis', 'Teres minor', 'rotator cuff'],
 };
 
+const SLING_JOINT_REGIONS: Record<string, string[]> = {
+  posterior_oblique: ['shoulder', 'lumbar_spine', 'hip', 'pelvis'],
+  anterior_oblique: ['hip', 'pelvis', 'trunk', 'anterolateral_trunk'],
+  lateral: ['hip', 'knee', 'lateral_hip', 'lateral_lumbar', 'medial_thigh'],
+  deep_longitudinal: ['ankle', 'knee', 'hip', 'pelvis', 'lumbar', 'spine'],
+  scapular_shoulder: ['shoulder', 'scapular', 'elbow', 'wrist'],
+};
+
 function findMuscleActivation(
   muscle: string,
   muscleStates: MuscleStateEntry[]
@@ -170,21 +246,133 @@ function findMuscleActivation(
   return null;
 }
 
+function applyMuscleOverrides(
+  muscle: string,
+  baseActivation: number,
+  baseRole: MuscleStateEntry['role'],
+  overrides?: Record<string, { tension?: number; pathology?: string }>
+): { activationPct: number; role: MuscleStateEntry['role'] } {
+  if (!overrides) return { activationPct: baseActivation, role: baseRole };
+
+  const aliases = MUSCLE_ALIASES[muscle] ?? [muscle];
+  for (const alias of aliases) {
+    const override = overrides[alias] ?? overrides[alias.toLowerCase()];
+    if (override) {
+      let modifiedActivation = baseActivation;
+      let modifiedRole = baseRole;
+      if (override.tension !== undefined) {
+        modifiedActivation = Math.max(0, Math.min(100, baseActivation + (override.tension - 50) * 0.5));
+      }
+      if (override.pathology) {
+        modifiedActivation = Math.max(0, modifiedActivation * 0.6);
+        modifiedRole = 'inhibited';
+      }
+      return { activationPct: Math.round(modifiedActivation), role: modifiedRole };
+    }
+  }
+  return { activationPct: baseActivation, role: baseRole };
+}
+
 function estimateActivation(
   muscle: string,
-  muscleStates: MuscleStateEntry[]
+  muscleStates: MuscleStateEntry[],
+  overrides?: Record<string, { tension?: number; pathology?: string }>
 ): { activationPct: number; role: MuscleStateEntry['role']; found: boolean } {
   const state = findMuscleActivation(muscle, muscleStates);
-  if (state) return { activationPct: state.activationPct, role: state.role, found: true };
+  if (state) {
+    const modified = applyMuscleOverrides(muscle, state.activationPct, state.role, overrides);
+    return { activationPct: modified.activationPct, role: modified.role, found: true };
+  }
   return { activationPct: 50, role: 'normal', found: false };
+}
+
+function computePosturalPenalty(
+  def: SlingDefinition,
+  posture: BiomechanicsOutput['posture'] | null
+): number {
+  if (!posture) return 0;
+  const slingRegions = SLING_JOINT_REGIONS[def.id] ?? [];
+  let penalty = 0;
+  for (const dev of posture.deviations) {
+    const regionMatch = slingRegions.some(r =>
+      dev.region?.toLowerCase().includes(r) ||
+      dev.pattern?.toLowerCase().includes(r)
+    );
+    if (regionMatch) {
+      const sevMul = dev.severity === 'severe' ? 15 : dev.severity === 'moderate' ? 8 : 3;
+      penalty += sevMul;
+    }
+  }
+  return Math.min(penalty, 30);
+}
+
+function computeFaultPenalty(
+  def: SlingDefinition,
+  faults: BiomechanicsOutput['faults'] | null
+): number {
+  if (!faults) return 0;
+  const slingRegions = SLING_JOINT_REGIONS[def.id] ?? [];
+  let penalty = 0;
+  for (const fault of faults.faults) {
+    const jointMatch = fault.affectedJoints.some(j =>
+      slingRegions.some(r => j.toLowerCase().includes(r))
+    );
+    if (jointMatch) {
+      const sevMul = fault.severity === 'severe' ? 12 : fault.severity === 'moderate' ? 6 : 2;
+      penalty += sevMul;
+    }
+  }
+  return Math.min(penalty, 25);
+}
+
+function computeCompensationBoost(
+  def: SlingDefinition,
+  compensations: BiomechanicsOutput['compensationPatterns'] | null
+): number {
+  if (!compensations) return 0;
+  const slingRegions = SLING_JOINT_REGIONS[def.id] ?? [];
+  let boost = 0;
+  for (const pattern of compensations.patterns) {
+    const regionMatch = slingRegions.some(r =>
+      pattern.compensatingRegion.toLowerCase().includes(r) ||
+      pattern.primaryRegion.toLowerCase().includes(r)
+    );
+    if (regionMatch) {
+      boost += pattern.additionalLoadPct * 0.3;
+    }
+  }
+  return Math.min(Math.round(boost), 20);
+}
+
+function computeKinematicsPenalty(
+  def: SlingDefinition,
+  kinematics: BiomechanicsOutput['jointKinematics'] | null
+): number {
+  if (!kinematics) return 0;
+  const slingRegions = SLING_JOINT_REGIONS[def.id] ?? [];
+  let penalty = 0;
+  for (const jk of kinematics.joints) {
+    if (!jk.withinNormal) {
+      const jointMatch = slingRegions.some(r => jk.joint.toLowerCase().includes(r));
+      if (jointMatch) {
+        const [low, high] = jk.normalRangeDeg;
+        const deviation = jk.currentAngleDeg < low
+          ? low - jk.currentAngleDeg
+          : jk.currentAngleDeg - high;
+        penalty += Math.min(deviation * 0.3, 8);
+      }
+    }
+  }
+  return Math.min(Math.round(penalty), 20);
 }
 
 function computeSlingActivationScore(
   def: SlingDefinition,
-  muscleStates: MuscleStateEntry[]
+  muscleStates: MuscleStateEntry[],
+  overrides?: Record<string, { tension?: number; pathology?: string }>
 ): { score: number; muscleScores: Array<{ muscle: string; activation: number; role: MuscleStateEntry['role']; found: boolean }> } {
   const muscleScores = def.muscles.map(m => {
-    const est = estimateActivation(m, muscleStates);
+    const est = estimateActivation(m, muscleStates, overrides);
     return { muscle: m, activation: est.activationPct, role: est.role, found: est.found };
   });
   const totalFound = muscleScores.filter(s => s.found).length;
@@ -200,7 +388,8 @@ function detectWeakLinks(
   muscleScores: Array<{ muscle: string; activation: number; role: MuscleStateEntry['role']; found: boolean }>
 ): WeakLink[] {
   const weakLinks: WeakLink[] = [];
-  for (const ms of muscleScores) {
+  for (let i = 0; i < muscleScores.length; i++) {
+    const ms = muscleScores[i];
     if (!ms.found) continue;
     if (ms.role === 'underactive' || ms.role === 'inhibited' || ms.activation < 35) {
       const reason = ms.role === 'inhibited'
@@ -208,12 +397,22 @@ function detectWeakLinks(
         : ms.role === 'underactive'
           ? `${ms.muscle} is underactive (${ms.activation}%), reducing sling efficiency`
           : `${ms.muscle} activation critically low (${ms.activation}%)`;
+
+      const totalBones = def.bonePathway.length;
+      const segStart = Math.floor((i / muscleScores.length) * totalBones);
+      const segEnd = Math.min(Math.ceil(((i + 1) / muscleScores.length) * totalBones), totalBones - 1);
+      const boneSegmentIndices: number[] = [];
+      for (let b = segStart; b <= segEnd; b++) {
+        boneSegmentIndices.push(b);
+      }
+
       weakLinks.push({
         muscle: ms.muscle,
         activationPct: ms.activation,
         role: ms.role,
         reason,
         impactOnSling: `Breaks force continuity in ${def.label}, forcing adjacent muscles to compensate`,
+        boneSegmentIndices,
       });
     }
   }
@@ -335,6 +534,32 @@ function computeConfidence(
   return Math.round((foundCount / total) * 100);
 }
 
+function computeOverloadedBoneIndices(
+  def: SlingDefinition,
+  muscleScores: Array<{ muscle: string; activation: number; role: MuscleStateEntry['role']; found: boolean }>
+): number[] {
+  const indices: number[] = [];
+  const totalBones = def.bonePathway.length;
+  for (let i = 0; i < muscleScores.length; i++) {
+    const ms = muscleScores[i];
+    if (ms.found && ms.role === 'overactive' && ms.activation > 70) {
+      const segIdx = Math.min(Math.round((i / muscleScores.length) * totalBones), totalBones - 1);
+      if (!indices.includes(segIdx)) indices.push(segIdx);
+    }
+  }
+  return indices;
+}
+
+function computeCompensatingBoneIndices(
+  def: SlingDefinition,
+  compensations: SlingCompensation[]
+): number[] {
+  if (compensations.length === 0) return [];
+  const totalBones = def.bonePathway.length;
+  const endIdx = totalBones - 1;
+  return [Math.max(0, endIdx - 1), endIdx];
+}
+
 function generateTreatmentTargets(
   def: SlingDefinition,
   weakLinks: WeakLink[],
@@ -417,13 +642,18 @@ function generateNarrative(
     parts.push(`Cross-sling compensation detected: ${compensations.map(c => c.compensatingSlingLabel).join(', ')} taking on additional load.`);
   }
 
+  if (def.commonDysfunctions.length > 0 && weakLinks.length > 0) {
+    parts.push(`Common pattern: ${def.commonDysfunctions[0]}`);
+  }
+
   parts.push(`Primary role affected: ${def.movementRole}.`);
   return parts.join(' ');
 }
 
 export function computeSlingAnalysis(
-  biomechanicsOutput: BiomechanicsOutput | null
+  input: SlingAnalysisInput
 ): SlingAnalysisResult {
+  const { biomechanicsOutput, muscleOverrides, movementTaskId } = input;
   const timestamp = Date.now();
 
   if (!biomechanicsOutput) {
@@ -443,6 +673,10 @@ export function computeSlingAnalysis(
         confidence: 0,
         treatmentTargets: [],
         narrative: `${def.label}: No biomechanical data available for analysis.`,
+        commonDysfunctions: def.commonDysfunctions,
+        assessmentTests: def.assessmentTests,
+        overloadedBoneIndices: [],
+        compensatingBoneIndices: [],
       })),
       systemSummary: 'No biomechanical data available. Adjust the skeleton posture to generate sling analysis.',
       overallForceTransferScore: 50,
@@ -452,13 +686,27 @@ export function computeSlingAnalysis(
   }
 
   const muscleStates = biomechanicsOutput.muscleAsymmetry.muscles;
+  const posture = biomechanicsOutput.posture;
+  const faults = biomechanicsOutput.faults;
+  const compensationPatterns = biomechanicsOutput.compensationPatterns;
+  const kinematics = biomechanicsOutput.jointKinematics;
 
   const intermediateResults = SLING_DEFINITIONS.map(def => {
-    const { score, muscleScores } = computeSlingActivationScore(def, muscleStates);
+    const { score: rawScore, muscleScores } = computeSlingActivationScore(def, muscleStates, muscleOverrides);
+
+    const posturalPenalty = computePosturalPenalty(def, posture);
+    const faultPenalty = computeFaultPenalty(def, faults);
+    const compBoost = computeCompensationBoost(def, compensationPatterns);
+    const kinematicsPenalty = computeKinematicsPenalty(def, kinematics);
+
+    const adjustedScore = Math.max(0, Math.min(100,
+      rawScore - posturalPenalty - faultPenalty + compBoost - kinematicsPenalty
+    ));
+
     const weakLinks = detectWeakLinks(def, muscleScores);
     const forceReroutes = detectForceReroutes(def, muscleScores);
 
-    return { def, activationScore: score, muscleScores, weakLinks, forceReroutes, status: 'normal' as SlingStatus };
+    return { def, activationScore: adjustedScore, muscleScores, weakLinks, forceReroutes, status: 'normal' as SlingStatus };
   });
 
   intermediateResults.forEach(ir => {
@@ -478,6 +726,8 @@ export function computeSlingAnalysis(
     const confidence = computeConfidence(ir.muscleScores);
     const treatmentTargets = generateTreatmentTargets(ir.def, ir.weakLinks, ir.forceReroutes, ir.muscleScores);
     const narrative = generateNarrative(ir.def, status, ir.activationScore, forceTransfer, ir.weakLinks, relevantCompensations, ir.forceReroutes);
+    const overloadedBoneIndices = computeOverloadedBoneIndices(ir.def, ir.muscleScores);
+    const compensatingBoneIndices = computeCompensatingBoneIndices(ir.def, relevantCompensations);
 
     return {
       slingId: ir.def.id,
@@ -493,6 +743,10 @@ export function computeSlingAnalysis(
       confidence,
       treatmentTargets,
       narrative,
+      commonDysfunctions: ir.def.commonDysfunctions,
+      assessmentTests: ir.def.assessmentTests,
+      overloadedBoneIndices,
+      compensatingBoneIndices,
     };
   });
 
@@ -515,10 +769,13 @@ export function computeSlingAnalysis(
     if (underperf.length > 0) {
       summaryParts.push(`Underperforming: ${underperf.map(s => s.label).join(', ')}.`);
     }
-    const overloaded = slings.filter(s => s.status === 'overloaded');
-    if (overloaded.length > 0) {
-      summaryParts.push(`Overloaded: ${overloaded.map(s => s.label).join(', ')}.`);
+    const overloadedSlings = slings.filter(s => s.status === 'overloaded');
+    if (overloadedSlings.length > 0) {
+      summaryParts.push(`Overloaded: ${overloadedSlings.map(s => s.label).join(', ')}.`);
     }
+  }
+  if (movementTaskId) {
+    summaryParts.push(`Analysis context: ${movementTaskId} movement task.`);
   }
   summaryParts.push(`Overall force transfer score: ${overallForceTransferScore}/100.`);
 

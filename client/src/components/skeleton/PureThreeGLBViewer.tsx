@@ -1693,6 +1693,9 @@ interface PureThreeGLBViewerProps {
       bonePathway: string[];
       status: string;
       activationScore: number;
+      weakLinkBoneIndices: number[];
+      overloadedBoneIndices: number[];
+      compensatingBoneIndices: number[];
     }>;
   } | null;
 }
@@ -3121,7 +3124,6 @@ export default function PureThreeGLBViewer({
       const isDimmed = slingPathwayVisualization.activeSlingId !== null && !isActive;
       const colorHex = parseInt(sling.color.replace('#', ''), 16);
       const opacity = isDimmed ? 0.15 : isActive ? 0.9 : 0.5;
-      const lineWidth = isActive ? 3 : 1.5;
 
       const positions: THREE.Vector3[] = [];
       for (const boneName of sling.bonePathway) {
@@ -3135,29 +3137,89 @@ export default function PureThreeGLBViewer({
 
       if (positions.length < 2) continue;
 
-      const curve = new THREE.CatmullRomCurve3(positions, false, 'catmullrom', 0.5);
-      const curvePoints = curve.getPoints(positions.length * 8);
-      const lineGeom = new THREE.BufferGeometry().setFromPoints(curvePoints);
-      const lineMat = new THREE.LineBasicMaterial({
-        color: colorHex,
-        opacity,
-        transparent: true,
-        linewidth: lineWidth,
-        depthTest: false,
-      });
-      const line = new THREE.Line(lineGeom, lineMat);
-      line.renderOrder = 997;
-      group.add(line);
+      const weakSet = new Set(sling.weakLinkBoneIndices ?? []);
+      const overloadSet = new Set(sling.overloadedBoneIndices ?? []);
+      const compSet = new Set(sling.compensatingBoneIndices ?? []);
+
+      for (let seg = 0; seg < positions.length - 1; seg++) {
+        const segStart = positions[seg];
+        const segEnd = positions[seg + 1];
+        const isWeakSeg = weakSet.has(seg) || weakSet.has(seg + 1);
+        const isCompSeg = compSet.has(seg) || compSet.has(seg + 1);
+
+        const segCurve = new THREE.CatmullRomCurve3([segStart, segEnd], false, 'catmullrom', 0.5);
+
+        if (isWeakSeg && isActive) {
+          const dashCount = 6;
+          for (let d = 0; d < dashCount; d++) {
+            const t0 = (d * 2) / (dashCount * 2);
+            const t1 = (d * 2 + 1) / (dashCount * 2);
+            const dashPts = [segCurve.getPoint(t0), segCurve.getPoint(t1)];
+            const dashGeom = new THREE.BufferGeometry().setFromPoints(dashPts);
+            const dashMat = new THREE.LineBasicMaterial({
+              color: 0xff4444,
+              opacity: isDimmed ? 0.1 : 0.7,
+              transparent: true,
+              depthTest: false,
+            });
+            const dashLine = new THREE.Line(dashGeom, dashMat);
+            dashLine.renderOrder = 997;
+            group.add(dashLine);
+          }
+        } else if (isCompSeg && isActive) {
+          const segPts = segCurve.getPoints(8);
+          const segGeom = new THREE.BufferGeometry().setFromPoints(segPts);
+          const segMat = new THREE.LineBasicMaterial({
+            color: 0xffcc00,
+            opacity: isDimmed ? 0.1 : 0.85,
+            transparent: true,
+            depthTest: false,
+          });
+          const segLine = new THREE.Line(segGeom, segMat);
+          segLine.renderOrder = 997;
+          group.add(segLine);
+        } else {
+          const segPts = segCurve.getPoints(8);
+          const segGeom = new THREE.BufferGeometry().setFromPoints(segPts);
+          const segMat = new THREE.LineBasicMaterial({
+            color: colorHex,
+            opacity,
+            transparent: true,
+            depthTest: false,
+          });
+          const segLine = new THREE.Line(segGeom, segMat);
+          segLine.renderOrder = 997;
+          group.add(segLine);
+        }
+      }
 
       const statusColor = sling.status === 'underperforming' ? 0xff4444 :
         sling.status === 'overloaded' ? 0xff9933 :
         sling.status === 'compensating' ? 0xffcc00 : colorHex;
 
-      for (const pos of positions) {
-        const dotSize = isActive ? 0.012 : 0.008;
+      for (let pi = 0; pi < positions.length; pi++) {
+        const pos = positions[pi];
+        const isWeak = weakSet.has(pi);
+        const isOverloaded = overloadSet.has(pi);
+        const isComp = compSet.has(pi);
+
+        let dotColor = statusColor;
+        let dotSize = isActive ? 0.012 : 0.008;
+
+        if (isActive && isOverloaded) {
+          dotColor = 0xff3300;
+          dotSize = 0.018;
+        } else if (isActive && isWeak) {
+          dotColor = 0xff4444;
+          dotSize = 0.006;
+        } else if (isActive && isComp) {
+          dotColor = 0xffcc00;
+          dotSize = 0.015;
+        }
+
         const dotGeom = new THREE.SphereGeometry(dotSize, 8, 8);
         const dotMat = new THREE.MeshBasicMaterial({
-          color: statusColor,
+          color: dotColor,
           opacity: isDimmed ? 0.2 : 0.8,
           transparent: true,
           depthTest: false,
@@ -3166,6 +3228,22 @@ export default function PureThreeGLBViewer({
         dot.position.copy(pos);
         dot.renderOrder = 998;
         group.add(dot);
+
+        if (isActive && isOverloaded) {
+          const ringGeom = new THREE.RingGeometry(0.02, 0.025, 16);
+          const ringMat = new THREE.MeshBasicMaterial({
+            color: 0xff3300,
+            opacity: 0.6,
+            transparent: true,
+            side: 2,
+            depthTest: false,
+          });
+          const ring = new THREE.Mesh(ringGeom, ringMat);
+          ring.position.copy(pos);
+          ring.lookAt(pos.x, pos.y + 1, pos.z);
+          ring.renderOrder = 999;
+          group.add(ring);
+        }
       }
     }
 

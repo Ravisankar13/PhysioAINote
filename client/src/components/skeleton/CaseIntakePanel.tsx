@@ -195,7 +195,7 @@ export default function CaseIntakePanel({
     try {
       const formData = new FormData();
       formData.append("audio", blob, "recording.webm");
-      const res = await fetch("/api/transcribe-audio", {
+      const res = await fetch("/api/transcribe", {
         method: "POST",
         body: formData,
       });

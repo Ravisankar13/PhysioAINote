@@ -40,6 +40,7 @@ import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
 import StructuredReasoningTab, { type StructuredReasoningResult, type ReasoningHypothesis as StructuredHypothesis } from "./StructuredReasoningTab";
 import DecisionTab, { type TreatmentDecisionResult } from "./DecisionTab";
+import PlanTab, { type TreatmentPlanResult } from "./PlanTab";
 
 export interface EvidenceReference {
   title: string;
@@ -206,6 +207,9 @@ interface ClinicalReasoningPanelProps {
   decisionData?: TreatmentDecisionResult | null;
   decisionLoading?: boolean;
   onDecisionTargetClick?: (regions: string[]) => void;
+  planData?: TreatmentPlanResult | null;
+  planLoading?: boolean;
+  onPlanTargetClick?: (regions: string[]) => void;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -417,8 +421,11 @@ export default function ClinicalReasoningPanel({
   decisionData,
   decisionLoading,
   onDecisionTargetClick,
+  planData,
+  planLoading,
+  onPlanTargetClick,
 }: ClinicalReasoningPanelProps) {
-  const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision'>('analysis');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan'>('analysis');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
     findings: true,
@@ -746,10 +753,24 @@ export default function ClinicalReasoningPanel({
             Decision
             {decisionData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />}
           </button>
+          <button
+            onClick={() => setActiveTab('plan')}
+            className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'plan' ? 'text-cyan-400 border-cyan-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
+          >
+            <Zap className="h-3 w-3" />
+            Plan
+            {planData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-cyan-400" />}
+          </button>
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">
-          {activeTab === 'decision' ? (
+          {activeTab === 'plan' ? (
+            <PlanTab
+              data={planData ?? null}
+              isLoading={planLoading ?? false}
+              onTargetRegionClick={onPlanTargetClick}
+            />
+          ) : activeTab === 'decision' ? (
             <DecisionTab
               data={decisionData ?? null}
               isLoading={decisionLoading ?? false}

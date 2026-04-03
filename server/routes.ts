@@ -6478,6 +6478,21 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/treatment-plan/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { generateTreatmentPlan } = await import("./services/treatmentPlanGenerator");
+      const body = req.body;
+      if (!body?.decisionResult) {
+        return res.status(400).json({ error: "decisionResult data is required" });
+      }
+      const result = generateTreatmentPlan(body);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Treatment plan generator error:", error);
+      res.status(500).json({ error: "Failed to generate treatment plan" });
+    }
+  });
+
   app.post("/api/clinical-notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { reasoningData, subjectiveHistory } = req.body;

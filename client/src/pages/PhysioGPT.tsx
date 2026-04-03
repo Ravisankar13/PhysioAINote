@@ -96,6 +96,7 @@ import { pdfGenerator } from "@/services/pdfGenerator";
 import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink, type VisualizationRequest, type ClinicalHypothesis } from "@/components/skeleton/ClinicalReasoningPanel";
 import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypothesis } from "@/components/skeleton/StructuredReasoningTab";
 import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab";
+import type { TreatmentPlanResult } from "@/components/skeleton/PlanTab";
 import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
@@ -539,6 +540,8 @@ export default function PhysioGPT() {
   const [structuredReasoningLoading, setStructuredReasoningLoading] = useState(false);
   const [treatmentDecisionData, setTreatmentDecisionData] = useState<TreatmentDecisionResult | null>(null);
   const [treatmentDecisionLoading, setTreatmentDecisionLoading] = useState(false);
+  const [treatmentPlanData, setTreatmentPlanData] = useState<TreatmentPlanResult | null>(null);
+  const [treatmentPlanLoading, setTreatmentPlanLoading] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1817,6 +1820,37 @@ ${ddxList}`;
       .finally(() => { if (!abortController.signal.aborted) setTreatmentDecisionLoading(false); });
     return () => abortController.abort();
   }, [structuredReasoningData]);
+
+  useEffect(() => {
+    if (!treatmentDecisionData) {
+      setTreatmentPlanData(null);
+      return;
+    }
+    const abortController = new AbortController();
+    setTreatmentPlanData(null);
+    setTreatmentPlanLoading(true);
+    const input = {
+      decisionResult: treatmentDecisionData,
+      painMarkers: painMarkers.map(pm => ({
+        region: pm.anatomicalLabel || pm.nearestBone || '',
+        severity: 5,
+        type: pm.type,
+      })),
+      postureState: modelConfig,
+    };
+    fetch('/api/treatment-plan/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+      signal: abortController.signal,
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(result => { if (result && !abortController.signal.aborted) setTreatmentPlanData(result); })
+      .catch(err => { if (err.name !== 'AbortError') console.error('Treatment plan error:', err); })
+      .finally(() => { if (!abortController.signal.aborted) setTreatmentPlanLoading(false); });
+    return () => abortController.abort();
+  }, [treatmentDecisionData]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;
@@ -8796,6 +8830,7 @@ ${ddxList}`;
           setClinicalReasoningData(null);
           setStructuredReasoningData(null);
           setTreatmentDecisionData(null);
+          setTreatmentPlanData(null);
           setClinicalReasoningPaused(false);
           lastReasoningTriggerRef.current = '';
           setActiveVisualizationId(null);
@@ -8819,6 +8854,9 @@ ${ddxList}`;
         decisionData={treatmentDecisionData}
         decisionLoading={treatmentDecisionLoading}
         onDecisionTargetClick={handleDecisionTargetClick}
+        planData={treatmentPlanData}
+        planLoading={treatmentPlanLoading}
+        onPlanTargetClick={handleDecisionTargetClick}
       />
 
       <HypothesisChatPanel

@@ -3149,8 +3149,9 @@ export default function PureThreeGLBViewer({
 
         const segCurve = new THREE.CatmullRomCurve3([segStart, segEnd], false, 'catmullrom', 0.5);
 
-        if (isWeakSeg && isActive) {
+        if (isWeakSeg && !isDimmed) {
           const dashCount = 6;
+          const weakOpacity = isActive ? 0.7 : 0.4;
           for (let d = 0; d < dashCount; d++) {
             const t0 = (d * 2) / (dashCount * 2);
             const t1 = (d * 2 + 1) / (dashCount * 2);
@@ -3158,7 +3159,7 @@ export default function PureThreeGLBViewer({
             const dashGeom = new THREE.BufferGeometry().setFromPoints(dashPts);
             const dashMat = new THREE.LineBasicMaterial({
               color: 0xff4444,
-              opacity: isDimmed ? 0.1 : 0.7,
+              opacity: weakOpacity,
               transparent: true,
               depthTest: false,
             });
@@ -3166,12 +3167,13 @@ export default function PureThreeGLBViewer({
             dashLine.renderOrder = 997;
             group.add(dashLine);
           }
-        } else if (isCompSeg && isActive) {
+        } else if (isCompSeg && !isDimmed) {
           const segPts = segCurve.getPoints(8);
           const segGeom = new THREE.BufferGeometry().setFromPoints(segPts);
+          const compOpacity = isActive ? 0.85 : 0.45;
           const segMat = new THREE.LineBasicMaterial({
             color: 0xffcc00,
-            opacity: isDimmed ? 0.1 : 0.85,
+            opacity: compOpacity,
             transparent: true,
             depthTest: false,
           });

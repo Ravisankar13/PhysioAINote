@@ -48,6 +48,7 @@ Preferred communication style: Simple, everyday language.
     - **Treatment Priority Engine**: Auto-generates ranked treatment targets with clinical status, actions, techniques (including evidence grades and references), and contraindication system.
     - **Treatment Decision Engine**: An 8-module pipeline that bridges clinical reasoning to actionable treatment direction, producing three-tier intervention lists with evidence grades, dosage, rationale, and risk flags.
     - **Treatment Plan Generator**: An 8-module pipeline that transforms Decision Engine output into adaptive, phased rehabilitation plans with exercises, manual therapy, patient education, and progression criteria.
+    - **Intake & Extraction Engine**: Unified clinical data capture pipeline consolidating manual form inputs, free-text clinical notes, voice transcription, and pain marker data into a structured `ClinicalExtractionResult` with 12+ clinical fields (body regions, symptoms, duration, onset, mechanism, aggravating/easing factors, red flags, irritability, functional limitations) plus missing-field prompts and source-attribution badges. Uses pattern-matching for structured inputs and focused GPT-4o for unstructured text.
 - **Dynamic 3D Interactions**:
     - **Zoom Tool with Anatomical Landmark System**: Deep zoom into specific anatomical structures with identification of over 147 virtual points.
     - **Direct Bone Manipulation (Pose Mode)**: Enables click-and-drag skeleton posing.

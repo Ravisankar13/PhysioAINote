@@ -6463,6 +6463,24 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/clinical/extract", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { unifiedIntakeSchema } = await import("../shared/clinicalIntakeTypes");
+      const { runExtraction } = await import("./services/extractionEngine");
+
+      const parsed = unifiedIntakeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid intake data", details: parsed.error.flatten() });
+      }
+
+      const result = await runExtraction(parsed.data);
+      res.json(result);
+    } catch (error: unknown) {
+      console.error("Clinical extraction error:", error);
+      res.status(500).json({ error: "Failed to run clinical extraction" });
+    }
+  });
+
   app.post("/api/treatment-decision/analyze", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { analyzeTreatmentDecision } = await import("./services/treatmentDecisionEngine");

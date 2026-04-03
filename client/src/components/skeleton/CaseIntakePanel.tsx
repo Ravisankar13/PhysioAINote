@@ -241,9 +241,8 @@ export default function CaseIntakePanel({
     setExtractionResult(null);
 
     try {
-      const res = await apiRequest("POST", "/api/clinical/extract", payload);
+      const result: ClinicalExtractionResult = await apiRequest("/api/clinical/extract", "POST", payload);
       if (controller.signal.aborted) return;
-      const result: ClinicalExtractionResult = await res.json();
       setExtractionResult(result);
       onExtractionComplete(result);
       toast({ title: "Extraction complete", description: `${result.bodyRegions.length} region(s), ${result.symptoms.length} symptom(s) found.` });

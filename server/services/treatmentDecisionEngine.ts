@@ -1,3 +1,4 @@
+import { SHARED_TECHNIQUE_DB, getLinkedEvidenceForCandidate, type ClinicalStatusKey } from '@shared/evidenceReferences';
 import type {
   ClinicalReasoningResult,
   ReasoningHypothesis,
@@ -87,17 +88,24 @@ export interface TreatmentDecisionInput {
   postureState?: Record<string, Record<string, number>>;
 }
 
-const TECHNIQUE_DB_CROSS_REF: Record<string, string[]> = {
-  soft_tissue_release: ['Myofascial release (manual)', 'Sustained static stretch'],
-  trigger_point_therapy: ['Inhibitory trigger point pressure release'],
-  stretching_programme: ['Sustained static stretch', 'Contract-relax PNF stretching', 'Instrument-assisted soft tissue mobilization'],
-  eccentric_programme: ['Eccentric loading program'],
-  progressive_strengthening: ['Progressive resistance training', 'Functional compound strengthening', 'Blood flow restriction (BFR) training'],
-  isometric_loading: ['Isolated isometric activation'],
-  dry_needling: ['Dry needling'],
-  motor_control_retraining: ['Neuromuscular electrical stimulation (NMES)', 'Tactile cueing with biofeedback'],
-  taping_support: ['Postural taping / kinesiology tape'],
+const CANDIDATE_TO_TECHNIQUE_STATUS: Record<string, ClinicalStatusKey[]> = {
+  soft_tissue_release: ['shortened'],
+  trigger_point_therapy: ['overactive'],
+  stretching_programme: ['shortened'],
+  eccentric_programme: ['shortened'],
+  progressive_strengthening: ['weak'],
+  isometric_loading: ['inhibited'],
+  dry_needling: ['overactive'],
+  motor_control_retraining: ['inhibited'],
+  taping_support: ['lengthened'],
 };
+
+function resolveLinkedTechniques(candidateId: string): string[] {
+  const statusKeys = CANDIDATE_TO_TECHNIQUE_STATUS[candidateId];
+  if (!statusKeys) return [];
+  const evidence = getLinkedEvidenceForCandidate(candidateId, statusKeys);
+  return evidence.map(e => e.name);
+}
 
 const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
   {
@@ -467,8 +475,10 @@ function riskFilter(
   const severeMustNotMiss = mustNotMiss.filter(m =>
     HIGH_SEVERITY_MUST_NOT_MISS.some(s => m.toLowerCase().includes(s))
   );
-  if (severeMustNotMiss.length > 0 && candidate.category === 'manual_therapy') {
-    flags.push(`High-severity must-not-miss present (${severeMustNotMiss[0]}) — manual therapy contraindicated`);
+  if (severeMustNotMiss.length > 0) {
+    if (candidate.category !== 'pharmacological_referral' && candidate.category !== 'education') {
+      flags.push(`High-severity must-not-miss present (${severeMustNotMiss[0]}) — defer until cleared by specialist`);
+    }
   }
 
   for (const ci of candidate.contraindications) {
@@ -601,6 +611,17 @@ function extractRegionsFromReasoning(input: TreatmentDecisionInput): string[] {
   return Array.from(regions);
 }
 
+function computePostureBonus(postureState?: Record<string, Record<string, number>>): number {
+  if (!postureState) return 0;
+  let totalDeviation = 0;
+  for (const group of Object.values(postureState)) {
+    for (const value of Object.values(group)) {
+      totalDeviation += Math.abs(value);
+    }
+  }
+  return Math.min(10, Math.round(totalDeviation / 5));
+}
+
 export function analyzeTreatmentDecision(input: TreatmentDecisionInput): TreatmentDecisionResult {
   const sr = input.structuredReasoning;
 
@@ -623,14 +644,19 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
       if (pm.severity && pm.severity >= 8) patientContraindications.push('severe pain');
     }
   }
-  const modifiers: Array<{ modifier?: string; impact?: string }> = sr.modifiers || [];
-  for (const mod of modifiers) {
-    if (mod && typeof mod.modifier === 'string') {
-      const label = mod.modifier.toLowerCase();
-      if (label.includes('anticoagulant')) patientContraindications.push('anticoagulant therapy');
-      if (label.includes('osteoporo')) patientContraindications.push('osteoporosis');
-      if (label.includes('pregnan')) patientContraindications.push('pregnancy (specific regions)');
-      if (label.includes('dvt') || label.includes('thrombosis')) patientContraindications.push('DVT');
+  const modifierBuckets: Array<{ category?: string; label?: string; modifiers?: string[] }> = sr.modifiers || [];
+  for (const bucket of modifierBuckets) {
+    if (bucket && Array.isArray(bucket.modifiers)) {
+      for (const modStr of bucket.modifiers) {
+        const label = modStr.toLowerCase();
+        if (label.includes('anticoagulant')) patientContraindications.push('anticoagulant therapy');
+        if (label.includes('osteoporo')) patientContraindications.push('osteoporosis');
+        if (label.includes('pregnan')) patientContraindications.push('pregnancy (specific regions)');
+        if (label.includes('dvt') || label.includes('thrombosis')) patientContraindications.push('DVT');
+        if (label.includes('hypermobil')) patientContraindications.push('hypermobility');
+        if (label.includes('fracture')) patientContraindications.push('fracture');
+        if (label.includes('open wound')) patientContraindications.push('open wounds');
+      }
     }
   }
 
@@ -638,15 +664,22 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
 
   const candidates = buildCandidates(regions, problemClass, mechanism);
 
+  const postureDeviationScore = computePostureBonus(input.postureState);
+
   const ranked: RankedIntervention[] = candidates.map(candidate => {
-    const score = matchScore(candidate, problemClass, mechanism);
+    let score = matchScore(candidate, problemClass, mechanism);
+    if (postureDeviationScore > 0) {
+      if (['stretching_programme', 'motor_control_retraining', 'ergonomic_advice'].includes(candidate.id)) {
+        score += Math.min(10, postureDeviationScore);
+      }
+    }
     const { pass: riskPassed, flags: riskFlags } = riskFilter(candidate, stage, irritability, mustNotMissConditions, patientContraindications);
     const tier = classifyTier(score, riskPassed, candidate, problemClass);
     const intent = classifyIntent(candidate, mechanism);
     const explainability = buildExplainability(candidate, tier, score, riskFlags, problemClass, mechanism, stage, irritability);
 
     const confidence = Math.min(100, Math.round((score / 80) * 100));
-    const linkedTechniques = TECHNIQUE_DB_CROSS_REF[candidate.id] || [];
+    const linkedTechniques = resolveLinkedTechniques(candidate.id);
 
     return {
       id: candidate.id,

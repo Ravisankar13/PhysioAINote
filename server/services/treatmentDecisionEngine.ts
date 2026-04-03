@@ -5,6 +5,7 @@ import type {
   ConditionStageType,
   ProblemClass,
   DominantMechanism,
+  ExtractionContextInput,
 } from './clinicalReasoningEngine';
 
 export type InterventionTier = 'primary' | 'adjunct' | 'avoid_defer';
@@ -85,6 +86,7 @@ export interface TreatmentDecisionInput {
   muscleOverrides?: Record<string, { pathology?: string; tension?: number }>;
   painMarkers?: Array<{ region: string; severity?: number; type?: string }>;
   postureState?: Record<string, Record<string, number>>;
+  extractionContext?: ExtractionContextInput;
 }
 
 const CANDIDATE_TO_TECHNIQUE_STATUS: Record<string, ClinicalStatusKey[]> = {
@@ -656,6 +658,30 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
         if (label.includes('fracture')) patientContraindications.push('fracture');
         if (label.includes('open wound')) patientContraindications.push('open wounds');
       }
+    }
+  }
+
+  const ctx = input.extractionContext;
+  if (ctx) {
+    if (ctx.redFlags?.length) {
+      for (const rf of ctx.redFlags) {
+        const flag = rf.flag.toLowerCase();
+        if (flag.includes('cancer') || flag.includes('malignancy')) patientContraindications.push('cancer history');
+        if (flag.includes('fracture') || flag.includes('trauma')) patientContraindications.push('fracture risk');
+        if (flag.includes('cauda') || flag.includes('bladder') || flag.includes('bowel')) patientContraindications.push('cauda equina screening required');
+        if (flag.includes('steroid')) patientContraindications.push('long-term steroid use');
+      }
+    }
+    if (ctx.priorTreatment) {
+      const prior = ctx.priorTreatment.toLowerCase();
+      if (prior.includes('surgery') || prior.includes('surgical')) patientContraindications.push('post-surgical');
+      if (prior.includes('injection') || prior.includes('cortisone')) patientContraindications.push('recent injection');
+    }
+    if (ctx.symptomBehaviour?.restPain) {
+      patientContraindications.push('rest pain');
+    }
+    if (ctx.symptomBehaviour?.nightSymptoms) {
+      patientContraindications.push('night symptoms');
     }
   }
 

@@ -124,6 +124,25 @@ export interface ClinicalReasoningResult {
   timestamp: string;
 }
 
+export interface ExtractionContextInput {
+  mainComplaint?: string;
+  bodyRegions?: Array<{ region: string; side: string; confidence: number }>;
+  symptoms?: Array<{ description: string; nature: string; severity: number; bodyRegion: string }>;
+  symptomBehaviour?: { pattern: string; nightSymptoms: boolean; morningStiffness: boolean; restPain: boolean };
+  duration?: string;
+  onset?: string;
+  mechanism?: string;
+  recurrence?: string;
+  aggravatingFactors?: Array<{ factor: string; context: string }>;
+  easingFactors?: Array<{ factor: string; context: string }>;
+  functionalLimitations?: Array<{ limitation: string; severity: string }>;
+  redFlags?: Array<{ flag: string; description: string; urgency: string }>;
+  irritability?: string;
+  priorTreatment?: string;
+  goals?: string;
+  relevantHistory?: string[];
+}
+
 export interface ClinicalReasoningInput {
   subjectiveHistory: string;
   symptoms?: string[];
@@ -147,6 +166,7 @@ export interface ClinicalReasoningInput {
   nightPain?: boolean;
   restingPain?: boolean;
   sleepAffected?: boolean;
+  extractionContext?: ExtractionContextInput;
 }
 
 const CLINICAL_FINGERPRINTS: ClinicalFingerprint[] = [
@@ -687,15 +707,89 @@ function planMissingData(input: ClinicalReasoningInput, irritability: Irritabili
   return items.sort((a, b) => b.priority - a.priority);
 }
 
+function enrichInputFromExtraction(input: ClinicalReasoningInput): ClinicalReasoningInput {
+  const ctx = input.extractionContext;
+  if (!ctx) return input;
+
+  const enriched = { ...input };
+
+  if (ctx.mainComplaint && !enriched.subjectiveHistory.includes(ctx.mainComplaint)) {
+    enriched.subjectiveHistory = `Chief complaint: ${ctx.mainComplaint}\n${enriched.subjectiveHistory}`;
+  }
+
+  if (ctx.symptoms?.length) {
+    const existingSymptoms = new Set(enriched.symptoms?.map(s => s.toLowerCase()) ?? []);
+    const newSymptoms = ctx.symptoms
+      .map(s => s.description)
+      .filter(d => !existingSymptoms.has(d.toLowerCase()));
+    enriched.symptoms = [...(enriched.symptoms ?? []), ...newSymptoms];
+  }
+
+  if (ctx.aggravatingFactors?.length) {
+    const existing = new Set(enriched.aggravatingFactors?.map(f => f.toLowerCase()) ?? []);
+    const newFactors = ctx.aggravatingFactors
+      .map(f => f.factor)
+      .filter(f => !existing.has(f.toLowerCase()));
+    enriched.aggravatingFactors = [...(enriched.aggravatingFactors ?? []), ...newFactors];
+  }
+
+  if (ctx.easingFactors?.length) {
+    const existing = new Set(enriched.easingFactors?.map(f => f.toLowerCase()) ?? []);
+    const newFactors = ctx.easingFactors
+      .map(f => f.factor)
+      .filter(f => !existing.has(f.toLowerCase()));
+    enriched.easingFactors = [...(enriched.easingFactors ?? []), ...newFactors];
+  }
+
+  if (ctx.duration && !enriched.duration) {
+    enriched.duration = ctx.duration;
+  }
+
+  if (ctx.onset && !enriched.onset) {
+    enriched.onset = ctx.onset;
+  }
+
+  if (ctx.symptomBehaviour) {
+    if (ctx.symptomBehaviour.nightSymptoms && !enriched.nightPain) {
+      enriched.nightPain = true;
+    }
+    if (ctx.symptomBehaviour.restPain && !enriched.restingPain) {
+      enriched.restingPain = true;
+    }
+    if (ctx.symptomBehaviour.morningStiffness && !enriched.sleepAffected) {
+      enriched.sleepAffected = true;
+    }
+  }
+
+  if (ctx.recurrence && !enriched.previousEpisodes) {
+    enriched.previousEpisodes = true;
+  }
+
+  if (ctx.priorTreatment) {
+    enriched.subjectiveHistory += `\nPrior treatment: ${ctx.priorTreatment}`;
+  }
+
+  if (ctx.goals) {
+    enriched.subjectiveHistory += `\nPatient goals: ${ctx.goals}`;
+  }
+
+  if (ctx.relevantHistory?.length) {
+    enriched.subjectiveHistory += `\nRelevant history: ${ctx.relevantHistory.join('; ')}`;
+  }
+
+  return enriched;
+}
+
 export async function analyzeClinicalReasoning(input: ClinicalReasoningInput): Promise<ClinicalReasoningResult> {
-  const text = buildSearchText(input);
-  const fingerprintMatches = matchFingerprints(input);
+  const enrichedInput = enrichInputFromExtraction(input);
+  const text = buildSearchText(enrichedInput);
+  const fingerprintMatches = matchFingerprints(enrichedInput);
   const topFp = fingerprintMatches.length > 0 ? fingerprintMatches[0].fingerprint : null;
 
-  const irritability = assessIrritability(input);
-  const stage = determineStage(input, topFp);
-  const modifiers = detectModifiers(input);
-  const mustNotMiss = detectMustNotMiss(input);
+  const irritability = assessIrritability(enrichedInput);
+  const stage = determineStage(enrichedInput, topFp);
+  const modifiers = detectModifiers(enrichedInput);
+  const mustNotMiss = detectMustNotMiss(enrichedInput);
   const problemClass = determineProblemClass(text, topFp);
   const dominantMechanism = determineMechanism(text, topFp);
 
@@ -710,7 +804,7 @@ export async function analyzeClinicalReasoning(input: ClinicalReasoningInput): P
   };
 
   try {
-    const aiResult = await generateAIHypotheses(input, fingerprintMatches, irritability, stage, problemClass, dominantMechanism);
+    const aiResult = await generateAIHypotheses(enrichedInput, fingerprintMatches, irritability, stage, problemClass, dominantMechanism);
     hypotheses = aiResult.hypotheses;
     dominantSymptomDriver = aiResult.dominantSymptomDriver;
     reasoningLayers = aiResult.reasoningLayers;
@@ -735,7 +829,7 @@ export async function analyzeClinicalReasoning(input: ClinicalReasoningInput): P
     }
   }
 
-  const missingData = planMissingData(input, irritability, mustNotMiss);
+  const missingData = planMissingData(enrichedInput, irritability, mustNotMiss);
 
   return {
     hypotheses,

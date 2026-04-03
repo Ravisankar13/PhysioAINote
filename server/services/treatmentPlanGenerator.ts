@@ -99,10 +99,22 @@ export interface TreatmentPlanResult {
   timestamp: string;
 }
 
+export interface ExtractionContextForPlan {
+  mainComplaint?: string;
+  goals?: string;
+  priorTreatment?: string;
+  recurrence?: string;
+  functionalLimitations?: Array<{ limitation: string; severity: string }>;
+  redFlags?: Array<{ flag: string; description: string; urgency: string }>;
+  symptomBehaviour?: { pattern: string; nightSymptoms: boolean; morningStiffness: boolean; restPain: boolean };
+  duration?: string;
+}
+
 export interface TreatmentPlanInput {
   decisionResult: DecisionResultInput;
   painMarkers?: Array<{ region: string; severity?: number; type?: string }>;
   postureState?: Record<string, Record<string, number>>;
+  extractionContext?: ExtractionContextForPlan;
 }
 
 const IRRITABILITY_ORDER: IrritabilityLevel[] = ['low', 'moderate', 'high'];
@@ -679,7 +691,7 @@ function adjustDosageForPainSeverity(
 }
 
 export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanResult {
-  const { decisionResult, painMarkers, postureState } = input;
+  const { decisionResult, painMarkers, postureState, extractionContext } = input;
   const stage = decisionResult.stage || 'subacute';
   const irritability = decisionResult.irritability || 'moderate';
 
@@ -762,6 +774,26 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
     if (idx === 0 && affectedRegions.length > 0) {
       education.push(`Region-specific precautions for: ${affectedRegions.join(', ')}`);
     }
+    if (extractionContext) {
+      if (idx === 0 && extractionContext.redFlags?.length) {
+        education.push(`Red flag awareness: ${extractionContext.redFlags.map(rf => rf.description || rf.flag).join('; ')}`);
+      }
+      if (idx === 0 && extractionContext.priorTreatment) {
+        education.push(`Previous treatments considered: ${extractionContext.priorTreatment}`);
+      }
+      if (idx === 0 && extractionContext.symptomBehaviour?.morningStiffness) {
+        education.push('Morning routine guidance: gentle ROM exercises before full activity');
+      }
+      if (idx === 0 && extractionContext.symptomBehaviour?.nightSymptoms) {
+        education.push('Sleep positioning advice to minimise night symptoms');
+      }
+      if (idx === 0 && extractionContext.recurrence) {
+        education.push(`Recurrence prevention strategies (history: ${extractionContext.recurrence})`);
+      }
+      if (extractionContext.functionalLimitations?.length && idx === 0) {
+        education.push(`Functional restoration targets: ${extractionContext.functionalLimitations.map(fl => fl.limitation).join(', ')}`);
+      }
+    }
 
     return {
       id: template.id,
@@ -792,11 +824,18 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
     ? ` Affected regions: ${affectedRegions.slice(0, 3).join(', ')}.`
     : '';
 
+  const goalsSummary = extractionContext?.goals
+    ? ` Patient goals: ${extractionContext.goals}.`
+    : '';
+  const complaintSummary = extractionContext?.mainComplaint
+    ? ` Presenting with: ${extractionContext.mainComplaint}.`
+    : '';
+
   return {
     phases,
     constraints,
-    planSummary: `${phases.length}-phase ${stage} rehabilitation plan for ${decisionResult.topHypothesis}. ` +
-      `${irritability} irritability drives dosage ceilings.${regionSummary} ` +
+    planSummary: `${phases.length}-phase ${stage} rehabilitation plan for ${decisionResult.topHypothesis}.${complaintSummary} ` +
+      `${irritability} irritability drives dosage ceilings.${regionSummary}${goalsSummary} ` +
       `Primary focus: ${decisionResult.primary.slice(0, 2).map(p => p.name).join(', ') || 'symptom management'}. ` +
       `Total estimated duration: ${totalWeeks} weeks.`,
     totalDurationWeeks: `${totalWeeks}`,

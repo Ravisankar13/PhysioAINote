@@ -8843,7 +8843,7 @@ ${ddxList}`;
             painMarkers={painMarkers.map(pm => ({
               id: pm.id,
               region: pm.anatomicalLabel || pm.nearestBone,
-              side: "bilateral" as const,
+              side: (pm.position.x < -0.05 ? "left" : pm.position.x > 0.05 ? "right" : "central") as "left" | "right" | "bilateral" | "central",
               type: pm.type,
               severity: pm.severity ?? 5,
               description: pm.description,

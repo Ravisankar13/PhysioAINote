@@ -17,7 +17,9 @@ import type {
   SymptomBehaviour,
 } from "../../shared/clinicalIntakeTypes";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+const openai = new OpenAI({ apiKey, baseURL });
 
 const REGION_ALIASES: Record<string, string> = {
   cervical: "neck", neck: "neck",

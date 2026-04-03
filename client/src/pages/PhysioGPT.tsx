@@ -1834,7 +1834,7 @@ ${ddxList}`;
       decisionResult: treatmentDecisionData,
       painMarkers: painMarkers.map(pm => ({
         region: pm.anatomicalLabel || pm.nearestBone || '',
-        severity: 5,
+        severity: (pm as unknown as { severity?: number }).severity ?? 5,
         type: pm.type,
       })),
       postureState: modelConfig,
@@ -8873,7 +8873,7 @@ ${ddxList}`;
             anatomicalLabel: pm.anatomicalLabel,
             nearestBone: pm.nearestBone,
             type: pm.type,
-            severity: 5,
+            severity: (pm as unknown as { severity?: number }).severity ?? 5,
           })),
           forces: hudForceAnalysis?.joints?.map((f: JointSurfaceForce) => ({
             label: f.label,

@@ -1824,6 +1824,7 @@ ${ddxList}`;
   useEffect(() => {
     if (!treatmentDecisionData) {
       setTreatmentPlanData(null);
+      setTreatmentPlanLoading(false);
       return;
     }
     const abortController = new AbortController();

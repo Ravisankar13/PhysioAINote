@@ -619,8 +619,88 @@ function convertManualTherapy(
   };
 }
 
+function computeMaxPainSeverity(
+  painMarkers?: TreatmentPlanInput['painMarkers'],
+  targetRegions?: string[],
+): number {
+  if (!painMarkers || painMarkers.length === 0) return 5;
+  if (!targetRegions || targetRegions.length === 0) {
+    return Math.max(...painMarkers.map(pm => pm.severity ?? 5));
+  }
+  const regionLower = targetRegions.map(r => r.toLowerCase());
+  const relevant = painMarkers.filter(pm =>
+    regionLower.some(r => pm.region.toLowerCase().includes(r) || r.includes(pm.region.toLowerCase()))
+  );
+  if (relevant.length === 0) return 3;
+  return Math.max(...relevant.map(pm => pm.severity ?? 5));
+}
+
+function derivePosturalConstraints(
+  postureState?: Record<string, Record<string, number>>,
+): PlanConstraint[] {
+  if (!postureState) return [];
+  const constraints: PlanConstraint[] = [];
+  const spine = postureState.spine;
+  if (spine) {
+    if (Math.abs(spine.thoracicKyphosis ?? 0) > 45) {
+      constraints.push({
+        id: 'posture_kyphosis',
+        description: 'Avoid overhead loading in early phases',
+        reason: `Significant thoracic kyphosis (${spine.thoracicKyphosis}°) — overhead positions increase impingement risk`,
+        severity: 'relative',
+        source: 'Postural analysis',
+      });
+    }
+    if (Math.abs(spine.forwardHead ?? 0) > 20) {
+      constraints.push({
+        id: 'posture_fhp',
+        description: 'Prioritise cervical retraction before loaded cervical exercises',
+        reason: `Forward head posture (${spine.forwardHead}°) — loaded flexion may aggravate cervicogenic symptoms`,
+        severity: 'relative',
+        source: 'Postural analysis',
+      });
+    }
+  }
+  const pelvis = postureState.pelvis;
+  if (pelvis) {
+    if (Math.abs(pelvis.tilt ?? 0) > 15) {
+      constraints.push({
+        id: 'posture_apt',
+        description: 'Address pelvic alignment before aggressive hip flexor or lumbar loading',
+        reason: `Anterior pelvic tilt (${pelvis.tilt}°) — may overload lumbar facets during extension-based exercises`,
+        severity: 'relative',
+        source: 'Postural analysis',
+      });
+    }
+  }
+  return constraints;
+}
+
+function adjustDosageForPainSeverity(
+  dosage: ReturnType<typeof computeDosage>,
+  painSeverity: number,
+): ReturnType<typeof computeDosage> {
+  if (painSeverity >= 7) {
+    return {
+      ...dosage,
+      sets: Math.max(1, dosage.sets - 1),
+      intensity: 'Very low — pain-guided',
+      painCeiling: 'Pain \u2264 2/10',
+      frequency: 'Every 2nd day, short bouts',
+    };
+  }
+  if (painSeverity >= 5) {
+    return {
+      ...dosage,
+      painCeiling: 'Pain \u2264 3/10',
+      intensity: dosage.intensity.includes('high') ? 'Moderate — symptom-guided' : dosage.intensity,
+    };
+  }
+  return dosage;
+}
+
 export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanResult {
-  const { decisionResult } = input;
+  const { decisionResult, painMarkers, postureState } = input;
   const stage = decisionResult.stage || 'subacute';
   const irritability = decisionResult.irritability || 'moderate';
 
@@ -633,6 +713,8 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
     stage,
     irritability,
   );
+
+  const affectedRegions = painMarkers?.map(pm => pm.region).filter(Boolean) ?? [];
 
   const phases: PlanPhase[] = phaseTemplates.map((template, idx) => {
     const phaseInterventions = interventionMap.get(idx) || [];
@@ -654,16 +736,30 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
       }
 
       const exerciseKeys = selectExercisesForIntervention(iv, idx);
+      const regionPainSeverity = computeMaxPainSeverity(painMarkers, iv.targetRegions);
+
       for (const key of exerciseKeys) {
         if (!seen.has(`${iv.id}_${key}`)) {
           seen.add(`${iv.id}_${key}`);
-          exercises.push(convertToExercise(key, iv, idx, irritability, stage));
+          const ex = convertToExercise(key, iv, idx, irritability, stage);
+          const adjustedDosage = adjustDosageForPainSeverity(
+            { sets: ex.sets, reps: ex.reps, holdSeconds: ex.holdSeconds, frequency: ex.frequency, intensity: ex.intensity, painCeiling: ex.painCeiling },
+            regionPainSeverity,
+          );
+          exercises.push({
+            ...ex,
+            sets: adjustedDosage.sets,
+            frequency: adjustedDosage.frequency,
+            painCeiling: adjustedDosage.painCeiling,
+            intensity: adjustedDosage.intensity,
+          });
         }
       }
 
       if (exerciseKeys.length === 0 && !seen.has(iv.id)) {
         seen.add(iv.id);
-        const dosage = computeDosage('', irritability, stage, idx);
+        let dosage = computeDosage('', irritability, stage, idx);
+        dosage = adjustDosageForPainSeverity(dosage, regionPainSeverity);
         exercises.push({
           id: `${iv.id}_generic_p${idx}`,
           name: iv.name,
@@ -683,6 +779,11 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
       }
     }
 
+    const education = [...template.education];
+    if (idx === 0 && affectedRegions.length > 0) {
+      education.push(`Region-specific precautions for: ${affectedRegions.join(', ')}`);
+    }
+
     return {
       id: template.id,
       name: template.name,
@@ -691,13 +792,15 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
       goals: template.goals,
       exercises,
       manualTherapy,
-      education: template.education,
+      education,
       frequency: template.frequency,
       reviewPoint: template.reviewPoint,
     };
   });
 
-  const constraints = buildConstraints(decisionResult.avoidDefer, stage, irritability);
+  const decisionConstraints = buildConstraints(decisionResult.avoidDefer, stage, irritability);
+  const posturalConstraints = derivePosturalConstraints(postureState);
+  const constraints = [...decisionConstraints, ...posturalConstraints];
 
   const totalWeeks = phases.reduce((acc, p) => {
     const match = p.durationWeeks.match(/(\d+)/g);
@@ -706,11 +809,15 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
     return acc + 4;
   }, 0);
 
+  const regionSummary = affectedRegions.length > 0
+    ? ` Affected regions: ${affectedRegions.slice(0, 3).join(', ')}.`
+    : '';
+
   return {
     phases,
     constraints,
     planSummary: `${phases.length}-phase ${stage} rehabilitation plan for ${decisionResult.topHypothesis}. ` +
-      `${irritability} irritability drives dosage ceilings. ` +
+      `${irritability} irritability drives dosage ceilings.${regionSummary} ` +
       `Primary focus: ${decisionResult.primary.slice(0, 2).map(p => p.name).join(', ') || 'symptom management'}. ` +
       `Total estimated duration: ${totalWeeks} weeks.`,
     totalDurationWeeks: `${totalWeeks}`,

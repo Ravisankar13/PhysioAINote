@@ -6480,12 +6480,59 @@ GUIDELINES:
 
   app.post("/api/treatment-plan/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
+      const { z } = await import("zod");
       const { generateTreatmentPlan } = await import("./services/treatmentPlanGenerator");
-      const body = req.body;
-      if (!body?.decisionResult) {
-        return res.status(400).json({ error: "decisionResult data is required" });
+
+      const treatmentPlanInputSchema = z.object({
+        decisionResult: z.object({
+          primary: z.array(z.object({
+            id: z.string(),
+            name: z.string(),
+            category: z.string(),
+            targetRegions: z.array(z.string()),
+            evidenceGrade: z.string(),
+            rationale: z.string(),
+            dosage: z.string().optional(),
+            riskFlags: z.array(z.string()),
+          })).default([]),
+          adjunct: z.array(z.object({
+            id: z.string(),
+            name: z.string(),
+            category: z.string(),
+            targetRegions: z.array(z.string()),
+            evidenceGrade: z.string(),
+            rationale: z.string(),
+            dosage: z.string().optional(),
+            riskFlags: z.array(z.string()),
+          })).default([]),
+          avoidDefer: z.array(z.object({
+            id: z.string(),
+            name: z.string(),
+            category: z.string(),
+            targetRegions: z.array(z.string()),
+            evidenceGrade: z.string(),
+            rationale: z.string(),
+            dosage: z.string().optional(),
+            riskFlags: z.array(z.string()),
+          })).default([]),
+          topHypothesis: z.string().default('Unknown'),
+          stage: z.string().optional(),
+          irritability: z.string().optional(),
+        }),
+        painMarkers: z.array(z.object({
+          region: z.string(),
+          severity: z.number().optional(),
+          type: z.string().optional(),
+        })).optional(),
+        postureState: z.record(z.record(z.number())).optional(),
+      });
+
+      const parsed = treatmentPlanInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request body", details: parsed.error.issues });
       }
-      const result = generateTreatmentPlan(body);
+
+      const result = generateTreatmentPlan(parsed.data as any);
       res.json(result);
     } catch (error: any) {
       console.error("Treatment plan generator error:", error);

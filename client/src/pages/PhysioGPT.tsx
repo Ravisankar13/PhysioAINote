@@ -95,6 +95,7 @@ import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/s
 import { pdfGenerator } from "@/services/pdfGenerator";
 import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink, type VisualizationRequest, type ClinicalHypothesis } from "@/components/skeleton/ClinicalReasoningPanel";
 import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypothesis } from "@/components/skeleton/StructuredReasoningTab";
+import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab";
 import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
@@ -536,6 +537,8 @@ export default function PhysioGPT() {
   const [clinicalReasoningPaused, setClinicalReasoningPaused] = useState(false);
   const [structuredReasoningData, setStructuredReasoningData] = useState<StructuredReasoningResult | null>(null);
   const [structuredReasoningLoading, setStructuredReasoningLoading] = useState(false);
+  const [treatmentDecisionData, setTreatmentDecisionData] = useState<TreatmentDecisionResult | null>(null);
+  const [treatmentDecisionLoading, setTreatmentDecisionLoading] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1750,6 +1753,33 @@ ${ddxList}`;
       },
     });
     setHypothesisChatOpen(true);
+  }, [structuredReasoningData]);
+
+  useEffect(() => {
+    if (!structuredReasoningData) {
+      setTreatmentDecisionData(null);
+      return;
+    }
+    setTreatmentDecisionLoading(true);
+    const input: Record<string, unknown> = {
+      structuredReasoning: structuredReasoningData,
+      painMarkers: painMarkers.map(pm => ({
+        region: pm.anatomicalLabel || pm.nearestBone || '',
+        severity: 5,
+        type: pm.type,
+      })),
+      postureState: modelConfig,
+    };
+    fetch('/api/treatment-decision/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(result => { if (result) setTreatmentDecisionData(result); })
+      .catch(err => console.error('Treatment decision error:', err))
+      .finally(() => setTreatmentDecisionLoading(false));
   }, [structuredReasoningData]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
@@ -8729,6 +8759,7 @@ ${ddxList}`;
         onReset={() => {
           setClinicalReasoningData(null);
           setStructuredReasoningData(null);
+          setTreatmentDecisionData(null);
           setClinicalReasoningPaused(false);
           lastReasoningTriggerRef.current = '';
           setActiveVisualizationId(null);
@@ -8749,6 +8780,8 @@ ${ddxList}`;
         structuredData={structuredReasoningData}
         structuredLoading={structuredReasoningLoading}
         onStructuredHypothesisClick={handleStructuredHypothesisClick}
+        decisionData={treatmentDecisionData}
+        decisionLoading={treatmentDecisionLoading}
       />
 
       <HypothesisChatPanel

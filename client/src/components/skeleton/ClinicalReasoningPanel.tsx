@@ -39,6 +39,7 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
 import StructuredReasoningTab, { type StructuredReasoningResult, type ReasoningHypothesis as StructuredHypothesis } from "./StructuredReasoningTab";
+import DecisionTab, { type TreatmentDecisionResult } from "./DecisionTab";
 
 export interface EvidenceReference {
   title: string;
@@ -202,6 +203,9 @@ interface ClinicalReasoningPanelProps {
   structuredData?: StructuredReasoningResult | null;
   structuredLoading?: boolean;
   onStructuredHypothesisClick?: (hypothesis: StructuredHypothesis) => void;
+  decisionData?: TreatmentDecisionResult | null;
+  decisionLoading?: boolean;
+  onDecisionTargetClick?: (regions: string[]) => void;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -410,8 +414,11 @@ export default function ClinicalReasoningPanel({
   structuredData,
   structuredLoading,
   onStructuredHypothesisClick,
+  decisionData,
+  decisionLoading,
+  onDecisionTargetClick,
 }: ClinicalReasoningPanelProps) {
-  const [activeTab, setActiveTab] = useState<'analysis' | 'structured'>('analysis');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision'>('analysis');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
     findings: true,
@@ -731,10 +738,24 @@ export default function ClinicalReasoningPanel({
             Structured
             {structuredData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-violet-400" />}
           </button>
+          <button
+            onClick={() => setActiveTab('decision')}
+            className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'decision' ? 'text-emerald-400 border-emerald-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
+          >
+            <Shield className="h-3 w-3" />
+            Decision
+            {decisionData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />}
+          </button>
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">
-          {activeTab === 'structured' ? (
+          {activeTab === 'decision' ? (
+            <DecisionTab
+              data={decisionData ?? null}
+              isLoading={decisionLoading ?? false}
+              onTargetRegionClick={onDecisionTargetClick}
+            />
+          ) : activeTab === 'structured' ? (
             <StructuredReasoningTab
               data={structuredData ?? null}
               isLoading={structuredLoading ?? false}

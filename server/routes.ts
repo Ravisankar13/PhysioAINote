@@ -6463,6 +6463,21 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/treatment-decision/analyze", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { analyzeTreatmentDecision } = await import("./services/treatmentDecisionEngine");
+      const body = req.body;
+      if (!body?.structuredReasoning) {
+        return res.status(400).json({ error: "structuredReasoning data is required" });
+      }
+      const result = analyzeTreatmentDecision(body);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Treatment decision engine error:", error);
+      res.status(500).json({ error: "Failed to run treatment decision analysis" });
+    }
+  });
+
   app.post("/api/clinical-notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { reasoningData, subjectiveHistory } = req.body;

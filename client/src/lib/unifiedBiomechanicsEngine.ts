@@ -1112,6 +1112,21 @@ function buildJointKinematics(
   const restrictedJoints: string[] = [];
   const hypermobileJoints: string[] = [];
 
+  const JOINT_TO_CONFIG_KEY: Record<string, string> = {
+    left_hip: 'leftHip.flexion',
+    right_hip: 'rightHip.flexion',
+    left_knee: 'leftKnee.flexion',
+    right_knee: 'rightKnee.flexion',
+    left_ankle: 'leftAnkle.dorsiflexion',
+    right_ankle: 'rightAnkle.dorsiflexion',
+    left_shoulder: 'leftShoulder.flexion',
+    right_shoulder: 'rightShoulder.flexion',
+    lumbar_spine: 'spine.lumbarFlexion',
+    thoracic_spine: 'spine.thoracicKyphosis',
+    cervical_spine: 'spine.cervicalFlexion',
+    pelvis: 'pelvis.tilt',
+  };
+
   for (const [joint, norms] of Object.entries(JOINT_ROM_NORMS)) {
     const restriction = romRestrictions.find(r => r.joint.toLowerCase().includes(joint.replace('left_', '').replace('right_', '')));
     const restrictionPct = restriction ? restriction.deficitPct : 0;
@@ -1121,16 +1136,10 @@ function buildJointKinematics(
     const totalROM = normalRange[1] - normalRange[0];
     const effectiveROM = totalROM * (1 - restrictionPct / 100);
 
-    const side = joint.startsWith('left_') ? 'l_' : joint.startsWith('right_') ? 'r_' : '';
-    const bonePart = joint.replace('left_', '').replace('right_', '');
-
     let currentAngle = midAngle;
-    const sliderKey = `${side}${bonePart}_flexion`;
-    const altKey = `${side}${bonePart}Flex`;
-    if (modelConfig[sliderKey] !== undefined) {
-      currentAngle = modelConfig[sliderKey];
-    } else if (modelConfig[altKey] !== undefined) {
-      currentAngle = modelConfig[altKey];
+    const configKey = JOINT_TO_CONFIG_KEY[joint];
+    if (configKey && modelConfig[configKey] !== undefined) {
+      currentAngle = modelConfig[configKey];
     }
 
     const withinNormal = currentAngle >= normalRange[0] && currentAngle <= normalRange[1];

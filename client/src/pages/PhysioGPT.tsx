@@ -3322,7 +3322,7 @@ ${ddxList}`;
       cervical_spine: 'Neck_M', pelvis: 'Root_M',
     };
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
-    if (!bioSrc || !showUnifiedBiomechanicsPanel) return undefined;
+    if (!bioSrc || rightPanelTab !== 'biomechanics') return undefined;
     const highlights: Array<{ boneName: string; color: number; intensity: number; label: string }> = [];
     for (const fault of bioSrc.faults.faults) {
       for (const joint of fault.affectedJoints) {
@@ -3338,7 +3338,7 @@ ${ddxList}`;
       }
     }
     return highlights.length > 0 ? highlights : undefined;
-  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, showUnifiedBiomechanicsPanel]);
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, rightPanelTab]);
 
   const hudChainIntegrity = useMemo(() => {
     if (showUnifiedChainPanel && chainIntegrityScores.size > 0) return chainIntegrityScores;

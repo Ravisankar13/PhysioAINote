@@ -638,29 +638,30 @@ export default function UnifiedBiomechanicsPanel({
   const [activeTab, setActiveTab] = useState('faults');
   const [faultRules, setFaultRules] = useState<FaultRuleConfig[]>(() => [...DEFAULT_FAULT_RULES]);
 
+  const emitOverrides = useCallback((rules: FaultRuleConfig[]) => {
+    const overrides = rules.filter(r => {
+      const def = DEFAULT_FAULT_RULES.find(d => d.id === r.id);
+      if (!def) return false;
+      return def.enabled !== r.enabled || def.thresholdMild !== r.thresholdMild || def.thresholdModerate !== r.thresholdModerate || def.thresholdSevere !== r.thresholdSevere;
+    }).map(r => ({ id: r.id, enabled: r.enabled, thresholdMild: r.thresholdMild, thresholdModerate: r.thresholdModerate, thresholdSevere: r.thresholdSevere }));
+    onFaultRuleOverride(overrides);
+  }, [onFaultRuleOverride]);
+
   const handleToggleRule = useCallback((ruleId: string, enabled: boolean) => {
     setFaultRules(prev => {
       const updated = prev.map(r => r.id === ruleId ? { ...r, enabled } : r);
-      onFaultRuleOverride(updated.filter(r => {
-        const def = DEFAULT_FAULT_RULES.find(d => d.id === r.id);
-        return def && def.enabled !== r.enabled;
-      }).map(r => ({ id: r.id, enabled: r.enabled })));
+      emitOverrides(updated);
       return updated;
     });
-  }, [onFaultRuleOverride]);
+  }, [emitOverrides]);
 
   const handleUpdateThreshold = useCallback((ruleId: string, level: 'thresholdMild' | 'thresholdModerate' | 'thresholdSevere', value: number) => {
     setFaultRules(prev => {
       const updated = prev.map(r => r.id === ruleId ? { ...r, [level]: value } : r);
-      const overrides = updated.filter(r => {
-        const def = DEFAULT_FAULT_RULES.find(d => d.id === r.id);
-        if (!def) return false;
-        return def.enabled !== r.enabled || def.thresholdMild !== r.thresholdMild || def.thresholdModerate !== r.thresholdModerate || def.thresholdSevere !== r.thresholdSevere;
-      }).map(r => ({ id: r.id, enabled: r.enabled, thresholdMild: r.thresholdMild, thresholdModerate: r.thresholdModerate, thresholdSevere: r.thresholdSevere }));
-      onFaultRuleOverride(overrides);
+      emitOverrides(updated);
       return updated;
     });
-  }, [onFaultRuleOverride]);
+  }, [emitOverrides]);
 
   if (!output) {
     return (

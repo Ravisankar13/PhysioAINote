@@ -1851,7 +1851,7 @@ ${ddxList}`;
       .catch(err => { if (err.name !== 'AbortError') console.error('Treatment plan error:', err); })
       .finally(() => { if (!abortController.signal.aborted) setTreatmentPlanLoading(false); });
     return () => abortController.abort();
-  }, [treatmentDecisionData]);
+  }, [treatmentDecisionData, painMarkers.length, modelConfig?.kyphosisAngle, modelConfig?.lordosisAngle, modelConfig?.headForwardOffset, modelConfig?.pelvicTilt]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;

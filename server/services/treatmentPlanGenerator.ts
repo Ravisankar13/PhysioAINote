@@ -24,6 +24,16 @@ export interface DecisionResultInput {
 
 export type InterventionCategory = string;
 type IrritabilityLevel = 'low' | 'moderate' | 'high';
+type EvidenceGrade = 'A' | 'B' | 'C' | 'Expert';
+
+function normalizeEvidenceGrade(raw: string): EvidenceGrade {
+  const upper = raw.trim().toUpperCase();
+  if (upper === 'A') return 'A';
+  if (upper === 'B') return 'B';
+  if (upper === 'C') return 'C';
+  if (upper === 'EXPERT' || upper === 'E') return 'Expert';
+  return 'C';
+}
 
 export interface PlanExercise {
   id: string;
@@ -546,7 +556,7 @@ function convertToExercise(
     painCeiling: dosage.painCeiling,
     intensity: dosage.intensity,
     rationale: intervention.rationale,
-    evidenceGrade: intervention.evidenceGrade,
+    evidenceGrade: normalizeEvidenceGrade(intervention.evidenceGrade),
     targetRegions: intervention.targetRegions,
     equipment: ex?.equipment ?? [],
     progression,
@@ -565,12 +575,12 @@ function convertManualTherapy(
     name: intervention.name,
     category: intervention.category,
     sets: 1,
-    reps: intervention.dosage,
+    reps: intervention.dosage ?? '1 session',
     frequency: phase === 0 ? (irrIdx >= 2 ? '2-3x/week' : '2x/week') : '1x/week',
     painCeiling: irrIdx >= 2 ? 'Pain \u2264 2/10' : 'Pain \u2264 3/10',
     intensity: irrIdx >= 2 ? 'Gentle — Grade I-II' : 'Moderate',
     rationale: intervention.rationale,
-    evidenceGrade: intervention.evidenceGrade,
+    evidenceGrade: normalizeEvidenceGrade(intervention.evidenceGrade),
     targetRegions: intervention.targetRegions,
     equipment: [],
     progression: {
@@ -739,7 +749,7 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
           painCeiling: dosage.painCeiling,
           intensity: dosage.intensity,
           rationale: iv.rationale,
-          evidenceGrade: iv.evidenceGrade,
+          evidenceGrade: normalizeEvidenceGrade(iv.evidenceGrade),
           targetRegions: iv.targetRegions,
           equipment: [],
           progression: buildProgression('', idx, irritability),

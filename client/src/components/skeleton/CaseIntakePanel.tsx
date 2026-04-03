@@ -101,12 +101,16 @@ const SOURCE_LABELS: Record<InputSourceLabel, { label: string; color: string }> 
 interface CaseIntakePanelProps {
   painMarkers: PainMarkerSummary[];
   onExtractionComplete: (result: ClinicalExtractionResult) => void;
+  existingSubjectiveHistory?: string;
+  existingVoiceTranscription?: string;
   className?: string;
 }
 
 export default function CaseIntakePanel({
   painMarkers,
   onExtractionComplete,
+  existingSubjectiveHistory = "",
+  existingVoiceTranscription = "",
   className,
 }: CaseIntakePanelProps) {
   const { toast } = useToast();
@@ -210,22 +214,27 @@ export default function CaseIntakePanel({
     const sources: InputSourceLabel[] = [];
     const hasForm = manualForm.painLocation || manualForm.duration || manualForm.onset || manualForm.mainComplaint || manualForm.goals || manualForm.priorTreatment || manualForm.recurrence || manualForm.functionalLimitations || manualForm.aggravatingFactors.length > 0 || manualForm.redFlags.length > 0 || manualForm.easingFactors.length > 0;
     if (hasForm) sources.push("manual_form");
-    if (freeText.length > 5) sources.push("free_text");
-    if (voiceTranscription.length > 5) sources.push("voice_transcription");
+
+    const combinedFreeText = [freeText, existingSubjectiveHistory].filter(Boolean).join("\n\n").trim();
+    if (combinedFreeText.length > 5) sources.push("free_text");
+
+    const combinedVoice = [voiceTranscription, existingVoiceTranscription].filter(Boolean).join("\n\n").trim();
+    if (combinedVoice.length > 5) sources.push("voice_transcription");
+
     if (painMarkers.length > 0) sources.push("pain_markers");
 
     return {
       sources,
       manualForm: hasForm ? manualForm : null,
-      freeText,
-      voiceTranscription,
+      freeText: combinedFreeText,
+      voiceTranscription: combinedVoice,
       painMarkers,
       mechanismOfInjury,
       patientAge: patientAge ? parseInt(patientAge, 10) : null,
       patientSex,
       relevantHistory,
     };
-  }, [manualForm, freeText, voiceTranscription, painMarkers, mechanismOfInjury, patientAge, patientSex, relevantHistory]);
+  }, [manualForm, freeText, voiceTranscription, painMarkers, mechanismOfInjury, patientAge, patientSex, relevantHistory, existingSubjectiveHistory, existingVoiceTranscription]);
 
   const runExtraction = useCallback(async () => {
     const payload = buildIntakePayload();
@@ -499,6 +508,24 @@ export default function CaseIntakePanel({
           </TabsContent>
 
           <TabsContent value="text" className="mt-3 space-y-3">
+            {existingSubjectiveHistory && (
+              <div className="p-2 bg-blue-500/10 border border-blue-500/30 rounded-lg space-y-1">
+                <Label className="text-[10px] text-blue-400 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  Existing clinical history will be included automatically
+                </Label>
+                <p className="text-[10px] text-slate-400 line-clamp-3">{existingSubjectiveHistory}</p>
+              </div>
+            )}
+            {existingVoiceTranscription && (
+              <div className="p-2 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-1">
+                <Label className="text-[10px] text-purple-400 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  Existing voice transcription will be included automatically
+                </Label>
+                <p className="text-[10px] text-slate-400 line-clamp-3">{existingVoiceTranscription}</p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">Paste or type clinical notes</Label>
               <Textarea

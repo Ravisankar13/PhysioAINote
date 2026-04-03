@@ -127,6 +127,8 @@ import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
 import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
 import RiskPrognosisDashboard from "@/components/skeleton/RiskPrognosisDashboard";
 import InjuryMechanismPanel from "@/components/skeleton/InjuryMechanismPanel";
+import UnifiedBiomechanicsPanel from "@/components/skeleton/UnifiedBiomechanicsPanel";
+import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
@@ -520,7 +522,11 @@ export default function PhysioGPT() {
   const [scarPlacementMode, setScarPlacementMode] = useState<ScarType | null>(null);
   const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
   const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
-  const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment'>('chat');
+  const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics'>('chat');
+  const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
+  const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
+  const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
+  const [previousBiomechanicsOutput, setPreviousBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
 
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
@@ -1803,6 +1809,14 @@ ${ddxList}`;
     const abortController = new AbortController();
     setTreatmentDecisionData(null);
     setTreatmentDecisionLoading(true);
+    const biomechanicsCtx = unifiedBiomechanicsOutput ? {
+      faults: unifiedBiomechanicsOutput.faults.faults.map(f => ({ label: f.label, severity: f.severity, category: f.category, clinical: f.clinical, corrective: f.corrective })),
+      deviations: unifiedBiomechanicsOutput.posture.deviations.map(d => ({ pattern: d.pattern, region: d.region, severity: d.severity, angleDeg: d.angleDeg })),
+      peakJoint: unifiedBiomechanicsOutput.forces.peakJoint,
+      peakForceBW: unifiedBiomechanicsOutput.forces.peakForceBW,
+      qualityScore: unifiedBiomechanicsOutput.faults.overallQualityScore,
+      movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
+    } : undefined;
     const input: Record<string, unknown> = {
       structuredReasoning: structuredReasoningData,
       painMarkers: painMarkers.map(pm => ({
@@ -1812,6 +1826,7 @@ ${ddxList}`;
       })),
       postureState: modelConfig,
       extractionContext: extractionResult ?? undefined,
+      biomechanicsContext: biomechanicsCtx,
     };
     fetch('/api/treatment-decision/analyze', {
       method: 'POST',
@@ -1836,6 +1851,12 @@ ${ddxList}`;
     const abortController = new AbortController();
     setTreatmentPlanData(null);
     setTreatmentPlanLoading(true);
+    const planBioCtx = unifiedBiomechanicsOutput ? {
+      faults: unifiedBiomechanicsOutput.faults.faults.map(f => ({ label: f.label, severity: f.severity, corrective: f.corrective })),
+      deviations: unifiedBiomechanicsOutput.posture.deviations.map(d => ({ pattern: d.pattern, region: d.region, angleDeg: d.angleDeg })),
+      qualityScore: unifiedBiomechanicsOutput.faults.overallQualityScore,
+      movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
+    } : undefined;
     const input = {
       decisionResult: treatmentDecisionData,
       painMarkers: painMarkers.map(pm => ({
@@ -1845,6 +1866,7 @@ ${ddxList}`;
       })),
       postureState: modelConfig,
       extractionContext: extractionResult ?? undefined,
+      biomechanicsContext: planBioCtx,
     };
     fetch('/api/treatment-plan/generate', {
       method: 'POST',
@@ -3245,6 +3267,21 @@ ${ddxList}`;
     const base = computeFullMuscleAnalysis(finalModelConfig);
     return applyOverridesToAnalysis(base, effectiveOverrides, crossMuscleEffects);
   }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects]);
+
+  const unifiedBiomechanicsOutput = useMemo(() => {
+    if (rightPanelTab !== 'biomechanics') return null;
+    const result = computeUnifiedBiomechanics({
+      modelConfig: finalModelConfig,
+      heightCm: 170,
+      weightKg: bodyWeightKg,
+      muscleOverrides: compensatedOverrides,
+      movementTaskId: unifiedBiomechanicsMovementTask,
+      movementProgress: unifiedBiomechanicsProgress,
+      faultRuleOverrides: unifiedBiomechanicsFaultOverrides.length > 0 ? unifiedBiomechanicsFaultOverrides : undefined,
+      previousOutput: previousBiomechanicsOutput,
+    });
+    return result;
+  }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput, rightPanelTab]);
 
   const hudChainIntegrity = useMemo(() => {
     if (showUnifiedChainPanel && chainIntegrityScores.size > 0) return chainIntegrityScores;
@@ -7731,6 +7768,18 @@ ${ddxList}`;
                 <Stethoscope className="h-3 w-3" />
                 Treatment
               </button>
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${rightPanelTab === 'biomechanics' ? 'bg-white text-cyan-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => {
+                  if (rightPanelTab === 'biomechanics' && unifiedBiomechanicsOutput) {
+                    setPreviousBiomechanicsOutput(unifiedBiomechanicsOutput);
+                  }
+                  setRightPanelTab('biomechanics');
+                }}
+              >
+                <Activity className="h-3 w-3" />
+                Biomech
+              </button>
             </div>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setChatPanelOpen(false)}>
               <X className="h-3.5 w-3.5" />
@@ -8316,6 +8365,19 @@ ${ddxList}`;
                 )}
               </div>
             </ScrollArea>
+          )}
+
+          {rightPanelTab === 'biomechanics' && (
+            <div className="flex-1 overflow-hidden">
+              <UnifiedBiomechanicsPanel
+                output={unifiedBiomechanicsOutput}
+                onMovementTaskChange={setUnifiedBiomechanicsMovementTask}
+                onMovementProgressChange={setUnifiedBiomechanicsProgress}
+                onFaultRuleOverride={setUnifiedBiomechanicsFaultOverrides}
+                selectedMovementTask={unifiedBiomechanicsMovementTask}
+                movementProgress={unifiedBiomechanicsProgress}
+              />
+            </div>
           )}
 
           {/* Chat Panel Content */}

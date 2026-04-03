@@ -110,11 +110,19 @@ export interface ExtractionContextForPlan {
   duration?: string;
 }
 
+export interface BiomechanicsContextForPlan {
+  faults?: Array<{ label: string; severity: string; corrective: string }>;
+  deviations?: Array<{ pattern: string; region: string; angleDeg: number }>;
+  qualityScore?: number;
+  movementTaskId?: string;
+}
+
 export interface TreatmentPlanInput {
   decisionResult: DecisionResultInput;
   painMarkers?: Array<{ region: string; severity?: number; type?: string }>;
   postureState?: Record<string, Record<string, number>>;
   extractionContext?: ExtractionContextForPlan;
+  biomechanicsContext?: BiomechanicsContextForPlan;
 }
 
 const IRRITABILITY_ORDER: IrritabilityLevel[] = ['low', 'moderate', 'high'];
@@ -773,6 +781,24 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
     const education = [...template.education];
     if (idx === 0 && affectedRegions.length > 0) {
       education.push(`Region-specific precautions for: ${affectedRegions.join(', ')}`);
+    }
+    const bioCtx = input.biomechanicsContext;
+    if (bioCtx) {
+      if (idx === 0 && bioCtx.faults && bioCtx.faults.length > 0) {
+        const topFaults = bioCtx.faults.filter(f => f.severity === 'high' || f.severity === 'critical').slice(0, 3);
+        if (topFaults.length > 0) {
+          education.push(`Biomechanical faults identified: ${topFaults.map(f => f.label).join(', ')}`);
+          for (const fault of topFaults) {
+            if (fault.corrective) education.push(`Corrective: ${fault.corrective}`);
+          }
+        }
+      }
+      if (bioCtx.deviations && bioCtx.deviations.length > 0 && idx === 0) {
+        education.push(`Postural deviations: ${bioCtx.deviations.slice(0, 3).map(d => `${d.pattern} (${d.region}, ${d.angleDeg}°)`).join('; ')}`);
+      }
+      if (bioCtx.movementTaskId && idx >= 1) {
+        education.push(`Movement retraining target: ${bioCtx.movementTaskId.replace(/_/g, ' ')} quality improvement`);
+      }
     }
     if (extractionContext) {
       if (idx === 0 && extractionContext.redFlags?.length) {

@@ -6550,6 +6550,12 @@ GUIDELINES:
         })).optional(),
         postureState: z.record(z.record(z.number())).optional(),
         extractionContext: z.record(z.unknown()).optional(),
+        biomechanicsContext: z.object({
+          faults: z.array(z.object({ label: z.string(), severity: z.string(), corrective: z.string() })).optional(),
+          deviations: z.array(z.object({ pattern: z.string(), region: z.string(), angleDeg: z.number() })).optional(),
+          qualityScore: z.number().optional(),
+          movementTaskId: z.string().optional(),
+        }).optional(),
       });
 
       const parsed = treatmentPlanInputSchema.safeParse(req.body);

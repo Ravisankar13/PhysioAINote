@@ -81,12 +81,24 @@ export interface TreatmentDecisionResult {
   timestamp: string;
 }
 
+export interface BiomechanicsContextInput {
+  faults?: Array<{ label: string; severity: string; category: string; clinical: string; corrective: string }>;
+  deviations?: Array<{ pattern: string; region: string; severity: string; angleDeg: number }>;
+  peakJoint?: string;
+  peakForceBW?: number;
+  qualityScore?: number;
+  clinicalSummary?: string;
+  movementTaskId?: string;
+  movementTaskPhase?: string;
+}
+
 export interface TreatmentDecisionInput {
   structuredReasoning: ClinicalReasoningResult;
   muscleOverrides?: Record<string, { pathology?: string; tension?: number }>;
   painMarkers?: Array<{ region: string; severity?: number; type?: string }>;
   postureState?: Record<string, Record<string, number>>;
   extractionContext?: ExtractionContextInput;
+  biomechanicsContext?: BiomechanicsContextInput;
 }
 
 const CANDIDATE_TO_TECHNIQUE_STATUS: Record<string, ClinicalStatusKey[]> = {
@@ -685,17 +697,33 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     }
   }
 
+  const bio = input.biomechanicsContext;
+  if (bio?.faults) {
+    for (const fault of bio.faults) {
+      if (fault.severity === 'high' || fault.severity === 'critical') {
+        patientContraindications.push(`biomechanical fault: ${fault.label}`);
+      }
+    }
+  }
+
   const regions = extractRegionsFromReasoning(input);
 
   const candidates = buildCandidates(regions, problemClass, mechanism);
 
   const postureDeviationScore = computePostureBonus(input.postureState);
 
+  const biomechanicsBonus = bio ? Math.min(15, (bio.faults?.length ?? 0) * 3 + (bio.deviations?.length ?? 0) * 2) : 0;
+
   const ranked: RankedIntervention[] = candidates.map(candidate => {
     let score = matchScore(candidate, problemClass, mechanism);
     if (postureDeviationScore > 0) {
       if (['stretching_programme', 'motor_control_retraining', 'ergonomic_advice'].includes(candidate.id)) {
         score += Math.min(10, postureDeviationScore);
+      }
+    }
+    if (biomechanicsBonus > 0) {
+      if (['motor_control_retraining', 'progressive_strengthening', 'ergonomic_advice', 'stretching_programme'].includes(candidate.id)) {
+        score += biomechanicsBonus;
       }
     }
     const { pass: riskPassed, flags: riskFlags } = riskFilter(candidate, stage, irritability, mustNotMissConditions, patientContraindications);

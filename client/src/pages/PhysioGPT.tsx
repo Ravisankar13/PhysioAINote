@@ -1862,7 +1862,7 @@ ${ddxList}`;
       .catch(err => { if (err.name !== 'AbortError') console.error('Treatment decision error:', err); })
       .finally(() => { if (!abortController.signal.aborted) setTreatmentDecisionLoading(false); });
     return () => abortController.abort();
-  }, [structuredReasoningData, extractionResult]);
+  }, [structuredReasoningData, extractionResult, slingAnalysis]);
 
   useEffect(() => {
     if (!treatmentDecisionData) {

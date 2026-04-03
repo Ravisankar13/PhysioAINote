@@ -104,10 +104,18 @@ function InterventionCard({ intervention, onTargetClick }: { intervention: Ranke
     avoid_defer: 'border-red-500/30 bg-red-500/5',
   };
 
+  const handleCardClick = () => {
+    const willExpand = !expanded;
+    setExpanded(willExpand);
+    if (willExpand && intervention.targetRegions.length > 0) {
+      onTargetClick?.(intervention.targetRegions);
+    }
+  };
+
   return (
     <div className={`rounded-lg border ${tierColors[intervention.tier]} overflow-hidden`}>
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleCardClick}
         className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-white/5 transition-colors"
       >
         <div className={`flex items-center justify-center h-6 w-6 rounded-md ${intervention.tier === 'avoid_defer' ? 'bg-red-500/20' : intervention.tier === 'primary' ? 'bg-emerald-500/20' : 'bg-blue-500/20'}`}>

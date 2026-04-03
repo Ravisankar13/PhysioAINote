@@ -436,11 +436,18 @@ function matchScore(candidate: TreatmentCandidate, problemClass: ProblemClass, m
   return score;
 }
 
+const HIGH_SEVERITY_MUST_NOT_MISS = [
+  'cauda equina syndrome', 'spinal cord compression', 'fracture',
+  'malignancy', 'infection', 'vascular compromise', 'progressive neurological deficit',
+  'vertebral artery dissection', 'abdominal aortic aneurysm',
+];
+
 function riskFilter(
   candidate: TreatmentCandidate,
   stage: ConditionStageType,
   irritability: IrritabilityLevel,
   mustNotMiss: string[],
+  patientContraindications: string[],
 ): { pass: boolean; flags: string[] } {
   const flags: string[] = [];
 
@@ -457,8 +464,18 @@ function riskFilter(
     }
   }
 
-  if (mustNotMiss.length > 0 && candidate.category === 'manual_therapy') {
-    flags.push('Must-not-miss conditions present — proceed with caution');
+  const severeMustNotMiss = mustNotMiss.filter(m =>
+    HIGH_SEVERITY_MUST_NOT_MISS.some(s => m.toLowerCase().includes(s))
+  );
+  if (severeMustNotMiss.length > 0 && candidate.category === 'manual_therapy') {
+    flags.push(`High-severity must-not-miss present (${severeMustNotMiss[0]}) — manual therapy contraindicated`);
+  }
+
+  for (const ci of candidate.contraindications) {
+    const ciLower = ci.toLowerCase();
+    if (patientContraindications.some(pc => pc.toLowerCase().includes(ciLower) || ciLower.includes(pc.toLowerCase()))) {
+      flags.push(`Patient-specific contraindication: ${ci}`);
+    }
   }
 
   return { pass: flags.length === 0, flags };
@@ -594,13 +611,36 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const topHypothesis = sr.hypotheses?.[0]?.condition || 'Unknown presentation';
   const mustNotMissConditions = sr.mustNotMiss?.map(m => m.condition) || [];
 
+  const patientContraindications: string[] = [];
+  if (input.muscleOverrides) {
+    for (const [, override] of Object.entries(input.muscleOverrides)) {
+      if (override.pathology) patientContraindications.push(override.pathology);
+    }
+  }
+  if (input.painMarkers) {
+    for (const pm of input.painMarkers) {
+      if (pm.type === 'referred') patientContraindications.push('referred pain');
+      if (pm.severity && pm.severity >= 8) patientContraindications.push('severe pain');
+    }
+  }
+  const modifiers: Array<{ modifier?: string; impact?: string }> = sr.modifiers || [];
+  for (const mod of modifiers) {
+    if (mod && typeof mod.modifier === 'string') {
+      const label = mod.modifier.toLowerCase();
+      if (label.includes('anticoagulant')) patientContraindications.push('anticoagulant therapy');
+      if (label.includes('osteoporo')) patientContraindications.push('osteoporosis');
+      if (label.includes('pregnan')) patientContraindications.push('pregnancy (specific regions)');
+      if (label.includes('dvt') || label.includes('thrombosis')) patientContraindications.push('DVT');
+    }
+  }
+
   const regions = extractRegionsFromReasoning(input);
 
   const candidates = buildCandidates(regions, problemClass, mechanism);
 
   const ranked: RankedIntervention[] = candidates.map(candidate => {
     const score = matchScore(candidate, problemClass, mechanism);
-    const { pass: riskPassed, flags: riskFlags } = riskFilter(candidate, stage, irritability, mustNotMissConditions);
+    const { pass: riskPassed, flags: riskFlags } = riskFilter(candidate, stage, irritability, mustNotMissConditions, patientContraindications);
     const tier = classifyTier(score, riskPassed, candidate, problemClass);
     const intent = classifyIntent(candidate, mechanism);
     const explainability = buildExplainability(candidate, tier, score, riskFlags, problemClass, mechanism, stage, irritability);

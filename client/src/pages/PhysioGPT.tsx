@@ -1825,7 +1825,7 @@ ${ddxList}`;
       .catch(err => { if (err.name !== 'AbortError') console.error('Treatment decision error:', err); })
       .finally(() => { if (!abortController.signal.aborted) setTreatmentDecisionLoading(false); });
     return () => abortController.abort();
-  }, [structuredReasoningData]);
+  }, [structuredReasoningData, extractionResult]);
 
   useEffect(() => {
     if (!treatmentDecisionData) {
@@ -2912,6 +2912,7 @@ ${ddxList}`;
           fascialChainAnalysis: fascialChainAnalysis.length > 0 ? fascialChainAnalysis : undefined,
           scarTissueAnalysis: scarTissueAnalysis.length > 0 ? scarTissueAnalysis : undefined,
           painDriverSummary: painDriverSummary.length > 0 ? painDriverSummary : undefined,
+          extractionContext: extractionResult ?? undefined,
         }),
       });
 

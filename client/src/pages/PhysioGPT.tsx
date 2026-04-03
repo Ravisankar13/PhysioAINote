@@ -527,6 +527,7 @@ export default function PhysioGPT() {
   const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
   const [previousBiomechanicsOutput, setPreviousBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
+  const [cachedBiomechanicsOutput, setCachedBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
 
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
@@ -1809,12 +1810,14 @@ ${ddxList}`;
     const abortController = new AbortController();
     setTreatmentDecisionData(null);
     setTreatmentDecisionLoading(true);
-    const biomechanicsCtx = unifiedBiomechanicsOutput ? {
-      faults: unifiedBiomechanicsOutput.faults.faults.map(f => ({ label: f.label, severity: f.severity, category: f.category, clinical: f.clinical, corrective: f.corrective })),
-      deviations: unifiedBiomechanicsOutput.posture.deviations.map(d => ({ pattern: d.pattern, region: d.region, severity: d.severity, angleDeg: d.angleDeg })),
-      peakJoint: unifiedBiomechanicsOutput.forces.peakJoint,
-      peakForceBW: unifiedBiomechanicsOutput.forces.peakForceBW,
-      qualityScore: unifiedBiomechanicsOutput.faults.overallQualityScore,
+    const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
+    const biomechanicsCtx = bioSrc ? {
+      faults: bioSrc.faults.faults.map(f => ({ label: f.label, severity: f.severity, category: f.category, clinical: f.clinical, corrective: f.corrective })),
+      deviations: bioSrc.posture.deviations.map(d => ({ pattern: d.pattern, region: d.region, severity: d.severity, angleDeg: d.angleDeg })),
+      peakJoint: bioSrc.forces.peakJoint,
+      peakForceBW: bioSrc.forces.peakForceBW,
+      qualityScore: bioSrc.qualityScore,
+      clinicalSummary: bioSrc.clinicalSummary,
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
     } : undefined;
     const input: Record<string, unknown> = {
@@ -1851,10 +1854,11 @@ ${ddxList}`;
     const abortController = new AbortController();
     setTreatmentPlanData(null);
     setTreatmentPlanLoading(true);
-    const planBioCtx = unifiedBiomechanicsOutput ? {
-      faults: unifiedBiomechanicsOutput.faults.faults.map(f => ({ label: f.label, severity: f.severity, corrective: f.corrective })),
-      deviations: unifiedBiomechanicsOutput.posture.deviations.map(d => ({ pattern: d.pattern, region: d.region, angleDeg: d.angleDeg })),
-      qualityScore: unifiedBiomechanicsOutput.faults.overallQualityScore,
+    const planBioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
+    const planBioCtx = planBioSrc ? {
+      faults: planBioSrc.faults.faults.map(f => ({ label: f.label, severity: f.severity, corrective: f.corrective })),
+      deviations: planBioSrc.posture.deviations.map(d => ({ pattern: d.pattern, region: d.region, angleDeg: d.angleDeg })),
+      qualityScore: planBioSrc.qualityScore,
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
     } : undefined;
     const input = {
@@ -2935,6 +2939,14 @@ ${ddxList}`;
           scarTissueAnalysis: scarTissueAnalysis.length > 0 ? scarTissueAnalysis : undefined,
           painDriverSummary: painDriverSummary.length > 0 ? painDriverSummary : undefined,
           extractionContext: extractionResult ?? undefined,
+          biomechanicsContext: unifiedBiomechanicsOutput ? {
+            faults: unifiedBiomechanicsOutput.faults.faults.map(f => ({ label: f.label, severity: f.severity, category: f.category, corrective: f.corrective })),
+            deviations: unifiedBiomechanicsOutput.posture.deviations.map(d => ({ pattern: d.pattern, region: d.region, severity: d.severity, angleDeg: d.angleDeg })),
+            overallRiskScore: unifiedBiomechanicsOutput.faults.overallRiskScore,
+            qualityScore: unifiedBiomechanicsOutput.qualityScore,
+            clinicalSummary: unifiedBiomechanicsOutput.clinicalSummary,
+            movementTaskId: unifiedBiomechanicsMovementTask,
+          } : undefined,
         }),
       });
 
@@ -3269,7 +3281,6 @@ ${ddxList}`;
   }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects]);
 
   const unifiedBiomechanicsOutput = useMemo(() => {
-    if (rightPanelTab !== 'biomechanics') return null;
     const result = computeUnifiedBiomechanics({
       modelConfig: finalModelConfig,
       heightCm: 170,
@@ -3280,8 +3291,9 @@ ${ddxList}`;
       faultRuleOverrides: unifiedBiomechanicsFaultOverrides.length > 0 ? unifiedBiomechanicsFaultOverrides : undefined,
       previousOutput: previousBiomechanicsOutput,
     });
+    setCachedBiomechanicsOutput(result);
     return result;
-  }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput, rightPanelTab]);
+  }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput]);
 
   const hudChainIntegrity = useMemo(() => {
     if (showUnifiedChainPanel && chainIntegrityScores.size > 0) return chainIntegrityScores;

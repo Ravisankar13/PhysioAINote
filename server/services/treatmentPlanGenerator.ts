@@ -785,7 +785,7 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
     const bioCtx = input.biomechanicsContext;
     if (bioCtx) {
       if (idx === 0 && bioCtx.faults && bioCtx.faults.length > 0) {
-        const topFaults = bioCtx.faults.filter(f => f.severity === 'high' || f.severity === 'critical').slice(0, 3);
+        const topFaults = bioCtx.faults.filter(f => f.severity === 'severe' || f.severity === 'moderate').slice(0, 3);
         if (topFaults.length > 0) {
           education.push(`Biomechanical faults identified: ${topFaults.map(f => f.label).join(', ')}`);
           for (const fault of topFaults) {

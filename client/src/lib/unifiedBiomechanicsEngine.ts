@@ -183,6 +183,7 @@ export interface UnifiedBiomechanicsInput {
 
 const MOVEMENT_TASK_LABELS: Record<string, string> = {
   squat: 'Squat',
+  single_leg_squat: 'Single Leg Squat',
   walk: 'Walking Gait',
   lunge: 'Lunge',
   singleLegBalance: 'Single Leg Balance',
@@ -191,6 +192,7 @@ const MOVEMENT_TASK_LABELS: Record<string, string> = {
   neckMobility: 'Neck Mobility',
   forwardBend: 'Forward Bend',
   backwardBend: 'Backward Bend',
+  overhead_reach: 'Overhead Reach',
   calfRaises: 'Calf Raises',
   armElevations: 'Arm Elevations',
   hipHinge: 'Hip Hinge',

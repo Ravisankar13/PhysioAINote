@@ -477,6 +477,55 @@ const MOVEMENT_BIOMECHANICS: Record<string, MovementBiomechanics> = {
       { range: [0.85, 1], label: 'Return' },
     ],
   },
+  single_leg_squat: {
+    forces: [
+      { joint: 'left_knee', label: 'Left Knee', direction: 'compressive', baseline: 30, curve: [30, 55, 80, 100, 105, 100, 80, 55, 30] },
+      { joint: 'left_hip', label: 'Left Hip', direction: 'compressive', baseline: 35, curve: [35, 55, 75, 95, 100, 95, 75, 55, 35] },
+      { joint: 'left_ankle', label: 'Left Ankle', direction: 'compressive', baseline: 25, curve: [25, 40, 55, 70, 75, 70, 55, 40, 25] },
+      { joint: 'lumbar_spine', label: 'Lumbar Spine', direction: 'compressive', baseline: 35, curve: [35, 50, 65, 80, 85, 80, 65, 50, 35] },
+      { joint: 'pelvis', label: 'Pelvis', direction: 'shear', baseline: 20, curve: [20, 35, 50, 60, 65, 60, 50, 35, 20] },
+    ],
+    muscles: [
+      { muscle: 'Quadriceps (Stance)', role: 'agonist', curve: [10, 35, 65, 90, 95, 90, 65, 35, 10] },
+      { muscle: 'Gluteus Maximus', role: 'agonist', curve: [10, 30, 55, 80, 85, 80, 55, 30, 10] },
+      { muscle: 'Gluteus Medius', role: 'stabilizer', curve: [25, 50, 70, 85, 90, 85, 70, 50, 25] },
+      { muscle: 'Hamstrings', role: 'synergist', curve: [15, 30, 45, 60, 65, 60, 45, 30, 15] },
+      { muscle: 'Core / Obliques', role: 'stabilizer', curve: [25, 40, 55, 65, 70, 65, 55, 40, 25] },
+      { muscle: 'Tibialis Posterior', role: 'stabilizer', curve: [20, 35, 50, 60, 65, 60, 50, 35, 20] },
+    ],
+    phases: [
+      { range: [0, 0.1], label: 'Single Leg Stance' },
+      { range: [0.1, 0.45], label: 'Descent (Eccentric)' },
+      { range: [0.45, 0.55], label: 'Bottom Position' },
+      { range: [0.55, 0.9], label: 'Ascent (Concentric)' },
+      { range: [0.9, 1], label: 'Single Leg Stance' },
+    ],
+  },
+  overhead_reach: {
+    forces: [
+      { joint: 'left_shoulder', label: 'Left Shoulder', direction: 'compressive', baseline: 15, curve: [15, 30, 55, 75, 85, 75, 55, 30, 15] },
+      { joint: 'right_shoulder', label: 'Right Shoulder', direction: 'compressive', baseline: 15, curve: [15, 30, 55, 75, 85, 75, 55, 30, 15] },
+      { joint: 'cervical_spine', label: 'Cervical Spine', direction: 'compressive', baseline: 20, curve: [20, 30, 40, 50, 55, 50, 40, 30, 20] },
+      { joint: 'thoracic_spine', label: 'Thoracic Spine', direction: 'compressive', baseline: 25, curve: [25, 35, 50, 60, 65, 60, 50, 35, 25] },
+      { joint: 'lumbar_spine', label: 'Lumbar Spine', direction: 'compressive', baseline: 30, curve: [30, 40, 50, 60, 65, 60, 50, 40, 30] },
+    ],
+    muscles: [
+      { muscle: 'Deltoid', role: 'agonist', curve: [10, 30, 60, 80, 90, 80, 60, 30, 10] },
+      { muscle: 'Upper Trapezius', role: 'synergist', curve: [15, 30, 50, 70, 75, 70, 50, 30, 15] },
+      { muscle: 'Serratus Anterior', role: 'stabilizer', curve: [10, 25, 45, 65, 75, 65, 45, 25, 10] },
+      { muscle: 'Lower Trapezius', role: 'stabilizer', curve: [15, 30, 50, 60, 65, 60, 50, 30, 15] },
+      { muscle: 'Rotator Cuff', role: 'stabilizer', curve: [20, 35, 55, 70, 80, 70, 55, 35, 20] },
+      { muscle: 'Core / TA', role: 'stabilizer', curve: [15, 25, 35, 45, 50, 45, 35, 25, 15] },
+      { muscle: 'Latissimus Dorsi', role: 'antagonist', curve: [30, 25, 20, 15, 10, 15, 20, 25, 30] },
+    ],
+    phases: [
+      { range: [0, 0.1], label: 'Arms at Side' },
+      { range: [0.1, 0.45], label: 'Elevation (Concentric)' },
+      { range: [0.45, 0.55], label: 'Full Overhead' },
+      { range: [0.55, 0.9], label: 'Lowering (Eccentric)' },
+      { range: [0.9, 1], label: 'Arms at Side' },
+    ],
+  },
 };
 
 export function getMovementBiomechanics(

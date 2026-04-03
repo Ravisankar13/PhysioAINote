@@ -6132,8 +6132,8 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
 
   app.post("/api/physiogpt/clinical-reasoning-analyze", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements, postureDeviations, forceAnalysis, muscleAnalysis, detectedSyndromes, compensationAnalysis, fascialChainAnalysis, scarTissueAnalysis, painDriverSummary } = req.body;
-      if (!painMarkers && !skeletonConfig && !subjectiveHistory && !postureDeviations && !compensationAnalysis && !muscleAnalysis && !forceAnalysis && !fascialChainAnalysis && !scarTissueAnalysis && !painDriverSummary && !romMeasurements && !detectedSyndromes) {
+      const { painMarkers, skeletonConfig, subjectiveHistory, romMeasurements, postureDeviations, forceAnalysis, muscleAnalysis, detectedSyndromes, compensationAnalysis, fascialChainAnalysis, scarTissueAnalysis, painDriverSummary, biomechanicsContext } = req.body;
+      if (!painMarkers && !skeletonConfig && !subjectiveHistory && !postureDeviations && !compensationAnalysis && !muscleAnalysis && !forceAnalysis && !fascialChainAnalysis && !scarTissueAnalysis && !painDriverSummary && !romMeasurements && !detectedSyndromes && !biomechanicsContext) {
         return res.status(400).json({ error: "At least one clinical input is required" });
       }
 
@@ -6194,6 +6194,15 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
           if (compensationAnalysis.compensations) {
             for (const c of compensationAnalysis.compensations) clinicalTextParts.push(`${c.source || ''} ${c.compensator || ''} compensation`);
           }
+        }
+        if (biomechanicsContext) {
+          if (biomechanicsContext.faults) {
+            for (const f of biomechanicsContext.faults) clinicalTextParts.push(`${f.label || ''} ${f.category || ''} biomechanical fault ${f.severity || ''} ${f.corrective || ''}`);
+          }
+          if (biomechanicsContext.deviations) {
+            for (const d of biomechanicsContext.deviations) clinicalTextParts.push(`${d.pattern || ''} ${d.region || ''} postural deviation ${d.angleDeg || 0}°`);
+          }
+          if (biomechanicsContext.clinicalSummary) clinicalTextParts.push(biomechanicsContext.clinicalSummary);
         }
 
         const clinicalText = clinicalTextParts.join(' ');
@@ -6273,9 +6282,25 @@ If nothing new can be extracted, return: { "painLocations": [], "subjectiveHisto
         painDriverContext = `\n\nRANKED PAIN DRIVERS (top ${painDriverSummary.length} computed drivers by evidence score):\n${painDriverSummary.map((d: any, i: number) => `${i+1}. [${d.category.toUpperCase()}] ${d.label} — Evidence score: ${d.evidenceScore}/100, Severity: ${d.severity}\n   Mechanism: ${d.mechanism}`).join('\n')}`;
       }
 
+      let biomechanicsEngineContext = '';
+      if (biomechanicsContext) {
+        const parts: string[] = [];
+        if (biomechanicsContext.qualityScore !== undefined) parts.push(`Overall quality score: ${biomechanicsContext.qualityScore}/100`);
+        if (biomechanicsContext.overallRiskScore !== undefined) parts.push(`Risk score: ${biomechanicsContext.overallRiskScore}/100`);
+        if (biomechanicsContext.faults && biomechanicsContext.faults.length > 0) {
+          parts.push(`Detected faults (${biomechanicsContext.faults.length}):\n${biomechanicsContext.faults.map((f: any, i: number) => `  ${i+1}. [${(f.severity || '').toUpperCase()}] ${f.label} (${f.category}) — ${f.corrective || 'No corrective specified'}`).join('\n')}`);
+        }
+        if (biomechanicsContext.deviations && biomechanicsContext.deviations.length > 0) {
+          parts.push(`Postural deviations (${biomechanicsContext.deviations.length}):\n${biomechanicsContext.deviations.map((d: any, i: number) => `  ${i+1}. ${d.pattern} at ${d.region} — ${d.angleDeg}° (${d.severity})`).join('\n')}`);
+        }
+        if (biomechanicsContext.movementTaskId) parts.push(`Movement task under analysis: ${biomechanicsContext.movementTaskId}`);
+        if (biomechanicsContext.clinicalSummary) parts.push(`Engine summary: ${biomechanicsContext.clinicalSummary}`);
+        biomechanicsEngineContext = `\n\nUNIFIED BIOMECHANICS ENGINE ANALYSIS:\n${parts.join('\n')}`;
+      }
+
       const prompt = `You are an expert musculoskeletal physiotherapist performing a comprehensive clinical reasoning analysis. Analyze ALL provided clinical data and produce a complete assessment with treatment plan. Pay special attention to posture deviations and their biomechanical consequences.
 
-${markerContext}${skeletonContext}${historyContext}${romContext}${postureContext}${forceContext}${muscleContext}${syndromeContext}${compensationContext}${fascialChainContext}${scarTissueContext}${painDriverContext}${evidenceContext}
+${markerContext}${skeletonContext}${historyContext}${romContext}${postureContext}${forceContext}${muscleContext}${syndromeContext}${compensationContext}${fascialChainContext}${scarTissueContext}${painDriverContext}${biomechanicsEngineContext}${evidenceContext}
 
 Return ONLY valid JSON with this structure:
 {

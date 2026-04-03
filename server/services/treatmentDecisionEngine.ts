@@ -82,8 +82,8 @@ export interface TreatmentDecisionResult {
 }
 
 export interface BiomechanicsContextInput {
-  faults?: Array<{ label: string; severity: string; category: string; clinical: string; corrective: string }>;
-  deviations?: Array<{ pattern: string; region: string; severity: string; angleDeg: number }>;
+  faults?: Array<{ label: string; severity: 'mild' | 'moderate' | 'severe'; category: string; clinical: string; corrective: string }>;
+  deviations?: Array<{ pattern: string; region: string; severity: 'mild' | 'moderate' | 'severe'; angleDeg: number }>;
   peakJoint?: string;
   peakForceBW?: number;
   qualityScore?: number;
@@ -700,7 +700,7 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const bio = input.biomechanicsContext;
   if (bio?.faults) {
     for (const fault of bio.faults) {
-      if (fault.severity === 'high' || fault.severity === 'critical') {
+      if (fault.severity === 'severe' || fault.severity === 'moderate') {
         patientContraindications.push(`biomechanical fault: ${fault.label}`);
       }
     }

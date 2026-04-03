@@ -8850,6 +8850,7 @@ ${ddxList}`;
               subjectiveHistory: pm.subjectiveHistory,
             }))}
             existingSubjectiveHistory={subjectiveHistoryRef.current}
+            existingVoiceTranscription={voiceTranscriptRef.current}
             onExtractionComplete={(result) => {
               setExtractionResult(result);
             }}

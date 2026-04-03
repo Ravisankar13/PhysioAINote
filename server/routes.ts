@@ -6543,6 +6543,7 @@ GUIDELINES:
           type: z.string().optional(),
         })).optional(),
         postureState: z.record(z.record(z.number())).optional(),
+        extractionContext: z.record(z.unknown()).optional(),
       });
 
       const parsed = treatmentPlanInputSchema.safeParse(req.body);

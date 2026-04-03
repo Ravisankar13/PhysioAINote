@@ -6532,7 +6532,7 @@ GUIDELINES:
         return res.status(400).json({ error: "Invalid request body", details: parsed.error.issues });
       }
 
-      const result = generateTreatmentPlan(parsed.data as any);
+      const result = generateTreatmentPlan(parsed.data);
       res.json(result);
     } catch (error: any) {
       console.error("Treatment plan generator error:", error);

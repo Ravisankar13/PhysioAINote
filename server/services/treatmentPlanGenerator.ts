@@ -1,12 +1,29 @@
-import type {
-  TreatmentDecisionResult,
-  RankedIntervention,
-  InterventionCategory,
-} from './treatmentDecisionEngine';
-import type {
-  IrritabilityLevel,
-  ConditionStageType,
-} from './clinicalReasoningEngine';
+import { EXERCISE_CATALOG, INTERVENTION_EXERCISE_MAP, findExercisesByBodyPart, type CatalogExercise } from '../../shared/exerciseCatalog';
+
+export type InterventionCategoryInput = string;
+
+export interface RankedInterventionInput {
+  id: string;
+  name: string;
+  category: InterventionCategoryInput;
+  targetRegions: string[];
+  evidenceGrade: string;
+  rationale: string;
+  dosage?: string;
+  riskFlags: string[];
+}
+
+export interface DecisionResultInput {
+  primary: RankedInterventionInput[];
+  adjunct: RankedInterventionInput[];
+  avoidDefer: RankedInterventionInput[];
+  topHypothesis: string;
+  stage?: string;
+  irritability?: string;
+}
+
+export type InterventionCategory = string;
+type IrritabilityLevel = 'low' | 'moderate' | 'high';
 
 export interface PlanExercise {
   id: string;
@@ -73,7 +90,7 @@ export interface TreatmentPlanResult {
 }
 
 export interface TreatmentPlanInput {
-  decisionResult: TreatmentDecisionResult;
+  decisionResult: DecisionResultInput;
   painMarkers?: Array<{ region: string; severity?: number; type?: string }>;
   postureState?: Record<string, Record<string, number>>;
 }
@@ -274,13 +291,13 @@ function buildPhases(
 }
 
 function mapInterventionsToPhases(
-  primary: RankedIntervention[],
-  adjunct: RankedIntervention[],
+  primary: RankedInterventionInput[],
+  adjunct: RankedInterventionInput[],
   phaseCount: number,
   stage: string,
   irritability: string,
-): Map<number, RankedIntervention[]> {
-  const phaseMap = new Map<number, RankedIntervention[]>();
+): Map<number, RankedInterventionInput[]> {
+  const phaseMap = new Map<number, RankedInterventionInput[]>();
   for (let i = 0; i < phaseCount; i++) {
     phaseMap.set(i, []);
   }
@@ -319,77 +336,29 @@ function mapInterventionsToPhases(
   return phaseMap;
 }
 
-const EXERCISE_LIBRARY: Record<string, {
-  name: string;
-  category: InterventionCategory;
-  equipment: string[];
-  baseReps: string;
-  baseSets: number;
-  baseHold?: number;
-  bodyParts: string[];
-}> = {
-  serratus_wall_slides: { name: 'Serratus Wall Slides', category: 'exercise', equipment: ['Wall'], baseReps: '12', baseSets: 3, bodyParts: ['shoulder'] },
-  prone_y_raises: { name: 'Prone Y-Raises', category: 'exercise', equipment: ['Light weights'], baseReps: '12-15', baseSets: 3, bodyParts: ['shoulder'] },
-  chin_tucks: { name: 'Chin Tucks', category: 'exercise', equipment: [], baseReps: '10-15', baseSets: 3, baseHold: 5, bodyParts: ['cervical', 'neck'] },
-  glute_bridge: { name: 'Glute Bridge', category: 'exercise', equipment: [], baseReps: '15', baseSets: 3, baseHold: 5, bodyParts: ['hip', 'lumbar'] },
-  single_leg_bridge: { name: 'Single Leg Glute Bridge', category: 'exercise', equipment: [], baseReps: '10-12', baseSets: 3, bodyParts: ['hip', 'lumbar'] },
-  clamshells: { name: 'Clamshells', category: 'exercise', equipment: [], baseReps: '15-20', baseSets: 3, bodyParts: ['hip'] },
-  monster_walks: { name: 'Monster Walks', category: 'exercise', equipment: ['Resistance band'], baseReps: '15 steps', baseSets: 3, bodyParts: ['hip', 'knee'] },
-  dead_bug: { name: 'Dead Bug', category: 'exercise', equipment: [], baseReps: '10 each side', baseSets: 3, bodyParts: ['lumbar', 'core'] },
-  bird_dog: { name: 'Bird Dog', category: 'exercise', equipment: [], baseReps: '10 each side', baseSets: 3, bodyParts: ['lumbar', 'core'] },
-  cat_cow: { name: 'Cat-Cow Mobilisation', category: 'exercise', equipment: [], baseReps: '10-12', baseSets: 3, bodyParts: ['thoracic', 'lumbar'] },
-  quad_sets: { name: 'Quadriceps Sets', category: 'exercise', equipment: [], baseReps: '10-15', baseSets: 3, baseHold: 5, bodyParts: ['knee'] },
-  heel_raises: { name: 'Heel Raises', category: 'exercise', equipment: [], baseReps: '15-20', baseSets: 3, bodyParts: ['ankle'] },
-  ankle_dorsiflexion_band: { name: 'Ankle Dorsiflexion with Band', category: 'exercise', equipment: ['Resistance band'], baseReps: '15', baseSets: 3, bodyParts: ['ankle'] },
-  wall_squats: { name: 'Wall Squats', category: 'exercise', equipment: ['Wall'], baseReps: '10-15', baseSets: 3, bodyParts: ['knee', 'hip'] },
-  hip_flexor_stretch: { name: 'Half-Kneeling Hip Flexor Stretch', category: 'exercise', equipment: [], baseReps: '3', baseSets: 3, baseHold: 30, bodyParts: ['hip', 'lumbar'] },
-  doorway_pec_stretch: { name: 'Doorway Pectoral Stretch', category: 'exercise', equipment: ['Doorway'], baseReps: '3', baseSets: 3, baseHold: 30, bodyParts: ['shoulder', 'thoracic'] },
-  upper_trap_stretch: { name: 'Upper Trapezius Stretch', category: 'exercise', equipment: [], baseReps: '3', baseSets: 3, baseHold: 30, bodyParts: ['cervical', 'shoulder'] },
-  foam_roll_thoracic: { name: 'Thoracic Foam Roll Extension', category: 'exercise', equipment: ['Foam roller'], baseReps: '10-15', baseSets: 2, bodyParts: ['thoracic'] },
-  single_leg_balance: { name: 'Single Leg Balance', category: 'exercise', equipment: [], baseReps: '30s', baseSets: 3, bodyParts: ['ankle', 'knee', 'hip'] },
-  side_plank: { name: 'Side Plank', category: 'exercise', equipment: [], baseReps: '30s', baseSets: 3, bodyParts: ['lumbar', 'core', 'hip'] },
-  pallof_press: { name: 'Pallof Press', category: 'exercise', equipment: ['Resistance band'], baseReps: '12-15', baseSets: 3, bodyParts: ['lumbar', 'core'] },
-  isometric_shoulder_er: { name: 'Isometric Shoulder External Rotation', category: 'exercise', equipment: ['Wall/towel'], baseReps: '10', baseSets: 3, baseHold: 10, bodyParts: ['shoulder'] },
-  eccentric_heel_drop: { name: 'Eccentric Heel Drop (Alfredson)', category: 'exercise', equipment: ['Step'], baseReps: '15', baseSets: 3, bodyParts: ['ankle'] },
-  neural_slider_median: { name: 'Median Nerve Slider', category: 'exercise', equipment: [], baseReps: '10-15', baseSets: 3, bodyParts: ['cervical', 'shoulder', 'elbow'] },
-  neural_slider_sciatic: { name: 'Sciatic Nerve Slider', category: 'exercise', equipment: [], baseReps: '10-15', baseSets: 3, bodyParts: ['lumbar', 'hip', 'knee'] },
-};
-
-const INTERVENTION_TO_EXERCISES: Record<string, string[]> = {
-  isometric_loading: ['isometric_shoulder_er', 'quad_sets', 'glute_bridge'],
-  eccentric_programme: ['eccentric_heel_drop'],
-  progressive_strengthening: ['wall_squats', 'glute_bridge', 'single_leg_bridge', 'monster_walks', 'heel_raises'],
-  motor_control_retraining: ['dead_bug', 'bird_dog', 'chin_tucks', 'pallof_press'],
-  stretching_programme: ['hip_flexor_stretch', 'doorway_pec_stretch', 'upper_trap_stretch'],
-  graded_exposure: ['cat_cow', 'wall_squats', 'single_leg_balance'],
-  proprioceptive_training: ['single_leg_balance', 'clamshells', 'monster_walks'],
-  neural_mobilisation: ['neural_slider_median', 'neural_slider_sciatic'],
-  activity_modification: [],
-  pain_neuroscience_education: [],
-  ergonomic_advice: [],
-  hydrotherapy: [],
-  soft_tissue_release: [],
-  trigger_point_therapy: [],
-  joint_mob_grade_1_2: [],
-  joint_mob_grade_3_4: [],
-  thoracic_manipulation: [],
-  taping_support: [],
-  dry_needling: [],
-  refer_imaging: [],
-};
+const catalogIndex = new Map<string, CatalogExercise>();
+for (const ex of EXERCISE_CATALOG) {
+  catalogIndex.set(ex.id, ex);
+}
 
 function selectExercisesForIntervention(
-  intervention: RankedIntervention,
-  phase: number,
+  intervention: RankedInterventionInput,
+  _phase: number,
 ): string[] {
-  const mapped = INTERVENTION_TO_EXERCISES[intervention.id];
+  const mapped = INTERVENTION_EXERCISE_MAP[intervention.id];
   if (mapped && mapped.length > 0) return mapped;
 
   const regionKeys = intervention.targetRegions.map(r => r.toLowerCase());
-  const matches = Object.entries(EXERCISE_LIBRARY).filter(([, ex]) =>
-    ex.bodyParts.some(bp => regionKeys.some(rk => rk.includes(bp) || bp.includes(rk)))
-  );
-  return matches.slice(0, 3).map(([key]) => key);
+  const matches: string[] = [];
+  for (const region of regionKeys) {
+    const found = findExercisesByBodyPart(region);
+    for (const ex of found) {
+      if (!matches.includes(ex.id)) matches.push(ex.id);
+      if (matches.length >= 3) break;
+    }
+    if (matches.length >= 3) break;
+  }
+  return matches.slice(0, 3);
 }
 
 function computeDosage(
@@ -398,7 +367,7 @@ function computeDosage(
   stage: string,
   phase: number,
 ): { sets: number; reps: string; holdSeconds?: number; frequency: string; intensity: string; painCeiling: string } {
-  const ex = EXERCISE_LIBRARY[exerciseKey];
+  const ex = catalogIndex.get(exerciseKey);
   const irrIdx = getIrritabilityIdx(irritability);
   const isAcute = stage === 'acute' || stage === 'reactive';
 
@@ -445,7 +414,7 @@ function buildProgression(
   const irrIdx = getIrritabilityIdx(irritability);
   const timeframeDays = irrIdx >= 2 ? 14 : irrIdx === 1 ? 10 : 7;
 
-  const ex = EXERCISE_LIBRARY[exerciseKey];
+  const ex = catalogIndex.get(exerciseKey);
   if (!ex) {
     return {
       criteria: 'Symptoms settle within 24 hours of exercise',
@@ -505,7 +474,7 @@ function buildRegression(
 }
 
 function buildConstraints(
-  avoidDefer: RankedIntervention[],
+  avoidDefer: RankedInterventionInput[],
   stage: string,
   irritability: string,
 ): PlanConstraint[] {
@@ -556,12 +525,12 @@ function buildConstraints(
 
 function convertToExercise(
   exerciseKey: string,
-  intervention: RankedIntervention,
+  intervention: RankedInterventionInput,
   phase: number,
   irritability: string,
   stage: string,
 ): PlanExercise {
-  const ex = EXERCISE_LIBRARY[exerciseKey];
+  const ex = catalogIndex.get(exerciseKey);
   const dosage = computeDosage(exerciseKey, irritability, stage, phase);
   const progression = buildProgression(exerciseKey, phase, irritability);
   const regression = buildRegression(exerciseKey, irritability);
@@ -586,7 +555,7 @@ function convertToExercise(
 }
 
 function convertManualTherapy(
-  intervention: RankedIntervention,
+  intervention: RankedInterventionInput,
   phase: number,
   irritability: string,
 ): PlanExercise {

@@ -175,7 +175,7 @@ function buildSlingDefinitions(): SlingDefinition[] {
 
     return {
       id: spec.id,
-      label: functionalSlingRef?.name ?? kineticChainRef?.name ?? spec.primaryFunction.split(',')[0],
+      label: functionalSlingRef?.name ?? kineticChainRef?.label ?? spec.primaryFunction.split(',')[0],
       color: spec.color,
       muscles: spec.muscles,
       joints: Array.from(new Set([...spec.joints, ...jointsFromKC])),

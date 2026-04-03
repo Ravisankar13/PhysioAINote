@@ -3337,7 +3337,10 @@ ${ddxList}`;
         }
       }
     }
-    return highlights.length > 0 ? highlights : undefined;
+    const deduped = highlights.filter((h, i, arr) =>
+      arr.findIndex(x => x.boneName === h.boneName) === i
+    );
+    return deduped.length > 0 ? deduped : undefined;
   }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, rightPanelTab]);
 
   const hudChainIntegrity = useMemo(() => {

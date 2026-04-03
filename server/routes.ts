@@ -6474,7 +6474,13 @@ GUIDELINES:
       }
 
       const result = await runExtraction(parsed.data);
-      res.json(result);
+      const { extractionResultSchema } = await import("../shared/clinicalIntakeTypes");
+      const validated = extractionResultSchema.safeParse(result);
+      if (!validated.success) {
+        console.error("[ExtractionEngine] Output validation failed:", validated.error.flatten());
+        return res.json(result);
+      }
+      res.json(validated.data);
     } catch (error: unknown) {
       console.error("Clinical extraction error:", error);
       res.status(500).json({ error: "Failed to run clinical extraction" });

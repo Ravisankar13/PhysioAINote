@@ -92,6 +92,27 @@ export interface BiomechanicsContextInput {
   movementTaskPhase?: string;
 }
 
+export interface SlingContextTarget {
+  muscle: string;
+  intervention: string;
+  rationale: string;
+}
+
+export interface SlingContextEntry {
+  sling: string;
+  status: string;
+  activationScore: number;
+  forceTransfer: string;
+  weakLinks: string[];
+  treatmentTargets: SlingContextTarget[];
+}
+
+export interface SlingContextInput {
+  overallForceTransferScore: number;
+  dominantDysfunction: string | null;
+  dysfunctionalSlings: SlingContextEntry[];
+}
+
 export interface TreatmentDecisionInput {
   structuredReasoning: ClinicalReasoningResult;
   muscleOverrides?: Record<string, { pathology?: string; tension?: number }>;
@@ -99,6 +120,7 @@ export interface TreatmentDecisionInput {
   postureState?: Record<string, Record<string, number>>;
   extractionContext?: ExtractionContextInput;
   biomechanicsContext?: BiomechanicsContextInput;
+  slingContext?: SlingContextInput;
 }
 
 const CANDIDATE_TO_TECHNIQUE_STATUS: Record<string, ClinicalStatusKey[]> = {
@@ -714,6 +736,21 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
 
   const biomechanicsBonus = bio ? Math.min(15, (bio.faults?.length ?? 0) * 3 + (bio.deviations?.length ?? 0) * 2) : 0;
 
+  const sling = input.slingContext;
+  const slingForceTransferDeficit = sling ? Math.max(0, 70 - sling.overallForceTransferScore) : 0;
+  const hasSlingDysfunction = sling && sling.dysfunctionalSlings.length > 0;
+  const slingNeedsActivation = sling?.dysfunctionalSlings.some(
+    s => s.treatmentTargets.some(t => t.intervention === 'activate')
+  ) ?? false;
+  const slingNeedsRelease = sling?.dysfunctionalSlings.some(
+    s => s.treatmentTargets.some(t => t.intervention === 'release')
+  ) ?? false;
+  const slingNeedsStrengthen = sling?.dysfunctionalSlings.some(
+    s => s.treatmentTargets.some(t => t.intervention === 'strengthen')
+  ) ?? false;
+  const slingCompensationCount = sling?.dysfunctionalSlings.filter(s => s.status === 'compensating').length ?? 0;
+  const slingUnderperformingCount = sling?.dysfunctionalSlings.filter(s => s.status === 'underperforming').length ?? 0;
+
   const ranked: RankedIntervention[] = candidates.map(candidate => {
     let score = matchScore(candidate, problemClass, mechanism);
     if (postureDeviationScore > 0) {
@@ -724,6 +761,24 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     if (biomechanicsBonus > 0) {
       if (['motor_control_retraining', 'progressive_strengthening', 'ergonomic_advice', 'stretching_programme'].includes(candidate.id)) {
         score += biomechanicsBonus;
+      }
+    }
+
+    if (hasSlingDysfunction) {
+      if (candidate.id === 'motor_control_retraining' && slingNeedsActivation) {
+        score += Math.min(20, slingForceTransferDeficit * 0.5 + slingUnderperformingCount * 5);
+      }
+      if (candidate.id === 'progressive_strengthening' && slingNeedsStrengthen) {
+        score += Math.min(15, slingForceTransferDeficit * 0.3 + slingUnderperformingCount * 4);
+      }
+      if ((candidate.id === 'soft_tissue_release' || candidate.id === 'trigger_point_therapy' || candidate.id === 'dry_needling') && slingNeedsRelease) {
+        score += Math.min(12, slingCompensationCount * 4 + slingForceTransferDeficit * 0.2);
+      }
+      if (candidate.id === 'isometric_loading' && slingNeedsActivation) {
+        score += Math.min(10, slingUnderperformingCount * 3);
+      }
+      if (candidate.id === 'stretching_programme' && slingCompensationCount > 0) {
+        score += Math.min(8, slingCompensationCount * 3);
       }
     }
     const { pass: riskPassed, flags: riskFlags } = riskFilter(candidate, stage, irritability, mustNotMissConditions, patientContraindications);
@@ -774,7 +829,10 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
 
   const reviewSchedule = computeReviewSchedule(irritability, stage);
 
-  const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class): ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'} Reassess in ${reviewSchedule.reassessmentLabel}.`;
+  const slingNote = hasSlingDysfunction
+    ? ` Sling analysis: ${sling!.dysfunctionalSlings.length} dysfunctional sling(s) detected (force transfer ${sling!.overallForceTransferScore}/100), prioritizing force-transfer restoration and compensation reduction.`
+    : '';
+  const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class): ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
 
   return {
     primary,

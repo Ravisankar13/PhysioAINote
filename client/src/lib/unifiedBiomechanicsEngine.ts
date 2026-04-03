@@ -1276,9 +1276,9 @@ function buildCompensationPatterns(
 function buildLeftRightComparison(forces: ForceOutput, muscleAsym: MuscleAsymmetryOutput): ComparisonOutput {
   const entries: ComparisonEntry[] = [];
 
-  const leftJoints = forces.joints.filter(j => j.joint.startsWith('left_'));
+  const leftJoints = forces.joints.filter(j => j.joint.startsWith('Left '));
   for (const lj of leftJoints) {
-    const rjName = lj.joint.replace('left_', 'right_');
+    const rjName = lj.joint.replace('Left ', 'Right ');
     const rj = forces.joints.find(j => j.joint === rjName);
     if (!rj) continue;
 
@@ -1288,7 +1288,7 @@ function buildLeftRightComparison(forces: ForceOutput, muscleAsym: MuscleAsymmet
     if (Math.abs(deltaPct) < 2) continue;
 
     entries.push({
-      parameter: `${lj.joint.replace('left_', '')} Force (BW)`,
+      parameter: `${lj.joint.replace('Left ', '')} Force (BW)`,
       leftValue: lj.totalBW,
       rightValue: rj.totalBW,
       delta: Math.round(delta * 100) / 100,

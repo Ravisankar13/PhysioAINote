@@ -257,13 +257,16 @@ function MuscleTab({ muscleAsymmetry }: { muscleAsymmetry: BiomechanicsOutput['m
 function FaultsTab({
   faults,
   onToggleRule,
+  onUpdateThreshold,
   faultRules,
 }: {
   faults: BiomechanicsOutput['faults'];
   onToggleRule: (ruleId: string, enabled: boolean) => void;
+  onUpdateThreshold: (ruleId: string, level: 'thresholdMild' | 'thresholdModerate' | 'thresholdSevere', value: number) => void;
   faultRules: FaultRuleConfig[];
 }) {
   const [showConfig, setShowConfig] = useState(false);
+  const [expandedRule, setExpandedRule] = useState<string | null>(null);
 
   return (
     <div className="space-y-3">
@@ -315,18 +318,48 @@ function FaultsTab({
       </button>
 
       {showConfig && (
-        <div className="space-y-1 p-2 rounded bg-slate-900/50 border border-slate-700/30 max-h-40 overflow-y-auto">
+        <div className="space-y-2 p-2 rounded bg-slate-900/50 border border-slate-700/30 max-h-64 overflow-y-auto">
           {faultRules.map(rule => (
-            <label key={rule.id} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rule.enabled}
-                onChange={(e) => onToggleRule(rule.id, e.target.checked)}
-                className="w-3 h-3 rounded border-slate-600"
-              />
-              <span className="text-[10px] text-slate-400 truncate">{rule.label}</span>
-              <span className="text-[9px] text-slate-600 ml-auto">{rule.category}</span>
-            </label>
+            <div key={rule.id} className="space-y-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={rule.enabled}
+                  onChange={(e) => onToggleRule(rule.id, e.target.checked)}
+                  className="w-3 h-3 rounded border-slate-600"
+                />
+                <button
+                  onClick={() => setExpandedRule(expandedRule === rule.id ? null : rule.id)}
+                  className="text-[10px] text-slate-400 hover:text-slate-300 truncate text-left flex-1"
+                >
+                  {rule.label}
+                </button>
+                <span className="text-[9px] text-slate-600 shrink-0">{rule.category}</span>
+              </div>
+              {expandedRule === rule.id && (
+                <div className="pl-5 space-y-1.5 pb-1">
+                  {(['thresholdMild', 'thresholdModerate', 'thresholdSevere'] as const).map(level => {
+                    const levelLabel = level.replace('threshold', '');
+                    const levelColor = level === 'thresholdSevere' ? 'text-red-400' : level === 'thresholdModerate' ? 'text-amber-400' : 'text-blue-400';
+                    return (
+                      <div key={level} className="flex items-center gap-2">
+                        <span className={`text-[9px] w-14 ${levelColor}`}>{levelLabel}</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={rule.unit === '°' ? 45 : 100}
+                          step={rule.unit === '°' ? 1 : 0.5}
+                          value={rule[level]}
+                          onChange={(e) => onUpdateThreshold(rule.id, level, parseFloat(e.target.value))}
+                          className="flex-1 h-1 accent-slate-500"
+                        />
+                        <span className="text-[9px] text-slate-500 w-10 text-right">{rule[level]}{rule.unit}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -616,6 +649,19 @@ export default function UnifiedBiomechanicsPanel({
     });
   }, [onFaultRuleOverride]);
 
+  const handleUpdateThreshold = useCallback((ruleId: string, level: 'thresholdMild' | 'thresholdModerate' | 'thresholdSevere', value: number) => {
+    setFaultRules(prev => {
+      const updated = prev.map(r => r.id === ruleId ? { ...r, [level]: value } : r);
+      const overrides = updated.filter(r => {
+        const def = DEFAULT_FAULT_RULES.find(d => d.id === r.id);
+        if (!def) return false;
+        return def.enabled !== r.enabled || def.thresholdMild !== r.thresholdMild || def.thresholdModerate !== r.thresholdModerate || def.thresholdSevere !== r.thresholdSevere;
+      }).map(r => ({ id: r.id, enabled: r.enabled, thresholdMild: r.thresholdMild, thresholdModerate: r.thresholdModerate, thresholdSevere: r.thresholdSevere }));
+      onFaultRuleOverride(overrides);
+      return updated;
+    });
+  }, [onFaultRuleOverride]);
+
   if (!output) {
     return (
       <div className="p-4 text-[11px] text-slate-500 text-center">
@@ -675,7 +721,7 @@ export default function UnifiedBiomechanicsPanel({
         <ScrollArea className="flex-1 min-h-0">
           <div className="p-3">
             <TabsContent value="faults" className="mt-0">
-              <FaultsTab faults={output.faults} onToggleRule={handleToggleRule} faultRules={faultRules} />
+              <FaultsTab faults={output.faults} onToggleRule={handleToggleRule} onUpdateThreshold={handleUpdateThreshold} faultRules={faultRules} />
             </TabsContent>
             <TabsContent value="forces" className="mt-0">
               <ForceTab forces={output.forces} />

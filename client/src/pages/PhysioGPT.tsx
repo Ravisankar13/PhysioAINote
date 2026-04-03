@@ -3312,6 +3312,34 @@ ${ddxList}`;
     }
   }, [unifiedBiomechanicsOutput]);
 
+  const biomechanicsFaultHighlights = useMemo(() => {
+    const FAULT_JOINT_TO_BONE: Record<string, string> = {
+      left_hip: 'Hip_L', right_hip: 'Hip_R',
+      left_knee: 'Knee_L', right_knee: 'Knee_R',
+      left_ankle: 'Ankle_L', right_ankle: 'Ankle_R',
+      left_shoulder: 'Shoulder_L', right_shoulder: 'Shoulder_R',
+      lumbar_spine: 'RootPart1_M', thoracic_spine: 'Spine1_M',
+      cervical_spine: 'Neck_M', pelvis: 'Root_M',
+    };
+    const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
+    if (!bioSrc || !showUnifiedBiomechanicsPanel) return undefined;
+    const highlights: Array<{ boneName: string; color: number; intensity: number; label: string }> = [];
+    for (const fault of bioSrc.faults.faults) {
+      for (const joint of fault.affectedJoints) {
+        const boneName = FAULT_JOINT_TO_BONE[joint];
+        if (boneName) {
+          highlights.push({
+            boneName,
+            color: fault.severity === 'severe' ? 0xff3333 : fault.severity === 'moderate' ? 0xff9933 : 0x3399ff,
+            intensity: fault.severity === 'severe' ? 0.9 : fault.severity === 'moderate' ? 0.7 : 0.4,
+            label: fault.label,
+          });
+        }
+      }
+    }
+    return highlights.length > 0 ? highlights : undefined;
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, showUnifiedBiomechanicsPanel]);
+
   const hudChainIntegrity = useMemo(() => {
     if (showUnifiedChainPanel && chainIntegrityScores.size > 0) return chainIntegrityScores;
     if (!hudMuscleAnalysis) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
@@ -4400,6 +4428,7 @@ ${ddxList}`;
               nerveRootLabels={nerveRootLabels}
               referralZoneBones={referralZoneBones}
               tissueViewOverlay={tissueViewOverlay}
+              biomechanicsFaultHighlights={biomechanicsFaultHighlights}
               onTissueBoneClick={tissueViewMode && tissueViewMode !== 'muscle' ? (boneName: string) => {
                 const matches = getAllEntriesForBone(tissueViewMode, boneName);
                 if (matches.length === 0) return;

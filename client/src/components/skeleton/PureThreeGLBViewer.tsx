@@ -1678,6 +1678,12 @@ interface PureThreeGLBViewerProps {
     loadIndicators?: Array<{ boneName: string; loadPercent: number; color: number }>;
   } | null;
   onTissueBoneClick?: (boneName: string) => void;
+  biomechanicsFaultHighlights?: Array<{
+    boneName: string;
+    color: number;
+    intensity: number;
+    label: string;
+  }>;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2143,6 +2149,7 @@ export default function PureThreeGLBViewer({
   referralZoneBones,
   tissueViewOverlay,
   onTissueBoneClick,
+  biomechanicsFaultHighlights,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -2735,7 +2742,11 @@ export default function PureThreeGLBViewer({
     });
     chainHighlightOverlaysRef.current = [];
 
-    if (!highlightBoneNames || highlightBoneNames.length === 0 || !model) return;
+    const mergedHighlights = [
+      ...(highlightBoneNames ?? []),
+      ...(biomechanicsFaultHighlights ?? []).map(h => ({ boneName: h.boneName, color: h.color, intensity: h.intensity, glowSize: 0.15 })),
+    ];
+    if (mergedHighlights.length === 0 || !model) return;
 
     model.updateMatrixWorld(true);
 
@@ -2746,7 +2757,7 @@ export default function PureThreeGLBViewer({
       }
     });
 
-    for (const highlight of highlightBoneNames) {
+    for (const highlight of mergedHighlights) {
       const bone = bones[highlight.boneName];
       if (!bone) continue;
 
@@ -2800,7 +2811,7 @@ export default function PureThreeGLBViewer({
       scene.add(outerGlow);
       chainHighlightOverlaysRef.current.push(outerGlow);
     }
-  }, [highlightBoneNames]);
+  }, [highlightBoneNames, biomechanicsFaultHighlights]);
 
   useEffect(() => {
     const overlays = chainHighlightOverlaysRef.current;
@@ -2823,7 +2834,7 @@ export default function PureThreeGLBViewer({
     };
     pulseFrameId = requestAnimationFrame(animatePulse);
     return () => cancelAnimationFrame(pulseFrameId);
-  }, [highlightBoneNames]);
+  }, [highlightBoneNames, biomechanicsFaultHighlights]);
 
   useEffect(() => {
     if (!sceneRef.current) return;

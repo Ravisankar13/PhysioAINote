@@ -132,6 +132,14 @@ export interface MovementTaskMuscle {
   role: string;
 }
 
+export interface MovementTaskFault {
+  id: string;
+  label: string;
+  severity: Severity;
+  description: string;
+  affectedJoint: string;
+}
+
 export interface MovementTaskOutput {
   taskId: string;
   taskLabel: string;
@@ -141,6 +149,46 @@ export interface MovementTaskOutput {
   muscles: MovementTaskMuscle[];
   peakForceJoint: string;
   peakForcePct: number;
+  taskFaults: MovementTaskFault[];
+  taskScore: number;
+}
+
+export interface JointKinematicsEntry {
+  joint: string;
+  flexionDeg: number;
+  extensionDeg: number;
+  currentAngleDeg: number;
+  normalRangeDeg: [number, number];
+  withinNormal: boolean;
+  plane: 'sagittal' | 'frontal' | 'transverse';
+  clinical: string;
+}
+
+export interface JointKinematicsOutput {
+  joints: JointKinematicsEntry[];
+  totalMobilityScore: number;
+  restrictedJoints: string[];
+  hypermobileJoints: string[];
+}
+
+export interface CompensationPattern {
+  id: string;
+  label: string;
+  primaryRegion: string;
+  compensatingRegion: string;
+  mechanism: string;
+  severity: Severity;
+  additionalLoadPct: number;
+  affectedMovements: string[];
+  clinical: string;
+  corrective: string;
+}
+
+export interface CompensationOutput {
+  patterns: CompensationPattern[];
+  totalCompensationScore: number;
+  primaryDrivers: string[];
+  cascadeChains: Array<{ chain: string[]; severity: Severity }>;
 }
 
 export interface ComparisonEntry {
@@ -163,6 +211,8 @@ export interface BiomechanicsOutput {
   forces: ForceOutput;
   posture: PostureOutput;
   muscleAsymmetry: MuscleAsymmetryOutput;
+  jointKinematics: JointKinematicsOutput;
+  compensationPatterns: CompensationOutput;
   faults: FaultOutput;
   movementTask: MovementTaskOutput | null;
   comparison: ComparisonOutput | null;
@@ -881,7 +931,9 @@ function buildFaultOutput(
 
 function buildMovementTaskOutput(
   taskId: string | undefined,
-  progress: number
+  progress: number,
+  postureOutput: PostureOutput,
+  forceOutput: ForceOutput,
 ): MovementTaskOutput | null {
   if (!taskId) return null;
 
@@ -904,6 +956,69 @@ function buildMovementTaskOutput(
 
   const peak = forces.reduce((best, f) => f.forcePercent > best.forcePercent ? f : best, forces[0]);
 
+  const taskFaults: MovementTaskFault[] = [];
+  let faultIdx = 0;
+
+  for (const f of forces) {
+    if (f.forcePercent > 90) {
+      taskFaults.push({
+        id: `tf_${faultIdx++}`,
+        label: `Excessive ${f.label} loading during ${snapshot.phase}`,
+        severity: f.forcePercent > 100 ? 'severe' : 'moderate',
+        description: `${f.label} force at ${f.forcePercent}% exceeds safe threshold during ${snapshot.phase}.`,
+        affectedJoint: f.joint,
+      });
+    }
+  }
+
+  for (const dev of postureOutput.deviations) {
+    if (dev.severity !== 'mild') {
+      const relatedForce = forces.find(f =>
+        f.joint.includes(dev.region) || dev.region.includes(f.joint.replace('left_', '').replace('right_', ''))
+      );
+      if (relatedForce) {
+        taskFaults.push({
+          id: `tf_${faultIdx++}`,
+          label: `${dev.pattern} affecting ${taskId} mechanics`,
+          severity: dev.severity,
+          description: `Postural deviation (${dev.pattern}, ${dev.angleDeg}°) alters loading pattern during ${MOVEMENT_TASK_LABELS[taskId] ?? taskId}.`,
+          affectedJoint: relatedForce.joint,
+        });
+      }
+    }
+  }
+
+  if (taskId === 'single_leg_squat' || taskId === 'singleLegBalance') {
+    const wd = forceOutput.weightDistribution;
+    if (Math.abs(wd.leftPct - wd.rightPct) > 15) {
+      taskFaults.push({
+        id: `tf_${faultIdx++}`,
+        label: 'Weight distribution asymmetry during single-leg task',
+        severity: Math.abs(wd.leftPct - wd.rightPct) > 25 ? 'severe' : 'moderate',
+        description: `L/R weight distribution ${wd.leftPct}%/${wd.rightPct}% indicates poor single-leg control.`,
+        affectedJoint: 'pelvis',
+      });
+    }
+  }
+
+  if (taskId === 'overhead_reach') {
+    for (const rom of postureOutput.romRestrictions) {
+      if (rom.joint.toLowerCase().includes('shoulder') && rom.deficitPct > 15) {
+        taskFaults.push({
+          id: `tf_${faultIdx++}`,
+          label: `Shoulder ROM restriction limits overhead reach`,
+          severity: rom.deficitPct > 30 ? 'severe' : 'moderate',
+          description: `${rom.joint} has ${Math.round(rom.deficitPct)}% ROM deficit affecting overhead reaching mechanics.`,
+          affectedJoint: rom.joint.toLowerCase().includes('left') ? 'left_shoulder' : 'right_shoulder',
+        });
+      }
+    }
+  }
+
+  const taskScore = Math.max(0, Math.min(100, Math.round(
+    100 - taskFaults.reduce((sum, f) => sum + (f.severity === 'severe' ? 25 : f.severity === 'moderate' ? 12 : 5), 0)
+  )));
+
   return {
     taskId,
     taskLabel: MOVEMENT_TASK_LABELS[taskId] ?? taskId,
@@ -913,6 +1028,8 @@ function buildMovementTaskOutput(
     muscles,
     peakForceJoint: peak?.joint ?? '',
     peakForcePct: peak?.forcePercent ?? 0,
+    taskFaults,
+    taskScore,
   };
 }
 
@@ -970,6 +1087,237 @@ function buildComparison(
     entries,
     summary,
   };
+}
+
+const JOINT_ROM_NORMS: Record<string, { normal: [number, number]; plane: 'sagittal' | 'frontal' | 'transverse' }> = {
+  left_hip: { normal: [0, 120], plane: 'sagittal' },
+  right_hip: { normal: [0, 120], plane: 'sagittal' },
+  left_knee: { normal: [0, 140], plane: 'sagittal' },
+  right_knee: { normal: [0, 140], plane: 'sagittal' },
+  left_ankle: { normal: [-20, 50], plane: 'sagittal' },
+  right_ankle: { normal: [-20, 50], plane: 'sagittal' },
+  left_shoulder: { normal: [0, 180], plane: 'sagittal' },
+  right_shoulder: { normal: [0, 180], plane: 'sagittal' },
+  lumbar_spine: { normal: [-30, 60], plane: 'sagittal' },
+  thoracic_spine: { normal: [-5, 40], plane: 'sagittal' },
+  cervical_spine: { normal: [-60, 60], plane: 'sagittal' },
+  pelvis: { normal: [-15, 15], plane: 'frontal' },
+};
+
+function buildJointKinematics(
+  modelConfig: Record<string, number>,
+  romRestrictions: ROMRestriction[],
+): JointKinematicsOutput {
+  const joints: JointKinematicsEntry[] = [];
+  const restrictedJoints: string[] = [];
+  const hypermobileJoints: string[] = [];
+
+  for (const [joint, norms] of Object.entries(JOINT_ROM_NORMS)) {
+    const restriction = romRestrictions.find(r => r.joint.toLowerCase().includes(joint.replace('left_', '').replace('right_', '')));
+    const restrictionPct = restriction ? restriction.deficitPct : 0;
+
+    const normalRange = norms.normal;
+    const midAngle = (normalRange[0] + normalRange[1]) / 2;
+    const totalROM = normalRange[1] - normalRange[0];
+    const effectiveROM = totalROM * (1 - restrictionPct / 100);
+
+    const side = joint.startsWith('left_') ? 'l_' : joint.startsWith('right_') ? 'r_' : '';
+    const bonePart = joint.replace('left_', '').replace('right_', '');
+
+    let currentAngle = midAngle;
+    const sliderKey = `${side}${bonePart}_flexion`;
+    const altKey = `${side}${bonePart}Flex`;
+    if (modelConfig[sliderKey] !== undefined) {
+      currentAngle = modelConfig[sliderKey];
+    } else if (modelConfig[altKey] !== undefined) {
+      currentAngle = modelConfig[altKey];
+    }
+
+    const withinNormal = currentAngle >= normalRange[0] && currentAngle <= normalRange[1];
+
+    let clinical = 'Within normal range.';
+    if (restrictionPct > 20) {
+      clinical = `${Math.round(restrictionPct)}% ROM deficit — likely capsular or muscular restriction.`;
+      restrictedJoints.push(joint);
+    } else if (restrictionPct > 10) {
+      clinical = `Minor ROM limitation (${Math.round(restrictionPct)}% deficit).`;
+    }
+
+    if (currentAngle > normalRange[1] + 10) {
+      clinical = 'Hypermobile — potential ligamentous laxity.';
+      hypermobileJoints.push(joint);
+    }
+
+    joints.push({
+      joint,
+      flexionDeg: Math.round(normalRange[0] + effectiveROM * 0.1),
+      extensionDeg: Math.round(normalRange[0] + effectiveROM),
+      currentAngleDeg: Math.round(currentAngle),
+      normalRangeDeg: normalRange,
+      withinNormal,
+      plane: norms.plane,
+      clinical,
+    });
+  }
+
+  const totalMobilityScore = Math.max(0, Math.min(100, Math.round(
+    100 - (restrictedJoints.length * 12) + (hypermobileJoints.length * -5)
+  )));
+
+  return { joints, totalMobilityScore, restrictedJoints, hypermobileJoints };
+}
+
+function buildCompensationPatterns(
+  posture: PostureOutput,
+  muscleAsymmetry: MuscleAsymmetryOutput,
+  faults: FaultOutput,
+  pathologyResult: PathologyCompensationResult | null,
+): CompensationOutput {
+  const patterns: CompensationPattern[] = [];
+  let nextId = 1;
+
+  if (pathologyResult) {
+    for (const finding of pathologyResult.clinicalFindings) {
+      const severityVal: Severity = finding.severity === 'severe' ? 'severe' : finding.severity === 'moderate' ? 'moderate' : 'mild';
+      patterns.push({
+        id: `comp_${nextId++}`,
+        label: finding.title,
+        primaryRegion: finding.muscleSource,
+        compensatingRegion: 'adjacent structures',
+        mechanism: finding.description,
+        severity: severityVal,
+        additionalLoadPct: severityVal === 'severe' ? 30 : severityVal === 'moderate' ? 15 : 5,
+        affectedMovements: ['squat', 'walk', 'lunge'],
+        clinical: finding.description,
+        corrective: `Address ${finding.muscleSource} ${finding.pathology}. Strengthen stabilizers.`,
+      });
+    }
+    for (const [muscleId, override] of Object.entries(pathologyResult.compensatoryOverrides)) {
+      const muscleName = muscleId.replace(/_/g, ' ');
+      const activationDelta = override.activationOffset ?? 0;
+      if (Math.abs(activationDelta) > 10) {
+        patterns.push({
+          id: `comp_${nextId++}`,
+          label: `${muscleName} compensatory ${activationDelta > 0 ? 'overactivation' : 'inhibition'}`,
+          primaryRegion: muscleName,
+          compensatingRegion: muscleName,
+          mechanism: activationDelta > 0 ? 'synergist overload' : 'reflex inhibition',
+          severity: Math.abs(activationDelta) > 25 ? 'severe' : Math.abs(activationDelta) > 15 ? 'moderate' : 'mild',
+          additionalLoadPct: Math.abs(activationDelta),
+          affectedMovements: ['squat', 'walk', 'lunge'],
+          clinical: `${muscleName} shows ${Math.abs(activationDelta)}% activation change due to compensatory pattern.`,
+          corrective: `Address underlying pathology driving ${muscleName} compensation.`,
+        });
+      }
+    }
+  }
+
+  for (const asym of muscleAsymmetry.asymmetries) {
+    if (asym.severity !== 'mild') {
+      const strongSide = asym.leftValue > asym.rightValue ? 'left' : 'right';
+      const weakSide = strongSide === 'left' ? 'right' : 'left';
+      patterns.push({
+        id: `comp_${nextId++}`,
+        label: `${asym.region} lateral shift compensation`,
+        primaryRegion: `${weakSide} ${asym.region}`,
+        compensatingRegion: `${strongSide} ${asym.region}`,
+        mechanism: 'contralateral overload',
+        severity: asym.severity,
+        additionalLoadPct: Math.round(asym.differencePct / 2),
+        affectedMovements: ['walk', 'single_leg_squat', 'lunge'],
+        clinical: `${Math.round(asym.differencePct)}% ${asym.region} asymmetry causes ${strongSide}-side overloading.`,
+        corrective: `Targeted ${weakSide}-side strengthening for ${asym.region}. Single-leg exercises.`,
+      });
+    }
+  }
+
+  for (const dev of posture.deviations) {
+    if (dev.severity !== 'mild') {
+      const compRegion = dev.region === 'lumbar' ? 'thoracic spine' :
+        dev.region === 'thoracic' ? 'cervical spine' :
+        dev.region === 'pelvis' ? 'lumbar spine' :
+        dev.region === 'cervical' ? 'thoracic spine' : 'adjacent region';
+      patterns.push({
+        id: `comp_${nextId++}`,
+        label: `${dev.pattern} compensation chain`,
+        primaryRegion: dev.region,
+        compensatingRegion: compRegion,
+        mechanism: 'postural compensation',
+        severity: dev.severity,
+        additionalLoadPct: Math.round(dev.angleDeg * 0.8),
+        affectedMovements: ['walk', 'squat', 'overhead_reach'],
+        clinical: `${dev.pattern} (${dev.angleDeg}°) drives compensatory loading at ${compRegion}.`,
+        corrective: dev.clinical,
+      });
+    }
+  }
+
+  const totalCompensationScore = Math.max(0, Math.min(100,
+    patterns.reduce((sum, p) => sum + (p.severity === 'severe' ? 25 : p.severity === 'moderate' ? 15 : 5), 0)
+  ));
+
+  const primaryDrivers = [...new Set(patterns.filter(p => p.severity === 'severe' || p.severity === 'moderate').map(p => p.primaryRegion))];
+
+  const cascadeChains: Array<{ chain: string[]; severity: Severity }> = [];
+  const driverPatterns = patterns.filter(p => p.severity !== 'mild');
+  for (const dp of driverPatterns) {
+    const downstream = patterns.filter(p => p.primaryRegion === dp.compensatingRegion);
+    if (downstream.length > 0) {
+      cascadeChains.push({
+        chain: [dp.primaryRegion, dp.compensatingRegion, ...downstream.map(d => d.compensatingRegion)],
+        severity: dp.severity,
+      });
+    }
+  }
+
+  return { patterns, totalCompensationScore, primaryDrivers, cascadeChains };
+}
+
+function buildLeftRightComparison(forces: ForceOutput, muscleAsym: MuscleAsymmetryOutput): ComparisonOutput {
+  const entries: ComparisonEntry[] = [];
+
+  const leftJoints = forces.joints.filter(j => j.joint.startsWith('left_'));
+  for (const lj of leftJoints) {
+    const rjName = lj.joint.replace('left_', 'right_');
+    const rj = forces.joints.find(j => j.joint === rjName);
+    if (!rj) continue;
+
+    const delta = lj.totalBW - rj.totalBW;
+    const avg = (lj.totalBW + rj.totalBW) / 2;
+    const deltaPct = avg > 0 ? (delta / avg) * 100 : 0;
+    if (Math.abs(deltaPct) < 2) continue;
+
+    entries.push({
+      parameter: `${lj.joint.replace('left_', '')} Force (BW)`,
+      leftValue: lj.totalBW,
+      rightValue: rj.totalBW,
+      delta: Math.round(delta * 100) / 100,
+      deltaPct: Math.round(deltaPct),
+      significance: Math.abs(deltaPct) > 25 ? 'significant' : Math.abs(deltaPct) > 10 ? 'notable' : 'negligible',
+    });
+  }
+
+  for (const asym of muscleAsym.asymmetries) {
+    entries.push({
+      parameter: `${asym.region} Activation`,
+      leftValue: asym.leftValue,
+      rightValue: asym.rightValue,
+      delta: Math.round((asym.leftValue - asym.rightValue) * 100) / 100,
+      deltaPct: Math.round(asym.differencePct),
+      significance: asym.severity === 'severe' ? 'significant' : asym.severity === 'moderate' ? 'notable' : 'negligible',
+    });
+  }
+
+  const sigCount = entries.filter(e => e.significance === 'significant').length;
+  const notableCount = entries.filter(e => e.significance === 'notable').length;
+  let summary = 'Bilateral symmetry within normal limits.';
+  if (sigCount > 0) {
+    summary = `${sigCount} significant left-right asymmetry(ies) detected.`;
+  } else if (notableCount > 0) {
+    summary = `${notableCount} notable bilateral difference(s).`;
+  }
+
+  return { mode: 'left_right', entries, summary };
 }
 
 function buildClinicalSummary(
@@ -1042,6 +1390,8 @@ export function computeUnifiedBiomechanics(input: UnifiedBiomechanicsInput): Bio
   const forces = buildForceOutput(forceResult, weightKg);
   const posture = buildPostureOutput(forceResult, modelConfig, pathologyResult);
   const muscleAsymmetry = buildMuscleAsymmetryOutput(biomechResult);
+  const jointKinematics = buildJointKinematics(modelConfig, posture.romRestrictions);
+  const compensationPatterns = buildCompensationPatterns(posture, muscleAsymmetry, buildFaultOutput(modelConfig, forces, DEFAULT_FAULT_RULES), pathologyResult);
 
   let rules = [...DEFAULT_FAULT_RULES];
   if (faultRuleOverrides) {
@@ -1054,14 +1404,18 @@ export function computeUnifiedBiomechanics(input: UnifiedBiomechanicsInput): Bio
   }
   const faults = buildFaultOutput(modelConfig, forces, rules);
 
-  const movementTask = buildMovementTaskOutput(movementTaskId, movementProgress);
-  const comparison = buildComparison(forces, previousOutput);
+  const movementTask = buildMovementTaskOutput(movementTaskId, movementProgress, posture, forces);
+  const beforeAfterComparison = buildComparison(forces, previousOutput);
+  const leftRightComparison = buildLeftRightComparison(forces, muscleAsymmetry);
+  const comparison = previousOutput ? beforeAfterComparison : leftRightComparison;
 
   const qualityScore = Math.max(0, Math.min(100, Math.round(
-    (posture.overallAlignmentScore * 0.35) +
-    ((100 - faults.overallRiskScore) * 0.35) +
+    (posture.overallAlignmentScore * 0.25) +
+    ((100 - faults.overallRiskScore) * 0.25) +
     (muscleAsymmetry.globalActivationScore * 0.15) +
-    ((biomechResult?.movementQuality.overallScore ?? 50) * 0.15)
+    (jointKinematics.totalMobilityScore * 0.15) +
+    (Math.max(0, 100 - compensationPatterns.totalCompensationScore) * 0.1) +
+    ((biomechResult?.movementQuality.overallScore ?? 50) * 0.1)
   )));
 
   const clinicalSummary = buildClinicalSummary(faults, posture, forces, muscleAsymmetry);
@@ -1071,6 +1425,8 @@ export function computeUnifiedBiomechanics(input: UnifiedBiomechanicsInput): Bio
     forces,
     posture,
     muscleAsymmetry,
+    jointKinematics,
+    compensationPatterns,
     faults,
     movementTask,
     comparison,

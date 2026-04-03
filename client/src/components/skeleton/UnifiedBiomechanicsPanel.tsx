@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeftRight, BarChart3, ChevronDown,
-  ChevronRight, Gauge, Layers, PlayCircle, Shield, TrendingUp, Zap
+  ChevronRight, Gauge, GitBranch, Layers, MoveHorizontal, PlayCircle, Shield, TrendingUp, Zap
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -19,6 +19,11 @@ import type {
   AsymmetryEntry,
   MovementTaskOutput,
   ComparisonEntry,
+  JointKinematicsOutput,
+  JointKinematicsEntry,
+  CompensationOutput,
+  CompensationPattern,
+  MovementTaskFault,
 } from '@/lib/unifiedBiomechanicsEngine';
 import { AVAILABLE_MOVEMENT_TASKS, DEFAULT_FAULT_RULES } from '@/lib/unifiedBiomechanicsEngine';
 
@@ -388,6 +393,32 @@ function MovementTab({
 
       {movementTask && (
         <>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] text-slate-400">Task Score</span>
+            <Badge variant="outline" className={`text-[9px] ${movementTask.taskScore >= 80 ? 'border-green-500/50 text-green-400' : movementTask.taskScore >= 50 ? 'border-amber-500/50 text-amber-400' : 'border-red-500/50 text-red-400'}`}>
+              {movementTask.taskScore}/100
+            </Badge>
+          </div>
+
+          {movementTask.taskFaults.length > 0 && (
+            <div className="space-y-1 mb-2">
+              <div className="text-[11px] text-red-400 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> Task Faults ({movementTask.taskFaults.length})
+              </div>
+              {movementTask.taskFaults.map((f) => (
+                <div key={f.id} className="bg-red-500/10 border border-red-500/20 rounded p-1.5">
+                  <div className="flex items-center gap-1">
+                    <Badge variant="outline" className={`text-[8px] ${f.severity === 'severe' ? 'border-red-500/50 text-red-400' : f.severity === 'moderate' ? 'border-amber-500/50 text-amber-400' : 'border-blue-500/50 text-blue-400'}`}>
+                      {f.severity}
+                    </Badge>
+                    <span className="text-[10px] text-slate-300">{f.label}</span>
+                  </div>
+                  <div className="text-[9px] text-slate-500 mt-0.5">{f.description}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="space-y-1">
             <div className="text-[11px] text-slate-400">Task Forces</div>
             {movementTask.forces.slice(0, 6).map((f, i) => (
@@ -431,6 +462,113 @@ function MovementTab({
   );
 }
 
+function JointKinematicsTab({ kinematics }: { kinematics: JointKinematicsOutput }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-slate-400 flex items-center gap-1">
+          <MoveHorizontal className="w-3 h-3" /> Joint Kinematics
+        </span>
+        <Badge variant="outline" className={`text-[9px] ${kinematics.totalMobilityScore >= 80 ? 'border-green-500/50 text-green-400' : kinematics.totalMobilityScore >= 50 ? 'border-amber-500/50 text-amber-400' : 'border-red-500/50 text-red-400'}`}>
+          Mobility: {kinematics.totalMobilityScore}/100
+        </Badge>
+      </div>
+
+      {kinematics.restrictedJoints.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded p-1.5">
+          <div className="text-[10px] text-amber-400">Restricted: {kinematics.restrictedJoints.map(j => j.replace(/_/g, ' ')).join(', ')}</div>
+        </div>
+      )}
+
+      {kinematics.hypermobileJoints.length > 0 && (
+        <div className="bg-purple-500/10 border border-purple-500/20 rounded p-1.5">
+          <div className="text-[10px] text-purple-400">Hypermobile: {kinematics.hypermobileJoints.map(j => j.replace(/_/g, ' ')).join(', ')}</div>
+        </div>
+      )}
+
+      <div className="space-y-1">
+        {kinematics.joints.map((j) => (
+          <div key={j.joint} className="space-y-0.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 capitalize">{j.joint.replace(/_/g, ' ')}</span>
+              <span className="text-[9px] text-slate-500">{j.plane}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-2 rounded bg-slate-700 overflow-hidden relative">
+                <div
+                  className={`h-full rounded ${j.withinNormal ? 'bg-green-500/60' : 'bg-amber-500/60'}`}
+                  style={{ width: `${Math.min(100, Math.max(0, ((j.currentAngleDeg - j.normalRangeDeg[0]) / (j.normalRangeDeg[1] - j.normalRangeDeg[0])) * 100))}%` }}
+                />
+              </div>
+              <span className="text-[9px] text-cyan-400 w-12 text-right">{j.currentAngleDeg}°</span>
+            </div>
+            <div className="text-[9px] text-slate-500">{j.clinical}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompensationTab({ compensation }: { compensation: CompensationOutput }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-slate-400 flex items-center gap-1">
+          <GitBranch className="w-3 h-3" /> Compensation Patterns
+        </span>
+        <Badge variant="outline" className={`text-[9px] ${compensation.totalCompensationScore <= 20 ? 'border-green-500/50 text-green-400' : compensation.totalCompensationScore <= 50 ? 'border-amber-500/50 text-amber-400' : 'border-red-500/50 text-red-400'}`}>
+          Load: {compensation.totalCompensationScore}/100
+        </Badge>
+      </div>
+
+      {compensation.primaryDrivers.length > 0 && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded p-1.5">
+          <div className="text-[10px] text-red-400">Primary Drivers: {compensation.primaryDrivers.join(', ')}</div>
+        </div>
+      )}
+
+      {compensation.patterns.length === 0 ? (
+        <div className="text-[11px] text-slate-500 text-center py-4">
+          No significant compensation patterns detected
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {compensation.patterns.map((p) => (
+            <div key={p.id} className="bg-slate-800/50 border border-slate-700/50 rounded p-2 space-y-1">
+              <div className="flex items-center gap-1">
+                <Badge variant="outline" className={`text-[8px] ${p.severity === 'severe' ? 'border-red-500/50 text-red-400' : p.severity === 'moderate' ? 'border-amber-500/50 text-amber-400' : 'border-blue-500/50 text-blue-400'}`}>
+                  {p.severity}
+                </Badge>
+                <span className="text-[10px] text-slate-300">{p.label}</span>
+              </div>
+              <div className="text-[9px] text-slate-500">
+                {p.primaryRegion} → {p.compensatingRegion} (+{p.additionalLoadPct}% load)
+              </div>
+              <div className="text-[9px] text-slate-500">{p.clinical}</div>
+              <div className="text-[9px] text-green-400/70">{p.corrective}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {compensation.cascadeChains.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[11px] text-slate-400">Cascade Chains</div>
+          {compensation.cascadeChains.map((c, i) => (
+            <div key={i} className="text-[9px] text-slate-500 bg-slate-800/30 rounded p-1.5">
+              <Badge variant="outline" className={`text-[8px] mr-1 ${c.severity === 'severe' ? 'border-red-500/50 text-red-400' : 'border-amber-500/50 text-amber-400'}`}>
+                {c.severity}
+              </Badge>
+              {c.chain.join(' → ')}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ComparisonBar({ comparison }: { comparison: BiomechanicsOutput['comparison'] }) {
   if (!comparison || comparison.entries.length === 0) return null;
 
@@ -438,11 +576,20 @@ function ComparisonBar({ comparison }: { comparison: BiomechanicsOutput['compari
   if (significantCount === 0) return null;
 
   return (
-    <div className="px-3 py-1.5 border-t border-slate-700/50">
+    <div className="px-3 py-1.5 border-t border-slate-700/50 space-y-1">
       <div className="text-[10px] text-slate-400 flex items-center gap-1">
         <TrendingUp className="w-3 h-3" />
-        {significantCount} change(s) from previous
+        {comparison.mode === 'left_right' ? 'L/R Comparison' : 'Before/After'}: {significantCount} finding(s)
       </div>
+      {comparison.entries.filter(e => e.significance !== 'negligible').slice(0, 3).map((e, i) => (
+        <div key={i} className="flex items-center justify-between text-[9px]">
+          <span className="text-slate-500 truncate flex-1">{e.parameter}</span>
+          <span className={`ml-1 ${e.significance === 'significant' ? 'text-red-400' : 'text-amber-400'}`}>
+            {e.deltaPct > 0 ? '+' : ''}{e.deltaPct}%
+          </span>
+        </div>
+      ))}
+      <div className="text-[9px] text-slate-500 italic">{comparison.summary}</div>
     </div>
   );
 }
@@ -489,29 +636,37 @@ export default function UnifiedBiomechanicsPanel({
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-        <TabsList className="mx-2 mt-1 grid grid-cols-5 h-7 bg-slate-800/50">
-          <TabsTrigger value="faults" className="text-[9px] px-1 data-[state=active]:bg-slate-700">
+        <TabsList className="mx-2 mt-1 grid grid-cols-7 h-7 bg-slate-800/50">
+          <TabsTrigger value="faults" className="text-[8px] px-0.5 data-[state=active]:bg-slate-700">
             <AlertTriangle className="w-3 h-3 mr-0.5" />
             Faults
             {output.faults.faultCount > 0 && (
-              <span className="ml-0.5 text-[8px] bg-red-500/30 text-red-300 px-1 rounded-full">
+              <span className="ml-0.5 text-[7px] bg-red-500/30 text-red-300 px-0.5 rounded-full">
                 {output.faults.faultCount}
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="forces" className="text-[9px] px-1 data-[state=active]:bg-slate-700">
+          <TabsTrigger value="forces" className="text-[8px] px-0.5 data-[state=active]:bg-slate-700">
             <Zap className="w-3 h-3 mr-0.5" />
             Forces
           </TabsTrigger>
-          <TabsTrigger value="posture" className="text-[9px] px-1 data-[state=active]:bg-slate-700">
+          <TabsTrigger value="posture" className="text-[8px] px-0.5 data-[state=active]:bg-slate-700">
             <Layers className="w-3 h-3 mr-0.5" />
             Posture
           </TabsTrigger>
-          <TabsTrigger value="muscles" className="text-[9px] px-1 data-[state=active]:bg-slate-700">
+          <TabsTrigger value="muscles" className="text-[8px] px-0.5 data-[state=active]:bg-slate-700">
             <Activity className="w-3 h-3 mr-0.5" />
-            Muscles
+            Muscle
           </TabsTrigger>
-          <TabsTrigger value="movement" className="text-[9px] px-1 data-[state=active]:bg-slate-700">
+          <TabsTrigger value="kinematics" className="text-[8px] px-0.5 data-[state=active]:bg-slate-700">
+            <MoveHorizontal className="w-3 h-3 mr-0.5" />
+            ROM
+          </TabsTrigger>
+          <TabsTrigger value="compensation" className="text-[8px] px-0.5 data-[state=active]:bg-slate-700">
+            <GitBranch className="w-3 h-3 mr-0.5" />
+            Comp
+          </TabsTrigger>
+          <TabsTrigger value="movement" className="text-[8px] px-0.5 data-[state=active]:bg-slate-700">
             <PlayCircle className="w-3 h-3 mr-0.5" />
             Task
           </TabsTrigger>
@@ -530,6 +685,12 @@ export default function UnifiedBiomechanicsPanel({
             </TabsContent>
             <TabsContent value="muscles" className="mt-0">
               <MuscleTab muscleAsymmetry={output.muscleAsymmetry} />
+            </TabsContent>
+            <TabsContent value="kinematics" className="mt-0">
+              <JointKinematicsTab kinematics={output.jointKinematics} />
+            </TabsContent>
+            <TabsContent value="compensation" className="mt-0">
+              <CompensationTab compensation={output.compensationPatterns} />
             </TabsContent>
             <TabsContent value="movement" className="mt-0">
               <MovementTab

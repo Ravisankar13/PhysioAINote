@@ -2946,6 +2946,19 @@ ${ddxList}`;
             qualityScore: unifiedBiomechanicsOutput.qualityScore,
             clinicalSummary: unifiedBiomechanicsOutput.clinicalSummary,
             movementTaskId: unifiedBiomechanicsMovementTask,
+            jointKinematics: {
+              totalMobilityScore: unifiedBiomechanicsOutput.jointKinematics.totalMobilityScore,
+              restrictedJoints: unifiedBiomechanicsOutput.jointKinematics.restrictedJoints,
+              hypermobileJoints: unifiedBiomechanicsOutput.jointKinematics.hypermobileJoints,
+            },
+            compensationPatterns: {
+              totalCompensationScore: unifiedBiomechanicsOutput.compensationPatterns.totalCompensationScore,
+              primaryDrivers: unifiedBiomechanicsOutput.compensationPatterns.primaryDrivers,
+              patterns: unifiedBiomechanicsOutput.compensationPatterns.patterns.slice(0, 5).map(p => ({
+                label: p.label, severity: p.severity, primaryRegion: p.primaryRegion,
+                compensatingRegion: p.compensatingRegion, additionalLoadPct: p.additionalLoadPct,
+              })),
+            },
           } : undefined,
         }),
       });
@@ -3281,7 +3294,7 @@ ${ddxList}`;
   }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects]);
 
   const unifiedBiomechanicsOutput = useMemo(() => {
-    const result = computeUnifiedBiomechanics({
+    return computeUnifiedBiomechanics({
       modelConfig: finalModelConfig,
       heightCm: 170,
       weightKg: bodyWeightKg,
@@ -3291,9 +3304,13 @@ ${ddxList}`;
       faultRuleOverrides: unifiedBiomechanicsFaultOverrides.length > 0 ? unifiedBiomechanicsFaultOverrides : undefined,
       previousOutput: previousBiomechanicsOutput,
     });
-    setCachedBiomechanicsOutput(result);
-    return result;
   }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput]);
+
+  useEffect(() => {
+    if (unifiedBiomechanicsOutput) {
+      setCachedBiomechanicsOutput(unifiedBiomechanicsOutput);
+    }
+  }, [unifiedBiomechanicsOutput]);
 
   const hudChainIntegrity = useMemo(() => {
     if (showUnifiedChainPanel && chainIntegrityScores.size > 0) return chainIntegrityScores;

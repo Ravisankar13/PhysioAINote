@@ -14,6 +14,7 @@ import type {
   DurationCategory,
   OnsetType,
   IrritabilityLevel,
+  SymptomBehaviour,
 } from "../../shared/clinicalIntakeTypes";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -246,6 +247,38 @@ function computeMissingFields(result: Partial<ClinicalExtractionResult>): Missin
     });
   }
 
+  if (!result.mainComplaint) {
+    missing.push({
+      fieldName: "mainComplaint",
+      importance: "critical",
+      promptQuestion: "What is the main reason for seeking treatment?",
+    });
+  }
+
+  if (!result.goals) {
+    missing.push({
+      fieldName: "goals",
+      importance: "important",
+      promptQuestion: "What are the patient's treatment goals?",
+    });
+  }
+
+  if (!result.priorTreatment) {
+    missing.push({
+      fieldName: "priorTreatment",
+      importance: "optional",
+      promptQuestion: "Has the patient had any previous treatment for this issue?",
+    });
+  }
+
+  if (!result.recurrence) {
+    missing.push({
+      fieldName: "recurrence",
+      importance: "optional",
+      promptQuestion: "Is this a recurring problem? If so, how often?",
+    });
+  }
+
   return missing;
 }
 
@@ -295,12 +328,19 @@ async function extractFromFreeTextWithAI(
   duration: DurationCategory | null;
   onset: OnsetType | null;
   mechanism: string;
+  recurrence: string;
+  priorTreatment: string;
+  goals: string;
+  mainComplaint: string;
+  symptomBehaviour: SymptomBehaviour;
   historyItems: string[];
 }> {
   const combinedText = [freeText, voiceText, mechanism, history].filter(Boolean).join("\n\n");
 
+  const defaultBehaviour: SymptomBehaviour = { pattern: "unknown", nightSymptoms: false, morningStiffness: false, restPain: false };
+
   if (combinedText.trim().length < 10) {
-    return { regions: [], symptoms: [], aggravating: [], easing: [], redFlags: [], functional: [], duration: null, onset: null, mechanism: "", historyItems: [] };
+    return { regions: [], symptoms: [], aggravating: [], easing: [], redFlags: [], functional: [], duration: null, onset: null, mechanism: "", recurrence: "", priorTreatment: "", goals: "", mainComplaint: "", symptomBehaviour: defaultBehaviour, historyItems: [] };
   }
 
   const prompt = `Extract structured clinical data from this physiotherapy patient input. Only extract what is explicitly stated — do not infer or diagnose.
@@ -312,8 +352,10 @@ ${combinedText}
 
 Respond with JSON:
 {
+  "mainComplaint": "primary presenting complaint in one sentence",
   "bodyRegions": [{"region": "string", "side": "left|right|bilateral|central", "confidence": 0.0-1.0}],
   "symptoms": [{"description": "string", "nature": "sharp|dull|burning|throbbing|radiating|stiffness|weakness|numbness", "severity": 0-10, "bodyRegion": "string"}],
+  "symptomBehaviour": {"pattern": "constant|intermittent|progressive|episodic|unknown", "nightSymptoms": false, "morningStiffness": false, "restPain": false},
   "aggravatingFactors": [{"factor": "string", "context": "string"}],
   "easingFactors": [{"factor": "string", "context": "string"}],
   "redFlags": [{"flag": "string", "description": "string", "urgency": "immediate|soon|monitor"}],
@@ -321,6 +363,9 @@ Respond with JSON:
   "duration": "acute|subacute|chronic|recurrent|null",
   "onset": "sudden|gradual|unknown|null",
   "mechanism": "string or empty",
+  "recurrence": "string describing recurrence pattern or empty",
+  "priorTreatment": "string describing previous treatments or empty",
+  "goals": "string describing patient goals or empty",
   "historyItems": ["string"]
 }`;
 
@@ -384,11 +429,21 @@ Respond with JSON:
       duration: parsed.duration && parsed.duration !== "null" ? parsed.duration as DurationCategory : null,
       onset: parsed.onset && parsed.onset !== "null" ? parsed.onset as OnsetType : null,
       mechanism: parsed.mechanism ?? "",
+      recurrence: String(parsed.recurrence ?? ""),
+      priorTreatment: String(parsed.priorTreatment ?? ""),
+      goals: String(parsed.goals ?? ""),
+      mainComplaint: String(parsed.mainComplaint ?? ""),
+      symptomBehaviour: {
+        pattern: (parsed.symptomBehaviour?.pattern as SymptomBehaviour["pattern"]) ?? "unknown",
+        nightSymptoms: Boolean(parsed.symptomBehaviour?.nightSymptoms),
+        morningStiffness: Boolean(parsed.symptomBehaviour?.morningStiffness),
+        restPain: Boolean(parsed.symptomBehaviour?.restPain),
+      },
       historyItems: Array.isArray(parsed.historyItems) ? parsed.historyItems.map(String) : [],
     };
   } catch (error) {
     console.error("[ExtractionEngine] AI extraction failed:", error);
-    return { regions: [], symptoms: [], aggravating: [], easing: [], redFlags: [], functional: [], duration: null, onset: null, mechanism: "", historyItems: [] };
+    return { regions: [], symptoms: [], aggravating: [], easing: [], redFlags: [], functional: [], duration: null, onset: null, mechanism: "", recurrence: "", priorTreatment: "", goals: "", mainComplaint: "", symptomBehaviour: defaultBehaviour, historyItems: [] };
   }
 }
 
@@ -482,17 +537,34 @@ export async function runExtraction(intake: UnifiedIntakeData): Promise<Clinical
   const sourceBonus = Math.min(0.2, activeSources * 0.05);
   const overallConfidence = Math.min(1, baseConfidence + sourceBonus);
 
+  const mainComplaint = intake.manualForm?.mainComplaint || aiData.mainComplaint || "";
+  const recurrence = intake.manualForm?.recurrence || aiData.recurrence || "";
+  const priorTreatment = intake.manualForm?.priorTreatment || aiData.priorTreatment || "";
+  const goals = intake.manualForm?.goals || aiData.goals || "";
+
+  const symptomBehaviour: SymptomBehaviour = {
+    pattern: aiData.symptomBehaviour.pattern !== "unknown" ? aiData.symptomBehaviour.pattern : "unknown",
+    nightSymptoms: aiData.symptomBehaviour.nightSymptoms || allRedFlags.some(r => r.flag === "night_pain"),
+    morningStiffness: aiData.symptomBehaviour.morningStiffness || allAggravating.some(a => a.factor.toLowerCase().includes("morning")),
+    restPain: aiData.symptomBehaviour.restPain,
+  };
+
   const partialResult: ClinicalExtractionResult = {
+    mainComplaint,
     bodyRegions: allRegions,
     symptoms: allSymptoms,
+    symptomBehaviour,
     duration,
     onset,
     mechanism,
+    recurrence,
     aggravatingFactors: allAggravating,
     easingFactors: allEasing,
     functionalLimitations: allFunctional,
     redFlags: allRedFlags,
     irritability,
+    priorTreatment,
+    goals,
     patientAge: intake.patientAge,
     patientSex: intake.patientSex || "",
     relevantHistory: uniqueHistory,

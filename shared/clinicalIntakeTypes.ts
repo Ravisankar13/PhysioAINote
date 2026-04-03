@@ -50,6 +50,10 @@ export interface ManualFormInput {
   functionalLimitations: string;
   redFlags: string[];
   additionalNotes: string;
+  mainComplaint: string;
+  priorTreatment: string;
+  goals: string;
+  recurrence: string;
 }
 
 export interface UnifiedIntakeData {
@@ -78,6 +82,10 @@ export const unifiedIntakeSchema = z.object({
     functionalLimitations: z.string(),
     redFlags: z.array(z.string()),
     additionalNotes: z.string(),
+    mainComplaint: z.string(),
+    priorTreatment: z.string(),
+    goals: z.string(),
+    recurrence: z.string(),
   }).nullable(),
   freeText: z.string(),
   voiceTranscription: z.string(),
@@ -142,17 +150,29 @@ export interface MissingField {
   promptQuestion: string;
 }
 
+export interface SymptomBehaviour {
+  pattern: "constant" | "intermittent" | "progressive" | "episodic" | "unknown";
+  nightSymptoms: boolean;
+  morningStiffness: boolean;
+  restPain: boolean;
+}
+
 export interface ClinicalExtractionResult {
+  mainComplaint: string;
   bodyRegions: ExtractedBodyRegion[];
   symptoms: ExtractedSymptom[];
+  symptomBehaviour: SymptomBehaviour;
   duration: DurationCategory;
   onset: OnsetType;
   mechanism: string;
+  recurrence: string;
   aggravatingFactors: ExtractedAggravatingFactor[];
   easingFactors: ExtractedEasingFactor[];
   functionalLimitations: ExtractedFunctionalLimitation[];
   redFlags: ExtractedRedFlag[];
   irritability: IrritabilityLevel;
+  priorTreatment: string;
+  goals: string;
   patientAge: number | null;
   patientSex: string;
   relevantHistory: string[];
@@ -163,6 +183,7 @@ export interface ClinicalExtractionResult {
 }
 
 export const extractionResultSchema = z.object({
+  mainComplaint: z.string(),
   bodyRegions: z.array(z.object({
     region: z.string(),
     side: painSideSchema,
@@ -176,9 +197,16 @@ export const extractionResultSchema = z.object({
     bodyRegion: z.string(),
     sourceLabel: z.string(),
   })),
+  symptomBehaviour: z.object({
+    pattern: z.enum(["constant", "intermittent", "progressive", "episodic", "unknown"]),
+    nightSymptoms: z.boolean(),
+    morningStiffness: z.boolean(),
+    restPain: z.boolean(),
+  }),
   duration: durationCategorySchema,
   onset: onsetTypeSchema,
   mechanism: z.string(),
+  recurrence: z.string(),
   aggravatingFactors: z.array(z.object({
     factor: z.string(),
     context: z.string(),
@@ -201,6 +229,8 @@ export const extractionResultSchema = z.object({
     sourceLabel: z.string(),
   })),
   irritability: irritabilityLevelSchema,
+  priorTreatment: z.string(),
+  goals: z.string(),
   patientAge: z.number().nullable(),
   patientSex: z.string(),
   relevantHistory: z.array(z.string()),

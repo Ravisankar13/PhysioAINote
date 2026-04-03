@@ -124,6 +124,10 @@ export default function CaseIntakePanel({
     functionalLimitations: "",
     redFlags: [],
     additionalNotes: "",
+    mainComplaint: "",
+    priorTreatment: "",
+    goals: "",
+    recurrence: "",
   });
 
   const [freeText, setFreeText] = useState("");
@@ -445,11 +449,51 @@ export default function CaseIntakePanel({
             </div>
 
             <div className="space-y-1.5">
+              <Label className="text-xs">Main Complaint</Label>
+              <Textarea
+                placeholder="Primary reason for seeking treatment..."
+                value={manualForm.mainComplaint}
+                onChange={(e) => updateForm({ mainComplaint: e.target.value })}
+                className="min-h-[50px] text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
               <Label className="text-xs">Functional Limitations</Label>
               <Textarea
                 placeholder="What activities are affected?"
                 value={manualForm.functionalLimitations}
                 onChange={(e) => updateForm({ functionalLimitations: e.target.value })}
+                className="min-h-[50px] text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Prior Treatment</Label>
+              <Textarea
+                placeholder="Previous treatments tried (physio, medication, surgery, etc.)..."
+                value={manualForm.priorTreatment}
+                onChange={(e) => updateForm({ priorTreatment: e.target.value })}
+                className="min-h-[50px] text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Patient Goals</Label>
+              <Textarea
+                placeholder="What does the patient want to achieve? (e.g., return to sport, reduce pain, improve mobility)"
+                value={manualForm.goals}
+                onChange={(e) => updateForm({ goals: e.target.value })}
+                className="min-h-[50px] text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Recurrence</Label>
+              <Textarea
+                placeholder="Has this happened before? How often? Any pattern?"
+                value={manualForm.recurrence}
+                onChange={(e) => updateForm({ recurrence: e.target.value })}
                 className="min-h-[50px] text-xs"
               />
             </div>

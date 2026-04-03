@@ -1807,10 +1807,11 @@ ${ddxList}`;
       structuredReasoning: structuredReasoningData,
       painMarkers: painMarkers.map(pm => ({
         region: pm.anatomicalLabel || pm.nearestBone || '',
-        severity: 5,
+        severity: pm.severity ?? 5,
         type: pm.type,
       })),
       postureState: modelConfig,
+      extractionContext: extractionResult ?? undefined,
     };
     fetch('/api/treatment-decision/analyze', {
       method: 'POST',
@@ -1839,10 +1840,11 @@ ${ddxList}`;
       decisionResult: treatmentDecisionData,
       painMarkers: painMarkers.map(pm => ({
         region: pm.anatomicalLabel || pm.nearestBone || '',
-        severity: (pm as unknown as { severity?: number }).severity ?? 5,
+        severity: pm.severity ?? 5,
         type: pm.type,
       })),
       postureState: modelConfig,
+      extractionContext: extractionResult ?? undefined,
     };
     fetch('/api/treatment-plan/generate', {
       method: 'POST',
@@ -2859,6 +2861,7 @@ ${ddxList}`;
       restingPain: undefined,
       sleepAffected: undefined,
       previousEpisodes: undefined,
+      extractionContext: extractionResult ?? undefined,
     };
 
     const subjectiveLower = (subjectiveHistoryRef.current || '').toLowerCase();
@@ -3296,7 +3299,7 @@ ${ddxList}`;
       id: pm.id,
       position: pm.position,
       label: pm.anatomicalLabel || pm.nearestBone,
-      severity: (pm as unknown as { severity?: number }).severity ?? 5,
+      severity: pm.severity ?? 5,
       weight: 1.0,
       isPredicted: false,
     }));
@@ -3411,7 +3414,7 @@ ${ddxList}`;
       id: pm.id,
       position: pm.position,
       label: pm.anatomicalLabel || pm.nearestBone,
-      severity: (pm as unknown as { severity?: number }).severity ?? 5,
+      severity: pm.severity ?? 5,
       weight: 1.0,
       isPredicted: false,
     }));
@@ -8842,7 +8845,7 @@ ${ddxList}`;
               region: pm.anatomicalLabel || pm.nearestBone,
               side: "bilateral" as const,
               type: pm.type,
-              severity: (pm as unknown as { severity?: number }).severity ?? 5,
+              severity: pm.severity ?? 5,
               description: pm.description,
               subjectiveHistory: pm.subjectiveHistory,
             }))}
@@ -8907,7 +8910,7 @@ ${ddxList}`;
             anatomicalLabel: pm.anatomicalLabel,
             nearestBone: pm.nearestBone,
             type: pm.type,
-            severity: (pm as unknown as { severity?: number }).severity ?? 5,
+            severity: pm.severity ?? 5,
           })),
           forces: hudForceAnalysis?.joints?.map((f: JointSurfaceForce) => ({
             label: f.label,

@@ -526,6 +526,7 @@ export default function PhysioGPT() {
   const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics' | 'slings'>('chat');
   const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
+  const [slingOverlayVisible, setSlingOverlayVisible] = useState(true);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
   const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
@@ -4460,7 +4461,7 @@ ${ddxList}`;
               referralZoneBones={referralZoneBones}
               tissueViewOverlay={tissueViewOverlay}
               biomechanicsFaultHighlights={biomechanicsFaultHighlights}
-              slingPathwayVisualization={rightPanelTab === 'slings' && slingAnalysis ? {
+              slingPathwayVisualization={rightPanelTab === 'slings' && slingOverlayVisible && slingAnalysis ? {
                 enabled: true,
                 activeSlingId: selectedSlingId,
                 slings: slingAnalysis.slings.map(s => ({
@@ -8496,6 +8497,8 @@ ${ddxList}`;
                 analysis={slingAnalysis}
                 onSlingSelect={setSelectedSlingId}
                 selectedSling={selectedSlingId}
+                overlayVisible={slingOverlayVisible}
+                onToggleOverlay={() => setSlingOverlayVisible(v => !v)}
               />
             </div>
           )}

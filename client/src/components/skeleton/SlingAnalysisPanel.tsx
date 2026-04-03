@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   Activity, AlertTriangle, ArrowRight, ChevronDown, ChevronRight,
-  Gauge, GitBranch, Shield, Target, TrendingUp, Zap, Link2
+  Eye, EyeOff, Gauge, GitBranch, Shield, Target, TrendingUp, Zap, Link2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -16,6 +16,8 @@ interface SlingAnalysisPanelProps {
   analysis: SlingAnalysisResult | null;
   onSlingSelect?: (slingId: SlingId | null) => void;
   selectedSling?: SlingId | null;
+  overlayVisible?: boolean;
+  onToggleOverlay?: () => void;
 }
 
 function statusBadge(status: SlingStatus) {
@@ -252,6 +254,8 @@ export default function SlingAnalysisPanel({
   analysis,
   onSlingSelect,
   selectedSling,
+  overlayVisible = true,
+  onToggleOverlay,
 }: SlingAnalysisPanelProps) {
   if (!analysis) {
     return (
@@ -264,6 +268,23 @@ export default function SlingAnalysisPanel({
   return (
     <ScrollArea className="h-full">
       <div className="p-3 space-y-3">
+        {onToggleOverlay && (
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-slate-500">3D Sling Overlay</span>
+            <button
+              onClick={onToggleOverlay}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] transition-colors ${
+                overlayVisible
+                  ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
+                  : 'bg-slate-700/50 text-slate-500 hover:bg-slate-700/70'
+              }`}
+            >
+              {overlayVisible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+              {overlayVisible ? 'Visible' : 'Hidden'}
+            </button>
+          </div>
+        )}
+
         <div className="p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
           <div className="flex items-center gap-2 mb-1.5">
             <Gauge className="w-4 h-4 text-slate-400" />

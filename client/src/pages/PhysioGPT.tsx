@@ -1184,8 +1184,10 @@ export default function PhysioGPT() {
       setClinicalHighlights(prev => [...prev, ...highlights]);
     }
 
-    const predictionText = result.clinical_summary
-      ? `[Clinical Prediction] ${result.clinical_summary}`
+    const originalDesc = result.original_description || '';
+    const summary = result.clinical_summary || '';
+    const predictionText = (originalDesc || summary)
+      ? `[Clinical Prediction] ${originalDesc}${summary && originalDesc ? '\n' : ''}${summary !== originalDesc ? summary : ''}`
       : '';
 
     if (predictionText) {
@@ -1254,10 +1256,11 @@ export default function PhysioGPT() {
       subjectiveHistoryRef.current = cleaned;
       setSubjectiveHistoryInput(cleaned);
       lastReasoningTriggerRef.current = '';
+      setTimeout(() => triggerClinicalReasoningAnalysis(true), 300);
     }
 
     clinicalTextAppliedRef.current = null;
-  }, []);
+  }, [triggerClinicalReasoningAnalysis]);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
     setPainMarkers(prev => prev.map(m => m.id === id ? { ...m, position, nearestBone, anatomicalLabel } : m));

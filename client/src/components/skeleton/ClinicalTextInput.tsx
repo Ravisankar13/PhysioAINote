@@ -46,6 +46,7 @@ export interface ClinicalParseResult {
   postural_deviations: Record<string, number>;
   region_highlights: ParsedRegionHighlight[];
   clinical_summary: string;
+  original_description?: string;
   follow_up_questions?: FollowUpQuestion[];
   predictions_confidence?: "high" | "moderate" | "low";
 }
@@ -105,6 +106,7 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
         text: inputText.trim(),
         context: context.length > 0 ? context : undefined,
       });
+      result.original_description = originalTextRef.current || inputText.trim();
       setLastResult(result);
       onParseResult(result);
 

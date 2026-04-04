@@ -436,8 +436,9 @@ function selectExercisesForIntervention(
   topHypothesis?: string,
 ): string[] {
   const regionKeys = intervention.targetRegions.map(r => r.toLowerCase());
+  const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'not', 'but', 'are', 'was', 'were', 'been', 'has', 'had', 'have', 'will', 'can', 'may', 'should', 'would', 'could', 'left', 'right', 'bilateral', 'unilateral', 'acute', 'chronic', 'sub', 'pain', 'mild', 'moderate', 'severe', 'unknown', 'presentation', 'suspected', 'possible', 'probable', 'likely']);
   const diagWords = topHypothesis
-    ? topHypothesis.toLowerCase().split(/\s+/).filter(w => w.length > 2)
+    ? topHypothesis.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w))
     : [];
 
   const mapped = INTERVENTION_EXERCISE_MAP[intervention.id];

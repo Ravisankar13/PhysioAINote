@@ -274,8 +274,9 @@ function matchScore(
   }
 
   if (topHypothesis && topHypothesis !== 'Unknown presentation' && candidate.conditionKeywords?.length) {
+    const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'not', 'but', 'are', 'was', 'were', 'been', 'has', 'had', 'have', 'will', 'can', 'may', 'should', 'would', 'could', 'left', 'right', 'bilateral', 'unilateral', 'acute', 'chronic', 'sub', 'pain', 'mild', 'moderate', 'severe', 'unknown', 'presentation', 'suspected', 'possible', 'probable', 'likely']);
     const diagLower = topHypothesis.toLowerCase();
-    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2);
+    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w));
     const kwMatches = candidate.conditionKeywords.filter(
       k => diagLower.includes(k) || diagWords.some(dw => k.includes(dw) || dw.includes(k))
     ).length;
@@ -417,7 +418,7 @@ function buildExplainability(
     reasons.push(...riskFlags);
   }
   if (tier === 'primary') {
-    reasons.push(`High match score (${score}/80) — selected as primary intervention`);
+    reasons.push(`High match score (${score}) — selected as primary intervention`);
   }
   return reasons;
 }

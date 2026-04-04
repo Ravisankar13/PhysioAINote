@@ -8698,11 +8698,24 @@ ${ddxList}`;
                       ))}
                     </div>
 
-                    <div className="space-y-2">
-                      {evidenceEngineResult.options
-                        .filter(opt => evidenceCategoryFilter === 'all' || opt.category === evidenceCategoryFilter)
-                        .filter(opt => evidenceGradeFilter === 'all' || opt.evidenceGrade === evidenceGradeFilter)
-                        .map(opt => {
+                    <div className="space-y-3">
+                      {(() => {
+                        const filtered = evidenceEngineResult.options
+                          .filter((opt: { category: string }) => evidenceCategoryFilter === 'all' || opt.category === evidenceCategoryFilter)
+                          .filter((opt: { evidenceGrade: string }) => evidenceGradeFilter === 'all' || opt.evidenceGrade === evidenceGradeFilter);
+                        const gradeOrder = ['A', 'B', 'C', 'Expert'] as const;
+                        const gradeLabels: Record<string, string> = { A: 'Grade A — Strong Evidence', B: 'Grade B — Moderate Evidence', C: 'Grade C — Limited Evidence', Expert: 'Expert Opinion' };
+                        const gradeHeaderColor: Record<string, string> = { A: 'bg-green-50 border-green-200 text-green-700', B: 'bg-blue-50 border-blue-200 text-blue-700', C: 'bg-yellow-50 border-yellow-200 text-yellow-700', Expert: 'bg-gray-50 border-gray-200 text-gray-600' };
+                        return gradeOrder.map(grade => {
+                          const gradeOpts = filtered.filter((o: { evidenceGrade: string }) => o.evidenceGrade === grade);
+                          if (gradeOpts.length === 0) return null;
+                          return (
+                            <div key={grade}>
+                              <div className={`text-[9px] font-semibold px-2.5 py-1.5 rounded-t-lg border ${gradeHeaderColor[grade]} mb-0`}>
+                                {gradeLabels[grade]} ({gradeOpts.length})
+                              </div>
+                              <div className="space-y-1.5 border border-t-0 rounded-b-lg border-gray-200 p-1.5">
+                                {gradeOpts.map((opt: { id: string; name: string; category: string; evidenceGrade: string; relevanceScore: number; riskFlags: string[]; expertApproach?: string; description: string; dosage: string; sourceLibrary: string; mechanismOfAction: string; rationale: string; stageAppropriateness: boolean; loadCompatibility: boolean; contraindications: string[]; references: Array<{ authors: string; year: number; title: string; journal: string; pmid?: string }> }) => {
                           const isExpanded = expandedEvidenceId === opt.id;
                           const gradeColor = opt.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-600 border-green-500/30' : opt.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-600 border-blue-500/30' : opt.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-600 border-yellow-500/30' : 'bg-gray-500/20 text-gray-600 border-gray-500/30';
                           return (
@@ -8803,6 +8816,11 @@ ${ddxList}`;
                             </div>
                           );
                         })}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                 ) : (

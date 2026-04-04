@@ -149,6 +149,11 @@ function resolveLinkedTechniques(candidateId: string): string[] {
 }
 
 
+interface EvidenceSourcedCandidates {
+  candidates: TreatmentCandidate[];
+  evidenceResult: import('./evidenceEngine').EvidenceQueryResult;
+}
+
 function buildCandidatesFromEvidenceEngine(
   regions: string[],
   problemClass: ProblemClass,
@@ -157,7 +162,7 @@ function buildCandidatesFromEvidenceEngine(
   irritability: IrritabilityLevel,
   structuredReasoning?: ClinicalReasoningResult,
   options?: { hasRedFlags?: boolean; hasMustNotMiss?: boolean },
-): TreatmentCandidate[] {
+): EvidenceSourcedCandidates {
   const evidenceResult = queryEvidenceEngine({
     diagnosis: structuredReasoning?.hypotheses?.[0]?.condition,
     bodyRegions: regions.length > 0 ? regions : undefined,
@@ -216,7 +221,7 @@ function buildCandidatesFromEvidenceEngine(
     }
   }
 
-  return candidates;
+  return { candidates, evidenceResult };
 }
 
 function matchScore(candidate: TreatmentCandidate, problemClass: ProblemClass, mechanism: DominantMechanism): number {
@@ -500,7 +505,7 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const hasRedFlags = (ctx?.redFlags?.length ?? 0) > 0;
   const hasMustNotMiss = mustNotMissConditions.length > 0;
 
-  const candidates = buildCandidatesFromEvidenceEngine(regions, problemClass, mechanism, stage, irritability, sr, { hasRedFlags, hasMustNotMiss });
+  const { candidates, evidenceResult: cachedEvidenceResult } = buildCandidatesFromEvidenceEngine(regions, problemClass, mechanism, stage, irritability, sr, { hasRedFlags, hasMustNotMiss });
 
   const postureDeviationScore = computePostureBonus(input.postureState);
 
@@ -623,22 +628,13 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     : '';
   const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class): ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
 
-  const evidenceForContext = queryEvidenceEngine({
-    diagnosis: topHypothesis,
-    bodyRegions: regions,
-    stage,
-    irritability,
-    mechanism,
-    problemClass,
-    structuredReasoning: sr,
-  });
   const expertApproaches = new Set<string>();
-  for (const opt of evidenceForContext.options) {
+  for (const opt of cachedEvidenceResult.options) {
     if (opt.expertApproach) expertApproaches.add(opt.expertApproach);
   }
   const evidenceEngineContext: TreatmentDecisionResult['evidenceEngineContext'] = {
-    totalEvidenceOptions: evidenceForContext.options.length,
-    gradeDistribution: evidenceForContext.gradeDistribution,
+    totalEvidenceOptions: cachedEvidenceResult.options.length,
+    gradeDistribution: cachedEvidenceResult.gradeDistribution,
     topExpertApproaches: Array.from(expertApproaches).slice(0, 5),
   };
 

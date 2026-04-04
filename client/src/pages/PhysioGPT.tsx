@@ -1827,6 +1827,8 @@ ${ddxList}`;
 
   const handleEvidenceQuery = useCallback(() => {
     if (evidenceLoading) return;
+    const firstBubbleCheck = Object.values(clinicalBubbleResults)[0];
+    if (!firstBubbleCheck?.data?.hypotheses?.length && painMarkers.length === 0) return;
     setEvidenceLoading(true);
     const regions: string[] = [];
     if (painMarkers.length > 0) painMarkers.forEach(pm => { if (pm.region && !regions.includes(pm.region.toLowerCase())) regions.push(pm.region.toLowerCase()); });

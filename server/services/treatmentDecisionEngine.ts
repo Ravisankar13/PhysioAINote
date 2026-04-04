@@ -173,14 +173,8 @@ function buildCandidatesFromEvidenceEngine(
     structuredReasoning,
   });
 
-  const irritabilityRank: Record<IrritabilityLevel, number> = { low: 1, moderate: 2, high: 3 };
-
   const candidates: TreatmentCandidate[] = evidenceResult.options.map(opt => {
     const stageRestrictions: ConditionStageType[] = opt.stageAppropriateness ? [] : [stage];
-    const resolvedIrritabilityMax: IrritabilityLevel = opt.loadCompatibility
-      ? 'high'
-      : (irritabilityRank[irritability] > 2 ? 'moderate' : irritability);
-
     return {
       id: opt.id,
       name: opt.name,
@@ -192,7 +186,7 @@ function buildCandidatesFromEvidenceEngine(
       targetRegions: opt.targetRegions,
       contraindications: opt.contraindications,
       stageRestrictions,
-      irritabilityMax: resolvedIrritabilityMax,
+      irritabilityMax: opt.irritabilityMax || (opt.loadCompatibility ? 'high' : 'moderate'),
       expectedTimeframe: opt.expectedTimeframe || 'Per clinical protocol',
       problemClassMatch: opt.problemClassMatch,
       mechanismMatch: opt.mechanismMatch,

@@ -8012,6 +8012,11 @@ ${ddxList}`;
                         bodyRegions: regions.length > 0 ? regions : undefined,
                         structuredReasoning: clinicalBubbleResults,
                         sling: slingCtx,
+                        tissueType: tissueViewMode || undefined,
+                        loadTolerance: clinicalBubbleResults?.irritability?.level === 'high' ? 'low' : clinicalBubbleResults?.irritability?.level === 'low' ? 'high' : 'moderate',
+                        patientContext: {
+                          goals: clinicalBubbleResults?.problemClass ? [clinicalBubbleResults.problemClass.primary] : undefined,
+                        },
                       }),
                       signal: controller.signal,
                     })
@@ -8847,6 +8852,11 @@ ${ddxList}`;
                             bodyRegions: regions.length > 0 ? regions : undefined,
                             structuredReasoning: clinicalBubbleResults || undefined,
                             sling: slingCtx,
+                            tissueType: tissueViewMode || undefined,
+                            loadTolerance: clinicalBubbleResults?.irritability?.level === 'high' ? 'low' : clinicalBubbleResults?.irritability?.level === 'low' ? 'high' : 'moderate',
+                            patientContext: {
+                              goals: clinicalBubbleResults?.problemClass ? [clinicalBubbleResults.problemClass.primary] : undefined,
+                            },
                           }),
                         })
                         .then(r => r.json())

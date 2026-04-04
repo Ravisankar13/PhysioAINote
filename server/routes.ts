@@ -6643,6 +6643,7 @@ GUIDELINES:
         sling: slingInputSchema,
         patientContext: patientContextSchema,
         structuredReasoning: structuredReasoningSchema,
+        maxResults: z.number().int().min(1).max(500).optional(),
       });
 
       const parsed = evidenceQuerySchema.safeParse(req.body);

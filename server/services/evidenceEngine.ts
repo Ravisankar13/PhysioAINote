@@ -67,6 +67,7 @@ export interface EvidenceQueryInput {
   sling?: SlingInput;
   patientContext?: PatientContextInput;
   structuredReasoning?: ClinicalReasoningResult;
+  maxResults?: number;
 }
 
 export interface LiteratureReference {
@@ -100,6 +101,7 @@ export interface EvidenceOption {
   mechanismMatch: DominantMechanism[];
   linkedTechniqueDbKeys?: string[];
   expectedTimeframe?: string;
+  irritabilityMax: IrritabilityLevel;
 }
 
 export interface EvidenceQueryResult {
@@ -1131,6 +1133,7 @@ export function queryEvidenceEngine(input: EvidenceQueryInput): EvidenceQueryRes
       mechanismMatch: entry.mechanismMatch,
       linkedTechniqueDbKeys: entry.linkedTechniqueDbKeys,
       expectedTimeframe: entry.expectedTimeframe,
+      irritabilityMax: entry.irritabilityMax,
     };
   });
 
@@ -1147,7 +1150,7 @@ export function queryEvidenceEngine(input: EvidenceQueryInput): EvidenceQueryRes
   }
 
   return {
-    options: options.slice(0, 50),
+    options: options.slice(0, input.maxResults || 100),
     queryContext: {
       diagnosis: resolvedInput.diagnosis || 'Not specified',
       regions: resolvedInput.bodyRegions || [],

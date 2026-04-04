@@ -51,6 +51,9 @@ export interface PlanExercise {
   equipment: string[];
   progression: ProgressionRule;
   regression: RegressionRule;
+  slingTarget?: string;
+  targetStructure?: string;
+  mobilisationGrade?: string;
 }
 
 export interface PlanPhase {
@@ -137,12 +140,28 @@ function ExerciseCard({ exercise, onTargetClick }: { exercise: PlanExercise; onT
             <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
               {exercise.sets} &times; {exercise.reps}{exercise.holdSeconds ? ` (${exercise.holdSeconds}s hold)` : ''}
             </span>
+            {exercise.mobilisationGrade && (
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                {exercise.mobilisationGrade}
+              </span>
+            )}
+            {exercise.targetStructure && (
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-white/5 text-gray-300">
+                {exercise.targetStructure}
+              </span>
+            )}
             <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-white/5 text-gray-400">
               {exercise.frequency}
             </span>
             <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
               {exercise.painCeiling}
             </span>
+            {exercise.slingTarget && (
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/20 flex items-center gap-0.5">
+                <Zap className="h-2 w-2" />
+                {exercise.slingTarget}
+              </span>
+            )}
           </div>
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-gray-500" /> : <ChevronDown className="h-3 w-3 text-gray-500" />}

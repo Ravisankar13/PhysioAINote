@@ -6581,6 +6581,22 @@ GUIDELINES:
           qualityScore: z.number().optional(),
           movementTaskId: z.string().optional(),
         }).optional(),
+        slingContext: z.object({
+          overallForceTransferScore: z.number().optional(),
+          dominantDysfunction: z.string().nullable().optional(),
+          dysfunctionalSlings: z.array(z.object({
+            sling: z.string(),
+            status: z.string(),
+            activationScore: z.number().optional(),
+            forceTransfer: z.string().optional(),
+            weakLinks: z.array(z.string()).optional(),
+            treatmentTargets: z.array(z.object({
+              muscle: z.string(),
+              intervention: z.string(),
+              rationale: z.string(),
+            })).optional(),
+          })).optional(),
+        }).optional(),
       });
 
       const parsed = treatmentPlanInputSchema.safeParse(req.body);

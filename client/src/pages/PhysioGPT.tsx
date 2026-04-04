@@ -1889,6 +1889,23 @@ ${ddxList}`;
       qualityScore: planBioSrc.qualityScore,
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
     } : undefined;
+    let planSlingCtx: Record<string, unknown> | undefined;
+    if (slingAnalysis) {
+      planSlingCtx = {
+        overallForceTransferScore: slingAnalysis.overallForceTransferScore,
+        dominantDysfunction: slingAnalysis.dominantDysfunction,
+        dysfunctionalSlings: slingAnalysis.slings
+          .filter(s => s.status !== 'normal')
+          .map(s => ({
+            sling: s.label,
+            status: s.status,
+            activationScore: s.activationScore,
+            forceTransfer: s.forceTransferQuality,
+            weakLinks: s.weakLinks.map(w => w.muscle),
+            treatmentTargets: s.treatmentTargets.map(t => ({ muscle: t.muscle, intervention: t.intervention, rationale: t.rationale })),
+          })),
+      };
+    }
     const input = {
       decisionResult: treatmentDecisionData,
       painMarkers: painMarkers.map(pm => ({
@@ -1899,6 +1916,7 @@ ${ddxList}`;
       postureState: modelConfig,
       extractionContext: extractionResult ?? undefined,
       biomechanicsContext: planBioCtx,
+      slingContext: planSlingCtx,
     };
     fetch('/api/treatment-plan/generate', {
       method: 'POST',

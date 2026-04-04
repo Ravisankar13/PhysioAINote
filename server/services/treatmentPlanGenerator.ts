@@ -1,4 +1,4 @@
-import { EXERCISE_CATALOG, INTERVENTION_EXERCISE_MAP, findExercisesByBodyPart, type CatalogExercise } from '../../shared/exerciseCatalog';
+import { EXERCISE_CATALOG, INTERVENTION_EXERCISE_MAP, SLING_EXERCISE_MAP, SLING_LABELS, findExercisesByBodyPart, findExercisesBySling, findManualTherapyByBodyPart, type CatalogExercise, type SlingId } from '../../shared/exerciseCatalog';
 
 export type InterventionCategoryInput = string;
 
@@ -51,6 +51,9 @@ export interface PlanExercise {
   equipment: string[];
   progression: ProgressionRule;
   regression: RegressionRule;
+  slingTarget?: string;
+  targetStructure?: string;
+  mobilisationGrade?: string;
 }
 
 export interface ProgressionRule {
@@ -117,12 +120,30 @@ export interface BiomechanicsContextForPlan {
   movementTaskId?: string;
 }
 
+export interface SlingContextForPlan {
+  overallForceTransferScore?: number;
+  dominantDysfunction?: string | null;
+  dysfunctionalSlings?: Array<{
+    sling: string;
+    status: string;
+    activationScore?: number;
+    forceTransfer?: string;
+    weakLinks?: string[];
+    treatmentTargets?: Array<{
+      muscle: string;
+      intervention: string;
+      rationale: string;
+    }>;
+  }>;
+}
+
 export interface TreatmentPlanInput {
   decisionResult: DecisionResultInput;
   painMarkers?: Array<{ region: string; severity?: number; type?: string }>;
   postureState?: Record<string, Record<string, number>>;
   extractionContext?: ExtractionContextForPlan;
   biomechanicsContext?: BiomechanicsContextForPlan;
+  slingContext?: SlingContextForPlan;
 }
 
 const IRRITABILITY_ORDER: IrritabilityLevel[] = ['low', 'moderate', 'high'];
@@ -376,7 +397,18 @@ function selectExercisesForIntervention(
   _phase: number,
 ): string[] {
   const mapped = INTERVENTION_EXERCISE_MAP[intervention.id];
-  if (mapped && mapped.length > 0) return mapped;
+  if (mapped && mapped.length > 0) {
+    const regionKeys = intervention.targetRegions.map(r => r.toLowerCase());
+    if (regionKeys.length > 0 && mapped.length > 5) {
+      const regionFiltered = mapped.filter(exId => {
+        const ex = catalogIndex.get(exId);
+        if (!ex) return false;
+        return ex.bodyParts.some(bp => regionKeys.some(rk => bp.includes(rk) || rk.includes(bp)));
+      });
+      if (regionFiltered.length > 0) return regionFiltered.slice(0, 4);
+    }
+    return mapped.slice(0, 5);
+  }
 
   const regionKeys = intervention.targetRegions.map(r => r.toLowerCase());
   const matches: string[] = [];
@@ -565,22 +597,31 @@ function convertToExercise(
   const progression = buildProgression(exerciseKey, phase, irritability);
   const regression = buildRegression(exerciseKey, irritability);
 
+  const isManualCatalog = ex?.category === 'manual';
+  const grade = ex?.mobilisationGrade;
+  const intensityLabel = isManualCatalog && grade
+    ? `${grade} mobilisation`
+    : dosage.intensity;
+
   return {
     id: `${intervention.id}_${exerciseKey}_p${phase}`,
     name: ex?.name ?? intervention.name,
-    category: intervention.category,
+    category: isManualCatalog ? 'manual_therapy' : intervention.category,
     sets: dosage.sets,
     reps: dosage.reps,
     holdSeconds: dosage.holdSeconds,
     frequency: dosage.frequency,
     painCeiling: dosage.painCeiling,
-    intensity: dosage.intensity,
+    intensity: intensityLabel,
     rationale: intervention.rationale,
     evidenceGrade: normalizeEvidenceGrade(intervention.evidenceGrade),
     targetRegions: intervention.targetRegions,
     equipment: ex?.equipment ?? [],
     progression,
     regression,
+    slingTarget: ex?.targetSling ? SLING_LABELS[ex.targetSling] : undefined,
+    targetStructure: ex?.targetStructure,
+    mobilisationGrade: grade,
   };
 }
 
@@ -698,6 +739,18 @@ function adjustDosageForPainSeverity(
   return dosage;
 }
 
+function normalizeSlingId(raw: string): SlingId | null {
+  const lower = raw.toLowerCase().replace(/\s+/g, '_');
+  if (lower.includes('posterior_oblique') || lower.includes('posterior oblique')) return 'posterior_oblique';
+  if (lower.includes('anterior_oblique') || lower.includes('anterior oblique')) return 'anterior_oblique';
+  if (lower.includes('lateral') && !lower.includes('oblique') && !lower.includes('longitudinal')) return 'lateral';
+  if (lower.includes('deep_longitudinal') || lower.includes('deep longitudinal')) return 'deep_longitudinal';
+  if (lower.includes('scapular') || lower.includes('shoulder_sling') || lower.includes('shoulder sling')) return 'scapular_shoulder';
+  const validIds: SlingId[] = ['posterior_oblique', 'anterior_oblique', 'lateral', 'deep_longitudinal', 'scapular_shoulder'];
+  if (validIds.includes(lower as SlingId)) return lower as SlingId;
+  return null;
+}
+
 export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanResult {
   const { decisionResult, painMarkers, postureState, extractionContext } = input;
   const stage = decisionResult.stage || 'subacute';
@@ -745,13 +798,18 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
             { sets: ex.sets, reps: ex.reps, holdSeconds: ex.holdSeconds, frequency: ex.frequency, intensity: ex.intensity, painCeiling: ex.painCeiling },
             regionPainSeverity,
           );
-          exercises.push({
+          const finalEx = {
             ...ex,
             sets: adjustedDosage.sets,
             frequency: adjustedDosage.frequency,
             painCeiling: adjustedDosage.painCeiling,
             intensity: adjustedDosage.intensity,
-          });
+          };
+          if (ex.category === 'manual_therapy') {
+            manualTherapy.push(finalEx);
+          } else {
+            exercises.push(finalEx);
+          }
         }
       }
 
@@ -775,6 +833,110 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
           progression: buildProgression('', idx, irritability),
           regression: buildRegression('', irritability),
         });
+      }
+    }
+
+    const slingCtx = input.slingContext;
+    if (slingCtx?.dysfunctionalSlings && slingCtx.dysfunctionalSlings.length > 0) {
+      for (const ds of slingCtx.dysfunctionalSlings) {
+        if (ds.status === 'normal') continue;
+        const slingId = normalizeSlingId(ds.sling);
+        if (!slingId) continue;
+        const slingExIds = SLING_EXERCISE_MAP[slingId];
+        if (!slingExIds || slingExIds.length === 0) continue;
+
+        const phaseExCount = idx === 0 ? 1 : 2;
+        let added = 0;
+        for (const exId of slingExIds) {
+          if (added >= phaseExCount) break;
+          const slingKey = `sling_${slingId}_${exId}`;
+          if (seen.has(slingKey)) continue;
+          seen.add(slingKey);
+
+          const catEx = catalogIndex.get(exId);
+          if (!catEx) continue;
+
+          const dosage = computeDosage(exId, irritability, stage, idx);
+          const slingLabel = SLING_LABELS[slingId];
+          const weakLinkInfo = ds.weakLinks && ds.weakLinks.length > 0
+            ? ` Weak links: ${ds.weakLinks.slice(0, 3).join(', ')}.`
+            : '';
+          const rationale = `${slingLabel} ${ds.status} (activation: ${ds.activationScore ?? 'N/A'}%, force transfer: ${ds.forceTransfer ?? 'unknown'}).${weakLinkInfo}`;
+
+          exercises.push({
+            id: `sling_${slingId}_${exId}_p${idx}`,
+            name: catEx.name,
+            category: 'exercise',
+            sets: dosage.sets,
+            reps: dosage.reps,
+            holdSeconds: dosage.holdSeconds,
+            frequency: dosage.frequency,
+            painCeiling: dosage.painCeiling,
+            intensity: dosage.intensity,
+            rationale,
+            evidenceGrade: 'B',
+            targetRegions: catEx.bodyParts,
+            equipment: catEx.equipment,
+            progression: buildProgression(exId, idx, irritability),
+            regression: buildRegression(exId, irritability),
+            slingTarget: slingLabel,
+            targetStructure: catEx.targetStructure,
+          });
+          added++;
+        }
+      }
+    }
+
+    if (slingCtx?.dysfunctionalSlings && slingCtx.dysfunctionalSlings.length > 0 && idx >= 1) {
+      for (const ds of slingCtx.dysfunctionalSlings) {
+        if (ds.status === 'normal') continue;
+        if (!ds.treatmentTargets) continue;
+        for (const tt of ds.treatmentTargets) {
+          if (tt.intervention === 'release' || tt.intervention === 'inhibit') {
+            const muscleKey = `sling_mt_${tt.muscle}`;
+            if (seen.has(muscleKey)) continue;
+            seen.add(muscleKey);
+            const muscleLower = tt.muscle.toLowerCase();
+            const mtMatches = EXERCISE_CATALOG.filter(ex =>
+              ex.category === 'manual' &&
+              ex.targetStructure &&
+              ex.targetStructure.toLowerCase().includes(muscleLower)
+            );
+            if (mtMatches.length > 0) {
+              const mtEx = mtMatches[0];
+              manualTherapy.push({
+                id: `sling_mt_${mtEx.id}_p${idx}`,
+                name: mtEx.name,
+                category: 'manual_therapy',
+                sets: mtEx.baseSets,
+                reps: mtEx.baseReps,
+                holdSeconds: mtEx.baseHold,
+                frequency: idx === 0 ? '2-3x/week' : '1x/week',
+                painCeiling: 'Pain ≤ 3/10',
+                intensity: mtEx.mobilisationGrade ? `${mtEx.mobilisationGrade} mobilisation` : 'Moderate',
+                rationale: `${tt.rationale} (${SLING_LABELS[normalizeSlingId(ds.sling) ?? 'posterior_oblique']} deficit)`,
+                evidenceGrade: 'B',
+                targetRegions: mtEx.bodyParts,
+                equipment: mtEx.equipment,
+                progression: {
+                  criteria: 'Positive response: increased ROM, reduced pain post-treatment',
+                  nextLevel: 'Progress to deeper technique or transition to self-release',
+                  timeframeDays: 7,
+                  parameters: 'Increase grade/intensity if symptoms allow',
+                },
+                regression: {
+                  trigger: 'Symptom flare lasting > 24h post-treatment',
+                  fallback: 'Reduce to lighter technique, shorten treatment duration',
+                  duration: '1-2 sessions',
+                  returnCriteria: 'Return to previous technique once symptoms settle',
+                },
+                slingTarget: SLING_LABELS[normalizeSlingId(ds.sling) ?? 'posterior_oblique'],
+                targetStructure: mtEx.targetStructure,
+                mobilisationGrade: mtEx.mobilisationGrade,
+              });
+            }
+          }
+        }
       }
     }
 
@@ -818,6 +980,19 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
       }
       if (extractionContext.functionalLimitations?.length && idx === 0) {
         education.push(`Functional restoration targets: ${extractionContext.functionalLimitations.map(fl => fl.limitation).join(', ')}`);
+      }
+    }
+
+    if (slingCtx?.dysfunctionalSlings && slingCtx.dysfunctionalSlings.length > 0 && idx === 0) {
+      const dysfunctional = slingCtx.dysfunctionalSlings.filter(s => s.status !== 'normal');
+      if (dysfunctional.length > 0) {
+        education.push(`Sling deficits identified: ${dysfunctional.map(s => {
+          const sid = normalizeSlingId(s.sling);
+          return `${sid ? SLING_LABELS[sid] : s.sling} (${s.status})`;
+        }).join(', ')}`);
+        if (slingCtx.overallForceTransferScore !== undefined) {
+          education.push(`Overall force transfer efficiency: ${slingCtx.overallForceTransferScore}%`);
+        }
       }
     }
 

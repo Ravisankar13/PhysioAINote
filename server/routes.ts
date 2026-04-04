@@ -6527,6 +6527,49 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/evidence-engine/query", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+      const { queryEvidenceEngine } = await import("./services/evidenceEngine");
+
+      const evidenceQuerySchema = z.object({
+        diagnosis: z.string().optional(),
+        bodyRegions: z.array(z.string()).optional(),
+        stage: z.string().optional(),
+        irritability: z.string().optional(),
+        mechanism: z.string().optional(),
+        problemClass: z.string().optional(),
+        tissueType: z.string().optional(),
+        tissuePathology: z.string().optional(),
+        loadTolerance: z.enum(['low', 'moderate', 'high']).optional(),
+        patientGoals: z.array(z.string()).optional(),
+        sport: z.string().optional(),
+        structuredReasoning: z.any().optional(),
+      });
+
+      const parsed = evidenceQuerySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid evidence query input", details: parsed.error.format() });
+      }
+
+      const result = queryEvidenceEngine(parsed.data);
+      res.json(result);
+    } catch (error: unknown) {
+      console.error("Evidence engine query error:", error);
+      res.status(500).json({ error: "Failed to query evidence engine" });
+    }
+  });
+
+  app.get("/api/evidence-engine/stats", ensureAuthenticated, async (_req: Request, res: Response) => {
+    try {
+      const { getEvidenceCatalogStats } = await import("./services/evidenceEngine");
+      res.json(getEvidenceCatalogStats());
+    } catch (error: unknown) {
+      console.error("Evidence engine stats error:", error);
+      res.status(500).json({ error: "Failed to get evidence catalog stats" });
+    }
+  });
+
   app.post("/api/treatment-plan/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { z } = await import("zod");

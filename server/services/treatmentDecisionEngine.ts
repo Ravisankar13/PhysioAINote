@@ -7,6 +7,7 @@ import type {
   DominantMechanism,
   ExtractionContextInput,
 } from './clinicalReasoningEngine';
+import { queryEvidenceEngine, type EvidenceQueryResult } from './evidenceEngine';
 
 export type InterventionTier = 'primary' | 'adjunct' | 'avoid_defer';
 export type InterventionIntent = 'symptom_relief' | 'root_cause' | 'both';
@@ -79,6 +80,11 @@ export interface TreatmentDecisionResult {
   irritability: IrritabilityLevel;
   decisionSummary: string;
   timestamp: string;
+  evidenceEngineContext?: {
+    totalEvidenceOptions: number;
+    gradeDistribution: Record<string, number>;
+    topExpertApproaches: string[];
+  };
 }
 
 export interface BiomechanicsContextInput {
@@ -876,6 +882,30 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     : '';
   const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class): ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
 
+  let evidenceEngineContext: TreatmentDecisionResult['evidenceEngineContext'];
+  try {
+    const evidenceResult = queryEvidenceEngine({
+      diagnosis: topHypothesis,
+      bodyRegions: regions,
+      stage,
+      irritability,
+      mechanism,
+      problemClass,
+      structuredReasoning: sr,
+    });
+    const expertApproaches = new Set<string>();
+    for (const opt of evidenceResult.options) {
+      if (opt.expertApproach) expertApproaches.add(opt.expertApproach);
+    }
+    evidenceEngineContext = {
+      totalEvidenceOptions: evidenceResult.options.length,
+      gradeDistribution: evidenceResult.gradeDistribution,
+      topExpertApproaches: Array.from(expertApproaches).slice(0, 5),
+    };
+  } catch {
+    evidenceEngineContext = undefined;
+  }
+
   return {
     primary,
     adjunct,
@@ -888,5 +918,6 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     irritability,
     decisionSummary,
     timestamp: new Date().toISOString(),
+    evidenceEngineContext,
   };
 }

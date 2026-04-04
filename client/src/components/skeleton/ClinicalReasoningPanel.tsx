@@ -35,6 +35,7 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
+  BookOpen,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
@@ -183,6 +184,23 @@ export interface ClinicalReasoningData {
   evidenceReferences?: EvidenceReference[];
 }
 
+export interface EvidenceEngineOption {
+  id: string; name: string; category: string; evidenceGrade: string;
+  relevanceScore: number; description: string; dosage: string; rationale: string;
+  mechanismOfAction: string; targetRegions: string[]; stageAppropriateness: boolean;
+  loadCompatibility: boolean; riskFlags: string[]; contraindications: string[];
+  tissueMatch: boolean; references: Array<{ authors: string; year: number; title: string; journal: string; pmid?: string }>;
+  sourceLibrary: string; expertApproach?: string;
+}
+
+export interface EvidenceEngineResult {
+  options: EvidenceEngineOption[];
+  queryContext: { diagnosis: string; regions: string[]; stage: string; irritability: string; mechanism: string; problemClass: string };
+  gradeDistribution: Record<string, number>;
+  categoryDistribution: Record<string, number>;
+  timestamp: string;
+}
+
 interface ClinicalReasoningPanelProps {
   data: ClinicalReasoningData | null;
   isProcessing: boolean;
@@ -210,6 +228,9 @@ interface ClinicalReasoningPanelProps {
   planData?: TreatmentPlanResult | null;
   planLoading?: boolean;
   onPlanTargetClick?: (regions: string[]) => void;
+  evidenceData?: EvidenceEngineResult | null;
+  evidenceLoading?: boolean;
+  onEvidenceQuery?: () => void;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -424,8 +445,14 @@ export default function ClinicalReasoningPanel({
   planData,
   planLoading,
   onPlanTargetClick,
+  evidenceData,
+  evidenceLoading,
+  onEvidenceQuery,
 }: ClinicalReasoningPanelProps) {
-  const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan'>('analysis');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
+  const [evidenceCategoryFilter, setEvidenceCategoryFilter] = useState<string>('all');
+  const [evidenceGradeFilter, setEvidenceGradeFilter] = useState<string>('all');
+  const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
     findings: true,
@@ -761,10 +788,224 @@ export default function ClinicalReasoningPanel({
             Plan
             {planData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-cyan-400" />}
           </button>
+          <button
+            onClick={() => {
+              setActiveTab('evidence');
+              if (!evidenceData && !evidenceLoading && onEvidenceQuery) {
+                onEvidenceQuery();
+              }
+            }}
+            className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'evidence' ? 'text-amber-400 border-amber-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
+          >
+            <BookOpen className="h-3 w-3" />
+            Evidence
+            {evidenceData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400" />}
+          </button>
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">
-          {activeTab === 'plan' ? (
+          {activeTab === 'evidence' ? (
+            <div className="px-1">
+              {evidenceLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <div className="animate-spin h-6 w-6 border-2 border-amber-500 border-t-transparent rounded-full" />
+                  <p className="text-[10px] text-gray-400">Querying evidence catalog...</p>
+                </div>
+              ) : evidenceData ? (
+                <div className="space-y-3">
+                  <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/5 rounded-lg p-3 border border-amber-500/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1 bg-amber-500 rounded">
+                        <BookOpen className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      <span className="font-semibold text-amber-200 text-xs">Evidence Engine</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 ml-auto">{evidenceData.options.length} results</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 mb-2">
+                      <div className="bg-black/20 rounded px-2 py-1">
+                        <span className="text-[9px] text-gray-500 block">Diagnosis</span>
+                        <span className="text-[10px] font-medium text-gray-300 truncate block">{evidenceData.queryContext.diagnosis}</span>
+                      </div>
+                      <div className="bg-black/20 rounded px-2 py-1">
+                        <span className="text-[9px] text-gray-500 block">Stage</span>
+                        <span className="text-[10px] font-medium text-gray-300">{evidenceData.queryContext.stage}</span>
+                      </div>
+                      <div className="bg-black/20 rounded px-2 py-1">
+                        <span className="text-[9px] text-gray-500 block">Mechanism</span>
+                        <span className="text-[10px] font-medium text-gray-300">{evidenceData.queryContext.mechanism}</span>
+                      </div>
+                      <div className="bg-black/20 rounded px-2 py-1">
+                        <span className="text-[9px] text-gray-500 block">Irritability</span>
+                        <span className="text-[10px] font-medium text-gray-300">{evidenceData.queryContext.irritability}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      {Object.entries(evidenceData.gradeDistribution).filter(([, count]) => count > 0).map(([grade, count]) => (
+                        <span key={grade} className={`text-[8px] px-1.5 py-0.5 rounded border ${grade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : grade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : grade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30'}`}>
+                          Grade {grade}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-1 flex-wrap">
+                    <button onClick={() => setEvidenceCategoryFilter('all')} className={`text-[9px] px-2 py-1 rounded-full border transition-colors ${evidenceCategoryFilter === 'all' ? 'bg-amber-500/20 border-amber-500/30 text-amber-300' : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/20'}`}>All</button>
+                    {Object.keys(evidenceData.categoryDistribution).map(cat => (
+                      <button key={cat} onClick={() => setEvidenceCategoryFilter(cat)} className={`text-[9px] px-2 py-1 rounded-full border transition-colors ${evidenceCategoryFilter === cat ? 'bg-amber-500/20 border-amber-500/30 text-amber-300' : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/20'}`}>
+                        {cat.replace(/_/g, ' ')}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-1">
+                    {['all', 'A', 'B', 'C', 'Expert'].map(g => (
+                      <button key={g} onClick={() => setEvidenceGradeFilter(g)} className={`text-[9px] px-2 py-1 rounded-full border transition-colors ${evidenceGradeFilter === g ? 'bg-amber-500/20 border-amber-500/30 text-amber-300' : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/20'}`}>
+                        {g === 'all' ? 'All Grades' : `Grade ${g}`}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="space-y-3">
+                    {(() => {
+                      const filtered = evidenceData.options
+                        .filter((opt) => evidenceCategoryFilter === 'all' || opt.category === evidenceCategoryFilter)
+                        .filter((opt) => evidenceGradeFilter === 'all' || opt.evidenceGrade === evidenceGradeFilter);
+                      const gradeOrder = ['A', 'B', 'C', 'Expert'] as const;
+                      const gradeLabels: Record<string, string> = { A: 'Grade A — Strong Evidence', B: 'Grade B — Moderate Evidence', C: 'Grade C — Limited Evidence', Expert: 'Expert Opinion' };
+                      const gradeHeaderColor: Record<string, string> = { A: 'bg-green-500/10 border-green-500/20 text-green-400', B: 'bg-blue-500/10 border-blue-500/20 text-blue-400', C: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400', Expert: 'bg-gray-500/10 border-gray-500/20 text-gray-400' };
+                      return gradeOrder.map(grade => {
+                        const gradeOpts = filtered.filter((o) => o.evidenceGrade === grade);
+                        if (gradeOpts.length === 0) return null;
+                        return (
+                          <div key={grade}>
+                            <div className={`text-[9px] font-semibold px-2.5 py-1.5 rounded-t-lg border ${gradeHeaderColor[grade]} mb-0`}>
+                              {gradeLabels[grade]} ({gradeOpts.length})
+                            </div>
+                            <div className="space-y-1.5 border border-t-0 rounded-b-lg border-white/10 p-1.5">
+                              {gradeOpts.map((opt) => {
+                                const isExpanded = expandedEvidenceId === opt.id;
+                                const gradeColor = opt.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : opt.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : opt.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+                                return (
+                                  <div key={opt.id} className={`rounded-lg border transition-all ${opt.riskFlags.length > 0 ? 'border-orange-500/30 bg-orange-500/5' : 'border-white/10 bg-white/5'}`}>
+                                    <button className="w-full text-left p-2.5" onClick={() => setExpandedEvidenceId(isExpanded ? null : opt.id)}>
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-1.5 mb-1">
+                                            <span className={`text-[7px] px-1 py-0.5 rounded border ${gradeColor}`}>{opt.evidenceGrade}</span>
+                                            <span className="text-[8px] px-1.5 py-0.5 rounded bg-white/10 text-gray-400 capitalize">{opt.category.replace(/_/g, ' ')}</span>
+                                            {opt.expertApproach && <span className="text-[7px] px-1 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20">{opt.expertApproach}</span>}
+                                          </div>
+                                          <p className="text-[11px] font-medium text-gray-200 leading-tight truncate">{opt.name}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `conic-gradient(#f59e0b ${opt.relevanceScore * 3.6}deg, #374151 ${opt.relevanceScore * 3.6}deg)` }}>
+                                            <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center">
+                                              <span className="text-[8px] font-bold text-amber-400">{opt.relevanceScore}</span>
+                                            </div>
+                                          </div>
+                                          <ChevronDown className={`h-3 w-3 text-gray-500 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                                        </div>
+                                      </div>
+                                      {opt.riskFlags.length > 0 && (
+                                        <div className="flex items-center gap-1 mt-1">
+                                          <AlertTriangle className="h-2.5 w-2.5 text-orange-400" />
+                                          <span className="text-[8px] text-orange-400">{opt.riskFlags[0]}</span>
+                                        </div>
+                                      )}
+                                    </button>
+                                    {isExpanded && (
+                                      <div className="px-2.5 pb-2.5 space-y-2 border-t border-white/5 pt-2">
+                                        <p className="text-[10px] text-gray-400 leading-relaxed">{opt.description}</p>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                          <div className="bg-black/20 rounded px-2 py-1.5">
+                                            <span className="text-[8px] text-gray-500 block mb-0.5">Dosage</span>
+                                            <span className="text-[9px] text-gray-300">{opt.dosage}</span>
+                                          </div>
+                                          <div className="bg-black/20 rounded px-2 py-1.5">
+                                            <span className="text-[8px] text-gray-500 block mb-0.5">Source</span>
+                                            <span className="text-[9px] text-gray-300">{opt.sourceLibrary}</span>
+                                          </div>
+                                        </div>
+                                        <div className="bg-emerald-500/5 rounded px-2 py-1.5 border border-emerald-500/10">
+                                          <span className="text-[8px] text-emerald-400 font-medium block mb-0.5">Mechanism of Action</span>
+                                          <span className="text-[9px] text-gray-300">{opt.mechanismOfAction}</span>
+                                        </div>
+                                        <div className="bg-blue-500/5 rounded px-2 py-1.5 border border-blue-500/10">
+                                          <span className="text-[8px] text-blue-400 font-medium block mb-0.5">Rationale</span>
+                                          <span className="text-[9px] text-gray-300">{opt.rationale}</span>
+                                        </div>
+                                        {opt.stageAppropriateness === false && (
+                                          <div className="bg-orange-500/10 rounded px-2 py-1.5 border border-orange-500/20">
+                                            <span className="text-[8px] text-orange-400">Stage restriction applies</span>
+                                          </div>
+                                        )}
+                                        {opt.loadCompatibility === false && (
+                                          <div className="bg-red-500/10 rounded px-2 py-1.5 border border-red-500/20">
+                                            <span className="text-[8px] text-red-400">Load compatibility concern</span>
+                                          </div>
+                                        )}
+                                        {opt.contraindications.length > 0 && (
+                                          <div>
+                                            <span className="text-[8px] text-gray-500 block mb-0.5">Contraindications</span>
+                                            <div className="flex flex-wrap gap-1">
+                                              {opt.contraindications.map((ci, i) => (
+                                                <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">{ci}</span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                        {opt.targetRegions.length > 0 && (
+                                          <div>
+                                            <span className="text-[8px] text-gray-500 block mb-0.5">Target Regions</span>
+                                            <div className="flex flex-wrap gap-1">
+                                              {opt.targetRegions.map((r, i) => (
+                                                <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-white/10 text-gray-400">{r}</span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                        {opt.references.length > 0 && (
+                                          <div>
+                                            <span className="text-[8px] text-gray-500 block mb-1">References</span>
+                                            <div className="space-y-1">
+                                              {opt.references.map((ref, i) => (
+                                                <div key={i} className="bg-black/20 rounded px-2 py-1">
+                                                  <span className="text-[9px] text-gray-300 block">{ref.authors} ({ref.year})</span>
+                                                  <span className="text-[8px] text-gray-500 italic">{ref.title}</span>
+                                                  <span className="text-[8px] text-gray-600 block">{ref.journal}{ref.pmid ? ` · PMID: ${ref.pmid}` : ''}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <BookOpen className="h-8 w-8 text-gray-600 mb-3" />
+                  <p className="text-xs font-medium text-gray-400 mb-1">No Evidence Query Yet</p>
+                  <p className="text-[10px] text-gray-600 leading-relaxed max-w-[260px]">Run a clinical analysis first (place pain markers, enter patient history), then click below to query the evidence catalog.</p>
+                  {onEvidenceQuery && (
+                    <button
+                      className="mt-3 text-xs px-3 py-1.5 bg-amber-500/20 text-amber-300 rounded-lg hover:bg-amber-500/30 transition-colors border border-amber-500/20"
+                      onClick={onEvidenceQuery}
+                    >
+                      Query Evidence Catalog
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : activeTab === 'plan' ? (
             <PlanTab
               data={planData ?? null}
               isLoading={planLoading ?? false}

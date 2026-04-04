@@ -525,7 +525,7 @@ export default function PhysioGPT() {
   const [scarPlacementMode, setScarPlacementMode] = useState<ScarType | null>(null);
   const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
   const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
-  const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics' | 'slings' | 'evidence'>('chat');
+  const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics' | 'slings'>('chat');
   const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
   const [slingOverlayVisible, setSlingOverlayVisible] = useState(true);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
@@ -549,9 +549,6 @@ export default function PhysioGPT() {
     timestamp: string;
   } | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
-  const [evidenceCategoryFilter, setEvidenceCategoryFilter] = useState<string>('all');
-  const [evidenceGradeFilter, setEvidenceGradeFilter] = useState<string>('all');
-  const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null);
 
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
@@ -1827,6 +1824,38 @@ ${ddxList}`;
     setMuscleHighlightColors(colorMap);
     setVisualizationBoneHighlights(boneHighlights);
   }, [BIOMECHANICAL_REGION_TO_MUSCLES, REGION_TO_BONE_NAMES]);
+
+  const handleEvidenceQuery = useCallback(() => {
+    if (evidenceLoading) return;
+    setEvidenceLoading(true);
+    const regions: string[] = [];
+    if (painMarkers.length > 0) painMarkers.forEach(pm => { if (pm.region && !regions.includes(pm.region.toLowerCase())) regions.push(pm.region.toLowerCase()); });
+    const slingCtx = slingAnalysis ? {
+      weakLinks: slingAnalysis.slings.filter((s: { status: string }) => s.status === 'underperforming').flatMap((s: { weakLinks: string[] }) => s.weakLinks),
+      forceTransferScore: slingAnalysis.overallForceTransferScore,
+      dominantDysfunction: slingAnalysis.dominantDysfunction,
+    } : undefined;
+    const firstBubble = Object.values(clinicalBubbleResults)[0];
+    fetch('/api/evidence-engine/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        diagnosis: firstBubble?.data?.hypotheses?.[0]?.condition,
+        bodyRegions: regions.length > 0 ? regions : undefined,
+        structuredReasoning: firstBubble?.data || undefined,
+        sling: slingCtx,
+        tissueType: tissueViewMode || undefined,
+        loadTolerance: firstBubble?.data?.irritability?.level === 'high' ? 'low' : firstBubble?.data?.irritability?.level === 'low' ? 'high' : 'moderate',
+        patientContext: {
+          goals: firstBubble?.data?.problemClass ? [firstBubble.data.problemClass.primary] : undefined,
+        },
+      }),
+    })
+    .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
+    .then(data => setEvidenceEngineResult(data))
+    .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' }); })
+    .finally(() => setEvidenceLoading(false));
+  }, [painMarkers, slingAnalysis, clinicalBubbleResults, tissueViewMode, evidenceLoading, toast]);
 
   const handleHypothesisClick = useCallback((hypothesis: ClinicalHypothesis) => {
     setSelectedHypothesisForChat({
@@ -7990,46 +8019,6 @@ ${ddxList}`;
                 <GitBranch className="h-3 w-3" />
                 Slings
               </button>
-              <button
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${rightPanelTab === 'evidence' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                onClick={() => {
-                  setRightPanelTab('evidence');
-                  if (!evidenceEngineResult && !evidenceLoading && clinicalBubbleResults) {
-                    const controller = new AbortController();
-                    setEvidenceLoading(true);
-                    const regions: string[] = [];
-                    if (painMarkers.length > 0) painMarkers.forEach(pm => { if (pm.region && !regions.includes(pm.region.toLowerCase())) regions.push(pm.region.toLowerCase()); });
-                    const slingCtx = slingAnalysis ? {
-                      weakLinks: slingAnalysis.slings.filter((s: { status: string }) => s.status === 'underperforming').flatMap((s: { weakLinks: string[] }) => s.weakLinks),
-                      forceTransferScore: slingAnalysis.overallForceTransferScore,
-                      dominantDysfunction: slingAnalysis.dominantDysfunction,
-                    } : undefined;
-                    fetch('/api/evidence-engine/query', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        diagnosis: clinicalBubbleResults?.hypotheses?.[0]?.condition,
-                        bodyRegions: regions.length > 0 ? regions : undefined,
-                        structuredReasoning: clinicalBubbleResults,
-                        sling: slingCtx,
-                        tissueType: tissueViewMode || undefined,
-                        loadTolerance: clinicalBubbleResults?.irritability?.level === 'high' ? 'low' : clinicalBubbleResults?.irritability?.level === 'low' ? 'high' : 'moderate',
-                        patientContext: {
-                          goals: clinicalBubbleResults?.problemClass ? [clinicalBubbleResults.problemClass.primary] : undefined,
-                        },
-                      }),
-                      signal: controller.signal,
-                    })
-                    .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
-                    .then(data => setEvidenceEngineResult(data))
-                    .catch((err) => { if (err.name !== 'AbortError') toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' }); })
-                    .finally(() => setEvidenceLoading(false));
-                  }
-                }}
-              >
-                <BookOpen className="h-3 w-3" />
-                Evidence
-              </button>
             </div>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setChatPanelOpen(false)}>
               <X className="h-3.5 w-3.5" />
@@ -8642,236 +8631,6 @@ ${ddxList}`;
             </div>
           )}
 
-          {rightPanelTab === 'evidence' && (
-            <ScrollArea className="flex-1">
-              <div className="p-3">
-                {evidenceLoading ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <div className="animate-spin h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full" />
-                    <p className="text-xs text-gray-500">Querying evidence catalog...</p>
-                  </div>
-                ) : evidenceEngineResult ? (
-                  <div className="space-y-3">
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-3 border border-emerald-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1 bg-emerald-500 rounded">
-                          <BookOpen className="h-3.5 w-3.5 text-white" />
-                        </div>
-                        <span className="font-semibold text-emerald-900 text-xs">Evidence Engine</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 ml-auto">{evidenceEngineResult.options.length} results</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 mb-2">
-                        <div className="bg-white/70 rounded px-2 py-1">
-                          <span className="text-[9px] text-gray-500 block">Diagnosis</span>
-                          <span className="text-[10px] font-medium text-gray-800 truncate block">{evidenceEngineResult.queryContext.diagnosis}</span>
-                        </div>
-                        <div className="bg-white/70 rounded px-2 py-1">
-                          <span className="text-[9px] text-gray-500 block">Stage</span>
-                          <span className="text-[10px] font-medium text-gray-800">{evidenceEngineResult.queryContext.stage}</span>
-                        </div>
-                        <div className="bg-white/70 rounded px-2 py-1">
-                          <span className="text-[9px] text-gray-500 block">Mechanism</span>
-                          <span className="text-[10px] font-medium text-gray-800">{evidenceEngineResult.queryContext.mechanism}</span>
-                        </div>
-                        <div className="bg-white/70 rounded px-2 py-1">
-                          <span className="text-[9px] text-gray-500 block">Irritability</span>
-                          <span className="text-[10px] font-medium text-gray-800">{evidenceEngineResult.queryContext.irritability}</span>
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        {Object.entries(evidenceEngineResult.gradeDistribution).filter(([, count]) => count > 0).map(([grade, count]) => (
-                          <span key={grade} className={`text-[8px] px-1.5 py-0.5 rounded border ${grade === 'A' ? 'bg-green-500/20 text-green-600 border-green-500/30' : grade === 'B' ? 'bg-blue-500/20 text-blue-600 border-blue-500/30' : grade === 'C' ? 'bg-yellow-500/20 text-yellow-600 border-yellow-500/30' : 'bg-gray-500/20 text-gray-600 border-gray-500/30'}`}>
-                            Grade {grade}: {count}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-1 flex-wrap">
-                      <button onClick={() => setEvidenceCategoryFilter('all')} className={`text-[9px] px-2 py-1 rounded-full border transition-colors ${evidenceCategoryFilter === 'all' ? 'bg-emerald-100 border-emerald-300 text-emerald-700' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}>All</button>
-                      {Object.keys(evidenceEngineResult.categoryDistribution).map(cat => (
-                        <button key={cat} onClick={() => setEvidenceCategoryFilter(cat)} className={`text-[9px] px-2 py-1 rounded-full border transition-colors ${evidenceCategoryFilter === cat ? 'bg-emerald-100 border-emerald-300 text-emerald-700' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                          {cat.replace(/_/g, ' ')}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex gap-1">
-                      {['all', 'A', 'B', 'C', 'Expert'].map(g => (
-                        <button key={g} onClick={() => setEvidenceGradeFilter(g)} className={`text-[9px] px-2 py-1 rounded-full border transition-colors ${evidenceGradeFilter === g ? 'bg-emerald-100 border-emerald-300 text-emerald-700' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                          {g === 'all' ? 'All Grades' : `Grade ${g}`}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="space-y-3">
-                      {(() => {
-                        const filtered = evidenceEngineResult.options
-                          .filter((opt: { category: string }) => evidenceCategoryFilter === 'all' || opt.category === evidenceCategoryFilter)
-                          .filter((opt: { evidenceGrade: string }) => evidenceGradeFilter === 'all' || opt.evidenceGrade === evidenceGradeFilter);
-                        const gradeOrder = ['A', 'B', 'C', 'Expert'] as const;
-                        const gradeLabels: Record<string, string> = { A: 'Grade A — Strong Evidence', B: 'Grade B — Moderate Evidence', C: 'Grade C — Limited Evidence', Expert: 'Expert Opinion' };
-                        const gradeHeaderColor: Record<string, string> = { A: 'bg-green-50 border-green-200 text-green-700', B: 'bg-blue-50 border-blue-200 text-blue-700', C: 'bg-yellow-50 border-yellow-200 text-yellow-700', Expert: 'bg-gray-50 border-gray-200 text-gray-600' };
-                        return gradeOrder.map(grade => {
-                          const gradeOpts = filtered.filter((o: { evidenceGrade: string }) => o.evidenceGrade === grade);
-                          if (gradeOpts.length === 0) return null;
-                          return (
-                            <div key={grade}>
-                              <div className={`text-[9px] font-semibold px-2.5 py-1.5 rounded-t-lg border ${gradeHeaderColor[grade]} mb-0`}>
-                                {gradeLabels[grade]} ({gradeOpts.length})
-                              </div>
-                              <div className="space-y-1.5 border border-t-0 rounded-b-lg border-gray-200 p-1.5">
-                                {gradeOpts.map((opt: { id: string; name: string; category: string; evidenceGrade: string; relevanceScore: number; riskFlags: string[]; expertApproach?: string; description: string; dosage: string; sourceLibrary: string; mechanismOfAction: string; rationale: string; stageAppropriateness: boolean; loadCompatibility: boolean; contraindications: string[]; references: Array<{ authors: string; year: number; title: string; journal: string; pmid?: string }> }) => {
-                          const isExpanded = expandedEvidenceId === opt.id;
-                          const gradeColor = opt.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-600 border-green-500/30' : opt.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-600 border-blue-500/30' : opt.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-600 border-yellow-500/30' : 'bg-gray-500/20 text-gray-600 border-gray-500/30';
-                          return (
-                            <div key={opt.id} className={`rounded-lg border transition-all ${opt.riskFlags.length > 0 ? 'border-orange-200 bg-orange-50/30' : 'border-gray-200 bg-white'}`}>
-                              <button className="w-full text-left p-2.5" onClick={() => setExpandedEvidenceId(isExpanded ? null : opt.id)}>
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5 mb-1">
-                                      <span className={`text-[7px] px-1 py-0.5 rounded border ${gradeColor}`}>{opt.evidenceGrade}</span>
-                                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 capitalize">{opt.category.replace(/_/g, ' ')}</span>
-                                      {opt.expertApproach && <span className="text-[7px] px-1 py-0.5 rounded bg-violet-50 text-violet-600 border border-violet-200">{opt.expertApproach}</span>}
-                                    </div>
-                                    <p className="text-[11px] font-medium text-gray-800 leading-tight truncate">{opt.name}</p>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `conic-gradient(#10b981 ${opt.relevanceScore * 3.6}deg, #e5e7eb ${opt.relevanceScore * 3.6}deg)` }}>
-                                      <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center">
-                                        <span className="text-[8px] font-bold text-emerald-700">{opt.relevanceScore}</span>
-                                      </div>
-                                    </div>
-                                    <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-                                  </div>
-                                </div>
-                                {opt.riskFlags.length > 0 && (
-                                  <div className="flex items-center gap-1 mt-1">
-                                    <AlertTriangle className="h-2.5 w-2.5 text-orange-500" />
-                                    <span className="text-[8px] text-orange-600">{opt.riskFlags[0]}</span>
-                                  </div>
-                                )}
-                              </button>
-                              {isExpanded && (
-                                <div className="px-2.5 pb-2.5 space-y-2 border-t border-gray-100 pt-2">
-                                  <p className="text-[10px] text-gray-600 leading-relaxed">{opt.description}</p>
-                                  <div className="grid grid-cols-2 gap-1.5">
-                                    <div className="bg-gray-50 rounded px-2 py-1.5">
-                                      <span className="text-[8px] text-gray-500 block mb-0.5">Dosage</span>
-                                      <span className="text-[9px] text-gray-700">{opt.dosage}</span>
-                                    </div>
-                                    <div className="bg-gray-50 rounded px-2 py-1.5">
-                                      <span className="text-[8px] text-gray-500 block mb-0.5">Source</span>
-                                      <span className="text-[9px] text-gray-700">{opt.sourceLibrary}</span>
-                                    </div>
-                                  </div>
-                                  <div className="bg-emerald-50/50 rounded px-2 py-1.5">
-                                    <span className="text-[8px] text-emerald-600 font-medium block mb-0.5">Mechanism of Action</span>
-                                    <span className="text-[9px] text-gray-700">{opt.mechanismOfAction}</span>
-                                  </div>
-                                  <div className="bg-blue-50/50 rounded px-2 py-1.5">
-                                    <span className="text-[8px] text-blue-600 font-medium block mb-0.5">Rationale</span>
-                                    <span className="text-[9px] text-gray-700">{opt.rationale}</span>
-                                  </div>
-                                  {opt.stageAppropriateness === false && (
-                                    <div className="bg-orange-50 rounded px-2 py-1.5 border border-orange-200">
-                                      <span className="text-[8px] text-orange-600">Stage restriction applies</span>
-                                    </div>
-                                  )}
-                                  {opt.loadCompatibility === false && (
-                                    <div className="bg-red-50 rounded px-2 py-1.5 border border-red-200">
-                                      <span className="text-[8px] text-red-600">Load compatibility concern</span>
-                                    </div>
-                                  )}
-                                  {opt.contraindications.length > 0 && (
-                                    <div>
-                                      <span className="text-[8px] text-gray-500 block mb-0.5">Contraindications</span>
-                                      <div className="flex flex-wrap gap-1">
-                                        {opt.contraindications.map((ci, i) => (
-                                          <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">{ci}</span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  {opt.targetRegions.length > 0 && (
-                                    <div>
-                                      <span className="text-[8px] text-gray-500 block mb-0.5">Target Regions</span>
-                                      <div className="flex flex-wrap gap-1">
-                                        {opt.targetRegions.map((r, i) => (
-                                          <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{r}</span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  {opt.references.length > 0 && (
-                                    <div>
-                                      <span className="text-[8px] text-gray-500 block mb-1">References</span>
-                                      <div className="space-y-1">
-                                        {opt.references.map((ref, i) => (
-                                          <div key={i} className="bg-gray-50 rounded px-2 py-1">
-                                            <span className="text-[9px] text-gray-700 block">{ref.authors} ({ref.year})</span>
-                                            <span className="text-[8px] text-gray-500 italic">{ref.title}</span>
-                                            <span className="text-[8px] text-gray-400 block">{ref.journal}{ref.pmid ? ` · PMID: ${ref.pmid}` : ''}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                              </div>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <BookOpen className="h-8 w-8 text-gray-300 mb-3" />
-                    <p className="text-sm font-medium text-gray-500 mb-1">No Evidence Query Yet</p>
-                    <p className="text-xs text-gray-400 max-w-[260px]">Run a clinical analysis first (place pain markers, enter patient history), then open this tab to query the evidence catalog.</p>
-                    <button
-                      className="mt-3 text-xs px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors"
-                      onClick={() => {
-                        setEvidenceLoading(true);
-                        const regions: string[] = [];
-                        if (painMarkers.length > 0) painMarkers.forEach(pm => { if (pm.region && !regions.includes(pm.region.toLowerCase())) regions.push(pm.region.toLowerCase()); });
-                        const slingCtx = slingAnalysis ? {
-                          weakLinks: slingAnalysis.slings.filter((s: { status: string }) => s.status === 'underperforming').flatMap((s: { weakLinks: string[] }) => s.weakLinks),
-                          forceTransferScore: slingAnalysis.overallForceTransferScore,
-                          dominantDysfunction: slingAnalysis.dominantDysfunction,
-                        } : undefined;
-                        fetch('/api/evidence-engine/query', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            diagnosis: clinicalBubbleResults?.hypotheses?.[0]?.condition,
-                            bodyRegions: regions.length > 0 ? regions : undefined,
-                            structuredReasoning: clinicalBubbleResults || undefined,
-                            sling: slingCtx,
-                            tissueType: tissueViewMode || undefined,
-                            loadTolerance: clinicalBubbleResults?.irritability?.level === 'high' ? 'low' : clinicalBubbleResults?.irritability?.level === 'low' ? 'high' : 'moderate',
-                            patientContext: {
-                              goals: clinicalBubbleResults?.problemClass ? [clinicalBubbleResults.problemClass.primary] : undefined,
-                            },
-                          }),
-                        })
-                        .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
-                        .then(data => setEvidenceEngineResult(data))
-                        .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' }); })
-                        .finally(() => setEvidenceLoading(false));
-                      }}
-                    >
-                      Query Evidence Catalog
-                    </button>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          )}
 
           {/* Chat Panel Content */}
           {rightPanelTab === 'chat' && (<>
@@ -9482,6 +9241,9 @@ ${ddxList}`;
         planData={treatmentPlanData}
         planLoading={treatmentPlanLoading}
         onPlanTargetClick={handleDecisionTargetClick}
+        evidenceData={evidenceEngineResult}
+        evidenceLoading={evidenceLoading}
+        onEvidenceQuery={handleEvidenceQuery}
       />
 
       <HypothesisChatPanel

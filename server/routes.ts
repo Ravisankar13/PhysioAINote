@@ -13032,39 +13032,30 @@ Be specific to THIS skeleton's findings. Every root cause must reference a speci
   // HOME PAGE API ROUTES
   // ============================================================================
 
-  // Get featured competitions for home page
   app.get('/api/home/featured-competitions', async (req, res) => {
     try {
-      // Get priority competitions with raw SQL to avoid Drizzle issues
-      const result = await db.execute(sql`
-        SELECT id, title, description, game_type, body_part, difficulty, 
-               time_limit_minutes, max_participants, current_participants, status
-        FROM competitions 
-        WHERE status = 'active'
-        ORDER BY 
-          CASE WHEN id IN (107, 108) THEN 0 ELSE 1 END,
-          current_participants
-        LIMIT 4
-      `);
+      const rows = await db
+        .select({
+          id: competitions.id,
+          title: competitions.title,
+          description: competitions.description,
+          gameType: competitions.gameType,
+          bodyPart: competitions.bodyPart,
+          difficulty: competitions.difficulty,
+          timeLimit: competitions.timeLimit,
+          maxParticipants: competitions.maxParticipants,
+          currentParticipants: competitions.currentParticipants,
+          status: competitions.status,
+        })
+        .from(competitions)
+        .where(eq(competitions.status, 'active'))
+        .orderBy(competitions.currentParticipants)
+        .limit(4);
 
-      // Map the results to expected format
-      const featuredCompetitions = result.rows.map((row: any) => ({
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        gameType: row.game_type,
-        bodyPart: row.body_part,
-        difficulty: row.difficulty,
-        timeLimit: row.time_limit_minutes,
-        maxParticipants: row.max_participants,
-        currentParticipants: row.current_participants,
-        status: row.status
-      }));
-      
-      res.json(featuredCompetitions);
+      res.json(rows);
     } catch (error) {
       console.error('Error fetching featured competitions:', error);
-      res.status(500).json({ message: 'Failed to fetch featured competitions' });
+      res.json([]);
     }
   });
 

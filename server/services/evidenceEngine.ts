@@ -119,6 +119,8 @@ export interface EvidenceQueryResult {
   timestamp: string;
 }
 
+type LoadLevel = 'low' | 'moderate' | 'high';
+
 interface CatalogEntry {
   id: string;
   name: string;
@@ -132,6 +134,7 @@ interface CatalogEntry {
   contraindications: string[];
   stageRestrictions: ConditionStageType[];
   irritabilityMax: IrritabilityLevel;
+  loadDemand: LoadLevel;
   problemClassMatch: ProblemClass[];
   mechanismMatch: DominantMechanism[];
   references: LiteratureReference[];
@@ -142,21 +145,51 @@ interface CatalogEntry {
   expectedTimeframe?: string;
 }
 
+function assignLoadDemand(entry: Omit<CatalogEntry, 'loadDemand'>): CatalogEntry {
+  const id = entry.id;
+  const cat = entry.category;
+
+  const lowLoadIds = ['joint_mob_grade_1_2', 'pain_neuroscience_education', 'activity_modification', 'taping_support', 'isometric_loading'];
+  const highLoadIds = ['joint_mob_grade_3_4', 'eccentric_programme', 'progressive_strengthening', 'graded_exposure', 'thoracic_manipulation'];
+
+  if (lowLoadIds.includes(id)) return { ...entry, loadDemand: 'low' };
+  if (highLoadIds.includes(id)) return { ...entry, loadDemand: 'high' };
+
+  if (cat === 'education') return { ...entry, loadDemand: 'low' };
+  if (cat === 'manual_therapy') return { ...entry, loadDemand: 'low' };
+  if (cat === 'neural') return { ...entry, loadDemand: 'low' };
+  if (cat === 'load_management') return { ...entry, loadDemand: 'moderate' };
+
+  if (entry.stageRestrictions.includes('acute')) return { ...entry, loadDemand: 'high' };
+
+  const descLower = entry.description.toLowerCase();
+  if (descLower.includes('heavy') || descLower.includes('plyometric') || descLower.includes('high-intensity') || descLower.includes('end-range')) {
+    return { ...entry, loadDemand: 'high' };
+  }
+  if (descLower.includes('gentle') || descLower.includes('isometric') || descLower.includes('passive') || descLower.includes('pain-free')) {
+    return { ...entry, loadDemand: 'low' };
+  }
+
+  return { ...entry, loadDemand: 'moderate' };
+}
+
 const UNIFIED_CATALOG: CatalogEntry[] = buildUnifiedCatalog();
 
 function buildUnifiedCatalog(): CatalogEntry[] {
-  const catalog: CatalogEntry[] = [];
+  const raw: Omit<CatalogEntry, 'loadDemand'>[][] = [
+    buildCoreInterventions(),
+    buildTechniqueDbEntries(),
+    buildExpertLibraryEntries(),
+    buildExerciseCatalogEntries(),
+    buildResearchDatabaseEntries(),
+  ];
 
-  catalog.push(...buildCoreInterventions());
-  catalog.push(...buildTechniqueDbEntries());
-  catalog.push(...buildExpertLibraryEntries());
-  catalog.push(...buildExerciseCatalogEntries());
-  catalog.push(...buildResearchDatabaseEntries());
-
-  return catalog;
+  return raw.flat().map(assignLoadDemand);
 }
 
-function buildCoreInterventions(): CatalogEntry[] {
+type CatalogEntryWithoutLoad = Omit<CatalogEntry, 'loadDemand'>;
+
+function buildCoreInterventions(): CatalogEntryWithoutLoad[] {
   return [
     {
       id: 'joint_mob_grade_1_2',
@@ -604,8 +637,8 @@ function buildCoreInterventions(): CatalogEntry[] {
   ];
 }
 
-function buildTechniqueDbEntries(): CatalogEntry[] {
-  const entries: CatalogEntry[] = [];
+function buildTechniqueDbEntries(): CatalogEntryWithoutLoad[] {
+  const entries: CatalogEntryWithoutLoad[] = [];
   const statusToMechanism: Record<ClinicalStatusKey, DominantMechanism[]> = {
     shortened: ['stiffness'],
     overactive: ['tensile_load', 'sensitisation'],
@@ -694,8 +727,8 @@ interface ExpertArticle {
   keywords: string[];
 }
 
-function buildExpertLibraryEntries(): CatalogEntry[] {
-  const entries: CatalogEntry[] = [];
+function buildExpertLibraryEntries(): CatalogEntryWithoutLoad[] {
+  const entries: CatalogEntryWithoutLoad[] = [];
   const libs: Array<{ name: string; conditions: ExpertCondition[]; articles: ExpertArticle[] }> = [
     { name: 'Bisset Elbow', conditions: bissetConditionApproaches, articles: bissetResearchArticles },
     { name: 'Grimaldi Hip', conditions: grimaldiConditionApproaches, articles: grimaldiResearchArticles },
@@ -894,7 +927,15 @@ function checkStageAppropriateness(entry: CatalogEntry, stage?: ConditionStageTy
   return !entry.stageRestrictions.includes(stage);
 }
 
-function checkLoadCompatibility(entry: CatalogEntry, irritability?: IrritabilityLevel): boolean {
+function checkLoadCompatibility(entry: CatalogEntry, loadTolerance?: LoadLevel): boolean {
+  if (!loadTolerance) return true;
+  const loadOrder: LoadLevel[] = ['low', 'moderate', 'high'];
+  const patientIdx = loadOrder.indexOf(loadTolerance);
+  const demandIdx = loadOrder.indexOf(entry.loadDemand);
+  return demandIdx <= patientIdx;
+}
+
+function checkIrritabilityCompatibility(entry: CatalogEntry, irritability?: IrritabilityLevel): boolean {
   if (!irritability) return true;
   const order: IrritabilityLevel[] = ['low', 'moderate', 'high'];
   return order.indexOf(irritability) <= order.indexOf(entry.irritabilityMax);
@@ -945,7 +986,7 @@ function exerciseMechanisms(cat: CatalogExercise['category']): DominantMechanism
   }
 }
 
-function buildExerciseCatalogEntries(): CatalogEntry[] {
+function buildExerciseCatalogEntries(): CatalogEntryWithoutLoad[] {
   return EXERCISE_CATALOG.map((ex: CatalogExercise) => {
     const slingLabel = ex.targetSling ? ` (targets ${ex.targetSling.replace(/_/g, ' ')} sling)` : '';
     const equipNote = ex.equipment.length > 0 ? ` Equipment: ${ex.equipment.join(', ')}.` : ' No equipment needed.';
@@ -1043,7 +1084,7 @@ function inferMechanismFromStudy(paper: typeof allResearchPapers[number]): Domin
   return mechs.length > 0 ? mechs : ['tensile_load'];
 }
 
-function buildResearchDatabaseEntries(): CatalogEntry[] {
+function buildResearchDatabaseEntries(): CatalogEntryWithoutLoad[] {
   return allResearchPapers.map((paper, idx) => {
     const region = mapBodyPartToRegion(paper.bodyPart);
     const protocols = paper.treatmentProtocols || [];
@@ -1103,12 +1144,14 @@ export function queryEvidenceEngine(input: EvidenceQueryInput): EvidenceQueryRes
   const options: EvidenceOption[] = filtered.map(entry => {
     const relevanceScore = computeRelevanceScore(entry, resolvedInput);
     const stageAppropriateness = checkStageAppropriateness(entry, resolvedInput.stage);
-    const loadCompatibility = checkLoadCompatibility(entry, resolvedInput.irritability);
+    const loadCompatibility = checkLoadCompatibility(entry, resolvedInput.loadTolerance);
+    const irritabilityCompatible = checkIrritabilityCompatibility(entry, resolvedInput.irritability);
     const tissueMatch = checkTissueMatch(entry, resolvedInput.tissueType, resolvedInput.tissuePathology);
 
     const riskFlags: string[] = [];
     if (!stageAppropriateness) riskFlags.push(`Not recommended in ${resolvedInput.stage} stage`);
-    if (!loadCompatibility) riskFlags.push(`Irritability (${resolvedInput.irritability}) exceeds max (${entry.irritabilityMax})`);
+    if (!loadCompatibility) riskFlags.push(`Load demand (${entry.loadDemand}) exceeds patient tolerance (${resolvedInput.loadTolerance})`);
+    if (!irritabilityCompatible) riskFlags.push(`Irritability (${resolvedInput.irritability}) exceeds max (${entry.irritabilityMax})`);
 
     return {
       id: entry.id,

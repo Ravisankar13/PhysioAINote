@@ -405,8 +405,8 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     contraindications: [],
     irritabilityMax: 'high',
     expectedTimeframe: 'Immediate behavioural change; 2-4 weeks for habit formation',
-    problemClassMatch: ['compression', 'load_capacity', 'mobility_restriction', 'mixed'],
-    mechanismMatch: ['compression', 'stiffness', 'tensile_load'],
+    problemClassMatch: ['compression'],
+    mechanismMatch: ['compression'],
   },
   {
     id: 'proprioceptive_training',
@@ -450,8 +450,8 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
     contraindications: [],
     irritabilityMax: 'high',
     expectedTimeframe: 'Urgent: within 24-48 hours; Routine: 2-6 weeks',
-    problemClassMatch: ['compression', 'instability', 'sensitivity_dominant', 'mixed', 'load_capacity', 'mobility_restriction', 'coordination_control'],
-    mechanismMatch: ['compression', 'tensile_load', 'instability', 'stiffness', 'motor_control', 'sensitisation', 'unknown'],
+    problemClassMatch: ['instability', 'sensitivity_dominant'],
+    mechanismMatch: ['unknown'],
   },
 ];
 
@@ -459,8 +459,12 @@ function buildCandidates(
   regions: string[],
   problemClass: ProblemClass,
   mechanism: DominantMechanism,
+  options?: { hasRedFlags?: boolean; hasMustNotMiss?: boolean },
 ): TreatmentCandidate[] {
   return CANDIDATE_LIBRARY.filter(c => {
+    if (c.category === 'pharmacological_referral' && (options?.hasRedFlags || options?.hasMustNotMiss)) {
+      return true;
+    }
     const regionMatch = regions.length === 0 || c.targetRegions.some(r => regions.some(ir => ir.toLowerCase().includes(r) || r.includes(ir.toLowerCase())));
     const classMatch = c.problemClassMatch.includes(problemClass) || c.problemClassMatch.includes('mixed');
     const mechMatch = c.mechanismMatch.includes(mechanism) || c.mechanismMatch.includes('unknown');
@@ -531,8 +535,24 @@ function classifyTier(
   riskPassed: boolean,
   candidate: TreatmentCandidate,
   problemClass: ProblemClass,
+  context: {
+    hasRedFlags: boolean;
+    hasMustNotMiss: boolean;
+    postureIsDominant: boolean;
+  },
 ): InterventionTier {
   if (!riskPassed) return 'avoid_defer';
+
+  if (candidate.category === 'pharmacological_referral') {
+    if (context.hasRedFlags || context.hasMustNotMiss) return 'primary';
+    return 'adjunct';
+  }
+
+  if (candidate.category === 'education') {
+    if (candidate.id === 'ergonomic_advice' && context.postureIsDominant && score >= 40) return 'primary';
+    return 'adjunct';
+  }
+
   if (score >= 50 && candidate.problemClassMatch.includes(problemClass)) return 'primary';
   if (score >= 25) return 'adjunct';
   return 'adjunct';
@@ -730,7 +750,10 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
 
   const regions = extractRegionsFromReasoning(input);
 
-  const candidates = buildCandidates(regions, problemClass, mechanism);
+  const hasRedFlags = (ctx?.redFlags?.length ?? 0) > 0;
+  const hasMustNotMiss = mustNotMissConditions.length > 0;
+
+  const candidates = buildCandidates(regions, problemClass, mechanism, { hasRedFlags, hasMustNotMiss });
 
   const postureDeviationScore = computePostureBonus(input.postureState);
 
@@ -751,15 +774,22 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const slingCompensationCount = sling?.dysfunctionalSlings.filter(s => s.status === 'compensating').length ?? 0;
   const slingUnderperformingCount = sling?.dysfunctionalSlings.filter(s => s.status === 'underperforming').length ?? 0;
 
+  const postureIsDominant = postureDeviationScore >= 6 && problemClass === 'compression';
+  const tierContext = { hasRedFlags, hasMustNotMiss, postureIsDominant };
+
   const ranked: RankedIntervention[] = candidates.map(candidate => {
     let score = matchScore(candidate, problemClass, mechanism);
+
+    const specificityBonus = 7 - Math.min(7, candidate.problemClassMatch.length);
+    score += specificityBonus;
+
     if (postureDeviationScore > 0) {
-      if (['stretching_programme', 'motor_control_retraining', 'ergonomic_advice'].includes(candidate.id)) {
+      if (['stretching_programme', 'motor_control_retraining'].includes(candidate.id)) {
         score += Math.min(10, postureDeviationScore);
       }
     }
     if (biomechanicsBonus > 0) {
-      if (['motor_control_retraining', 'progressive_strengthening', 'ergonomic_advice', 'stretching_programme'].includes(candidate.id)) {
+      if (['motor_control_retraining', 'progressive_strengthening', 'stretching_programme'].includes(candidate.id)) {
         score += biomechanicsBonus;
       }
     }
@@ -782,7 +812,7 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
       }
     }
     const { pass: riskPassed, flags: riskFlags } = riskFilter(candidate, stage, irritability, mustNotMissConditions, patientContraindications);
-    const tier = classifyTier(score, riskPassed, candidate, problemClass);
+    const tier = classifyTier(score, riskPassed, candidate, problemClass, tierContext);
     const intent = classifyIntent(candidate, mechanism);
     const explainability = buildExplainability(candidate, tier, score, riskFlags, problemClass, mechanism, stage, irritability);
 

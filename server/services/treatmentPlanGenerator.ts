@@ -844,7 +844,7 @@ function buildEvidenceCitations(
   const citations: EvidenceCitationSummary[] = [];
   const allInterventions = [
     ...(decisionResult.primary || []),
-    ...(decisionResult.secondary || []),
+    ...(decisionResult.adjunct || []),
   ];
   for (const iv of allInterventions) {
     const refs = refsMap.get(iv.id);

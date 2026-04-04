@@ -783,6 +783,18 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     const specificityBonus = 7 - Math.min(7, candidate.problemClassMatch.length);
     score += specificityBonus;
 
+    const regionOverlap = candidate.targetRegions.filter(r =>
+      regions.some(ir => ir.toLowerCase().includes(r) || r.includes(ir.toLowerCase()))
+    ).length;
+    if (regions.length > 0 && regionOverlap > 0) {
+      score += Math.min(10, regionOverlap * 4);
+    }
+
+    const clinicalCategories: InterventionCategory[] = ['manual_therapy', 'exercise', 'load_management'];
+    if (clinicalCategories.includes(candidate.category) && candidate.mechanismMatch.includes(mechanism)) {
+      score += 8;
+    }
+
     if (postureDeviationScore > 0) {
       if (['stretching_programme', 'motor_control_retraining'].includes(candidate.id)) {
         score += Math.min(10, postureDeviationScore);

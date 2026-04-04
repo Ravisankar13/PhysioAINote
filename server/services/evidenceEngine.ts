@@ -26,6 +26,31 @@ export type EvidenceCategory =
   | 'neural'
   | 'pharmacological_referral';
 
+export interface BiomechanicsInput {
+  faults?: Array<{ label: string; severity: string; category: string }>;
+  jointIssues?: Array<{ joint: string; issue: string; severity: string }>;
+  qualityScore?: number;
+  movementTask?: string;
+}
+
+export interface SlingInput {
+  weakLinks?: string[];
+  systemFailures?: string[];
+  forceTransferScore?: number;
+  dominantDysfunction?: string;
+}
+
+export interface PatientContextInput {
+  goals?: string[];
+  sport?: string;
+  equipment?: string[];
+  adherenceLevel?: 'low' | 'moderate' | 'high';
+  workDemands?: string;
+  activityLevel?: string;
+  age?: number;
+  gender?: string;
+}
+
 export interface EvidenceQueryInput {
   diagnosis?: string;
   bodyRegions?: string[];
@@ -36,8 +61,9 @@ export interface EvidenceQueryInput {
   tissueType?: string;
   tissuePathology?: string;
   loadTolerance?: 'low' | 'moderate' | 'high';
-  patientGoals?: string[];
-  sport?: string;
+  biomechanics?: BiomechanicsInput;
+  sling?: SlingInput;
+  patientContext?: PatientContextInput;
   structuredReasoning?: ClinicalReasoningResult;
 }
 
@@ -738,7 +764,29 @@ function computeRelevanceScore(
     if (entry.conditionKeywords.some(k => pathLower.includes(k))) score += 8;
   }
 
-  if (input.sport && entry.sourceLibrary === 'Sports Map') score += 5;
+  if (input.patientContext?.sport && entry.sourceLibrary === 'Sports Map') score += 5;
+
+  if (input.biomechanics?.faults?.length) {
+    const faultLabels = input.biomechanics.faults.map(f => f.label.toLowerCase());
+    if (entry.conditionKeywords.some(k => faultLabels.some(f => f.includes(k)))) score += 5;
+    if (['motor_control_retraining', 'progressive_strengthening', 'stretching_programme'].includes(entry.id)) {
+      score += Math.min(8, input.biomechanics.faults.length * 2);
+    }
+  }
+
+  if (input.sling?.weakLinks?.length) {
+    if (['motor_control_retraining', 'isometric_loading', 'progressive_strengthening'].includes(entry.id)) {
+      score += Math.min(10, input.sling.weakLinks.length * 3);
+    }
+  }
+  if (input.sling?.forceTransferScore !== undefined && input.sling.forceTransferScore < 70) {
+    if (['motor_control_retraining', 'progressive_strengthening'].includes(entry.id)) {
+      score += Math.min(8, Math.round((70 - input.sling.forceTransferScore) * 0.2));
+    }
+  }
+
+  if (input.patientContext?.adherenceLevel === 'low' && entry.category === 'education') score += 3;
+  if (input.patientContext?.activityLevel === 'athlete' && entry.sourceLibrary === 'Sports Map') score += 5;
 
   return Math.min(100, score);
 }

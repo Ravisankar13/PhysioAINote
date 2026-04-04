@@ -7999,6 +7999,11 @@ ${ddxList}`;
                     setEvidenceLoading(true);
                     const regions: string[] = [];
                     if (painMarkers.length > 0) painMarkers.forEach(pm => { if (pm.region && !regions.includes(pm.region.toLowerCase())) regions.push(pm.region.toLowerCase()); });
+                    const slingCtx = slingAnalysis ? {
+                      weakLinks: slingAnalysis.slings.filter((s: { status: string }) => s.status === 'underperforming').flatMap((s: { weakLinks: string[] }) => s.weakLinks),
+                      forceTransferScore: slingAnalysis.overallForceTransferScore,
+                      dominantDysfunction: slingAnalysis.dominantDysfunction,
+                    } : undefined;
                     fetch('/api/evidence-engine/query', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -8006,6 +8011,7 @@ ${ddxList}`;
                         diagnosis: clinicalBubbleResults?.hypotheses?.[0]?.condition,
                         bodyRegions: regions.length > 0 ? regions : undefined,
                         structuredReasoning: clinicalBubbleResults,
+                        sling: slingCtx,
                       }),
                       signal: controller.signal,
                     })
@@ -8810,6 +8816,11 @@ ${ddxList}`;
                         setEvidenceLoading(true);
                         const regions: string[] = [];
                         if (painMarkers.length > 0) painMarkers.forEach(pm => { if (pm.region && !regions.includes(pm.region.toLowerCase())) regions.push(pm.region.toLowerCase()); });
+                        const slingCtx = slingAnalysis ? {
+                          weakLinks: slingAnalysis.slings.filter((s: { status: string }) => s.status === 'underperforming').flatMap((s: { weakLinks: string[] }) => s.weakLinks),
+                          forceTransferScore: slingAnalysis.overallForceTransferScore,
+                          dominantDysfunction: slingAnalysis.dominantDysfunction,
+                        } : undefined;
                         fetch('/api/evidence-engine/query', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -8817,6 +8828,7 @@ ${ddxList}`;
                             diagnosis: clinicalBubbleResults?.hypotheses?.[0]?.condition,
                             bodyRegions: regions.length > 0 ? regions : undefined,
                             structuredReasoning: clinicalBubbleResults || undefined,
+                            sling: slingCtx,
                           }),
                         })
                         .then(r => r.json())

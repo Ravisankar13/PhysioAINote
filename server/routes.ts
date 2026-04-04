@@ -6532,6 +6532,103 @@ GUIDELINES:
       const { z } = await import("zod");
       const { queryEvidenceEngine } = await import("./services/evidenceEngine");
 
+      const biomechanicsInputSchema = z.object({
+        faults: z.array(z.object({
+          label: z.string(),
+          severity: z.string(),
+          category: z.string(),
+        })).optional(),
+        jointIssues: z.array(z.object({
+          joint: z.string(),
+          issue: z.string(),
+          severity: z.string(),
+        })).optional(),
+        qualityScore: z.number().optional(),
+        movementTask: z.string().optional(),
+      }).optional();
+
+      const slingInputSchema = z.object({
+        weakLinks: z.array(z.string()).optional(),
+        systemFailures: z.array(z.string()).optional(),
+        forceTransferScore: z.number().optional(),
+        dominantDysfunction: z.string().optional(),
+      }).optional();
+
+      const patientContextSchema = z.object({
+        goals: z.array(z.string()).optional(),
+        sport: z.string().optional(),
+        equipment: z.array(z.string()).optional(),
+        adherenceLevel: z.enum(['low', 'moderate', 'high']).optional(),
+        workDemands: z.string().optional(),
+        activityLevel: z.string().optional(),
+        age: z.number().optional(),
+        gender: z.string().optional(),
+      }).optional();
+
+      const structuredReasoningSchema = z.object({
+        hypotheses: z.array(z.object({
+          id: z.string().optional(),
+          condition: z.string(),
+          confidence: z.number().optional(),
+          supporting: z.array(z.object({ feature: z.string(), weight: z.number() })).optional(),
+          contradicting: z.array(z.object({ feature: z.string(), weight: z.number() })).optional(),
+          fingerprintMatchScore: z.number().optional(),
+          structuralHypothesis: z.string().optional(),
+          dominantClinicalDriver: z.string().optional(),
+        })).optional(),
+        dominantSymptomDriver: z.object({
+          driver: z.string(),
+          mechanism: z.string(),
+          reasoning: z.string(),
+        }).optional(),
+        irritability: z.object({
+          level: z.enum(['low', 'moderate', 'high']),
+          score: z.number().optional(),
+          reasons: z.array(z.string()).optional(),
+        }).optional(),
+        stage: z.object({
+          stage: z.string(),
+          label: z.string().optional(),
+          conditionSpecific: z.boolean().optional(),
+          reasoning: z.string().optional(),
+        }).optional(),
+        problemClass: z.object({
+          primary: z.string(),
+          secondary: z.string().optional(),
+          label: z.string().optional(),
+        }).optional(),
+        dominantMechanism: z.object({
+          mechanism: z.string(),
+          label: z.string().optional(),
+          reasoning: z.string().optional(),
+        }).optional(),
+        modifiers: z.array(z.object({
+          category: z.string().optional(),
+          label: z.string().optional(),
+          modifiers: z.array(z.string()).optional(),
+        })).optional(),
+        mustNotMiss: z.array(z.object({
+          condition: z.string(),
+          likelihood: z.string().optional(),
+          reasoning: z.string().optional(),
+          screeningNeeded: z.array(z.string()).optional(),
+        })).optional(),
+        missingData: z.array(z.object({
+          question: z.string(),
+          purpose: z.string().optional(),
+          priority: z.number().optional(),
+          category: z.string().optional(),
+        })).optional(),
+        reasoningLayers: z.object({
+          presentation: z.string().optional(),
+          symptomPattern: z.string().optional(),
+          mechanismPattern: z.string().optional(),
+          tissueFamilySuspicion: z.string().optional(),
+          differentialSummary: z.string().optional(),
+        }).optional(),
+        timestamp: z.string().optional(),
+      }).optional();
+
       const evidenceQuerySchema = z.object({
         diagnosis: z.string().optional(),
         bodyRegions: z.array(z.string()).optional(),
@@ -6542,9 +6639,10 @@ GUIDELINES:
         tissueType: z.string().optional(),
         tissuePathology: z.string().optional(),
         loadTolerance: z.enum(['low', 'moderate', 'high']).optional(),
-        patientGoals: z.array(z.string()).optional(),
-        sport: z.string().optional(),
-        structuredReasoning: z.any().optional(),
+        biomechanics: biomechanicsInputSchema,
+        sling: slingInputSchema,
+        patientContext: patientContextSchema,
+        structuredReasoning: structuredReasoningSchema,
       });
 
       const parsed = evidenceQuerySchema.safeParse(req.body);

@@ -461,6 +461,67 @@ const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
   },
 ];
 
+function buildCandidatesFromEvidenceEngine(
+  regions: string[],
+  problemClass: ProblemClass,
+  mechanism: DominantMechanism,
+  stage: ConditionStageType,
+  irritability: IrritabilityLevel,
+  structuredReasoning?: ClinicalReasoningResult,
+  options?: { hasRedFlags?: boolean; hasMustNotMiss?: boolean },
+): TreatmentCandidate[] {
+  const evidenceResult = queryEvidenceEngine({
+    diagnosis: structuredReasoning?.hypotheses?.[0]?.condition,
+    bodyRegions: regions.length > 0 ? regions : undefined,
+    stage,
+    irritability,
+    mechanism,
+    problemClass,
+    structuredReasoning,
+  });
+
+  const candidates: TreatmentCandidate[] = evidenceResult.options.map(opt => ({
+    id: opt.id,
+    name: opt.name,
+    category: opt.category as InterventionCategory,
+    description: opt.description,
+    dosage: opt.dosage,
+    rationale: opt.rationale,
+    evidenceGrade: opt.evidenceGrade as 'A' | 'B' | 'C' | 'Expert',
+    targetRegions: opt.targetRegions,
+    contraindications: opt.contraindications,
+    stageRestrictions: opt.stageAppropriateness ? [] : [stage],
+    irritabilityMax: opt.loadCompatibility ? 'high' as IrritabilityLevel : (irritability === 'high' ? 'moderate' : 'low') as IrritabilityLevel,
+    expectedTimeframe: 'Per clinical protocol',
+    problemClassMatch: problemClass ? [problemClass] : ['mixed' as ProblemClass],
+    mechanismMatch: mechanism ? [mechanism] : ['unknown' as DominantMechanism],
+    linkedTechniqueDbKeys: CANDIDATE_TO_TECHNIQUE_STATUS[opt.id] ? [Object.keys(CANDIDATE_TO_TECHNIQUE_STATUS).find(k => k === opt.id) || ''] : undefined,
+  }));
+
+  if (options?.hasRedFlags || options?.hasMustNotMiss) {
+    const hasReferral = candidates.some(c => c.category === 'pharmacological_referral');
+    if (!hasReferral) {
+      candidates.push({
+        id: 'refer_imaging',
+        name: 'Refer for Imaging / Specialist Review',
+        category: 'pharmacological_referral',
+        description: 'Onward referral when red flags are present, diagnosis uncertain, or conservative management plateaus',
+        dosage: 'Urgent (red flags) or routine (6-12 week plateau)',
+        rationale: 'Clinical governance: imaging or specialist assessment when conservative management is insufficient or unsafe',
+        evidenceGrade: 'Expert',
+        targetRegions: regions.length > 0 ? regions : ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
+        contraindications: [],
+        irritabilityMax: 'high',
+        expectedTimeframe: 'Urgent: within 24-48 hours; Routine: 2-6 weeks',
+        problemClassMatch: ['instability', 'sensitivity_dominant'],
+        mechanismMatch: ['unknown'],
+      });
+    }
+  }
+
+  return candidates;
+}
+
 function buildCandidates(
   regions: string[],
   problemClass: ProblemClass,
@@ -759,7 +820,7 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const hasRedFlags = (ctx?.redFlags?.length ?? 0) > 0;
   const hasMustNotMiss = mustNotMissConditions.length > 0;
 
-  const candidates = buildCandidates(regions, problemClass, mechanism, { hasRedFlags, hasMustNotMiss });
+  const candidates = buildCandidatesFromEvidenceEngine(regions, problemClass, mechanism, stage, irritability, sr, { hasRedFlags, hasMustNotMiss });
 
   const postureDeviationScore = computePostureBonus(input.postureState);
 
@@ -882,29 +943,18 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     : '';
   const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class): ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
 
-  let evidenceEngineContext: TreatmentDecisionResult['evidenceEngineContext'];
-  try {
-    const evidenceResult = queryEvidenceEngine({
-      diagnosis: topHypothesis,
-      bodyRegions: regions,
-      stage,
-      irritability,
-      mechanism,
-      problemClass,
-      structuredReasoning: sr,
-    });
-    const expertApproaches = new Set<string>();
-    for (const opt of evidenceResult.options) {
-      if (opt.expertApproach) expertApproaches.add(opt.expertApproach);
-    }
-    evidenceEngineContext = {
-      totalEvidenceOptions: evidenceResult.options.length,
-      gradeDistribution: evidenceResult.gradeDistribution,
-      topExpertApproaches: Array.from(expertApproaches).slice(0, 5),
-    };
-  } catch {
-    evidenceEngineContext = undefined;
-  }
+  const evidenceEngineContext: TreatmentDecisionResult['evidenceEngineContext'] = {
+    totalEvidenceOptions: candidates.length,
+    gradeDistribution: candidates.reduce((acc, c) => {
+      acc[c.evidenceGrade] = (acc[c.evidenceGrade] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+    topExpertApproaches: [...new Set(
+      candidates
+        .filter(c => c.linkedTechniqueDbKeys && c.linkedTechniqueDbKeys.length > 0)
+        .map(c => c.id)
+    )].slice(0, 5),
+  };
 
   return {
     primary,

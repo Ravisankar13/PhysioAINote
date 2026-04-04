@@ -8,12 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   ClipboardList, AlertTriangle, Mic, MicOff, FileText,
-  MapPin, Zap, ChevronRight, Loader2, CheckCircle2, XCircle,
-  Info, HelpCircle,
+  MapPin, Zap, Loader2,
+  Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -22,7 +21,6 @@ import type {
   ManualFormInput,
   PainMarkerSummary,
   PainSide,
-  MissingField,
   InputSourceLabel,
 } from "@shared/clinicalIntakeTypes";
 
@@ -88,18 +86,10 @@ const RED_FLAGS = [
   { value: "age_over_55", label: "Age over 55 with new onset" },
 ];
 
-const SOURCE_LABELS: Record<InputSourceLabel, { label: string; color: string }> = {
-  manual_form: { label: "Form", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-  free_text: { label: "Text", color: "bg-green-500/20 text-green-400 border-green-500/30" },
-  voice_transcription: { label: "Voice", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
-  pain_markers: { label: "Markers", color: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
-  soap_note: { label: "SOAP", color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
-  clinical_conversation: { label: "Chat", color: "bg-pink-500/20 text-pink-400 border-pink-500/30" },
-};
-
 interface CaseIntakePanelProps {
   painMarkers: PainMarkerSummary[];
   onExtractionComplete: (result: ClinicalExtractionResult) => void;
+  onBuildPayload?: (builder: () => UnifiedIntakeData) => void;
   existingSubjectiveHistory?: string;
   existingVoiceTranscription?: string;
   className?: string;
@@ -108,6 +98,7 @@ interface CaseIntakePanelProps {
 export default function CaseIntakePanel({
   painMarkers,
   onExtractionComplete,
+  onBuildPayload,
   existingSubjectiveHistory = "",
   existingVoiceTranscription = "",
   className,
@@ -142,7 +133,6 @@ export default function CaseIntakePanel({
 
   const [isRecording, setIsRecording] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
-  const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -238,6 +228,10 @@ export default function CaseIntakePanel({
     };
   }, [manualForm, freeText, voiceTranscription, painMarkers, mechanismOfInjury, patientAge, patientSex, relevantHistory, existingSubjectiveHistory, existingVoiceTranscription]);
 
+  useEffect(() => {
+    onBuildPayload?.(() => buildIntakePayload());
+  }, [buildIntakePayload, onBuildPayload]);
+
   const runExtraction = useCallback(async () => {
     const payload = buildIntakePayload();
     if (payload.sources.length === 0) {
@@ -249,7 +243,6 @@ export default function CaseIntakePanel({
     const controller = new AbortController();
     abortRef.current = controller;
     setIsExtracting(true);
-    setExtractionResult(null);
 
     try {
       const response = await fetch("/api/clinical/extract", {
@@ -262,7 +255,6 @@ export default function CaseIntakePanel({
       if (!response.ok) throw new Error("Extraction failed");
       const result: ClinicalExtractionResult = await response.json();
       if (controller.signal.aborted) return;
-      setExtractionResult(result);
       onExtractionComplete(result);
       toast({ title: "Extraction complete", description: `${result.bodyRegions.length} region(s), ${result.symptoms.length} symptom(s) found.` });
     } catch (err) {
@@ -669,179 +661,8 @@ export default function CaseIntakePanel({
           </Button>
         </div>
 
-        {extractionResult && (
-          <ExtractionResultsView result={extractionResult} />
-        )}
       </CardContent>
     </Card>
   );
 }
 
-function SourceBadge({ source }: { source: InputSourceLabel | string }) {
-  const config = SOURCE_LABELS[source as InputSourceLabel];
-  if (!config) return <Badge variant="outline" className="text-[10px]">{source}</Badge>;
-  return (
-    <Badge variant="outline" className={`text-[10px] px-1 py-0 ${config.color}`}>
-      {config.label}
-    </Badge>
-  );
-}
-
-function ExtractionResultsView({ result }: { result: ClinicalExtractionResult }) {
-  return (
-    <div className="space-y-3 pt-2">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
-          Extraction Results
-        </h4>
-        <Badge
-          variant="outline"
-          className={`text-[10px] ${
-            result.overallConfidence >= 0.7
-              ? "text-green-400 border-green-500/30"
-              : result.overallConfidence >= 0.4
-              ? "text-yellow-400 border-yellow-500/30"
-              : "text-red-400 border-red-500/30"
-          }`}
-        >
-          {Math.round(result.overallConfidence * 100)}% confidence
-        </Badge>
-      </div>
-
-      <ScrollArea className="max-h-[300px]">
-        <div className="space-y-2 pr-2">
-          {result.bodyRegions.length > 0 && (
-            <ResultSection title="Body Regions">
-              <div className="flex flex-wrap gap-1">
-                {result.bodyRegions.map((r, i) => (
-                  <Badge key={i} variant="secondary" className="text-[10px] gap-1">
-                    {r.region} ({r.side}) <SourceBadge source={r.sourceLabel} />
-                  </Badge>
-                ))}
-              </div>
-            </ResultSection>
-          )}
-
-          {result.symptoms.length > 0 && (
-            <ResultSection title="Symptoms">
-              {result.symptoms.map((s, i) => (
-                <div key={i} className="flex items-center justify-between text-xs py-0.5">
-                  <span className="text-slate-300">{s.description}</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-orange-400">{s.severity}/10</span>
-                    <SourceBadge source={s.sourceLabel} />
-                  </div>
-                </div>
-              ))}
-            </ResultSection>
-          )}
-
-          <ResultSection title="Timeline">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div><span className="text-slate-500">Duration:</span> <span className="text-slate-200">{result.duration}</span></div>
-              <div><span className="text-slate-500">Onset:</span> <span className="text-slate-200">{result.onset}</span></div>
-              <div><span className="text-slate-500">Irritability:</span>{" "}
-                <span className={
-                  result.irritability === "high" ? "text-red-400" :
-                  result.irritability === "moderate" ? "text-yellow-400" : "text-green-400"
-                }>
-                  {result.irritability}
-                </span>
-              </div>
-              {result.mechanism && (
-                <div className="col-span-2"><span className="text-slate-500">Mechanism:</span> <span className="text-slate-200">{result.mechanism}</span></div>
-              )}
-            </div>
-          </ResultSection>
-
-          {result.aggravatingFactors.length > 0 && (
-            <ResultSection title="Aggravating Factors">
-              <div className="flex flex-wrap gap-1">
-                {result.aggravatingFactors.map((a, i) => (
-                  <Badge key={i} variant="outline" className="text-[10px] text-red-300 border-red-500/20 gap-1">
-                    {a.factor} <SourceBadge source={a.sourceLabel} />
-                  </Badge>
-                ))}
-              </div>
-            </ResultSection>
-          )}
-
-          {result.easingFactors.length > 0 && (
-            <ResultSection title="Easing Factors">
-              <div className="flex flex-wrap gap-1">
-                {result.easingFactors.map((e, i) => (
-                  <Badge key={i} variant="outline" className="text-[10px] text-green-300 border-green-500/20 gap-1">
-                    {e.factor} <SourceBadge source={e.sourceLabel} />
-                  </Badge>
-                ))}
-              </div>
-            </ResultSection>
-          )}
-
-          {result.redFlags.length > 0 && (
-            <ResultSection title="Red Flags" urgent>
-              {result.redFlags.map((r, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs py-0.5">
-                  <AlertTriangle className={`h-3 w-3 ${r.urgency === "immediate" ? "text-red-500" : "text-yellow-500"}`} />
-                  <span className="text-slate-300">{r.description}</span>
-                  <Badge variant="outline" className={`text-[10px] ${r.urgency === "immediate" ? "text-red-400 border-red-500/30" : "text-yellow-400 border-yellow-500/30"}`}>
-                    {r.urgency}
-                  </Badge>
-                  <SourceBadge source={r.sourceLabel} />
-                </div>
-              ))}
-            </ResultSection>
-          )}
-
-          {result.functionalLimitations.length > 0 && (
-            <ResultSection title="Functional Limitations">
-              {result.functionalLimitations.map((f, i) => (
-                <div key={i} className="flex items-center justify-between text-xs py-0.5">
-                  <span className="text-slate-300">{f.limitation}</span>
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant="outline" className="text-[10px]">{f.severity}</Badge>
-                    <SourceBadge source={f.sourceLabel} />
-                  </div>
-                </div>
-              ))}
-            </ResultSection>
-          )}
-
-          {result.missingFields.length > 0 && (
-            <ResultSection title="Missing Information">
-              {result.missingFields.map((m, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs py-0.5">
-                  <HelpCircle className={`h-3 w-3 mt-0.5 ${m.importance === "critical" ? "text-red-400" : m.importance === "important" ? "text-yellow-400" : "text-slate-400"}`} />
-                  <div>
-                    <span className="text-slate-300">{m.promptQuestion}</span>
-                    <Badge variant="outline" className="ml-1.5 text-[10px]">{m.importance}</Badge>
-                  </div>
-                </div>
-              ))}
-            </ResultSection>
-          )}
-        </div>
-      </ScrollArea>
-    </div>
-  );
-}
-
-function ResultSection({
-  title,
-  urgent,
-  children,
-}: {
-  title: string;
-  urgent?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={`p-2 rounded-lg ${urgent ? "bg-red-500/10 border border-red-500/20" : "bg-slate-800/50"}`}>
-      <h5 className={`text-[11px] font-medium mb-1 ${urgent ? "text-red-400" : "text-slate-400"}`}>
-        {title}
-      </h5>
-      {children}
-    </div>
-  );
-}

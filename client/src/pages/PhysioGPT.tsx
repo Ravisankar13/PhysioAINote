@@ -100,7 +100,8 @@ import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab"
 import type { TreatmentPlanResult } from "@/components/skeleton/PlanTab";
 import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
 import CaseIntakePanel from "@/components/skeleton/CaseIntakePanel";
-import type { ClinicalExtractionResult, PainMarkerSummary } from "@shared/clinicalIntakeTypes";
+import ExtractionResultsPanel from "@/components/skeleton/ExtractionResultsPanel";
+import type { ClinicalExtractionResult, PainMarkerSummary, UnifiedIntakeData } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
@@ -557,6 +558,8 @@ export default function PhysioGPT() {
   const [treatmentPlanData, setTreatmentPlanData] = useState<TreatmentPlanResult | null>(null);
   const [treatmentPlanLoading, setTreatmentPlanLoading] = useState(false);
   const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
+  const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
+  const intakePayloadBuilderRef = useRef<(() => UnifiedIntakeData) | null>(null);
   const [caseIntakeOpen, setCaseIntakeOpen] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
@@ -8990,10 +8993,19 @@ ${ddxList}`;
           >
             <ClipboardList className="h-3.5 w-3.5" />
             {caseIntakeOpen ? 'Hide Intake' : 'Case Intake'}
-            {extractionResult && !caseIntakeOpen && (
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            )}
           </button>
+          {extractionResult && (
+            <button
+              onClick={() => setExtractionResultsOpen(!extractionResultsOpen)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${extractionResultsOpen ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-black/70 hover:bg-black/80 text-white'}`}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {extractionResultsOpen ? 'Hide Results' : 'Extraction Results'}
+              {!extractionResultsOpen && (
+                <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+              )}
+            </button>
+          )}
           <button
             onClick={() => setClinicalReasoningOpen(!clinicalReasoningOpen)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${clinicalReasoningOpen ? 'bg-cyan-500 hover:bg-cyan-600 text-white' : 'bg-black/70 hover:bg-black/80 text-white'}`}
@@ -9045,6 +9057,26 @@ ${ddxList}`;
             existingVoiceTranscription={voiceTranscriptRef.current}
             onExtractionComplete={(result) => {
               setExtractionResult(result);
+              setExtractionResultsOpen(true);
+            }}
+            onBuildPayload={(builder) => {
+              intakePayloadBuilderRef.current = builder;
+            }}
+          />
+        </div>
+      )}
+
+      {extractionResultsOpen && extractionResult && (
+        <div className="absolute top-14 z-[31] w-[400px] max-h-[calc(100vh-80px)]" style={{ right: caseIntakeOpen ? '810px' : '420px' }}>
+          <ExtractionResultsPanel
+            result={extractionResult}
+            onClose={() => setExtractionResultsOpen(false)}
+            onUpdateResult={(updated) => {
+              setExtractionResult(updated);
+            }}
+            buildIntakePayload={() => {
+              if (intakePayloadBuilderRef.current) return intakePayloadBuilderRef.current();
+              return { sources: [], manualForm: null, freeText: "", voiceTranscription: "", painMarkers: [], mechanismOfInjury: "", patientAge: null, patientSex: "", relevantHistory: "" };
             }}
           />
         </div>

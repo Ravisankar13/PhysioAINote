@@ -76,9 +76,33 @@ export function setupAuth(app: Express) {
   };
 
   app.set("trust proxy", 1);
-  app.use(session(sessionSettings));
-  app.use(passport.initialize());
-  app.use(passport.session());
+
+  const sessionMiddleware = session(sessionSettings);
+  app.use((req, res, next) => {
+    if (
+      req.path.startsWith('/@') ||
+      req.path.startsWith('/src/') ||
+      req.path.startsWith('/node_modules/') ||
+      req.path.startsWith('/__vite')
+    ) {
+      return next();
+    }
+    sessionMiddleware(req, res, next);
+  });
+
+  const passportInit = passport.initialize();
+  const passportSession = passport.session();
+  app.use((req, res, next) => {
+    if (
+      req.path.startsWith('/@') ||
+      req.path.startsWith('/src/') ||
+      req.path.startsWith('/node_modules/') ||
+      req.path.startsWith('/__vite')
+    ) {
+      return next();
+    }
+    passportInit(req, res, () => passportSession(req, res, next));
+  });
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {

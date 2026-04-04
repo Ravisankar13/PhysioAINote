@@ -1827,17 +1827,17 @@ ${ddxList}`;
 
   const handleEvidenceQuery = useCallback(() => {
     if (evidenceLoading) return;
-    const firstBubbleCheck = Object.values(clinicalBubbleResults)[0];
-    if (!firstBubbleCheck?.data?.hypotheses?.length && painMarkers.length === 0) return;
+    const firstBubble = Object.values(clinicalBubbleResults)[0];
+    if (!firstBubble?.data?.hypotheses?.length && painMarkers.length === 0) return;
     setEvidenceLoading(true);
     const regions: string[] = [];
     if (painMarkers.length > 0) painMarkers.forEach(pm => { if (pm.region && !regions.includes(pm.region.toLowerCase())) regions.push(pm.region.toLowerCase()); });
-    const slingCtx = slingAnalysis ? {
-      weakLinks: slingAnalysis.slings.filter((s: { status: string }) => s.status === 'underperforming').flatMap((s: { weakLinks: string[] }) => s.weakLinks),
-      forceTransferScore: slingAnalysis.overallForceTransferScore,
-      dominantDysfunction: slingAnalysis.dominantDysfunction,
+    const sa = slingAnalysisRef.current;
+    const slingCtx = sa ? {
+      weakLinks: sa.slings.filter((s: { status: string }) => s.status === 'underperforming').flatMap((s: { weakLinks: string[] }) => s.weakLinks),
+      forceTransferScore: sa.overallForceTransferScore,
+      dominantDysfunction: sa.dominantDysfunction,
     } : undefined;
-    const firstBubble = Object.values(clinicalBubbleResults)[0];
     fetch('/api/evidence-engine/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1857,7 +1857,7 @@ ${ddxList}`;
     .then(data => setEvidenceEngineResult(data))
     .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' }); })
     .finally(() => setEvidenceLoading(false));
-  }, [painMarkers, slingAnalysis, clinicalBubbleResults, tissueViewMode, evidenceLoading, toast]);
+  }, [painMarkers, clinicalBubbleResults, tissueViewMode, evidenceLoading, toast]);
 
   const handleHypothesisClick = useCallback((hypothesis: ClinicalHypothesis) => {
     setSelectedHypothesisForChat({

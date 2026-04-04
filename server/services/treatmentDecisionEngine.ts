@@ -36,6 +36,11 @@ export interface TreatmentCandidate {
   problemClassMatch: ProblemClass[];
   mechanismMatch: DominantMechanism[];
   linkedTechniqueDbKeys?: string[];
+  evidenceRelevanceScore?: number;
+  conditionKeywords?: string[];
+  sourceLibrary?: string;
+  expertApproach?: string;
+  references?: Array<{ authors: string; year: number; title: string; journal: string; pmid?: string }>;
 }
 
 export interface RankedIntervention {
@@ -57,6 +62,11 @@ export interface RankedIntervention {
   stageAppropriate: boolean;
   irritabilityAppropriate: boolean;
   linkedTechniques: string[];
+  sourceLibrary?: string;
+  expertApproach?: string;
+  references?: Array<{ authors: string; year: number; title: string; journal: string; pmid?: string }>;
+  evidenceRelevanceScore?: number;
+  conditionKeywords?: string[];
 }
 
 export interface ReviewSchedule {
@@ -66,6 +76,20 @@ export interface ReviewSchedule {
   stageBasis: ConditionStageType;
   milestones: string[];
   criteria: string[];
+}
+
+export interface EvidenceOptionForPlan {
+  id: string;
+  name: string;
+  dosage: string;
+  rationale: string;
+  evidenceGrade: string;
+  references: Array<{ authors: string; year: number; title: string; journal: string; pmid?: string }>;
+  sourceLibrary: string;
+  expertApproach?: string;
+  relevanceScore: number;
+  targetRegions: string[];
+  conditionKeywords?: string[];
 }
 
 export interface TreatmentDecisionResult {
@@ -85,6 +109,7 @@ export interface TreatmentDecisionResult {
     gradeDistribution: Record<string, number>;
     topExpertApproaches: string[];
   };
+  topEvidenceOptions?: EvidenceOptionForPlan[];
 }
 
 export interface BiomechanicsContextInput {
@@ -191,6 +216,13 @@ function buildCandidatesFromEvidenceEngine(
       problemClassMatch: opt.problemClassMatch,
       mechanismMatch: opt.mechanismMatch,
       linkedTechniqueDbKeys: opt.linkedTechniqueDbKeys,
+      evidenceRelevanceScore: opt.relevanceScore,
+      conditionKeywords: opt.conditionKeywords && opt.conditionKeywords.length > 0
+        ? opt.conditionKeywords
+        : opt.name.toLowerCase().split(/[^a-z]+/).filter(w => w.length > 3),
+      sourceLibrary: opt.sourceLibrary,
+      expertApproach: opt.expertApproach,
+      references: opt.references,
     };
   });
 
@@ -218,14 +250,46 @@ function buildCandidatesFromEvidenceEngine(
   return { candidates, evidenceResult };
 }
 
-function matchScore(candidate: TreatmentCandidate, problemClass: ProblemClass, mechanism: DominantMechanism): number {
+function matchScore(
+  candidate: TreatmentCandidate,
+  problemClass: ProblemClass,
+  mechanism: DominantMechanism,
+  topHypothesis: string,
+  regions: string[],
+): number {
   let score = 0;
-  if (candidate.problemClassMatch.includes(problemClass)) score += 30;
-  if (candidate.mechanismMatch.includes(mechanism)) score += 30;
-  if (candidate.evidenceGrade === 'A') score += 20;
-  else if (candidate.evidenceGrade === 'B') score += 12;
-  else if (candidate.evidenceGrade === 'C') score += 5;
-  else score += 2;
+  if (candidate.problemClassMatch.includes(problemClass)) score += 25;
+  if (candidate.mechanismMatch.includes(mechanism)) score += 25;
+  if (candidate.evidenceGrade === 'A') score += 10;
+  else if (candidate.evidenceGrade === 'B') score += 6;
+  else if (candidate.evidenceGrade === 'C') score += 3;
+  else score += 1;
+
+  if (candidate.evidenceRelevanceScore !== undefined && candidate.evidenceRelevanceScore > 0) {
+    score += Math.min(25, Math.round(candidate.evidenceRelevanceScore * 0.35));
+  }
+
+  if (regions.length > 0 && candidate.targetRegions.length >= 6 && candidate.sourceLibrary === 'core') {
+    score -= Math.min(15, (candidate.targetRegions.length - 3) * 3);
+  }
+
+  if (topHypothesis && topHypothesis !== 'Unknown presentation' && candidate.conditionKeywords?.length) {
+    const diagLower = topHypothesis.toLowerCase();
+    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2);
+    const kwMatches = candidate.conditionKeywords.filter(
+      k => diagLower.includes(k) || diagWords.some(dw => k.includes(dw) || dw.includes(k))
+    ).length;
+    if (kwMatches >= 2) score += 20;
+    else if (kwMatches >= 1) score += 12;
+  }
+
+  if (candidate.expertApproach && topHypothesis && topHypothesis !== 'Unknown presentation') {
+    const diagLower = topHypothesis.toLowerCase();
+    const nameWords = candidate.name.toLowerCase().split(/[^a-z]+/).filter(w => w.length > 3);
+    const nameMatch = nameWords.filter(w => diagLower.includes(w)).length;
+    if (nameMatch >= 2) score += 10;
+  }
+
   return score;
 }
 
@@ -339,6 +403,15 @@ function buildExplainability(
     reasons.push('Supported by Grade A evidence');
   } else if (candidate.evidenceGrade === 'B') {
     reasons.push('Supported by Grade B evidence');
+  }
+  if (candidate.evidenceRelevanceScore !== undefined && candidate.evidenceRelevanceScore >= 50) {
+    reasons.push(`High evidence relevance (${candidate.evidenceRelevanceScore}/100)`);
+  }
+  if (candidate.expertApproach) {
+    reasons.push(`Expert approach: ${candidate.expertApproach}`);
+  }
+  if (candidate.sourceLibrary && candidate.sourceLibrary !== 'core') {
+    reasons.push(`Source: ${candidate.sourceLibrary}`);
   }
   if (tier === 'avoid_defer') {
     reasons.push(...riskFlags);
@@ -524,7 +597,7 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const tierContext = { hasRedFlags, hasMustNotMiss, postureIsDominant };
 
   const ranked: RankedIntervention[] = candidates.map(candidate => {
-    let score = matchScore(candidate, problemClass, mechanism);
+    let score = matchScore(candidate, problemClass, mechanism, topHypothesis, regions);
 
     const specificityBonus = 7 - Math.min(7, candidate.problemClassMatch.length);
     score += specificityBonus;
@@ -602,6 +675,11 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
         return order.indexOf(irritability) <= order.indexOf(candidate.irritabilityMax);
       })(),
       linkedTechniques,
+      sourceLibrary: candidate.sourceLibrary,
+      expertApproach: candidate.expertApproach,
+      references: candidate.references,
+      evidenceRelevanceScore: candidate.evidenceRelevanceScore,
+      conditionKeywords: candidate.conditionKeywords,
     };
   });
 
@@ -649,6 +727,21 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     topExpertApproaches: Array.from(expertApproaches).slice(0, 5),
   };
 
+  const topEvidenceOptions: EvidenceOptionForPlan[] = cachedEvidenceResult.options
+    .slice(0, 20)
+    .map(opt => ({
+      id: opt.id,
+      name: opt.name,
+      dosage: opt.dosage,
+      rationale: opt.rationale,
+      evidenceGrade: opt.evidenceGrade,
+      references: opt.references,
+      sourceLibrary: opt.sourceLibrary,
+      expertApproach: opt.expertApproach,
+      relevanceScore: opt.relevanceScore,
+      targetRegions: opt.targetRegions,
+    }));
+
   return {
     primary,
     adjunct,
@@ -662,5 +755,6 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     decisionSummary,
     timestamp: new Date().toISOString(),
     evidenceEngineContext,
+    topEvidenceOptions,
   };
 }

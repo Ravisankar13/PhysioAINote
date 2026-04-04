@@ -102,6 +102,7 @@ export interface EvidenceOption {
   linkedTechniqueDbKeys?: string[];
   expectedTimeframe?: string;
   irritabilityMax: IrritabilityLevel;
+  conditionKeywords?: string[];
 }
 
 export interface EvidenceQueryResult {
@@ -727,6 +728,48 @@ interface ExpertArticle {
   keywords: string[];
 }
 
+function inferExpertProblemClassAndMechanism(conditionName: string, principles: string[]): { problemClasses: ProblemClass[]; mechanisms: DominantMechanism[] } {
+  const text = `${conditionName} ${principles.join(' ')}`.toLowerCase();
+  const problemClasses: ProblemClass[] = [];
+  const mechanisms: DominantMechanism[] = [];
+
+  if (text.includes('tendin') || text.includes('tendon') || text.includes('load') || text.includes('capacity') || text.includes('overload') || text.includes('strain') || text.includes('tear') || text.includes('rupture')) {
+    problemClasses.push('load_capacity');
+    mechanisms.push('tensile_load');
+  }
+  if (text.includes('instabil') || text.includes('sublux') || text.includes('disloc') || text.includes('laxity') || text.includes('hypermobil')) {
+    problemClasses.push('instability');
+    mechanisms.push('instability');
+  }
+  if (text.includes('impinge') || text.includes('compress') || text.includes('stenosis') || text.includes('entrap') || text.includes('labr')) {
+    problemClasses.push('compression');
+    mechanisms.push('compression');
+  }
+  if (text.includes('stiff') || text.includes('restrict') || text.includes('frozen') || text.includes('adhesive') || text.includes('capsul') || text.includes('mobility') || text.includes('contracture')) {
+    problemClasses.push('mobility_restriction');
+    mechanisms.push('stiffness');
+  }
+  if (text.includes('motor control') || text.includes('coordination') || text.includes('stabilis') || text.includes('neuromuscular') || text.includes('retraining') || text.includes('activation')) {
+    problemClasses.push('coordination_control');
+    mechanisms.push('motor_control');
+  }
+  if (text.includes('sensitis') || text.includes('chronic pain') || text.includes('central') || text.includes('neuropath') || text.includes('allodyn') || text.includes('hyperalges')) {
+    problemClasses.push('sensitivity_dominant');
+    mechanisms.push('sensitisation');
+  }
+  if (text.includes('nerve') || text.includes('neural') || text.includes('radiculop') || text.includes('neuropath')) {
+    if (!mechanisms.includes('compression')) mechanisms.push('compression');
+    if (!problemClasses.includes('compression')) problemClasses.push('compression');
+  }
+
+  if (problemClasses.length === 0) {
+    problemClasses.push('load_capacity');
+    mechanisms.push('tensile_load');
+  }
+
+  return { problemClasses, mechanisms };
+}
+
 function buildExpertLibraryEntries(): CatalogEntryWithoutLoad[] {
   const entries: CatalogEntryWithoutLoad[] = [];
   const libs: Array<{ name: string; conditions: ExpertCondition[]; articles: ExpertArticle[] }> = [
@@ -756,6 +799,8 @@ function buildExpertLibraryEntries(): CatalogEntryWithoutLoad[] {
 
       const id = `expert_${lib.name.toLowerCase().replace(/\s+/g, '_')}_${cond.condition.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40)}`;
 
+      const { problemClasses, mechanisms } = inferExpertProblemClassAndMechanism(cond.condition, cond.keyPrinciples);
+
       entries.push({
         id,
         name: `${cond.condition} — ${lib.name} Approach`,
@@ -769,8 +814,8 @@ function buildExpertLibraryEntries(): CatalogEntryWithoutLoad[] {
         contraindications: [],
         stageRestrictions: [],
         irritabilityMax: 'high',
-        problemClassMatch: ['load_capacity', 'mobility_restriction', 'coordination_control'],
-        mechanismMatch: ['tensile_load', 'motor_control', 'stiffness'],
+        problemClassMatch: problemClasses,
+        mechanismMatch: mechanisms,
         references: refs,
         sourceLibrary: lib.name,
         conditionKeywords: cond.condition.toLowerCase().split(/\s+/).filter(w => w.length > 3),
@@ -1184,6 +1229,7 @@ export function queryEvidenceEngine(input: EvidenceQueryInput): EvidenceQueryRes
       linkedTechniqueDbKeys: entry.linkedTechniqueDbKeys,
       expectedTimeframe: entry.expectedTimeframe,
       irritabilityMax: entry.irritabilityMax,
+      conditionKeywords: entry.conditionKeywords,
     };
   });
 

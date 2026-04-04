@@ -13,6 +13,19 @@ export interface RankedInterventionInput {
   riskFlags: string[];
 }
 
+export interface EvidenceOptionForPlanInput {
+  id: string;
+  name: string;
+  dosage: string;
+  rationale: string;
+  evidenceGrade: string;
+  references?: Array<{ authors: string; year: number; title: string; journal: string; pmid?: string }>;
+  sourceLibrary?: string;
+  expertApproach?: string;
+  relevanceScore?: number;
+  targetRegions?: string[];
+}
+
 export interface DecisionResultInput {
   primary: RankedInterventionInput[];
   adjunct: RankedInterventionInput[];
@@ -20,6 +33,7 @@ export interface DecisionResultInput {
   topHypothesis: string;
   stage?: string;
   irritability?: string;
+  topEvidenceOptions?: EvidenceOptionForPlanInput[];
 }
 
 export type InterventionCategory = string;
@@ -399,11 +413,36 @@ for (const ex of EXERCISE_CATALOG) {
 function selectExercisesForIntervention(
   intervention: RankedInterventionInput,
   _phase: number,
+  topHypothesis?: string,
 ): string[] {
   const regionKeys = intervention.targetRegions.map(r => r.toLowerCase());
+  const diagWords = topHypothesis
+    ? topHypothesis.toLowerCase().split(/\s+/).filter(w => w.length > 2)
+    : [];
 
   const mapped = INTERVENTION_EXERCISE_MAP[intervention.id];
   if (mapped && mapped.length > 0) {
+    if (diagWords.length > 0 && mapped.length > 3) {
+      const diagScored = mapped.map(exId => {
+        const ex = catalogIndex.get(exId);
+        if (!ex) return { exId, score: 0 };
+        let s = 0;
+        const nameLower = ex.name.toLowerCase();
+        const targetLower = (ex.targetStructure || '').toLowerCase();
+        for (const dw of diagWords) {
+          if (nameLower.includes(dw)) s += 3;
+          if (targetLower.includes(dw)) s += 2;
+        }
+        if (regionKeys.length > 0) {
+          const regionHit = ex.bodyParts.some(bp => regionKeys.some(rk => bp.includes(rk) || rk.includes(bp)));
+          if (regionHit) s += 2;
+        }
+        return { exId, score: s };
+      });
+      diagScored.sort((a, b) => b.score - a.score);
+      const topScored = diagScored.filter(d => d.score > 0).map(d => d.exId);
+      if (topScored.length > 0) return topScored.slice(0, 4);
+    }
     if (regionKeys.length > 0 && mapped.length > 3) {
       const regionFiltered = mapped.filter(exId => {
         const ex = catalogIndex.get(exId);
@@ -413,6 +452,28 @@ function selectExercisesForIntervention(
       if (regionFiltered.length > 0) return regionFiltered.slice(0, 4);
     }
     return mapped.slice(0, 5);
+  }
+
+  if (diagWords.length > 0) {
+    const diagMatches: Array<{ id: string; score: number }> = [];
+    for (const ex of EXERCISE_CATALOG) {
+      const nameLower = ex.name.toLowerCase();
+      const targetLower = (ex.targetStructure || '').toLowerCase();
+      let s = 0;
+      for (const dw of diagWords) {
+        if (nameLower.includes(dw)) s += 3;
+        if (targetLower.includes(dw)) s += 2;
+      }
+      if (regionKeys.length > 0) {
+        const regionHit = ex.bodyParts.some(bp => regionKeys.some(rk => bp.includes(rk) || rk.includes(bp)));
+        if (regionHit) s += 1;
+      }
+      if (s > 0) diagMatches.push({ id: ex.id, score: s });
+    }
+    if (diagMatches.length > 0) {
+      diagMatches.sort((a, b) => b.score - a.score);
+      return diagMatches.slice(0, 4).map(d => d.id);
+    }
   }
 
   const matches: string[] = [];
@@ -760,6 +821,19 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
   const stage = decisionResult.stage || 'subacute';
   const irritability = decisionResult.irritability || 'moderate';
 
+  const evidenceDosageMap = new Map<string, string>();
+  const evidenceRationaleMap = new Map<string, string>();
+  if (decisionResult.topEvidenceOptions) {
+    for (const eo of decisionResult.topEvidenceOptions) {
+      if (eo.dosage && eo.dosage !== 'Per expert clinical protocol — individualised to patient presentation') {
+        evidenceDosageMap.set(eo.id, eo.dosage);
+      }
+      if (eo.rationale) {
+        evidenceRationaleMap.set(eo.id, eo.rationale);
+      }
+    }
+  }
+
   const allRegions = new Set<string>();
   if (painMarkers) {
     for (const pm of painMarkers) {
@@ -799,8 +873,11 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
 
       const isManualIntervention = iv.category === 'manual_therapy' || iv.category === 'modality';
 
-      const exerciseKeys = selectExercisesForIntervention(iv, idx);
+      const exerciseKeys = selectExercisesForIntervention(iv, idx, decisionResult.topHypothesis);
       const regionPainSeverity = computeMaxPainSeverity(painMarkers, iv.targetRegions);
+
+      const evidenceDosageForIv = evidenceDosageMap.get(iv.id);
+      const evidenceRationaleForIv = evidenceRationaleMap.get(iv.id);
 
       for (const key of exerciseKeys) {
         if (!seen.has(`${iv.id}_${key}`)) {
@@ -816,7 +893,11 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
             frequency: adjustedDosage.frequency,
             painCeiling: adjustedDosage.painCeiling,
             intensity: adjustedDosage.intensity,
+            rationale: evidenceRationaleForIv || ex.rationale,
           };
+          if (evidenceDosageForIv) {
+            finalEx.reps = evidenceDosageForIv;
+          }
           if (ex.category === 'manual_therapy' || isManualIntervention) {
             manualTherapy.push(finalEx);
           } else {
@@ -832,16 +913,18 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
         } else {
           let dosage = computeDosage('', irritability, stage, idx);
           dosage = adjustDosageForPainSeverity(dosage, regionPainSeverity);
+          const repsValue = evidenceDosageForIv || iv.dosage || dosage.reps;
+          const rationaleValue = evidenceRationaleForIv || iv.rationale;
           exercises.push({
             id: `${iv.id}_generic_p${idx}`,
             name: iv.name,
             category: iv.category,
             sets: dosage.sets,
-            reps: iv.dosage || dosage.reps,
+            reps: repsValue,
             frequency: dosage.frequency,
             painCeiling: dosage.painCeiling,
             intensity: dosage.intensity,
-            rationale: iv.rationale,
+            rationale: rationaleValue,
             evidenceGrade: normalizeEvidenceGrade(iv.evidenceGrade),
             targetRegions: iv.targetRegions,
             equipment: [],

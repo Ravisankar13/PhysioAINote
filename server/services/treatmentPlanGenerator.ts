@@ -776,16 +776,11 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
     const seen = new Set<string>();
 
     for (const iv of phaseInterventions) {
-      if (iv.category === 'manual_therapy' || iv.category === 'modality') {
-        if (!seen.has(iv.id)) {
-          seen.add(iv.id);
-          manualTherapy.push(convertManualTherapy(iv, idx, irritability));
-        }
-        continue;
-      }
       if (iv.category === 'education' || iv.category === 'pharmacological_referral') {
         continue;
       }
+
+      const isManualIntervention = iv.category === 'manual_therapy' || iv.category === 'modality';
 
       const exerciseKeys = selectExercisesForIntervention(iv, idx);
       const regionPainSeverity = computeMaxPainSeverity(painMarkers, iv.targetRegions);
@@ -805,7 +800,7 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
             painCeiling: adjustedDosage.painCeiling,
             intensity: adjustedDosage.intensity,
           };
-          if (ex.category === 'manual_therapy') {
+          if (ex.category === 'manual_therapy' || isManualIntervention) {
             manualTherapy.push(finalEx);
           } else {
             exercises.push(finalEx);
@@ -815,24 +810,28 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
 
       if (exerciseKeys.length === 0 && !seen.has(iv.id)) {
         seen.add(iv.id);
-        let dosage = computeDosage('', irritability, stage, idx);
-        dosage = adjustDosageForPainSeverity(dosage, regionPainSeverity);
-        exercises.push({
-          id: `${iv.id}_generic_p${idx}`,
-          name: iv.name,
-          category: iv.category,
-          sets: dosage.sets,
-          reps: iv.dosage || dosage.reps,
-          frequency: dosage.frequency,
-          painCeiling: dosage.painCeiling,
-          intensity: dosage.intensity,
-          rationale: iv.rationale,
-          evidenceGrade: normalizeEvidenceGrade(iv.evidenceGrade),
-          targetRegions: iv.targetRegions,
-          equipment: [],
-          progression: buildProgression('', idx, irritability),
-          regression: buildRegression('', irritability),
-        });
+        if (isManualIntervention) {
+          manualTherapy.push(convertManualTherapy(iv, idx, irritability));
+        } else {
+          let dosage = computeDosage('', irritability, stage, idx);
+          dosage = adjustDosageForPainSeverity(dosage, regionPainSeverity);
+          exercises.push({
+            id: `${iv.id}_generic_p${idx}`,
+            name: iv.name,
+            category: iv.category,
+            sets: dosage.sets,
+            reps: iv.dosage || dosage.reps,
+            frequency: dosage.frequency,
+            painCeiling: dosage.painCeiling,
+            intensity: dosage.intensity,
+            rationale: iv.rationale,
+            evidenceGrade: normalizeEvidenceGrade(iv.evidenceGrade),
+            targetRegions: iv.targetRegions,
+            equipment: [],
+            progression: buildProgression('', idx, irritability),
+            regression: buildRegression('', irritability),
+          });
+        }
       }
     }
 

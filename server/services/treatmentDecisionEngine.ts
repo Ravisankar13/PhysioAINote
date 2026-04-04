@@ -148,318 +148,6 @@ function resolveLinkedTechniques(candidateId: string): string[] {
   return evidence.map(e => e.name);
 }
 
-const CANDIDATE_LIBRARY: TreatmentCandidate[] = [
-  {
-    id: 'joint_mob_grade_1_2',
-    name: 'Joint Mobilisation (Grade I-II)',
-    category: 'manual_therapy',
-    description: 'Oscillatory accessory movements within pain-free range for pain modulation and neurophysiological inhibition',
-    dosage: '3-5 sets of 30-60s oscillations per segment',
-    rationale: 'Grade I-II mobilisations activate descending pain inhibition via large-diameter afferent input (gate control) and reduce sympathetic tone',
-    evidenceGrade: 'A',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
-    contraindications: ['fracture', 'malignancy', 'active infection', 'vascular compromise'],
-    irritabilityMax: 'high',
-    expectedTimeframe: 'Immediate pain relief; 2-4 sessions for sustained effect',
-    problemClassMatch: ['mobility_restriction', 'compression', 'sensitivity_dominant'],
-    mechanismMatch: ['compression', 'stiffness', 'sensitisation'],
-  },
-  {
-    id: 'joint_mob_grade_3_4',
-    name: 'Joint Mobilisation (Grade III-IV)',
-    category: 'manual_therapy',
-    description: 'Large-amplitude accessory movements at end range to restore joint mobility and break adhesion barriers',
-    dosage: '3-5 sets of 30s at end-range, reassess ROM between sets',
-    rationale: 'End-range mobilisation produces mechanical hysteresis and neurophysiological effects restoring accessory glide',
-    evidenceGrade: 'A',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
-    contraindications: ['fracture', 'malignancy', 'acute inflammation', 'hypermobility', 'osteoporosis'],
-    stageRestrictions: ['acute'],
-    irritabilityMax: 'moderate',
-    expectedTimeframe: '2-6 weeks for ROM restoration',
-    problemClassMatch: ['mobility_restriction', 'compression'],
-    mechanismMatch: ['stiffness', 'compression'],
-  },
-  {
-    id: 'soft_tissue_release',
-    name: 'Soft Tissue Release / Myofascial Release',
-    category: 'manual_therapy',
-    description: 'Sustained pressure and longitudinal gliding to reduce fascial restrictions and muscle tone',
-    dosage: '3-5 min per area, moderate to deep pressure',
-    rationale: 'Thixotropic reduction in fascial viscosity and autogenic inhibition via Golgi tendon organ activation',
-    evidenceGrade: 'B',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee'],
-    contraindications: ['open wounds', 'DVT', 'acute inflammation'],
-    expectedTimeframe: 'Immediate tone reduction; 3-6 sessions for lasting change',
-    problemClassMatch: ['mobility_restriction', 'load_capacity', 'compression', 'mixed'],
-    mechanismMatch: ['stiffness', 'compression', 'tensile_load'],
-    linkedTechniqueDbKeys: ['shortened'],
-  },
-  {
-    id: 'trigger_point_therapy',
-    name: 'Trigger Point Pressure Release',
-    category: 'manual_therapy',
-    description: 'Sustained ischemic compression to deactivate myofascial trigger points and reduce referred pain patterns',
-    dosage: '60-90s sustained pressure per point, 3-5 points per session',
-    rationale: 'Motor end plate dysfunction reset via ischemic compression and local vasodilation',
-    evidenceGrade: 'B',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee'],
-    contraindications: ['anticoagulant therapy', 'local infection'],
-    expectedTimeframe: '1-3 sessions for acute trigger points; 4-8 for chronic',
-    problemClassMatch: ['load_capacity', 'sensitivity_dominant', 'mixed'],
-    mechanismMatch: ['tensile_load', 'sensitisation'],
-    linkedTechniqueDbKeys: ['overactive'],
-  },
-  {
-    id: 'neural_mobilisation',
-    name: 'Neural Mobilisation / Neurodynamics',
-    category: 'neural',
-    description: 'Slider and tensioner techniques to restore neural tissue mobility and reduce mechanosensitivity',
-    dosage: '3 sets of 10-15 gentle oscillations, pain-free range',
-    rationale: 'Restores intraneural blood flow and reduces neural mechanosensitivity via axoplasmic flow enhancement',
-    evidenceGrade: 'A',
-    targetRegions: ['cervical', 'lumbar', 'shoulder', 'hip'],
-    contraindications: ['active radiculopathy with progressive deficit', 'cauda equina', 'spinal cord compression'],
-    expectedTimeframe: '2-6 weeks for neural desensitisation',
-    problemClassMatch: ['compression', 'sensitivity_dominant'],
-    mechanismMatch: ['compression', 'sensitisation'],
-  },
-  {
-    id: 'isometric_loading',
-    name: 'Isometric Loading Programme',
-    category: 'exercise',
-    description: 'Sustained isometric contractions for tendon pain modulation and early-stage load introduction',
-    dosage: '5 reps × 45s holds at 70% MVC, 3×/day',
-    rationale: 'Isometric loading produces cortical inhibition of pain and stimulates tendon matrix remodelling without compressive load',
-    evidenceGrade: 'A',
-    targetRegions: ['shoulder', 'knee', 'ankle', 'hip', 'elbow'],
-    contraindications: ['acute fracture', 'complete tendon rupture'],
-    irritabilityMax: 'high',
-    expectedTimeframe: 'Immediate analgesic effect (45 min); 2-4 weeks for structural adaptation',
-    problemClassMatch: ['load_capacity'],
-    mechanismMatch: ['tensile_load'],
-    linkedTechniqueDbKeys: ['inhibited'],
-  },
-  {
-    id: 'eccentric_programme',
-    name: 'Eccentric Loading Programme',
-    category: 'exercise',
-    description: 'Progressive eccentric strengthening for tendon remodelling and muscle length-tension restoration',
-    dosage: '3 × 15 reps, slow 4s eccentric phase, daily',
-    rationale: 'Promotes sarcomere addition in series and collagen realignment via mechanotransduction',
-    evidenceGrade: 'A',
-    targetRegions: ['shoulder', 'knee', 'ankle', 'hip', 'elbow'],
-    contraindications: ['reactive tendinopathy', 'acute inflammation'],
-    stageRestrictions: ['acute', 'reactive'],
-    irritabilityMax: 'moderate',
-    expectedTimeframe: '6-12 weeks for tendon remodelling',
-    problemClassMatch: ['load_capacity'],
-    mechanismMatch: ['tensile_load'],
-    linkedTechniqueDbKeys: ['shortened'],
-  },
-  {
-    id: 'progressive_strengthening',
-    name: 'Progressive Resistance Training',
-    category: 'exercise',
-    description: 'Graded resistance programme targeting identified weak or inhibited muscle groups',
-    dosage: '3 × 8-12 reps, RPE 6-8, 3×/week with progressive overload',
-    rationale: 'Addresses load capacity deficits through neural adaptation (weeks 1-6) and hypertrophy (weeks 6+)',
-    evidenceGrade: 'A',
-    targetRegions: ['shoulder', 'hip', 'knee', 'ankle', 'lumbar', 'cervical'],
-    contraindications: ['unstable fracture', 'acute inflammatory arthropathy'],
-    stageRestrictions: ['acute'],
-    irritabilityMax: 'moderate',
-    expectedTimeframe: '6-12 weeks for strength gains; 12+ weeks for hypertrophy',
-    problemClassMatch: ['load_capacity', 'instability', 'coordination_control'],
-    mechanismMatch: ['tensile_load', 'instability', 'motor_control'],
-    linkedTechniqueDbKeys: ['weak'],
-  },
-  {
-    id: 'motor_control_retraining',
-    name: 'Motor Control Retraining',
-    category: 'exercise',
-    description: 'Specific re-education of deep stabiliser activation and movement pattern correction',
-    dosage: '3 × 10 reps with biofeedback, low load, daily',
-    rationale: 'Restores feedforward timing of deep stabilisers (transversus, multifidus, rotator cuff) disrupted by pain inhibition',
-    evidenceGrade: 'A',
-    targetRegions: ['lumbar', 'cervical', 'shoulder', 'hip', 'knee'],
-    contraindications: [],
-    irritabilityMax: 'high',
-    expectedTimeframe: '4-8 weeks for motor pattern correction',
-    problemClassMatch: ['instability', 'coordination_control'],
-    mechanismMatch: ['instability', 'motor_control'],
-    linkedTechniqueDbKeys: ['inhibited'],
-  },
-  {
-    id: 'graded_exposure',
-    name: 'Graded Exposure to Movement',
-    category: 'exercise',
-    description: 'Systematic desensitisation to feared movements using a hierarchy of progressive exposure',
-    dosage: 'Fear hierarchy: 3-5 exposure levels, progress when distress < 3/10',
-    rationale: 'Reduces fear-avoidance beliefs and central sensitisation through extinction learning',
-    evidenceGrade: 'A',
-    targetRegions: ['lumbar', 'cervical', 'thoracic'],
-    contraindications: ['structural instability', 'active pathology requiring rest'],
-    expectedTimeframe: '4-12 weeks for behavioural change',
-    problemClassMatch: ['sensitivity_dominant', 'mixed'],
-    mechanismMatch: ['sensitisation', 'motor_control'],
-  },
-  {
-    id: 'pain_neuroscience_education',
-    name: 'Pain Neuroscience Education (PNE)',
-    category: 'education',
-    description: 'Reconceptualisation of pain as a protective output, addressing threat appraisal and central sensitisation',
-    dosage: '1-2 structured sessions + handout, reinforce each visit',
-    rationale: 'Reduces pain catastrophising and threat perception by targeting cortical representation of danger',
-    evidenceGrade: 'A',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee'],
-    contraindications: [],
-    irritabilityMax: 'high',
-    expectedTimeframe: '2-4 weeks for cognitive shift; ongoing reinforcement',
-    problemClassMatch: ['sensitivity_dominant', 'mixed'],
-    mechanismMatch: ['sensitisation'],
-  },
-  {
-    id: 'activity_modification',
-    name: 'Activity & Load Management',
-    category: 'load_management',
-    description: 'Structured modification of aggravating activities with graded return-to-activity planning',
-    dosage: 'Individualised schedule: reduce provocative loads to 70% current capacity, progress 10%/week',
-    rationale: 'Allows tissue healing while maintaining activity levels above deconditioning threshold',
-    evidenceGrade: 'B',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
-    contraindications: [],
-    irritabilityMax: 'high',
-    expectedTimeframe: 'Immediate reduction in symptoms; 4-8 weeks for graded return',
-    problemClassMatch: ['load_capacity', 'compression', 'sensitivity_dominant', 'mixed'],
-    mechanismMatch: ['tensile_load', 'compression', 'sensitisation'],
-  },
-  {
-    id: 'stretching_programme',
-    name: 'Targeted Stretching Programme',
-    category: 'exercise',
-    description: 'Static and PNF stretching for identified shortened muscles contributing to movement restriction',
-    dosage: '3-4 × 30-60s holds per muscle, daily',
-    rationale: 'Viscoelastic creep and sarcomere remodelling to restore optimal length-tension relationship',
-    evidenceGrade: 'A',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
-    contraindications: ['hypermobility in target region', 'acute muscle tear'],
-    stageRestrictions: ['acute'],
-    expectedTimeframe: '2-6 weeks for sustained flexibility gains',
-    problemClassMatch: ['mobility_restriction'],
-    mechanismMatch: ['stiffness'],
-    linkedTechniqueDbKeys: ['shortened'],
-  },
-  {
-    id: 'thoracic_manipulation',
-    name: 'Thoracic Spine Manipulation (HVLA)',
-    category: 'manual_therapy',
-    description: 'High-velocity low-amplitude thrust to thoracic spine for rapid neurophysiological pain modulation',
-    dosage: '1-2 thrusts per session, reassess immediately',
-    rationale: 'Produces immediate hypoalgesic effect via descending inhibition and sympathoexcitatory response',
-    evidenceGrade: 'A',
-    targetRegions: ['thoracic', 'cervical', 'shoulder'],
-    contraindications: ['osteoporosis', 'fracture', 'malignancy', 'vascular disease', 'anticoagulant therapy'],
-    stageRestrictions: ['acute'],
-    irritabilityMax: 'moderate',
-    expectedTimeframe: 'Immediate session effect; 2-4 sessions for lasting change',
-    problemClassMatch: ['mobility_restriction', 'compression'],
-    mechanismMatch: ['stiffness', 'compression'],
-  },
-  {
-    id: 'taping_support',
-    name: 'Therapeutic Taping (Kinesiology / Rigid)',
-    category: 'modality',
-    description: 'Supportive or facilitative taping for postural correction, proprioceptive cueing, or offloading',
-    dosage: 'Applied each session, patient can maintain 2-3 days',
-    rationale: 'Cutaneous proprioceptive input alters motor recruitment patterns and provides external postural cue',
-    evidenceGrade: 'C',
-    targetRegions: ['shoulder', 'knee', 'ankle', 'lumbar', 'cervical'],
-    contraindications: ['skin allergy to tape', 'open wounds'],
-    irritabilityMax: 'high',
-    expectedTimeframe: 'Immediate proprioceptive effect; short-term adjunct',
-    problemClassMatch: ['instability', 'coordination_control', 'load_capacity'],
-    mechanismMatch: ['instability', 'motor_control', 'tensile_load'],
-    linkedTechniqueDbKeys: ['lengthened'],
-  },
-  {
-    id: 'dry_needling',
-    name: 'Dry Needling',
-    category: 'manual_therapy',
-    description: 'Filiform needle insertion into trigger points to elicit local twitch response and reset motor end plate',
-    dosage: '2-3 insertions per trigger point, 4-6 points per session',
-    rationale: 'Disrupts dysfunctional motor endplate and reduces spontaneous electrical activity at trigger point loci',
-    evidenceGrade: 'A',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee'],
-    contraindications: ['needle phobia', 'anticoagulant therapy', 'local infection', 'pregnancy (specific regions)'],
-    stageRestrictions: ['acute'],
-    irritabilityMax: 'moderate',
-    expectedTimeframe: '1-3 sessions for acute trigger points; 4-8 for chronic',
-    problemClassMatch: ['load_capacity', 'sensitivity_dominant', 'mixed'],
-    mechanismMatch: ['tensile_load', 'sensitisation'],
-    linkedTechniqueDbKeys: ['overactive'],
-  },
-  {
-    id: 'ergonomic_advice',
-    name: 'Ergonomic & Postural Advice',
-    category: 'education',
-    description: 'Workplace and activity-specific postural optimisation to reduce sustained tissue loading',
-    dosage: 'Initial assessment + follow-up review, written action plan',
-    rationale: 'Reduces cumulative tissue loading below injury threshold through environmental modification',
-    evidenceGrade: 'B',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip'],
-    contraindications: [],
-    irritabilityMax: 'high',
-    expectedTimeframe: 'Immediate behavioural change; 2-4 weeks for habit formation',
-    problemClassMatch: ['compression'],
-    mechanismMatch: ['compression'],
-  },
-  {
-    id: 'proprioceptive_training',
-    name: 'Proprioceptive & Balance Training',
-    category: 'exercise',
-    description: 'Progressive balance and proprioceptive challenge for joint position sense restoration',
-    dosage: '3 × 30-60s per exercise, progress surface instability weekly',
-    rationale: 'Restores mechanoreceptor-mediated joint position sense disrupted by injury or deconditioning',
-    evidenceGrade: 'A',
-    targetRegions: ['ankle', 'knee', 'hip', 'lumbar'],
-    contraindications: ['acute fracture', 'severe vestibular dysfunction'],
-    stageRestrictions: ['acute'],
-    expectedTimeframe: '4-8 weeks for proprioceptive restoration',
-    problemClassMatch: ['instability', 'coordination_control'],
-    mechanismMatch: ['instability', 'motor_control'],
-  },
-  {
-    id: 'hydrotherapy',
-    name: 'Aquatic Therapy / Hydrotherapy',
-    category: 'exercise',
-    description: 'Water-based exercise programme utilising buoyancy for offloaded strengthening and ROM',
-    dosage: '30-45 min sessions, 2-3×/week',
-    rationale: 'Buoyancy reduces joint loading by 50-90% while hydrostatic pressure aids circulation and edema reduction',
-    evidenceGrade: 'B',
-    targetRegions: ['lumbar', 'hip', 'knee', 'ankle', 'shoulder'],
-    contraindications: ['open wounds', 'uncontrolled cardiac conditions', 'urinary incontinence'],
-    irritabilityMax: 'high',
-    expectedTimeframe: '4-8 weeks for functional improvement',
-    problemClassMatch: ['load_capacity', 'mobility_restriction', 'sensitivity_dominant'],
-    mechanismMatch: ['compression', 'tensile_load', 'sensitisation'],
-  },
-  {
-    id: 'refer_imaging',
-    name: 'Refer for Imaging / Specialist Review',
-    category: 'pharmacological_referral',
-    description: 'Onward referral when red flags are present, diagnosis uncertain, or conservative management plateaus',
-    dosage: 'Urgent (red flags) or routine (6-12 week plateau)',
-    rationale: 'Clinical governance: imaging or specialist assessment when conservative management is insufficient or unsafe',
-    evidenceGrade: 'Expert',
-    targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle'],
-    contraindications: [],
-    irritabilityMax: 'high',
-    expectedTimeframe: 'Urgent: within 24-48 hours; Routine: 2-6 weeks',
-    problemClassMatch: ['instability', 'sensitivity_dominant'],
-    mechanismMatch: ['unknown'],
-  },
-];
 
 function buildCandidatesFromEvidenceEngine(
   regions: string[],
@@ -480,23 +168,32 @@ function buildCandidatesFromEvidenceEngine(
     structuredReasoning,
   });
 
-  const candidates: TreatmentCandidate[] = evidenceResult.options.map(opt => ({
-    id: opt.id,
-    name: opt.name,
-    category: opt.category as InterventionCategory,
-    description: opt.description,
-    dosage: opt.dosage,
-    rationale: opt.rationale,
-    evidenceGrade: opt.evidenceGrade as 'A' | 'B' | 'C' | 'Expert',
-    targetRegions: opt.targetRegions,
-    contraindications: opt.contraindications,
-    stageRestrictions: opt.stageAppropriateness ? [] : [stage],
-    irritabilityMax: opt.loadCompatibility ? 'high' as IrritabilityLevel : (irritability === 'high' ? 'moderate' : 'low') as IrritabilityLevel,
-    expectedTimeframe: 'Per clinical protocol',
-    problemClassMatch: problemClass ? [problemClass] : ['mixed' as ProblemClass],
-    mechanismMatch: mechanism ? [mechanism] : ['unknown' as DominantMechanism],
-    linkedTechniqueDbKeys: CANDIDATE_TO_TECHNIQUE_STATUS[opt.id] ? [Object.keys(CANDIDATE_TO_TECHNIQUE_STATUS).find(k => k === opt.id) || ''] : undefined,
-  }));
+  const irritabilityRank: Record<IrritabilityLevel, number> = { low: 1, moderate: 2, high: 3 };
+
+  const candidates: TreatmentCandidate[] = evidenceResult.options.map(opt => {
+    const stageRestrictions: ConditionStageType[] = opt.stageAppropriateness ? [] : [stage];
+    const resolvedIrritabilityMax: IrritabilityLevel = opt.loadCompatibility
+      ? 'high'
+      : (irritabilityRank[irritability] > 2 ? 'moderate' : irritability);
+
+    return {
+      id: opt.id,
+      name: opt.name,
+      category: opt.category as InterventionCategory,
+      description: opt.description,
+      dosage: opt.dosage,
+      rationale: opt.rationale,
+      evidenceGrade: opt.evidenceGrade as 'A' | 'B' | 'C' | 'Expert',
+      targetRegions: opt.targetRegions,
+      contraindications: opt.contraindications,
+      stageRestrictions,
+      irritabilityMax: resolvedIrritabilityMax,
+      expectedTimeframe: opt.expectedTimeframe || 'Per clinical protocol',
+      problemClassMatch: opt.problemClassMatch,
+      mechanismMatch: opt.mechanismMatch,
+      linkedTechniqueDbKeys: opt.linkedTechniqueDbKeys,
+    };
+  });
 
   if (options?.hasRedFlags || options?.hasMustNotMiss) {
     const hasReferral = candidates.some(c => c.category === 'pharmacological_referral');
@@ -520,23 +217,6 @@ function buildCandidatesFromEvidenceEngine(
   }
 
   return candidates;
-}
-
-function buildCandidates(
-  regions: string[],
-  problemClass: ProblemClass,
-  mechanism: DominantMechanism,
-  options?: { hasRedFlags?: boolean; hasMustNotMiss?: boolean },
-): TreatmentCandidate[] {
-  return CANDIDATE_LIBRARY.filter(c => {
-    if (c.category === 'pharmacological_referral' && (options?.hasRedFlags || options?.hasMustNotMiss)) {
-      return true;
-    }
-    const regionMatch = regions.length === 0 || c.targetRegions.some(r => regions.some(ir => ir.toLowerCase().includes(r) || r.includes(ir.toLowerCase())));
-    const classMatch = c.problemClassMatch.includes(problemClass) || c.problemClassMatch.includes('mixed');
-    const mechMatch = c.mechanismMatch.includes(mechanism) || c.mechanismMatch.includes('unknown');
-    return regionMatch && (classMatch || mechMatch);
-  });
 }
 
 function matchScore(candidate: TreatmentCandidate, problemClass: ProblemClass, mechanism: DominantMechanism): number {
@@ -943,17 +623,23 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     : '';
   const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class): ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
 
+  const evidenceForContext = queryEvidenceEngine({
+    diagnosis: topHypothesis,
+    bodyRegions: regions,
+    stage,
+    irritability,
+    mechanism,
+    problemClass,
+    structuredReasoning: sr,
+  });
+  const expertApproaches = new Set<string>();
+  for (const opt of evidenceForContext.options) {
+    if (opt.expertApproach) expertApproaches.add(opt.expertApproach);
+  }
   const evidenceEngineContext: TreatmentDecisionResult['evidenceEngineContext'] = {
-    totalEvidenceOptions: candidates.length,
-    gradeDistribution: candidates.reduce((acc, c) => {
-      acc[c.evidenceGrade] = (acc[c.evidenceGrade] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>),
-    topExpertApproaches: [...new Set(
-      candidates
-        .filter(c => c.linkedTechniqueDbKeys && c.linkedTechniqueDbKeys.length > 0)
-        .map(c => c.id)
-    )].slice(0, 5),
+    totalEvidenceOptions: evidenceForContext.options.length,
+    gradeDistribution: evidenceForContext.gradeDistribution,
+    topExpertApproaches: Array.from(expertApproaches).slice(0, 5),
   };
 
   return {

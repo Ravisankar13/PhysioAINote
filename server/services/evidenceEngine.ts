@@ -94,6 +94,10 @@ export interface EvidenceOption {
   references: LiteratureReference[];
   sourceLibrary: string;
   expertApproach?: string;
+  problemClassMatch: ProblemClass[];
+  mechanismMatch: DominantMechanism[];
+  linkedTechniqueDbKeys?: string[];
+  expectedTimeframe?: string;
 }
 
 export interface EvidenceQueryResult {
@@ -130,6 +134,8 @@ interface CatalogEntry {
   sourceLibrary: string;
   conditionKeywords: string[];
   expertApproach?: string;
+  linkedTechniqueDbKeys?: string[];
+  expectedTimeframe?: string;
 }
 
 const UNIFIED_CATALOG: CatalogEntry[] = buildUnifiedCatalog();
@@ -166,6 +172,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['stiffness', 'joint pain', 'restricted movement'],
+      expectedTimeframe: 'Immediate pain relief; 2-4 sessions for sustained effect',
     },
     {
       id: 'joint_mob_grade_3_4',
@@ -187,6 +194,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['stiffness', 'restricted ROM', 'capsular restriction'],
+      expectedTimeframe: '2-6 weeks for ROM restoration',
     },
     {
       id: 'soft_tissue_release',
@@ -208,6 +216,8 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['tightness', 'fascial restriction', 'muscle tension'],
+      linkedTechniqueDbKeys: ['shortened'],
+      expectedTimeframe: 'Immediate tone reduction; 3-6 sessions for lasting change',
     },
     {
       id: 'trigger_point_therapy',
@@ -229,6 +239,8 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['trigger point', 'referred pain', 'myofascial pain'],
+      linkedTechniqueDbKeys: ['overactive'],
+      expectedTimeframe: '1-3 sessions for acute trigger points; 4-8 for chronic',
     },
     {
       id: 'neural_mobilisation',
@@ -250,6 +262,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['nerve', 'neural', 'radiculopathy', 'numbness', 'tingling'],
+      expectedTimeframe: '2-6 weeks for neural desensitisation',
     },
     {
       id: 'isometric_loading',
@@ -271,6 +284,8 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['tendinopathy', 'tendon pain', 'load capacity'],
+      linkedTechniqueDbKeys: ['inhibited'],
+      expectedTimeframe: 'Immediate analgesic effect (45 min); 2-4 weeks for structural adaptation',
     },
     {
       id: 'eccentric_programme',
@@ -292,6 +307,8 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['tendinopathy', 'tendon remodelling', 'eccentric'],
+      linkedTechniqueDbKeys: ['shortened'],
+      expectedTimeframe: '6-12 weeks for tendon remodelling',
     },
     {
       id: 'progressive_strengthening',
@@ -313,6 +330,8 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['weakness', 'deconditioning', 'strength deficit'],
+      linkedTechniqueDbKeys: ['weak'],
+      expectedTimeframe: '6-12 weeks for strength gains; 12+ weeks for hypertrophy',
     },
     {
       id: 'motor_control_retraining',
@@ -334,6 +353,8 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['instability', 'motor control', 'coordination', 'stabilisation'],
+      linkedTechniqueDbKeys: ['inhibited'],
+      expectedTimeframe: '4-8 weeks for motor pattern correction',
     },
     {
       id: 'graded_exposure',
@@ -355,6 +376,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['fear avoidance', 'kinesiophobia', 'chronic pain', 'sensitisation'],
+      expectedTimeframe: '4-12 weeks for behavioural change',
     },
     {
       id: 'pain_neuroscience_education',
@@ -376,6 +398,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['chronic pain', 'central sensitisation', 'pain education'],
+      expectedTimeframe: '2-4 weeks for cognitive shift; ongoing reinforcement',
     },
     {
       id: 'activity_modification',
@@ -397,6 +420,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['overload', 'load management', 'activity modification'],
+      expectedTimeframe: 'Immediate symptom reduction; 4-8 weeks for graded return',
     },
     {
       id: 'stretching_programme',
@@ -418,6 +442,8 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['shortening', 'tightness', 'flexibility'],
+      linkedTechniqueDbKeys: ['shortened'],
+      expectedTimeframe: '2-6 weeks for sustained flexibility gains',
     },
     {
       id: 'thoracic_manipulation',
@@ -439,6 +465,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['thoracic stiffness', 'neck pain', 'shoulder pain'],
+      expectedTimeframe: 'Immediate session effect; 2-4 sessions for lasting change',
     },
     {
       id: 'taping_support',
@@ -458,6 +485,8 @@ function buildCoreInterventions(): CatalogEntry[] {
       references: [],
       sourceLibrary: 'core',
       conditionKeywords: ['instability', 'postural correction', 'proprioception'],
+      linkedTechniqueDbKeys: ['lengthened'],
+      expectedTimeframe: 'Immediate proprioceptive effect; short-term adjunct',
     },
     {
       id: 'dry_needling',
@@ -479,6 +508,8 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['trigger point', 'myofascial pain', 'muscle spasm'],
+      linkedTechniqueDbKeys: ['overactive'],
+      expectedTimeframe: '1-3 sessions for acute trigger points; 4-8 for chronic',
     },
     {
       id: 'ergonomic_advice',
@@ -498,6 +529,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       references: [],
       sourceLibrary: 'core',
       conditionKeywords: ['posture', 'ergonomics', 'workplace'],
+      expectedTimeframe: 'Immediate behavioural change; 2-4 weeks for habit formation',
     },
     {
       id: 'proprioceptive_training',
@@ -519,6 +551,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['instability', 'balance', 'proprioception', 'ankle sprain'],
+      expectedTimeframe: '4-8 weeks for proprioceptive restoration',
     },
     {
       id: 'hydrotherapy',
@@ -540,6 +573,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       ],
       sourceLibrary: 'core',
       conditionKeywords: ['water therapy', 'offloaded exercise', 'joint pain'],
+      expectedTimeframe: '4-8 weeks for functional improvement',
     },
     {
       id: 'refer_imaging',
@@ -559,6 +593,7 @@ function buildCoreInterventions(): CatalogEntry[] {
       references: [],
       sourceLibrary: 'core',
       conditionKeywords: ['red flags', 'imaging', 'referral', 'specialist'],
+      expectedTimeframe: 'Urgent: within 24-48 hours; Routine: 2-6 weeks',
     },
   ];
 }
@@ -855,6 +890,10 @@ export function queryEvidenceEngine(input: EvidenceQueryInput): EvidenceQueryRes
       references: entry.references,
       sourceLibrary: entry.sourceLibrary,
       expertApproach: entry.expertApproach,
+      problemClassMatch: entry.problemClassMatch,
+      mechanismMatch: entry.mechanismMatch,
+      linkedTechniqueDbKeys: entry.linkedTechniqueDbKeys,
+      expectedTimeframe: entry.expectedTimeframe,
     };
   });
 

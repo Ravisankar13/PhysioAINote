@@ -1824,10 +1824,16 @@ ${ddxList}`;
       clinicalSummary: bioSrc.clinicalSummary,
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
     } : undefined;
-    const slingCtx = slingAnalysis ? {
-      overallForceTransferScore: slingAnalysis.overallForceTransferScore,
-      dominantDysfunction: slingAnalysis.dominantDysfunction,
-      dysfunctionalSlings: slingAnalysis.slings
+    const slingInput: SlingAnalysisInput = {
+      biomechanicsOutput: bioSrc,
+      muscleOverrides: muscleOverrides as Record<string, { tension?: number; pathology?: string }> | undefined,
+      movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
+    };
+    const currentSlingAnalysis = computeSlingAnalysis(slingInput);
+    const slingCtx = currentSlingAnalysis ? {
+      overallForceTransferScore: currentSlingAnalysis.overallForceTransferScore,
+      dominantDysfunction: currentSlingAnalysis.dominantDysfunction,
+      dysfunctionalSlings: currentSlingAnalysis.slings
         .filter(s => s.status !== 'normal')
         .map(s => ({
           sling: s.label,
@@ -1862,7 +1868,7 @@ ${ddxList}`;
       .catch(err => { if (err.name !== 'AbortError') console.error('Treatment decision error:', err); })
       .finally(() => { if (!abortController.signal.aborted) setTreatmentDecisionLoading(false); });
     return () => abortController.abort();
-  }, [structuredReasoningData, extractionResult, slingAnalysis]);
+  }, [structuredReasoningData, extractionResult]);
 
   useEffect(() => {
     if (!treatmentDecisionData) {
@@ -3336,10 +3342,10 @@ ${ddxList}`;
     const slingInput: SlingAnalysisInput = {
       biomechanicsOutput: bioSrc,
       muscleOverrides: muscleOverrides as Record<string, { tension?: number; pathology?: string }> | undefined,
-      movementTaskId: selectedMovementTask ?? undefined,
+      movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
     };
     return computeSlingAnalysis(slingInput);
-  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, selectedMovementTask]);
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask]);
 
   const biomechanicsFaultHighlights = useMemo(() => {
     const FAULT_JOINT_TO_BONE: Record<string, string> = {

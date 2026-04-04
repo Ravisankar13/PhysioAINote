@@ -49,6 +49,14 @@ function normalizeEvidenceGrade(raw: string): EvidenceGrade {
   return 'C';
 }
 
+export interface PlanReference {
+  authors: string;
+  year: number;
+  title: string;
+  journal: string;
+  pmid?: string;
+}
+
 export interface PlanExercise {
   id: string;
   name: string;
@@ -68,6 +76,9 @@ export interface PlanExercise {
   slingTarget?: string;
   targetStructure?: string;
   mobilisationGrade?: string;
+  references?: PlanReference[];
+  sourceLibrary?: string;
+  expertApproach?: string;
 }
 
 export interface ProgressionRule {
@@ -105,6 +116,14 @@ export interface PlanConstraint {
   source: string;
 }
 
+export interface EvidenceCitationSummary {
+  interventionId: string;
+  interventionName: string;
+  references: PlanReference[];
+  sourceLibrary?: string;
+  expertApproach?: string;
+}
+
 export interface TreatmentPlanResult {
   phases: PlanPhase[];
   constraints: PlanConstraint[];
@@ -114,6 +133,7 @@ export interface TreatmentPlanResult {
   stageBasis: string;
   topHypothesis: string;
   timestamp: string;
+  evidenceCitations?: EvidenceCitationSummary[];
 }
 
 export interface ExtractionContextForPlan {
@@ -816,6 +836,46 @@ function normalizeSlingId(raw: string): SlingId | null {
   return null;
 }
 
+function buildEvidenceCitations(
+  decisionResult: DecisionResultInput,
+  refsMap: Map<string, PlanReference[]>,
+  sourceMap: Map<string, { sourceLibrary?: string; expertApproach?: string }>,
+): EvidenceCitationSummary[] {
+  const citations: EvidenceCitationSummary[] = [];
+  const allInterventions = [
+    ...(decisionResult.primary || []),
+    ...(decisionResult.secondary || []),
+  ];
+  for (const iv of allInterventions) {
+    const refs = refsMap.get(iv.id);
+    const src = sourceMap.get(iv.id);
+    if ((refs && refs.length > 0) || src) {
+      citations.push({
+        interventionId: iv.id,
+        interventionName: iv.name,
+        references: refs || [],
+        sourceLibrary: src?.sourceLibrary,
+        expertApproach: src?.expertApproach,
+      });
+    }
+  }
+  if (decisionResult.topEvidenceOptions) {
+    const existingIds = new Set(citations.map(c => c.interventionId));
+    for (const eo of decisionResult.topEvidenceOptions) {
+      if (!existingIds.has(eo.id) && eo.references && eo.references.length > 0) {
+        citations.push({
+          interventionId: eo.id,
+          interventionName: eo.name,
+          references: eo.references as PlanReference[],
+          sourceLibrary: eo.sourceLibrary,
+          expertApproach: eo.expertApproach,
+        });
+      }
+    }
+  }
+  return citations;
+}
+
 export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanResult {
   const { decisionResult, painMarkers, postureState, extractionContext } = input;
   const stage = decisionResult.stage || 'subacute';
@@ -823,6 +883,8 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
 
   const evidenceDosageMap = new Map<string, string>();
   const evidenceRationaleMap = new Map<string, string>();
+  const evidenceRefsMap = new Map<string, PlanReference[]>();
+  const evidenceSourceMap = new Map<string, { sourceLibrary?: string; expertApproach?: string }>();
   if (decisionResult.topEvidenceOptions) {
     for (const eo of decisionResult.topEvidenceOptions) {
       if (eo.dosage && eo.dosage !== 'Per expert clinical protocol — individualised to patient presentation') {
@@ -830,6 +892,12 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
       }
       if (eo.rationale) {
         evidenceRationaleMap.set(eo.id, eo.rationale);
+      }
+      if (eo.references && eo.references.length > 0) {
+        evidenceRefsMap.set(eo.id, eo.references as PlanReference[]);
+      }
+      if (eo.sourceLibrary || eo.expertApproach) {
+        evidenceSourceMap.set(eo.id, { sourceLibrary: eo.sourceLibrary, expertApproach: eo.expertApproach });
       }
     }
   }
@@ -878,6 +946,8 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
 
       const evidenceDosageForIv = evidenceDosageMap.get(iv.id);
       const evidenceRationaleForIv = evidenceRationaleMap.get(iv.id);
+      const evidenceRefsForIv = evidenceRefsMap.get(iv.id);
+      const evidenceSourceForIv = evidenceSourceMap.get(iv.id);
 
       for (const key of exerciseKeys) {
         if (!seen.has(`${iv.id}_${key}`)) {
@@ -887,13 +957,16 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
             { sets: ex.sets, reps: ex.reps, holdSeconds: ex.holdSeconds, frequency: ex.frequency, intensity: ex.intensity, painCeiling: ex.painCeiling },
             regionPainSeverity,
           );
-          const finalEx = {
+          const finalEx: PlanExercise = {
             ...ex,
             sets: adjustedDosage.sets,
             frequency: adjustedDosage.frequency,
             painCeiling: adjustedDosage.painCeiling,
             intensity: adjustedDosage.intensity,
             rationale: evidenceRationaleForIv || ex.rationale,
+            references: evidenceRefsForIv,
+            sourceLibrary: evidenceSourceForIv?.sourceLibrary,
+            expertApproach: evidenceSourceForIv?.expertApproach,
           };
           if (evidenceDosageForIv) {
             finalEx.reps = evidenceDosageForIv;
@@ -930,6 +1003,9 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
             equipment: [],
             progression: buildProgression('', idx, irritability),
             regression: buildRegression('', irritability),
+            references: evidenceRefsForIv,
+            sourceLibrary: evidenceSourceForIv?.sourceLibrary,
+            expertApproach: evidenceSourceForIv?.expertApproach,
           });
         }
       }
@@ -1143,5 +1219,6 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
     stageBasis: stage,
     topHypothesis: decisionResult.topHypothesis,
     timestamp: new Date().toISOString(),
+    evidenceCitations: buildEvidenceCitations(decisionResult, evidenceRefsMap, evidenceSourceMap),
   };
 }

@@ -565,6 +565,7 @@ export default function PhysioGPT() {
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slingAnalysisRef = useRef<ReturnType<typeof computeSlingAnalysis> | null>(null);
+  const triggerClinicalReasoningAnalysisRef = useRef<(forceRefresh?: boolean) => void>(() => {});
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
@@ -1201,7 +1202,7 @@ export default function PhysioGPT() {
       subjectiveHistoryRef.current = updated;
       setSubjectiveHistoryInput(updated);
       lastReasoningTriggerRef.current = '';
-      setTimeout(() => triggerClinicalReasoningAnalysis(true), 300);
+      setTimeout(() => triggerClinicalReasoningAnalysisRef.current(true), 300);
     }
 
     const prev = clinicalTextAppliedRef.current;
@@ -1212,7 +1213,7 @@ export default function PhysioGPT() {
       highlightLabels: [...(prev?.highlightLabels || []), ...applied.highlightLabels],
       predictionText,
     };
-  }, [triggerClinicalReasoningAnalysis]);
+  }, []);
 
   const handleClinicalTextClear = useCallback(() => {
     const applied = clinicalTextAppliedRef.current;
@@ -1256,11 +1257,11 @@ export default function PhysioGPT() {
       subjectiveHistoryRef.current = cleaned;
       setSubjectiveHistoryInput(cleaned);
       lastReasoningTriggerRef.current = '';
-      setTimeout(() => triggerClinicalReasoningAnalysis(true), 300);
+      setTimeout(() => triggerClinicalReasoningAnalysisRef.current(true), 300);
     }
 
     clinicalTextAppliedRef.current = null;
-  }, [triggerClinicalReasoningAnalysis]);
+  }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
     setPainMarkers(prev => prev.map(m => m.id === id ? { ...m, position, nearestBone, anatomicalLabel } : m));
@@ -3066,6 +3067,8 @@ ${ddxList}`;
       setClinicalReasoningProcessing(false);
     }
   }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations]);
+
+  triggerClinicalReasoningAnalysisRef.current = triggerClinicalReasoningAnalysis;
 
   useEffect(() => {
     const hasPostureChanges = Object.entries(modelConfig).some(([key, val]: [string, any]) => {

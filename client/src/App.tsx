@@ -85,6 +85,50 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import NotesClinical from "./pages/NotesClinical";
 import TreatmentNotes from "@/pages/TreatmentNotes";
+import { Component, type ErrorInfo, type ReactNode } from "react";
+
+class PageErrorBoundary extends Component<
+  { children: ReactNode; pageName: string },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: ReactNode; pageName: string }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error(`[${this.props.pageName}] React render crash:`, error.message, error.stack);
+    console.error(`[${this.props.pageName}] Component stack:`, errorInfo.componentStack);
+    fetch('/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        page: this.props.pageName,
+        error: error.message,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack
+      })
+    }).catch(() => {});
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, textAlign: 'center' }}>
+          <h2>Something went wrong on the {this.props.pageName} page</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', textAlign: 'left', maxWidth: 800, margin: '20px auto', background: '#f5f5f5', padding: 16, borderRadius: 8, fontSize: 12 }}>
+            {this.state.error?.message}{'\n'}{this.state.error?.stack}
+          </pre>
+          <button onClick={() => this.setState({ hasError: false, error: null })} style={{ marginTop: 16, padding: '8px 16px' }}>
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function Router() {
   return (
@@ -196,7 +240,9 @@ function Router() {
             <ProtectedRoute component={CompetitionResultsPage} />
           </Route>
           <Route path="/physiogpt">
-            <ProtectedRoute component={PhysioGPT} />
+            <PageErrorBoundary pageName="PhysioGPT">
+              <ProtectedRoute component={PhysioGPT} />
+            </PageErrorBoundary>
           </Route>
           <Route path="/education">
             <ProtectedRoute component={Education} />

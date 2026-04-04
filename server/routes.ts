@@ -13028,6 +13028,16 @@ Be specific to THIS skeleton's findings. Every root cause must reference a speci
     }
   });
 
+  app.post('/api/client-error', (req, res) => {
+    const { page, error, stack, componentStack } = req.body || {};
+    console.error(`\n=== CLIENT-SIDE CRASH on ${page || 'unknown'} ===`);
+    console.error(`Error: ${error}`);
+    if (stack) console.error(`Stack: ${stack}`);
+    if (componentStack) console.error(`Component Stack: ${componentStack}`);
+    console.error('=== END CLIENT-SIDE CRASH ===\n');
+    res.json({ received: true });
+  });
+
   // ============================================================================
   // HOME PAGE API ROUTES
   // ============================================================================

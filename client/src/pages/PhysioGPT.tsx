@@ -564,6 +564,7 @@ export default function PhysioGPT() {
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slingAnalysisRef = useRef<ReturnType<typeof computeSlingAnalysis> | null>(null);
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
@@ -1890,11 +1891,12 @@ ${ddxList}`;
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
     } : undefined;
     let planSlingCtx: Record<string, unknown> | undefined;
-    if (slingAnalysis) {
+    const currentSlingAnalysis = slingAnalysisRef.current;
+    if (currentSlingAnalysis) {
       planSlingCtx = {
-        overallForceTransferScore: slingAnalysis.overallForceTransferScore,
-        dominantDysfunction: slingAnalysis.dominantDysfunction,
-        dysfunctionalSlings: slingAnalysis.slings
+        overallForceTransferScore: currentSlingAnalysis.overallForceTransferScore,
+        dominantDysfunction: currentSlingAnalysis.dominantDysfunction,
+        dysfunctionalSlings: currentSlingAnalysis.slings
           .filter(s => s.status !== 'normal')
           .map(s => ({
             sling: s.label,
@@ -1930,7 +1932,7 @@ ${ddxList}`;
       .catch(err => { if (err.name !== 'AbortError') console.error('Treatment plan error:', err); })
       .finally(() => { if (!abortController.signal.aborted) setTreatmentPlanLoading(false); });
     return () => abortController.abort();
-  }, [treatmentDecisionData, JSON.stringify(painMarkers.map(pm => ({ r: pm.anatomicalLabel || pm.nearestBone, t: pm.type }))), modelConfig?.spine?.thoracicKyphosis, modelConfig?.spine?.forwardHead, modelConfig?.pelvis?.tilt, slingAnalysis]);
+  }, [treatmentDecisionData, JSON.stringify(painMarkers.map(pm => ({ r: pm.anatomicalLabel || pm.nearestBone, t: pm.type }))), modelConfig?.spine?.thoracicKyphosis, modelConfig?.spine?.forwardHead, modelConfig?.pelvis?.tilt]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;
@@ -3365,7 +3367,9 @@ ${ddxList}`;
       muscleOverrides: muscleOverrides as Record<string, { tension?: number; pathology?: string }> | undefined,
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
     };
-    return computeSlingAnalysis(slingInput);
+    const result = computeSlingAnalysis(slingInput);
+    slingAnalysisRef.current = result;
+    return result;
   }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask]);
 
   const biomechanicsFaultHighlights = useMemo(() => {

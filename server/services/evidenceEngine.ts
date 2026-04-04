@@ -1185,15 +1185,17 @@ export function queryEvidenceEngine(input: EvidenceQueryInput): EvidenceQueryRes
     return b.relevanceScore - a.relevanceScore;
   });
 
+  const sliced = options.slice(0, input.maxResults || 100);
+
   const gradeDistribution: Record<EvidenceGradeLevel, number> = { A: 0, B: 0, C: 0, Expert: 0 };
   const categoryDistribution: Record<string, number> = {};
-  for (const opt of options) {
+  for (const opt of sliced) {
     gradeDistribution[opt.evidenceGrade]++;
     categoryDistribution[opt.category] = (categoryDistribution[opt.category] || 0) + 1;
   }
 
   return {
-    options: options.slice(0, input.maxResults || 100),
+    options: sliced,
     queryContext: {
       diagnosis: resolvedInput.diagnosis || 'Not specified',
       regions: resolvedInput.bodyRegions || [],

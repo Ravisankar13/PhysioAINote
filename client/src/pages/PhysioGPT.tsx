@@ -8022,7 +8022,7 @@ ${ddxList}`;
                     })
                     .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
                     .then(data => setEvidenceEngineResult(data))
-                    .catch(() => {})
+                    .catch((err) => { if (err.name !== 'AbortError') toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' }); })
                     .finally(() => setEvidenceLoading(false));
                   }
                 }}
@@ -8861,7 +8861,7 @@ ${ddxList}`;
                         })
                         .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
                         .then(data => setEvidenceEngineResult(data))
-                        .catch(() => {})
+                        .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' }); })
                         .finally(() => setEvidenceLoading(false));
                       }}
                     >

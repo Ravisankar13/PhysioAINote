@@ -1,4 +1,4 @@
-import { EXERCISE_CATALOG, INTERVENTION_EXERCISE_MAP, SLING_EXERCISE_MAP, SLING_LABELS, findExercisesByBodyPart, findExercisesBySling, findManualTherapyByBodyPart, type CatalogExercise, type SlingId } from '../../shared/exerciseCatalog';
+import { EXERCISE_CATALOG, INTERVENTION_EXERCISE_MAP, SLING_EXERCISE_MAP, SLING_LABELS, findExercisesByBodyPart, type CatalogExercise, type SlingId } from '../../shared/exerciseCatalog';
 
 export type InterventionCategoryInput = string;
 

@@ -1930,7 +1930,7 @@ ${ddxList}`;
       .catch(err => { if (err.name !== 'AbortError') console.error('Treatment plan error:', err); })
       .finally(() => { if (!abortController.signal.aborted) setTreatmentPlanLoading(false); });
     return () => abortController.abort();
-  }, [treatmentDecisionData, JSON.stringify(painMarkers.map(pm => ({ r: pm.anatomicalLabel || pm.nearestBone, t: pm.type }))), modelConfig?.spine?.thoracicKyphosis, modelConfig?.spine?.forwardHead, modelConfig?.pelvis?.tilt]);
+  }, [treatmentDecisionData, JSON.stringify(painMarkers.map(pm => ({ r: pm.anatomicalLabel || pm.nearestBone, t: pm.type }))), modelConfig?.spine?.thoracicKyphosis, modelConfig?.spine?.forwardHead, modelConfig?.pelvis?.tilt, slingAnalysis]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;

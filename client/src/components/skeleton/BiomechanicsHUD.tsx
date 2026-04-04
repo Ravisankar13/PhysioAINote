@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Activity, Shield, Dumbbell, Scale } from 'lucide-react';
+import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers } from 'lucide-react';
 import type { ForceAnalysisResult, WeightDistribution } from '@/lib/posturalForceEngine';
 import { computeMuscleBalanceRatios, type MuscleAnalysisResult } from '@/lib/muscleBiomechanicsEngine';
+import type { SlingAnalysisResult } from '@/lib/slingEngine';
+import type { BiomechanicsOutput } from '@/lib/unifiedBiomechanicsEngine';
 
 interface ChainIntegrityEntry {
   score: number;
@@ -15,9 +17,16 @@ interface BiomechanicsHUDProps {
   weightDistribution: WeightDistribution | null;
   muscleAnalysis: MuscleAnalysisResult | null;
   chainIntegrityScores: Map<string, ChainIntegrityEntry>;
+  slingAnalysis: SlingAnalysisResult | null;
+  biomechanicsOutput: BiomechanicsOutput | null;
+  romRestrictionCount: number;
+  tissueConcernCount: number;
   onOpenForceOverlay: () => void;
   onOpenMuscleOverlay: () => void;
   onOpenChainExplorer: () => void;
+  onOpenSlings: () => void;
+  onOpenBiomechanics: () => void;
+  onToggleTissueView: () => void;
 }
 
 function getForceColor(status: string): string {
@@ -30,6 +39,13 @@ function getForceColor(status: string): string {
 }
 
 function getIntegrityColor(score: number): string {
+  if (score >= 80) return '#22c55e';
+  if (score >= 60) return '#eab308';
+  if (score >= 40) return '#f97316';
+  return '#ef4444';
+}
+
+function getScoreColor(score: number): string {
   if (score >= 80) return '#22c55e';
   if (score >= 60) return '#eab308';
   if (score >= 40) return '#f97316';
@@ -53,31 +69,70 @@ export default function BiomechanicsHUD({
   weightDistribution,
   muscleAnalysis,
   chainIntegrityScores,
+  slingAnalysis,
+  biomechanicsOutput,
+  romRestrictionCount,
+  tissueConcernCount,
   onOpenForceOverlay,
   onOpenMuscleOverlay,
   onOpenChainExplorer,
+  onOpenSlings,
+  onOpenBiomechanics,
+  onToggleTissueView,
 }: BiomechanicsHUDProps) {
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
-  const prevThresholdsRef = useRef<{ forceStatus: string; chainScore: number; syndromes: number }>({ forceStatus: 'normal', chainScore: 100, syndromes: 0 });
+  const prevThresholdsRef = useRef<{
+    forceStatus: string;
+    chainScore: number;
+    syndromes: number;
+    slingScore: number;
+    bioScore: number;
+    romCount: number;
+    tissueCount: number;
+  }>({
+    forceStatus: 'normal',
+    chainScore: 100,
+    syndromes: 0,
+    slingScore: 100,
+    bioScore: 100,
+    romCount: 0,
+    tissueCount: 0,
+  });
 
   useEffect(() => {
     const prev = prevThresholdsRef.current;
     const curForceStatus = forceAnalysis?.joints?.[0]?.status || 'normal';
     const curChainScore = (() => { let min = 100; chainIntegrityScores.forEach(e => { if (e.score < min) min = e.score; }); return min; })();
     const curSyndromes = muscleAnalysis ? computeMuscleBalanceRatios(muscleAnalysis.allMuscles).filter(r => r.syndrome).length : 0;
+    const curSlingScore = slingAnalysis?.overallForceTransferScore ?? 100;
+    const curBioScore = biomechanicsOutput?.qualityScore ?? 100;
+    const curRomCount = romRestrictionCount;
+    const curTissueCount = tissueConcernCount;
 
     const newPulse = new Set<string>();
     if (curForceStatus !== prev.forceStatus && (curForceStatus === 'high' || curForceStatus === 'very_high')) newPulse.add('forces');
     if (curChainScore < 60 && prev.chainScore >= 60) newPulse.add('chains');
     if (curSyndromes > prev.syndromes) newPulse.add('muscle');
+    if (curSlingScore < prev.slingScore - 10) newPulse.add('slings');
+    if (curBioScore < prev.bioScore - 10) newPulse.add('biomechanics');
+    if (curRomCount > prev.romCount) newPulse.add('controls');
+    if (curTissueCount > prev.tissueCount) newPulse.add('tissue');
 
-    prevThresholdsRef.current = { forceStatus: curForceStatus, chainScore: curChainScore, syndromes: curSyndromes };
+    prevThresholdsRef.current = {
+      forceStatus: curForceStatus,
+      chainScore: curChainScore,
+      syndromes: curSyndromes,
+      slingScore: curSlingScore,
+      bioScore: curBioScore,
+      romCount: curRomCount,
+      tissueCount: curTissueCount,
+    };
 
     if (newPulse.size > 0) {
       setPulsingIds(newPulse);
       setTimeout(() => setPulsingIds(new Set()), 600);
     }
-  }, [forceAnalysis, chainIntegrityScores, muscleAnalysis]);
+  }, [forceAnalysis, chainIntegrityScores, muscleAnalysis, slingAnalysis, biomechanicsOutput, romRestrictionCount, tissueConcernCount]);
 
   const topJoint = useMemo(() => {
     if (!forceAnalysis) return null;
@@ -106,6 +161,9 @@ export default function BiomechanicsHUD({
     return ratios.filter(r => r.status !== 'balanced').length;
   }, [muscleAnalysis]);
 
+  const slingScore = slingAnalysis?.overallForceTransferScore ?? null;
+  const bioQualityScore = biomechanicsOutput?.qualityScore ?? null;
+
   const circles: Array<{
     id: string;
     icon: typeof Activity;
@@ -117,6 +175,50 @@ export default function BiomechanicsHUD({
     valueColor: string;
     onClick: () => void;
   }> = [
+    {
+      id: 'controls',
+      icon: Lock,
+      color: 'text-orange-400',
+      bgColor: 'bg-orange-500/15',
+      ringColor: 'ring-orange-500/30',
+      label: 'Controls',
+      value: romRestrictionCount > 0 ? `${romRestrictionCount}` : 'OK',
+      valueColor: romRestrictionCount >= 4 ? '#ef4444' : romRestrictionCount >= 2 ? '#f97316' : romRestrictionCount >= 1 ? '#eab308' : '#22c55e',
+      onClick: onOpenForceOverlay,
+    },
+    {
+      id: 'slings',
+      icon: Link2,
+      color: 'text-violet-400',
+      bgColor: 'bg-violet-500/15',
+      ringColor: 'ring-violet-500/30',
+      label: 'Slings',
+      value: slingScore !== null ? `${Math.round(slingScore)}%` : '--',
+      valueColor: slingScore !== null ? getScoreColor(slingScore) : '#6b7280',
+      onClick: onOpenSlings,
+    },
+    {
+      id: 'biomechanics',
+      icon: Brain,
+      color: 'text-cyan-400',
+      bgColor: 'bg-cyan-500/15',
+      ringColor: 'ring-cyan-500/30',
+      label: 'Biomech',
+      value: bioQualityScore !== null ? `${Math.round(bioQualityScore)}%` : '--',
+      valueColor: bioQualityScore !== null ? getScoreColor(bioQualityScore) : '#6b7280',
+      onClick: onOpenBiomechanics,
+    },
+    {
+      id: 'tissue',
+      icon: Layers,
+      color: 'text-pink-400',
+      bgColor: 'bg-pink-500/15',
+      ringColor: 'ring-pink-500/30',
+      label: 'Tissue',
+      value: tissueConcernCount > 0 ? `${tissueConcernCount}` : 'OK',
+      valueColor: tissueConcernCount >= 5 ? '#ef4444' : tissueConcernCount >= 3 ? '#f97316' : tissueConcernCount >= 1 ? '#eab308' : '#22c55e',
+      onClick: onToggleTissueView,
+    },
     {
       id: 'forces',
       icon: Activity,
@@ -176,7 +278,7 @@ export default function BiomechanicsHUD({
     <>
     <style>{`@keyframes hud-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }`}</style>
     <div
-      className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3"
+      className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 flex-wrap justify-center max-w-[500px]"
     >
       {circles.map((c) => {
         const Icon = c.icon;
@@ -185,18 +287,18 @@ export default function BiomechanicsHUD({
           <button
             key={c.id}
             onClick={c.onClick}
-            className={`w-[60px] h-[60px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
+            className={`w-[52px] h-[52px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
             style={isPulsing ? { animation: 'hud-pulse 0.3s ease-in-out 2' } : undefined}
             title={c.label}
           >
-            <Icon className={`h-3.5 w-3.5 ${c.color}`} />
+            <Icon className={`h-3 w-3 ${c.color}`} />
             <span
-              className="text-[11px] font-bold tabular-nums leading-none"
+              className="text-[10px] font-bold tabular-nums leading-none"
               style={{ color: c.valueColor }}
             >
               {c.value}
             </span>
-            <span className="text-[7px] text-gray-400 uppercase tracking-wider leading-none">
+            <span className="text-[6px] text-gray-400 uppercase tracking-wider leading-none">
               {c.label}
             </span>
           </button>

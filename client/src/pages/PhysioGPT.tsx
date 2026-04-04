@@ -7798,9 +7798,16 @@ ${ddxList}`;
               weightDistribution={hudWeightDistribution}
               muscleAnalysis={hudMuscleAnalysis}
               chainIntegrityScores={hudChainIntegrity}
+              slingAnalysis={slingAnalysis}
+              biomechanicsOutput={unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput}
+              romRestrictionCount={unifiedBiomechanicsOutput?.posture?.romRestrictions?.length ?? cachedBiomechanicsOutput?.posture?.romRestrictions?.length ?? 0}
+              tissueConcernCount={(() => { const bio = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput; if (!bio) return 0; const romCount = bio.posture.romRestrictions.filter(r => r.deficitPct > 20).length; const compCount = bio.compensationPatterns.patterns.filter(p => p.severity === 'moderate' || p.severity === 'severe').length; return romCount + compCount; })()}
               onOpenForceOverlay={() => { setForceMode(true); }}
               onOpenMuscleOverlay={() => { setMuscleMode(true); }}
               onOpenChainExplorer={() => { setShowUnifiedChainPanel(true); }}
+              onOpenSlings={() => { setRightPanelTab('slings'); }}
+              onOpenBiomechanics={() => { setRightPanelTab('biomechanics'); }}
+              onToggleTissueView={() => { setTissueViewMode(prev => prev ? null : 'tendon'); }}
             />
 
             {(liveTreatmentPriorities.targets.length > 0 || predictedPainSpots.length > 0) && (

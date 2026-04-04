@@ -112,7 +112,7 @@ import { getClinicalPresetCategories, applyPresetToConfig, type ClinicalPostureP
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
-import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors } from "@/lib/myofascialChains";
+import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors, computeClinicalConsequences, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
 import UnifiedChainPanel from "@/components/skeleton/UnifiedChainPanel";
 import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel, getInfluencePathwayAbbrev, getDominantPathway, type InfluenceMap, type InfluencePathway } from "@/lib/muscleInfluenceMap";
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
@@ -3170,6 +3170,14 @@ ${ddxList}`;
     }
     return deltas;
   }, [propagatedEffects]);
+
+  const clinicalConsequences = useMemo(() => {
+    return computeClinicalConsequences(
+      baseMuscleTensions.computedTensions,
+      manualChainTensions,
+      propagationDeltas
+    );
+  }, [baseMuscleTensions.computedTensions, manualChainTensions, propagationDeltas]);
 
   const chainDrivenJointEffects = useMemo(() => {
     if (!chainPropagation || !bidirectionalMode) return null;
@@ -6379,6 +6387,7 @@ ${ddxList}`;
                 painTensionContributors={painTensionContributors}
                 selectedChainId={selectedChainId}
                 setSelectedChainId={setSelectedChainId}
+                clinicalConsequences={clinicalConsequences}
               />
             )}
 

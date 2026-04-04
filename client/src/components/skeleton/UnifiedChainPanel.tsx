@@ -12,12 +12,15 @@ import {
   MapPin,
   Target,
   ChevronRight,
+  Stethoscope,
+  ArrowRight,
+  TrendingUp,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { KINETIC_CHAINS, CHAIN_BONE_MAPPING } from "@/lib/kineticChainExplorer";
-import { MYOFASCIAL_CHAINS, mapJointIdToMuscleIds, type ChainRecommendation, type PainTensionContributor } from "@/lib/myofascialChains";
+import { MYOFASCIAL_CHAINS, mapJointIdToMuscleIds, type ChainRecommendation, type PainTensionContributor, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
 
-type TabId = 'explorer' | 'tension' | 'treatments';
+type TabId = 'explorer' | 'tension' | 'consequences' | 'treatments';
 
 interface SelectedNodeDetails {
   state: {
@@ -60,6 +63,7 @@ export interface UnifiedChainPanelProps {
   painTensionContributors: PainTensionContributor[];
   selectedChainId: string | null;
   setSelectedChainId: (fn: (prev: string | null) => string | null) => void;
+  clinicalConsequences: ClinicalConsequenceResult;
 }
 
 const getIntegrityColor = (score: number) => score >= 80 ? '#22c55e' : score >= 60 ? '#eab308' : score >= 40 ? '#f97316' : '#ef4444';
@@ -89,6 +93,7 @@ export default function UnifiedChainPanel({
   painTensionContributors,
   selectedChainId,
   setSelectedChainId,
+  clinicalConsequences,
 }: UnifiedChainPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('explorer');
   const [chainIntegrityMode, setChainIntegrityMode] = useState(false);
@@ -121,7 +126,8 @@ export default function UnifiedChainPanel({
         {([
           { id: 'explorer' as TabId, label: 'Explorer', icon: GitBranch },
           { id: 'tension' as TabId, label: 'Tension', icon: Activity },
-          { id: 'treatments' as TabId, label: 'Treatments', icon: Target },
+          { id: 'consequences' as TabId, label: 'Clinical', icon: Stethoscope },
+          { id: 'treatments' as TabId, label: 'Rx', icon: Target },
         ]).map(tab => (
           <button
             key={tab.id}
@@ -175,6 +181,10 @@ export default function UnifiedChainPanel({
           computedTensions={computedTensions}
           hasManualTensions={hasManualTensions}
         />
+      )}
+
+      {activeTab === 'consequences' && (
+        <ConsequencesTab clinicalConsequences={clinicalConsequences} />
       )}
 
       {activeTab === 'treatments' && (
@@ -1169,6 +1179,172 @@ function TreatmentsTab({
           </div>
         )}
       </div>
+    </>
+  );
+}
+
+function ConsequencesTab({ clinicalConsequences }: { clinicalConsequences: ClinicalConsequenceResult }) {
+  const [expandedConsequence, setExpandedConsequence] = useState<number | null>(null);
+  const [showPropFlow, setShowPropFlow] = useState(true);
+
+  const severityColor = (s: string) => s === 'severe' ? 'text-red-400' : s === 'moderate' ? 'text-orange-400' : 'text-yellow-400';
+  const severityBg = (s: string) => s === 'severe' ? 'bg-red-500/15 border-red-500/30' : s === 'moderate' ? 'bg-orange-500/15 border-orange-500/30' : 'bg-yellow-500/10 border-yellow-500/20';
+
+  const hasConsequences = clinicalConsequences.consequences.length > 0;
+  const hasFlow = clinicalConsequences.propagationFlow.length > 0;
+
+  return (
+    <>
+      <div className={`mb-3 p-2 rounded-lg border ${
+        clinicalConsequences.riskScore >= 60 ? 'border-red-500/50 bg-red-500/10' :
+        clinicalConsequences.riskScore >= 30 ? 'border-orange-500/50 bg-orange-500/10' :
+        clinicalConsequences.riskScore > 0 ? 'border-yellow-500/50 bg-yellow-500/10' :
+        'border-green-500/50 bg-green-500/10'
+      }`}>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] font-medium text-gray-300">Clinical Risk Score</span>
+          <span className={`text-sm font-bold ${
+            clinicalConsequences.riskScore >= 60 ? 'text-red-400' :
+            clinicalConsequences.riskScore >= 30 ? 'text-orange-400' :
+            clinicalConsequences.riskScore > 0 ? 'text-yellow-400' :
+            'text-green-400'
+          }`}>{clinicalConsequences.riskScore}/100</span>
+        </div>
+        <div className="w-full bg-gray-700 rounded-full h-1.5">
+          <div className={`h-1.5 rounded-full transition-all ${
+            clinicalConsequences.riskScore >= 60 ? 'bg-red-500' :
+            clinicalConsequences.riskScore >= 30 ? 'bg-orange-500' :
+            clinicalConsequences.riskScore > 0 ? 'bg-yellow-500' :
+            'bg-green-500'
+          }`} style={{ width: `${clinicalConsequences.riskScore}%` }} />
+        </div>
+        <p className="text-[8px] text-gray-400 mt-1">{clinicalConsequences.dominantPattern}</p>
+      </div>
+
+      {hasFlow && (
+        <div className="mb-3">
+          <button
+            className="flex items-center gap-1 mb-1.5 text-[9px] font-medium text-blue-300 hover:text-blue-200 transition-colors"
+            onClick={() => setShowPropFlow(prev => !prev)}
+          >
+            <TrendingUp className="h-3 w-3" />
+            Propagation Flow ({clinicalConsequences.propagationFlow.length} nodes)
+            <ChevronDown className={`h-2.5 w-2.5 transition-transform ${showPropFlow ? '' : '-rotate-90'}`} />
+          </button>
+          {showPropFlow && (
+            <div className="space-y-0.5">
+              {clinicalConsequences.propagationFlow.map((step, i) => (
+                <div key={`${step.muscleId}_${step.chainId}_${i}`} className="flex items-center gap-1.5">
+                  <div className="flex flex-col items-center flex-shrink-0 w-3">
+                    <div className="w-2 h-2 rounded-full border" style={{
+                      borderColor: step.chainColor,
+                      backgroundColor: step.distanceFromSource === 0 ? step.chainColor : 'transparent',
+                    }} />
+                    {i < clinicalConsequences.propagationFlow.length - 1 && (
+                      <div className="w-0.5 h-3 mt-0.5" style={{ backgroundColor: step.chainColor + '40' }} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 flex items-center gap-1">
+                    <span className="text-[8px] text-gray-200 truncate">{step.label}</span>
+                    {step.distanceFromSource === 0 && (
+                      <span className="text-[6px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 flex-shrink-0">SOURCE</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-[7px] text-gray-500">{Math.round(step.tensionBefore)}%</span>
+                    <ArrowRight className="h-2 w-2 text-gray-600" />
+                    <span className={`text-[7px] font-bold ${step.tensionAfter > 70 ? 'text-red-400' : step.tensionAfter > 55 ? 'text-yellow-400' : step.tensionAfter < 35 ? 'text-cyan-400' : 'text-green-400'}`}>
+                      {Math.round(step.tensionAfter)}%
+                    </span>
+                    <span className={`text-[6px] font-bold ${step.delta > 0 ? 'text-red-400' : 'text-cyan-400'}`}>
+                      {step.delta > 0 ? '+' : ''}{step.delta.toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasConsequences ? (
+        <div>
+          <div className="flex items-center gap-1 mb-1.5">
+            <Stethoscope className="h-3 w-3 text-purple-400" />
+            <span className="text-[9px] font-medium text-purple-300">Clinical Consequences ({clinicalConsequences.consequences.length})</span>
+          </div>
+          <div className="space-y-1">
+            {clinicalConsequences.consequences.map((c, i) => {
+              const isExpanded = expandedConsequence === i;
+              return (
+                <div key={i}>
+                  <button
+                    className={`w-full text-left px-2 py-1.5 rounded border transition-colors ${severityBg(c.severity)} hover:bg-white/5`}
+                    onClick={() => setExpandedConsequence(isExpanded ? null : i)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <AlertTriangle className={`h-2.5 w-2.5 flex-shrink-0 ${severityColor(c.severity)}`} />
+                        <span className="text-[8px] text-gray-200 truncate">{c.region}</span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className={`text-[7px] font-bold px-1 py-0.5 rounded ${
+                          c.severity === 'severe' ? 'bg-red-500/30 text-red-300' :
+                          c.severity === 'moderate' ? 'bg-orange-500/30 text-orange-300' :
+                          'bg-yellow-500/20 text-yellow-300'
+                        }`}>{c.severity}</span>
+                        <ChevronDown className={`h-2 w-2 text-gray-500 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      </div>
+                    </div>
+                    <p className="text-[7px] text-gray-300 mt-0.5 leading-relaxed">{c.symptom}</p>
+                  </button>
+                  {isExpanded && (
+                    <div className="ml-2 px-2 py-1.5 bg-white/5 rounded-b border-l-2 border-purple-500/30 space-y-1.5 mb-0.5">
+                      <div>
+                        <span className="text-[7px] text-purple-400 font-medium">Mechanism</span>
+                        <p className="text-[7px] text-gray-400 leading-relaxed mt-0.5">{c.mechanism}</p>
+                      </div>
+                      {c.compensationPattern && (
+                        <div>
+                          <span className="text-[7px] text-amber-400 font-medium">Compensation Pattern</span>
+                          <p className="text-[7px] text-gray-400 leading-relaxed mt-0.5">{c.compensationPattern}</p>
+                        </div>
+                      )}
+                      {c.relatedChains.length > 0 && (
+                        <div>
+                          <span className="text-[7px] text-gray-500">Related chains:</span>
+                          <div className="flex flex-wrap gap-0.5 mt-0.5">
+                            {c.relatedChains.slice(0, 4).map(cid => {
+                              const chain = MYOFASCIAL_CHAINS.find(ch => ch.id === cid);
+                              return chain ? (
+                                <span key={cid} className="text-[6px] px-1 py-0.5 rounded" style={{ backgroundColor: chain.color + '25', color: chain.color }}>
+                                  {chain.name.replace(/ \([LR]\)$/, '')}
+                                </span>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+          <Stethoscope className="h-4 w-4 text-green-400 mx-auto mb-1" />
+          <p className="text-[9px] text-green-300 font-medium">No Clinical Consequences</p>
+          <p className="text-[7px] text-green-400/70 mt-0.5">All muscle tensions within normal range. Adjust posture or introduce tension in the Tension tab to see predicted clinical consequences.</p>
+        </div>
+      )}
+
+      {!hasFlow && hasConsequences && (
+        <div className="mt-2 p-1.5 rounded border border-blue-500/20 bg-blue-500/5">
+          <p className="text-[7px] text-blue-300">Introduce manual tension in the Tension tab to see propagation flow.</p>
+        </div>
+      )}
     </>
   );
 }

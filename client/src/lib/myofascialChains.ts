@@ -439,6 +439,355 @@ export function computeWholeBodyTensionScore(
   return { score: Math.round(score), level, description };
 }
 
+export interface ClinicalConsequence {
+  region: string;
+  symptom: string;
+  mechanism: string;
+  severity: 'mild' | 'moderate' | 'severe';
+  relatedChains: string[];
+  compensationPattern?: string;
+}
+
+export interface PropagationStep {
+  muscleId: string;
+  label: string;
+  tensionBefore: number;
+  tensionAfter: number;
+  delta: number;
+  chainId: string;
+  chainColor: string;
+  distanceFromSource: number;
+}
+
+export interface ClinicalConsequenceResult {
+  consequences: ClinicalConsequence[];
+  propagationFlow: PropagationStep[];
+  riskScore: number;
+  dominantPattern: string;
+}
+
+const MUSCLE_CONSEQUENCE_MAP: Record<string, { highTension: ClinicalConsequence[]; lowTension: ClinicalConsequence[] }> = {
+  spine: {
+    highTension: [
+      { region: 'Lumbar/Thoracic Spine', symptom: 'Paraspinal hypertonicity with reduced segmental mobility', mechanism: 'Sustained erector spinae contraction restricting intervertebral motion', severity: 'moderate', relatedChains: ['superficial_back_l', 'superficial_back_r', 'deep_front_l', 'deep_front_r'], compensationPattern: 'Increased hip flexion strategy during forward bending' },
+      { region: 'Lumbar Spine', symptom: 'Extension-biased low back pain', mechanism: 'Posterior chain shortening creating compressive load on facet joints', severity: 'moderate', relatedChains: ['superficial_back_l', 'superficial_back_r'] },
+    ],
+    lowTension: [
+      { region: 'Lumbar/Thoracic Spine', symptom: 'Segmental hypermobility and poor spinal control', mechanism: 'Insufficient paraspinal stabilization allowing excessive intervertebral translation', severity: 'moderate', relatedChains: ['superficial_back_l', 'superficial_back_r'], compensationPattern: 'Rectus abdominis dominance for trunk control' },
+    ],
+  },
+  core: {
+    highTension: [
+      { region: 'Abdomen/Pelvis', symptom: 'Anterior pelvic tilt restriction and breath-holding pattern', mechanism: 'Excessive abdominal bracing limiting diaphragmatic excursion', severity: 'mild', relatedChains: ['superficial_front_l', 'superficial_front_r', 'deep_front_l', 'deep_front_r'] },
+      { region: 'Lumbopelvic', symptom: 'Increased intra-abdominal pressure during loading', mechanism: 'Core rigidity preventing optimal load distribution', severity: 'moderate', relatedChains: ['deep_front_l', 'deep_front_r'], compensationPattern: 'Valsalva pattern substitution during functional tasks' },
+    ],
+    lowTension: [
+      { region: 'Lumbopelvic', symptom: 'Poor pelvic stability and trunk sway during gait', mechanism: 'Insufficient deep stabilizer recruitment allowing pelvic drop', severity: 'moderate', relatedChains: ['lateral_line_l', 'lateral_line_r', 'deep_front_l', 'deep_front_r'], compensationPattern: 'Lateral trunk lean over stance leg' },
+    ],
+  },
+  neck: {
+    highTension: [
+      { region: 'Cervical Spine', symptom: 'Cervicogenic headache and restricted cervical rotation', mechanism: 'Suboccipital and upper trapezius hypertonicity compressing C1-C2 facets', severity: 'moderate', relatedChains: ['superficial_back_l', 'superficial_back_r'], compensationPattern: 'Thoracic rotation substitution for cervical motion' },
+      { region: 'Cervical/Thoracic Junction', symptom: 'Forward head posture with upper crossed syndrome', mechanism: 'Deep cervical flexor inhibition with SCM/upper trap dominance', severity: 'moderate', relatedChains: ['superficial_front_l', 'superficial_front_r', 'deep_front_l', 'deep_front_r'] },
+    ],
+    lowTension: [
+      { region: 'Cervical Spine', symptom: 'Cervical instability and poor head-on-trunk control', mechanism: 'Insufficient deep neck flexor and extensor co-contraction', severity: 'mild', relatedChains: ['deep_front_l', 'deep_front_r'] },
+    ],
+  },
+  chest: {
+    highTension: [
+      { region: 'Thorax/Shoulder', symptom: 'Rounded shoulders with restricted overhead reach', mechanism: 'Pectoralis major/minor shortening pulling scapulae into protraction', severity: 'moderate', relatedChains: ['superficial_front_l', 'superficial_front_r', 'arm_line_l', 'arm_line_r'], compensationPattern: 'Lumbar extension compensation during overhead activities' },
+    ],
+    lowTension: [
+      { region: 'Thorax', symptom: 'Reduced thoracic stability and poor push capacity', mechanism: 'Insufficient anterior chain activation for sagittal stabilization', severity: 'mild', relatedChains: ['superficial_front_l', 'superficial_front_r'] },
+    ],
+  },
+  glute_l: {
+    highTension: [
+      { region: 'Left Hip/Pelvis', symptom: 'Hip external rotation bias with limited internal rotation', mechanism: 'Gluteal hypertonicity creating compressive force on hip joint', severity: 'moderate', relatedChains: ['superficial_back_l', 'lateral_line_l'], compensationPattern: 'Foot external rotation and knee valgus during squat' },
+    ],
+    lowTension: [
+      { region: 'Left Hip/Pelvis', symptom: 'Trendelenburg sign and lateral pelvic drop', mechanism: 'Gluteal inhibition reducing hip abductor moment during stance phase', severity: 'moderate', relatedChains: ['lateral_line_l'], compensationPattern: 'Contralateral trunk lean (compensated Trendelenburg)' },
+    ],
+  },
+  glute_r: {
+    highTension: [
+      { region: 'Right Hip/Pelvis', symptom: 'Hip external rotation bias with limited internal rotation', mechanism: 'Gluteal hypertonicity creating compressive force on hip joint', severity: 'moderate', relatedChains: ['superficial_back_r', 'lateral_line_r'], compensationPattern: 'Foot external rotation and knee valgus during squat' },
+    ],
+    lowTension: [
+      { region: 'Right Hip/Pelvis', symptom: 'Trendelenburg sign and lateral pelvic drop', mechanism: 'Gluteal inhibition reducing hip abductor moment during stance phase', severity: 'moderate', relatedChains: ['lateral_line_r'], compensationPattern: 'Contralateral trunk lean (compensated Trendelenburg)' },
+    ],
+  },
+  quad_l: {
+    highTension: [
+      { region: 'Left Knee/Thigh', symptom: 'Patellofemoral compression and anterior knee pain', mechanism: 'Quadriceps hypertonicity increasing patellar tracking forces', severity: 'moderate', relatedChains: ['superficial_front_l'], compensationPattern: 'Hamstring co-contraction as protective strategy' },
+    ],
+    lowTension: [
+      { region: 'Left Knee/Thigh', symptom: 'Reduced knee extension force and stair difficulty', mechanism: 'Quadriceps inhibition limiting terminal knee extension moment', severity: 'moderate', relatedChains: ['superficial_front_l'], compensationPattern: 'Hip extensor dominance during sit-to-stand' },
+    ],
+  },
+  quad_r: {
+    highTension: [
+      { region: 'Right Knee/Thigh', symptom: 'Patellofemoral compression and anterior knee pain', mechanism: 'Quadriceps hypertonicity increasing patellar tracking forces', severity: 'moderate', relatedChains: ['superficial_front_r'], compensationPattern: 'Hamstring co-contraction as protective strategy' },
+    ],
+    lowTension: [
+      { region: 'Right Knee/Thigh', symptom: 'Reduced knee extension force and stair difficulty', mechanism: 'Quadriceps inhibition limiting terminal knee extension moment', severity: 'moderate', relatedChains: ['superficial_front_r'], compensationPattern: 'Hip extensor dominance during sit-to-stand' },
+    ],
+  },
+  calf_l: {
+    highTension: [
+      { region: 'Left Ankle/Lower Leg', symptom: 'Restricted ankle dorsiflexion and Achilles loading', mechanism: 'Gastrocnemius/soleus shortening limiting tibial advancement', severity: 'moderate', relatedChains: ['superficial_back_l'], compensationPattern: 'Early heel rise and midfoot collapse during gait' },
+    ],
+    lowTension: [
+      { region: 'Left Ankle/Lower Leg', symptom: 'Reduced push-off power and calf weakness', mechanism: 'Triceps surae inhibition limiting plantar flexion moment', severity: 'mild', relatedChains: ['superficial_back_l', 'deep_front_l'] },
+    ],
+  },
+  calf_r: {
+    highTension: [
+      { region: 'Right Ankle/Lower Leg', symptom: 'Restricted ankle dorsiflexion and Achilles loading', mechanism: 'Gastrocnemius/soleus shortening limiting tibial advancement', severity: 'moderate', relatedChains: ['superficial_back_r'], compensationPattern: 'Early heel rise and midfoot collapse during gait' },
+    ],
+    lowTension: [
+      { region: 'Right Ankle/Lower Leg', symptom: 'Reduced push-off power and calf weakness', mechanism: 'Triceps surae inhibition limiting plantar flexion moment', severity: 'mild', relatedChains: ['superficial_back_r', 'deep_front_r'] },
+    ],
+  },
+  shin_l: {
+    highTension: [
+      { region: 'Left Shin/Ankle', symptom: 'Anterior compartment tightness and shin splints risk', mechanism: 'Tibialis anterior overactivity from dorsiflexor compensation', severity: 'mild', relatedChains: ['superficial_front_l', 'lateral_line_l'] },
+    ],
+    lowTension: [
+      { region: 'Left Foot/Ankle', symptom: 'Foot drop tendency and reduced toe clearance', mechanism: 'Anterior compartment weakness limiting foot control', severity: 'mild', relatedChains: ['superficial_front_l'] },
+    ],
+  },
+  shin_r: {
+    highTension: [
+      { region: 'Right Shin/Ankle', symptom: 'Anterior compartment tightness and shin splints risk', mechanism: 'Tibialis anterior overactivity from dorsiflexor compensation', severity: 'mild', relatedChains: ['superficial_front_r', 'lateral_line_r'] },
+    ],
+    lowTension: [
+      { region: 'Right Foot/Ankle', symptom: 'Foot drop tendency and reduced toe clearance', mechanism: 'Anterior compartment weakness limiting foot control', severity: 'mild', relatedChains: ['superficial_front_r'] },
+    ],
+  },
+  deltoid_l: {
+    highTension: [
+      { region: 'Left Shoulder', symptom: 'Subacromial impingement risk with painful arc', mechanism: 'Deltoid hypertonicity elevating humeral head in subacromial space', severity: 'moderate', relatedChains: ['lateral_line_l', 'arm_line_l'], compensationPattern: 'Scapular hiking substitution for glenohumeral abduction' },
+    ],
+    lowTension: [
+      { region: 'Left Shoulder', symptom: 'Reduced shoulder elevation strength', mechanism: 'Deltoid inhibition limiting shoulder abduction/flexion moment', severity: 'mild', relatedChains: ['arm_line_l'] },
+    ],
+  },
+  deltoid_r: {
+    highTension: [
+      { region: 'Right Shoulder', symptom: 'Subacromial impingement risk with painful arc', mechanism: 'Deltoid hypertonicity elevating humeral head in subacromial space', severity: 'moderate', relatedChains: ['lateral_line_r', 'arm_line_r'], compensationPattern: 'Scapular hiking substitution for glenohumeral abduction' },
+    ],
+    lowTension: [
+      { region: 'Right Shoulder', symptom: 'Reduced shoulder elevation strength', mechanism: 'Deltoid inhibition limiting shoulder abduction/flexion moment', severity: 'mild', relatedChains: ['arm_line_r'] },
+    ],
+  },
+  scapula_l: {
+    highTension: [
+      { region: 'Left Scapula', symptom: 'Scapular downward rotation and poor overhead mechanics', mechanism: 'Rhomboid/levator scapulae hypertonicity preventing upward rotation', severity: 'moderate', relatedChains: ['arm_line_l', 'spiral_line_r'], compensationPattern: 'Cervical side-bend to assist arm elevation' },
+    ],
+    lowTension: [
+      { region: 'Left Scapula', symptom: 'Scapular winging and poor push-up performance', mechanism: 'Serratus anterior weakness allowing scapular medial border prominence', severity: 'moderate', relatedChains: ['arm_line_l'] },
+    ],
+  },
+  scapula_r: {
+    highTension: [
+      { region: 'Right Scapula', symptom: 'Scapular downward rotation and poor overhead mechanics', mechanism: 'Rhomboid/levator scapulae hypertonicity preventing upward rotation', severity: 'moderate', relatedChains: ['arm_line_r', 'spiral_line_l'], compensationPattern: 'Cervical side-bend to assist arm elevation' },
+    ],
+    lowTension: [
+      { region: 'Right Scapula', symptom: 'Scapular winging and poor push-up performance', mechanism: 'Serratus anterior weakness allowing scapular medial border prominence', severity: 'moderate', relatedChains: ['arm_line_r'] },
+    ],
+  },
+  bicep_l: {
+    highTension: [
+      { region: 'Left Elbow/Forearm', symptom: 'Elbow flexion contracture and grip overload', mechanism: 'Biceps hypertonicity limiting full elbow extension', severity: 'mild', relatedChains: ['arm_line_l'] },
+    ],
+    lowTension: [
+      { region: 'Left Elbow/Forearm', symptom: 'Reduced elbow flexion and carrying capacity', mechanism: 'Biceps inhibition reducing elbow flexion moment', severity: 'mild', relatedChains: ['arm_line_l'] },
+    ],
+  },
+  bicep_r: {
+    highTension: [
+      { region: 'Right Elbow/Forearm', symptom: 'Elbow flexion contracture and grip overload', mechanism: 'Biceps hypertonicity limiting full elbow extension', severity: 'mild', relatedChains: ['arm_line_r'] },
+    ],
+    lowTension: [
+      { region: 'Right Elbow/Forearm', symptom: 'Reduced elbow flexion and carrying capacity', mechanism: 'Biceps inhibition reducing elbow flexion moment', severity: 'mild', relatedChains: ['arm_line_r'] },
+    ],
+  },
+};
+
+const CROSS_CHAIN_PATTERNS: Array<{
+  name: string;
+  condition: (tensions: Record<string, number>) => boolean;
+  consequence: ClinicalConsequence;
+}> = [
+  {
+    name: 'Upper Crossed Syndrome',
+    condition: (t) => (t.chest ?? 50) > 65 && (t.neck ?? 50) > 65 && (t.scapula_l ?? 50) < 40 && (t.scapula_r ?? 50) < 40,
+    consequence: {
+      region: 'Cervicothoracic',
+      symptom: 'Upper crossed syndrome: forward head, protracted shoulders, increased thoracic kyphosis',
+      mechanism: 'Pec/upper trap hypertonicity with deep neck flexor/lower trap inhibition creating predictable muscle imbalance pattern (Janda)',
+      severity: 'moderate',
+      relatedChains: ['superficial_front_l', 'superficial_front_r', 'arm_line_l', 'arm_line_r'],
+      compensationPattern: 'Cervical extension, shoulder internal rotation, reduced overhead reach',
+    },
+  },
+  {
+    name: 'Lower Crossed Syndrome',
+    condition: (t) => ((t.quad_l ?? 50) > 65 || (t.quad_r ?? 50) > 65) && (t.spine ?? 50) > 65 && ((t.glute_l ?? 50) < 40 || (t.glute_r ?? 50) < 40) && (t.core ?? 50) < 40,
+    consequence: {
+      region: 'Lumbopelvic',
+      symptom: 'Lower crossed syndrome: anterior pelvic tilt, lumbar hyperextension, hip flexor tightness',
+      mechanism: 'Hip flexor/erector spinae hypertonicity with gluteal/abdominal inhibition creating pelvic anterior rotation (Janda)',
+      severity: 'moderate',
+      relatedChains: ['superficial_front_l', 'superficial_front_r', 'superficial_back_l', 'superficial_back_r'],
+      compensationPattern: 'Hamstring overuse, lumbar facet loading, altered hip extension mechanics',
+    },
+  },
+  {
+    name: 'Bilateral Posterior Chain Overload',
+    condition: (t) => (t.spine ?? 50) > 70 && ((t.calf_l ?? 50) > 65 && (t.calf_r ?? 50) > 65) && ((t.glute_l ?? 50) > 65 || (t.glute_r ?? 50) > 65),
+    consequence: {
+      region: 'Full Posterior Chain',
+      symptom: 'Posterior chain dominance with flexion intolerance and extension-biased posture',
+      mechanism: 'Global posterior fascial chain tension restricting forward flexion and creating extensor-dominant movement strategy',
+      severity: 'moderate',
+      relatedChains: ['superficial_back_l', 'superficial_back_r'],
+      compensationPattern: 'Hip hinge avoidance, stiff-legged gait pattern',
+    },
+  },
+  {
+    name: 'Lateral Chain Asymmetry',
+    condition: (t) => Math.abs((t.glute_l ?? 50) - (t.glute_r ?? 50)) > 15 || Math.abs((t.deltoid_l ?? 50) - (t.deltoid_r ?? 50)) > 15,
+    consequence: {
+      region: 'Lateral System',
+      symptom: 'Lateral asymmetry with frontal plane pelvic obliquity and trunk side-shift',
+      mechanism: 'Unilateral lateral chain tension creating pelvic height difference and compensatory scoliotic pattern',
+      severity: 'moderate',
+      relatedChains: ['lateral_line_l', 'lateral_line_r'],
+      compensationPattern: 'Asymmetric weight bearing with contralateral trunk lean',
+    },
+  },
+  {
+    name: 'Spiral Line Dysfunction',
+    condition: (t) => Math.abs((t.scapula_l ?? 50) - (t.quad_r ?? 50)) > 20 || Math.abs((t.scapula_r ?? 50) - (t.quad_l ?? 50)) > 20,
+    consequence: {
+      region: 'Rotational System',
+      symptom: 'Rotational asymmetry affecting gait counter-rotation and throwing/reaching mechanics',
+      mechanism: 'Spiral line tension imbalance disrupting contralateral arm-leg coordination during functional movement',
+      severity: 'moderate',
+      relatedChains: ['spiral_line_l', 'spiral_line_r'],
+      compensationPattern: 'Reduced arm swing, trunk rotation limitation, asymmetric stride length',
+    },
+  },
+];
+
+export function computeClinicalConsequences(
+  tensions: Record<string, number>,
+  manualTensions: Record<string, number>,
+  propagationDeltas: Record<string, number>
+): ClinicalConsequenceResult {
+  const consequences: ClinicalConsequence[] = [];
+  const propagationFlow: PropagationStep[] = [];
+  const effectiveTensions: Record<string, number> = {};
+
+  for (const muscleId of Object.keys(tensions)) {
+    effectiveTensions[muscleId] = manualTensions[muscleId] ?? tensions[muscleId] ?? 50;
+  }
+  for (const muscleId of Object.keys(manualTensions)) {
+    effectiveTensions[muscleId] = manualTensions[muscleId];
+  }
+
+  for (const [muscleId, tension] of Object.entries(effectiveTensions)) {
+    const delta = tension - 50;
+    if (Math.abs(delta) < 10) continue;
+
+    const mapping = MUSCLE_CONSEQUENCE_MAP[muscleId];
+    if (!mapping) continue;
+
+    const items = delta > 0 ? mapping.highTension : mapping.lowTension;
+    const absDelta = Math.abs(delta);
+    for (const item of items) {
+      const severity: ClinicalConsequence['severity'] = absDelta >= 30 ? 'severe' : absDelta >= 18 ? 'moderate' : 'mild';
+      consequences.push({ ...item, severity });
+    }
+  }
+
+  for (const pattern of CROSS_CHAIN_PATTERNS) {
+    if (pattern.condition(effectiveTensions)) {
+      consequences.push(pattern.consequence);
+    }
+  }
+
+  for (const [muscleId, manualVal] of Object.entries(manualTensions)) {
+    const baseTension = tensions[muscleId] ?? 50;
+    const membership = getChainMembership(muscleId);
+
+    for (const chain of membership) {
+      const sourceIdx = chain.links.findIndex(l => l.muscleId === muscleId);
+      if (sourceIdx < 0) continue;
+
+      propagationFlow.push({
+        muscleId,
+        label: muscleId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        tensionBefore: baseTension,
+        tensionAfter: manualVal,
+        delta: manualVal - baseTension,
+        chainId: chain.id,
+        chainColor: chain.color,
+        distanceFromSource: 0,
+      });
+
+      for (let i = 0; i < chain.links.length; i++) {
+        if (i === sourceIdx) continue;
+        const targetLink = chain.links[i];
+        const distance = Math.abs(i - sourceIdx);
+        const propDelta = propagationDeltas[targetLink.muscleId] ?? 0;
+        if (Math.abs(propDelta) < 0.5) continue;
+
+        const targetBase = tensions[targetLink.muscleId] ?? 50;
+        propagationFlow.push({
+          muscleId: targetLink.muscleId,
+          label: targetLink.muscleId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          tensionBefore: targetBase,
+          tensionAfter: targetBase + propDelta,
+          delta: propDelta,
+          chainId: chain.id,
+          chainColor: chain.color,
+          distanceFromSource: distance,
+        });
+      }
+    }
+  }
+
+  propagationFlow.sort((a, b) => a.distanceFromSource - b.distanceFromSource || Math.abs(b.delta) - Math.abs(a.delta));
+
+  const uniqueFlow: PropagationStep[] = [];
+  const seenKeys = new Set<string>();
+  for (const step of propagationFlow) {
+    const key = `${step.muscleId}_${step.chainId}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      uniqueFlow.push(step);
+    }
+  }
+
+  const severityScores = { mild: 1, moderate: 2, severe: 3 };
+  const riskScore = Math.min(100, consequences.reduce((sum, c) => sum + severityScores[c.severity] * 12, 0));
+
+  let dominantPattern = 'No significant dysfunction pattern detected';
+  const severeCount = consequences.filter(c => c.severity === 'severe').length;
+  const modCount = consequences.filter(c => c.severity === 'moderate').length;
+  if (severeCount >= 2) dominantPattern = 'Multi-region severe tension pattern — systemic fascial overload';
+  else if (severeCount === 1 && modCount >= 2) dominantPattern = 'Focal severe tension with regional spread';
+  else if (modCount >= 3) dominantPattern = 'Distributed moderate tension — compensatory cascade active';
+  else if (modCount >= 1) dominantPattern = 'Regional tension pattern with local consequences';
+  else if (consequences.length > 0) dominantPattern = 'Mild tension deviation — monitor for progression';
+
+  return { consequences, propagationFlow: uniqueFlow, riskScore, dominantPattern };
+}
+
 export interface ChainRecommendation {
   chainId: string;
   chainName: string;

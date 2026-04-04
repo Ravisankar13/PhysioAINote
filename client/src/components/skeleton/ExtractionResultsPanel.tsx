@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   CheckCircle2, AlertTriangle, HelpCircle, X, Loader2,
-  RefreshCw, Send,
+  RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -69,6 +69,11 @@ export default function ExtractionResultsPanel({
 
     try {
       const payload = buildIntakePayload();
+      if (payload.sources.length === 0 && !payload.freeText && !payload.manualForm) {
+        toast({ title: "Intake data unavailable", description: "Please open the Case Intake panel first.", variant: "destructive" });
+        setIsReExtracting(false);
+        return;
+      }
       const supplementaryText = `\n\nAdditional clinical information provided:\n${answered.join("\n")}`;
       payload.freeText = payload.freeText
         ? payload.freeText + supplementaryText

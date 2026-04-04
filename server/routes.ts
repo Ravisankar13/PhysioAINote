@@ -6632,9 +6632,9 @@ GUIDELINES:
       const evidenceQuerySchema = z.object({
         diagnosis: z.string().optional(),
         bodyRegions: z.array(z.string()).optional(),
-        stage: z.enum(['acute', 'subacute', 'chronic', 'recurrent']).optional(),
+        stage: z.enum(['acute', 'subacute', 'chronic', 'chronic_recurrent', 'chronic_sensitised', 'freezing', 'frozen', 'thawing', 'reactive', 'disrepair', 'degenerative']).optional(),
         irritability: z.enum(['low', 'moderate', 'high']).optional(),
-        mechanism: z.enum(['tensile_load', 'compression', 'shear', 'stiffness', 'instability', 'motor_control', 'sensitisation', 'inflammatory', 'vascular', 'unknown']).optional(),
+        mechanism: z.enum(['compression', 'tensile_load', 'instability', 'stiffness', 'motor_control', 'sensitisation', 'unknown']).optional(),
         problemClass: z.enum(['load_capacity', 'mobility_restriction', 'instability', 'coordination_control', 'sensitivity_dominant', 'compression', 'mixed']).optional(),
         tissueType: z.string().optional(),
         tissuePathology: z.string().optional(),

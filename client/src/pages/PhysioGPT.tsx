@@ -8020,7 +8020,7 @@ ${ddxList}`;
                       }),
                       signal: controller.signal,
                     })
-                    .then(r => r.json())
+                    .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
                     .then(data => setEvidenceEngineResult(data))
                     .catch(() => {})
                     .finally(() => setEvidenceLoading(false));
@@ -8859,7 +8859,7 @@ ${ddxList}`;
                             },
                           }),
                         })
-                        .then(r => r.json())
+                        .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
                         .then(data => setEvidenceEngineResult(data))
                         .catch(() => {})
                         .finally(() => setEvidenceLoading(false));

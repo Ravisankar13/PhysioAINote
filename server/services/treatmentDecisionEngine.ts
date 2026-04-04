@@ -533,7 +533,9 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
       regions.some(ir => ir.toLowerCase().includes(r) || r.includes(ir.toLowerCase()))
     ).length;
     if (regions.length > 0 && regionOverlap > 0) {
-      score += Math.min(10, regionOverlap * 4);
+      score += Math.min(18, regionOverlap * 6);
+    } else if (regions.length > 0 && regionOverlap === 0 && !candidate.targetRegions.includes('general')) {
+      score -= 8;
     }
 
     const clinicalCategories: InterventionCategory[] = ['manual_therapy', 'exercise', 'load_management'];
@@ -620,7 +622,22 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const slingNote = hasSlingDysfunction
     ? ` Sling analysis: ${sling!.dysfunctionalSlings.length} dysfunctional sling(s) detected (force transfer ${sling!.overallForceTransferScore}/100), prioritizing force-transfer restoration and compensation reduction.`
     : '';
-  const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class): ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
+  const regionNote = regions.length > 0
+    ? ` Affected region(s): ${regions.join(', ')}.`
+    : '';
+  const durationNote = ctx?.duration
+    ? ` Duration: ${ctx.duration}.`
+    : '';
+  const onsetNote = ctx?.onset
+    ? ` Onset: ${ctx.onset}.`
+    : '';
+  const priorTxNote = ctx?.priorTreatment
+    ? ` Prior treatment: ${ctx.priorTreatment}.`
+    : '';
+  const aggravNote = ctx?.aggravatingFactors?.length
+    ? ` Aggravated by: ${ctx.aggravatingFactors.slice(0, 3).map(a => a.factor).join(', ')}.`
+    : '';
+  const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class).${regionNote}${durationNote}${onsetNote}${priorTxNote}${aggravNote} ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
 
   const expertApproaches = new Set<string>();
   for (const opt of cachedEvidenceResult.options) {

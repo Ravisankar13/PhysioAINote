@@ -815,22 +815,29 @@ function computeRelevanceScore(
   if (input.problemClass && entry.problemClassMatch.includes(input.problemClass)) score += 25;
   if (input.mechanism && entry.mechanismMatch.includes(input.mechanism)) score += 25;
 
-  if (entry.evidenceGrade === 'A') score += 20;
-  else if (entry.evidenceGrade === 'B') score += 12;
-  else if (entry.evidenceGrade === 'C') score += 5;
+  if (entry.evidenceGrade === 'A') score += 12;
+  else if (entry.evidenceGrade === 'B') score += 8;
+  else if (entry.evidenceGrade === 'C') score += 4;
   else score += 2;
 
   if (input.bodyRegions && input.bodyRegions.length > 0) {
     const regionMatch = input.bodyRegions.some(r =>
       entry.targetRegions.some(tr => tr.includes(r.toLowerCase()) || r.toLowerCase().includes(tr))
     );
-    if (regionMatch) score += 15;
+    if (regionMatch) score += 22;
   }
 
   if (input.diagnosis) {
     const diagLower = input.diagnosis.toLowerCase();
+    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2);
     const keywordMatch = entry.conditionKeywords.some(k => diagLower.includes(k) || k.includes(diagLower.split(' ')[0]));
-    if (keywordMatch) score += 10;
+    if (keywordMatch) score += 22;
+    const multiWordHits = diagWords.filter(w => entry.conditionKeywords.some(k => k.includes(w) || w.includes(k))).length;
+    if (multiWordHits >= 2) score += 10;
+  }
+
+  if (entry.problemClassMatch.length >= 4) {
+    score -= Math.min(12, (entry.problemClassMatch.length - 3) * 4);
   }
 
   if (input.tissuePathology) {
@@ -1138,7 +1145,7 @@ export function queryEvidenceEngine(input: EvidenceQueryInput): EvidenceQueryRes
     }
 
     const relevance = computeRelevanceScore(entry, resolvedInput);
-    return relevance > 10;
+    return relevance > 20;
   });
 
   const options: EvidenceOption[] = filtered.map(entry => {

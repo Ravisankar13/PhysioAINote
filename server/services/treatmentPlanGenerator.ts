@@ -156,9 +156,13 @@ function getIrritabilityIdx(level: string): number {
 function buildPhases(
   stage: string,
   irritability: string,
+  topHypothesis?: string,
+  bodyRegions?: string[],
 ): Array<{ id: string; name: string; order: number; durationWeeks: string; goals: string[]; frequency: string; reviewPoint: string; education: string[] }> {
   const irrIdx = getIrritabilityIdx(irritability);
   const phases: Array<{ id: string; name: string; order: number; durationWeeks: string; goals: string[]; frequency: string; reviewPoint: string; education: string[] }> = [];
+  const conditionLabel = topHypothesis && topHypothesis !== 'Unknown presentation' ? topHypothesis : '';
+  const regionLabel = bodyRegions && bodyRegions.length > 0 ? bodyRegions.join('/') : '';
 
   if (stage === 'acute' || stage === 'reactive') {
     phases.push({
@@ -167,10 +171,10 @@ function buildPhases(
       order: 1,
       durationWeeks: irrIdx >= 2 ? '1-2' : '1',
       goals: [
-        'Reduce pain to manageable levels (NRS < 4/10)',
-        'Protect injured tissues from further aggravation',
+        `Reduce pain to manageable levels (NRS < 4/10)${conditionLabel ? ` for ${conditionLabel}` : ''}`,
+        `Protect ${regionLabel || 'injured tissues'} from further aggravation`,
         'Maintain general fitness within pain limits',
-        'Patient education on condition and prognosis',
+        `Patient education on ${conditionLabel || 'condition'} and prognosis`,
       ],
       frequency: irrIdx >= 2 ? '2-3x/week supervised' : '3x/week supervised',
       reviewPoint: irrIdx >= 2 ? '3-5 days' : '1 week',
@@ -187,8 +191,8 @@ function buildPhases(
       order: 2,
       durationWeeks: irrIdx >= 2 ? '2-4' : '2-3',
       goals: [
-        'Restore pain-free ROM',
-        'Begin controlled loading of affected tissues',
+        `Restore pain-free ROM${regionLabel ? ` in ${regionLabel}` : ''}`,
+        `Begin controlled loading of ${regionLabel || 'affected tissues'}`,
         'Address muscle inhibition patterns',
         'Establish home exercise compliance',
       ],
@@ -206,8 +210,8 @@ function buildPhases(
       order: 3,
       durationWeeks: '3-6',
       goals: [
-        'Build load capacity in affected tissues',
-        'Correct movement patterns and motor control',
+        `Build load capacity in ${regionLabel || 'affected tissues'}`,
+        `Correct movement patterns and motor control${conditionLabel ? ` relevant to ${conditionLabel}` : ''}`,
         'Progress to functional activities',
         'Reduce treatment frequency',
       ],
@@ -226,8 +230,8 @@ function buildPhases(
       order: 1,
       durationWeeks: irrIdx >= 2 ? '2-3' : '1-2',
       goals: [
-        'Progressive tissue loading below symptom threshold',
-        'Restore functional ROM',
+        `Progressive ${regionLabel || 'tissue'} loading below symptom threshold${conditionLabel ? ` for ${conditionLabel}` : ''}`,
+        `Restore functional ROM${regionLabel ? ` in ${regionLabel}` : ''}`,
         'Address underlying muscle imbalances',
         'Begin motor control retraining',
       ],
@@ -245,8 +249,8 @@ function buildPhases(
       order: 2,
       durationWeeks: '3-6',
       goals: [
-        'Build strength to pre-injury levels',
-        'Integrate corrective exercises into functional movements',
+        `Build ${regionLabel || 'regional'} strength to pre-injury levels`,
+        `Integrate corrective exercises into functional movements${conditionLabel ? ` for ${conditionLabel} recovery` : ''}`,
         'Progress cardiovascular fitness',
         'Achieve independence with exercise programme',
       ],
@@ -264,8 +268,8 @@ function buildPhases(
       order: 3,
       durationWeeks: '4-8',
       goals: [
-        'Full return to sport/work/daily activities',
-        'Maintain gains through independent programme',
+        `Full return to sport/work/daily activities${conditionLabel ? ` post-${conditionLabel}` : ''}`,
+        `Maintain ${regionLabel || 'functional'} gains through independent programme`,
         'Address any residual deficits',
         'Establish maintenance routine',
       ],
@@ -284,8 +288,8 @@ function buildPhases(
       order: 1,
       durationWeeks: irrIdx >= 2 ? '2-4' : '2-3',
       goals: [
-        'Reduce central sensitisation and fear-avoidance',
-        'Establish baseline exercise tolerance',
+        `Reduce central sensitisation and fear-avoidance${conditionLabel ? ` associated with ${conditionLabel}` : ''}`,
+        `Establish baseline exercise tolerance${regionLabel ? ` for ${regionLabel}` : ''}`,
         'Begin graded exposure to feared movements',
         'Address psychosocial factors',
       ],
@@ -304,8 +308,8 @@ function buildPhases(
       order: 2,
       durationWeeks: '4-8',
       goals: [
-        'Progressive overload to rebuild tissue capacity',
-        'Restore functional movement patterns',
+        `Progressive overload to rebuild ${regionLabel || 'tissue'} capacity`,
+        `Restore functional movement patterns${conditionLabel ? ` compromised by ${conditionLabel}` : ''}`,
         'Improve cardiovascular conditioning',
         'Build confidence in movement',
       ],
@@ -323,8 +327,8 @@ function buildPhases(
       order: 3,
       durationWeeks: '6-12',
       goals: [
-        'Full integration into daily activities',
-        'Achieve and maintain fitness goals',
+        `Full integration into daily activities${conditionLabel ? ` despite history of ${conditionLabel}` : ''}`,
+        `Achieve and maintain ${regionLabel || 'fitness'} goals`,
         'Independent self-management',
         'Discharge with maintenance plan',
       ],
@@ -396,10 +400,11 @@ function selectExercisesForIntervention(
   intervention: RankedInterventionInput,
   _phase: number,
 ): string[] {
+  const regionKeys = intervention.targetRegions.map(r => r.toLowerCase());
+
   const mapped = INTERVENTION_EXERCISE_MAP[intervention.id];
   if (mapped && mapped.length > 0) {
-    const regionKeys = intervention.targetRegions.map(r => r.toLowerCase());
-    if (regionKeys.length > 0 && mapped.length > 5) {
+    if (regionKeys.length > 0 && mapped.length > 3) {
       const regionFiltered = mapped.filter(exId => {
         const ex = catalogIndex.get(exId);
         if (!ex) return false;
@@ -410,7 +415,6 @@ function selectExercisesForIntervention(
     return mapped.slice(0, 5);
   }
 
-  const regionKeys = intervention.targetRegions.map(r => r.toLowerCase());
   const matches: string[] = [];
   for (const region of regionKeys) {
     const found = findExercisesByBodyPart(region);
@@ -756,7 +760,20 @@ export function generateTreatmentPlan(input: TreatmentPlanInput): TreatmentPlanR
   const stage = decisionResult.stage || 'subacute';
   const irritability = decisionResult.irritability || 'moderate';
 
-  const phaseTemplates = buildPhases(stage, irritability);
+  const allRegions = new Set<string>();
+  if (painMarkers) {
+    for (const pm of painMarkers) {
+      if (pm.region) allRegions.add(pm.region.toLowerCase());
+    }
+  }
+  for (const iv of [...(decisionResult.primary || []), ...(decisionResult.adjunct || [])]) {
+    for (const r of iv.targetRegions) {
+      allRegions.add(r.toLowerCase());
+    }
+  }
+  const planBodyRegions = Array.from(allRegions).slice(0, 4);
+
+  const phaseTemplates = buildPhases(stage, irritability, decisionResult.topHypothesis, planBodyRegions);
 
   const interventionMap = mapInterventionsToPhases(
     decisionResult.primary,

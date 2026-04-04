@@ -135,19 +135,26 @@ app.use((req, res, next) => {
     });
     log("Routes registered successfully");
 
-    // Global error handler
     app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+      if (
+        req.path.startsWith('/@') ||
+        req.path.startsWith('/src/') ||
+        req.path.startsWith('/node_modules/') ||
+        req.path.startsWith('/__vite')
+      ) {
+        if (!res.headersSent) {
+          _next(err);
+        }
+        return;
+      }
+
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
 
-      // Enhanced error logging
-      console.error(`[${new Date().toISOString()}] Error on ${req.method} ${req.path}:`, {
-        error: err.message,
-        stack: err.stack,
-        status
-      });
+      if (req.path.startsWith('/api/')) {
+        console.error(`[${new Date().toISOString()}] Error on ${req.method} ${req.path}:`, err.message);
+      }
 
-      // Only send response if not already sent
       if (!res.headersSent) {
         res.status(status).json({
           message,

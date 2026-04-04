@@ -13034,27 +13034,16 @@ Be specific to THIS skeleton's findings. Every root cause must reference a speci
 
   app.get('/api/home/featured-competitions', async (req, res) => {
     try {
-      const rows = await db
-        .select({
-          id: competitions.id,
-          title: competitions.title,
-          description: competitions.description,
-          gameType: competitions.gameType,
-          bodyPart: competitions.bodyPart,
-          difficulty: competitions.difficulty,
-          timeLimit: competitions.timeLimit,
-          maxParticipants: competitions.maxParticipants,
-          currentParticipants: competitions.currentParticipants,
-          status: competitions.status,
-        })
-        .from(competitions)
-        .where(eq(competitions.status, 'active'))
-        .orderBy(competitions.currentParticipants)
-        .limit(4);
-
-      res.json(rows);
-    } catch (error) {
-      console.error('Error fetching featured competitions:', error);
+      const { pool } = await import('./db.js');
+      const result = await pool.query(
+        `SELECT id, title, description, game_type as "gameType", body_part as "bodyPart",
+                difficulty, time_limit_minutes as "timeLimit", max_participants as "maxParticipants",
+                current_participants as "currentParticipants", status
+         FROM competitions WHERE status = 'active'
+         ORDER BY current_participants DESC LIMIT 4`
+      );
+      res.json(result.rows || []);
+    } catch (error: unknown) {
       res.json([]);
     }
   });

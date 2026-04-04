@@ -7,6 +7,8 @@ import type {
 } from './clinicalReasoningEngine';
 
 import { SHARED_TECHNIQUE_DB, type TechniqueEvidence, type EvidenceReference, type ClinicalStatusKey } from '@shared/evidenceReferences';
+import { EXERCISE_CATALOG, type CatalogExercise } from '@shared/exerciseCatalog';
+import { allResearchPapers } from '../comprehensiveResearchDatabase';
 
 import { bissetConditionApproaches, bissetResearchArticles } from '../bisset-elbow-library';
 import { grimaldiConditionApproaches, grimaldiResearchArticles } from '../grimaldi-hip-library';
@@ -822,8 +824,65 @@ function computeRelevanceScore(
     }
   }
 
-  if (input.patientContext?.adherenceLevel === 'low' && entry.category === 'education') score += 3;
-  if (input.patientContext?.activityLevel === 'athlete' && entry.sourceLibrary === 'Sports Map') score += 5;
+  if (input.loadTolerance) {
+    if (input.loadTolerance === 'low') {
+      if (['isometric_loading', 'pain_neuroscience_education', 'joint_mob_grade_1_2'].includes(entry.id)) score += 8;
+      if (entry.stageRestrictions.includes('acute')) score -= 5;
+    } else if (input.loadTolerance === 'high') {
+      if (['progressive_strengthening', 'eccentric_programme', 'graded_exposure'].includes(entry.id)) score += 6;
+      if (entry.category === 'exercise') score += 3;
+    }
+  }
+
+  if (input.patientContext) {
+    const ctx = input.patientContext;
+
+    if (ctx.adherenceLevel === 'low') {
+      if (entry.category === 'education') score += 5;
+      if (entry.id === 'pain_neuroscience_education') score += 4;
+    } else if (ctx.adherenceLevel === 'high') {
+      if (entry.category === 'exercise') score += 3;
+    }
+
+    if (ctx.activityLevel === 'athlete' || ctx.sport) {
+      if (entry.sourceLibrary === 'Sports Map') score += 7;
+      if (entry.category === 'load_management') score += 4;
+    }
+
+    if (ctx.goals?.length) {
+      const goalStr = ctx.goals.join(' ').toLowerCase();
+      if (goalStr.includes('return to sport') || goalStr.includes('competition')) {
+        if (entry.category === 'exercise' || entry.category === 'load_management') score += 4;
+      }
+      if (goalStr.includes('pain') || goalStr.includes('relief')) {
+        if (entry.category === 'manual_therapy' || entry.category === 'education') score += 4;
+      }
+      if (goalStr.includes('mobility') || goalStr.includes('flexibility')) {
+        if (entry.problemClassMatch.includes('mobility_restriction')) score += 4;
+      }
+    }
+
+    if (ctx.equipment?.length) {
+      const equipLower = ctx.equipment.map(e => e.toLowerCase());
+      const descLower = entry.description.toLowerCase();
+      if (equipLower.some(e => descLower.includes(e))) score += 3;
+    }
+
+    if (ctx.workDemands) {
+      const workLower = ctx.workDemands.toLowerCase();
+      if ((workLower.includes('sedentary') || workLower.includes('desk')) && entry.category === 'exercise') score += 2;
+      if ((workLower.includes('manual') || workLower.includes('heavy')) && entry.category === 'load_management') score += 3;
+    }
+  }
+
+  if (input.tissueType) {
+    const tissueLower = input.tissueType.toLowerCase();
+    if (tissueLower.includes('tendon') && entry.conditionKeywords.some(k => k.includes('tendin') || k.includes('tendon'))) score += 8;
+    if (tissueLower.includes('muscle') && entry.conditionKeywords.some(k => k.includes('muscle') || k.includes('strain') || k.includes('strength'))) score += 8;
+    if (tissueLower.includes('nerve') && (entry.category === 'neural' || entry.conditionKeywords.some(k => k.includes('neural') || k.includes('nerve')))) score += 8;
+    if (tissueLower.includes('joint') && entry.category === 'manual_therapy') score += 6;
+    if (tissueLower.includes('fascia') && entry.conditionKeywords.some(k => k.includes('fascia') || k.includes('myofascial'))) score += 8;
+  }
 
   return Math.min(100, score);
 }
@@ -848,186 +907,180 @@ function checkTissueMatch(entry: CatalogEntry, tissueType?: string, tissuePathol
   );
 }
 
-function buildExerciseCatalogEntries(): CatalogEntry[] {
-  const exerciseCategories: Array<{
-    id: string; name: string; bodyParts: string[]; category: EvidenceCategory;
-    description: string; dosage: string; rationale: string; mechanismOfAction: string;
-    evidenceGrade: EvidenceGradeLevel; problemClassMatch: ProblemClass[]; mechanismMatch: DominantMechanism[];
-    conditionKeywords: string[];
-  }> = [
-    {
-      id: 'ex_shoulder_rotator_cuff', name: 'Rotator Cuff Strengthening Programme',
-      bodyParts: ['shoulder'], category: 'exercise',
-      description: 'Progressive rotator cuff strengthening including external/internal rotation at varying abduction angles',
-      dosage: '3 × 12-15 reps, progressive resistance, 3×/week',
-      rationale: 'Restores rotator cuff force couple balance and dynamic glenohumeral stability',
-      mechanismOfAction: 'Progressive overload of supraspinatus, infraspinatus, teres minor, subscapularis restoring force couple balance',
-      evidenceGrade: 'A', problemClassMatch: ['load_capacity', 'instability'],
-      mechanismMatch: ['tensile_load', 'instability'],
-      conditionKeywords: ['rotator cuff', 'shoulder impingement', 'shoulder weakness'],
-    },
-    {
-      id: 'ex_scapular_stabilisation', name: 'Scapular Stabilisation Programme',
-      bodyParts: ['shoulder', 'thoracic'], category: 'exercise',
-      description: 'Scapular retraction, protraction, and upward rotation exercises (Ts, Ys, Is, Ws, serratus punch)',
-      dosage: '3 × 12-15 reps, bodyweight to light resistance',
-      rationale: 'Restores scapulohumeral rhythm and serratus anterior/lower trapezius activation',
-      mechanismOfAction: 'Upregulates serratus anterior and lower trapezius while inhibiting upper trapezius dominance',
-      evidenceGrade: 'A', problemClassMatch: ['coordination_control', 'instability'],
-      mechanismMatch: ['motor_control', 'instability'],
-      conditionKeywords: ['scapular dyskinesis', 'winged scapula', 'shoulder blade'],
-    },
-    {
-      id: 'ex_knee_quad_strengthening', name: 'Quadriceps Strengthening Programme',
-      bodyParts: ['knee'], category: 'exercise',
-      description: 'Progressive quadriceps loading from isometric to isotonic including terminal knee extension, leg press, squats',
-      dosage: '3 × 8-12 reps, RPE 6-8, 3×/week',
-      rationale: 'Addresses quadriceps inhibition and weakness common in knee pathology',
-      mechanismOfAction: 'Reverses arthrogenic muscle inhibition; improves dynamic knee stability through VMO-VL balance',
-      evidenceGrade: 'A', problemClassMatch: ['load_capacity'],
-      mechanismMatch: ['tensile_load', 'instability'],
-      conditionKeywords: ['quadriceps', 'knee weakness', 'patellofemoral', 'ACL'],
-    },
-    {
-      id: 'ex_hip_gluteal_programme', name: 'Gluteal Strengthening & Activation Programme',
-      bodyParts: ['hip', 'knee', 'lumbar'], category: 'exercise',
-      description: 'Targeted gluteus medius/maximus activation and strengthening (clamshells, bridges, side-lying abduction, hip thrusts)',
-      dosage: '3 × 10-15 reps, progress to single-leg and loaded variants',
-      rationale: 'Addresses gluteal inhibition driving hip drop, knee valgus, and lumbar compensation',
-      mechanismOfAction: 'Restores hip abductor/extensor force production reducing dynamic valgus and lateral trunk shift',
-      evidenceGrade: 'A', problemClassMatch: ['load_capacity', 'coordination_control'],
-      mechanismMatch: ['motor_control', 'tensile_load'],
-      conditionKeywords: ['gluteal weakness', 'hip drop', 'trendelenburg', 'hip pain'],
-    },
-    {
-      id: 'ex_ankle_proprioception', name: 'Ankle Proprioception & Balance Programme',
-      bodyParts: ['ankle', 'knee'], category: 'exercise',
-      description: 'Progressive balance training from double-leg to single-leg on stable and unstable surfaces',
-      dosage: '3 × 30-60s holds, progress surface instability weekly',
-      rationale: 'Restores mechanoreceptor-mediated joint position sense after ankle sprain',
-      mechanismOfAction: 'Repetitive proprioceptive challenge upregulates peroneal reaction time and cortical body mapping',
-      evidenceGrade: 'A', problemClassMatch: ['instability', 'coordination_control'],
-      mechanismMatch: ['instability', 'motor_control'],
-      conditionKeywords: ['ankle sprain', 'instability', 'balance', 'proprioception'],
-    },
-    {
-      id: 'ex_spinal_stabilisation', name: 'Core Stabilisation Programme',
-      bodyParts: ['lumbar', 'cervical', 'thoracic'], category: 'exercise',
-      description: 'Deep stabiliser retraining (transversus abdominis, multifidus, pelvic floor) progressing to functional integration',
-      dosage: '3 × 10 reps with biofeedback, progress to functional tasks',
-      rationale: 'Restores feedforward activation of deep stabilisers disrupted by pain',
-      mechanismOfAction: 'Cortical reorganisation of motor maps; restores anticipatory postural adjustments',
-      evidenceGrade: 'A', problemClassMatch: ['instability', 'coordination_control'],
-      mechanismMatch: ['instability', 'motor_control'],
-      conditionKeywords: ['core stability', 'low back pain', 'multifidus', 'transversus'],
-    },
-  ];
+function mapExerciseCategoryToEvidence(cat: CatalogExercise['category']): EvidenceCategory {
+  switch (cat) {
+    case 'strengthening': return 'exercise';
+    case 'stretching': return 'exercise';
+    case 'mobility': return 'exercise';
+    case 'neuromuscular': return 'neural';
+    case 'functional': return 'exercise';
+    case 'stabilization': return 'exercise';
+    case 'manual': return 'manual_therapy';
+  }
+}
 
-  return exerciseCategories.map(ex => ({
-    id: ex.id,
-    name: ex.name,
-    category: ex.category,
-    description: ex.description,
-    dosage: ex.dosage,
-    rationale: ex.rationale,
-    mechanismOfAction: ex.mechanismOfAction,
-    evidenceGrade: ex.evidenceGrade,
-    targetRegions: ex.bodyParts,
-    contraindications: [],
-    stageRestrictions: [] as ConditionStageType[],
-    irritabilityMax: 'moderate' as IrritabilityLevel,
-    problemClassMatch: ex.problemClassMatch,
-    mechanismMatch: ex.mechanismMatch,
-    references: [],
-    sourceLibrary: 'exercise_catalog',
-    conditionKeywords: ex.conditionKeywords,
-    expectedTimeframe: '6-12 weeks for measurable strength/function gains',
-  }));
+function exerciseProblemClasses(cat: CatalogExercise['category']): ProblemClass[] {
+  switch (cat) {
+    case 'strengthening': return ['load_capacity'];
+    case 'stretching': return ['mobility_restriction'];
+    case 'mobility': return ['mobility_restriction'];
+    case 'neuromuscular': return ['coordination_control'];
+    case 'functional': return ['load_capacity', 'coordination_control'];
+    case 'stabilization': return ['instability', 'coordination_control'];
+    case 'manual': return ['mobility_restriction', 'compression'];
+  }
+}
+
+function exerciseMechanisms(cat: CatalogExercise['category']): DominantMechanism[] {
+  switch (cat) {
+    case 'strengthening': return ['tensile_load'];
+    case 'stretching': return ['stiffness'];
+    case 'mobility': return ['stiffness'];
+    case 'neuromuscular': return ['motor_control'];
+    case 'functional': return ['tensile_load', 'motor_control'];
+    case 'stabilization': return ['instability', 'motor_control'];
+    case 'manual': return ['stiffness', 'compression'];
+  }
+}
+
+function buildExerciseCatalogEntries(): CatalogEntry[] {
+  return EXERCISE_CATALOG.map((ex: CatalogExercise) => {
+    const slingLabel = ex.targetSling ? ` (targets ${ex.targetSling.replace(/_/g, ' ')} sling)` : '';
+    const equipNote = ex.equipment.length > 0 ? ` Equipment: ${ex.equipment.join(', ')}.` : ' No equipment needed.';
+    const holdNote = ex.baseHold ? `, ${ex.baseHold}s hold` : '';
+    const isManual = ex.category === 'manual';
+
+    return {
+      id: `exercise_${ex.id}`,
+      name: ex.name,
+      category: mapExerciseCategoryToEvidence(ex.category),
+      description: `${ex.name} — ${ex.category} exercise for ${ex.bodyParts.join(', ')}${slingLabel}.${equipNote}${ex.mobilisationGrade ? ` Grade: ${ex.mobilisationGrade}.` : ''}`,
+      dosage: `${ex.baseSets} × ${ex.baseReps}${holdNote}`,
+      rationale: isManual
+        ? `Manual therapy technique targeting ${ex.bodyParts.join('/')} for joint/soft tissue restoration`
+        : `${ex.category.charAt(0).toUpperCase() + ex.category.slice(1)} exercise targeting ${ex.bodyParts.join(', ')} region`,
+      mechanismOfAction: isManual
+        ? 'Neurophysiological pain modulation and/or mechanical tissue change via manual input'
+        : `Progressive ${ex.category} stimulus driving tissue adaptation in ${ex.bodyParts.join(', ')}`,
+      evidenceGrade: 'B' as EvidenceGradeLevel,
+      targetRegions: ex.bodyParts,
+      contraindications: isManual ? ['fracture', 'malignancy', 'active infection'] : [],
+      stageRestrictions: (isManual && ex.mobilisationGrade?.includes('3'))
+        ? ['acute' as ConditionStageType]
+        : [] as ConditionStageType[],
+      irritabilityMax: (isManual ? 'moderate' : 'high') as IrritabilityLevel,
+      problemClassMatch: exerciseProblemClasses(ex.category),
+      mechanismMatch: exerciseMechanisms(ex.category),
+      references: [],
+      sourceLibrary: 'exercise_catalog',
+      conditionKeywords: [
+        ...ex.bodyParts,
+        ex.category,
+        ...(ex.targetSling ? [ex.targetSling.replace(/_/g, ' ')] : []),
+        ...(ex.targetStructure ? [ex.targetStructure.toLowerCase()] : []),
+        ex.name.toLowerCase(),
+      ],
+      expectedTimeframe: isManual ? 'Immediate effect; 2-6 sessions for sustained change' : '4-12 weeks for measurable gains',
+    };
+  });
+}
+
+function mapEvidenceLevel(level: string): EvidenceGradeLevel {
+  switch (level) {
+    case 'level_1': return 'A';
+    case 'level_2': return 'A';
+    case 'level_3': return 'B';
+    case 'level_4': return 'C';
+    case 'level_5': return 'Expert';
+    default: return 'B';
+  }
+}
+
+function mapBodyPartToRegion(bodyPart: string): string {
+  const map: Record<string, string> = {
+    shoulder: 'shoulder', neck: 'cervical', back: 'lumbar', elbow: 'elbow',
+    wrist: 'wrist', hand: 'hand', hip: 'hip', knee: 'knee',
+    ankle: 'ankle', foot: 'ankle', general: 'general', other: 'general',
+  };
+  return map[bodyPart] || bodyPart;
+}
+
+function inferCategoryFromStudy(paper: typeof allResearchPapers[number]): EvidenceCategory {
+  const titleLower = paper.title.toLowerCase();
+  const abstractLower = (paper.abstract || '').toLowerCase();
+  const combined = titleLower + ' ' + abstractLower;
+  if (combined.includes('manual therapy') || combined.includes('mobilisation') || combined.includes('manipulation')) return 'manual_therapy';
+  if (combined.includes('education') || combined.includes('neuroscience education') || combined.includes('self-management')) return 'education';
+  if (combined.includes('neural') || combined.includes('neurodynamic')) return 'neural';
+  if (combined.includes('load management') || combined.includes('workload')) return 'load_management';
+  if (combined.includes('exercise') || combined.includes('strengthening') || combined.includes('rehabilitation')) return 'exercise';
+  return 'exercise';
+}
+
+function inferProblemClassFromStudy(paper: typeof allResearchPapers[number]): ProblemClass[] {
+  const combined = (paper.title + ' ' + (paper.abstract || '')).toLowerCase();
+  const classes: ProblemClass[] = [];
+  if (combined.includes('strength') || combined.includes('load') || combined.includes('tendin')) classes.push('load_capacity');
+  if (combined.includes('range of motion') || combined.includes('stiffness') || combined.includes('mobility')) classes.push('mobility_restriction');
+  if (combined.includes('stability') || combined.includes('instability') || combined.includes('laxity')) classes.push('instability');
+  if (combined.includes('motor control') || combined.includes('coordination') || combined.includes('neuromuscular')) classes.push('coordination_control');
+  if (combined.includes('sensitisation') || combined.includes('sensitization') || combined.includes('chronic pain')) classes.push('sensitivity_dominant');
+  if (combined.includes('compression') || combined.includes('impingement') || combined.includes('stenosis')) classes.push('compression');
+  return classes.length > 0 ? classes : ['load_capacity'];
+}
+
+function inferMechanismFromStudy(paper: typeof allResearchPapers[number]): DominantMechanism[] {
+  const combined = (paper.title + ' ' + (paper.abstract || '')).toLowerCase();
+  const mechs: DominantMechanism[] = [];
+  if (combined.includes('tensile') || combined.includes('tendin') || combined.includes('loading')) mechs.push('tensile_load');
+  if (combined.includes('compression') || combined.includes('impingement')) mechs.push('compression');
+  if (combined.includes('stiffness') || combined.includes('capsular') || combined.includes('adhesive')) mechs.push('stiffness');
+  if (combined.includes('motor control') || combined.includes('neuromuscular')) mechs.push('motor_control');
+  if (combined.includes('instability') || combined.includes('laxity')) mechs.push('instability');
+  if (combined.includes('sensitisation') || combined.includes('sensitization') || combined.includes('central')) mechs.push('sensitisation');
+  return mechs.length > 0 ? mechs : ['tensile_load'];
 }
 
 function buildResearchDatabaseEntries(): CatalogEntry[] {
-  const researchEntries: Array<{
-    id: string; name: string; category: EvidenceCategory;
-    description: string; rationale: string; mechanismOfAction: string;
-    evidenceGrade: EvidenceGradeLevel; targetRegions: string[];
-    problemClassMatch: ProblemClass[]; mechanismMatch: DominantMechanism[];
-    conditionKeywords: string[]; references: LiteratureReference[];
-  }> = [
-    {
-      id: 'research_tendinopathy_loading', name: 'Tendinopathy Loading Continuum (Research)',
-      category: 'exercise',
-      description: 'Evidence-based loading progression: isometric → isotonic → energy storage → sport-specific for reactive through degenerative tendinopathy',
-      rationale: 'Cook & Purdam continuum model matches loading intensity to tendon pathology stage',
-      mechanismOfAction: 'Staged mechanotransduction: isometrics for pain modulation, heavy slow resistance for collagen remodelling, plyometrics for energy storage capacity',
-      evidenceGrade: 'A', targetRegions: ['shoulder', 'knee', 'ankle', 'hip', 'elbow'],
-      problemClassMatch: ['load_capacity'], mechanismMatch: ['tensile_load'],
-      conditionKeywords: ['tendinopathy', 'tendon loading', 'reactive tendon', 'degenerative tendon'],
-      references: [
-        { authors: 'Cook JL, Purdam CR', year: 2009, title: 'Is tendon pathology a continuum? A pathology model to explain the clinical presentation of load-induced tendinopathy', journal: 'Br J Sports Med', pmid: '19066177' },
-        { authors: 'Malliaras P et al.', year: 2015, title: 'Patellar tendinopathy: clinical diagnosis, load management, and advice for challenging presentations', journal: 'J Orthop Sports Phys Ther', pmid: '26381484' },
-      ],
-    },
-    {
-      id: 'research_csi_management', name: 'Central Sensitisation Management (Research)',
-      category: 'education',
-      description: 'Multimodal approach combining PNE, graded motor imagery, graded exposure, and aerobic exercise for central sensitisation',
-      rationale: 'Addresses maladaptive neuroplastic changes in persistent pain via top-down and bottom-up interventions',
-      mechanismOfAction: 'PNE reduces threat appraisal; graded exposure extinguishes fear-avoidance; aerobic exercise activates endogenous opioid system',
-      evidenceGrade: 'A', targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee'],
-      problemClassMatch: ['sensitivity_dominant'], mechanismMatch: ['sensitisation'],
-      conditionKeywords: ['central sensitisation', 'chronic pain', 'nociplastic', 'widespread pain'],
-      references: [
-        { authors: 'Nijs J et al.', year: 2014, title: 'Treatment of central sensitization in patients with "unexplained" chronic pain: what options do we have?', journal: 'Expert Opin Pharmacother', pmid: '24825925' },
-      ],
-    },
-    {
-      id: 'research_load_management', name: 'Acute:Chronic Workload Ratio (Research)',
-      category: 'load_management',
-      description: 'Monitoring training load using acute:chronic workload ratio to maintain 0.8-1.3 "sweet spot" for injury prevention',
-      rationale: 'Systematic load management reduces injury risk by avoiding both undertraining and spike-related overload',
-      mechanismOfAction: 'Maintains tissue adaptation rate within biological tolerance window; avoids training error-induced tissue failure',
-      evidenceGrade: 'B', targetRegions: ['shoulder', 'hip', 'knee', 'ankle', 'lumbar'],
-      problemClassMatch: ['load_capacity', 'mixed'], mechanismMatch: ['tensile_load', 'compression'],
-      conditionKeywords: ['load management', 'training load', 'overuse', 'overtraining'],
-      references: [
-        { authors: 'Gabbett TJ', year: 2016, title: 'The training—injury prevention paradox: should athletes be training smarter and harder?', journal: 'Br J Sports Med', pmid: '26758673' },
-      ],
-    },
-    {
-      id: 'research_manual_therapy_mechanisms', name: 'Manual Therapy Mechanisms (Research)',
-      category: 'manual_therapy',
-      description: 'Current understanding of manual therapy: neurophysiological effects predominate over biomechanical tissue changes',
-      rationale: 'Manual therapy produces hypoalgesia via descending inhibition, not structural tissue change',
-      mechanismOfAction: 'Stimulation of peripheral mechanoreceptors activates descending pain inhibition via PAG; reduces sympathetic tone; non-specific contextual effects',
-      evidenceGrade: 'A', targetRegions: ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee'],
-      problemClassMatch: ['mobility_restriction', 'sensitivity_dominant', 'compression'],
-      mechanismMatch: ['stiffness', 'sensitisation', 'compression'],
-      conditionKeywords: ['manual therapy', 'mobilisation', 'manipulation', 'hands-on'],
-      references: [
-        { authors: 'Bialosky JE et al.', year: 2018, title: 'Unraveling the mechanisms of manual therapy: modeling an approach', journal: 'J Orthop Sports Phys Ther', pmid: '29034800' },
-      ],
-    },
-  ];
+  return allResearchPapers.map((paper, idx) => {
+    const region = mapBodyPartToRegion(paper.bodyPart);
+    const protocols = paper.treatmentProtocols || [];
+    const dosageStr = protocols.length > 0
+      ? protocols.map(p => `${p.intervention}: ${p.dosage}, ${p.frequency}, ${p.duration}`).join('; ')
+      : 'See study protocol';
+    const titleWords = paper.title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
 
-  return researchEntries.map(re => ({
-    id: re.id,
-    name: re.name,
-    category: re.category,
-    description: re.description,
-    dosage: 'See protocol-specific guidelines',
-    rationale: re.rationale,
-    mechanismOfAction: re.mechanismOfAction,
-    evidenceGrade: re.evidenceGrade,
-    targetRegions: re.targetRegions,
-    contraindications: [],
-    stageRestrictions: [] as ConditionStageType[],
-    irritabilityMax: 'high' as IrritabilityLevel,
-    problemClassMatch: re.problemClassMatch,
-    mechanismMatch: re.mechanismMatch,
-    references: re.references,
-    sourceLibrary: 'research_database',
-    conditionKeywords: re.conditionKeywords,
-  }));
+    return {
+      id: `research_${paper.pubmedId || idx}`,
+      name: paper.title,
+      category: inferCategoryFromStudy(paper),
+      description: paper.aiSummary || paper.abstract,
+      dosage: dosageStr,
+      rationale: paper.clinicalRelevance,
+      mechanismOfAction: paper.keyFindings?.join('; ') || paper.aiSummary || '',
+      evidenceGrade: mapEvidenceLevel(paper.evidenceLevel),
+      targetRegions: [region],
+      contraindications: paper.contraindications || [],
+      stageRestrictions: [] as ConditionStageType[],
+      irritabilityMax: 'high' as IrritabilityLevel,
+      problemClassMatch: inferProblemClassFromStudy(paper),
+      mechanismMatch: inferMechanismFromStudy(paper),
+      references: [{
+        authors: paper.authors,
+        year: paper.year,
+        title: paper.title,
+        journal: paper.journal,
+        pmid: paper.pubmedId || undefined,
+      }],
+      sourceLibrary: 'research_database',
+      conditionKeywords: [
+        paper.bodyPart,
+        region,
+        ...titleWords.slice(0, 8),
+        ...(paper.practicalApplications || []).flatMap(a => a.toLowerCase().split(/\s+/).filter(w => w.length > 4)).slice(0, 5),
+      ],
+    };
+  });
 }
 
 export function queryEvidenceEngine(input: EvidenceQueryInput): EvidenceQueryResult {

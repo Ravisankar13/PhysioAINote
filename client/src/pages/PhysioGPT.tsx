@@ -1080,6 +1080,7 @@ export default function PhysioGPT() {
     muscleIds: string[];
     deviationKeys: string[];
     highlightLabels: string[];
+    predictionText: string;
   } | null>(null);
 
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
@@ -1183,14 +1184,33 @@ export default function PhysioGPT() {
       setClinicalHighlights(prev => [...prev, ...highlights]);
     }
 
+    const predictionText = result.clinical_summary
+      ? `[Clinical Prediction] ${result.clinical_summary}`
+      : '';
+
+    if (predictionText) {
+      const previousPrediction = clinicalTextAppliedRef.current?.predictionText || '';
+      if (previousPrediction && subjectiveHistoryRef.current.includes(previousPrediction)) {
+        subjectiveHistoryRef.current = subjectiveHistoryRef.current.replace(previousPrediction, '').trim();
+      }
+      const updated = subjectiveHistoryRef.current
+        ? `${subjectiveHistoryRef.current}\n\n${predictionText}`
+        : predictionText;
+      subjectiveHistoryRef.current = updated;
+      setSubjectiveHistoryInput(updated);
+      lastReasoningTriggerRef.current = '';
+      setTimeout(() => triggerClinicalReasoningAnalysis(true), 300);
+    }
+
     const prev = clinicalTextAppliedRef.current;
     clinicalTextAppliedRef.current = {
       markerIds: [...(prev?.markerIds || []), ...applied.markerIds],
       muscleIds: [...(prev?.muscleIds || []), ...applied.muscleIds],
       deviationKeys: [...(prev?.deviationKeys || []), ...applied.deviationKeys],
       highlightLabels: [...(prev?.highlightLabels || []), ...applied.highlightLabels],
+      predictionText,
     };
-  }, []);
+  }, [triggerClinicalReasoningAnalysis]);
 
   const handleClinicalTextClear = useCallback(() => {
     const applied = clinicalTextAppliedRef.current;
@@ -1227,6 +1247,13 @@ export default function PhysioGPT() {
     if (applied.highlightLabels.length > 0) {
       const labelsToRemove = new Set(applied.highlightLabels);
       setClinicalHighlights(prev => prev.filter(h => !labelsToRemove.has(h.label || '')));
+    }
+
+    if (applied.predictionText && subjectiveHistoryRef.current.includes(applied.predictionText)) {
+      const cleaned = subjectiveHistoryRef.current.replace(applied.predictionText, '').replace(/\n{3,}/g, '\n\n').trim();
+      subjectiveHistoryRef.current = cleaned;
+      setSubjectiveHistoryInput(cleaned);
+      lastReasoningTriggerRef.current = '';
     }
 
     clinicalTextAppliedRef.current = null;

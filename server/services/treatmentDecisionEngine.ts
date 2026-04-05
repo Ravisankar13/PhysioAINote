@@ -257,8 +257,8 @@ function buildCandidatesFromEvidenceEngine(
       conditionKeywords: opt.conditionKeywords && opt.conditionKeywords.length > 0
         ? opt.conditionKeywords
         : opt.name.toLowerCase().split(/[^a-z]+/).filter(w => w.length > 3),
-      sourceLibrary: opt.sourceLibrary,
-      expertApproach: opt.expertApproach,
+      sourceLibrary: 'evidence_engine',
+      expertApproach: opt.expertApproach ? `${opt.sourceLibrary}: ${opt.expertApproach}` : (opt.sourceLibrary !== 'core' ? opt.sourceLibrary : undefined),
       references: opt.references,
     };
   });
@@ -491,28 +491,57 @@ function buildCandidatesFromClinicalPrediction(
   return candidates;
 }
 
+const CONCEPT_STEMS: Array<[RegExp, string]> = [
+  [/\bdry\s*needl/i, 'dry_needling'],
+  [/\btrigger\s*point/i, 'trigger_point_therapy'],
+  [/\bsoft\s*tissue|myofascial\s*release/i, 'soft_tissue_release'],
+  [/\bisometric/i, 'isometric_loading'],
+  [/\beccentric/i, 'eccentric_programme'],
+  [/\bprogressive\s*(resistance|strength)/i, 'progressive_strengthening'],
+  [/\bmotor\s*control/i, 'motor_control_retraining'],
+  [/\bneural\s*mobili[sz]/i, 'neural_mobilisation'],
+  [/\bjoint\s*mobili[sz].*grade\s*(i|1)/i, 'joint_mob_grade_1_2'],
+  [/\bjoint\s*mobili[sz].*grade\s*(iii|iv|3|4)/i, 'joint_mob_grade_3_4'],
+  [/\bjoint\s*mobili[sz]/i, 'joint_mobilisation'],
+  [/\bstretch/i, 'stretching_programme'],
+  [/\bpain\s*neuroscience|pain\s*education|PNE\b/i, 'pain_neuroscience_education'],
+  [/\bgraded\s*exposure/i, 'graded_exposure'],
+  [/\bload\s*manage|activity\s*modif/i, 'activity_modification'],
+  [/\btaping/i, 'taping_support'],
+  [/\bergonomic|postur.*correct/i, 'ergonomic_advice'],
+  [/\bthoracic\s*manip/i, 'thoracic_manipulation'],
+  [/\bscapula.*stabil/i, 'scapular_stabilisation'],
+  [/\brotator\s*cuff.*strength/i, 'rotator_cuff_strengthening'],
+  [/\bglute.*activ|hip.*strength/i, 'glute_activation'],
+  [/\bcore.*stabil/i, 'core_stabilisation'],
+  [/\bpropriocepti/i, 'proprioceptive_training'],
+  [/\bplyometric/i, 'plyometric_training'],
+  [/\bbreath.*retrain/i, 'breathing_retraining'],
+];
+
+function extractConceptKey(candidate: TreatmentCandidate): string {
+  const nameAndDesc = (candidate.name + ' ' + candidate.description).toLowerCase();
+  for (const [pattern, stem] of CONCEPT_STEMS) {
+    if (pattern.test(nameAndDesc)) {
+      return `${stem}__${candidate.category}`;
+    }
+  }
+  const normId = candidate.id.replace(/^(mech_|cpred_)/, '').replace(/_[a-f0-9]+$/, '');
+  return `${normId}__${candidate.category}`;
+}
+
 function deduplicateCandidates(candidates: TreatmentCandidate[]): TreatmentCandidate[] {
   const GRADE_ORDER: Record<string, number> = { A: 4, B: 3, C: 2, Expert: 1 };
   const groupKeys: string[] = [];
   const groupMap: Record<string, TreatmentCandidate[]> = {};
 
   for (const c of candidates) {
-    const normName = c.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const words = normName.split(/\s+/).filter((w: string) => w.length > 3);
-    let matched = false;
-    for (const key of groupKeys) {
-      const keyWords = key.split(/\s+/);
-      const overlap = words.filter((w: string) => keyWords.some((kw: string) => kw.includes(w) || w.includes(kw))).length;
-      if (overlap >= 2 && overlap >= Math.min(words.length, keyWords.length) * 0.5) {
-        groupMap[key].push(c);
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) {
-      const newKey = words.join(' ');
-      groupKeys.push(newKey);
-      groupMap[newKey] = [c];
+    const conceptKey = extractConceptKey(c);
+    if (groupMap[conceptKey]) {
+      groupMap[conceptKey].push(c);
+    } else {
+      groupKeys.push(conceptKey);
+      groupMap[conceptKey] = [c];
     }
   }
 
@@ -525,10 +554,11 @@ function deduplicateCandidates(candidates: TreatmentCandidate[]): TreatmentCandi
     }
     group.sort((a: TreatmentCandidate, b: TreatmentCandidate) => (GRADE_ORDER[b.evidenceGrade] ?? 0) - (GRADE_ORDER[a.evidenceGrade] ?? 0));
     const best = { ...group[0] };
-    const sourceSet: Record<string, boolean> = {};
+    const sourceOrigins: Record<string, boolean> = {};
     const allRationale: string[] = [];
     for (const c of group) {
-      if (c.sourceLibrary) sourceSet[c.sourceLibrary] = true;
+      const origin = normalizeSourceOrigin(c.sourceLibrary);
+      sourceOrigins[origin] = true;
       if (c.rationale && !allRationale.includes(c.rationale)) allRationale.push(c.rationale);
       if (c.evidenceRelevanceScore !== undefined && (best.evidenceRelevanceScore ?? 0) < c.evidenceRelevanceScore) {
         best.evidenceRelevanceScore = c.evidenceRelevanceScore;
@@ -536,10 +566,17 @@ function deduplicateCandidates(candidates: TreatmentCandidate[]): TreatmentCandi
       if (c.references?.length && (!best.references?.length || best.references.length < c.references.length)) {
         best.references = c.references;
       }
+      if (c.targetRegions) {
+        for (const r of c.targetRegions) {
+          if (!best.targetRegions.includes(r)) best.targetRegions.push(r);
+        }
+      }
     }
-    const sourceKeys = Object.keys(sourceSet);
-    if (sourceKeys.length > 1) {
-      best.sourceLibrary = sourceKeys.join(' + ');
+    const origins = Object.keys(sourceOrigins);
+    if (origins.length > 1) {
+      best.sourceLibrary = origins.join(' + ');
+    } else {
+      best.sourceLibrary = origins[0];
     }
     if (allRationale.length > 1) {
       best.rationale = allRationale.slice(0, 2).join(' | ');
@@ -547,6 +584,13 @@ function deduplicateCandidates(candidates: TreatmentCandidate[]): TreatmentCandi
     result.push(best);
   }
   return result;
+}
+
+function normalizeSourceOrigin(source?: string): string {
+  if (!source) return 'evidence_engine';
+  if (source === 'mechanism_analysis') return 'mechanism_analysis';
+  if (source === 'clinical_prediction') return 'clinical_prediction';
+  return 'evidence_engine';
 }
 
 function matchScore(
@@ -715,8 +759,14 @@ function buildExplainability(
     } else if (candidate.sourceLibrary === 'clinical_prediction') {
       reasons.push('Source: Clinical Prediction — hypothesis-driven recommendation');
     } else if (candidate.sourceLibrary.includes(' + ')) {
-      reasons.push(`Source: Multi-source (${candidate.sourceLibrary}) — corroborated across engines`);
-    } else if (candidate.sourceLibrary !== 'core') {
+      const origins = candidate.sourceLibrary.split(' + ').map((s: string) => {
+        if (s === 'evidence_engine') return 'Evidence Engine';
+        if (s === 'mechanism_analysis') return 'Mechanism Analysis';
+        if (s === 'clinical_prediction') return 'Clinical Prediction';
+        return s;
+      });
+      reasons.push(`Source: Multi-source (${origins.join(' + ')}) — corroborated across engines`);
+    } else if (candidate.sourceLibrary !== 'core' && candidate.sourceLibrary !== 'evidence_engine') {
       reasons.push(`Source: ${candidate.sourceLibrary}`);
     }
   }

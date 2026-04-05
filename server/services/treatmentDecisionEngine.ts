@@ -612,7 +612,7 @@ function matchScore(
     score += Math.min(25, Math.round(candidate.evidenceRelevanceScore * 0.35));
   }
 
-  if (regions.length > 0 && candidate.targetRegions.length >= 6 && candidate.sourceLibrary === 'core') {
+  if (regions.length > 0 && candidate.targetRegions.length >= 6 && (candidate.sourceLibrary === 'core' || candidate.sourceLibrary === 'evidence_engine')) {
     score -= Math.min(15, (candidate.targetRegions.length - 3) * 3);
   }
 

@@ -6546,16 +6546,62 @@ GUIDELINES:
         sling: z.record(z.any()).optional(),
         patientContext: z.record(z.any()).optional(),
         structuredReasoning: z.record(z.any()).optional(),
-        maxResults: z.number().int().min(1).max(500).optional(),
+        maxResults: z.coerce.number().int().min(1).max(500).optional(),
       }).passthrough();
 
       const parsed = evidenceQuerySchema.safeParse(req.body);
       if (!parsed.success) {
-        console.error("Evidence query validation failed:", JSON.stringify(parsed.error.issues, null, 2));
+        const fieldTypes = Object.fromEntries(
+          Object.entries(req.body || {}).map(([k, v]) => [k, typeof v])
+        );
+        console.error("Evidence query validation failed:", JSON.stringify(parsed.error.issues, null, 2), "Field types:", JSON.stringify(fieldTypes));
         return res.status(400).json({ error: "Invalid evidence query input", details: parsed.error.format() });
       }
 
-      const catalogResult = queryEvidenceEngine(parsed.data as any);
+      const VALID_STAGES = ['acute', 'subacute', 'chronic', 'chronic_recurrent', 'chronic_sensitised', 'freezing', 'frozen', 'thawing', 'reactive', 'disrepair', 'degenerative'] as const;
+      const VALID_IRRITABILITY = ['low', 'moderate', 'high'] as const;
+      const VALID_MECHANISMS = ['compression', 'tensile_load', 'instability', 'stiffness', 'motor_control', 'sensitisation', 'unknown'] as const;
+      const VALID_PROBLEM_CLASSES = ['mobility_restriction', 'load_capacity', 'compression', 'instability', 'coordination_control', 'sensitivity_dominant', 'mixed'] as const;
+      const VALID_LOAD_TOLERANCE = ['low', 'moderate', 'high'] as const;
+
+      const d = parsed.data;
+      const normalizedInput: import("./services/evidenceEngine").EvidenceQueryInput = {
+        diagnosis: d.diagnosis,
+        bodyRegions: d.bodyRegions,
+        stage: VALID_STAGES.includes(d.stage as typeof VALID_STAGES[number]) ? d.stage as typeof VALID_STAGES[number] : undefined,
+        irritability: VALID_IRRITABILITY.includes(d.irritability as typeof VALID_IRRITABILITY[number]) ? d.irritability as typeof VALID_IRRITABILITY[number] : undefined,
+        mechanism: VALID_MECHANISMS.includes(d.mechanism as typeof VALID_MECHANISMS[number]) ? d.mechanism as typeof VALID_MECHANISMS[number] : undefined,
+        problemClass: VALID_PROBLEM_CLASSES.includes(d.problemClass as typeof VALID_PROBLEM_CLASSES[number]) ? d.problemClass as typeof VALID_PROBLEM_CLASSES[number] : undefined,
+        tissueType: d.tissueType,
+        tissuePathology: d.tissuePathology,
+        loadTolerance: VALID_LOAD_TOLERANCE.includes(d.loadTolerance as typeof VALID_LOAD_TOLERANCE[number]) ? d.loadTolerance as typeof VALID_LOAD_TOLERANCE[number] : undefined,
+        biomechanics: d.biomechanics ? {
+          faults: Array.isArray(d.biomechanics.faults) ? d.biomechanics.faults : undefined,
+          jointIssues: Array.isArray(d.biomechanics.jointIssues) ? d.biomechanics.jointIssues : undefined,
+          qualityScore: typeof d.biomechanics.qualityScore === 'number' ? d.biomechanics.qualityScore : undefined,
+          movementTask: typeof d.biomechanics.movementTask === 'string' ? d.biomechanics.movementTask : undefined,
+        } : undefined,
+        sling: d.sling ? {
+          weakLinks: Array.isArray(d.sling.weakLinks) ? d.sling.weakLinks : undefined,
+          systemFailures: Array.isArray(d.sling.systemFailures) ? d.sling.systemFailures : undefined,
+          forceTransferScore: typeof d.sling.forceTransferScore === 'number' ? d.sling.forceTransferScore : undefined,
+          dominantDysfunction: typeof d.sling.dominantDysfunction === 'string' ? d.sling.dominantDysfunction : undefined,
+        } : undefined,
+        patientContext: d.patientContext ? {
+          goals: Array.isArray(d.patientContext.goals) ? d.patientContext.goals : undefined,
+          sport: typeof d.patientContext.sport === 'string' ? d.patientContext.sport : undefined,
+          equipment: Array.isArray(d.patientContext.equipment) ? d.patientContext.equipment : undefined,
+          adherenceLevel: ['low', 'moderate', 'high'].includes(d.patientContext.adherenceLevel) ? d.patientContext.adherenceLevel : undefined,
+          workDemands: typeof d.patientContext.workDemands === 'string' ? d.patientContext.workDemands : undefined,
+          activityLevel: typeof d.patientContext.activityLevel === 'string' ? d.patientContext.activityLevel : undefined,
+          age: typeof d.patientContext.age === 'number' ? d.patientContext.age : undefined,
+          gender: typeof d.patientContext.gender === 'string' ? d.patientContext.gender : undefined,
+        } : undefined,
+        structuredReasoning: d.structuredReasoning || undefined,
+        maxResults: d.maxResults,
+      };
+
+      const catalogResult = queryEvidenceEngine(normalizedInput);
 
       let multiSourceResult = null;
       let pubmedUnavailable = false;

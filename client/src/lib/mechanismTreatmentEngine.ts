@@ -156,6 +156,34 @@ function resolveAntagonist(muscleName: string): string {
   return '';
 }
 
+const KNOWN_MUSCLE_NAMES = [
+  'Gluteus Maximus', 'Gluteus Medius', 'Gluteus Minimus', 'Hamstrings', 'Quadriceps',
+  'Rectus Femoris', 'Vastus Medialis', 'Vastus Lateralis', 'Iliopsoas', 'Piriformis',
+  'Gastrocnemius', 'Soleus', 'Tibialis Anterior', 'Tibialis Posterior', 'Peroneals',
+  'Upper Trapezius', 'Lower Trapezius', 'Middle Trapezius', 'Rhomboids', 'Serratus Anterior',
+  'Pectoralis Major', 'Pectoralis Minor', 'Latissimus Dorsi', 'Infraspinatus', 'Supraspinatus',
+  'Subscapularis', 'Anterior Deltoid', 'Posterior Deltoid', 'Middle Deltoid',
+  'Biceps', 'Biceps Brachii', 'Triceps', 'Triceps Brachii',
+  'Deep Neck Flexors', 'Deep Cervical Flexors', 'Erector Spinae', 'Multifidus',
+  'Transversus Abdominis', 'Rectus Abdominis', 'External Obliques', 'Internal Obliques',
+  'Abdominals', 'Hip Adductors', 'Hip Flexors', 'Wrist Flexors', 'Wrist Extensors',
+  'Levator Scapulae', 'Sternocleidomastoid', 'Scalenes', 'TFL', 'Tensor Fasciae Latae',
+  'Plantar Intrinsics', 'Diaphragm',
+];
+
+function extractMuscleNamesFromText(text: string): string[] {
+  const results: string[] = [];
+  const lower = text.toLowerCase();
+  for (const muscle of KNOWN_MUSCLE_NAMES) {
+    if (lower.includes(muscle.toLowerCase())) {
+      if (!results.some(r => r.toLowerCase() === muscle.toLowerCase())) {
+        results.push(muscle);
+      }
+    }
+  }
+  return results;
+}
+
 function extractWeakMusclesFromPattern(card: CompensationCard): string[] {
   const weakKeywords: Record<string, string[]> = {
     upper_cross_syndrome: ['Deep Neck Flexors', 'Lower Trapezius'],
@@ -163,6 +191,10 @@ function extractWeakMusclesFromPattern(card: CompensationCard): string[] {
     pronation_distortion: ['Gluteus Medius', 'Tibialis Posterior'],
     posterior_chain_weakness: ['Gluteus Maximus', 'Hamstrings'],
     anterior_dominance: ['Rhomboids', 'Lower Trapezius', 'Infraspinatus', 'Gluteus Maximus'],
+    quad_dominance: ['Gluteus Maximus', 'Hamstrings'],
+    hip_flexor_dominance: ['Gluteus Maximus', 'Abdominals'],
+    scapular_dyskinesis: ['Lower Trapezius', 'Serratus Anterior'],
+    lateral_pelvic_drop: ['Gluteus Medius', 'Gluteus Minimus'],
   };
   const lower = card.title.toLowerCase();
   for (const [key, muscles] of Object.entries(weakKeywords)) {
@@ -173,6 +205,18 @@ function extractWeakMusclesFromPattern(card: CompensationCard): string[] {
   if (primaryLower.includes('inhibit') || primaryLower.includes('weak')) {
     const match = card.primaryDysfunction.match(/(?:inhibited?|weak)\s+(.+?)(?:\s*[—–-]|$)/i);
     if (match) return [match[1].trim()];
+  }
+  const fromPrimary = extractMuscleNamesFromText(card.primaryDysfunction);
+  if (fromPrimary.length > 0) return fromPrimary;
+  const fromTitle = extractMuscleNamesFromText(card.title);
+  if (fromTitle.length > 0) return fromTitle;
+  if (card.compensatingStructures.length > 0) {
+    const antagonists: string[] = [];
+    for (const comp of card.compensatingStructures) {
+      const ant = resolveAntagonist(comp);
+      if (ant) antagonists.push(ant);
+    }
+    if (antagonists.length > 0) return antagonists;
   }
   return [];
 }
@@ -359,21 +403,33 @@ function buildCompensationTechniques(card: CompensationCard): MechTreatmentTechn
   const compensatorLabel = specificCompensators.join(', ');
 
   const weakMuscles = extractWeakMusclesFromPattern(card);
-  const activateLabel = weakMuscles.length > 0
-    ? weakMuscles.join(', ')
-    : card.primaryDysfunction || 'primary movers';
+  let activateLabel: string;
+  if (weakMuscles.length > 0) {
+    activateLabel = weakMuscles.join(', ');
+  } else {
+    const primaryMuscles = extractMuscleNamesFromText(card.primaryDysfunction);
+    activateLabel = primaryMuscles.length > 0
+      ? primaryMuscles.join(', ')
+      : 'inhibited antagonist muscles';
+  }
 
   const releaseTagged: MechTreatmentTechnique[] = [];
   for (const t of releaseTechniques) {
     const isReciprocal = t.name.toLowerCase().includes('reciprocal inhibition');
     if (isReciprocal) {
-      const firstComp = specificCompensators[0];
-      const antagonist = resolveAntagonist(firstComp);
-      if (antagonist) {
+      let compAntagonist = '';
+      for (const comp of specificCompensators) {
+        compAntagonist = resolveAntagonist(comp);
+        if (compAntagonist) break;
+      }
+      if (!compAntagonist && activateLabel !== 'inhibited antagonist muscles') {
+        compAntagonist = activateLabel;
+      }
+      if (compAntagonist) {
         releaseTagged.push({
           ...t,
-          name: `${t.name} — activate ${antagonist} to inhibit ${compensatorLabel}`,
-          rationale: `Inhibit overactive ${compensatorLabel}: activate ${antagonist} via reciprocal inhibition to reflexively reduce tone in ${compensatorLabel}`,
+          name: `${t.name} — activate ${compAntagonist} to inhibit ${compensatorLabel}`,
+          rationale: `Inhibit overactive ${compensatorLabel}: activate ${compAntagonist} via reciprocal inhibition to reflexively reduce tone in ${compensatorLabel}`,
         });
       } else {
         releaseTagged.push({
@@ -594,10 +650,14 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
 
     const chainType = resolveChainType(kcd.chainLabel);
     const baseChainTx = CHAIN_TREATMENTS[chainType] || CHAIN_TREATMENTS.posterior;
+    const dysfunctionMuscles = extractMuscleNamesFromText(kcd.dysfunction);
+    const structureSuffix = dysfunctionMuscles.length > 0
+      ? `${kcd.chainLabel} chain (${dysfunctionMuscles.join(', ')})`
+      : `${kcd.chainLabel} chain`;
     const chainTx = baseChainTx.map(t => ({
       ...t,
-      name: `${t.name} — ${kcd.chainLabel} chain`,
-      rationale: `${kcd.chainLabel} chain dysfunction (${kcd.dysfunction}): ${t.rationale}`,
+      name: `${t.name} — ${structureSuffix}`,
+      rationale: `${structureSuffix} dysfunction (${kcd.dysfunction}): ${t.rationale}`,
     }));
 
     targets.push({

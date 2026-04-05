@@ -5,6 +5,12 @@ import type {
   LoadRedistribution,
   KineticChainDysfunction,
 } from './injuryMechanismEngine';
+import {
+  TECHNIQUE_DB,
+  STATUS_TO_ACTION,
+  type TreatmentTechnique,
+} from './treatmentPriorityEngine';
+import type { ClinicalStatus } from './muscleBiomechanicsEngine';
 
 export type EvidenceGrade = 'A' | 'B' | 'C' | 'Expert';
 
@@ -44,107 +50,59 @@ export interface MechTreatmentResult {
   summary: MechTreatmentSummary;
 }
 
-const STRUCTURE_TREATMENTS: Record<string, { action: string; techniques: MechTreatmentTechnique[] }> = {
-  default_root: {
-    action: 'Release & Mobilize',
-    techniques: [
-      { name: 'Soft tissue mobilization', type: 'manual', dosage: '5-8 min, moderate depth', rationale: 'Reduce tissue restrictions at the primary dysfunction site', evidenceGrade: 'A' },
-      { name: 'Joint mobilization (Maitland Gr III-IV)', type: 'manual', dosage: '3-5 sets × 30s oscillations', rationale: 'Restore joint play and reduce mechanoreceptor sensitization', evidenceGrade: 'A' },
-      { name: 'Corrective activation exercise', type: 'exercise', dosage: '3 × 10-15 reps, controlled tempo', rationale: 'Re-establish motor recruitment at the root cause level', evidenceGrade: 'B' },
-    ],
-  },
-  default_intermediate: {
-    action: 'Stabilize & Retrain',
-    techniques: [
-      { name: 'Neuromuscular re-education', type: 'exercise', dosage: '3 × 12 reps with proprioceptive focus', rationale: 'Retrain movement patterns through the affected intermediate link', evidenceGrade: 'B' },
-      { name: 'Eccentric loading program', type: 'exercise', dosage: '3 × 12 reps, slow 4s eccentric', rationale: 'Promote tissue adaptation and restore length-tension relationship', evidenceGrade: 'A' },
-    ],
-  },
-  default_symptom: {
-    action: 'Relieve & Protect',
-    techniques: [
-      { name: 'Manual trigger point release', type: 'manual', dosage: '60-90s sustained pressure per point', rationale: 'Reduce local pain via ischemic compression and autogenic inhibition', evidenceGrade: 'B' },
-      { name: 'Pain-free ROM exercise', type: 'exercise', dosage: '2 × 10-15 reps within pain-free range', rationale: 'Maintain mobility and promote healing without aggravation', evidenceGrade: 'B' },
-    ],
-  },
+function toMechTechnique(t: TreatmentTechnique): MechTreatmentTechnique {
+  return {
+    name: t.name,
+    type: t.type,
+    dosage: t.dosage,
+    rationale: t.rationale,
+    evidenceGrade: t.evidenceGrade as EvidenceGrade,
+  };
+}
+
+function pickTechniquesForStatus(status: ClinicalStatus, limit = 3): MechTreatmentTechnique[] {
+  const techniques = TECHNIQUE_DB[status] || [];
+  return techniques.slice(0, limit).map(toMechTechnique);
+}
+
+function inferClinicalStatus(step: CausalChainStep): ClinicalStatus {
+  const lower = (step.finding + ' ' + step.mechanism).toLowerCase();
+  if (lower.includes('spasm') || lower.includes('guarding')) return 'spasm';
+  if (lower.includes('overactive') || lower.includes('hypertonic') || lower.includes('tight') || lower.includes('hyperactiv')) return 'overactive';
+  if (lower.includes('shortened') || lower.includes('adaptive shorten') || lower.includes('contracture')) return 'shortened';
+  if (lower.includes('inhibit') || lower.includes('underactive') || lower.includes('delayed activation')) return 'inhibited';
+  if (lower.includes('weak') || lower.includes('atrophy') || lower.includes('deficit')) return 'weak';
+  if (lower.includes('lengthen') || lower.includes('elongat') || lower.includes('overstretched')) return 'lengthened';
+
+  if (step.category === 'root_cause') return 'overactive';
+  if (step.category === 'intermediate') return 'shortened';
+  return 'spasm';
+}
+
+function getActionLabel(status: ClinicalStatus): string {
+  return STATUS_TO_ACTION[status]?.label || 'Treat';
+}
+
+const REGION_AUGMENTATION: Record<string, MechTreatmentTechnique[]> = {
+  lumbar: [
+    { name: 'McGill Big 3 stabilization', type: 'exercise', dosage: 'Curl-up, side bridge, bird-dog — 3 × 8-10s holds', rationale: 'Build endurance in stabilizers without excessive spinal load', evidenceGrade: 'A' },
+  ],
+  cervical: [
+    { name: 'Deep cervical flexor activation (craniocervical flexion)', type: 'exercise', dosage: '10 × 10s holds at progressive pressure levels', rationale: 'Address deep flexor inhibition — root cause of many cervical presentations', evidenceGrade: 'A' },
+  ],
+  shoulder: [
+    { name: 'Scapular setting and serratus anterior activation', type: 'exercise', dosage: 'Wall slides / push-up plus — 3 × 10 reps', rationale: 'Restore scapulohumeral rhythm and reduce impingement risk', evidenceGrade: 'A' },
+  ],
+  hip: [
+    { name: 'Glute activation program (bridging → side-lying → standing)', type: 'exercise', dosage: '3 × 12-15 reps progressive difficulty', rationale: 'Address gluteal inhibition — major contributor to hip, knee, and lumbar dysfunction', evidenceGrade: 'A' },
+  ],
+  knee: [
+    { name: 'VMO activation (terminal knee extension)', type: 'exercise', dosage: '3 × 15 reps, last 30° ROM', rationale: 'Restore VMO timing and strength for patellofemoral tracking', evidenceGrade: 'A' },
+  ],
+  ankle: [
+    { name: 'Proprioceptive balance training', type: 'exercise', dosage: '3 × 30-60s single-leg stance, progressive surfaces', rationale: 'Retrain ankle proprioception and dynamic stability', evidenceGrade: 'A' },
+  ],
 };
-
-const REGION_SPECIFIC: Record<string, { action: string; techniques: MechTreatmentTechnique[] }> = {
-  lumbar: {
-    action: 'Core Stabilization & Spinal Mobilization',
-    techniques: [
-      { name: 'Lumbar segmental mobilization (PA)', type: 'manual', dosage: '3-5 × 30s grade III-IV oscillations per level', rationale: 'Restore segmental mobility and reduce protective muscle guarding', evidenceGrade: 'A' },
-      { name: 'McGill Big 3 stabilization', type: 'exercise', dosage: 'Curl-up, side bridge, bird-dog — 3 × 8-10s holds', rationale: 'Build endurance in stabilizers without excessive spinal load', evidenceGrade: 'A' },
-      { name: 'Neural flossing (sciatic/femoral)', type: 'exercise', dosage: '3 × 10 reps, gentle oscillations', rationale: 'Restore neural mobility if nerve tension contributes to symptoms', evidenceGrade: 'B' },
-    ],
-  },
-  cervical: {
-    action: 'Deep Flexor Activation & Upper Cervical Mobilization',
-    techniques: [
-      { name: 'Deep cervical flexor activation (craniocervical flexion)', type: 'exercise', dosage: '10 × 10s holds at progressive pressure levels', rationale: 'Address deep flexor inhibition — root cause of many cervical presentations', evidenceGrade: 'A' },
-      { name: 'Upper cervical SNAG/NAGS (Mulligan)', type: 'manual', dosage: '3-6 reps with overpressure at symptomatic level', rationale: 'Restore C0-C2 mobility with pain-free joint glide', evidenceGrade: 'B' },
-      { name: 'Levator scapulae / upper trapezius stretching', type: 'exercise', dosage: '3 × 30s holds, bilateral', rationale: 'Reduce overactivity in cervical extensors perpetuating forward head posture', evidenceGrade: 'B' },
-    ],
-  },
-  thoracic: {
-    action: 'Thoracic Extension & Scapular Control',
-    techniques: [
-      { name: 'Thoracic extension mobilization (foam roller)', type: 'exercise', dosage: '2-3 min segmental extension over roller', rationale: 'Restore thoracic kyphosis mobility — key for shoulder and cervical function', evidenceGrade: 'B' },
-      { name: 'Thoracic manipulation (supine or seated)', type: 'manual', dosage: '1-3 HVLA thrusts at hypomobile segments', rationale: 'Rapid restoration of segmental mobility with immediate neurophysiological pain reduction', evidenceGrade: 'A' },
-    ],
-  },
-  hip: {
-    action: 'Hip Stabilization & Glute Activation',
-    techniques: [
-      { name: 'Glute activation program (bridging → side-lying → standing)', type: 'exercise', dosage: '3 × 12-15 reps progressive difficulty', rationale: 'Address gluteal inhibition — major contributor to hip, knee, and lumbar dysfunction', evidenceGrade: 'A' },
-      { name: 'Hip joint mobilization (long-axis distraction / AP glide)', type: 'manual', dosage: '3-5 × 30s grade III-IV mobilizations', rationale: 'Restore capsular mobility and reduce intra-articular compression', evidenceGrade: 'A' },
-      { name: 'Hip flexor stretching (modified Thomas stretch)', type: 'exercise', dosage: '3 × 30-60s holds', rationale: 'Address adaptive shortening from prolonged sitting', evidenceGrade: 'B' },
-    ],
-  },
-  knee: {
-    action: 'Quadriceps & VMO Strengthening',
-    techniques: [
-      { name: 'VMO activation (terminal knee extension)', type: 'exercise', dosage: '3 × 15 reps, last 30° ROM', rationale: 'Restore VMO timing and strength for patellofemoral tracking', evidenceGrade: 'A' },
-      { name: 'Patellar mobilization', type: 'manual', dosage: '2-3 min multidirectional glides', rationale: 'Restore patellar mobility and reduce retinacular tightness', evidenceGrade: 'B' },
-      { name: 'Step-down eccentric loading', type: 'exercise', dosage: '3 × 10 reps per leg, 3s eccentric', rationale: 'Build eccentric control through functional range for load tolerance', evidenceGrade: 'A' },
-    ],
-  },
-  ankle: {
-    action: 'Ankle Mobility & Proprioceptive Training',
-    techniques: [
-      { name: 'Ankle dorsiflexion mobilization with movement (MWM)', type: 'manual', dosage: '3 × 10 reps with belt/manual AP talar glide', rationale: 'Restore talocrural dorsiflexion — prerequisite for squat/gait mechanics', evidenceGrade: 'A' },
-      { name: 'Proprioceptive balance training', type: 'exercise', dosage: '3 × 30-60s single-leg stance, progressive surfaces', rationale: 'Retrain ankle proprioception and dynamic stability', evidenceGrade: 'A' },
-      { name: 'Calf eccentric loading (Alfredson protocol)', type: 'exercise', dosage: '3 × 15 reps, straight and bent knee', rationale: 'Build tendon load tolerance and restore gastrocnemius/soleus capacity', evidenceGrade: 'A' },
-    ],
-  },
-  shoulder: {
-    action: 'Rotator Cuff & Scapular Stabilization',
-    techniques: [
-      { name: 'Rotator cuff isometrics → isotonics', type: 'exercise', dosage: '3 × 10-15 reps, progressive resistance', rationale: 'Graduated loading of rotator cuff for tendon adaptation and strength', evidenceGrade: 'A' },
-      { name: 'Scapular setting and serratus anterior activation', type: 'exercise', dosage: 'Wall slides / push-up plus — 3 × 10 reps', rationale: 'Restore scapulohumeral rhythm and reduce impingement risk', evidenceGrade: 'A' },
-      { name: 'Glenohumeral mobilization (inferior/posterior glide)', type: 'manual', dosage: '3-5 × 30s oscillations in restricted direction', rationale: 'Restore capsular mobility for pain-free overhead function', evidenceGrade: 'A' },
-    ],
-  },
-  pelvis: {
-    action: 'Pelvic Alignment & Core Integration',
-    techniques: [
-      { name: 'SIJ mobilization / muscle energy technique', type: 'manual', dosage: '3-5 reps: 5s isometric → reposition', rationale: 'Correct pelvic asymmetry and restore SIJ arthrokinematics', evidenceGrade: 'B' },
-      { name: 'Transversus abdominis activation', type: 'exercise', dosage: '10 × 10s holds, co-contract with pelvic floor', rationale: 'Restore deep core stability as foundation for pelvic control', evidenceGrade: 'A' },
-    ],
-  },
-};
-
-const COMPENSATION_TREATMENTS: MechTreatmentTechnique[] = [
-  { name: 'Release overactive compensating muscles', type: 'manual', dosage: '3-5 min soft tissue work per muscle', rationale: 'Reduce compensatory overactivity to restore normal recruitment patterns', evidenceGrade: 'B' },
-  { name: 'Strengthen primary movers', type: 'exercise', dosage: '3 × 10-12 reps, progressive loading', rationale: 'Build capacity in dysfunctional primary movers so compensation is no longer needed', evidenceGrade: 'A' },
-  { name: 'Movement pattern retraining', type: 'exercise', dosage: '10-15 reps with external cueing and mirror feedback', rationale: 'Retrain motor control to use correct muscle synergies rather than compensatory patterns', evidenceGrade: 'B' },
-];
-
-const OVERLOAD_TREATMENTS: MechTreatmentTechnique[] = [
-  { name: 'Load management / activity modification', type: 'exercise', dosage: 'Reduce aggravating loads by 30-50% for 2-4 weeks', rationale: 'Allow tissue recovery by reducing demand below injury threshold', evidenceGrade: 'A' },
-  { name: 'Joint distraction mobilization', type: 'manual', dosage: '3 × 30-60s sustained grade III traction', rationale: 'Decompress articular surfaces and stimulate mechanoreceptors for pain modulation', evidenceGrade: 'B' },
-  { name: 'Isometric pain relief exercise', type: 'exercise', dosage: '5 × 45s holds at 70% MVC', rationale: 'Analgesic effect via cortical inhibition and tendon adaptation without dynamic load', evidenceGrade: 'A' },
-];
 
 const CHAIN_TREATMENTS: Record<string, MechTreatmentTechnique[]> = {
   posterior: [
@@ -175,13 +133,21 @@ function resolveRegion(structure: string): string | null {
 }
 
 function getTreatmentsForStep(step: CausalChainStep): { action: string; techniques: MechTreatmentTechnique[] } {
+  const status = inferClinicalStatus(step);
+  const action = getActionLabel(status);
+  const techniques = pickTechniquesForStatus(status, 3);
+
   const region = resolveRegion(step.structure);
-  if (region && REGION_SPECIFIC[region]) {
-    return REGION_SPECIFIC[region];
+  if (region && REGION_AUGMENTATION[region]) {
+    const existing = new Set(techniques.map(t => t.name));
+    for (const aug of REGION_AUGMENTATION[region]) {
+      if (!existing.has(aug.name) && techniques.length < 4) {
+        techniques.push(aug);
+      }
+    }
   }
-  if (step.category === 'root_cause') return STRUCTURE_TREATMENTS.default_root;
-  if (step.category === 'intermediate') return STRUCTURE_TREATMENTS.default_intermediate;
-  return STRUCTURE_TREATMENTS.default_symptom;
+
+  return { action, techniques };
 }
 
 function categoryPriority(cat: string): number {
@@ -205,6 +171,59 @@ function resolveChainType(label: string): string {
   if (lower.includes('anterior')) return 'anterior';
   if (lower.includes('lateral')) return 'lateral';
   return 'posterior';
+}
+
+function buildCompensationTechniques(card: CompensationCard): MechTreatmentTechnique[] {
+  const releaseTechniques = pickTechniquesForStatus('overactive', 2);
+  const strengthenTechniques = pickTechniquesForStatus('inhibited', 2);
+
+  const compensatorName = card.title || 'compensating muscles';
+  const primaryName = card.primaryDysfunction || 'primary movers';
+
+  const tagged: MechTreatmentTechnique[] = [
+    ...releaseTechniques.map(t => ({
+      ...t,
+      name: `${t.name} — release ${compensatorName}`,
+      rationale: `Release/inhibit compensatory overactivity in ${compensatorName}: ${t.rationale}`,
+    })),
+    ...strengthenTechniques.map(t => ({
+      ...t,
+      name: `${t.name} — activate ${primaryName}`,
+      rationale: `Strengthen/activate dysfunctional ${primaryName}: ${t.rationale}`,
+    })),
+    {
+      name: 'Movement pattern retraining',
+      type: 'exercise',
+      dosage: '10-15 reps with external cueing and mirror feedback',
+      rationale: 'Retrain motor control to use correct muscle synergies rather than compensatory patterns',
+      evidenceGrade: 'B',
+    },
+  ];
+
+  return tagged;
+}
+
+function buildOverloadTechniques(joint: LoadRedistribution): MechTreatmentTechnique[] {
+  const spasmRelief = pickTechniquesForStatus('spasm', 2);
+  const strengthening = pickTechniquesForStatus('weak', 1);
+
+  return [
+    ...spasmRelief.map(t => ({
+      ...t,
+      rationale: `Reduce protective guarding around overloaded ${joint.joint}: ${t.rationale}`,
+    })),
+    ...strengthening.map(t => ({
+      ...t,
+      rationale: `Build load tolerance at ${joint.joint}: ${t.rationale}`,
+    })),
+    {
+      name: 'Load management / activity modification',
+      type: 'exercise' as const,
+      dosage: 'Reduce aggravating loads by 30-50% for 2-4 weeks',
+      rationale: 'Allow tissue recovery by reducing demand below injury threshold',
+      evidenceGrade: 'A' as EvidenceGrade,
+    },
+  ];
 }
 
 export function generateMechanismTreatments(analysis: InjuryMechanismResult): MechTreatmentResult {
@@ -239,8 +258,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const region = resolveRegion(card.primaryDysfunction);
-    const regionTx = region ? REGION_SPECIFIC[region] : null;
+    const techniques = buildCompensationTechniques(card);
 
     targets.push({
       id: `mech_${++idCounter}`,
@@ -251,8 +269,8 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
       priority: categoryPriority('compensation') * severityMultiplier(card.severity),
       finding: card.primaryDysfunction,
       mechanism: card.clinicalSignificance,
-      action: regionTx?.action || 'Release Compensators & Restore Primary',
-      techniques: regionTx?.techniques || COMPENSATION_TREATMENTS,
+      action: `${STATUS_TO_ACTION['overactive'].label} compensators → ${STATUS_TO_ACTION['inhibited'].label} primaries`,
+      techniques,
     });
   }
 
@@ -262,8 +280,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const region = resolveRegion(joint.joint);
-    const regionTx = region ? REGION_SPECIFIC[region] : null;
+    const techniques = buildOverloadTechniques(joint);
 
     targets.push({
       id: `mech_${++idCounter}`,
@@ -274,8 +291,8 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
       priority: categoryPriority('overload') * (joint.changePct > 80 ? 1.5 : 1.0),
       finding: `Joint loading +${joint.changePct}% above baseline (${joint.currentForce}N vs ${joint.baselineForce}N)`,
       mechanism: 'Excessive compressive/shear forces due to postural compensation or muscle imbalance',
-      action: regionTx?.action || 'Offload & Decompress',
-      techniques: regionTx?.techniques || OVERLOAD_TREATMENTS,
+      action: 'Offload & Decompress',
+      techniques,
     });
   }
 

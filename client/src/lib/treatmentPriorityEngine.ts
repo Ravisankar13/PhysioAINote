@@ -89,7 +89,7 @@ export interface PainMarkerSimple {
   isPredicted?: boolean;
 }
 
-const STATUS_TO_ACTION: Record<ClinicalStatus, { action: TreatmentAction; label: string }> = {
+export const STATUS_TO_ACTION: Record<ClinicalStatus, { action: TreatmentAction; label: string }> = {
   shortened: { action: 'stretch', label: 'Stretch & Lengthen' },
   overactive: { action: 'release', label: 'Release & Inhibit' },
   inhibited: { action: 'activate', label: 'Activate & Facilitate' },
@@ -99,7 +99,7 @@ const STATUS_TO_ACTION: Record<ClinicalStatus, { action: TreatmentAction; label:
   normal: { action: 'stabilize', label: 'Maintain' },
 };
 
-const TECHNIQUE_DB: Record<ClinicalStatus, TreatmentTechnique[]> = {
+export const TECHNIQUE_DB: Record<ClinicalStatus, TreatmentTechnique[]> = {
   shortened: [
     {
       name: 'Sustained static stretch',

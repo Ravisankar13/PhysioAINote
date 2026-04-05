@@ -7763,7 +7763,7 @@ ${ddxList}`;
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'treatment' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       <Stethoscope className="h-3 w-3" />
-                      Treat
+                      Treatment
                     </button>
                     <button
                       onClick={() => setMechanismActiveTab('whatif')}

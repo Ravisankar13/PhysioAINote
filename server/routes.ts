@@ -6532,126 +6532,30 @@ GUIDELINES:
       const { z } = await import("zod");
       const { queryEvidenceEngine } = await import("./services/evidenceEngine");
 
-      const biomechanicsInputSchema = z.object({
-        faults: z.array(z.object({
-          label: z.string(),
-          severity: z.string(),
-          category: z.string(),
-        }).passthrough()).optional(),
-        jointIssues: z.array(z.object({
-          joint: z.string(),
-          issue: z.string(),
-          severity: z.string(),
-        }).passthrough()).optional(),
-        qualityScore: z.number().optional(),
-        movementTask: z.string().optional(),
-      }).passthrough().optional();
-
-      const slingInputSchema = z.object({
-        weakLinks: z.array(z.string()).optional(),
-        systemFailures: z.array(z.string()).optional(),
-        forceTransferScore: z.number().optional(),
-        dominantDysfunction: z.string().optional(),
-      }).passthrough().optional();
-
-      const patientContextSchema = z.object({
-        goals: z.array(z.string()).optional(),
-        sport: z.string().optional(),
-        equipment: z.array(z.string()).optional(),
-        adherenceLevel: z.enum(['low', 'moderate', 'high']).optional(),
-        workDemands: z.string().optional(),
-        activityLevel: z.string().optional(),
-        age: z.number().optional(),
-        gender: z.string().optional(),
-      }).passthrough().optional();
-
-      const structuredReasoningSchema = z.object({
-        hypotheses: z.array(z.object({
-          id: z.string().optional(),
-          condition: z.string(),
-          confidence: z.number().optional(),
-          supporting: z.array(z.object({ feature: z.string(), weight: z.number() }).passthrough()).optional(),
-          contradicting: z.array(z.object({ feature: z.string(), weight: z.number() }).passthrough()).optional(),
-          fingerprintMatchScore: z.number().optional(),
-          structuralHypothesis: z.string().optional(),
-          dominantClinicalDriver: z.string().optional(),
-        }).passthrough()).optional(),
-        dominantSymptomDriver: z.object({
-          driver: z.string(),
-          mechanism: z.string(),
-          reasoning: z.string(),
-        }).passthrough().optional(),
-        irritability: z.object({
-          level: z.enum(['low', 'moderate', 'high']),
-          score: z.number().optional(),
-          reasons: z.array(z.string()).optional(),
-        }).passthrough().optional(),
-        stage: z.object({
-          stage: z.string(),
-          label: z.string().optional(),
-          conditionSpecific: z.boolean().optional(),
-          reasoning: z.string().optional(),
-        }).passthrough().optional(),
-        problemClass: z.object({
-          primary: z.string(),
-          secondary: z.string().optional(),
-          label: z.string().optional(),
-        }).passthrough().optional(),
-        dominantMechanism: z.object({
-          mechanism: z.string(),
-          label: z.string().optional(),
-          reasoning: z.string().optional(),
-        }).passthrough().optional(),
-        modifiers: z.array(z.object({
-          category: z.string().optional(),
-          label: z.string().optional(),
-          modifiers: z.array(z.string()).optional(),
-        }).passthrough()).optional(),
-        mustNotMiss: z.array(z.object({
-          condition: z.string(),
-          likelihood: z.string().optional(),
-          reasoning: z.string().optional(),
-          screeningNeeded: z.array(z.string()).optional(),
-        }).passthrough()).optional(),
-        missingData: z.array(z.object({
-          question: z.string(),
-          purpose: z.string().optional(),
-          priority: z.number().optional(),
-          category: z.string().optional(),
-        }).passthrough()).optional(),
-        reasoningLayers: z.object({
-          presentation: z.string().optional(),
-          symptomPattern: z.string().optional(),
-          mechanismPattern: z.string().optional(),
-          tissueFamilySuspicion: z.string().optional(),
-          differentialSummary: z.string().optional(),
-        }).passthrough().optional(),
-        timestamp: z.string().optional(),
-      }).passthrough().optional();
-
       const evidenceQuerySchema = z.object({
         diagnosis: z.string().optional(),
         bodyRegions: z.array(z.string()).optional(),
-        stage: z.enum(['acute', 'subacute', 'chronic', 'chronic_recurrent', 'chronic_sensitised', 'freezing', 'frozen', 'thawing', 'reactive', 'disrepair', 'degenerative']).optional(),
-        irritability: z.enum(['low', 'moderate', 'high']).optional(),
-        mechanism: z.enum(['compression', 'tensile_load', 'instability', 'stiffness', 'motor_control', 'sensitisation', 'unknown']).optional(),
-        problemClass: z.enum(['load_capacity', 'mobility_restriction', 'instability', 'coordination_control', 'sensitivity_dominant', 'compression', 'mixed']).optional(),
+        stage: z.string().optional(),
+        irritability: z.string().optional(),
+        mechanism: z.string().optional(),
+        problemClass: z.string().optional(),
         tissueType: z.string().optional(),
         tissuePathology: z.string().optional(),
-        loadTolerance: z.enum(['low', 'moderate', 'high']).optional(),
-        biomechanics: biomechanicsInputSchema,
-        sling: slingInputSchema,
-        patientContext: patientContextSchema,
-        structuredReasoning: structuredReasoningSchema,
+        loadTolerance: z.string().optional(),
+        biomechanics: z.record(z.any()).optional(),
+        sling: z.record(z.any()).optional(),
+        patientContext: z.record(z.any()).optional(),
+        structuredReasoning: z.record(z.any()).optional(),
         maxResults: z.number().int().min(1).max(500).optional(),
       }).passthrough();
 
       const parsed = evidenceQuerySchema.safeParse(req.body);
       if (!parsed.success) {
+        console.error("Evidence query validation failed:", JSON.stringify(parsed.error.issues, null, 2));
         return res.status(400).json({ error: "Invalid evidence query input", details: parsed.error.format() });
       }
 
-      const catalogResult = queryEvidenceEngine(parsed.data);
+      const catalogResult = queryEvidenceEngine(parsed.data as any);
 
       let multiSourceResult = null;
       let pubmedUnavailable = false;

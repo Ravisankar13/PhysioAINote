@@ -176,7 +176,15 @@ function extractMuscleNamesFromText(text: string): string[] {
   const lower = text.toLowerCase();
   for (const muscle of KNOWN_MUSCLE_NAMES) {
     if (lower.includes(muscle.toLowerCase())) {
-      if (!results.some(r => r.toLowerCase() === muscle.toLowerCase())) {
+      const existingIdx = results.findIndex(r =>
+        r.toLowerCase().includes(muscle.toLowerCase()) ||
+        muscle.toLowerCase().includes(r.toLowerCase())
+      );
+      if (existingIdx >= 0) {
+        if (muscle.length > results[existingIdx].length) {
+          results[existingIdx] = muscle;
+        }
+      } else {
         results.push(muscle);
       }
     }

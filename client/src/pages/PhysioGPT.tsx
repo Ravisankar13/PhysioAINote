@@ -598,6 +598,8 @@ export default function PhysioGPT() {
   const triggerClinicalReasoningAnalysisRef = useRef<(forceRefresh?: boolean) => void>(() => {});
   const handleEvidenceQueryRef = useRef<() => void>(() => {});
   const autoEvidenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const evidenceAbortRef = useRef<AbortController | null>(null);
+  const evidenceQueryIdRef = useRef(0);
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
@@ -667,6 +669,8 @@ export default function PhysioGPT() {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       if (interimAbortRef.current) interimAbortRef.current.abort();
       if (abortControllerRef.current) abortControllerRef.current.abort();
+      if (autoEvidenceTimerRef.current) clearTimeout(autoEvidenceTimerRef.current);
+      if (evidenceAbortRef.current) evidenceAbortRef.current.abort();
     };
   }, []);
 
@@ -1842,7 +1846,10 @@ ${ddxList}`;
   }, [BIOMECHANICAL_REGION_TO_MUSCLES, REGION_TO_BONE_NAMES]);
 
   const handleEvidenceQuery = useCallback(() => {
-    if (evidenceLoading) return;
+    if (evidenceAbortRef.current) {
+      evidenceAbortRef.current.abort();
+    }
+
     const firstBubble = Object.values(clinicalBubbleResults)[0];
     const bubbleDiagnosis = firstBubble?.data?.hypotheses?.[0]?.condition;
     const reasoningDiagnosis = clinicalReasoningData?.hypotheses?.[0]?.condition;
@@ -1855,6 +1862,12 @@ ${ddxList}`;
     });
 
     if (!diagnosis && regions.length === 0) return;
+
+    const abortController = new AbortController();
+    evidenceAbortRef.current = abortController;
+    evidenceQueryIdRef.current += 1;
+    const currentQueryId = evidenceQueryIdRef.current;
+
     setEvidenceLoading(true);
     const sa = slingAnalysisRef.current;
     const slingCtx = sa ? {
@@ -1867,6 +1880,7 @@ ${ddxList}`;
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      signal: abortController.signal,
       body: JSON.stringify({
         diagnosis,
         bodyRegions: regions.length > 0 ? regions : undefined,
@@ -1880,10 +1894,26 @@ ${ddxList}`;
       }),
     })
     .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
-    .then(data => setEvidenceEngineResult(data))
-    .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' }); })
-    .finally(() => setEvidenceLoading(false));
-  }, [painMarkers, clinicalBubbleResults, clinicalReasoningData, structuredReasoningData, tissueViewMode, evidenceLoading, toast]);
+    .then(data => {
+      if (evidenceQueryIdRef.current === currentQueryId) {
+        setEvidenceEngineResult(data);
+      }
+    })
+    .catch((err) => {
+      if (err?.name === 'AbortError') return;
+      if (evidenceQueryIdRef.current === currentQueryId) {
+        toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' });
+      }
+    })
+    .finally(() => {
+      if (evidenceQueryIdRef.current === currentQueryId) {
+        setEvidenceLoading(false);
+        if (evidenceAbortRef.current === abortController) {
+          evidenceAbortRef.current = null;
+        }
+      }
+    });
+  }, [painMarkers, clinicalBubbleResults, clinicalReasoningData, structuredReasoningData, tissueViewMode, toast]);
 
   handleEvidenceQueryRef.current = handleEvidenceQuery;
 
@@ -3185,6 +3215,10 @@ ${ddxList}`;
         setClinicalReasoningOpen(true);
       }
 
+      if (evidenceAbortRef.current) {
+        evidenceAbortRef.current.abort();
+        evidenceAbortRef.current = null;
+      }
       setEvidenceEngineResult(null);
       if (autoEvidenceTimerRef.current) {
         clearTimeout(autoEvidenceTimerRef.current);

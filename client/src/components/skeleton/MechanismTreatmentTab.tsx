@@ -191,6 +191,8 @@ export default function MechanismTreatmentTab({ analysis }: MechanismTreatmentTa
     navigator.clipboard.writeText(lines.join('\n')).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setCopied(false);
     });
   }, [treatmentResult]);
 

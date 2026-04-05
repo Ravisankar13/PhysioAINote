@@ -268,23 +268,23 @@ export default function MechanismTreatmentTab({ analysis, onNavigateToDecisionTa
         ))}
       </div>
 
-      {treatmentResult.fullTargetCount > treatmentResult.targets.length && (
-        <div className="text-center py-1.5">
-          <p className="text-[9px] text-gray-500">
-            Showing top {treatmentResult.targets.length} of {treatmentResult.fullTargetCount} targets.{' '}
-            {onNavigateToDecisionTab ? (
-              <button
-                onClick={onNavigateToDecisionTab}
-                className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors"
-              >
-                See full clinical plan in Decision tab →
-              </button>
-            ) : (
-              <span className="text-emerald-400">See full clinical plan in Decision tab →</span>
-            )}
-          </p>
-        </div>
-      )}
+      <div className="text-center py-1.5">
+        <p className="text-[9px] text-gray-500">
+          {treatmentResult.fullTargetCount > treatmentResult.targets.length && (
+            <>Showing top {treatmentResult.targets.length} of {treatmentResult.fullTargetCount} targets. </>
+          )}
+          {onNavigateToDecisionTab ? (
+            <button
+              onClick={onNavigateToDecisionTab}
+              className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors"
+            >
+              See full clinical plan in Decision tab →
+            </button>
+          ) : (
+            <span className="text-emerald-400">See full clinical plan in Decision tab →</span>
+          )}
+        </p>
+      </div>
     </div>
   );
 }

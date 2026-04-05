@@ -6576,8 +6576,8 @@ GUIDELINES:
         tissuePathology: d.tissuePathology,
         loadTolerance: VALID_LOAD_TOLERANCE.includes(d.loadTolerance as typeof VALID_LOAD_TOLERANCE[number]) ? d.loadTolerance as typeof VALID_LOAD_TOLERANCE[number] : undefined,
         biomechanics: d.biomechanics ? {
-          faults: Array.isArray(d.biomechanics.faults) ? d.biomechanics.faults : undefined,
-          jointIssues: Array.isArray(d.biomechanics.jointIssues) ? d.biomechanics.jointIssues : undefined,
+          faults: Array.isArray(d.biomechanics.faults) ? d.biomechanics.faults.filter((f: unknown) => f && typeof f === 'object' && typeof (f as Record<string, unknown>).label === 'string') : undefined,
+          jointIssues: Array.isArray(d.biomechanics.jointIssues) ? d.biomechanics.jointIssues.filter((j: unknown) => j && typeof j === 'object' && typeof (j as Record<string, unknown>).joint === 'string') : undefined,
           qualityScore: typeof d.biomechanics.qualityScore === 'number' ? d.biomechanics.qualityScore : undefined,
           movementTask: typeof d.biomechanics.movementTask === 'string' ? d.biomechanics.movementTask : undefined,
         } : undefined,

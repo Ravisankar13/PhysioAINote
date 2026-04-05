@@ -7524,12 +7524,14 @@ ${ddxList}`;
                 <BookOpen className="h-3 w-3 mr-1" />
                 Evidence
                 {evidenceLoading && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 animate-pulse inline-block" />}
-                {!evidenceLoading && evidenceEngineResult?.pubmedPapers && evidenceEngineResult.pubmedPapers.length > 0 && (
-                  <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 min-w-[14px] text-center inline-block">{evidenceEngineResult.pubmedPapers.length}</span>
-                )}
-                {!evidenceLoading && evidenceEngineResult && (!evidenceEngineResult.pubmedPapers || evidenceEngineResult.pubmedPapers.length === 0) && (
-                  <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 inline-block" />
-                )}
+                {!evidenceLoading && evidenceEngineResult && (() => {
+                  const totalCount = (evidenceEngineResult.pubmedPapers?.length || 0) + (evidenceEngineResult.options?.length || 0);
+                  return totalCount > 0 ? (
+                    <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 min-w-[14px] text-center inline-block">{totalCount}</span>
+                  ) : (
+                    <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 inline-block" />
+                  );
+                })()}
               </Button>
               <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
               <Button

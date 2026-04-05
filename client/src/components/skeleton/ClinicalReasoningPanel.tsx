@@ -1199,6 +1199,7 @@ export default function ClinicalReasoningPanel({
                       const studyTypeColor = paper.studyType === 'Meta-Analysis' || paper.studyType === 'Systematic Review' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : paper.studyType === 'RCT' ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' : 'bg-white/10 text-gray-400 border-white/10';
                       const sourceColors: Record<string, string> = {
                         'PubMed': 'bg-teal-500/15 text-teal-400 border-teal-500/25',
+                        'PEDro': 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
                         'Europe PMC': 'bg-blue-500/15 text-blue-400 border-blue-500/25',
                         'OpenAlex': 'bg-orange-500/15 text-orange-400 border-orange-500/25',
                         'Cochrane': 'bg-purple-500/15 text-purple-400 border-purple-500/25',
@@ -1214,6 +1215,11 @@ export default function ClinicalReasoningPanel({
                                   {src}
                                 </span>
                               ))}
+                              {paper.pedroScore !== undefined && paper.pedroScore > 0 && (
+                                <span className="text-[7px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                  PEDro {paper.pedroScore}/10
+                                </span>
+                              )}
                               {paper.citationCount !== undefined && paper.citationCount > 0 && (
                                 <span className="text-[7px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
                                   {paper.citationCount} cited

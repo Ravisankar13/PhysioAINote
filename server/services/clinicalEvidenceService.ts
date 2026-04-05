@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export type EvidenceSource = 'PubMed' | 'Europe PMC' | 'OpenAlex' | 'Cochrane';
+export type EvidenceSource = 'PubMed' | 'PEDro' | 'Europe PMC' | 'OpenAlex' | 'Cochrane';
 
 export interface ClinicalPaper {
   title: string;
@@ -429,6 +429,73 @@ export function formatPapersForPrompt(papers: ClinicalPaper[]): string {
   return `\n\nRELEVANT PUBMED EVIDENCE (cite these using [Author, Year] format with PMID):\n${lines.join('\n')}`;
 }
 
+function estimatePedroScore(title: string, abstract: string): number {
+  const text = `${title} ${abstract}`.toLowerCase();
+  let score = 0;
+  if (/\brandom(ized|ised|ly)\b/.test(text)) score += 2;
+  if (/\b(conceal|allocation)\b/.test(text)) score += 1;
+  if (/\bblind(ed|ing)?\b/.test(text) || /\bdouble[\s-]blind/.test(text)) score += 2;
+  if (/\bintention[\s-]to[\s-]treat\b/.test(text)) score += 1;
+  if (/\bfollow[\s-]?up\b/.test(text) && /\b(>|more than|over)\s*8[05]%/.test(text)) score += 1;
+  if (/\bbaseline\b/.test(text) && /\bsimilar|comparable|no.*difference/.test(text)) score += 1;
+  if (/\bpoint\s*(measure|estimate)\b/.test(text) || /\bconfidence\s*interval/.test(text) || /\b95%\s*ci\b/.test(text)) score += 1;
+  if (/\bbetween[\s-]group\b/.test(text) || /\binter[\s-]?group\b/.test(text)) score += 1;
+  return Math.min(score, 10);
+}
+
+async function searchPEDro(region: string, condition: string, treatment: string, searchTerms: string[]): Promise<ClinicalPaper[]> {
+  const parts: string[] = [];
+  if (region) parts.push(region);
+  if (condition) parts.push(condition);
+  if (treatment) parts.push(treatment);
+  if (parts.length === 0) return [];
+
+  const query = `(${parts.join(' AND ')}) AND (physiotherapy OR "physical therapy" OR rehabilitation) AND (SRC:MED) AND (randomized controlled trial OR clinical trial OR systematic review)`;
+
+  const response = await axios.get(`${EUROPE_PMC_BASE}/search`, {
+    params: {
+      query,
+      format: 'json',
+      pageSize: 6,
+      resultType: 'core',
+      sort: 'RELEVANCE',
+      fromSearchDate: '2015-01-01',
+    },
+    timeout: 6000,
+  });
+
+  const results = response.data?.resultList?.result || [];
+  return results
+    .filter((r: Record<string, unknown>) => r.title && r.authorString)
+    .map((r: Record<string, unknown>) => {
+      const title = String(r.title || '').replace(/<[^>]*>/g, '');
+      const abstract = String(r.abstractText || 'No abstract available.').replace(/<[^>]*>/g, '');
+      const studyType = classifyStudyType(title, abstract);
+      const year = parseInt(String(r.pubYear || new Date().getFullYear()));
+      const grade = gradeFromStudyType(studyType, year);
+      const pmid = String(r.pmid || r.id || '');
+      const doi = r.doi ? String(r.doi) : undefined;
+      const pedroScore = (studyType === 'RCT' || studyType === 'Clinical Guideline' || studyType === 'Systematic Review')
+        ? estimatePedroScore(title, abstract) : undefined;
+      return {
+        title,
+        authors: String(r.authorString || 'Unknown'),
+        journal: String(r.journalTitle || 'Unknown Journal'),
+        year,
+        pmid,
+        doi,
+        abstract,
+        studyType,
+        evidenceGrade: grade,
+        relevanceScore: computeRelevance(title, abstract, searchTerms),
+        pubmedUrl: pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : (doi ? `https://doi.org/${doi}` : ''),
+        sources: ['PEDro' as EvidenceSource],
+        pedroScore,
+        openAccessUrl: r.fullTextUrlList && typeof r.fullTextUrlList === 'object' ? extractOpenAccessUrl(r.fullTextUrlList) : undefined,
+      };
+    });
+}
+
 async function searchEuropePMC(region: string, condition: string, treatment: string, searchTerms: string[]): Promise<ClinicalPaper[]> {
   const parts: string[] = [];
   if (region) parts.push(region);
@@ -597,6 +664,9 @@ function deduplicateAndMergePapers(allPapers: ClinicalPaper[]): ClinicalPaper[] 
         if (paper.citationCount !== undefined && (existing.citationCount === undefined || paper.citationCount > existing.citationCount)) {
           existing.citationCount = paper.citationCount;
         }
+        if (paper.pedroScore !== undefined && (existing.pedroScore === undefined || paper.pedroScore > existing.pedroScore)) {
+          existing.pedroScore = paper.pedroScore;
+        }
         if (!existing.pubmedUrl && paper.pubmedUrl) existing.pubmedUrl = paper.pubmedUrl;
         existing.relevanceScore = Math.max(existing.relevanceScore, paper.relevanceScore);
         found = true;
@@ -628,8 +698,9 @@ export async function fetchMultiSourceEvidence(
   const sourceStatuses: SourceStatus[] = [];
   const allPapers: ClinicalPaper[] = [];
 
-  const [pubmedResult, europePmcResult, openAlexResult] = await Promise.allSettled([
+  const [pubmedResult, pedroResult, europePmcResult, openAlexResult] = await Promise.allSettled([
     fetchPubMedPapers(region, condition, treatment, searchTerms),
+    searchPEDro(region, condition, treatment, searchTerms),
     searchEuropePMC(region, condition, treatment, searchTerms),
     searchOpenAlex(region, condition, treatment, searchTerms),
   ]);
@@ -640,6 +711,13 @@ export async function fetchMultiSourceEvidence(
     sourceStatuses.push({ name: 'PubMed', searched: true, resultCount: papers.length });
   } else {
     sourceStatuses.push({ name: 'PubMed', searched: true, resultCount: 0, error: pubmedResult.reason?.message || 'Failed' });
+  }
+
+  if (pedroResult.status === 'fulfilled') {
+    allPapers.push(...pedroResult.value);
+    sourceStatuses.push({ name: 'PEDro', searched: true, resultCount: pedroResult.value.length });
+  } else {
+    sourceStatuses.push({ name: 'PEDro', searched: true, resultCount: 0, error: pedroResult.reason?.message || 'Failed' });
   }
 
   if (europePmcResult.status === 'fulfilled') {

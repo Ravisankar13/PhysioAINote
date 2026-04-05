@@ -126,9 +126,31 @@ const ANTAGONIST_PAIRS: Record<string, string> = {
   'latissimus dorsi': 'Anterior Deltoid / Pectoralis Major',
   'gluteus maximus': 'Iliopsoas / Rectus Femoris',
   'gluteus medius': 'Adductors',
+  'gluteus minimus': 'Adductors',
   'tibialis anterior': 'Gastrocnemius / Soleus',
   'tibialis posterior': 'Peroneals (Fibularis)',
   'peroneals': 'Tibialis Posterior',
+  'fibularis': 'Tibialis Posterior',
+  'rhomboids': 'Pectoralis Major / Serratus Anterior',
+  'rhomboid': 'Pectoralis Major / Serratus Anterior',
+  'serratus anterior': 'Rhomboids',
+  'supraspinatus': 'Infraspinatus / Posterior Deltoid',
+  'wrist flexors': 'Wrist Extensors',
+  'wrist extensors': 'Wrist Flexors',
+  'hip adductors': 'Gluteus Medius',
+  'plantar intrinsics': 'Tibialis Anterior',
+  'pectoralis': 'Rhomboids / Lower Trapezius',
+  'mid deltoid': 'Latissimus Dorsi',
+  'middle deltoid': 'Latissimus Dorsi',
+  'multifidus': 'Rectus Abdominis',
+  'transversus abdominis': 'Erector Spinae',
+  'rectus abdominis': 'Erector Spinae / Multifidus',
+  'oblique': 'Erector Spinae',
+  'abdominal': 'Erector Spinae',
+  'deep neck flexor': 'Upper Trapezius / Sternocleidomastoid',
+  'lower trapezius': 'Upper Trapezius / Levator Scapulae',
+  'biceps brachii': 'Triceps Brachii',
+  'triceps brachii': 'Biceps Brachii',
 };
 
 function resolveAntagonist(muscleName: string): string {
@@ -265,22 +287,26 @@ function getTreatmentsForStep(step: CausalChainStep): { action: string; techniqu
   const structureName = step.structure;
   const antagonist = resolveAntagonist(structureName);
 
-  const techniques: MechTreatmentTechnique[] = baseTechniques.map(t => {
+  const actionVerb = status === 'overactive' || status === 'shortened' || status === 'spasm' ? 'release' : status === 'inhibited' || status === 'weak' ? 'activate' : 'treat';
+  const techniques: MechTreatmentTechnique[] = [];
+  for (const t of baseTechniques) {
     const isReciprocal = t.name.toLowerCase().includes('reciprocal inhibition');
-    if (isReciprocal && antagonist) {
-      return {
-        ...t,
-        name: `${t.name} — activate ${antagonist} to inhibit ${structureName}`,
-        rationale: `${action} ${structureName}: activate ${antagonist} via reciprocal inhibition to reflexively inhibit overactive ${structureName}`,
-      };
+    if (isReciprocal) {
+      if (antagonist) {
+        techniques.push({
+          ...t,
+          name: `${t.name} — activate ${antagonist} to inhibit ${structureName}`,
+          rationale: `${action} ${structureName}: activate ${antagonist} via reciprocal inhibition to reflexively inhibit overactive ${structureName}`,
+        });
+      }
+      continue;
     }
-    const actionVerb = status === 'overactive' || status === 'shortened' || status === 'spasm' ? 'release' : status === 'inhibited' || status === 'weak' ? 'activate' : 'treat';
-    return {
+    techniques.push({
       ...t,
       name: `${t.name} — ${actionVerb} ${structureName}`,
       rationale: `${action} ${structureName}: ${t.rationale}`,
-    };
-  });
+    });
+  }
 
   const region = resolveRegion(step.structure);
   if (region && REGION_AUGMENTATION[region]) {
@@ -336,26 +362,30 @@ function buildCompensationTechniques(card: CompensationCard): MechTreatmentTechn
     ? weakMuscles.slice(0, 3).join(', ')
     : card.primaryDysfunction || 'primary movers';
 
-  const tagged: MechTreatmentTechnique[] = [
-    ...releaseTechniques.map(t => {
-      const isReciprocal = t.name.toLowerCase().includes('reciprocal inhibition');
-      if (isReciprocal) {
-        const firstComp = specificCompensators[0];
-        const antagonist = resolveAntagonist(firstComp);
-        if (antagonist) {
-          return {
-            ...t,
-            name: `${t.name} — activate ${antagonist} to inhibit ${compensatorLabel}`,
-            rationale: `Inhibit overactive ${compensatorLabel}: activate ${antagonist} via reciprocal inhibition to reflexively reduce tone in ${compensatorLabel}`,
-          };
-        }
+  const releaseTagged: MechTreatmentTechnique[] = [];
+  for (const t of releaseTechniques) {
+    const isReciprocal = t.name.toLowerCase().includes('reciprocal inhibition');
+    if (isReciprocal) {
+      const firstComp = specificCompensators[0];
+      const antagonist = resolveAntagonist(firstComp);
+      if (antagonist) {
+        releaseTagged.push({
+          ...t,
+          name: `${t.name} — activate ${antagonist} to inhibit ${compensatorLabel}`,
+          rationale: `Inhibit overactive ${compensatorLabel}: activate ${antagonist} via reciprocal inhibition to reflexively reduce tone in ${compensatorLabel}`,
+        });
       }
-      return {
-        ...t,
-        name: `${t.name} — release ${compensatorLabel}`,
-        rationale: `Release/inhibit compensatory overactivity in ${compensatorLabel}: ${t.rationale}`,
-      };
-    }),
+      continue;
+    }
+    releaseTagged.push({
+      ...t,
+      name: `${t.name} — release ${compensatorLabel}`,
+      rationale: `Release/inhibit compensatory overactivity in ${compensatorLabel}: ${t.rationale}`,
+    });
+  }
+
+  const tagged: MechTreatmentTechnique[] = [
+    ...releaseTagged,
     ...strengthenTechniques.map(t => ({
       ...t,
       name: `${t.name} — activate ${activateLabel}`,

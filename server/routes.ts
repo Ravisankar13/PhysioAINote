@@ -6537,22 +6537,22 @@ GUIDELINES:
           label: z.string(),
           severity: z.string(),
           category: z.string(),
-        })).optional(),
+        }).passthrough()).optional(),
         jointIssues: z.array(z.object({
           joint: z.string(),
           issue: z.string(),
           severity: z.string(),
-        })).optional(),
+        }).passthrough()).optional(),
         qualityScore: z.number().optional(),
         movementTask: z.string().optional(),
-      }).optional();
+      }).passthrough().optional();
 
       const slingInputSchema = z.object({
         weakLinks: z.array(z.string()).optional(),
         systemFailures: z.array(z.string()).optional(),
         forceTransferScore: z.number().optional(),
         dominantDysfunction: z.string().optional(),
-      }).optional();
+      }).passthrough().optional();
 
       const patientContextSchema = z.object({
         goals: z.array(z.string()).optional(),
@@ -6563,71 +6563,71 @@ GUIDELINES:
         activityLevel: z.string().optional(),
         age: z.number().optional(),
         gender: z.string().optional(),
-      }).optional();
+      }).passthrough().optional();
 
       const structuredReasoningSchema = z.object({
         hypotheses: z.array(z.object({
           id: z.string().optional(),
           condition: z.string(),
           confidence: z.number().optional(),
-          supporting: z.array(z.object({ feature: z.string(), weight: z.number() })).optional(),
-          contradicting: z.array(z.object({ feature: z.string(), weight: z.number() })).optional(),
+          supporting: z.array(z.object({ feature: z.string(), weight: z.number() }).passthrough()).optional(),
+          contradicting: z.array(z.object({ feature: z.string(), weight: z.number() }).passthrough()).optional(),
           fingerprintMatchScore: z.number().optional(),
           structuralHypothesis: z.string().optional(),
           dominantClinicalDriver: z.string().optional(),
-        })).optional(),
+        }).passthrough()).optional(),
         dominantSymptomDriver: z.object({
           driver: z.string(),
           mechanism: z.string(),
           reasoning: z.string(),
-        }).optional(),
+        }).passthrough().optional(),
         irritability: z.object({
           level: z.enum(['low', 'moderate', 'high']),
           score: z.number().optional(),
           reasons: z.array(z.string()).optional(),
-        }).optional(),
+        }).passthrough().optional(),
         stage: z.object({
           stage: z.string(),
           label: z.string().optional(),
           conditionSpecific: z.boolean().optional(),
           reasoning: z.string().optional(),
-        }).optional(),
+        }).passthrough().optional(),
         problemClass: z.object({
           primary: z.string(),
           secondary: z.string().optional(),
           label: z.string().optional(),
-        }).optional(),
+        }).passthrough().optional(),
         dominantMechanism: z.object({
           mechanism: z.string(),
           label: z.string().optional(),
           reasoning: z.string().optional(),
-        }).optional(),
+        }).passthrough().optional(),
         modifiers: z.array(z.object({
           category: z.string().optional(),
           label: z.string().optional(),
           modifiers: z.array(z.string()).optional(),
-        })).optional(),
+        }).passthrough()).optional(),
         mustNotMiss: z.array(z.object({
           condition: z.string(),
           likelihood: z.string().optional(),
           reasoning: z.string().optional(),
           screeningNeeded: z.array(z.string()).optional(),
-        })).optional(),
+        }).passthrough()).optional(),
         missingData: z.array(z.object({
           question: z.string(),
           purpose: z.string().optional(),
           priority: z.number().optional(),
           category: z.string().optional(),
-        })).optional(),
+        }).passthrough()).optional(),
         reasoningLayers: z.object({
           presentation: z.string().optional(),
           symptomPattern: z.string().optional(),
           mechanismPattern: z.string().optional(),
           tissueFamilySuspicion: z.string().optional(),
           differentialSummary: z.string().optional(),
-        }).optional(),
+        }).passthrough().optional(),
         timestamp: z.string().optional(),
-      }).optional();
+      }).passthrough().optional();
 
       const evidenceQuerySchema = z.object({
         diagnosis: z.string().optional(),
@@ -6644,7 +6644,7 @@ GUIDELINES:
         patientContext: patientContextSchema,
         structuredReasoning: structuredReasoningSchema,
         maxResults: z.number().int().min(1).max(500).optional(),
-      });
+      }).passthrough();
 
       const parsed = evidenceQuerySchema.safeParse(req.body);
       if (!parsed.success) {

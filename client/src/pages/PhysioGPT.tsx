@@ -596,6 +596,7 @@ export default function PhysioGPT() {
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slingAnalysisRef = useRef<ReturnType<typeof computeSlingAnalysis> | null>(null);
   const triggerClinicalReasoningAnalysisRef = useRef<(forceRefresh?: boolean) => void>(() => {});
+  const handleEvidenceQueryRef = useRef<() => void>(() => {});
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
@@ -1872,6 +1873,8 @@ ${ddxList}`;
     .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' }); })
     .finally(() => setEvidenceLoading(false));
   }, [painMarkers, clinicalBubbleResults, tissueViewMode, evidenceLoading, toast]);
+
+  handleEvidenceQueryRef.current = handleEvidenceQuery;
 
   const handleManualEvidenceQuery = useCallback((params: { diagnosis?: string; bodyRegions?: string[]; stage?: string; irritability?: string; mechanism?: string }) => {
     if (evidenceLoading) return;
@@ -3169,6 +3172,40 @@ ${ddxList}`;
 
       if (!clinicalReasoningOpen) {
         setClinicalReasoningOpen(true);
+      }
+
+      const autoRegions: string[] = [];
+      painMarkersRef.current.forEach(pm => {
+        const r = (pm.anatomicalLabel || pm.nearestBone || '').toLowerCase();
+        if (r && !autoRegions.includes(r)) autoRegions.push(r);
+      });
+      const autoHypothesis = data.hypotheses?.[0]?.condition || '';
+      if (autoHypothesis || autoRegions.length > 0) {
+        setTimeout(() => {
+          const sa = slingAnalysisRef.current;
+          const slingCtx = sa ? {
+            weakLinks: sa.slings.filter((s: { status: string }) => s.status === 'underperforming').flatMap((s: { weakLinks: string[] }) => s.weakLinks),
+            forceTransferScore: sa.overallForceTransferScore,
+            dominantDysfunction: sa.dominantDysfunction,
+          } : undefined;
+          setEvidenceLoading(true);
+          fetch('/api/evidence-engine/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              diagnosis: autoHypothesis,
+              bodyRegions: autoRegions.length > 0 ? autoRegions : undefined,
+              structuredReasoning: data || undefined,
+              sling: slingCtx,
+              tissueType: tissueViewMode || undefined,
+            }),
+          })
+          .then(r => { if (!r.ok) throw new Error('Evidence auto-query failed'); return r.json(); })
+          .then(result => setEvidenceEngineResult(result))
+          .catch(() => {})
+          .finally(() => setEvidenceLoading(false));
+        }, 300);
       }
     } catch (error) {
       console.error('Clinical reasoning analysis error:', error);
@@ -7464,7 +7501,11 @@ ${ddxList}`;
               >
                 <BookOpen className="h-3 w-3 mr-1" />
                 Evidence
-                {evidenceEngineResult && (
+                {evidenceLoading && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 animate-pulse inline-block" />}
+                {!evidenceLoading && evidenceEngineResult?.pubmedPapers && evidenceEngineResult.pubmedPapers.length > 0 && (
+                  <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 min-w-[14px] text-center inline-block">{evidenceEngineResult.pubmedPapers.length}</span>
+                )}
+                {!evidenceLoading && evidenceEngineResult && (!evidenceEngineResult.pubmedPapers || evidenceEngineResult.pubmedPapers.length === 0) && (
                   <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 inline-block" />
                 )}
               </Button>

@@ -873,7 +873,11 @@ export default function ClinicalReasoningPanel({
           >
             <BookOpen className="h-3 w-3" />
             Evidence
-            {evidenceData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400" />}
+            {evidenceLoading && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />}
+            {!evidenceLoading && evidenceData && evidenceData.pubmedPapers && evidenceData.pubmedPapers.length > 0 && (
+              <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/20 text-amber-400 min-w-[14px] text-center">{evidenceData.pubmedPapers.length}</span>
+            )}
+            {!evidenceLoading && evidenceData && (!evidenceData.pubmedPapers || evidenceData.pubmedPapers.length === 0) && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400" />}
           </button>
         </div>
 

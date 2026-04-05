@@ -1216,8 +1216,8 @@ export default function ClinicalReasoningPanel({
                                 </span>
                               ))}
                               {paper.pedroScore !== undefined && paper.pedroScore > 0 && (
-                                <span className="text-[7px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                                  PEDro {paper.pedroScore}/10
+                                <span className="text-[7px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" title="Estimated PEDro methodology quality score based on abstract analysis">
+                                  PEDro {paper.pedroScore}/10 (est.)
                                 </span>
                               )}
                               {paper.citationCount !== undefined && paper.citationCount > 0 && (

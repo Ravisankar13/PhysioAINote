@@ -6663,7 +6663,8 @@ GUIDELINES:
         if (regionStr || diagnosis) {
           multiSourceResult = await fetchMultiSourceEvidence(regionStr, diagnosis, '');
           if (multiSourceResult.source === 'fallback') {
-            pubmedUnavailable = true;
+            const allFailed = multiSourceResult.sourcesSearched.every(s => s.error);
+            pubmedUnavailable = allFailed;
           }
         }
       } catch (fetchErr: unknown) {

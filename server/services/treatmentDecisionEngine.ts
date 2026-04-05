@@ -473,16 +473,48 @@ function computeReviewSchedule(
 
 function extractRegionsFromReasoning(input: TreatmentDecisionInput): string[] {
   const regions = new Set<string>();
+  const regionKeywords = ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle', 'elbow', 'wrist', 'foot', 'hand', 'pelvis', 'sacroiliac', 'neck', 'spine'];
+  const regionAliases: Record<string, string> = { neck: 'cervical', spine: 'lumbar', foot: 'ankle', hand: 'wrist', pelvis: 'hip', sacroiliac: 'hip' };
+
   if (input.painMarkers) {
     for (const pm of input.painMarkers) {
       if (pm.region) regions.add(pm.region.toLowerCase());
     }
   }
-  const text = input.structuredReasoning?.reasoningLayers?.presentation || '';
-  const regionKeywords = ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle', 'elbow', 'wrist'];
-  for (const kw of regionKeywords) {
-    if (text.toLowerCase().includes(kw)) regions.add(kw);
+
+  const textSources: string[] = [];
+  const sr = input.structuredReasoning;
+  if (sr?.reasoningLayers?.presentation) textSources.push(sr.reasoningLayers.presentation);
+  if (sr?.hypotheses?.length) {
+    for (const h of sr.hypotheses) {
+      if (h.condition) textSources.push(h.condition);
+      if (h.supporting) {
+        for (const s of h.supporting) {
+          if (typeof s === 'string') textSources.push(s);
+          else if (s && typeof s === 'object' && 'feature' in s) textSources.push((s as { feature: string }).feature);
+        }
+      }
+    }
   }
+
+  const ctx = input.extractionContext;
+  if (ctx) {
+    if (ctx.bodyRegions && Array.isArray(ctx.bodyRegions)) {
+      for (const br of ctx.bodyRegions) {
+        const lower = (typeof br === 'string' ? br : (br as { region: string }).region || '').toLowerCase();
+        if (lower) regions.add(lower);
+      }
+    }
+    if (ctx.mainComplaint) textSources.push(ctx.mainComplaint);
+  }
+
+  const combined = textSources.join(' ').toLowerCase();
+  for (const kw of regionKeywords) {
+    if (combined.includes(kw)) {
+      regions.add(regionAliases[kw] || kw);
+    }
+  }
+
   return Array.from(regions);
 }
 

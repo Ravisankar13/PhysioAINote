@@ -866,16 +866,27 @@ function computeRelevanceScore(
   else score += 2;
 
   if (input.bodyRegions && input.bodyRegions.length > 0) {
-    const regionMatch = input.bodyRegions.some(r =>
+    const matchingRegions = input.bodyRegions.filter(r =>
       entry.targetRegions.some(tr => tr.includes(r.toLowerCase()) || r.toLowerCase().includes(tr))
     );
-    if (regionMatch) score += 22;
+    const regionMatch = matchingRegions.length > 0;
+    if (regionMatch) {
+      score += 22;
+      const nonGeneralTargets = entry.targetRegions.filter(t => t !== 'general');
+      if (nonGeneralTargets.length > 0 && nonGeneralTargets.length <= 3) {
+        const overlapRatio = matchingRegions.length / nonGeneralTargets.length;
+        score += Math.round(overlapRatio * 10);
+      } else if (nonGeneralTargets.length >= 6) {
+        score -= Math.min(8, (nonGeneralTargets.length - 3) * 2);
+      }
+    }
   }
 
   if (input.diagnosis) {
+    const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'not', 'but', 'are', 'was', 'were', 'been', 'has', 'had', 'have', 'will', 'can', 'may', 'should', 'would', 'could', 'left', 'right', 'bilateral', 'unilateral', 'acute', 'chronic', 'sub', 'pain', 'mild', 'moderate', 'severe', 'unknown', 'presentation', 'suspected', 'possible', 'probable', 'likely', 'syndrome', 'disorder', 'injury', 'type', 'grade', 'stage', 'phase']);
     const diagLower = input.diagnosis.toLowerCase();
-    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2);
-    const keywordMatch = entry.conditionKeywords.some(k => diagLower.includes(k) || k.includes(diagLower.split(' ')[0]));
+    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w));
+    const keywordMatch = entry.conditionKeywords.some(k => diagLower.includes(k) || (diagWords.length > 0 && k.includes(diagWords[0])));
     if (keywordMatch) score += 22;
     const multiWordHits = diagWords.filter(w => entry.conditionKeywords.some(k => k.includes(w) || w.includes(k))).length;
     if (multiWordHits >= 2) score += 10;
@@ -883,6 +894,10 @@ function computeRelevanceScore(
 
   if (entry.problemClassMatch.length >= 4) {
     score -= Math.min(12, (entry.problemClassMatch.length - 3) * 4);
+  }
+
+  if (entry.sourceLibrary === 'core' && entry.targetRegions.length >= 6) {
+    score -= Math.min(15, (entry.targetRegions.length - 3) * 3);
   }
 
   if (input.tissuePathology) {
@@ -1190,7 +1205,7 @@ export function queryEvidenceEngine(input: EvidenceQueryInput): EvidenceQueryRes
     }
 
     const relevance = computeRelevanceScore(entry, resolvedInput);
-    return relevance > 20;
+    return relevance > 30;
   });
 
   const options: EvidenceOption[] = filtered.map(entry => {

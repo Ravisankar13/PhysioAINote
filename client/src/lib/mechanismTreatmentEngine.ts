@@ -10,7 +10,7 @@ import {
   STATUS_TO_ACTION,
   type TreatmentTechnique,
 } from './treatmentPriorityEngine';
-import type { ClinicalStatus } from './muscleBiomechanicsEngine';
+import { type ClinicalStatus, BALANCE_PAIRS } from './muscleBiomechanicsEngine';
 
 export type EvidenceGrade = 'A' | 'B' | 'C' | 'Expert';
 
@@ -88,22 +88,14 @@ function getActionLabel(status: ClinicalStatus): string {
   return STATUS_TO_ACTION[status]?.label || 'Treat';
 }
 
-const ANTAGONIST_PAIRS: Record<string, string> = {
-  'upper trapezius': 'Lower Trapezius',
-  'upper trap': 'Lower Trapezius',
+const SUPPLEMENTARY_ANTAGONIST_ALIASES: Record<string, string> = {
   'levator scapulae': 'Lower Trapezius',
-  'pec major': 'Rhomboids / Middle Trapezius',
   'pec minor': 'Lower Trapezius / Serratus Anterior',
-  'pectoralis major': 'Rhomboids / Middle Trapezius',
   'pectoralis minor': 'Lower Trapezius / Serratus Anterior',
-  'rectus femoris': 'Gluteus Maximus / Hamstrings',
-  'iliopsoas': 'Gluteus Maximus',
   'psoas': 'Gluteus Maximus',
   'hip flexor': 'Gluteus Maximus',
   'hip flexors': 'Gluteus Maximus',
   'erector spinae': 'Transversus Abdominis / Rectus Abdominis',
-  'gastrocnemius': 'Tibialis Anterior',
-  'gastroc': 'Tibialis Anterior',
   'soleus': 'Tibialis Anterior',
   'tfl': 'Gluteus Medius (posterior fibers)',
   'tensor fasciae latae': 'Gluteus Medius (posterior fibers)',
@@ -112,34 +104,18 @@ const ANTAGONIST_PAIRS: Record<string, string> = {
   'scalene': 'Deep Cervical Flexors',
   'subscapularis': 'Infraspinatus / Teres Minor',
   'infraspinatus': 'Subscapularis / Pectoralis Major',
-  'biceps': 'Triceps',
-  'triceps': 'Biceps',
-  'quadriceps': 'Hamstrings',
-  'hamstrings': 'Quadriceps',
-  'adductors': 'Gluteus Medius',
-  'adductor': 'Gluteus Medius',
   'piriformis': 'Gluteus Medius (internal rotation component)',
   'vastus lateralis': 'Vastus Medialis (VMO)',
   'it band': 'Gluteus Medius',
-  'anterior deltoid': 'Posterior Deltoid',
-  'posterior deltoid': 'Anterior Deltoid',
   'latissimus dorsi': 'Anterior Deltoid / Pectoralis Major',
-  'gluteus maximus': 'Iliopsoas / Rectus Femoris',
-  'gluteus medius': 'Adductors',
-  'gluteus minimus': 'Adductors',
-  'tibialis anterior': 'Gastrocnemius / Soleus',
   'tibialis posterior': 'Peroneals (Fibularis)',
   'peroneals': 'Tibialis Posterior',
   'fibularis': 'Tibialis Posterior',
-  'rhomboids': 'Pectoralis Major / Serratus Anterior',
-  'rhomboid': 'Pectoralis Major / Serratus Anterior',
   'serratus anterior': 'Rhomboids',
   'supraspinatus': 'Infraspinatus / Posterior Deltoid',
   'wrist flexors': 'Wrist Extensors',
   'wrist extensors': 'Wrist Flexors',
-  'hip adductors': 'Gluteus Medius',
   'plantar intrinsics': 'Tibialis Anterior',
-  'pectoralis': 'Rhomboids / Lower Trapezius',
   'mid deltoid': 'Latissimus Dorsi',
   'middle deltoid': 'Latissimus Dorsi',
   'multifidus': 'Rectus Abdominis',
@@ -148,14 +124,33 @@ const ANTAGONIST_PAIRS: Record<string, string> = {
   'oblique': 'Erector Spinae',
   'abdominal': 'Erector Spinae',
   'deep neck flexor': 'Upper Trapezius / Sternocleidomastoid',
-  'lower trapezius': 'Upper Trapezius / Levator Scapulae',
-  'biceps brachii': 'Triceps Brachii',
-  'triceps brachii': 'Biceps Brachii',
 };
+
+function buildCanonicalAntagonistMap(): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const pair of BALANCE_PAIRS) {
+    for (const pattern of pair.agonistPatterns) {
+      map[pattern.toLowerCase()] = pair.antagonistLabel;
+    }
+    for (const pattern of pair.antagonistPatterns) {
+      map[pattern.toLowerCase()] = pair.agonistLabel;
+    }
+    map[pair.agonistLabel.toLowerCase()] = pair.antagonistLabel;
+    map[pair.antagonistLabel.toLowerCase()] = pair.agonistLabel;
+  }
+  return map;
+}
+
+const CANONICAL_ANTAGONISTS = buildCanonicalAntagonistMap();
 
 function resolveAntagonist(muscleName: string): string {
   const lower = muscleName.toLowerCase().replace(/^[lr] /, '');
-  for (const [key, value] of Object.entries(ANTAGONIST_PAIRS)) {
+  const exact = CANONICAL_ANTAGONISTS[lower];
+  if (exact) return exact;
+  for (const [key, value] of Object.entries(CANONICAL_ANTAGONISTS)) {
+    if (lower.includes(key) || key.includes(lower)) return value;
+  }
+  for (const [key, value] of Object.entries(SUPPLEMENTARY_ANTAGONIST_ALIASES)) {
     if (lower.includes(key) || key.includes(lower)) return value;
   }
   return '';
@@ -298,6 +293,12 @@ function getTreatmentsForStep(step: CausalChainStep): { action: string; techniqu
           name: `${t.name} — activate ${antagonist} to inhibit ${structureName}`,
           rationale: `${action} ${structureName}: activate ${antagonist} via reciprocal inhibition to reflexively inhibit overactive ${structureName}`,
         });
+      } else {
+        techniques.push({
+          ...t,
+          name: `${t.name} — antagonist activation for ${structureName}`,
+          rationale: `${action} ${structureName}: activate the antagonist muscle group via reciprocal inhibition to reflexively reduce tone in ${structureName}`,
+        });
       }
       continue;
     }
@@ -353,13 +354,13 @@ function buildCompensationTechniques(card: CompensationCard): MechTreatmentTechn
   const strengthenTechniques = pickTechniquesForStatus('inhibited', 2);
 
   const specificCompensators = card.compensatingStructures.length > 0
-    ? card.compensatingStructures.slice(0, 4)
+    ? card.compensatingStructures
     : [card.title || 'compensating muscles'];
   const compensatorLabel = specificCompensators.join(', ');
 
   const weakMuscles = extractWeakMusclesFromPattern(card);
   const activateLabel = weakMuscles.length > 0
-    ? weakMuscles.slice(0, 3).join(', ')
+    ? weakMuscles.join(', ')
     : card.primaryDysfunction || 'primary movers';
 
   const releaseTagged: MechTreatmentTechnique[] = [];
@@ -373,6 +374,12 @@ function buildCompensationTechniques(card: CompensationCard): MechTreatmentTechn
           ...t,
           name: `${t.name} — activate ${antagonist} to inhibit ${compensatorLabel}`,
           rationale: `Inhibit overactive ${compensatorLabel}: activate ${antagonist} via reciprocal inhibition to reflexively reduce tone in ${compensatorLabel}`,
+        });
+      } else {
+        releaseTagged.push({
+          ...t,
+          name: `${t.name} — antagonist activation for ${compensatorLabel}`,
+          rationale: `Inhibit overactive ${compensatorLabel}: activate the antagonist muscle group via reciprocal inhibition to reflexively reduce tone`,
         });
       }
       continue;

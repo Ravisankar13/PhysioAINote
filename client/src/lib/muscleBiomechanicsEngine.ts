@@ -2042,7 +2042,7 @@ export interface MuscleBalanceRatio {
   clinical: string;
 }
 
-interface BalancePairDef {
+export interface BalancePairDef {
   id: string;
   label: string;
   agonistPatterns: string[];
@@ -2055,7 +2055,7 @@ interface BalancePairDef {
   clinicalAntagonist: string;
 }
 
-const BALANCE_PAIRS: BalancePairDef[] = [
+export const BALANCE_PAIRS: BalancePairDef[] = [
   {
     id: 'quad_hamstring',
     label: 'Quad:Hamstring Ratio',

@@ -552,12 +552,15 @@ export default function PhysioGPT() {
     gradeDistribution: Record<string, number>;
     categoryDistribution: Record<string, number>;
     timestamp: string;
-    pubmedPapers?: Array<{ title: string; authors: string; journal: string; year: number; pmid: string; doi?: string; abstract: string; studyType: string; evidenceGrade: string; relevanceScore: number; pubmedUrl: string }>;
+    pubmedPapers?: Array<{ title: string; authors: string; journal: string; year: number; pmid: string; doi?: string; abstract: string; studyType: string; evidenceGrade: string; relevanceScore: number; pubmedUrl: string; sources?: string[]; citationCount?: number; openAccessUrl?: string; pedroScore?: number }>;
     pubmedOverallGrade?: string | null;
     pubmedConfidence?: string | null;
     pubmedSource?: string | null;
     pubmedSearchQuery?: string | null;
     pubmedUnavailable?: boolean;
+    sourcesSearched?: Array<{ name: string; searched: boolean; resultCount: number; error?: string }>;
+    totalSourcesQueried?: number;
+    totalSourcesReturned?: number;
   } | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
 

@@ -6653,32 +6653,35 @@ GUIDELINES:
 
       const catalogResult = queryEvidenceEngine(parsed.data);
 
-      let pubmedResult = null;
+      let multiSourceResult = null;
       let pubmedUnavailable = false;
       try {
-        const { fetchClinicalEvidence } = await import("./services/clinicalEvidenceService");
+        const { fetchMultiSourceEvidence } = await import("./services/clinicalEvidenceService");
         const regions = parsed.data.bodyRegions || [];
         const diagnosis = parsed.data.diagnosis || '';
         const regionStr = regions.length > 0 ? regions.join(' ') : '';
         if (regionStr || diagnosis) {
-          pubmedResult = await fetchClinicalEvidence(regionStr, diagnosis, '');
-          if (pubmedResult.source === 'fallback') {
+          multiSourceResult = await fetchMultiSourceEvidence(regionStr, diagnosis, '');
+          if (multiSourceResult.source === 'fallback') {
             pubmedUnavailable = true;
           }
         }
-      } catch (pubmedErr: unknown) {
-        console.warn("PubMed fetch failed (non-blocking):", pubmedErr instanceof Error ? pubmedErr.message : pubmedErr);
+      } catch (fetchErr: unknown) {
+        console.warn("Multi-source evidence fetch failed (non-blocking):", fetchErr instanceof Error ? fetchErr.message : fetchErr);
         pubmedUnavailable = true;
       }
 
       res.json({
         ...catalogResult,
-        pubmedPapers: pubmedResult?.papers || [],
-        pubmedOverallGrade: pubmedResult?.overallGrade || null,
-        pubmedConfidence: pubmedResult?.confidence || null,
-        pubmedSource: pubmedResult?.source || null,
-        pubmedSearchQuery: pubmedResult?.searchQuery || null,
+        pubmedPapers: multiSourceResult?.papers || [],
+        pubmedOverallGrade: multiSourceResult?.overallGrade || null,
+        pubmedConfidence: multiSourceResult?.confidence || null,
+        pubmedSource: multiSourceResult?.source || null,
+        pubmedSearchQuery: multiSourceResult?.searchQuery || null,
         pubmedUnavailable,
+        sourcesSearched: multiSourceResult?.sourcesSearched || [],
+        totalSourcesQueried: multiSourceResult?.totalSourcesQueried || 0,
+        totalSourcesReturned: multiSourceResult?.totalSourcesReturned || 0,
       });
     } catch (error: unknown) {
       console.error("Evidence engine query error:", error);

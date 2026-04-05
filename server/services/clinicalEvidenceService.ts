@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+export type EvidenceSource = 'PubMed' | 'Europe PMC' | 'OpenAlex' | 'Cochrane';
+
 export interface ClinicalPaper {
   title: string;
   authors: string;
@@ -12,6 +14,28 @@ export interface ClinicalPaper {
   evidenceGrade: 'A' | 'B' | 'C' | 'D';
   relevanceScore: number;
   pubmedUrl: string;
+  sources?: EvidenceSource[];
+  citationCount?: number;
+  openAccessUrl?: string;
+  pedroScore?: number;
+}
+
+export interface SourceStatus {
+  name: EvidenceSource;
+  searched: boolean;
+  resultCount: number;
+  error?: string;
+}
+
+export interface MultiSourceEvidenceResult {
+  papers: ClinicalPaper[];
+  overallGrade: 'A' | 'B' | 'C' | 'D';
+  confidence: 'High' | 'Moderate' | 'Low' | 'Very Low';
+  searchQuery: string;
+  source: 'multi' | 'pubmed' | 'fallback';
+  sourcesSearched: SourceStatus[];
+  totalSourcesQueried: number;
+  totalSourcesReturned: number;
 }
 
 export interface ClinicalEvidenceResult {
@@ -27,10 +51,18 @@ interface CacheEntry {
   timestamp: number;
 }
 
+interface MultiSourceCacheEntry {
+  result: MultiSourceEvidenceResult;
+  timestamp: number;
+}
+
 const PUBMED_BASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
+const EUROPE_PMC_BASE = 'https://www.ebi.ac.uk/europepmc/webservices/rest';
+const OPENALEX_BASE = 'https://api.openalex.org';
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
 const evidenceCache = new Map<string, CacheEntry>();
+const multiSourceCache = new Map<string, MultiSourceCacheEntry>();
 
 function makeCacheKey(region: string, condition: string, treatment: string): string {
   return `${region}||${condition}||${treatment}`.toLowerCase().trim();
@@ -395,4 +427,331 @@ export function formatPapersForPrompt(papers: ClinicalPaper[]): string {
     `[${i + 1}] ${p.authors} (${p.year}). "${p.title}" ${p.journal}. PMID: ${p.pmid}. Evidence Grade: ${p.evidenceGrade}. Study Type: ${p.studyType}.`
   );
   return `\n\nRELEVANT PUBMED EVIDENCE (cite these using [Author, Year] format with PMID):\n${lines.join('\n')}`;
+}
+
+async function searchEuropePMC(region: string, condition: string, treatment: string, searchTerms: string[]): Promise<ClinicalPaper[]> {
+  const parts: string[] = [];
+  if (region) parts.push(region);
+  if (condition) parts.push(condition);
+  if (treatment) parts.push(treatment);
+  if (parts.length === 0) return [];
+
+  const query = `(${parts.join(' AND ')}) AND (physiotherapy OR "physical therapy" OR rehabilitation) AND (SRC:MED)`;
+
+  const response = await axios.get(`${EUROPE_PMC_BASE}/search`, {
+    params: {
+      query,
+      format: 'json',
+      pageSize: 8,
+      resultType: 'core',
+      sort: 'RELEVANCE',
+      fromSearchDate: '2015-01-01',
+    },
+    timeout: 6000,
+  });
+
+  const results = response.data?.resultList?.result || [];
+  return results
+    .filter((r: Record<string, unknown>) => r.title && r.authorString)
+    .map((r: Record<string, unknown>) => {
+      const title = String(r.title || '').replace(/<[^>]*>/g, '');
+      const abstract = String(r.abstractText || 'No abstract available.').replace(/<[^>]*>/g, '');
+      const studyType = classifyStudyType(title, abstract);
+      const year = parseInt(String(r.pubYear || new Date().getFullYear()));
+      const grade = gradeFromStudyType(studyType, year);
+      const pmid = String(r.pmid || r.id || '');
+      const doi = r.doi ? String(r.doi) : undefined;
+      return {
+        title,
+        authors: String(r.authorString || 'Unknown'),
+        journal: String(r.journalTitle || 'Unknown Journal'),
+        year,
+        pmid,
+        doi,
+        abstract,
+        studyType,
+        evidenceGrade: grade,
+        relevanceScore: computeRelevance(title, abstract, searchTerms),
+        pubmedUrl: pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : (doi ? `https://doi.org/${doi}` : ''),
+        sources: ['Europe PMC' as EvidenceSource],
+        openAccessUrl: r.fullTextUrlList && typeof r.fullTextUrlList === 'object' ? extractOpenAccessUrl(r.fullTextUrlList) : undefined,
+      };
+    });
+}
+
+function extractOpenAccessUrl(fullTextUrlList: unknown): string | undefined {
+  try {
+    const list = fullTextUrlList as { fullTextUrl?: Array<{ availabilityCode?: string; url?: string }> };
+    const oa = list?.fullTextUrl?.find(u => u.availabilityCode === 'OA');
+    return oa?.url;
+  } catch {
+    return undefined;
+  }
+}
+
+async function searchOpenAlex(region: string, condition: string, treatment: string, searchTerms: string[]): Promise<ClinicalPaper[]> {
+  const parts: string[] = [];
+  if (region) parts.push(region);
+  if (condition) parts.push(condition);
+  if (treatment) parts.push(treatment);
+  parts.push('physiotherapy rehabilitation');
+  if (parts.length <= 1) return [];
+
+  const searchStr = parts.join(' ');
+
+  const response = await axios.get(`${OPENALEX_BASE}/works`, {
+    params: {
+      search: searchStr,
+      filter: `from_publication_date:2015-01-01,type:article`,
+      per_page: 8,
+      sort: 'relevance_score:desc',
+      mailto: 'physiogpt@example.com',
+    },
+    timeout: 6000,
+  });
+
+  const results = response.data?.results || [];
+  return results
+    .filter((w: Record<string, unknown>) => w.title)
+    .map((w: Record<string, unknown>) => {
+      const title = String(w.title || '');
+      const abstract = w.abstract_inverted_index ? reconstructAbstract(w.abstract_inverted_index as Record<string, number[]>) : 'No abstract available.';
+      const studyType = classifyStudyType(title, abstract);
+      const year = parseInt(String(w.publication_year || new Date().getFullYear()));
+      const grade = gradeFromStudyType(studyType, year);
+
+      const authorships = (w.authorships || []) as Array<{ author?: { display_name?: string } }>;
+      const authorNames = authorships.slice(0, 4).map(a => a.author?.display_name || '').filter(Boolean);
+      const authorStr = authorNames.length > 3 ? `${authorNames.slice(0, 3).join(', ')} et al.` : authorNames.join(', ') || 'Unknown';
+
+      const ids = w.ids as Record<string, string> | undefined;
+      const doi = ids?.doi ? String(ids.doi).replace('https://doi.org/', '') : (w.doi ? String(w.doi).replace('https://doi.org/', '') : undefined);
+      const pmid = ids?.pmid ? String(ids.pmid).replace('https://pubmed.ncbi.nlm.nih.gov/', '').replace('/', '') : '';
+
+      const primaryLocation = w.primary_location as { source?: { display_name?: string } } | undefined;
+      const journal = primaryLocation?.source?.display_name || 'Unknown Journal';
+
+      const oaInfo = w.open_access as { oa_url?: string; is_oa?: boolean } | undefined;
+      const citedByCount = typeof w.cited_by_count === 'number' ? w.cited_by_count : undefined;
+
+      return {
+        title,
+        authors: authorStr,
+        journal,
+        year,
+        pmid,
+        doi,
+        abstract,
+        studyType,
+        evidenceGrade: grade,
+        relevanceScore: computeRelevance(title, abstract, searchTerms),
+        pubmedUrl: pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : (doi ? `https://doi.org/${doi}` : ''),
+        sources: ['OpenAlex' as EvidenceSource],
+        citationCount: citedByCount,
+        openAccessUrl: oaInfo?.oa_url || undefined,
+      };
+    });
+}
+
+function reconstructAbstract(invertedIndex: Record<string, number[]>): string {
+  const wordPositions: Array<[string, number]> = [];
+  for (const [word, positions] of Object.entries(invertedIndex)) {
+    for (const pos of positions) {
+      wordPositions.push([word, pos]);
+    }
+  }
+  wordPositions.sort((a, b) => a[1] - b[1]);
+  return wordPositions.map(wp => wp[0]).join(' ');
+}
+
+function normalizeTitle(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function titlesMatch(a: string, b: string): boolean {
+  const na = normalizeTitle(a);
+  const nb = normalizeTitle(b);
+  if (na === nb) return true;
+  if (na.length < 20 || nb.length < 20) return false;
+  const shorter = na.length < nb.length ? na : nb;
+  const longer = na.length < nb.length ? nb : na;
+  return longer.includes(shorter) || shorter.includes(longer.slice(0, shorter.length));
+}
+
+function deduplicateAndMergePapers(allPapers: ClinicalPaper[]): ClinicalPaper[] {
+  const merged: ClinicalPaper[] = [];
+
+  for (const paper of allPapers) {
+    let found = false;
+    for (const existing of merged) {
+      const doiMatch = paper.doi && existing.doi && paper.doi === existing.doi;
+      const pmidMatch = paper.pmid && existing.pmid && paper.pmid === existing.pmid;
+      const titleMatch = titlesMatch(paper.title, existing.title);
+
+      if (doiMatch || pmidMatch || titleMatch) {
+        existing.sources = [...new Set([...(existing.sources || []), ...(paper.sources || [])])];
+        if (!existing.doi && paper.doi) existing.doi = paper.doi;
+        if (!existing.pmid && paper.pmid) existing.pmid = paper.pmid;
+        if (!existing.abstract || existing.abstract === 'No abstract available.') existing.abstract = paper.abstract;
+        if (!existing.openAccessUrl && paper.openAccessUrl) existing.openAccessUrl = paper.openAccessUrl;
+        if (paper.citationCount !== undefined && (existing.citationCount === undefined || paper.citationCount > existing.citationCount)) {
+          existing.citationCount = paper.citationCount;
+        }
+        if (!existing.pubmedUrl && paper.pubmedUrl) existing.pubmedUrl = paper.pubmedUrl;
+        existing.relevanceScore = Math.max(existing.relevanceScore, paper.relevanceScore);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      merged.push({ ...paper });
+    }
+  }
+
+  return merged;
+}
+
+export async function fetchMultiSourceEvidence(
+  region: string,
+  condition: string = '',
+  treatment: string = ''
+): Promise<MultiSourceEvidenceResult> {
+  const cacheKey = `multi::${makeCacheKey(region, condition, treatment)}`;
+  const cached = multiSourceCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.result;
+  }
+
+  const searchQuery = buildPubMedQuery(region, condition, treatment);
+  const searchTerms = [region, condition, treatment].filter(Boolean);
+
+  const sourceStatuses: SourceStatus[] = [];
+  const allPapers: ClinicalPaper[] = [];
+
+  const [pubmedResult, europePmcResult, openAlexResult] = await Promise.allSettled([
+    fetchPubMedPapers(region, condition, treatment, searchTerms),
+    searchEuropePMC(region, condition, treatment, searchTerms),
+    searchOpenAlex(region, condition, treatment, searchTerms),
+  ]);
+
+  if (pubmedResult.status === 'fulfilled') {
+    const papers = pubmedResult.value.map(p => ({ ...p, sources: ['PubMed' as EvidenceSource] }));
+    allPapers.push(...papers);
+    sourceStatuses.push({ name: 'PubMed', searched: true, resultCount: papers.length });
+  } else {
+    sourceStatuses.push({ name: 'PubMed', searched: true, resultCount: 0, error: pubmedResult.reason?.message || 'Failed' });
+  }
+
+  if (europePmcResult.status === 'fulfilled') {
+    allPapers.push(...europePmcResult.value);
+    sourceStatuses.push({ name: 'Europe PMC', searched: true, resultCount: europePmcResult.value.length });
+  } else {
+    sourceStatuses.push({ name: 'Europe PMC', searched: true, resultCount: 0, error: europePmcResult.reason?.message || 'Failed' });
+  }
+
+  if (openAlexResult.status === 'fulfilled') {
+    allPapers.push(...openAlexResult.value);
+    sourceStatuses.push({ name: 'OpenAlex', searched: true, resultCount: openAlexResult.value.length });
+  } else {
+    sourceStatuses.push({ name: 'OpenAlex', searched: true, resultCount: 0, error: openAlexResult.reason?.message || 'Failed' });
+  }
+
+  const totalSourcesQueried = sourceStatuses.length;
+  const totalSourcesReturned = sourceStatuses.filter(s => s.resultCount > 0).length;
+
+  if (allPapers.length === 0) {
+    const fallback = getFallbackPapers(region, condition).map(p => ({ ...p, sources: ['PubMed' as EvidenceSource] }));
+    const { grade, confidence } = overallGradeFromPapers(fallback);
+    const result: MultiSourceEvidenceResult = {
+      papers: fallback,
+      overallGrade: grade,
+      confidence,
+      searchQuery,
+      source: 'fallback',
+      sourcesSearched: sourceStatuses,
+      totalSourcesQueried,
+      totalSourcesReturned: 0,
+    };
+    multiSourceCache.set(cacheKey, { result, timestamp: Date.now() });
+    return result;
+  }
+
+  const deduplicated = deduplicateAndMergePapers(allPapers);
+
+  const scored = deduplicated.map(p => {
+    const multiSourceBonus = (p.sources?.length || 1) > 1 ? 0.1 * ((p.sources?.length || 1) - 1) : 0;
+    const citationBonus = p.citationCount && p.citationCount > 50 ? 0.05 : 0;
+    return { ...p, relevanceScore: Math.min(1, p.relevanceScore + multiSourceBonus + citationBonus) };
+  });
+
+  scored.sort((a, b) => {
+    const gradeOrder: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
+    if ((gradeOrder[a.evidenceGrade] ?? 3) !== (gradeOrder[b.evidenceGrade] ?? 3)) {
+      return (gradeOrder[a.evidenceGrade] ?? 3) - (gradeOrder[b.evidenceGrade] ?? 3);
+    }
+    return b.relevanceScore - a.relevanceScore;
+  });
+
+  const topPapers = scored.slice(0, 10);
+  const { grade, confidence } = overallGradeFromPapers(topPapers);
+
+  const adjustedConfidence = totalSourcesReturned >= 3 && confidence === 'Moderate' ? 'High' :
+    totalSourcesReturned >= 2 && confidence === 'Low' ? 'Moderate' : confidence;
+
+  const result: MultiSourceEvidenceResult = {
+    papers: topPapers,
+    overallGrade: grade,
+    confidence: adjustedConfidence,
+    searchQuery,
+    source: 'multi',
+    sourcesSearched: sourceStatuses,
+    totalSourcesQueried,
+    totalSourcesReturned,
+  };
+  multiSourceCache.set(cacheKey, { result, timestamp: Date.now() });
+  return result;
+}
+
+async function fetchPubMedPapers(region: string, condition: string, treatment: string, searchTerms: string[]): Promise<ClinicalPaper[]> {
+  const searchQuery = buildPubMedQuery(region, condition, treatment);
+
+  const searchResponse = await axios.get(`${PUBMED_BASE}/esearch.fcgi`, {
+    params: {
+      db: 'pubmed',
+      term: searchQuery,
+      retmax: 8,
+      retmode: 'json',
+      sort: 'relevance',
+      datetype: 'pdat',
+      mindate: '2015',
+      maxdate: new Date().getFullYear(),
+    },
+    timeout: 6000,
+  });
+
+  const ids: string[] = searchResponse.data?.esearchresult?.idlist || [];
+  if (ids.length === 0) return [];
+
+  const fetchResponse = await axios.get(`${PUBMED_BASE}/efetch.fcgi`, {
+    params: { db: 'pubmed', id: ids.join(','), retmode: 'xml' },
+    timeout: 8000,
+  });
+
+  const parsed = parseEfetchXml(fetchResponse.data);
+  return parsed.map(p => {
+    const studyType = classifyStudyType(p.title, p.abstract);
+    const grade = gradeFromStudyType(studyType, p.year);
+    return {
+      title: p.title,
+      authors: p.authors,
+      journal: p.journal,
+      year: p.year,
+      pmid: p.pmid,
+      abstract: p.abstract,
+      studyType,
+      evidenceGrade: grade,
+      relevanceScore: computeRelevance(p.title, p.abstract, searchTerms),
+      pubmedUrl: `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/`,
+    };
+  });
 }

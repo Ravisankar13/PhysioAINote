@@ -208,6 +208,17 @@ export interface PubMedPaper {
   evidenceGrade: string;
   relevanceScore: number;
   pubmedUrl: string;
+  sources?: string[];
+  citationCount?: number;
+  openAccessUrl?: string;
+  pedroScore?: number;
+}
+
+export interface SourceStatusInfo {
+  name: string;
+  searched: boolean;
+  resultCount: number;
+  error?: string;
 }
 
 export interface EvidenceEngineResult {
@@ -222,6 +233,9 @@ export interface EvidenceEngineResult {
   pubmedSource?: string | null;
   pubmedSearchQuery?: string | null;
   pubmedUnavailable?: boolean;
+  sourcesSearched?: SourceStatusInfo[];
+  totalSourcesQueried?: number;
+  totalSourcesReturned?: number;
 }
 
 interface ClinicalReasoningPanelProps {
@@ -1121,7 +1135,35 @@ export default function ClinicalReasoningPanel({
                 </div>
               </div>
 
-              {/* PubMed Live Research Section */}
+              {/* Sources Searched Summary */}
+              {evidenceData?.sourcesSearched && evidenceData.sourcesSearched.length > 0 && (
+                <div className="mt-3 bg-gradient-to-r from-indigo-500/5 to-violet-500/5 rounded-lg p-2.5 border border-indigo-500/15">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Globe className="h-3 w-3 text-indigo-400" />
+                    <span className="text-[9px] font-medium text-indigo-300">
+                      {evidenceData.totalSourcesReturned}/{evidenceData.totalSourcesQueried} databases returned results
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {evidenceData.sourcesSearched.map((src) => (
+                      <span
+                        key={src.name}
+                        className={`text-[7px] px-1.5 py-0.5 rounded-full border ${
+                          src.resultCount > 0
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
+                            : src.error
+                            ? 'bg-red-500/10 text-red-400/70 border-red-500/20'
+                            : 'bg-gray-500/10 text-gray-500 border-gray-500/20'
+                        }`}
+                      >
+                        {src.name} {src.resultCount > 0 ? `(${src.resultCount})` : src.error ? '(error)' : '(0)'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Multi-Source Live Research Section */}
               {evidenceData?.pubmedPapers && evidenceData.pubmedPapers.length > 0 && (
                 <div className="mt-3 space-y-2">
                   <div className="bg-gradient-to-br from-teal-500/10 to-emerald-500/5 rounded-lg p-3 border border-teal-500/20">
@@ -1129,7 +1171,9 @@ export default function ClinicalReasoningPanel({
                       <div className="p-1 bg-teal-500 rounded">
                         <Globe className="h-3.5 w-3.5 text-white" />
                       </div>
-                      <span className="font-semibold text-teal-200 text-xs">Live PubMed Research</span>
+                      <span className="font-semibold text-teal-200 text-xs">
+                        {evidenceData.pubmedSource === 'multi' ? 'Multi-Database Research' : 'Live PubMed Research'}
+                      </span>
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 ml-auto">{evidenceData.pubmedPapers.length} papers</span>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
@@ -1148,16 +1192,33 @@ export default function ClinicalReasoningPanel({
                   </div>
 
                   <div className="space-y-1.5">
-                    {evidenceData.pubmedPapers.map((paper) => {
-                      const isExpanded = expandedPubmedId === paper.pmid;
+                    {evidenceData.pubmedPapers.map((paper, idx) => {
+                      const paperKey = paper.pmid || paper.doi || `paper-${idx}`;
+                      const isExpanded = expandedPubmedId === paperKey;
                       const gradeColor = paper.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : paper.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : paper.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
                       const studyTypeColor = paper.studyType === 'Meta-Analysis' || paper.studyType === 'Systematic Review' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : paper.studyType === 'RCT' ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' : 'bg-white/10 text-gray-400 border-white/10';
+                      const sourceColors: Record<string, string> = {
+                        'PubMed': 'bg-teal-500/15 text-teal-400 border-teal-500/25',
+                        'Europe PMC': 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+                        'OpenAlex': 'bg-orange-500/15 text-orange-400 border-orange-500/25',
+                        'Cochrane': 'bg-purple-500/15 text-purple-400 border-purple-500/25',
+                      };
                       return (
-                        <div key={paper.pmid} className="rounded-lg border border-teal-500/10 bg-teal-500/5">
-                          <button className="w-full text-left p-2.5" onClick={() => setExpandedPubmedId(isExpanded ? null : paper.pmid)}>
-                            <div className="flex items-center gap-1.5 mb-1">
+                        <div key={paperKey} className="rounded-lg border border-teal-500/10 bg-teal-500/5">
+                          <button className="w-full text-left p-2.5" onClick={() => setExpandedPubmedId(isExpanded ? null : paperKey)}>
+                            <div className="flex items-center gap-1 mb-1 flex-wrap">
                               <span className={`text-[7px] px-1 py-0.5 rounded border ${gradeColor}`}>{paper.evidenceGrade}</span>
                               <span className={`text-[7px] px-1 py-0.5 rounded border ${studyTypeColor}`}>{paper.studyType}</span>
+                              {paper.sources && paper.sources.length > 0 && paper.sources.map(src => (
+                                <span key={src} className={`text-[6px] px-1 py-0.5 rounded-full border ${sourceColors[src] || 'bg-gray-500/15 text-gray-400 border-gray-500/25'}`}>
+                                  {src}
+                                </span>
+                              ))}
+                              {paper.citationCount !== undefined && paper.citationCount > 0 && (
+                                <span className="text-[7px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                  {paper.citationCount} cited
+                                </span>
+                              )}
                               <span className="text-[8px] text-gray-500 ml-auto">{paper.year}</span>
                             </div>
                             <p className="text-[10px] font-medium text-gray-200 leading-tight">{paper.title}</p>
@@ -1166,15 +1227,26 @@ export default function ClinicalReasoningPanel({
                           {isExpanded && (
                             <div className="px-2.5 pb-2.5 space-y-2 border-t border-teal-500/10 pt-2">
                               <p className="text-[9px] text-gray-400 leading-relaxed">{paper.abstract}</p>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[8px] text-gray-500">PMID: {paper.pmid}</span>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {paper.pmid && <span className="text-[8px] text-gray-500">PMID: {paper.pmid}</span>}
+                                {paper.doi && <span className="text-[8px] text-gray-500">DOI: {paper.doi}</span>}
+                                {paper.openAccessUrl && (
+                                  <a
+                                    href={paper.openAccessUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[8px] text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5"
+                                  >
+                                    Open Access <ExternalLink className="h-2 w-2" />
+                                  </a>
+                                )}
                                 <a
                                   href={paper.pubmedUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-[8px] text-teal-400 hover:text-teal-300 flex items-center gap-1 ml-auto"
                                 >
-                                  View on PubMed <ExternalLink className="h-2.5 w-2.5" />
+                                  View Source <ExternalLink className="h-2.5 w-2.5" />
                                 </a>
                               </div>
                             </div>
@@ -1189,13 +1261,13 @@ export default function ClinicalReasoningPanel({
               {evidenceData && evidenceData.pubmedUnavailable && (
                 <div className="mt-3 bg-orange-500/5 rounded-lg p-2.5 border border-orange-500/15 flex items-center gap-2">
                   <AlertTriangle className="h-3.5 w-3.5 text-orange-400 shrink-0" />
-                  <span className="text-[9px] text-orange-300">Live PubMed search is currently unavailable. Curated catalog results are shown above. Fallback reference papers may be included below.</span>
+                  <span className="text-[9px] text-orange-300">Live research databases are currently unavailable. Curated catalog results are shown above. Fallback reference papers may be included below.</span>
                 </div>
               )}
               {evidenceData && !evidenceData.pubmedUnavailable && (!evidenceData.pubmedPapers || evidenceData.pubmedPapers.length === 0) && (
                 <div className="mt-3 bg-gray-800/40 rounded-lg p-2.5 border border-white/5 flex items-center gap-2">
                   <Globe className="h-3.5 w-3.5 text-gray-500 shrink-0" />
-                  <span className="text-[9px] text-gray-500">No matching PubMed papers found for this query. Try adjusting your diagnosis or body region. Curated catalog results shown above.</span>
+                  <span className="text-[9px] text-gray-500">No matching papers found across databases. Try adjusting your diagnosis or body region. Curated catalog results shown above.</span>
                 </div>
               )}
             </div>

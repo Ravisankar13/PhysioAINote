@@ -3093,6 +3093,17 @@ ${ddxList}`;
     lastReasoningTriggerRef.current = triggerKey;
     setClinicalReasoningProcessing(true);
 
+    if (evidenceAbortRef.current) {
+      evidenceAbortRef.current.abort();
+      evidenceAbortRef.current = null;
+    }
+    if (autoEvidenceTimerRef.current) {
+      clearTimeout(autoEvidenceTimerRef.current);
+      autoEvidenceTimerRef.current = null;
+    }
+    setEvidenceEngineResult(null);
+    setEvidenceLoading(false);
+
     const structuredInput: Record<string, unknown> = {
       subjectiveHistory: subjectiveHistoryRef.current || '',
       symptoms: markerData.map(m => m.label).filter(Boolean),
@@ -3215,14 +3226,6 @@ ${ddxList}`;
         setClinicalReasoningOpen(true);
       }
 
-      if (evidenceAbortRef.current) {
-        evidenceAbortRef.current.abort();
-        evidenceAbortRef.current = null;
-      }
-      setEvidenceEngineResult(null);
-      if (autoEvidenceTimerRef.current) {
-        clearTimeout(autoEvidenceTimerRef.current);
-      }
       autoEvidenceTimerRef.current = setTimeout(() => {
         handleEvidenceQueryRef.current();
       }, 500);

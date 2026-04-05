@@ -544,6 +544,32 @@ function extractRegionsFromReasoning(input: TreatmentDecisionInput): string[] {
   return Array.from(regions);
 }
 
+const MECHANISM_STRUCTURE_TO_REGIONS: Array<[RegExp, string[]]> = [
+  [/lumbar|lower back|erector spinae|multifidus/i, ['lumbar', 'spine']],
+  [/thoracic|mid back|rhomboid/i, ['thoracic', 'spine']],
+  [/cervical|neck|sternocleidomastoid/i, ['cervical', 'neck']],
+  [/shoulder|deltoid|rotator|supraspinatus|infraspinatus|scapula/i, ['shoulder']],
+  [/hip|glute|gluteus|piriformis|psoas|iliacus/i, ['hip']],
+  [/knee|quad|patell|hamstring|vmo/i, ['knee']],
+  [/ankle|calf|gastrocnemius|soleus|tibial|achilles/i, ['ankle']],
+  [/pelvis|sacrum|sacroiliac|core|pelvic/i, ['pelvis', 'hip']],
+  [/elbow|epicondyl|forearm/i, ['elbow']],
+  [/wrist|hand|carpal/i, ['wrist']],
+];
+
+function mechanismStructureToRegions(structure: string): string[] {
+  const results: string[] = [];
+  for (const [pattern, regions] of MECHANISM_STRUCTURE_TO_REGIONS) {
+    if (pattern.test(structure)) {
+      results.push(...regions);
+    }
+  }
+  if (results.length === 0) {
+    results.push(structure.toLowerCase().replace(/[^a-z ]/g, '').trim());
+  }
+  return [...new Set(results)];
+}
+
 function computePostureBonus(postureState?: Record<string, Record<string, number>>): number {
   if (!postureState) return 0;
   let totalDeviation = 0;
@@ -654,12 +680,12 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
 
   const mech = input.mechanismContext;
   const hasMechanismContext = mech && mech.topTargets.length > 0;
-  const mechRootCauseStructures = mech?.topTargets
+  const mechRootCauseRegions = mech?.topTargets
     .filter(t => t.category === 'root_cause')
-    .map(t => t.structure.toLowerCase()) ?? [];
-  const mechCompensationStructures = mech?.topTargets
+    .flatMap(t => mechanismStructureToRegions(t.structure)) ?? [];
+  const mechCompensationRegions = mech?.topTargets
     .filter(t => t.category === 'compensation')
-    .map(t => t.structure.toLowerCase()) ?? [];
+    .flatMap(t => mechanismStructureToRegions(t.structure)) ?? [];
   const mechOverloadCount = mech?.overloadedJointCount ?? 0;
 
   const postureIsDominant = postureDeviationScore >= 6 && problemClass === 'compression';
@@ -716,11 +742,11 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
 
     if (hasMechanismContext) {
       const candidateRegions = candidate.targetRegions.map(r => r.toLowerCase());
-      const rootCauseMatch = mechRootCauseStructures.some(s =>
-        candidateRegions.some(r => s.includes(r) || r.includes(s))
+      const rootCauseMatch = mechRootCauseRegions.some(r =>
+        candidateRegions.some(cr => cr.includes(r) || r.includes(cr))
       );
-      const compensationMatch = mechCompensationStructures.some(s =>
-        candidateRegions.some(r => s.includes(r) || r.includes(s))
+      const compensationMatch = mechCompensationRegions.some(r =>
+        candidateRegions.some(cr => cr.includes(r) || r.includes(cr))
       );
       if (rootCauseMatch) {
         if (['motor_control_retraining', 'progressive_strengthening', 'isometric_loading'].includes(candidate.id)) {

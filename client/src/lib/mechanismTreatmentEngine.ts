@@ -22,17 +22,21 @@ export interface MechTreatmentTechnique {
   evidenceGrade: EvidenceGrade;
 }
 
+export type MechTargetCategory = 'root_cause' | 'intermediate' | 'symptom' | 'compensation' | 'overload' | 'chain';
+export type MechTargetSource = 'causal_chain' | 'compensation' | 'overloaded_joint' | 'kinetic_chain';
+
 export interface MechTreatmentTarget {
   id: string;
   structure: string;
-  source: 'causal_chain' | 'compensation' | 'overloaded_joint' | 'kinetic_chain';
-  category: 'root_cause' | 'intermediate' | 'symptom' | 'compensation' | 'overload' | 'chain';
+  source: MechTargetSource;
+  category: MechTargetCategory;
   severity: 'mild' | 'moderate' | 'severe';
   priority: number;
   finding: string;
   mechanism: string;
   action: string;
   techniques: MechTreatmentTechnique[];
+  roles: MechTargetCategory[];
 }
 
 export interface MechTreatmentSummary {
@@ -139,11 +143,17 @@ function consolidateTargets(targets: MechTreatmentTarget[]): MechTreatmentTarget
   const consolidated: MechTreatmentTarget[] = [];
   for (const group of groups.values()) {
     if (group.length === 1) {
+      group[0].roles = [group[0].category];
       consolidated.push(group[0]);
       continue;
     }
     group.sort((a, b) => b.priority - a.priority);
-    const best = group[0];
+    const best = { ...group[0] };
+    const allRoles = new Set<MechTargetCategory>();
+    for (const t of group) {
+      allRoles.add(t.category);
+    }
+    best.roles = Array.from(allRoles);
     const seenTechniques = new Set(best.techniques.map(t => t.name));
     for (let i = 1; i < group.length; i++) {
       for (const tech of group[i].techniques) {
@@ -373,6 +383,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
         mechanism: step.mechanism,
         action: treatment.action,
         techniques: treatment.techniques,
+        roles: [step.category],
       });
     }
   }
@@ -395,6 +406,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
       mechanism: card.clinicalSignificance,
       action: `${STATUS_TO_ACTION['overactive'].label} compensators → ${STATUS_TO_ACTION['inhibited'].label} primaries`,
       techniques,
+      roles: ['compensation'],
     });
   }
 
@@ -417,6 +429,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
       mechanism: 'Excessive compressive/shear forces due to postural compensation or muscle imbalance',
       action: 'Offload & Decompress',
       techniques,
+      roles: ['overload'],
     });
   }
 
@@ -440,6 +453,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
       mechanism: kcd.relevance,
       action: 'Chain Integration & Corrective Training',
       techniques: chainTx,
+      roles: ['chain'],
     });
   }
 

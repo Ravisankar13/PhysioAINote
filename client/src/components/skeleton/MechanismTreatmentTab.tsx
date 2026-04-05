@@ -24,10 +24,12 @@ import {
   type MechTreatmentResult,
   type MechTreatmentTarget,
   type MechTreatmentTechnique,
+  type MechTargetCategory,
 } from "@/lib/mechanismTreatmentEngine";
 
 interface MechanismTreatmentTabProps {
   analysis: InjuryMechanismResult | null;
+  onNavigateToDecisionTab?: () => void;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -110,13 +112,15 @@ function TargetCard({ target, defaultOpen }: { target: MechTreatmentTarget; defa
             <CategoryIcon className="w-3 h-3 text-gray-400 shrink-0" />
             <span className="text-[11px] font-medium text-gray-200 truncate">{target.structure}</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0 ml-1">
+          <div className="flex items-center gap-1 shrink-0 ml-1 flex-wrap justify-end">
             <Badge variant="outline" className={`text-[8px] px-1 py-0 h-3.5 ${SEVERITY_COLORS[target.severity]}`}>
               {target.severity}
             </Badge>
-            <Badge variant="outline" className="text-[7px] px-1 py-0 h-3.5 text-gray-400 border-gray-600/40">
-              {CATEGORY_LABELS[target.category]}
-            </Badge>
+            {(target.roles && target.roles.length > 1 ? target.roles : [target.category]).map((role: MechTargetCategory) => (
+              <Badge key={role} variant="outline" className="text-[7px] px-1 py-0 h-3.5 text-gray-400 border-gray-600/40">
+                {CATEGORY_LABELS[role]}
+              </Badge>
+            ))}
             {open ? <ChevronUp className="w-3 h-3 text-gray-500" /> : <ChevronDown className="w-3 h-3 text-gray-500" />}
           </div>
         </div>
@@ -145,7 +149,7 @@ function TargetCard({ target, defaultOpen }: { target: MechTreatmentTarget; defa
   );
 }
 
-export default function MechanismTreatmentTab({ analysis }: MechanismTreatmentTabProps) {
+export default function MechanismTreatmentTab({ analysis, onNavigateToDecisionTab }: MechanismTreatmentTabProps) {
   const [copied, setCopied] = useState(false);
 
   const treatmentResult = useMemo((): MechTreatmentResult | null => {
@@ -268,7 +272,16 @@ export default function MechanismTreatmentTab({ analysis }: MechanismTreatmentTa
         <div className="text-center py-1.5">
           <p className="text-[9px] text-gray-500">
             Showing top {treatmentResult.targets.length} of {treatmentResult.fullTargetCount} targets.{' '}
-            <span className="text-emerald-400">See full clinical plan in Decision tab →</span>
+            {onNavigateToDecisionTab ? (
+              <button
+                onClick={onNavigateToDecisionTab}
+                className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors"
+              >
+                See full clinical plan in Decision tab →
+              </button>
+            ) : (
+              <span className="text-emerald-400">See full clinical plan in Decision tab →</span>
+            )}
           </p>
         </div>
       )}

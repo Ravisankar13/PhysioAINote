@@ -231,6 +231,8 @@ interface ClinicalReasoningPanelProps {
   evidenceData?: EvidenceEngineResult | null;
   evidenceLoading?: boolean;
   onEvidenceQuery?: () => void;
+  requestedTab?: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null;
+  onRequestedTabHandled?: () => void;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -448,8 +450,17 @@ export default function ClinicalReasoningPanel({
   evidenceData,
   evidenceLoading,
   onEvidenceQuery,
+  requestedTab,
+  onRequestedTabHandled,
 }: ClinicalReasoningPanelProps) {
   const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
+
+  useEffect(() => {
+    if (requestedTab) {
+      setActiveTab(requestedTab);
+      onRequestedTabHandled?.();
+    }
+  }, [requestedTab, onRequestedTabHandled]);
   const [evidenceCategoryFilter, setEvidenceCategoryFilter] = useState<string>('all');
   const [evidenceGradeFilter, setEvidenceGradeFilter] = useState<string>('all');
   const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null);

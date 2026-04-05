@@ -529,6 +529,7 @@ export default function PhysioGPT() {
   const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
   const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics' | 'slings'>('chat');
+  const [reasoningRequestedTab, setReasoningRequestedTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null>(null);
   const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
   const [slingOverlayVisible, setSlingOverlayVisible] = useState(true);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
@@ -1950,7 +1951,10 @@ ${ddxList}`;
           compensationCount: mechTx.summary.compensations,
           rootCauseCount: mechTx.summary.rootCauses,
         };
-      } catch { return undefined; }
+      } catch (err) {
+        console.warn('[MechanismContext] Failed to generate mechanism context for Decision Engine:', err);
+        return undefined;
+      }
     })() : undefined;
     const input: Record<string, unknown> = {
       structuredReasoning: structuredReasoningData,
@@ -7808,6 +7812,10 @@ ${ddxList}`;
                   {mechanismActiveTab === 'treatment' && (
                     <MechanismTreatmentTab
                       analysis={mechanismAnalysisResult}
+                      onNavigateToDecisionTab={() => {
+                        setRightPanelTab('treatment');
+                        setReasoningRequestedTab('decision');
+                      }}
                     />
                   )}
                   {mechanismActiveTab === 'whatif' && (
@@ -9296,6 +9304,8 @@ ${ddxList}`;
         evidenceData={evidenceEngineResult}
         evidenceLoading={evidenceLoading}
         onEvidenceQuery={handleEvidenceQuery}
+        requestedTab={reasoningRequestedTab}
+        onRequestedTabHandled={() => setReasoningRequestedTab(null)}
       />
 
       <HypothesisChatPanel

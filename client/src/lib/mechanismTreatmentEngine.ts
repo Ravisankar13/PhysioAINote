@@ -203,11 +203,87 @@ function buildCompensationTechniques(card: CompensationCard): MechTreatmentTechn
   return tagged;
 }
 
+const JOINT_MOBILIZATION_BY_REGION: Record<string, MechTreatmentTechnique> = {
+  lumbar: {
+    name: 'Lumbar segmental mobilization (PA)',
+    type: 'manual',
+    dosage: '3-5 × 30s grade III-IV oscillations per level',
+    rationale: 'Restore segmental mobility and reduce protective muscle guarding',
+    evidenceGrade: 'A',
+  },
+  cervical: {
+    name: 'Upper cervical SNAG/NAGS (Mulligan)',
+    type: 'manual',
+    dosage: '3-6 reps with overpressure at symptomatic level',
+    rationale: 'Restore cervical mobility with pain-free joint glide',
+    evidenceGrade: 'B',
+  },
+  thoracic: {
+    name: 'Thoracic manipulation (supine or seated)',
+    type: 'manual',
+    dosage: '1-3 HVLA thrusts at hypomobile segments',
+    rationale: 'Rapid restoration of segmental mobility with immediate neurophysiological pain reduction',
+    evidenceGrade: 'A',
+  },
+  hip: {
+    name: 'Hip joint mobilization (long-axis distraction / AP glide)',
+    type: 'manual',
+    dosage: '3-5 × 30s grade III-IV mobilizations',
+    rationale: 'Restore capsular mobility and reduce intra-articular compression',
+    evidenceGrade: 'A',
+  },
+  knee: {
+    name: 'Patellar and tibiofemoral mobilization',
+    type: 'manual',
+    dosage: '2-3 min multidirectional glides, grade III-IV',
+    rationale: 'Restore patellar tracking and tibiofemoral joint play',
+    evidenceGrade: 'B',
+  },
+  ankle: {
+    name: 'Ankle dorsiflexion mobilization with movement (MWM)',
+    type: 'manual',
+    dosage: '3 × 10 reps with belt/manual AP talar glide',
+    rationale: 'Restore talocrural dorsiflexion — prerequisite for squat/gait mechanics',
+    evidenceGrade: 'A',
+  },
+  shoulder: {
+    name: 'Glenohumeral mobilization (inferior/posterior glide)',
+    type: 'manual',
+    dosage: '3-5 × 30s oscillations in restricted direction',
+    rationale: 'Restore capsular mobility for pain-free overhead function',
+    evidenceGrade: 'A',
+  },
+  pelvis: {
+    name: 'SIJ mobilization / muscle energy technique',
+    type: 'manual',
+    dosage: '3-5 reps: 5s isometric → reposition',
+    rationale: 'Correct pelvic asymmetry and restore SIJ arthrokinematics',
+    evidenceGrade: 'B',
+  },
+};
+
+const DEFAULT_JOINT_MOBILIZATION: MechTreatmentTechnique = {
+  name: 'Graded joint mobilization (Maitland Gr III-IV)',
+  type: 'manual',
+  dosage: '3-5 × 30s oscillations at restricted segment',
+  rationale: 'Restore joint play, reduce mechanoreceptor sensitization, and improve arthrokinematics',
+  evidenceGrade: 'A',
+};
+
 function buildOverloadTechniques(joint: LoadRedistribution): MechTreatmentTechnique[] {
-  const spasmRelief = pickTechniquesForStatus('spasm', 2);
+  const spasmRelief = pickTechniquesForStatus('spasm', 1);
   const strengthening = pickTechniquesForStatus('weak', 1);
 
+  const region = resolveRegion(joint.joint);
+  const mobilization = (region && JOINT_MOBILIZATION_BY_REGION[region])
+    ? JOINT_MOBILIZATION_BY_REGION[region]
+    : DEFAULT_JOINT_MOBILIZATION;
+
   return [
+    {
+      ...mobilization,
+      rationale: `Mobilize overloaded ${joint.joint}: ${mobilization.rationale}`,
+    },
     ...spasmRelief.map(t => ({
       ...t,
       rationale: `Reduce protective guarding around overloaded ${joint.joint}: ${t.rationale}`,

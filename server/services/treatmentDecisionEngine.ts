@@ -7,7 +7,7 @@ import type {
   DominantMechanism,
   ExtractionContextInput,
 } from './clinicalReasoningEngine';
-import { queryEvidenceEngine, type EvidenceQueryResult } from './evidenceEngine';
+import { queryEvidenceEngine, type EvidenceQueryResult, CLINICAL_STOP_WORDS } from './evidenceEngine';
 
 export type InterventionTier = 'primary' | 'adjunct' | 'avoid_defer';
 export type InterventionIntent = 'symptom_relief' | 'root_cause' | 'both';
@@ -274,9 +274,8 @@ function matchScore(
   }
 
   if (topHypothesis && topHypothesis !== 'Unknown presentation' && candidate.conditionKeywords?.length) {
-    const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'not', 'but', 'are', 'was', 'were', 'been', 'has', 'had', 'have', 'will', 'can', 'may', 'should', 'would', 'could', 'left', 'right', 'bilateral', 'unilateral', 'acute', 'chronic', 'sub', 'pain', 'mild', 'moderate', 'severe', 'unknown', 'presentation', 'suspected', 'possible', 'probable', 'likely']);
     const diagLower = topHypothesis.toLowerCase();
-    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w));
+    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2 && !CLINICAL_STOP_WORDS.has(w));
     const kwMatches = candidate.conditionKeywords.filter(
       k => diagLower.includes(k) || diagWords.some(dw => k.includes(dw) || dw.includes(k))
     ).length;
@@ -473,8 +472,11 @@ function computeReviewSchedule(
 
 function extractRegionsFromReasoning(input: TreatmentDecisionInput): string[] {
   const regions = new Set<string>();
-  const regionKeywords = ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle', 'elbow', 'wrist', 'foot', 'hand', 'pelvis', 'sacroiliac', 'neck', 'spine'];
-  const regionAliases: Record<string, string> = { neck: 'cervical', spine: 'lumbar', foot: 'ankle', hand: 'wrist', pelvis: 'hip', sacroiliac: 'hip' };
+  const canonicalRegions = ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle', 'elbow', 'wrist'];
+  const additionalKeywords: Record<string, string> = {
+    neck: 'cervical',
+    sacroiliac: 'hip',
+  };
 
   if (input.painMarkers) {
     for (const pm of input.painMarkers) {
@@ -509,9 +511,14 @@ function extractRegionsFromReasoning(input: TreatmentDecisionInput): string[] {
   }
 
   const combined = textSources.join(' ').toLowerCase();
-  for (const kw of regionKeywords) {
+  for (const kw of canonicalRegions) {
     if (combined.includes(kw)) {
-      regions.add(regionAliases[kw] || kw);
+      regions.add(kw);
+    }
+  }
+  for (const [keyword, canonical] of Object.entries(additionalKeywords)) {
+    if (combined.includes(keyword)) {
+      regions.add(canonical);
     }
   }
 

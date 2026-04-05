@@ -6,6 +6,16 @@ import type {
   DominantMechanism,
 } from './clinicalReasoningEngine';
 
+export const CLINICAL_STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'not', 'but',
+  'are', 'was', 'were', 'been', 'has', 'had', 'have', 'will', 'can',
+  'may', 'should', 'would', 'could', 'left', 'right', 'bilateral',
+  'unilateral', 'acute', 'chronic', 'sub', 'pain', 'mild', 'moderate',
+  'severe', 'unknown', 'presentation', 'suspected', 'possible',
+  'probable', 'likely', 'syndrome', 'disorder', 'injury', 'type',
+  'grade', 'stage', 'phase',
+]);
+
 import { SHARED_TECHNIQUE_DB, type TechniqueEvidence, type EvidenceReference, type ClinicalStatusKey } from '@shared/evidenceReferences';
 import { EXERCISE_CATALOG, type CatalogExercise } from '@shared/exerciseCatalog';
 import { allResearchPapers } from '../comprehensiveResearchDatabase';
@@ -883,9 +893,8 @@ function computeRelevanceScore(
   }
 
   if (input.diagnosis) {
-    const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'not', 'but', 'are', 'was', 'were', 'been', 'has', 'had', 'have', 'will', 'can', 'may', 'should', 'would', 'could', 'left', 'right', 'bilateral', 'unilateral', 'acute', 'chronic', 'sub', 'pain', 'mild', 'moderate', 'severe', 'unknown', 'presentation', 'suspected', 'possible', 'probable', 'likely', 'syndrome', 'disorder', 'injury', 'type', 'grade', 'stage', 'phase']);
     const diagLower = input.diagnosis.toLowerCase();
-    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w));
+    const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2 && !CLINICAL_STOP_WORDS.has(w));
     const keywordMatch = entry.conditionKeywords.some(k => diagLower.includes(k) || (diagWords.length > 0 && k.includes(diagWords[0])));
     if (keywordMatch) score += 22;
     const multiWordHits = diagWords.filter(w => entry.conditionKeywords.some(k => k.includes(w) || w.includes(k))).length;

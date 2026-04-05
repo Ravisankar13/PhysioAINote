@@ -14,6 +14,13 @@ export const CLINICAL_STOP_WORDS = new Set([
   'severe', 'unknown', 'presentation', 'suspected', 'possible',
   'probable', 'likely', 'syndrome', 'disorder', 'injury', 'type',
   'grade', 'stage', 'phase',
+  'sided', 'side', 'lower', 'upper', 'anterior', 'posterior',
+  'medial', 'lateral', 'proximal', 'distal', 'inferior', 'superior',
+  'dorsal', 'ventral', 'superficial', 'deep', 'ipsilateral',
+  'contralateral', 'primary', 'secondary', 'recurrent', 'progressive',
+  'intermittent', 'constant', 'diffuse', 'focal', 'localised',
+  'localized', 'generalized', 'generalised', 'partial', 'complete',
+  'early', 'late', 'initial', 'ongoing', 'recent', 'longstanding',
 ]);
 
 import { SHARED_TECHNIQUE_DB, type TechniqueEvidence, type EvidenceReference, type ClinicalStatusKey } from '@shared/evidenceReferences';
@@ -895,8 +902,9 @@ function computeRelevanceScore(
   if (input.diagnosis) {
     const diagLower = input.diagnosis.toLowerCase();
     const diagWords = diagLower.split(/\s+/).filter(w => w.length > 2 && !CLINICAL_STOP_WORDS.has(w));
-    const keywordMatch = entry.conditionKeywords.some(k => diagLower.includes(k) || (diagWords.length > 0 && k.includes(diagWords[0])));
-    if (keywordMatch) score += 22;
+    const directKeywordMatch = entry.conditionKeywords.some(k => diagLower.includes(k));
+    const reverseKeywordMatch = diagWords.length > 0 && entry.conditionKeywords.some(k => diagWords.some(w => k.includes(w) || w.includes(k)));
+    if (directKeywordMatch || reverseKeywordMatch) score += 22;
     const multiWordHits = diagWords.filter(w => entry.conditionKeywords.some(k => k.includes(w) || w.includes(k))).length;
     if (multiWordHits >= 2) score += 10;
   }

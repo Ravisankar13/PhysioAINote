@@ -551,6 +551,11 @@ export default function PhysioGPT() {
     gradeDistribution: Record<string, number>;
     categoryDistribution: Record<string, number>;
     timestamp: string;
+    pubmedPapers?: Array<{ title: string; authors: string; journal: string; year: number; pmid: string; doi?: string; abstract: string; studyType: string; evidenceGrade: string; relevanceScore: number; pubmedUrl: string }>;
+    pubmedOverallGrade?: string | null;
+    pubmedConfidence?: string | null;
+    pubmedSource?: string | null;
+    pubmedSearchQuery?: string | null;
   } | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
 
@@ -1862,6 +1867,26 @@ ${ddxList}`;
     .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' }); })
     .finally(() => setEvidenceLoading(false));
   }, [painMarkers, clinicalBubbleResults, tissueViewMode, evidenceLoading, toast]);
+
+  const handleManualEvidenceQuery = useCallback((params: { diagnosis?: string; bodyRegions?: string[]; stage?: string; irritability?: string; mechanism?: string }) => {
+    if (evidenceLoading) return;
+    setEvidenceLoading(true);
+    fetch('/api/evidence-engine/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        diagnosis: params.diagnosis,
+        bodyRegions: params.bodyRegions,
+        stage: params.stage,
+        irritability: params.irritability,
+        mechanism: params.mechanism,
+      }),
+    })
+    .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
+    .then(data => setEvidenceEngineResult(data))
+    .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence results.', variant: 'destructive' }); })
+    .finally(() => setEvidenceLoading(false));
+  }, [evidenceLoading, toast]);
 
   const handleHypothesisClick = useCallback((hypothesis: ClinicalHypothesis) => {
     setSelectedHypothesisForChat({
@@ -9305,6 +9330,7 @@ ${ddxList}`;
         evidenceData={evidenceEngineResult}
         evidenceLoading={evidenceLoading}
         onEvidenceQuery={handleEvidenceQuery}
+        onManualEvidenceQuery={handleManualEvidenceQuery}
         requestedTab={reasoningRequestedTab}
         onRequestedTabHandled={() => setReasoningRequestedTab(null)}
       />

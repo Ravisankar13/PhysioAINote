@@ -36,6 +36,9 @@ import {
   Eye,
   EyeOff,
   BookOpen,
+  Search,
+  ExternalLink,
+  Globe,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
@@ -193,12 +196,31 @@ export interface EvidenceEngineOption {
   sourceLibrary: string; expertApproach?: string;
 }
 
+export interface PubMedPaper {
+  title: string;
+  authors: string;
+  journal: string;
+  year: number;
+  pmid: string;
+  doi?: string;
+  abstract: string;
+  studyType: string;
+  evidenceGrade: string;
+  relevanceScore: number;
+  pubmedUrl: string;
+}
+
 export interface EvidenceEngineResult {
   options: EvidenceEngineOption[];
   queryContext: { diagnosis: string; regions: string[]; stage: string; irritability: string; mechanism: string; problemClass: string };
   gradeDistribution: Record<string, number>;
   categoryDistribution: Record<string, number>;
   timestamp: string;
+  pubmedPapers?: PubMedPaper[];
+  pubmedOverallGrade?: string | null;
+  pubmedConfidence?: string | null;
+  pubmedSource?: string | null;
+  pubmedSearchQuery?: string | null;
 }
 
 interface ClinicalReasoningPanelProps {
@@ -231,6 +253,7 @@ interface ClinicalReasoningPanelProps {
   evidenceData?: EvidenceEngineResult | null;
   evidenceLoading?: boolean;
   onEvidenceQuery?: () => void;
+  onManualEvidenceQuery?: (params: { diagnosis?: string; bodyRegions?: string[]; stage?: string; irritability?: string; mechanism?: string }) => void;
   requestedTab?: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null;
   onRequestedTabHandled?: () => void;
 }
@@ -450,6 +473,7 @@ export default function ClinicalReasoningPanel({
   evidenceData,
   evidenceLoading,
   onEvidenceQuery,
+  onManualEvidenceQuery,
   requestedTab,
   onRequestedTabHandled,
 }: ClinicalReasoningPanelProps) {
@@ -464,6 +488,24 @@ export default function ClinicalReasoningPanel({
   const [evidenceCategoryFilter, setEvidenceCategoryFilter] = useState<string>('all');
   const [evidenceGradeFilter, setEvidenceGradeFilter] = useState<string>('all');
   const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null);
+  const [expandedPubmedId, setExpandedPubmedId] = useState<string | null>(null);
+  const [manualDiagnosis, setManualDiagnosis] = useState('');
+  const [manualRegion, setManualRegion] = useState('');
+  const [manualStage, setManualStage] = useState('');
+  const [manualIrritability, setManualIrritability] = useState('');
+  const [manualMechanism, setManualMechanism] = useState('');
+  const handleManualSearch = useCallback(() => {
+    if (!manualDiagnosis && !manualRegion) return;
+    if (onManualEvidenceQuery) {
+      onManualEvidenceQuery({
+        diagnosis: manualDiagnosis || undefined,
+        bodyRegions: manualRegion ? manualRegion.split(',').map(r => r.trim()).filter(Boolean) : undefined,
+        stage: manualStage || undefined,
+        irritability: manualIrritability || undefined,
+        mechanism: manualMechanism || undefined,
+      });
+    }
+  }, [manualDiagnosis, manualRegion, manualStage, manualIrritability, manualMechanism, onManualEvidenceQuery]);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     hypotheses: true,
     findings: true,
@@ -802,9 +844,6 @@ export default function ClinicalReasoningPanel({
           <button
             onClick={() => {
               setActiveTab('evidence');
-              if (!evidenceData && !evidenceLoading && onEvidenceQuery) {
-                onEvidenceQuery();
-              }
             }}
             className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'evidence' ? 'text-amber-400 border-amber-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
           >
@@ -1000,19 +1039,148 @@ export default function ClinicalReasoningPanel({
                     })()}
                   </div>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <BookOpen className="h-8 w-8 text-gray-600 mb-3" />
-                  <p className="text-xs font-medium text-gray-400 mb-1">No Evidence Query Yet</p>
-                  <p className="text-[10px] text-gray-600 leading-relaxed max-w-[260px]">Run a clinical analysis first (place pain markers, enter patient history), then click below to query the evidence catalog.</p>
-                  {onEvidenceQuery && (
-                    <button
-                      className="mt-3 text-xs px-3 py-1.5 bg-amber-500/20 text-amber-300 rounded-lg hover:bg-amber-500/30 transition-colors border border-amber-500/20"
-                      onClick={onEvidenceQuery}
+              ) : null}
+
+              {/* Case Input Form — always visible in evidence tab */}
+              <div className={`bg-gradient-to-br from-gray-800/60 to-gray-900/60 rounded-lg p-3 border border-white/10 ${evidenceData ? 'mt-3' : ''}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Search className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="text-[10px] font-semibold text-gray-300">{evidenceData ? 'Refine Search' : 'Search Evidence'}</span>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Diagnosis (e.g. rotator cuff tendinopathy)"
+                      value={manualDiagnosis}
+                      onChange={e => setManualDiagnosis(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleManualSearch()}
+                      className="col-span-2 text-[10px] bg-black/30 border border-white/10 rounded px-2 py-1.5 text-gray-300 placeholder-gray-600 focus:border-amber-500/40 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Body region (e.g. shoulder)"
+                      value={manualRegion}
+                      onChange={e => setManualRegion(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleManualSearch()}
+                      className="text-[10px] bg-black/30 border border-white/10 rounded px-2 py-1.5 text-gray-300 placeholder-gray-600 focus:border-amber-500/40 focus:outline-none"
+                    />
+                    <select
+                      value={manualStage}
+                      onChange={e => setManualStage(e.target.value)}
+                      className="text-[10px] bg-black/30 border border-white/10 rounded px-2 py-1.5 text-gray-300 focus:border-amber-500/40 focus:outline-none"
                     >
-                      Query Evidence Catalog
-                    </button>
-                  )}
+                      <option value="">Stage...</option>
+                      <option value="acute">Acute</option>
+                      <option value="subacute">Subacute</option>
+                      <option value="chronic">Chronic</option>
+                      <option value="reactive">Reactive</option>
+                    </select>
+                    <select
+                      value={manualIrritability}
+                      onChange={e => setManualIrritability(e.target.value)}
+                      className="text-[10px] bg-black/30 border border-white/10 rounded px-2 py-1.5 text-gray-300 focus:border-amber-500/40 focus:outline-none"
+                    >
+                      <option value="">Irritability...</option>
+                      <option value="low">Low</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="high">High</option>
+                    </select>
+                    <select
+                      value={manualMechanism}
+                      onChange={e => setManualMechanism(e.target.value)}
+                      className="text-[10px] bg-black/30 border border-white/10 rounded px-2 py-1.5 text-gray-300 focus:border-amber-500/40 focus:outline-none"
+                    >
+                      <option value="">Mechanism...</option>
+                      <option value="compression">Compression</option>
+                      <option value="tensile_load">Tensile Load</option>
+                      <option value="instability">Instability</option>
+                      <option value="stiffness">Stiffness</option>
+                      <option value="motor_control">Motor Control</option>
+                      <option value="sensitisation">Sensitisation</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleManualSearch}
+                    disabled={(!manualDiagnosis && !manualRegion) || evidenceLoading}
+                    className="w-full text-[10px] px-3 py-1.5 bg-amber-500/20 text-amber-300 rounded-lg hover:bg-amber-500/30 transition-colors border border-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  >
+                    <Search className="h-3 w-3" />
+                    {evidenceLoading ? 'Searching...' : 'Search Evidence & PubMed'}
+                  </button>
+                </div>
+              </div>
+
+              {/* PubMed Live Research Section */}
+              {evidenceData?.pubmedPapers && evidenceData.pubmedPapers.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <div className="bg-gradient-to-br from-teal-500/10 to-emerald-500/5 rounded-lg p-3 border border-teal-500/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1 bg-teal-500 rounded">
+                        <Globe className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      <span className="font-semibold text-teal-200 text-xs">Live PubMed Research</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 ml-auto">{evidenceData.pubmedPapers.length} papers</span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      {evidenceData.pubmedOverallGrade && (
+                        <span className={`text-[8px] px-1.5 py-0.5 rounded border ${evidenceData.pubmedOverallGrade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : evidenceData.pubmedOverallGrade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'}`}>
+                          Overall Grade {evidenceData.pubmedOverallGrade}
+                        </span>
+                      )}
+                      {evidenceData.pubmedConfidence && (
+                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-white/10 text-gray-400">{evidenceData.pubmedConfidence} Confidence</span>
+                      )}
+                      {evidenceData.pubmedSource === 'fallback' && (
+                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20">Cached Results</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {evidenceData.pubmedPapers.map((paper) => {
+                      const isExpanded = expandedPubmedId === paper.pmid;
+                      const gradeColor = paper.evidenceGrade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : paper.evidenceGrade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : paper.evidenceGrade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+                      const studyTypeColor = paper.studyType === 'Meta-Analysis' || paper.studyType === 'Systematic Review' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : paper.studyType === 'RCT' ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' : 'bg-white/10 text-gray-400 border-white/10';
+                      return (
+                        <div key={paper.pmid} className="rounded-lg border border-teal-500/10 bg-teal-500/5">
+                          <button className="w-full text-left p-2.5" onClick={() => setExpandedPubmedId(isExpanded ? null : paper.pmid)}>
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className={`text-[7px] px-1 py-0.5 rounded border ${gradeColor}`}>{paper.evidenceGrade}</span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded border ${studyTypeColor}`}>{paper.studyType}</span>
+                              <span className="text-[8px] text-gray-500 ml-auto">{paper.year}</span>
+                            </div>
+                            <p className="text-[10px] font-medium text-gray-200 leading-tight">{paper.title}</p>
+                            <p className="text-[9px] text-gray-500 mt-0.5">{paper.authors} · {paper.journal}</p>
+                          </button>
+                          {isExpanded && (
+                            <div className="px-2.5 pb-2.5 space-y-2 border-t border-teal-500/10 pt-2">
+                              <p className="text-[9px] text-gray-400 leading-relaxed">{paper.abstract}</p>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[8px] text-gray-500">PMID: {paper.pmid}</span>
+                                <a
+                                  href={paper.pubmedUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[8px] text-teal-400 hover:text-teal-300 flex items-center gap-1 ml-auto"
+                                >
+                                  View on PubMed <ExternalLink className="h-2.5 w-2.5" />
+                                </a>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* PubMed unavailable notice */}
+              {evidenceData && (!evidenceData.pubmedPapers || evidenceData.pubmedPapers.length === 0) && (
+                <div className="mt-3 bg-gray-800/40 rounded-lg p-2.5 border border-white/5 flex items-center gap-2">
+                  <Globe className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                  <span className="text-[9px] text-gray-500">Live PubMed search returned no results for this query. Curated catalog results shown above.</span>
                 </div>
               )}
             </div>

@@ -6651,8 +6651,29 @@ GUIDELINES:
         return res.status(400).json({ error: "Invalid evidence query input", details: parsed.error.format() });
       }
 
-      const result = queryEvidenceEngine(parsed.data);
-      res.json(result);
+      const catalogResult = queryEvidenceEngine(parsed.data);
+
+      let pubmedResult = null;
+      try {
+        const { fetchClinicalEvidence } = await import("./services/clinicalEvidenceService");
+        const regions = parsed.data.bodyRegions || [];
+        const diagnosis = parsed.data.diagnosis || '';
+        const regionStr = regions.length > 0 ? regions.join(' ') : '';
+        if (regionStr || diagnosis) {
+          pubmedResult = await fetchClinicalEvidence(regionStr, diagnosis, '');
+        }
+      } catch (pubmedErr: unknown) {
+        console.warn("PubMed fetch failed (non-blocking):", pubmedErr instanceof Error ? pubmedErr.message : pubmedErr);
+      }
+
+      res.json({
+        ...catalogResult,
+        pubmedPapers: pubmedResult?.papers || [],
+        pubmedOverallGrade: pubmedResult?.overallGrade || null,
+        pubmedConfidence: pubmedResult?.confidence || null,
+        pubmedSource: pubmedResult?.source || null,
+        pubmedSearchQuery: pubmedResult?.searchQuery || null,
+      });
     } catch (error: unknown) {
       console.error("Evidence engine query error:", error);
       res.status(500).json({ error: "Failed to query evidence engine" });

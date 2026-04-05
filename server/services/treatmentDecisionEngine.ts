@@ -105,6 +105,13 @@ export interface TreatmentDecisionResult {
   decisionSummary: string;
   timestamp: string;
   mechanismInformed: boolean;
+  clinicalPredictionInformed?: boolean;
+  candidateSourceCounts?: {
+    evidenceEngine: number;
+    mechanismAnalysis: number;
+    clinicalPrediction: number;
+    afterDedup: number;
+  };
   evidenceEngineContext?: {
     totalEvidenceOptions: number;
     gradeDistribution: Record<string, number>;
@@ -145,6 +152,14 @@ export interface SlingContextInput {
   dysfunctionalSlings: SlingContextEntry[];
 }
 
+export interface MechanismContextTechnique {
+  name: string;
+  type: 'manual' | 'exercise' | 'modality';
+  dosage: string;
+  rationale: string;
+  evidenceGrade: 'A' | 'B' | 'C' | 'Expert';
+}
+
 export interface MechanismContextTarget {
   structure: string;
   category: 'root_cause' | 'intermediate' | 'symptom' | 'compensation' | 'overload' | 'chain';
@@ -152,6 +167,8 @@ export interface MechanismContextTarget {
   severity: 'mild' | 'moderate' | 'severe';
   action: string;
   finding: string;
+  mechanism?: string;
+  techniques?: MechanismContextTechnique[];
 }
 
 export interface MechanismContextInput {
@@ -268,6 +285,268 @@ function buildCandidatesFromEvidenceEngine(
   }
 
   return { candidates, evidenceResult };
+}
+
+const MECH_TECHNIQUE_TYPE_TO_CATEGORY: Record<string, InterventionCategory> = {
+  manual: 'manual_therapy',
+  exercise: 'exercise',
+  modality: 'modality',
+};
+
+const MECH_CATEGORY_TO_PROBLEM_CLASS: Record<string, ProblemClass[]> = {
+  root_cause: ['load_capacity', 'instability', 'coordination_control', 'mixed'],
+  compensation: ['load_capacity', 'coordination_control', 'mixed'],
+  overload: ['load_capacity', 'compression', 'mixed'],
+  intermediate: ['load_capacity', 'mixed'],
+  symptom: ['sensitivity_dominant', 'mixed'],
+  chain: ['load_capacity', 'coordination_control', 'mixed'],
+};
+
+const MECH_CATEGORY_TO_MECHANISM: Record<string, DominantMechanism[]> = {
+  root_cause: ['tensile_load', 'motor_control', 'instability'],
+  compensation: ['motor_control', 'tensile_load'],
+  overload: ['compression', 'tensile_load'],
+  intermediate: ['tensile_load', 'motor_control'],
+  symptom: ['sensitisation'],
+  chain: ['tensile_load', 'motor_control'],
+};
+
+function buildCandidatesFromMechanismContext(
+  mechContext: MechanismContextInput,
+  stage: ConditionStageType,
+): TreatmentCandidate[] {
+  const candidates: TreatmentCandidate[] = [];
+  for (const target of mechContext.topTargets) {
+    const techniques = target.techniques ?? [];
+    if (techniques.length === 0) continue;
+
+    const targetRegions = mechanismStructureToRegions(target.structure);
+    const category = MECH_CATEGORY_TO_PROBLEM_CLASS[target.category] ?? ['mixed'];
+    const mechMatch = MECH_CATEGORY_TO_MECHANISM[target.category] ?? ['unknown'];
+    const isRootCause = (target.roles ?? [target.category]).includes('root_cause');
+
+    for (const tech of techniques) {
+      const candidateCategory: InterventionCategory = MECH_TECHNIQUE_TYPE_TO_CATEGORY[tech.type] ?? 'exercise';
+      const stageRestrictions: ConditionStageType[] = [];
+      if (candidateCategory === 'exercise' && tech.dosage.toLowerCase().includes('heavy') && stage === 'acute') {
+        stageRestrictions.push('acute');
+      }
+      const irritabilityMax: IrritabilityLevel = candidateCategory === 'manual_therapy' ? 'high' : (stage === 'acute' ? 'moderate' : 'high');
+
+      candidates.push({
+        id: `mech_${target.structure.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${tech.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+        name: `${tech.name} — ${target.structure}`,
+        category: candidateCategory,
+        description: `${target.action}. Finding: ${target.finding}${target.mechanism ? `. Mechanism: ${target.mechanism}` : ''}`,
+        dosage: tech.dosage,
+        rationale: `${tech.rationale} (${isRootCause ? 'Root cause' : target.category} target via mechanism analysis)`,
+        evidenceGrade: tech.evidenceGrade,
+        targetRegions,
+        contraindications: [],
+        stageRestrictions,
+        irritabilityMax,
+        expectedTimeframe: 'Per mechanism analysis protocol',
+        problemClassMatch: category,
+        mechanismMatch: mechMatch,
+        conditionKeywords: [target.structure.toLowerCase(), target.finding.toLowerCase()],
+        sourceLibrary: 'mechanism_analysis',
+        evidenceRelevanceScore: isRootCause ? 65 : target.category === 'compensation' ? 50 : 40,
+      });
+    }
+  }
+  return candidates;
+}
+
+function buildCandidatesFromClinicalPrediction(
+  structuredReasoning: ClinicalReasoningResult,
+): TreatmentCandidate[] {
+  const candidates: TreatmentCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const hyp of structuredReasoning.hypotheses) {
+    const condition = hyp.condition;
+    const confidence = hyp.confidence;
+    const regions: string[] = [];
+    const condLower = condition.toLowerCase();
+    for (const [pattern, regs] of MECHANISM_STRUCTURE_TO_REGIONS) {
+      if (pattern.test(condLower)) regions.push(...regs);
+    }
+    if (regions.length === 0) {
+      const canonicalRegions = ['cervical', 'thoracic', 'lumbar', 'shoulder', 'hip', 'knee', 'ankle', 'elbow', 'wrist'];
+      for (const r of canonicalRegions) {
+        if (condLower.includes(r)) regions.push(r);
+      }
+    }
+    const uniqueRegions = Array.from(new Set(regions));
+
+    const evidenceGrade: 'A' | 'B' | 'C' | 'Expert' = confidence >= 70 ? 'B' : confidence >= 40 ? 'C' : 'Expert';
+
+    const structHyp = hyp.structuralHypothesis;
+    if (structHyp && structHyp.length > 5) {
+      const key = `cpred_struct_${hyp.id}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const isLoadRelated = condLower.includes('tendin') || condLower.includes('strain') || condLower.includes('tear') || condLower.includes('rupture');
+        const isNeural = condLower.includes('nerve') || condLower.includes('radiculop') || condLower.includes('neural') || condLower.includes('neuropath');
+        const isJoint = condLower.includes('arthritis') || condLower.includes('osteoarth') || condLower.includes('articular') || condLower.includes('meniscus') || condLower.includes('labr');
+        const isSensitivity = condLower.includes('sensitiz') || condLower.includes('sensitisation') || condLower.includes('fibromyalgia') || condLower.includes('chronic pain');
+
+        let category: InterventionCategory = 'exercise';
+        const problemClasses: ProblemClass[] = ['mixed'];
+        const mechanisms: DominantMechanism[] = ['unknown'];
+
+        if (isLoadRelated) {
+          category = 'exercise';
+          problemClasses.splice(0, problemClasses.length, 'load_capacity');
+          mechanisms.splice(0, mechanisms.length, 'tensile_load');
+        } else if (isNeural) {
+          category = 'neural';
+          problemClasses.splice(0, problemClasses.length, 'compression', 'sensitivity_dominant');
+          mechanisms.splice(0, mechanisms.length, 'compression', 'sensitisation');
+        } else if (isJoint) {
+          category = 'manual_therapy';
+          problemClasses.splice(0, problemClasses.length, 'mobility_restriction', 'compression');
+          mechanisms.splice(0, mechanisms.length, 'compression', 'stiffness');
+        } else if (isSensitivity) {
+          category = 'education';
+          problemClasses.splice(0, problemClasses.length, 'sensitivity_dominant');
+          mechanisms.splice(0, mechanisms.length, 'sensitisation');
+        }
+
+        candidates.push({
+          id: `cpred_${hyp.id}_structural`,
+          name: `Address ${condition} — ${structHyp.slice(0, 80)}`,
+          category,
+          description: `Clinical prediction: ${condition} (${confidence}% confidence). Structural hypothesis: ${structHyp}`,
+          dosage: 'Per clinical protocol guided by hypothesis confidence',
+          rationale: `Hypothesis-driven treatment for ${condition} based on clinical prediction (confidence ${confidence}%). Driver: ${hyp.dominantClinicalDriver || 'unspecified'}`,
+          evidenceGrade,
+          targetRegions: uniqueRegions.length > 0 ? uniqueRegions : ['general'],
+          contraindications: [],
+          expectedTimeframe: 'Guided by clinical reassessment',
+          problemClassMatch: problemClasses,
+          mechanismMatch: mechanisms,
+          conditionKeywords: condLower.split(/\s+/).filter(w => w.length > 3 && !CLINICAL_STOP_WORDS.has(w)),
+          sourceLibrary: 'clinical_prediction',
+          evidenceRelevanceScore: Math.min(70, Math.round(confidence * 0.7)),
+        });
+      }
+    }
+
+    const driver = hyp.dominantClinicalDriver;
+    if (driver && driver.length > 5) {
+      const key = `cpred_driver_${hyp.id}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        candidates.push({
+          id: `cpred_${hyp.id}_driver`,
+          name: `Target ${driver.slice(0, 60)} — ${condition}`,
+          category: 'exercise',
+          description: `Clinical prediction targets the dominant clinical driver: ${driver}. Condition: ${condition} (${confidence}% confidence)`,
+          dosage: 'Progressive protocol targeting dominant clinical driver',
+          rationale: `Addressing dominant clinical driver "${driver}" for ${condition} (confidence ${confidence}%)`,
+          evidenceGrade,
+          targetRegions: uniqueRegions.length > 0 ? uniqueRegions : ['general'],
+          contraindications: [],
+          expectedTimeframe: 'Guided by driver response and clinical reassessment',
+          problemClassMatch: ['mixed'],
+          mechanismMatch: ['unknown'],
+          conditionKeywords: [...condLower.split(/\s+/).filter(w => w.length > 3 && !CLINICAL_STOP_WORDS.has(w)), ...driver.toLowerCase().split(/\s+/).filter(w => w.length > 3 && !CLINICAL_STOP_WORDS.has(w))],
+          sourceLibrary: 'clinical_prediction',
+          evidenceRelevanceScore: Math.min(60, Math.round(confidence * 0.6)),
+        });
+      }
+    }
+  }
+
+  const mustNotMiss = structuredReasoning.mustNotMiss;
+  if (mustNotMiss?.length) {
+    for (const mnm of mustNotMiss) {
+      if (mnm.screeningNeeded?.length) {
+        const key = `cpred_mnm_${mnm.condition.toLowerCase().replace(/[^a-z]+/g, '_')}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          candidates.push({
+            id: key,
+            name: `Screen for ${mnm.condition}`,
+            category: 'pharmacological_referral',
+            description: `Must-not-miss condition: ${mnm.condition} (likelihood: ${mnm.likelihood}). ${mnm.reasoning}`,
+            dosage: `Screening: ${mnm.screeningNeeded.join(', ')}`,
+            rationale: `Clinical prediction identified ${mnm.condition} as must-not-miss. Screening is essential before proceeding with treatment`,
+            evidenceGrade: 'Expert',
+            targetRegions: ['general'],
+            contraindications: [],
+            expectedTimeframe: 'Immediate screening recommended',
+            problemClassMatch: ['mixed'],
+            mechanismMatch: ['unknown'],
+            conditionKeywords: [mnm.condition.toLowerCase()],
+            sourceLibrary: 'clinical_prediction',
+            evidenceRelevanceScore: 80,
+          });
+        }
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function deduplicateCandidates(candidates: TreatmentCandidate[]): TreatmentCandidate[] {
+  const GRADE_ORDER: Record<string, number> = { A: 4, B: 3, C: 2, Expert: 1 };
+  const groupKeys: string[] = [];
+  const groupMap: Record<string, TreatmentCandidate[]> = {};
+
+  for (const c of candidates) {
+    const normName = c.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const words = normName.split(/\s+/).filter((w: string) => w.length > 3);
+    let matched = false;
+    for (const key of groupKeys) {
+      const keyWords = key.split(/\s+/);
+      const overlap = words.filter((w: string) => keyWords.some((kw: string) => kw.includes(w) || w.includes(kw))).length;
+      if (overlap >= 2 && overlap >= Math.min(words.length, keyWords.length) * 0.5) {
+        groupMap[key].push(c);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      const newKey = words.join(' ');
+      groupKeys.push(newKey);
+      groupMap[newKey] = [c];
+    }
+  }
+
+  const result: TreatmentCandidate[] = [];
+  for (const key of groupKeys) {
+    const group = groupMap[key];
+    if (group.length === 1) {
+      result.push(group[0]);
+      continue;
+    }
+    group.sort((a: TreatmentCandidate, b: TreatmentCandidate) => (GRADE_ORDER[b.evidenceGrade] ?? 0) - (GRADE_ORDER[a.evidenceGrade] ?? 0));
+    const best = { ...group[0] };
+    const sourceSet: Record<string, boolean> = {};
+    const allRationale: string[] = [];
+    for (const c of group) {
+      if (c.sourceLibrary) sourceSet[c.sourceLibrary] = true;
+      if (c.rationale && !allRationale.includes(c.rationale)) allRationale.push(c.rationale);
+      if (c.evidenceRelevanceScore !== undefined && (best.evidenceRelevanceScore ?? 0) < c.evidenceRelevanceScore) {
+        best.evidenceRelevanceScore = c.evidenceRelevanceScore;
+      }
+      if (c.references?.length && (!best.references?.length || best.references.length < c.references.length)) {
+        best.references = c.references;
+      }
+    }
+    const sourceKeys = Object.keys(sourceSet);
+    if (sourceKeys.length > 1) {
+      best.sourceLibrary = sourceKeys.join(' + ');
+    }
+    if (allRationale.length > 1) {
+      best.rationale = allRationale.slice(0, 2).join(' | ');
+    }
+    result.push(best);
+  }
+  return result;
 }
 
 function matchScore(
@@ -430,8 +709,16 @@ function buildExplainability(
   if (candidate.expertApproach) {
     reasons.push(`Expert approach: ${candidate.expertApproach}`);
   }
-  if (candidate.sourceLibrary && candidate.sourceLibrary !== 'core') {
-    reasons.push(`Source: ${candidate.sourceLibrary}`);
+  if (candidate.sourceLibrary) {
+    if (candidate.sourceLibrary === 'mechanism_analysis') {
+      reasons.push('Source: Mechanism Treatment Analysis — structure-specific intervention');
+    } else if (candidate.sourceLibrary === 'clinical_prediction') {
+      reasons.push('Source: Clinical Prediction — hypothesis-driven recommendation');
+    } else if (candidate.sourceLibrary.includes(' + ')) {
+      reasons.push(`Source: Multi-source (${candidate.sourceLibrary}) — corroborated across engines`);
+    } else if (candidate.sourceLibrary !== 'core') {
+      reasons.push(`Source: ${candidate.sourceLibrary}`);
+    }
   }
   if (tier === 'avoid_defer') {
     reasons.push(...riskFlags);
@@ -568,7 +855,7 @@ function mechanismStructureToRegions(structure: string): string[] {
   if (results.length === 0) {
     results.push(structure.toLowerCase().replace(/[^a-z ]/g, '').trim());
   }
-  return [...new Set(results)];
+  return Array.from(new Set(results));
 }
 
 function computePostureBonus(postureState?: Record<string, Record<string, number>>): number {
@@ -658,7 +945,15 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const hasRedFlags = (ctx?.redFlags?.length ?? 0) > 0;
   const hasMustNotMiss = mustNotMissConditions.length > 0;
 
-  const { candidates, evidenceResult: cachedEvidenceResult } = buildCandidatesFromEvidenceEngine(regions, problemClass, mechanism, stage, irritability, sr, { hasRedFlags, hasMustNotMiss });
+  const mech = input.mechanismContext;
+  const hasMechanismContext = mech && mech.topTargets.length > 0;
+
+  const { candidates: evidenceCandidates, evidenceResult: cachedEvidenceResult } = buildCandidatesFromEvidenceEngine(regions, problemClass, mechanism, stage, irritability, sr, { hasRedFlags, hasMustNotMiss });
+
+  const mechCandidates = mech ? buildCandidatesFromMechanismContext(mech, stage) : [];
+  const clinicalPredCandidates = buildCandidatesFromClinicalPrediction(sr);
+
+  const candidates = deduplicateCandidates([...evidenceCandidates, ...mechCandidates, ...clinicalPredCandidates]);
 
   const postureDeviationScore = computePostureBonus(input.postureState);
 
@@ -678,9 +973,6 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   ) ?? false;
   const slingCompensationCount = sling?.dysfunctionalSlings.filter(s => s.status === 'compensating').length ?? 0;
   const slingUnderperformingCount = sling?.dysfunctionalSlings.filter(s => s.status === 'underperforming').length ?? 0;
-
-  const mech = input.mechanismContext;
-  const hasMechanismContext = mech && mech.topTargets.length > 0;
   const mechRootCauseRegions = mech?.topTargets
     .filter(t => (t.roles ?? [t.category]).includes('root_cause'))
     .flatMap(t => mechanismStructureToRegions(t.structure)) ?? [];
@@ -843,7 +1135,12 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const aggravNote = ctx?.aggravatingFactors?.length
     ? ` Aggravated by: ${ctx.aggravatingFactors.slice(0, 3).map(a => a.factor).join(', ')}.`
     : '';
-  const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class).${regionNote}${durationNote}${onsetNote}${priorTxNote}${aggravNote} ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${mechanismNote}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
+  const sourceNotes: string[] = [];
+  sourceNotes.push(`Evidence Engine: ${evidenceCandidates.length} candidates`);
+  if (mechCandidates.length > 0) sourceNotes.push(`Mechanism treatments: ${mechCandidates.length} candidates`);
+  if (clinicalPredCandidates.length > 0) sourceNotes.push(`Clinical prediction: ${clinicalPredCandidates.length} candidates`);
+  const sourceSummary = ` Sources: ${sourceNotes.join(', ')}.`;
+  const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class).${regionNote}${durationNote}${onsetNote}${priorTxNote}${aggravNote} ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${sourceSummary}${mechanismNote}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
 
   const expertApproaches = new Set<string>();
   for (const opt of cachedEvidenceResult.options) {
@@ -883,6 +1180,13 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     decisionSummary,
     timestamp: new Date().toISOString(),
     mechanismInformed: !!hasMechanismContext,
+    clinicalPredictionInformed: clinicalPredCandidates.length > 0,
+    candidateSourceCounts: {
+      evidenceEngine: evidenceCandidates.length,
+      mechanismAnalysis: mechCandidates.length,
+      clinicalPrediction: clinicalPredCandidates.length,
+      afterDedup: candidates.length,
+    },
     evidenceEngineContext,
     topEvidenceOptions,
   };

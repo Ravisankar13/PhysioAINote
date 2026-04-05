@@ -461,10 +461,10 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
 
   const merged = consolidateTargets(targets);
 
-  const rootCauses = merged.filter(t => t.category === 'root_cause').length;
-  const compensations = merged.filter(t => t.category === 'compensation').length;
-  const overloadedJoints = merged.filter(t => t.category === 'overload').length;
-  const chainDysfunctions = merged.filter(t => t.category === 'chain').length;
+  const rootCauses = merged.filter(t => (t.roles ?? [t.category]).includes('root_cause')).length;
+  const compensations = merged.filter(t => (t.roles ?? [t.category]).includes('compensation')).length;
+  const overloadedJoints = merged.filter(t => (t.roles ?? [t.category]).includes('overload')).length;
+  const chainDysfunctions = merged.filter(t => (t.roles ?? [t.category]).includes('chain')).length;
 
   const sequence: string[] = [];
   if (rootCauses > 0) sequence.push('Address root causes first');

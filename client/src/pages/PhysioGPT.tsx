@@ -1941,6 +1941,7 @@ ${ddxList}`;
           topTargets: mechTx.targets.slice(0, 8).map(t => ({
             structure: t.structure,
             category: t.category,
+            roles: t.roles ?? [t.category],
             severity: t.severity,
             action: t.action,
             finding: t.finding,

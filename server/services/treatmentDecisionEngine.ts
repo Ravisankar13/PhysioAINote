@@ -148,6 +148,7 @@ export interface SlingContextInput {
 export interface MechanismContextTarget {
   structure: string;
   category: 'root_cause' | 'intermediate' | 'symptom' | 'compensation' | 'overload' | 'chain';
+  roles: Array<'root_cause' | 'intermediate' | 'symptom' | 'compensation' | 'overload' | 'chain'>;
   severity: 'mild' | 'moderate' | 'severe';
   action: string;
   finding: string;
@@ -681,10 +682,10 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const mech = input.mechanismContext;
   const hasMechanismContext = mech && mech.topTargets.length > 0;
   const mechRootCauseRegions = mech?.topTargets
-    .filter(t => t.category === 'root_cause')
+    .filter(t => (t.roles ?? [t.category]).includes('root_cause'))
     .flatMap(t => mechanismStructureToRegions(t.structure)) ?? [];
   const mechCompensationRegions = mech?.topTargets
-    .filter(t => t.category === 'compensation')
+    .filter(t => (t.roles ?? [t.category]).includes('compensation'))
     .flatMap(t => mechanismStructureToRegions(t.structure)) ?? [];
   const mechOverloadCount = mech?.overloadedJointCount ?? 0;
 

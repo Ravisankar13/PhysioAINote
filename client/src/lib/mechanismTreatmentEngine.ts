@@ -150,19 +150,23 @@ function getTreatmentsForStep(step: CausalChainStep): { action: string; techniqu
   return { action, techniques };
 }
 
-function categoryPriority(cat: string): number {
-  if (cat === 'root_cause') return 100;
-  if (cat === 'compensation') return 80;
-  if (cat === 'overload') return 70;
-  if (cat === 'intermediate') return 50;
-  if (cat === 'chain') return 40;
-  return 20;
+function categoryTier(cat: string): number {
+  if (cat === 'root_cause') return 6;
+  if (cat === 'compensation') return 5;
+  if (cat === 'overload') return 4;
+  if (cat === 'intermediate') return 3;
+  if (cat === 'chain') return 2;
+  return 1;
 }
 
-function severityMultiplier(sev: string): number {
-  if (sev === 'severe') return 1.5;
-  if (sev === 'moderate') return 1.0;
-  return 0.7;
+function severityScore(sev: string): number {
+  if (sev === 'severe') return 3;
+  if (sev === 'moderate') return 2;
+  return 1;
+}
+
+function computePriority(cat: string, sev: string): number {
+  return categoryTier(cat) * 1000 + severityScore(sev);
 }
 
 function resolveChainType(label: string): string {
@@ -320,7 +324,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
         source: 'causal_chain',
         category: step.category,
         severity: step.severity,
-        priority: categoryPriority(step.category) * severityMultiplier(step.severity),
+        priority: computePriority(step.category, step.severity),
         finding: step.finding,
         mechanism: step.mechanism,
         action: treatment.action,
@@ -342,7 +346,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
       source: 'compensation',
       category: 'compensation',
       severity: card.severity,
-      priority: categoryPriority('compensation') * severityMultiplier(card.severity),
+      priority: computePriority('compensation', card.severity),
       finding: card.primaryDysfunction,
       mechanism: card.clinicalSignificance,
       action: `${STATUS_TO_ACTION['overactive'].label} compensators → ${STATUS_TO_ACTION['inhibited'].label} primaries`,
@@ -364,7 +368,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
       source: 'overloaded_joint',
       category: 'overload',
       severity: joint.changePct > 80 ? 'severe' : 'moderate',
-      priority: categoryPriority('overload') * (joint.changePct > 80 ? 1.5 : 1.0),
+      priority: computePriority('overload', joint.changePct > 80 ? 'severe' : 'moderate'),
       finding: `Joint loading +${joint.changePct}% above baseline (${joint.currentForce}N vs ${joint.baselineForce}N)`,
       mechanism: 'Excessive compressive/shear forces due to postural compensation or muscle imbalance',
       action: 'Offload & Decompress',
@@ -387,7 +391,7 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
       source: 'kinetic_chain',
       category: 'chain',
       severity: 'moderate',
-      priority: categoryPriority('chain'),
+      priority: computePriority('chain', 'moderate'),
       finding: kcd.dysfunction,
       mechanism: kcd.relevance,
       action: 'Chain Integration & Corrective Training',

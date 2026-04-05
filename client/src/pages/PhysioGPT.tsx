@@ -3321,19 +3321,6 @@ ${ddxList}`;
     });
   }, [finalModelConfig, effectiveOverrides, painMarkers, bodyWeightKg, correlationMode, showUnifiedChainPanel, showInjuryMechanism]);
 
-  const mechanismAnalysisResult = useMemo(() => {
-    if (!showInjuryMechanism) return null;
-    try {
-      return analyzeInjuryMechanism({
-        forceAnalysis: hudForceAnalysis,
-        pathologyCompensation,
-        correlationResult,
-        compensatedOverrides,
-        bodyWeightKg,
-      });
-    } catch { return null; }
-  }, [showInjuryMechanism, hudForceAnalysis, pathologyCompensation, correlationResult, compensatedOverrides, bodyWeightKg]);
-
   const handleAddWhatIfScenario = useCallback((scenario: WhatIfScenario) => {
     setWhatIfScenarios(prev => {
       if (prev.find(s => s.id === scenario.id)) return prev;
@@ -3435,6 +3422,19 @@ ${ddxList}`;
     }
     return base;
   }, [finalModelConfig, forceMode, forceAnalysis, whatIfScenarios, whatIfSimulatedConfig]);
+
+  const mechanismAnalysisResult = useMemo(() => {
+    if (!showInjuryMechanism) return null;
+    try {
+      return analyzeInjuryMechanism({
+        forceAnalysis: hudForceAnalysis,
+        pathologyCompensation,
+        correlationResult,
+        compensatedOverrides,
+        bodyWeightKg,
+      });
+    } catch { return null; }
+  }, [showInjuryMechanism, hudForceAnalysis, pathologyCompensation, correlationResult, compensatedOverrides, bodyWeightKg]);
 
   const hudWeightDistribution = useMemo(() => {
     if (forceMode && weightDistribution) return weightDistribution;

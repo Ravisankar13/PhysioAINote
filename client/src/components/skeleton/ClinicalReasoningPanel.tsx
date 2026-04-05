@@ -221,6 +221,7 @@ export interface EvidenceEngineResult {
   pubmedConfidence?: string | null;
   pubmedSource?: string | null;
   pubmedSearchQuery?: string | null;
+  pubmedUnavailable?: boolean;
 }
 
 interface ClinicalReasoningPanelProps {
@@ -844,6 +845,9 @@ export default function ClinicalReasoningPanel({
           <button
             onClick={() => {
               setActiveTab('evidence');
+              if (!evidenceData && !evidenceLoading && onEvidenceQuery) {
+                onEvidenceQuery();
+              }
             }}
             className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'evidence' ? 'text-amber-400 border-amber-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
           >
@@ -1176,11 +1180,16 @@ export default function ClinicalReasoningPanel({
                 </div>
               )}
 
-              {/* PubMed unavailable notice */}
-              {evidenceData && (!evidenceData.pubmedPapers || evidenceData.pubmedPapers.length === 0) && (
+              {evidenceData && evidenceData.pubmedUnavailable && (
+                <div className="mt-3 bg-orange-500/5 rounded-lg p-2.5 border border-orange-500/15 flex items-center gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 text-orange-400 shrink-0" />
+                  <span className="text-[9px] text-orange-300">Live PubMed search is currently unavailable. Curated catalog results are shown above. Fallback reference papers may be included below.</span>
+                </div>
+              )}
+              {evidenceData && !evidenceData.pubmedUnavailable && (!evidenceData.pubmedPapers || evidenceData.pubmedPapers.length === 0) && (
                 <div className="mt-3 bg-gray-800/40 rounded-lg p-2.5 border border-white/5 flex items-center gap-2">
                   <Globe className="h-3.5 w-3.5 text-gray-500 shrink-0" />
-                  <span className="text-[9px] text-gray-500">Live PubMed search returned no results for this query. Curated catalog results shown above.</span>
+                  <span className="text-[9px] text-gray-500">No matching PubMed papers found for this query. Try adjusting your diagnosis or body region. Curated catalog results shown above.</span>
                 </div>
               )}
             </div>

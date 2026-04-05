@@ -6654,6 +6654,7 @@ GUIDELINES:
       const catalogResult = queryEvidenceEngine(parsed.data);
 
       let pubmedResult = null;
+      let pubmedUnavailable = false;
       try {
         const { fetchClinicalEvidence } = await import("./services/clinicalEvidenceService");
         const regions = parsed.data.bodyRegions || [];
@@ -6661,9 +6662,13 @@ GUIDELINES:
         const regionStr = regions.length > 0 ? regions.join(' ') : '';
         if (regionStr || diagnosis) {
           pubmedResult = await fetchClinicalEvidence(regionStr, diagnosis, '');
+          if (pubmedResult.source === 'fallback') {
+            pubmedUnavailable = true;
+          }
         }
       } catch (pubmedErr: unknown) {
         console.warn("PubMed fetch failed (non-blocking):", pubmedErr instanceof Error ? pubmedErr.message : pubmedErr);
+        pubmedUnavailable = true;
       }
 
       res.json({
@@ -6673,6 +6678,7 @@ GUIDELINES:
         pubmedConfidence: pubmedResult?.confidence || null,
         pubmedSource: pubmedResult?.source || null,
         pubmedSearchQuery: pubmedResult?.searchQuery || null,
+        pubmedUnavailable,
       });
     } catch (error: unknown) {
       console.error("Evidence engine query error:", error);

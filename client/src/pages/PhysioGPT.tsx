@@ -556,6 +556,7 @@ export default function PhysioGPT() {
     pubmedConfidence?: string | null;
     pubmedSource?: string | null;
     pubmedSearchQuery?: string | null;
+    pubmedUnavailable?: boolean;
   } | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
 

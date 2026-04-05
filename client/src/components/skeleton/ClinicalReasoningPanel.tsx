@@ -257,6 +257,7 @@ interface ClinicalReasoningPanelProps {
   onManualEvidenceQuery?: (params: { diagnosis?: string; bodyRegions?: string[]; stage?: string; irritability?: string; mechanism?: string }) => void;
   requestedTab?: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null;
   onRequestedTabHandled?: () => void;
+  onActiveTabChange?: (tab: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence') => void;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -477,6 +478,7 @@ export default function ClinicalReasoningPanel({
   onManualEvidenceQuery,
   requestedTab,
   onRequestedTabHandled,
+  onActiveTabChange,
 }: ClinicalReasoningPanelProps) {
   const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
 
@@ -486,6 +488,10 @@ export default function ClinicalReasoningPanel({
       onRequestedTabHandled?.();
     }
   }, [requestedTab, onRequestedTabHandled]);
+
+  useEffect(() => {
+    onActiveTabChange?.(activeTab);
+  }, [activeTab, onActiveTabChange]);
   const [evidenceCategoryFilter, setEvidenceCategoryFilter] = useState<string>('all');
   const [evidenceGradeFilter, setEvidenceGradeFilter] = useState<string>('all');
   const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null);

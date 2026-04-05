@@ -530,6 +530,7 @@ export default function PhysioGPT() {
   const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics' | 'slings'>('chat');
   const [reasoningRequestedTab, setReasoningRequestedTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null>(null);
+  const [reasoningActiveTab, setReasoningActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
   const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
   const [slingOverlayVisible, setSlingOverlayVisible] = useState(true);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
@@ -7445,6 +7446,25 @@ ${ddxList}`;
                 <Link2 className="h-3 w-3 mr-1" />
                 Mechanism
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${clinicalReasoningOpen && reasoningActiveTab === 'evidence' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  if (clinicalReasoningOpen && reasoningActiveTab === 'evidence') {
+                    setClinicalReasoningOpen(false);
+                  } else {
+                    setClinicalReasoningOpen(true);
+                    setReasoningRequestedTab('evidence');
+                  }
+                }}
+              >
+                <BookOpen className="h-3 w-3 mr-1" />
+                Evidence
+                {evidenceEngineResult && (
+                  <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 inline-block" />
+                )}
+              </Button>
               <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
               <Button
                 variant="secondary"
@@ -9334,6 +9354,7 @@ ${ddxList}`;
         onManualEvidenceQuery={handleManualEvidenceQuery}
         requestedTab={reasoningRequestedTab}
         onRequestedTabHandled={() => setReasoningRequestedTab(null)}
+        onActiveTabChange={setReasoningActiveTab}
       />
 
       <HypothesisChatPanel

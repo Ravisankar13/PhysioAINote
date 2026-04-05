@@ -131,6 +131,8 @@ import InjuryMechanismPanel from "@/components/skeleton/InjuryMechanismPanel";
 import UnifiedBiomechanicsPanel from "@/components/skeleton/UnifiedBiomechanicsPanel";
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
+import MechanismTreatmentTab from "@/components/skeleton/MechanismTreatmentTab";
+import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
@@ -493,7 +495,7 @@ export default function PhysioGPT() {
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
-  const [showWhatIfSimulation, setShowWhatIfSimulation] = useState(false);
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif'>('mechanism');
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
   const mechanismHighlightBones = useMemo(() => {
@@ -3319,6 +3321,19 @@ ${ddxList}`;
     });
   }, [finalModelConfig, effectiveOverrides, painMarkers, bodyWeightKg, correlationMode, showUnifiedChainPanel, showInjuryMechanism]);
 
+  const mechanismAnalysisResult = useMemo(() => {
+    if (!showInjuryMechanism) return null;
+    try {
+      return analyzeInjuryMechanism({
+        forceAnalysis: hudForceAnalysis,
+        pathologyCompensation,
+        correlationResult,
+        compensatedOverrides,
+        bodyWeightKg,
+      });
+    } catch { return null; }
+  }, [showInjuryMechanism, hudForceAnalysis, pathologyCompensation, correlationResult, compensatedOverrides, bodyWeightKg]);
+
   const handleAddWhatIfScenario = useCallback((scenario: WhatIfScenario) => {
     setWhatIfScenarios(prev => {
       if (prev.find(s => s.id === scenario.id)) return prev;
@@ -3358,7 +3373,7 @@ ${ddxList}`;
       setMuscleOverrides(prev => ({ ...prev, [key]: { ...prev[key], ...val } }));
     }
     setWhatIfScenarios([]);
-    setShowWhatIfSimulation(false);
+    setMechanismActiveTab('mechanism');
   }, [whatIfSimulatedConfig, modelConfig, effectiveModelConfig]);
 
   const chainIntegrityScores = useMemo(() => {
@@ -7738,20 +7753,27 @@ ${ddxList}`;
                   </div>
                   <div className="flex gap-1 mb-2">
                     <button
-                      onClick={() => setShowWhatIfSimulation(false)}
-                      className={`flex-1 text-[10px] py-1 rounded transition-colors ${!showWhatIfSimulation ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                      onClick={() => setMechanismActiveTab('mechanism')}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors ${mechanismActiveTab === 'mechanism' ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       Mechanism
                     </button>
                     <button
-                      onClick={() => setShowWhatIfSimulation(true)}
-                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${showWhatIfSimulation ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                      onClick={() => setMechanismActiveTab('treatment')}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'treatment' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                    >
+                      <Stethoscope className="h-3 w-3" />
+                      Treat
+                    </button>
+                    <button
+                      onClick={() => setMechanismActiveTab('whatif')}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'whatif' ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       <FlaskConical className="h-3 w-3" />
                       What-If
                     </button>
                   </div>
-                  {!showWhatIfSimulation ? (
+                  {mechanismActiveTab === 'mechanism' && (
                     <InjuryMechanismPanel
                       forceAnalysis={hudForceAnalysis}
                       compensatedOverrides={compensatedOverrides}
@@ -7760,7 +7782,13 @@ ${ddxList}`;
                       bodyWeightKg={bodyWeightKg}
                       onHighlightBones={setMechanismBoneIds}
                     />
-                  ) : (
+                  )}
+                  {mechanismActiveTab === 'treatment' && (
+                    <MechanismTreatmentTab
+                      analysis={mechanismAnalysisResult}
+                    />
+                  )}
+                  {mechanismActiveTab === 'whatif' && (
                     <WhatIfSimulationPanel
                       comparison={whatIfSimulatedConfig}
                       activeScenarios={whatIfScenarios}

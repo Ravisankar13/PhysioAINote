@@ -47,6 +47,7 @@ export interface MechTreatmentSummary {
 
 export interface MechTreatmentResult {
   targets: MechTreatmentTarget[];
+  fullTargetCount: number;
   summary: MechTreatmentSummary;
 }
 
@@ -118,6 +119,49 @@ const CHAIN_TREATMENTS: Record<string, MechTreatmentTechnique[]> = {
     { name: 'Gluteus medius/minimus strengthening', type: 'exercise', dosage: '3 × 12 reps, side-lying → standing progression', rationale: 'Address hip abductor weakness — primary contributor to lateral chain dysfunction', evidenceGrade: 'A' },
   ],
 };
+
+function normalizeStructureKey(structure: string): string {
+  return structure.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+}
+
+function consolidateTargets(targets: MechTreatmentTarget[]): MechTreatmentTarget[] {
+  const groups = new Map<string, MechTreatmentTarget[]>();
+  for (const t of targets) {
+    const key = normalizeStructureKey(t.structure);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.push(t);
+    } else {
+      groups.set(key, [t]);
+    }
+  }
+
+  const consolidated: MechTreatmentTarget[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      consolidated.push(group[0]);
+      continue;
+    }
+    group.sort((a, b) => b.priority - a.priority);
+    const best = group[0];
+    const seenTechniques = new Set(best.techniques.map(t => t.name));
+    for (let i = 1; i < group.length; i++) {
+      for (const tech of group[i].techniques) {
+        if (!seenTechniques.has(tech.name) && best.techniques.length < 5) {
+          best.techniques.push(tech);
+          seenTechniques.add(tech.name);
+        }
+      }
+      if (group[i].finding && !best.finding.includes(group[i].finding)) {
+        best.finding = `${best.finding}; ${group[i].finding}`;
+      }
+    }
+    consolidated.push(best);
+  }
+
+  consolidated.sort((a, b) => b.priority - a.priority);
+  return consolidated;
+}
 
 function resolveRegion(structure: string): string | null {
   const lower = structure.toLowerCase();
@@ -401,10 +445,12 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
 
   targets.sort((a, b) => b.priority - a.priority);
 
-  const rootCauses = targets.filter(t => t.category === 'root_cause').length;
-  const compensations = targets.filter(t => t.category === 'compensation').length;
-  const overloadedJoints = targets.filter(t => t.category === 'overload').length;
-  const chainDysfunctions = targets.filter(t => t.category === 'chain').length;
+  const merged = consolidateTargets(targets);
+
+  const rootCauses = merged.filter(t => t.category === 'root_cause').length;
+  const compensations = merged.filter(t => t.category === 'compensation').length;
+  const overloadedJoints = merged.filter(t => t.category === 'overload').length;
+  const chainDysfunctions = merged.filter(t => t.category === 'chain').length;
 
   const sequence: string[] = [];
   if (rootCauses > 0) sequence.push('Address root causes first');
@@ -413,16 +459,20 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
   if (chainDysfunctions > 0) sequence.push('Integrate kinetic chain corrections');
   sequence.push('Progress to functional retraining');
 
+  const fullCount = targets.length;
+  const capped = merged.slice(0, 8);
+
   let overallPlan = 'No significant findings requiring treatment.';
-  if (targets.length > 0) {
-    const topStructures = targets.slice(0, 3).map(t => t.structure);
-    overallPlan = `${targets.length} treatment target${targets.length > 1 ? 's' : ''} identified. Priority: ${topStructures.join(', ')}. ${
+  if (capped.length > 0) {
+    const topStructures = capped.slice(0, 3).map(t => t.structure);
+    overallPlan = `${capped.length} priority target${capped.length > 1 ? 's' : ''}${fullCount > 8 ? ` (consolidated from ${fullCount})` : ''} identified. Priority: ${topStructures.join(', ')}. ${
       rootCauses > 0 ? `${rootCauses} root cause${rootCauses > 1 ? 's' : ''} to address first. ` : ''
     }${compensations > 0 ? `${compensations} compensation pattern${compensations > 1 ? 's' : ''} to resolve. ` : ''}`.trim();
   }
 
   return {
-    targets,
+    targets: capped,
+    fullTargetCount: fullCount,
     summary: {
       totalTargets: targets.length,
       rootCauses,

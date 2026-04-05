@@ -104,6 +104,7 @@ export interface TreatmentDecisionResult {
   irritability: IrritabilityLevel;
   decisionSummary: string;
   timestamp: string;
+  mechanismInformed: boolean;
   evidenceEngineContext?: {
     totalEvidenceOptions: number;
     gradeDistribution: Record<string, number>;
@@ -144,6 +145,23 @@ export interface SlingContextInput {
   dysfunctionalSlings: SlingContextEntry[];
 }
 
+export interface MechanismContextTarget {
+  structure: string;
+  category: 'root_cause' | 'intermediate' | 'symptom' | 'compensation' | 'overload' | 'chain';
+  severity: 'mild' | 'moderate' | 'severe';
+  action: string;
+  finding: string;
+}
+
+export interface MechanismContextInput {
+  topTargets: MechanismContextTarget[];
+  overallSummary: string;
+  topContributors: string[];
+  overloadedJointCount: number;
+  compensationCount: number;
+  rootCauseCount: number;
+}
+
 export interface TreatmentDecisionInput {
   structuredReasoning: ClinicalReasoningResult;
   muscleOverrides?: Record<string, { pathology?: string; tension?: number }>;
@@ -152,6 +170,7 @@ export interface TreatmentDecisionInput {
   extractionContext?: ExtractionContextInput;
   biomechanicsContext?: BiomechanicsContextInput;
   slingContext?: SlingContextInput;
+  mechanismContext?: MechanismContextInput;
 }
 
 const CANDIDATE_TO_TECHNIQUE_STATUS: Record<string, ClinicalStatusKey[]> = {
@@ -633,6 +652,16 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const slingCompensationCount = sling?.dysfunctionalSlings.filter(s => s.status === 'compensating').length ?? 0;
   const slingUnderperformingCount = sling?.dysfunctionalSlings.filter(s => s.status === 'underperforming').length ?? 0;
 
+  const mech = input.mechanismContext;
+  const hasMechanismContext = mech && mech.topTargets.length > 0;
+  const mechRootCauseStructures = mech?.topTargets
+    .filter(t => t.category === 'root_cause')
+    .map(t => t.structure.toLowerCase()) ?? [];
+  const mechCompensationStructures = mech?.topTargets
+    .filter(t => t.category === 'compensation')
+    .map(t => t.structure.toLowerCase()) ?? [];
+  const mechOverloadCount = mech?.overloadedJointCount ?? 0;
+
   const postureIsDominant = postureDeviationScore >= 6 && problemClass === 'compression';
   const tierContext = { hasRedFlags, hasMustNotMiss, postureIsDominant };
 
@@ -684,6 +713,35 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
         score += Math.min(8, slingCompensationCount * 3);
       }
     }
+
+    if (hasMechanismContext) {
+      const candidateRegions = candidate.targetRegions.map(r => r.toLowerCase());
+      const rootCauseMatch = mechRootCauseStructures.some(s =>
+        candidateRegions.some(r => s.includes(r) || r.includes(s))
+      );
+      const compensationMatch = mechCompensationStructures.some(s =>
+        candidateRegions.some(r => s.includes(r) || r.includes(s))
+      );
+      if (rootCauseMatch) {
+        if (['motor_control_retraining', 'progressive_strengthening', 'isometric_loading'].includes(candidate.id)) {
+          score += 12;
+        } else if (['soft_tissue_release', 'trigger_point_therapy', 'dry_needling'].includes(candidate.id)) {
+          score += 10;
+        }
+      }
+      if (compensationMatch) {
+        if (['soft_tissue_release', 'trigger_point_therapy', 'stretching_programme'].includes(candidate.id)) {
+          score += 8;
+        }
+        if (['motor_control_retraining'].includes(candidate.id)) {
+          score += 6;
+        }
+      }
+      if (mechOverloadCount > 0 && candidate.id === 'load_management_advice') {
+        score += Math.min(10, mechOverloadCount * 4);
+      }
+    }
+
     const { pass: riskPassed, flags: riskFlags } = riskFilter(candidate, stage, irritability, mustNotMissConditions, patientContraindications);
     const tier = classifyTier(score, riskPassed, candidate, problemClass, tierContext);
     const intent = classifyIntent(candidate, mechanism);
@@ -737,6 +795,9 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
 
   const reviewSchedule = computeReviewSchedule(irritability, stage);
 
+  const mechanismNote = hasMechanismContext
+    ? ` Mechanism analysis: ${mech!.rootCauseCount} root cause(s), ${mech!.compensationCount} compensation(s), ${mech!.overloadedJointCount} overloaded joint(s). Top contributors: ${mech!.topContributors.slice(0, 3).join(', ')}.`
+    : '';
   const slingNote = hasSlingDysfunction
     ? ` Sling analysis: ${sling!.dysfunctionalSlings.length} dysfunctional sling(s) detected (force transfer ${sling!.overallForceTransferScore}/100), prioritizing force-transfer restoration and compensation reduction.`
     : '';
@@ -755,7 +816,7 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
   const aggravNote = ctx?.aggravatingFactors?.length
     ? ` Aggravated by: ${ctx.aggravatingFactors.slice(0, 3).map(a => a.factor).join(', ')}.`
     : '';
-  const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class).${regionNote}${durationNote}${onsetNote}${priorTxNote}${aggravNote} ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
+  const decisionSummary = `For ${topHypothesis} (${stage} stage, ${irritability} irritability, ${problemClass.replace(/_/g, ' ')} problem class).${regionNote}${durationNote}${onsetNote}${priorTxNote}${aggravNote} ${primary.length} primary and ${adjunct.length} adjunct interventions recommended. ${avoidDefer.length > 0 ? `${avoidDefer.length} intervention(s) deferred due to stage/irritability constraints.` : 'No interventions deferred.'}${mechanismNote}${slingNote} Reassess in ${reviewSchedule.reassessmentLabel}.`;
 
   const expertApproaches = new Set<string>();
   for (const opt of cachedEvidenceResult.options) {
@@ -794,6 +855,7 @@ export function analyzeTreatmentDecision(input: TreatmentDecisionInput): Treatme
     irritability,
     decisionSummary,
     timestamp: new Date().toISOString(),
+    mechanismInformed: !!hasMechanismContext,
     evidenceEngineContext,
     topEvidenceOptions,
   };

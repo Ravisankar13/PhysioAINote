@@ -263,6 +263,15 @@ export default function MechanismTreatmentTab({ analysis }: MechanismTreatmentTa
           <TargetCard key={target.id} target={target} defaultOpen={i === 0} />
         ))}
       </div>
+
+      {treatmentResult.fullTargetCount > treatmentResult.targets.length && (
+        <div className="text-center py-1.5">
+          <p className="text-[9px] text-gray-500">
+            Showing top {treatmentResult.targets.length} of {treatmentResult.fullTargetCount} targets.{' '}
+            <span className="text-emerald-400">See full clinical plan in Decision tab →</span>
+          </p>
+        </div>
+      )}
     </div>
   );
 }

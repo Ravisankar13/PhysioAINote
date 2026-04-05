@@ -132,6 +132,7 @@ import UnifiedBiomechanicsPanel from "@/components/skeleton/UnifiedBiomechanicsP
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
 import MechanismTreatmentTab from "@/components/skeleton/MechanismTreatmentTab";
+import { generateMechanismTreatments } from "@/lib/mechanismTreatmentEngine";
 import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
@@ -1931,6 +1932,26 @@ ${ddxList}`;
           treatmentTargets: s.treatmentTargets.map(t => ({ muscle: t.muscle, intervention: t.intervention, rationale: t.rationale })),
         })),
     } : undefined;
+    const currentMechanismResult = mechanismAnalysisResult;
+    const mechCtx = currentMechanismResult ? (() => {
+      try {
+        const mechTx = generateMechanismTreatments(currentMechanismResult);
+        return {
+          topTargets: mechTx.targets.slice(0, 8).map(t => ({
+            structure: t.structure,
+            category: t.category,
+            severity: t.severity,
+            action: t.action,
+            finding: t.finding,
+          })),
+          overallSummary: mechTx.summary.overallPlan,
+          topContributors: currentMechanismResult.topContributors,
+          overloadedJointCount: mechTx.summary.overloadedJoints,
+          compensationCount: mechTx.summary.compensations,
+          rootCauseCount: mechTx.summary.rootCauses,
+        };
+      } catch { return undefined; }
+    })() : undefined;
     const input: Record<string, unknown> = {
       structuredReasoning: structuredReasoningData,
       painMarkers: painMarkers.map(pm => ({
@@ -1942,6 +1963,7 @@ ${ddxList}`;
       extractionContext: extractionResult ?? undefined,
       biomechanicsContext: biomechanicsCtx,
       slingContext: slingCtx,
+      mechanismContext: mechCtx,
     };
     fetch('/api/treatment-decision/analyze', {
       method: 'POST',

@@ -62,6 +62,7 @@ export interface TreatmentDecisionResult {
   irritability: string;
   decisionSummary: string;
   timestamp: string;
+  mechanismInformed?: boolean;
 }
 
 interface DecisionTabProps {
@@ -263,6 +264,11 @@ export default function DecisionTab({ data, isLoading, onTargetRegionClick }: De
         <div className="flex items-center gap-1.5 mb-1.5">
           <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
           <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Decision Summary</span>
+          {data.mechanismInformed && (
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 ml-auto">
+              Mechanism-Informed
+            </span>
+          )}
         </div>
         <p className="text-[9px] text-gray-300 leading-relaxed">{data.decisionSummary}</p>
         <div className="flex flex-wrap gap-1.5 mt-2">

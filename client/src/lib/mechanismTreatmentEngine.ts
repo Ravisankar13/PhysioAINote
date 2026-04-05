@@ -88,6 +88,78 @@ function getActionLabel(status: ClinicalStatus): string {
   return STATUS_TO_ACTION[status]?.label || 'Treat';
 }
 
+const ANTAGONIST_PAIRS: Record<string, string> = {
+  'upper trapezius': 'Lower Trapezius',
+  'upper trap': 'Lower Trapezius',
+  'levator scapulae': 'Lower Trapezius',
+  'pec major': 'Rhomboids / Middle Trapezius',
+  'pec minor': 'Lower Trapezius / Serratus Anterior',
+  'pectoralis major': 'Rhomboids / Middle Trapezius',
+  'pectoralis minor': 'Lower Trapezius / Serratus Anterior',
+  'rectus femoris': 'Gluteus Maximus / Hamstrings',
+  'iliopsoas': 'Gluteus Maximus',
+  'psoas': 'Gluteus Maximus',
+  'hip flexor': 'Gluteus Maximus',
+  'hip flexors': 'Gluteus Maximus',
+  'erector spinae': 'Transversus Abdominis / Rectus Abdominis',
+  'gastrocnemius': 'Tibialis Anterior',
+  'gastroc': 'Tibialis Anterior',
+  'soleus': 'Tibialis Anterior',
+  'tfl': 'Gluteus Medius (posterior fibers)',
+  'tensor fasciae latae': 'Gluteus Medius (posterior fibers)',
+  'sternocleidomastoid': 'Deep Cervical Flexors',
+  'scm': 'Deep Cervical Flexors',
+  'scalene': 'Deep Cervical Flexors',
+  'subscapularis': 'Infraspinatus / Teres Minor',
+  'infraspinatus': 'Subscapularis / Pectoralis Major',
+  'biceps': 'Triceps',
+  'triceps': 'Biceps',
+  'quadriceps': 'Hamstrings',
+  'hamstrings': 'Quadriceps',
+  'adductors': 'Gluteus Medius',
+  'adductor': 'Gluteus Medius',
+  'piriformis': 'Gluteus Medius (internal rotation component)',
+  'vastus lateralis': 'Vastus Medialis (VMO)',
+  'it band': 'Gluteus Medius',
+  'anterior deltoid': 'Posterior Deltoid',
+  'posterior deltoid': 'Anterior Deltoid',
+  'latissimus dorsi': 'Anterior Deltoid / Pectoralis Major',
+  'gluteus maximus': 'Iliopsoas / Rectus Femoris',
+  'gluteus medius': 'Adductors',
+  'tibialis anterior': 'Gastrocnemius / Soleus',
+  'tibialis posterior': 'Peroneals (Fibularis)',
+  'peroneals': 'Tibialis Posterior',
+};
+
+function resolveAntagonist(muscleName: string): string {
+  const lower = muscleName.toLowerCase().replace(/^[lr] /, '');
+  for (const [key, value] of Object.entries(ANTAGONIST_PAIRS)) {
+    if (lower.includes(key) || key.includes(lower)) return value;
+  }
+  return '';
+}
+
+function extractWeakMusclesFromPattern(card: CompensationCard): string[] {
+  const weakKeywords: Record<string, string[]> = {
+    upper_cross_syndrome: ['Deep Neck Flexors', 'Lower Trapezius'],
+    lower_cross_syndrome: ['Gluteus Maximus', 'Abdominals', 'Transversus Abdominis'],
+    pronation_distortion: ['Gluteus Medius', 'Tibialis Posterior'],
+    posterior_chain_weakness: ['Gluteus Maximus', 'Hamstrings'],
+    anterior_dominance: ['Rhomboids', 'Lower Trapezius', 'Infraspinatus', 'Gluteus Maximus'],
+  };
+  const lower = card.title.toLowerCase();
+  for (const [key, muscles] of Object.entries(weakKeywords)) {
+    const normalizedKey = key.replace(/_/g, ' ');
+    if (lower.includes(normalizedKey) || lower.includes(key.replace(/_/g, ''))) return muscles;
+  }
+  const primaryLower = card.primaryDysfunction.toLowerCase();
+  if (primaryLower.includes('inhibit') || primaryLower.includes('weak')) {
+    const match = card.primaryDysfunction.match(/(?:inhibited?|weak)\s+(.+?)(?:\s*[—–-]|$)/i);
+    if (match) return [match[1].trim()];
+  }
+  return [];
+}
+
 const REGION_AUGMENTATION: Record<string, MechTreatmentTechnique[]> = {
   lumbar: [
     { name: 'McGill Big 3 stabilization', type: 'exercise', dosage: 'Curl-up, side bridge, bird-dog — 3 × 8-10s holds', rationale: 'Build endurance in stabilizers without excessive spinal load', evidenceGrade: 'A' },
@@ -189,7 +261,26 @@ function resolveRegion(structure: string): string | null {
 function getTreatmentsForStep(step: CausalChainStep): { action: string; techniques: MechTreatmentTechnique[] } {
   const status = inferClinicalStatus(step);
   const action = getActionLabel(status);
-  const techniques = pickTechniquesForStatus(status, 3);
+  const baseTechniques = pickTechniquesForStatus(status, 3);
+  const structureName = step.structure;
+  const antagonist = resolveAntagonist(structureName);
+
+  const techniques: MechTreatmentTechnique[] = baseTechniques.map(t => {
+    const isReciprocal = t.name.toLowerCase().includes('reciprocal inhibition');
+    if (isReciprocal && antagonist) {
+      return {
+        ...t,
+        name: `${t.name} — activate ${antagonist} to inhibit ${structureName}`,
+        rationale: `${action} ${structureName}: activate ${antagonist} via reciprocal inhibition to reflexively inhibit overactive ${structureName}`,
+      };
+    }
+    const actionVerb = status === 'overactive' || status === 'shortened' || status === 'spasm' ? 'release' : status === 'inhibited' || status === 'weak' ? 'activate' : 'treat';
+    return {
+      ...t,
+      name: `${t.name} — ${actionVerb} ${structureName}`,
+      rationale: `${action} ${structureName}: ${t.rationale}`,
+    };
+  });
 
   const region = resolveRegion(step.structure);
   if (region && REGION_AUGMENTATION[region]) {
@@ -235,25 +326,46 @@ function buildCompensationTechniques(card: CompensationCard): MechTreatmentTechn
   const releaseTechniques = pickTechniquesForStatus('overactive', 2);
   const strengthenTechniques = pickTechniquesForStatus('inhibited', 2);
 
-  const compensatorName = card.title || 'compensating muscles';
-  const primaryName = card.primaryDysfunction || 'primary movers';
+  const specificCompensators = card.compensatingStructures.length > 0
+    ? card.compensatingStructures.slice(0, 4)
+    : [card.title || 'compensating muscles'];
+  const compensatorLabel = specificCompensators.join(', ');
+
+  const weakMuscles = extractWeakMusclesFromPattern(card);
+  const activateLabel = weakMuscles.length > 0
+    ? weakMuscles.slice(0, 3).join(', ')
+    : card.primaryDysfunction || 'primary movers';
 
   const tagged: MechTreatmentTechnique[] = [
-    ...releaseTechniques.map(t => ({
-      ...t,
-      name: `${t.name} — release ${compensatorName}`,
-      rationale: `Release/inhibit compensatory overactivity in ${compensatorName}: ${t.rationale}`,
-    })),
+    ...releaseTechniques.map(t => {
+      const isReciprocal = t.name.toLowerCase().includes('reciprocal inhibition');
+      if (isReciprocal) {
+        const firstComp = specificCompensators[0];
+        const antagonist = resolveAntagonist(firstComp);
+        if (antagonist) {
+          return {
+            ...t,
+            name: `${t.name} — activate ${antagonist} to inhibit ${compensatorLabel}`,
+            rationale: `Inhibit overactive ${compensatorLabel}: activate ${antagonist} via reciprocal inhibition to reflexively reduce tone in ${compensatorLabel}`,
+          };
+        }
+      }
+      return {
+        ...t,
+        name: `${t.name} — release ${compensatorLabel}`,
+        rationale: `Release/inhibit compensatory overactivity in ${compensatorLabel}: ${t.rationale}`,
+      };
+    }),
     ...strengthenTechniques.map(t => ({
       ...t,
-      name: `${t.name} — activate ${primaryName}`,
-      rationale: `Strengthen/activate dysfunctional ${primaryName}: ${t.rationale}`,
+      name: `${t.name} — activate ${activateLabel}`,
+      rationale: `Strengthen/activate inhibited ${activateLabel}: ${t.rationale}`,
     })),
     {
-      name: 'Movement pattern retraining',
+      name: `Movement pattern retraining — ${compensatorLabel} → ${activateLabel}`,
       type: 'exercise',
       dosage: '10-15 reps with external cueing and mirror feedback',
-      rationale: 'Retrain motor control to use correct muscle synergies rather than compensatory patterns',
+      rationale: `Retrain motor control: reduce reliance on ${compensatorLabel} and restore activation of ${activateLabel}`,
       evidenceGrade: 'B',
     },
   ];
@@ -331,8 +443,9 @@ const DEFAULT_JOINT_MOBILIZATION: MechTreatmentTechnique = {
 function buildOverloadTechniques(joint: LoadRedistribution): MechTreatmentTechnique[] {
   const spasmRelief = pickTechniquesForStatus('spasm', 1);
   const strengthening = pickTechniquesForStatus('weak', 1);
+  const jointName = joint.joint;
 
-  const region = resolveRegion(joint.joint);
+  const region = resolveRegion(jointName);
   const mobilization = (region && JOINT_MOBILIZATION_BY_REGION[region])
     ? JOINT_MOBILIZATION_BY_REGION[region]
     : DEFAULT_JOINT_MOBILIZATION;
@@ -340,21 +453,24 @@ function buildOverloadTechniques(joint: LoadRedistribution): MechTreatmentTechni
   return [
     {
       ...mobilization,
-      rationale: `Mobilize overloaded ${joint.joint}: ${mobilization.rationale}`,
+      name: `${mobilization.name} — ${jointName}`,
+      rationale: `Mobilize overloaded ${jointName}: ${mobilization.rationale}`,
     },
     ...spasmRelief.map(t => ({
       ...t,
-      rationale: `Reduce protective guarding around overloaded ${joint.joint}: ${t.rationale}`,
+      name: `${t.name} — ${jointName} periarticular muscles`,
+      rationale: `Reduce protective guarding around overloaded ${jointName}: ${t.rationale}`,
     })),
     ...strengthening.map(t => ({
       ...t,
-      rationale: `Build load tolerance at ${joint.joint}: ${t.rationale}`,
+      name: `${t.name} — ${jointName} stabilizers`,
+      rationale: `Build load tolerance at ${jointName}: ${t.rationale}`,
     })),
     {
-      name: 'Load management / activity modification',
+      name: `Load management — ${jointName}`,
       type: 'exercise' as const,
       dosage: 'Reduce aggravating loads by 30-50% for 2-4 weeks',
-      rationale: 'Allow tissue recovery by reducing demand below injury threshold',
+      rationale: `Allow tissue recovery at ${jointName} by reducing demand below injury threshold`,
       evidenceGrade: 'A' as EvidenceGrade,
     },
   ];
@@ -440,7 +556,12 @@ export function generateMechanismTreatments(analysis: InjuryMechanismResult): Me
     seen.add(key);
 
     const chainType = resolveChainType(kcd.chainLabel);
-    const chainTx = CHAIN_TREATMENTS[chainType] || CHAIN_TREATMENTS.posterior;
+    const baseChainTx = CHAIN_TREATMENTS[chainType] || CHAIN_TREATMENTS.posterior;
+    const chainTx = baseChainTx.map(t => ({
+      ...t,
+      name: `${t.name} — ${kcd.chainLabel} chain`,
+      rationale: `${kcd.chainLabel} chain dysfunction (${kcd.dysfunction}): ${t.rationale}`,
+    }));
 
     targets.push({
       id: `mech_${++idCounter}`,

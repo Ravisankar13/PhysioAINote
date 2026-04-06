@@ -99,7 +99,7 @@ import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab"
 import type { TreatmentPlanResult } from "@/components/skeleton/PlanTab";
 import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
 import ExtractionResultsPanel from "@/components/skeleton/ExtractionResultsPanel";
-import type { ClinicalExtractionResult, PainMarkerSummary, UnifiedIntakeData } from "@shared/clinicalIntakeTypes";
+import type { ClinicalExtractionResult } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
@@ -588,7 +588,6 @@ export default function PhysioGPT() {
   const [treatmentPlanLoading, setTreatmentPlanLoading] = useState(false);
   const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
   const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
-  const intakePayloadBuilderRef = useRef<(() => UnifiedIntakeData) | null>(null);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -9484,7 +9483,6 @@ ${ddxList}`;
               setExtractionResult(updated);
             }}
             buildIntakePayload={() => {
-              if (intakePayloadBuilderRef.current) return intakePayloadBuilderRef.current();
               return { sources: [], manualForm: null, freeText: "", voiceTranscription: "", painMarkers: [], mechanismOfInjury: "", patientAge: null, patientSex: "", relevantHistory: "" };
             }}
           />

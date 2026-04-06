@@ -7429,6 +7429,14 @@ COMBINED/ADVANCED:
 - Blood Flow Restriction (BFR): cuff width, limb occlusion pressure (%), exercise protocol, sets/reps, duration
 - Cryoneurolysis: target nerve, temperature, probe specifications, treatment duration
 
+TAPING & BRACING:
+- Rigid/Athletic Taping: tape type (zinc oxide/rigid sports tape), width (25mm/38mm/50mm), anchors and lock strips, direction of pull, number of layers, skin prep (underwrap/adhesive spray), wear time, taping technique (e.g. closed basket weave for ankle, figure-of-8 for wrist)
+- Kinesiology Taping (Kinesio Tex / RockTape / K-Tape): tape brand/type, cut shape (I/Y/X/fan/web), application direction (origin-to-insertion for facilitation / insertion-to-origin for inhibition), stretch percentage (0-75% paper-off tension), body position during application, wear time (typically 3-5 days), skin prep
+- Dynamic Tape: tape type (Dynamic Tape Beige/Black/ECO), application technique (multi-directional biomechanical), degree of resistance, body position, functional movement targeted, wear time
+- McConnell Taping: target joint (typically patellofemoral), tape type (rigid Endura Fix + Fixomull), glide direction (medial/lateral/superior/inferior tilt/rotation), reassessment asterisk sign, wear time, skin care
+- Mulligan Taping (Mobilisation with Movement Tape): joint targeted, direction of sustained glide replicated, tape type (rigid or elastic), number of strips, patient position during application, functional reassessment movement
+- Elastic Therapeutic Taping (Leukotape / Cover-Roll): tape type and width, correction technique (mechanical/functional/fascial/space/lymphatic), tension applied, layering with hypoallergenic base, wear time
+
 CLINICAL REASONING RULES:
 1. Be SPECIFIC with modality parameters — e.g. "TENS: conventional mode, 80-120Hz, 60-200μs pulse width, sensory-level intensity, 30 min" NOT just "TENS"
 2. Consider tissue irritability — use lower-intensity/pulsed modes for acute/irritable presentations

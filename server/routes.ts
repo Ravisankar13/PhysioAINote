@@ -7450,7 +7450,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const electroResponseSchema = z.object({
         modalityGroups: z.array(z.object({
           groupId: z.string(),
-          goalTitle: z.string(),
+          goalTitle: z.enum(['Pain Modulation', 'Tissue Healing & Repair', 'Muscle Activation & Facilitation', 'Joint Mobility & Traction', 'Myofascial Release & Trigger Points']).or(z.string()),
           goalDescription: z.string(),
           priority: z.number(),
           modalities: z.array(z.object({

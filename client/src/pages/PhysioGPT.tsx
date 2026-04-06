@@ -7645,8 +7645,102 @@ ${ddxList}`;
                   setClinicalHighlights([]);
                   setScarMarkers([]);
                   setAdhesionBands([]);
+
+                  setClinicalReasoningData(null);
+                  setStructuredReasoningData(null);
+                  setTreatmentDecisionData(null);
+                  setTreatmentPlanData(null);
+                  setEvidenceEngineResult(null);
+                  setExtractionResult(null);
+                  setClinicalBubbleResults({});
+
+                  setPreviousBiomechanicsOutput(null);
+                  setCachedBiomechanicsOutput(null);
+                  setPosturalMetrics(null);
+                  setFocusedCameraResult(null);
+                  setUnifiedBiomechanicsMovementTask(undefined);
+                  setUnifiedBiomechanicsProgress(0.5);
+                  setUnifiedBiomechanicsFaultOverrides([]);
+
+                  setWhatIfScenarios([]);
+                  setWhatIfComparisonBScenarios([]);
+                  setShowInjuryMechanism(false);
+                  setMechanismActiveTab('mechanism');
+                  setMechanismBoneIds([]);
+
+                  setCorrelationMode(false);
+                  setExpandedCorrelation(null);
+                  setCorrelationTab('overview');
+                  setSelectedSlingId(null);
+                  setSlingOverlayVisible(true);
+
+                  setShowPainIntelligence(false);
+                  setDermatomeHighlightBones([]);
+                  setNerveRootLabels([]);
+                  setReferralZoneBones([]);
+                  setTissueViewMode(null);
+                  setSelectedTissueEntry(null);
+                  setTissueDisambiguationEntries([]);
+
+                  setConnectionHighlights([]);
+                  setTestChainActive(null);
+                  setShowRiskDashboard(false);
+                  setShowShoulderAssessment(false);
+
+                  setRomMeasurements([]);
+                  setRomValues({});
+                  setSelectedRomJoint(null);
+
+                  setVoiceFindings([]);
+                  setVoiceTranscript('');
+                  setSubjectiveHistoryInput('');
+
+                  setForceAiSuggestions(null);
+                  setActiveBiomechanicalLink(null);
+                  setBiomechanicalMuscleHighlights([]);
+                  setMuscleHighlightColors({});
+                  setVisualizationBoneHighlights([]);
+                  setActiveVisualizationId(null);
+
+                  setSelectedRegion(null);
+                  setZoomToRegion(null);
+                  setSelectedChainId(null);
+                  setManualChainTensions({});
+                  setSelectedChainNode(null);
+
+                  setAnimationState({ isPlaying: false, currentMovement: null, progress: 0, speed: 1 });
+                  setAnimationConstraints([]);
+
+                  setPainMarkerMode(false);
+                  setForceMode(false);
+                  setMuscleMode(false);
+                  setRomMode(false);
+                  setPoseMode(false);
+                  setZoomToolMode(false);
+                  setScarPlacementMode(null);
+                  setAdhesionPlacementStep('idle');
+                  setPendingAdhesionStart(null);
+
                   clinicalTextAppliedRef.current = null;
-                  toast({ title: "Skeleton Reset", description: "All joints, pain markers, muscle states, and clinical findings cleared." });
+                  lastReasoningTriggerRef.current = '';
+                  slingAnalysisRef.current = null;
+                  compensationDataRef.current = { result: null, movementName: null, restrictions: {} };
+                  voiceTranscriptRef.current = '';
+                  subjectiveHistoryRef.current = '';
+                  if (clinicalReasoningTimerRef.current) {
+                    clearTimeout(clinicalReasoningTimerRef.current);
+                    clinicalReasoningTimerRef.current = null;
+                  }
+                  if (autoEvidenceTimerRef.current) {
+                    clearTimeout(autoEvidenceTimerRef.current);
+                    autoEvidenceTimerRef.current = null;
+                  }
+                  if (evidenceAbortRef.current) {
+                    evidenceAbortRef.current.abort();
+                    evidenceAbortRef.current = null;
+                  }
+
+                  toast({ title: "Skeleton Reset", description: "All joints, markers, analysis results, and clinical findings cleared." });
                 }}
               >
                 <Bone className="h-3 w-3 mr-1" />

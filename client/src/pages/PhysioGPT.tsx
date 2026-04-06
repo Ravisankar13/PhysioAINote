@@ -72,7 +72,8 @@ import {
   Pill,
   Microscope,
   Link2,
-  FlaskConical
+  FlaskConical,
+  GraduationCap
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -129,6 +130,7 @@ import InjuryMechanismPanel from "@/components/skeleton/InjuryMechanismPanel";
 import ExerciseEngineTab from "@/components/skeleton/ExerciseEngineTab";
 import ManualTherapyEngineTab from "@/components/skeleton/ManualTherapyEngineTab";
 import ElectrophysicalEngineTab from "@/components/skeleton/ElectrophysicalEngineTab";
+import PatientEducationEngineTab from "@/components/skeleton/PatientEducationEngineTab";
 import UnifiedBiomechanicsPanel from "@/components/skeleton/UnifiedBiomechanicsPanel";
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
@@ -497,7 +499,7 @@ export default function PhysioGPT() {
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
-  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx'>('mechanism');
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd'>('mechanism');
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
@@ -8062,6 +8064,13 @@ ${ddxList}`;
                       <Zap className="h-3 w-3" />
                       Electro Rx
                     </button>
+                    <button
+                      onClick={() => setMechanismActiveTab('patientEd')}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'patientEd' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                    >
+                      <GraduationCap className="h-3 w-3" />
+                      Patient Ed
+                    </button>
                   </div>
                   {mechanismActiveTab === 'mechanism' && (
                     <InjuryMechanismPanel
@@ -8135,6 +8144,17 @@ ${ddxList}`;
                   )}
                   {mechanismActiveTab === 'electroRx' && (
                     <ElectrophysicalEngineTab
+                      mechanismAnalysis={mechanismAnalysisResult}
+                      slingAnalysis={slingAnalysis}
+                      painMarkers={painMarkers.map(pm => ({
+                        label: pm.anatomicalLabel || pm.nearestBone,
+                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        type: pm.type,
+                      }))}
+                    />
+                  )}
+                  {mechanismActiveTab === 'patientEd' && (
+                    <PatientEducationEngineTab
                       mechanismAnalysis={mechanismAnalysisResult}
                       slingAnalysis={slingAnalysis}
                       painMarkers={painMarkers.map(pm => ({

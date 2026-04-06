@@ -7569,6 +7569,309 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  app.post("/api/patient-education-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const eduInputSchema = z.object({
+        mechanismSummary: z.string().optional().default(""),
+        causalChains: z.array(z.array(z.object({
+          step: z.number(),
+          structure: z.string(),
+          finding: z.string(),
+          mechanism: z.string().optional(),
+          category: z.string().optional(),
+          severity: z.string().optional(),
+        }))).optional().default([]),
+        compensationCards: z.array(z.object({
+          title: z.string(),
+          description: z.string().optional(),
+          severity: z.string().optional(),
+          primaryRegion: z.string().optional(),
+          compensatingRegion: z.string().optional(),
+        })).optional().default([]),
+        loadRedistribution: z.array(z.object({
+          joint: z.string(),
+          change: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+        slingData: z.object({
+          systemSummary: z.string().optional(),
+          overallForceTransferScore: z.number().optional(),
+          slings: z.array(z.object({
+            label: z.string(),
+            status: z.string(),
+            activationScore: z.number(),
+            forceTransferQuality: z.string(),
+            weakLinks: z.array(z.object({
+              muscle: z.string(),
+              activationPct: z.number(),
+              reason: z.string(),
+            })).optional().default([]),
+            treatmentTargets: z.array(z.object({
+              muscle: z.string(),
+              intervention: z.string(),
+              rationale: z.string(),
+            })).optional().default([]),
+            narrative: z.string().optional(),
+          })).optional().default([]),
+        }).optional(),
+        painMarkers: z.array(z.object({
+          label: z.string(),
+          severity: z.number().optional(),
+          type: z.string().optional(),
+        })).optional().default([]),
+        topContributors: z.array(z.string()).optional().default([]),
+        kineticChainDysfunctions: z.array(z.object({
+          chain: z.string().optional(),
+          dysfunction: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+      });
+
+      const parsed = eduInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const causalChainText = data.causalChains.length > 0
+        ? data.causalChains.map((chain, i) =>
+            `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
+          ).join('\n')
+        : 'None identified';
+
+      const compensationText = data.compensationCards.length > 0
+        ? data.compensationCards.map(c =>
+            `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
+          ).join('\n')
+        : 'None identified';
+
+      const loadText = data.loadRedistribution.length > 0
+        ? data.loadRedistribution.map(l =>
+            `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const slingText = data.slingData?.slings && data.slingData.slings.length > 0
+        ? data.slingData.slings.map(s => {
+            const weakLinkStr = s.weakLinks.length > 0
+              ? ` | Weak links: ${s.weakLinks.map(w => `${w.muscle} (${w.activationPct}%)`).join(', ')}`
+              : '';
+            return `- ${s.label}: status=${s.status}, activation=${s.activationScore}%, forceTransfer=${s.forceTransferQuality}${weakLinkStr}`;
+          }).join('\n')
+        : 'No sling data';
+
+      const painText = data.painMarkers.length > 0
+        ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
+        : 'None';
+
+      const contributorsText = data.topContributors.length > 0
+        ? data.topContributors.join(', ')
+        : 'None identified';
+
+      const kineticText = data.kineticChainDysfunctions.length > 0
+        ? data.kineticChainDysfunctions.map(k =>
+            `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const systemPrompt = `You are an expert musculoskeletal physiotherapist specializing in patient education as a clinical intervention. You understand pain neuroscience education, biopsychosocial approaches, motivational interviewing, health literacy principles, and evidence-based self-management strategies.
+
+You are given detailed biomechanical analysis data from a clinical assessment. Your task is to generate comprehensive, structured patient education content that the therapist can use during sessions or provide as take-home material. The language must be PATIENT-FRIENDLY — no clinical jargon unless explained simply.
+
+Generate education across ALL 14 categories below. Each category MUST be included in the response:
+
+EDUCATION CATEGORIES:
+
+1. CONDITION EXPLANATION
+- Plain-language explanation of what is happening in the body
+- Why it hurts, what structures are involved, what caused it
+- Use simple analogies (e.g., "think of the tendon like a rope that's been frayed")
+- Avoid fear-inducing language — normalize the condition
+
+2. ACTIVITY MODIFICATION
+- Specific modifications for daily activities (work, household, driving, sleeping)
+- "Do this instead of that" practical guidance
+- Sport/hobby-specific modifications if applicable
+- Workspace and ergonomic adjustments
+
+3. LOAD MANAGEMENT
+- Traffic light system: GREEN (safe to do), AMBER (do with modifications), RED (avoid for now)
+- List 4-6 specific activities in each category relevant to the condition
+- Progression criteria for moving activities from red → amber → green
+- Explain the concept of "dosing" activity
+
+4. SELF-MANAGEMENT STRATEGIES
+- Ice vs heat guidance specific to the condition and stage
+- Self-massage or foam rolling techniques
+- Breathing exercises for pain management
+- Sleep position recommendations
+- Relaxation techniques relevant to musculoskeletal recovery
+
+5. RED FLAGS & WHEN TO SEEK HELP
+- 3-5 clear warning signs that need urgent medical attention
+- Written to be memorable and actionable without causing anxiety
+- Include timeframes (e.g., "if X persists for more than Y days")
+- Differentiate between "normal recovery discomfort" and "concerning symptoms"
+
+6. RECOVERY TIMELINE & EXPECTATIONS
+- Realistic healing timeframes broken into phases (e.g., weeks 1-2, weeks 3-6, weeks 6-12)
+- What progress looks like at each stage
+- Common setbacks and how to handle them
+- When to expect meaningful improvement
+- Reassurance about non-linear recovery
+
+7. MYTHS & MISCONCEPTIONS
+- 3-5 common myths about the condition
+- Each myth paired with the evidence-based truth
+- Address fear-avoidance beliefs specific to the condition
+- Common unhelpful phrases patients hear from others
+
+8. PAIN NEUROSCIENCE EDUCATION (PNE)
+- How pain works in the nervous system — simplified
+- Why pain doesn't always equal tissue damage
+- How the brain can amplify or reduce pain signals
+- Central sensitization explained in patient-friendly terms
+- Why understanding pain science helps recovery
+
+9. ERGONOMIC & POSTURAL GUIDANCE
+- Specific workspace setup (desk, chair, monitor, keyboard positions)
+- Driving position adjustments
+- Phone/tablet posture
+- Lifting technique relevant to the condition
+- Standing vs sitting habits and alternating strategies
+
+10. FLARE-UP MANAGEMENT PLAN
+- Step-by-step action plan for when symptoms suddenly worsen
+- What to do in the first hour, first day, first 3 days
+- Safe movement options during a flare-up
+- When a flare-up warrants contacting the therapist
+- Reassurance: "a flare-up does not mean you've re-injured yourself"
+
+11. MOVEMENT & EXERCISE RATIONALE
+- Explain WHY each type of exercise helps (strengthening, stretching, aerobic)
+- Connect exercises to the healing process
+- Address common patient fears about movement and exercise
+- Explain progressive loading and why "some discomfort" during exercise can be normal
+- Adherence tips and motivation strategies
+
+12. PSYCHOSOCIAL FACTORS & COPING
+- Address fear-avoidance behavior and catastrophizing tenderly
+- The stress-pain connection and how stress amplifies symptoms
+- Sleep-mood-pain cycle and practical tips
+- Graded exposure concepts for feared movements
+- When to consider psychological support (normalize it)
+
+13. RETURN-TO-SPORT / RETURN-TO-WORK CRITERIA
+- Clear, objective milestones before returning to full activity
+- Graduated return protocol (e.g., 25% → 50% → 75% → 100%)
+- Sport-specific or occupation-specific criteria
+- Warning signs of returning too early
+- How to communicate with employer/coach about graduated return
+
+14. NUTRITION & LIFESTYLE FACTORS
+- Anti-inflammatory nutrition basics (no extreme diets)
+- Protein intake for tissue repair
+- Hydration and its role in tissue health
+- Sleep quality and its impact on healing
+- Alcohol and smoking impact on musculoskeletal recovery
+- Stress management as a lifestyle factor
+
+RESPONSE FORMAT — return valid JSON with this exact structure:
+{
+  "educationCategories": [
+    {
+      "categoryId": "string — unique ID (e.g. 'condition-explanation', 'activity-modification')",
+      "categoryTitle": "string — one of the 14 category titles above",
+      "content": "string — the main educational content for this category, written in patient-friendly language as if speaking directly to the patient. Use 'you/your' language.",
+      "keyPoints": ["string — 3-5 key takeaway bullet points the patient should remember"],
+      "analogy": "string — a relatable analogy or metaphor to help the patient understand (optional but encouraged)"
+    }
+  ],
+  "overallSummary": "string — a 2-3 sentence summary of the key messages across all education categories, suitable as an opening statement to the patient",
+  "communicationTips": "string — tips for the therapist on how to deliver this education effectively (motivational interviewing cues, health literacy considerations, cultural sensitivity)"
+}`;
+
+      const userPrompt = `CLINICAL ASSESSMENT DATA:
+
+OVERALL MECHANISM SUMMARY:
+${data.mechanismSummary || 'Not available'}
+
+CAUSAL CHAINS (root cause → symptom):
+${causalChainText}
+
+TOP CONTRIBUTORS:
+${contributorsText}
+
+COMPENSATION PATTERNS:
+${compensationText}
+
+LOAD REDISTRIBUTION:
+${loadText}
+
+KINETIC CHAIN DYSFUNCTIONS:
+${kineticText}
+
+SLING SYSTEM ANALYSIS:
+Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/A'}%
+System summary: ${data.slingData?.systemSummary || 'Not available'}
+${slingText}
+
+PAIN MARKERS:
+${painText}
+
+Based on this clinical data, generate comprehensive patient education content across ALL 14 categories. The content should be specific to this patient's presentation — not generic advice. Use the biomechanical findings to explain the condition and guide activity modification, load management, and recovery expectations.`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 8000,
+        temperature: 0.4,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const eduResponseSchema = z.object({
+        educationCategories: z.array(z.object({
+          categoryId: z.string(),
+          categoryTitle: z.string(),
+          content: z.string().min(1),
+          keyPoints: z.array(z.string()).min(1),
+          analogy: z.string().optional().default(''),
+        })).min(1),
+        overallSummary: z.string().default(''),
+        communicationTips: z.string().default(''),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = eduResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Patient education engine response validation failed:", validated.error.format());
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          validationErrors: validated.error.format(),
+        });
+      }
+      res.json(validated.data);
+    } catch (error: unknown) {
+      console.error("Patient education engine generation error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate patient education", details: message });
+    }
+  });
+
   app.post("/api/clinical-notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { reasoningData, subjectiveHistory } = req.body;

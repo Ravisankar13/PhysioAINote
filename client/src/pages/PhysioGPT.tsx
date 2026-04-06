@@ -72,8 +72,7 @@ import {
   Pill,
   Microscope,
   Link2,
-  FlaskConical,
-  ClipboardList
+  FlaskConical
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -99,7 +98,6 @@ import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypoth
 import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab";
 import type { TreatmentPlanResult } from "@/components/skeleton/PlanTab";
 import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
-import CaseIntakePanel from "@/components/skeleton/CaseIntakePanel";
 import ExtractionResultsPanel from "@/components/skeleton/ExtractionResultsPanel";
 import type { ClinicalExtractionResult, PainMarkerSummary, UnifiedIntakeData } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
@@ -591,7 +589,6 @@ export default function PhysioGPT() {
   const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
   const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
   const intakePayloadBuilderRef = useRef<(() => UnifiedIntakeData) | null>(null);
-  const [caseIntakeOpen, setCaseIntakeOpen] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -9430,13 +9427,6 @@ ${ddxList}`;
             {cameraMode ? <CameraOff className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
             {cameraMode ? 'Stop Camera' : 'Camera'}
           </button>
-          <button
-            onClick={() => setCaseIntakeOpen(!caseIntakeOpen)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${caseIntakeOpen ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-black/70 hover:bg-black/80 text-white'}`}
-          >
-            <ClipboardList className="h-3.5 w-3.5" />
-            {caseIntakeOpen ? 'Hide Intake' : 'Case Intake'}
-          </button>
           {extractionResult && (
             <button
               onClick={() => setExtractionResultsOpen(!extractionResultsOpen)}
@@ -9484,33 +9474,9 @@ ${ddxList}`;
         />
       </div>
 
-      {caseIntakeOpen && (
-        <div className="absolute top-14 right-[420px] z-30 w-[380px] max-h-[calc(100vh-80px)] overflow-y-auto">
-          <CaseIntakePanel
-            painMarkers={painMarkers.map(pm => ({
-              id: pm.id,
-              region: pm.anatomicalLabel || pm.nearestBone,
-              side: (pm.position.x < -0.05 ? "left" : pm.position.x > 0.05 ? "right" : "central") as "left" | "right" | "bilateral" | "central",
-              type: pm.type,
-              severity: pm.severity ?? 5,
-              description: pm.description,
-              subjectiveHistory: pm.subjectiveHistory,
-            }))}
-            existingSubjectiveHistory={subjectiveHistoryRef.current}
-            existingVoiceTranscription={voiceTranscriptRef.current}
-            onExtractionComplete={(result) => {
-              setExtractionResult(result);
-              setExtractionResultsOpen(true);
-            }}
-            onBuildPayload={(builder) => {
-              intakePayloadBuilderRef.current = builder;
-            }}
-          />
-        </div>
-      )}
 
       {extractionResultsOpen && extractionResult && (
-        <div className="absolute top-14 z-[31] w-[400px] max-h-[calc(100vh-80px)]" style={{ right: caseIntakeOpen ? '810px' : '420px' }}>
+        <div className="absolute top-14 z-[31] w-[400px] max-h-[calc(100vh-80px)]" style={{ right: '420px' }}>
           <ExtractionResultsPanel
             result={extractionResult}
             onClose={() => setExtractionResultsOpen(false)}

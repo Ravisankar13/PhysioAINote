@@ -6753,6 +6753,219 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/exercise-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+
+      const exerciseInputSchema = z.object({
+        mechanismSummary: z.string().optional().default(""),
+        causalChains: z.array(z.array(z.object({
+          step: z.number(),
+          structure: z.string(),
+          finding: z.string(),
+          mechanism: z.string().optional(),
+          category: z.string().optional(),
+          severity: z.string().optional(),
+        }))).optional().default([]),
+        compensationCards: z.array(z.object({
+          title: z.string(),
+          description: z.string().optional(),
+          severity: z.string().optional(),
+          primaryRegion: z.string().optional(),
+          compensatingRegion: z.string().optional(),
+        })).optional().default([]),
+        loadRedistribution: z.array(z.object({
+          joint: z.string(),
+          change: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+        slingData: z.object({
+          systemSummary: z.string().optional(),
+          overallForceTransferScore: z.number().optional(),
+          slings: z.array(z.object({
+            label: z.string(),
+            status: z.string(),
+            activationScore: z.number(),
+            forceTransferQuality: z.string(),
+            weakLinks: z.array(z.object({
+              muscle: z.string(),
+              activationPct: z.number(),
+              reason: z.string(),
+            })).optional().default([]),
+            treatmentTargets: z.array(z.object({
+              muscle: z.string(),
+              intervention: z.string(),
+              rationale: z.string(),
+            })).optional().default([]),
+            narrative: z.string().optional(),
+          })).optional().default([]),
+        }).optional(),
+        painMarkers: z.array(z.object({
+          label: z.string(),
+          severity: z.number().optional(),
+          type: z.string().optional(),
+        })).optional().default([]),
+        topContributors: z.array(z.string()).optional().default([]),
+        kineticChainDysfunctions: z.array(z.object({
+          chain: z.string().optional(),
+          dysfunction: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+      });
+
+      const parsed = exerciseInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const causalChainText = data.causalChains.length > 0
+        ? data.causalChains.map((chain, i) =>
+            `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
+          ).join('\n')
+        : 'None identified';
+
+      const compensationText = data.compensationCards.length > 0
+        ? data.compensationCards.map(c =>
+            `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
+          ).join('\n')
+        : 'None identified';
+
+      const loadText = data.loadRedistribution.length > 0
+        ? data.loadRedistribution.map(l =>
+            `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const slingText = data.slingData?.slings && data.slingData.slings.length > 0
+        ? data.slingData.slings.map(s => {
+            const weakLinkStr = s.weakLinks.length > 0
+              ? ` | Weak links: ${s.weakLinks.map(w => `${w.muscle} (${w.activationPct}%)`).join(', ')}`
+              : '';
+            const targetStr = s.treatmentTargets.length > 0
+              ? ` | Targets: ${s.treatmentTargets.map(t => `${t.intervention} ${t.muscle}`).join(', ')}`
+              : '';
+            return `- ${s.label}: status=${s.status}, activation=${s.activationScore}%, forceTransfer=${s.forceTransferQuality}${weakLinkStr}${targetStr}`;
+          }).join('\n')
+        : 'No sling data';
+
+      const painText = data.painMarkers.length > 0
+        ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
+        : 'None';
+
+      const contributorsText = data.topContributors.length > 0
+        ? data.topContributors.join(', ')
+        : 'None identified';
+
+      const kineticText = data.kineticChainDysfunctions.length > 0
+        ? data.kineticChainDysfunctions.map(k =>
+            `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const systemPrompt = `You are an expert musculoskeletal physiotherapist and exercise prescription specialist. You are given detailed biomechanical analysis data from a clinical assessment including injury mechanism analysis, sling system analysis, compensation patterns, force redistribution, and pain markers.
+
+Your task is to reason through ALL of this clinical data and generate a highly specific, prioritized exercise prescription that addresses the patient's underlying dysfunctions — not just symptoms.
+
+CLINICAL REASONING RULES:
+1. Address ROOT CAUSES first, not just symptoms
+2. Consider tissue irritability — avoid heavy loading on inflamed/acute tissues
+3. Respect the kinetic chain — address upstream/downstream contributors
+4. For sling deficits, prescribe chain-level exercises that restore force transfer across the ENTIRE sling, not just isolated muscles
+5. Consider compensation patterns — prescribe offloading exercises for overloaded structures AND activation exercises for inhibited ones
+6. Include dosage that reflects the patient's current capacity (lower loads for acute/irritable, progressive for chronic)
+7. Group exercises by clinical goal, not body part
+8. Each exercise MUST include a clear rationale linking it to a SPECIFIC finding from the data
+
+RESPONSE FORMAT — return valid JSON with this exact structure:
+{
+  "exerciseGroups": [
+    {
+      "groupId": "string",
+      "goalTitle": "string (e.g. 'Address Root Causes', 'Restore Sling Function', 'Reduce Compensatory Loading', 'Pain Management & Mobility')",
+      "goalDescription": "string explaining WHY this group matters clinically",
+      "priority": number (1 = highest),
+      "exercises": [
+        {
+          "name": "string — specific exercise name",
+          "targetStructure": "string — which muscle/joint/sling this targets",
+          "targetFinding": "string — the SPECIFIC clinical finding this addresses (e.g. 'Posterior oblique sling weak link at gluteus maximus — 28% activation')",
+          "sets": "string (e.g. '3')",
+          "reps": "string (e.g. '10-12' or '30s hold')",
+          "tempo": "string (e.g. '3-1-2-0' or 'controlled')",
+          "loadGuidance": "string — specific load guidance based on tissue status",
+          "rationale": "string — clinical reasoning for WHY this exercise was chosen over alternatives",
+          "contraindications": "string — when to avoid or modify",
+          "progression": "string — how to progress this exercise as the patient improves"
+        }
+      ]
+    }
+  ],
+  "clinicalNotes": "string — overall clinical reasoning summary, key considerations, and precautions",
+  "irritabilityConsiderations": "string — tissue irritability assessment and how it influenced prescription"
+}`;
+
+      const userPrompt = `CLINICAL ASSESSMENT DATA:
+
+OVERALL MECHANISM SUMMARY:
+${data.mechanismSummary || 'Not available'}
+
+CAUSAL CHAINS (root cause → symptom):
+${causalChainText}
+
+TOP CONTRIBUTORS:
+${contributorsText}
+
+COMPENSATION PATTERNS:
+${compensationText}
+
+LOAD REDISTRIBUTION:
+${loadText}
+
+KINETIC CHAIN DYSFUNCTIONS:
+${kineticText}
+
+SLING SYSTEM ANALYSIS:
+Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/A'}%
+System summary: ${data.slingData?.systemSummary || 'Not available'}
+${slingText}
+
+PAIN MARKERS:
+${painText}
+
+Based on this clinical data, generate a comprehensive, prioritized exercise prescription. Think through the biomechanical relationships and prescribe exercises that address the underlying dysfunction pattern, not just individual muscle weaknesses.`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 4000,
+        temperature: 0.4,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const result = JSON.parse(content);
+      res.json(result);
+    } catch (error: unknown) {
+      console.error("Exercise engine generation error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate exercise plan", details: message });
+    }
+  });
+
   app.post("/api/clinical-notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { reasoningData, subjectiveHistory } = req.body;

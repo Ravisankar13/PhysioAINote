@@ -126,6 +126,7 @@ import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
 import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
 import RiskPrognosisDashboard from "@/components/skeleton/RiskPrognosisDashboard";
 import InjuryMechanismPanel from "@/components/skeleton/InjuryMechanismPanel";
+import ExerciseEngineTab from "@/components/skeleton/ExerciseEngineTab";
 import UnifiedBiomechanicsPanel from "@/components/skeleton/UnifiedBiomechanicsPanel";
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
@@ -494,7 +495,7 @@ export default function PhysioGPT() {
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
-  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif'>('mechanism');
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise'>('mechanism');
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
@@ -8038,6 +8039,13 @@ ${ddxList}`;
                       <FlaskConical className="h-3 w-3" />
                       What-If
                     </button>
+                    <button
+                      onClick={() => setMechanismActiveTab('exercise')}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'exercise' ? 'bg-violet-500/30 text-violet-300 border border-violet-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                    >
+                      <Dumbbell className="h-3 w-3" />
+                      Exercise
+                    </button>
                   </div>
                   {mechanismActiveTab === 'mechanism' && (
                     <InjuryMechanismPanel
@@ -8084,6 +8092,17 @@ ${ddxList}`;
                         id: pm.id,
                         label: pm.anatomicalLabel || pm.nearestBone,
                         severity: (pm as Record<string, unknown>).severity as number | undefined,
+                      }))}
+                    />
+                  )}
+                  {mechanismActiveTab === 'exercise' && (
+                    <ExerciseEngineTab
+                      mechanismAnalysis={mechanismAnalysisResult}
+                      slingAnalysis={slingAnalysis}
+                      painMarkers={painMarkers.map(pm => ({
+                        label: pm.anatomicalLabel || pm.nearestBone,
+                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        type: pm.type,
                       }))}
                     />
                   )}

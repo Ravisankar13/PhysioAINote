@@ -20,6 +20,8 @@ export interface WhatIfScenario {
   magnitude: number;
   unit: string;
   color: string;
+  rationale?: string;
+  evidenceGrade?: string;
 }
 
 export interface ForceDelta {
@@ -66,6 +68,18 @@ export interface PainPredictionDelta {
   beforeLikelihood: number;
   afterLikelihood: number;
   delta: number;
+  markerId?: string;
+  markerLabel?: string;
+  addressedByScenarios: string[];
+}
+
+export interface SlingCompensationDelta {
+  compensatingSlingLabel: string;
+  mechanism: string;
+  severityBefore: string;
+  severityAfter: string;
+  loadPctBefore: number;
+  loadPctAfter: number;
 }
 
 export interface SlingDelta {
@@ -83,6 +97,7 @@ export interface SlingDelta {
   transferScoreAfter: number;
   weakLinksBefore: number;
   weakLinksAfter: number;
+  compensationDeltas: SlingCompensationDelta[];
 }
 
 export interface TimelinePoint {
@@ -747,6 +762,7 @@ export interface DecisionEngineIntervention {
   targetRegions: string[];
   dosage: string;
   evidenceGrade: string;
+  rationale?: string;
   score?: number;
 }
 
@@ -829,6 +845,8 @@ export function generateScenariosFromDecisionEngine(
       magnitude,
       unit: finalIntervention === 'mobilize' ? '°' : '%',
       color: colors[scenarios.length % colors.length],
+      rationale: intervention.rationale,
+      evidenceGrade: intervention.evidenceGrade,
     });
   }
 
@@ -1107,7 +1125,47 @@ export function computeWhatIfComparison(
       const as_ = slingAfter.slings.find(s => s.slingId === bs.slingId);
       if (as_) {
         const delta = as_.activationScore - bs.activationScore;
-        if (Math.abs(delta) > 1 || bs.status !== as_.status || bs.forceTransferQuality !== as_.forceTransferQuality) {
+
+        const compDeltas: SlingCompensationDelta[] = [];
+        for (const bc of bs.compensations) {
+          const ac = as_.compensations.find(c => c.compensatingSling === bc.compensatingSling && c.mechanism === bc.mechanism);
+          if (ac) {
+            if (bc.severity !== ac.severity || Math.abs(bc.additionalLoadPct - ac.additionalLoadPct) > 1) {
+              compDeltas.push({
+                compensatingSlingLabel: bc.compensatingSlingLabel,
+                mechanism: bc.mechanism,
+                severityBefore: bc.severity,
+                severityAfter: ac.severity,
+                loadPctBefore: bc.additionalLoadPct,
+                loadPctAfter: ac.additionalLoadPct,
+              });
+            }
+          } else {
+            compDeltas.push({
+              compensatingSlingLabel: bc.compensatingSlingLabel,
+              mechanism: bc.mechanism,
+              severityBefore: bc.severity,
+              severityAfter: 'none',
+              loadPctBefore: bc.additionalLoadPct,
+              loadPctAfter: 0,
+            });
+          }
+        }
+        for (const ac of as_.compensations) {
+          const bc = bs.compensations.find(c => c.compensatingSling === ac.compensatingSling && c.mechanism === ac.mechanism);
+          if (!bc) {
+            compDeltas.push({
+              compensatingSlingLabel: ac.compensatingSlingLabel,
+              mechanism: ac.mechanism,
+              severityBefore: 'none',
+              severityAfter: ac.severity,
+              loadPctBefore: 0,
+              loadPctAfter: ac.additionalLoadPct,
+            });
+          }
+        }
+
+        if (Math.abs(delta) > 1 || bs.status !== as_.status || bs.forceTransferQuality !== as_.forceTransferQuality || compDeltas.length > 0) {
           slingDeltas.push({
             slingId: bs.slingId,
             label: bs.label,
@@ -1123,12 +1181,71 @@ export function computeWhatIfComparison(
             transferScoreAfter: transferScoreMap(as_.forceTransferQuality),
             weakLinksBefore: bs.weakLinks.length,
             weakLinksAfter: as_.weakLinks.length,
+            compensationDeltas: compDeltas,
           });
         }
       }
     }
   } catch (e) {
     console.warn('[WhatIf] Sling computation failed:', e instanceof Error ? e.message : e);
+  }
+
+  const SCENARIO_TARGET_REGIONS: Record<string, string[]> = {
+    spine: ['lumbar', 'thoracic'],
+    neck: ['cervical'],
+    scm: ['cervical'],
+    suboccipitals: ['cervical'],
+    levator_scapulae: ['cervical', 'shoulder'],
+    scalenes: ['cervical'],
+    glute_l: ['hip', 'lumbar'],
+    glute_r: ['hip', 'lumbar'],
+    quad_l: ['knee'],
+    quad_r: ['knee'],
+    hamstring_l: ['knee', 'hip'],
+    hamstring_r: ['knee', 'hip'],
+    hip_flexor_l: ['hip', 'lumbar'],
+    hip_flexor_r: ['hip', 'lumbar'],
+    calf_l: ['ankle'],
+    calf_r: ['ankle'],
+    shin_l: ['ankle'],
+    shin_r: ['ankle'],
+    scapula_l: ['shoulder'],
+    scapula_r: ['shoulder'],
+    rotator_cuff_l: ['shoulder'],
+    rotator_cuff_r: ['shoulder'],
+    deltoid_l: ['shoulder'],
+    deltoid_r: ['shoulder'],
+    bicep_l: ['elbow'],
+    bicep_r: ['elbow'],
+    tricep_l: ['elbow'],
+    tricep_r: ['elbow'],
+    wrist_flex_l: ['wrist'],
+    wrist_flex_r: ['wrist'],
+    wrist_ext_l: ['wrist'],
+    wrist_ext_r: ['wrist'],
+    core: ['lumbar'],
+    chest: ['shoulder'],
+    leftHip: ['hip'],
+    rightHip: ['hip'],
+    leftKnee: ['knee'],
+    rightKnee: ['knee'],
+    leftAnkle: ['ankle'],
+    rightAnkle: ['ankle'],
+    leftShoulder: ['shoulder'],
+    rightShoulder: ['shoulder'],
+    leftElbow: ['elbow'],
+    rightElbow: ['elbow'],
+    leftWrist: ['wrist'],
+    rightWrist: ['wrist'],
+  };
+
+  const regionToScenarios: Record<string, string[]> = {};
+  for (const sc of scenarios) {
+    const regions = SCENARIO_TARGET_REGIONS[sc.target] || [];
+    for (const r of regions) {
+      if (!regionToScenarios[r]) regionToScenarios[r] = [];
+      regionToScenarios[r].push(sc.id);
+    }
   }
 
   const painPredictions: PainPredictionDelta[] = [];
@@ -1143,44 +1260,88 @@ export function computeWhatIfComparison(
     wrist: { x: 0.45, y: 0.9, z: 0 },
   };
   const painRegions = ['lumbar', 'cervical', 'knee', 'hip', 'ankle', 'shoulder', 'elbow', 'wrist'];
+
+  for (const pm of painMarkers) {
+    let bestRegion = '';
+    let bestDist = Infinity;
+    for (const region of painRegions) {
+      const regionPos = PAIN_REGION_POSITIONS[region];
+      if (!regionPos) continue;
+      const dx = pm.position.x - regionPos.x;
+      const dy = pm.position.y - regionPos.y;
+      const dz = pm.position.z - regionPos.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestRegion = region;
+      }
+    }
+    if (!bestRegion || bestDist > 0.5) continue;
+
+    const regionRisks = riskDeltas.filter(rd => rd.region.toLowerCase().includes(bestRegion) || rd.label.toLowerCase().includes(bestRegion));
+    const regionForces = forceDeltas.filter(fd => fd.jointId.toLowerCase().includes(bestRegion));
+
+    const severityFactor = (pm.severity ?? 5) / 5;
+    const proximityFactor = Math.max(0, 1 - (bestDist / 0.5));
+    const markerWeight = 1.0 + proximityFactor * severityFactor * 0.5;
+
+    const avgRiskBefore = regionRisks.length > 0 ? regionRisks.reduce((s, r) => s + r.before, 0) / regionRisks.length : 0;
+    const avgRiskAfter = regionRisks.length > 0 ? regionRisks.reduce((s, r) => s + r.after, 0) / regionRisks.length : 0;
+    const avgForceDelta = regionForces.length > 0 ? regionForces.reduce((s, f) => s + f.deltaPercent, 0) / regionForces.length : 0;
+
+    const beforeLikelihood = clamp((avgRiskBefore * 0.7 + (avgForceDelta > 0 ? 10 : 0)) * markerWeight, 0, 100);
+    const afterLikelihood = clamp((avgRiskAfter * 0.7 + (avgForceDelta > 0 ? avgForceDelta * 0.3 : avgForceDelta * 0.2)) * markerWeight, 0, 100);
+
+    if (Math.abs(beforeLikelihood - afterLikelihood) > 1) {
+      painPredictions.push({
+        region: bestRegion.charAt(0).toUpperCase() + bestRegion.slice(1),
+        beforeLikelihood: Math.round(beforeLikelihood),
+        afterLikelihood: Math.round(afterLikelihood),
+        delta: Math.round(afterLikelihood - beforeLikelihood),
+        markerId: pm.id,
+        markerLabel: pm.label,
+        addressedByScenarios: regionToScenarios[bestRegion] || [],
+      });
+    }
+  }
+
   for (const region of painRegions) {
-    const beforeRegionRisks = riskDeltas.filter(rd => rd.region.toLowerCase().includes(region) || rd.label.toLowerCase().includes(region));
-    const beforeForceRegion = forceDeltas.filter(fd => fd.jointId.toLowerCase().includes(region));
-    if (beforeRegionRisks.length === 0 && beforeForceRegion.length === 0) continue;
+    const alreadyHasMarkerPred = painPredictions.some(p => p.region.toLowerCase() === region);
+    if (alreadyHasMarkerPred) continue;
+
+    const regionRisks = riskDeltas.filter(rd => rd.region.toLowerCase().includes(region) || rd.label.toLowerCase().includes(region));
+    const regionForces = forceDeltas.filter(fd => fd.jointId.toLowerCase().includes(region));
+    if (regionRisks.length === 0 && regionForces.length === 0) continue;
 
     let markerWeight = 1.0;
     const regionPos = PAIN_REGION_POSITIONS[region];
     if (regionPos && painMarkers.length > 0) {
-      for (const pm of painMarkers) {
-        const dx = pm.position.x - regionPos.x;
-        const dy = pm.position.y - regionPos.y;
-        const dz = pm.position.z - regionPos.z;
+      for (const marker of painMarkers) {
+        const dx = marker.position.x - regionPos.x;
+        const dy = marker.position.y - regionPos.y;
+        const dz = marker.position.z - regionPos.z;
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (dist < 0.3) {
-          const severityFactor = (pm.severity ?? 5) / 5;
-          const proximityFactor = 1 - (dist / 0.3);
-          markerWeight += proximityFactor * severityFactor * 0.5;
+          const sf = (marker.severity ?? 5) / 5;
+          const pf = 1 - (dist / 0.3);
+          markerWeight += pf * sf * 0.5;
         }
       }
     }
 
-    const avgRiskBefore = beforeRegionRisks.length > 0
-      ? beforeRegionRisks.reduce((s, r) => s + r.before, 0) / beforeRegionRisks.length
-      : 0;
-    const avgRiskAfter = beforeRegionRisks.length > 0
-      ? beforeRegionRisks.reduce((s, r) => s + r.after, 0) / beforeRegionRisks.length
-      : 0;
-    const avgForceDeltaPct = beforeForceRegion.length > 0
-      ? beforeForceRegion.reduce((s, f) => s + f.deltaPercent, 0) / beforeForceRegion.length
-      : 0;
-    const beforeLikelihood = clamp((avgRiskBefore * 0.7 + (avgForceDeltaPct > 0 ? 10 : 0)) * markerWeight, 0, 100);
-    const afterLikelihood = clamp((avgRiskAfter * 0.7 + (avgForceDeltaPct > 0 ? avgForceDeltaPct * 0.3 : avgForceDeltaPct * 0.2)) * markerWeight, 0, 100);
+    const avgRiskBefore = regionRisks.length > 0 ? regionRisks.reduce((s, r) => s + r.before, 0) / regionRisks.length : 0;
+    const avgRiskAfter = regionRisks.length > 0 ? regionRisks.reduce((s, r) => s + r.after, 0) / regionRisks.length : 0;
+    const avgForceDelta = regionForces.length > 0 ? regionForces.reduce((s, f) => s + f.deltaPercent, 0) / regionForces.length : 0;
+
+    const beforeLikelihood = clamp((avgRiskBefore * 0.7 + (avgForceDelta > 0 ? 10 : 0)) * markerWeight, 0, 100);
+    const afterLikelihood = clamp((avgRiskAfter * 0.7 + (avgForceDelta > 0 ? avgForceDelta * 0.3 : avgForceDelta * 0.2)) * markerWeight, 0, 100);
     if (Math.abs(beforeLikelihood - afterLikelihood) > 1) {
       painPredictions.push({
         region: region.charAt(0).toUpperCase() + region.slice(1),
         beforeLikelihood: Math.round(beforeLikelihood),
         afterLikelihood: Math.round(afterLikelihood),
         delta: Math.round(afterLikelihood - beforeLikelihood),
+        addressedByScenarios: regionToScenarios[region] || [],
       });
     }
   }

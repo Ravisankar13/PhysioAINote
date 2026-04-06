@@ -31,7 +31,9 @@ import {
   type InterventionType,
   type DecisionEngineIntervention,
   type SlingDelta,
+  type SlingCompensationDelta,
   type TimelinePoint,
+  type PainPredictionDelta,
   PRESET_SCENARIOS,
   MUSCLE_TARGETS,
   JOINT_TARGETS,
@@ -171,26 +173,32 @@ export default function WhatIfSimulationPanel({
                 const isActive = activeIds.has(scenario.id);
                 const Icon = INTERVENTION_ICONS[scenario.interventionType];
                 return (
-                  <button
-                    key={scenario.id}
-                    onClick={() => isActive ? onRemoveScenario(scenario.id) : onAddScenario(scenario)}
-                    className={`w-full flex items-center gap-1.5 px-1.5 py-1 rounded-md border text-[9px] leading-tight transition-all ${
-                      isActive
-                        ? 'border-amber-400/60 bg-amber-500/20 text-amber-300'
-                        : 'border-gray-600/40 bg-gray-800/40 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
-                    }`}
-                    title={scenario.description}
-                  >
-                    <Icon className="h-3 w-3 flex-shrink-0" />
-                    <span className="text-left truncate flex-1">{scenario.label}</span>
-                    <Badge variant="outline" className={`text-[7px] px-0.5 py-0 ${
-                      scenario.description?.includes('Grade A') || scenario.description?.includes(', A)') ? 'border-green-500/40 text-green-400'
-                      : scenario.description?.includes('Grade B') || scenario.description?.includes(', B)') ? 'border-blue-500/40 text-blue-400'
-                      : 'border-amber-500/30 text-amber-400'
-                    }`}>
-                      {scenario.description?.match(/,\s*(A|B|C|Expert)\)/)?.[1] || 'DE'}
-                    </Badge>
-                  </button>
+                  <div key={scenario.id} className="space-y-0.5">
+                    <button
+                      onClick={() => isActive ? onRemoveScenario(scenario.id) : onAddScenario(scenario)}
+                      className={`w-full flex items-center gap-1.5 px-1.5 py-1 rounded-md border text-[9px] leading-tight transition-all ${
+                        isActive
+                          ? 'border-amber-400/60 bg-amber-500/20 text-amber-300'
+                          : 'border-gray-600/40 bg-gray-800/40 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
+                      }`}
+                      title={scenario.description}
+                    >
+                      <Icon className="h-3 w-3 flex-shrink-0" />
+                      <span className="text-left truncate flex-1">{scenario.label}</span>
+                      <Badge variant="outline" className={`text-[7px] px-0.5 py-0 ${
+                        scenario.evidenceGrade === 'A' || scenario.description?.includes(', A)') ? 'border-green-500/40 text-green-400'
+                        : scenario.evidenceGrade === 'B' || scenario.description?.includes(', B)') ? 'border-blue-500/40 text-blue-400'
+                        : 'border-amber-500/30 text-amber-400'
+                      }`}>
+                        {scenario.evidenceGrade || scenario.description?.match(/,\s*(A|B|C|Expert)\)/)?.[1] || 'DE'}
+                      </Badge>
+                    </button>
+                    {scenario.rationale && (
+                      <div className="text-[7px] text-gray-500 pl-4 leading-tight truncate" title={scenario.rationale}>
+                        {scenario.rationale}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
               <button
@@ -544,6 +552,22 @@ export default function WhatIfSimulationPanel({
                             )}
                           </div>
                         )}
+                        {sd.compensationDeltas.length > 0 && (
+                          <div className="mt-0.5 space-y-0.5">
+                            {sd.compensationDeltas.map((cd: SlingCompensationDelta, ci: number) => (
+                              <div key={ci} className="text-[7px] flex items-center gap-0.5">
+                                <span className="text-gray-600">↳</span>
+                                <span className="text-gray-500 truncate">{cd.compensatingSlingLabel}</span>
+                                <span className="text-gray-600">load:</span>
+                                <span className="text-gray-400 font-mono">{cd.loadPctBefore.toFixed(0)}%</span>
+                                <ArrowRight className="h-1.5 w-1.5 text-gray-600" />
+                                <span className={`font-mono ${cd.loadPctAfter < cd.loadPctBefore ? 'text-green-400' : cd.loadPctAfter > cd.loadPctBefore ? 'text-red-400' : 'text-gray-400'}`}>
+                                  {cd.loadPctAfter.toFixed(0)}%
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -689,18 +713,27 @@ export default function WhatIfSimulationPanel({
               <span className="text-[10px] font-semibold text-gray-300 mb-1 block">
                 Pain Predictions
                 {painMarkers && painMarkers.length > 0 && (
-                  <span className="text-[8px] text-gray-500 font-normal ml-1">({painMarkers.length} markers weighted)</span>
+                  <span className="text-[8px] text-gray-500 font-normal ml-1">({painMarkers.length} markers)</span>
                 )}
               </span>
               <div className="space-y-1">
-                {comparison.painPredictions.slice(0, 6).map((pp, i) => {
-                  const relatedMarkers = painMarkers?.filter(pm =>
-                    pm.label.toLowerCase().includes(pp.region.toLowerCase())
-                  ) || [];
+                {comparison.painPredictions.slice(0, 8).map((pp: PainPredictionDelta, i: number) => {
+                  const matchedMarker = pp.markerId && painMarkers
+                    ? painMarkers.find(pm => pm.id === pp.markerId)
+                    : null;
+                  const addressingScenarios = pp.addressedByScenarios && pp.addressedByScenarios.length > 0
+                    ? activeScenarios.filter(sc => pp.addressedByScenarios?.includes(sc.id))
+                    : [];
                   return (
                     <div key={i} className="space-y-0.5">
                       <div className="flex items-center gap-1 text-[9px]">
-                        <span className="text-gray-400 flex-1 truncate">{pp.region}</span>
+                        {matchedMarker ? (
+                          <span className="text-gray-400 flex-1 truncate" title={`Marker: ${pp.markerLabel || matchedMarker.label}`}>
+                            📍 {pp.markerLabel || matchedMarker.label}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 flex-1 truncate">{pp.region}</span>
+                        )}
                         <span className="font-mono text-gray-500">{pp.beforeLikelihood}%</span>
                         <ArrowRight className="h-2.5 w-2.5 text-gray-600" />
                         <span className={`font-mono font-bold ${pp.delta < 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -710,12 +743,19 @@ export default function WhatIfSimulationPanel({
                           {pp.delta < 0 ? '↓' : '↑'}{Math.abs(pp.delta)}%
                         </Badge>
                       </div>
-                      {relatedMarkers.length > 0 && (
-                        <div className="flex items-center gap-1 pl-1 text-[7px] text-gray-500">
-                          <span>Markers:</span>
-                          {relatedMarkers.slice(0, 2).map((m, mi) => (
-                            <Badge key={mi} variant="outline" className="text-[6px] px-0.5 py-0 border-gray-600/40 text-gray-400">
-                              {m.label} (sev:{m.severity ?? 5})
+                      {matchedMarker && (
+                        <div className="flex items-center gap-1 pl-2 text-[7px] text-gray-500">
+                          <span className="text-gray-600">Region: {pp.region}</span>
+                          <span className="text-gray-600">·</span>
+                          <span className="text-gray-600">Severity: {matchedMarker.severity ?? 5}/10</span>
+                        </div>
+                      )}
+                      {addressingScenarios.length > 0 && (
+                        <div className="flex items-center gap-0.5 pl-2 text-[7px] text-gray-500 flex-wrap">
+                          <span className="text-green-500/70">Addressed by:</span>
+                          {addressingScenarios.slice(0, 3).map((sc, si) => (
+                            <Badge key={si} variant="outline" className="text-[6px] px-0.5 py-0 border-green-600/30 text-green-400/70">
+                              {sc.label}
                             </Badge>
                           ))}
                         </div>

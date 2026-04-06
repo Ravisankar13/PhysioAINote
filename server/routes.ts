@@ -6984,10 +6984,12 @@ Based on this clinical data, generate a comprehensive, prioritized exercise pres
       const validated = exerciseResponseSchema.safeParse(raw);
       if (!validated.success) {
         console.error("Exercise engine response validation failed:", validated.error.format());
-        res.json(raw);
-      } else {
-        res.json(validated.data);
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          validationErrors: validated.error.format(),
+        });
       }
+      res.json(validated.data);
     } catch (error: unknown) {
       console.error("Exercise engine generation error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";

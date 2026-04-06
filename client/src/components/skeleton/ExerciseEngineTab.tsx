@@ -71,12 +71,14 @@ function ExerciseCard({ exercise, index }: { exercise: ExerciseItem; index: numb
         <span className="text-[10px] font-mono text-gray-500 mt-0.5 min-w-[16px]">{index + 1}.</span>
         <div className="flex-1 min-w-0">
           <div className="text-[11px] font-medium text-gray-200">{exercise.name}</div>
-          <div className="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1">
-            <Target className="h-2.5 w-2.5 text-amber-400 shrink-0" />
-            <span className="truncate">{exercise.targetFinding}</span>
-          </div>
+          {exercise.targetFinding && (
+            <div className="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1">
+              <Target className="h-2.5 w-2.5 text-amber-400 shrink-0" />
+              <span className="truncate">{exercise.targetFinding}</span>
+            </div>
+          )}
           <div className="flex gap-2 mt-1 text-[9px]">
-            <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300">{exercise.sets} × {exercise.reps}</span>
+            <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300">{exercise.sets || '?'} × {exercise.reps || '?'}</span>
             {exercise.tempo && exercise.tempo !== 'controlled' && (
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Tempo: {exercise.tempo}</span>
             )}

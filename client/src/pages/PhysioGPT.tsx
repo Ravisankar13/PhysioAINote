@@ -1727,11 +1727,11 @@ ${ddxList}`;
     'ankle': ['Ankle_L', 'Ankle_R'],
     'neck': ['Neck_M'],
     'cervical': ['Neck_M'],
-    'thoracic': ['Spine1_M', 'Spine2_M'],
+    'thoracic': ['Spine1_M', 'Chest_M'],
     'lumbar': ['RootPart1_M'],
     'low back': ['RootPart1_M'],
     'pelvis': ['RootPart1_M', 'Hip_L', 'Hip_R'],
-    'spine': ['RootPart1_M', 'Spine1_M', 'Spine2_M'],
+    'spine': ['RootPart1_M', 'Spine1_M', 'Chest_M'],
     'elbow': ['Elbow_L', 'Elbow_R'],
     'wrist': ['Elbow_L', 'Elbow_R'],
     'sacroiliac': ['RootPart1_M', 'Hip_L', 'Hip_R'],
@@ -4523,7 +4523,7 @@ ${ddxList}`;
       l_pec_major: ['Shoulder_L'], l_pec_minor: ['Shoulder_L'],
       r_pec_major: ['Shoulder_R'], r_pec_minor: ['Shoulder_R'],
       rectus_abdominis: ['RootPart1_M'], transverse_abdominis: ['RootPart1_M'], obliques: ['RootPart1_M'],
-      erector_spinae_lumbar: ['RootPart1_M'], erector_spinae_thoracic: ['Spine2_M'],
+      erector_spinae_lumbar: ['RootPart1_M'], erector_spinae_thoracic: ['Chest_M'],
       multifidus: ['RootPart1_M'],
     };
 

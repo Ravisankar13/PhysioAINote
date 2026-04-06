@@ -25,10 +25,38 @@ export const MUSCLE_GROUPS: MuscleGroupDefinition[] = [
   { id: 'foot_r', label: 'Right Foot', color: '#e67e22', bones: ['Toes_R'] },
   { id: 'foot_l', label: 'Left Foot', color: '#e67e22', bones: ['Toes_L'] },
   { id: 'chest', label: 'Chest', color: '#e91e63', bones: ['Chest_M'] },
-  { id: 'spine', label: 'Spine', color: '#ff9800', bones: ['Spine1_M', 'Spine2_M'] },
+  { id: 'spine', label: 'Spine', color: '#ff9800', bones: ['Spine1_M', 'Chest_M'] },
   { id: 'neck', label: 'Neck', color: '#795548', bones: ['Neck_M', 'NeckPart1_M', 'NeckPart2_M'] },
   { id: 'core', label: 'Core', color: '#f1c40f', bones: ['Root_M', 'RootPart1_M', 'RootPart2_M'] },
 ];
+
+const NAMED_MUSCLE_TO_GROUP: Record<string, string> = {
+  'Deltoid1': 'deltoid_r',
+  'supraspinatus': 'scapula_r',
+  'Infraspinatus1': 'scapula_r',
+  'Lat_Dorsi': 'spine',
+  'Trapezius': 'spine',
+  'Trapezius_lower': 'spine',
+  'Trapezius_mid': 'spine',
+  'Trapezius_upper': 'neck',
+  'Pec_major': 'chest',
+  'Pec_minor': 'chest',
+  'Teres_major': 'scapula_r',
+  'Teres_minor': 'scapula_r',
+  'Levator_scapula': 'neck',
+  'Rhomboid_major_minor': 'scapula_r',
+  'Gluteus_maximus': 'glute_r',
+  'Gluteus_medius1': 'glute_r',
+  'Gluteus_Minimus': 'glute_r',
+  'Piriformis': 'glute_r',
+  'Obturator_externus': 'glute_r',
+  'Quadratus_femoris': 'glute_r',
+  'Gemelli_inferior': 'glute_r',
+  'Rectus_abdominus': 'core',
+  'External_obliques': 'core',
+  'Internal_obliques': 'core',
+  'Quadratus_lumborum': 'core',
+};
 
 export interface SplitMuscleGroup {
   id: string;
@@ -36,6 +64,16 @@ export interface SplitMuscleGroup {
   color: string;
   meshes: THREE.Mesh[];
   visible: boolean;
+}
+
+function classifyMeshByName(meshName: string): string | null {
+  const direct = NAMED_MUSCLE_TO_GROUP[meshName];
+  if (direct) return direct;
+  const lower = meshName.toLowerCase();
+  for (const [key, group] of Object.entries(NAMED_MUSCLE_TO_GROUP)) {
+    if (lower.includes(key.toLowerCase())) return group;
+  }
+  return null;
 }
 
 function classifyMeshByBoneWeights(
@@ -95,7 +133,8 @@ export function classifyMuscleMeshes(
     if (!(mesh instanceof THREE.SkinnedMesh)) continue;
     if (!mesh.skeleton || !mesh.geometry.getAttribute('skinIndex')) continue;
 
-    const groupId = classifyMeshByBoneWeights(mesh);
+    const namedGroup = classifyMeshByName(mesh.name);
+    const groupId = namedGroup || classifyMeshByBoneWeights(mesh);
 
     if (!results.has(groupId)) {
       const def = MUSCLE_GROUPS.find(g => g.id === groupId) || {

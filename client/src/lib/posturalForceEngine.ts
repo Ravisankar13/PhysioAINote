@@ -201,23 +201,23 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
 
   const ctjComp = thorAbove * thorMomentMult * 1.15 * (1 + 0.01 * thorScol);
   const ctjShear = thorAbove * thorLeverArm * 0.5;
-  joints.push({ id: 'ctj_facet', label: 'Cervicothoracic Junction (C7-T1)', category: 'thoracic_spine', boneName: 'Spine2Part2_M', compression: ctjComp, tension: thorAbove * 0.2, shear: ctjShear, totalForce: ctjComp + ctjShear, status: getStatus(ctjComp), clinical: getClinicalNote(ctjComp, 'facet'), enabled: true });
+  joints.push({ id: 'ctj_facet', label: 'Cervicothoracic Junction (C7-T1)', category: 'thoracic_spine', boneName: 'Chest_M', compression: ctjComp, tension: thorAbove * 0.2, shear: ctjShear, totalForce: ctjComp + ctjShear, status: getStatus(ctjComp), clinical: getClinicalNote(ctjComp, 'facet'), enabled: true });
 
   const upperThorAbove = headMass + upperTrunkMass * 0.5 + armMass;
   const upperThorComp = upperThorAbove * thorMomentMult * 1.1 * (1 + 0.015 * thorScol + 0.01 * thorRot);
   const upperThorShear = upperThorAbove * thorLeverArm * 0.45;
-  joints.push({ id: 't1t4_facet', label: 'T1-T4 Upper Thoracic Facets', category: 'thoracic_spine', boneName: 'Spine2Part2_M', compression: upperThorComp, tension: upperThorAbove * 0.15, shear: upperThorShear, totalForce: upperThorComp + upperThorShear, status: getStatus(upperThorComp), clinical: getClinicalNote(upperThorComp, 'facet'), enabled: true });
+  joints.push({ id: 't1t4_facet', label: 'T1-T4 Upper Thoracic Facets', category: 'thoracic_spine', boneName: 'Chest_M', compression: upperThorComp, tension: upperThorAbove * 0.15, shear: upperThorShear, totalForce: upperThorComp + upperThorShear, status: getStatus(upperThorComp), clinical: getClinicalNote(upperThorComp, 'facet'), enabled: true });
 
   const costotransComp = upperThorAbove * 0.15 * (1 + 0.02 * thorRot + 0.02 * thorKyph);
   const costotransShear = upperThorAbove * 0.05 * (1 + 0.03 * thorRot);
-  joints.push({ id: 'costotrans', label: 'Costovertebral/Costotransverse', category: 'thoracic_spine', boneName: 'Spine2_M', compression: costotransComp, tension: upperThorAbove * 0.08, shear: costotransShear, totalForce: costotransComp + costotransShear, status: getStatus(costotransComp), clinical: getClinicalNote(costotransComp, 'generic'), enabled: true });
+  joints.push({ id: 'costotrans', label: 'Costovertebral/Costotransverse', category: 'thoracic_spine', boneName: 'Chest_M', compression: costotransComp, tension: upperThorAbove * 0.08, shear: costotransShear, totalForce: costotransComp + costotransShear, status: getStatus(costotransComp), clinical: getClinicalNote(costotransComp, 'generic'), enabled: true });
 
   const midThorAbove = headMass + upperTrunkMass + armMass;
   const midThorComp = midThorAbove * thorMomentMult * 1.15 * (1 + 0.02 * thorScol);
   const midThorShear = midThorAbove * thorLeverArm * 0.5;
   const midThorDiscComp = midThorAbove * thorMomentMult * 1.2;
-  joints.push({ id: 't5t8_facet', label: 'T5-T8 Mid-Thoracic Facets', category: 'thoracic_spine', boneName: 'Spine2_M', compression: midThorComp, tension: midThorAbove * 0.12, shear: midThorShear, totalForce: midThorComp + midThorShear, status: getStatus(midThorComp), clinical: getClinicalNote(midThorComp, 'facet'), enabled: true });
-  joints.push({ id: 't5t8_disc', label: 'T5-T8 Intervertebral Discs', category: 'thoracic_spine', boneName: 'Spine2_M', compression: midThorDiscComp, tension: midThorAbove * 0.1, shear: midThorShear * 0.8, totalForce: midThorDiscComp + midThorShear * 0.8, status: getStatus(midThorDiscComp), clinical: getClinicalNote(midThorDiscComp, 'disc'), enabled: true });
+  joints.push({ id: 't5t8_facet', label: 'T5-T8 Mid-Thoracic Facets', category: 'thoracic_spine', boneName: 'Chest_M', compression: midThorComp, tension: midThorAbove * 0.12, shear: midThorShear, totalForce: midThorComp + midThorShear, status: getStatus(midThorComp), clinical: getClinicalNote(midThorComp, 'facet'), enabled: true });
+  joints.push({ id: 't5t8_disc', label: 'T5-T8 Intervertebral Discs', category: 'thoracic_spine', boneName: 'Chest_M', compression: midThorDiscComp, tension: midThorAbove * 0.1, shear: midThorShear * 0.8, totalForce: midThorDiscComp + midThorShear * 0.8, status: getStatus(midThorDiscComp), clinical: getClinicalNote(midThorDiscComp, 'disc'), enabled: true });
 
   const lowThorAbove = headMass + SEGMENT_MASS_PCT.trunk * 0.7 + armMass;
   const lowThorComp = lowThorAbove * thorMomentMult * 1.2 * (1 + 0.02 * thorScol + 0.01 * lumbarScol * 0.5);
@@ -611,10 +611,9 @@ export interface FascialModifiers {
 }
 
 const BONE_ADJACENCY: Record<string, string[]> = {
-  'Neck_M': ['Spine2Part2_M'],
-  'Spine2Part2_M': ['Neck_M', 'Spine2_M'],
-  'Spine2_M': ['Spine2Part2_M', 'Spine1Part2_M'],
-  'Spine1Part2_M': ['Spine2_M', 'Spine1Part1_M'],
+  'Neck_M': ['Chest_M'],
+  'Chest_M': ['Neck_M', 'Spine1Part2_M', 'Scapula_L', 'Scapula_R', 'Shoulder_L', 'Shoulder_R'],
+  'Spine1Part2_M': ['Chest_M', 'Spine1Part1_M'],
   'Spine1Part1_M': ['Spine1Part2_M', 'Spine1_M'],
   'Spine1_M': ['Spine1Part1_M', 'RootPart2_M'],
   'RootPart2_M': ['Spine1_M', 'RootPart1_M'],
@@ -630,15 +629,14 @@ const BONE_ADJACENCY: Record<string, string[]> = {
   'Ankle_R': ['Knee_R', 'Toes_R'],
   'Toes_L': ['Ankle_L'],
   'Toes_R': ['Ankle_R'],
-  'Shoulder_L': ['Scapula_L', 'Spine2Part2_M', 'Elbow_L'],
-  'Shoulder_R': ['Scapula_R', 'Spine2Part2_M', 'Elbow_R'],
-  'Scapula_L': ['Shoulder_L', 'Spine2_M'],
-  'Scapula_R': ['Shoulder_R', 'Spine2_M'],
+  'Shoulder_L': ['Scapula_L', 'Chest_M', 'Elbow_L'],
+  'Shoulder_R': ['Scapula_R', 'Chest_M', 'Elbow_R'],
+  'Scapula_L': ['Shoulder_L', 'Chest_M'],
+  'Scapula_R': ['Shoulder_R', 'Chest_M'],
   'Elbow_L': ['Shoulder_L', 'Wrist_L'],
   'Elbow_R': ['Shoulder_R', 'Wrist_R'],
   'Wrist_L': ['Elbow_L'],
   'Wrist_R': ['Elbow_R'],
-  'Chest_M': ['Spine2_M', 'Spine2Part2_M'],
 };
 
 function getChainTensionFactor(chainTensions: Record<string, number>, chainPrefix: string): number {

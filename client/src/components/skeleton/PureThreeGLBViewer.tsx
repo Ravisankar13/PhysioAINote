@@ -4997,6 +4997,10 @@ export default function PureThreeGLBViewer({
             if (xhr.lengthComputable) {
               const progress = Math.round((xhr.loaded / xhr.total) * 100);
               setLoadProgress(progress);
+            } else if (xhr.loaded) {
+              const estimatedTotal = 145000000;
+              const progress = Math.min(95, Math.round((xhr.loaded / estimatedTotal) * 100));
+              setLoadProgress(progress);
             }
           },
           (error: unknown) => {
@@ -7397,11 +7401,14 @@ export default function PureThreeGLBViewer({
             {status === 'checking' ? 'Initializing 3D...' : 'Loading 3D Model...'}
           </span>
           {loadProgress > 0 && (
-            <div className="w-48 bg-slate-700 rounded-full h-2">
-              <div 
-                className="bg-green-500 h-2 rounded-full transition-all"
-                style={{ width: `${loadProgress}%` }}
-              />
+            <div className="flex flex-col items-center gap-1">
+              <div className="w-48 bg-slate-700 rounded-full h-2">
+                <div 
+                  className="bg-green-500 h-2 rounded-full transition-all"
+                  style={{ width: `${loadProgress}%` }}
+                />
+              </div>
+              <span className="text-xs text-slate-400">{loadProgress}%</span>
             </div>
           )}
         </div>

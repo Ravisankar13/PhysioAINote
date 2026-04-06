@@ -4775,7 +4775,18 @@ export default function PureThreeGLBViewer({
             
             const muscleMeshes: THREE.Object3D[] = [];
             
-            const BONE_MATERIAL_NAME = 'lambert4';
+            const BONE_MATERIAL_NAMES = new Set(['lambert4']);
+            const MUSCLE_MATERIAL_NAMES = new Set(['Skings', 'lambert2', 'lambert5']);
+            const KNOWN_MUSCLE_MESH_NAMES = new Set([
+              'Deltoid1', 'supraspinatus', 'Infraspinatus1', 'Lat_Dorsi',
+              'Trapezius', 'Trapezius_lower', 'Trapezius_mid', 'Trapezius_upper',
+              'Pec_major', 'Pec_minor', 'Teres_major', 'Teres_minor',
+              'Levator_scapula', 'Rhomboid_major_minor', 'Gluteus_maximus',
+              'Gluteus_medius1', 'Gluteus_Minimus', 'Piriformis',
+              'Obturator_externus', 'Quadratus_femoris', 'Gemelli_inferior',
+              'Rectus_abdominus', 'External_obliques', 'Internal_obliques',
+              'Quadratus_lumborum',
+            ]);
             
             model.traverse((child) => {
               objectTypes.push(`${child.name}: ${child.type}`);
@@ -4784,12 +4795,16 @@ export default function PureThreeGLBViewer({
                 child.receiveShadow = true;
                 
                 const lowerName = child.name.toLowerCase();
-                const hasBoneMaterial = child.material
-                  ? Array.isArray(child.material)
-                    ? child.material.every((m: THREE.Material) => m.name === BONE_MATERIAL_NAME)
-                    : (child.material as THREE.Material).name === BONE_MATERIAL_NAME
-                  : false;
-                const isMuscle = !hasBoneMaterial;
+                const getMaterialNames = (): string[] => {
+                  if (!child.material) return [];
+                  if (Array.isArray(child.material)) return child.material.map((m: THREE.Material) => m.name);
+                  return [(child.material as THREE.Material).name];
+                };
+                const matNames = getMaterialNames();
+                const isNamedMuscle = KNOWN_MUSCLE_MESH_NAMES.has(child.name);
+                const hasMuscleMaterial = matNames.some(n => MUSCLE_MATERIAL_NAMES.has(n));
+                const hasBoneMaterial = matNames.length > 0 && matNames.every(n => BONE_MATERIAL_NAMES.has(n));
+                const isMuscle = isNamedMuscle || hasMuscleMaterial || !hasBoneMaterial;
                 
                 if (isMuscle) {
                   muscleMeshes.push(child);

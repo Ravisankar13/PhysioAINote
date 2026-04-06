@@ -11347,7 +11347,7 @@ Important:
     }
   });
   
-  app.post('/api/clinical-text/parse', async (req: Request, res: Response) => {
+  app.post('/api/clinical-text/parse', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { text, context } = req.body;
       if (!text || typeof text !== 'string' || text.trim().length < 3) {

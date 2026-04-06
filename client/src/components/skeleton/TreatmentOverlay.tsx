@@ -83,7 +83,7 @@ const EXTENDED_BONE_MAP: Record<string, string> = {
   glute_med_l: 'Hip_L', glute_med_r: 'Hip_R',
   glute_min_l: 'Hip_L', glute_min_r: 'Hip_R',
   joint_cervical_spine: 'Neck_M', joint_cervical: 'Neck_M',
-  joint_thoracic_spine: 'Chest_M', joint_thoracic: 'Chest_M',
+  joint_thoracic_spine: 'Spine1Part2_M', joint_thoracic: 'Spine1Part2_M',
   joint_lumbar_spine: 'Spine1_M', joint_lumbar: 'Spine1_M',
   joint_thoracolumbar: 'Spine1Part2_M',
   joint_left_shoulder: 'Shoulder_L', joint_right_shoulder: 'Shoulder_R',

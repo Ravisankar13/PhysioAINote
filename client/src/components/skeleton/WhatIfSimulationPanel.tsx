@@ -48,6 +48,7 @@ interface WhatIfSimulationPanelProps {
   treatmentDecisionData?: { primary: DecisionEngineIntervention[]; adjunct: DecisionEngineIntervention[] } | null;
   comparisonB?: WhatIfComparisonResult | null;
   onSetComparisonB?: (scenarios: WhatIfScenario[]) => void;
+  painMarkers?: Array<{ id: string; label: string; severity?: number }>;
 }
 
 const INTERVENTION_ICONS: Record<InterventionType, typeof Dumbbell> = {
@@ -76,6 +77,7 @@ export default function WhatIfSimulationPanel({
   treatmentDecisionData,
   comparisonB,
   onSetComparisonB,
+  painMarkers,
 }: WhatIfSimulationPanelProps) {
   const [showCustom, setShowCustom] = useState(false);
   const [customTarget, setCustomTarget] = useState(MUSCLE_TARGETS[0].id);
@@ -181,8 +183,12 @@ export default function WhatIfSimulationPanel({
                   >
                     <Icon className="h-3 w-3 flex-shrink-0" />
                     <span className="text-left truncate flex-1">{scenario.label}</span>
-                    <Badge variant="outline" className="text-[7px] px-0.5 py-0 border-amber-500/30 text-amber-400">
-                      DE
+                    <Badge variant="outline" className={`text-[7px] px-0.5 py-0 ${
+                      scenario.description?.includes('Grade A') || scenario.description?.includes(', A)') ? 'border-green-500/40 text-green-400'
+                      : scenario.description?.includes('Grade B') || scenario.description?.includes(', B)') ? 'border-blue-500/40 text-blue-400'
+                      : 'border-amber-500/30 text-amber-400'
+                    }`}>
+                      {scenario.description?.match(/,\s*(A|B|C|Expert)\)/)?.[1] || 'DE'}
                     </Badge>
                   </button>
                 );
@@ -451,15 +457,31 @@ export default function WhatIfSimulationPanel({
                       <span>Wk 12</span>
                     </div>
                     {timelinePoint && (
-                      <div className="grid grid-cols-2 gap-1 text-[8px]">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Force ↓</span>
-                          <span className="text-green-400 font-mono">{Math.abs(timelinePoint.forceReduction).toFixed(1)}%</span>
+                      <div className="space-y-1">
+                        <div className="grid grid-cols-3 gap-1 text-[8px]">
+                          <div className="flex flex-col items-center">
+                            <span className="text-gray-500">Risk</span>
+                            <span className={`font-mono font-bold ${riskColor(timelinePoint.riskLevel)}`}>{timelinePoint.riskScore}</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-gray-500">Force ↓</span>
+                            <span className="text-green-400 font-mono">{Math.abs(timelinePoint.forceReduction).toFixed(1)}%</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-gray-500">Comp ↓</span>
+                            <span className="text-green-400 font-mono">{timelinePoint.compensationResolution.toFixed(0)}%</span>
+                          </div>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Comp ↓</span>
-                          <span className="text-green-400 font-mono">{timelinePoint.compensationResolution.toFixed(0)}%</span>
-                        </div>
+                        {timelineWeek > 0 && (
+                          <div className="text-[7px] text-gray-500 text-center">
+                            Dose-response: {Math.round(
+                              timelineWeek <= 2 ? 15 * timelineWeek
+                              : timelineWeek <= 6 ? 30 + (timelineWeek - 2) * 12
+                              : timelineWeek <= 10 ? 78 + (timelineWeek - 6) * 4
+                              : 94 + (timelineWeek - 10) * 1.5
+                            )}% of intervention effect applied
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -652,21 +674,43 @@ export default function WhatIfSimulationPanel({
 
           {comparison.painPredictions && comparison.painPredictions.length > 0 && (
             <div>
-              <span className="text-[10px] font-semibold text-gray-300 mb-1 block">Pain Predictions</span>
+              <span className="text-[10px] font-semibold text-gray-300 mb-1 block">
+                Pain Predictions
+                {painMarkers && painMarkers.length > 0 && (
+                  <span className="text-[8px] text-gray-500 font-normal ml-1">({painMarkers.length} markers weighted)</span>
+                )}
+              </span>
               <div className="space-y-1">
-                {comparison.painPredictions.slice(0, 4).map((pp, i) => (
-                  <div key={i} className="flex items-center gap-1 text-[9px]">
-                    <span className="text-gray-400 flex-1 truncate">{pp.region}</span>
-                    <span className="font-mono text-gray-500">{pp.beforeLikelihood}%</span>
-                    <ArrowRight className="h-2.5 w-2.5 text-gray-600" />
-                    <span className={`font-mono font-bold ${pp.delta < 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {pp.afterLikelihood}%
-                    </span>
-                    <Badge variant="outline" className={`text-[7px] px-0.5 py-0 ${pp.delta < 0 ? 'text-green-400 border-green-500/30' : 'text-red-400 border-red-500/30'}`}>
-                      {pp.delta < 0 ? '↓' : '↑'}{Math.abs(pp.delta)}%
-                    </Badge>
-                  </div>
-                ))}
+                {comparison.painPredictions.slice(0, 6).map((pp, i) => {
+                  const relatedMarkers = painMarkers?.filter(pm =>
+                    pm.label.toLowerCase().includes(pp.region.toLowerCase())
+                  ) || [];
+                  return (
+                    <div key={i} className="space-y-0.5">
+                      <div className="flex items-center gap-1 text-[9px]">
+                        <span className="text-gray-400 flex-1 truncate">{pp.region}</span>
+                        <span className="font-mono text-gray-500">{pp.beforeLikelihood}%</span>
+                        <ArrowRight className="h-2.5 w-2.5 text-gray-600" />
+                        <span className={`font-mono font-bold ${pp.delta < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {pp.afterLikelihood}%
+                        </span>
+                        <Badge variant="outline" className={`text-[7px] px-0.5 py-0 ${pp.delta < 0 ? 'text-green-400 border-green-500/30' : 'text-red-400 border-red-500/30'}`}>
+                          {pp.delta < 0 ? '↓' : '↑'}{Math.abs(pp.delta)}%
+                        </Badge>
+                      </div>
+                      {relatedMarkers.length > 0 && (
+                        <div className="flex items-center gap-1 pl-1 text-[7px] text-gray-500">
+                          <span>Markers:</span>
+                          {relatedMarkers.slice(0, 2).map((m, mi) => (
+                            <Badge key={mi} variant="outline" className="text-[6px] px-0.5 py-0 border-gray-600/40 text-gray-400">
+                              {m.label} (sev:{m.severity ?? 5})
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -703,6 +747,54 @@ export default function WhatIfSimulationPanel({
                   ) : (
                     <span className="text-gray-400">Both programmes achieve equal risk scores</span>
                   )}
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
+                  <div className="space-y-0.5">
+                    <div className="text-gray-500 font-semibold">A Forces</div>
+                    {comparison.forceDeltas.filter(f => Math.abs(f.deltaPercent) > 2).slice(0, 3).map(fd => (
+                      <div key={fd.jointId} className={`font-mono ${fd.delta < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {fd.jointLabel}: {fd.delta < 0 ? '↓' : '↑'}{Math.abs(fd.deltaPercent).toFixed(0)}%
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-gray-500 font-semibold">B Forces</div>
+                    {comparisonB.forceDeltas.filter(f => Math.abs(f.deltaPercent) > 2).slice(0, 3).map(fd => (
+                      <div key={fd.jointId} className={`font-mono ${fd.delta < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {fd.jointLabel}: {fd.delta < 0 ? '↓' : '↑'}{Math.abs(fd.deltaPercent).toFixed(0)}%
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {(comparison.slingDeltas?.length > 0 || comparisonB.slingDeltas?.length > 0) && (
+                  <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
+                    <div className="space-y-0.5">
+                      <div className="text-gray-500 font-semibold">A Slings</div>
+                      {(comparison.slingDeltas || []).slice(0, 3).map(sd => (
+                        <div key={sd.slingId} className={`font-mono ${sd.activationDelta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {sd.label}: {sd.activationDelta > 0 ? '↑' : '↓'}{Math.abs(sd.activationDelta).toFixed(0)}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="text-gray-500 font-semibold">B Slings</div>
+                      {(comparisonB.slingDeltas || []).slice(0, 3).map(sd => (
+                        <div key={sd.slingId} className={`font-mono ${sd.activationDelta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {sd.label}: {sd.activationDelta > 0 ? '↑' : '↓'}{Math.abs(sd.activationDelta).toFixed(0)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
+                  <div>
+                    <span className="text-gray-500">A Compensations: </span>
+                    <span className="text-green-400">{comparison.compensationDeltas.filter(c => c.resolvedPercent >= 50).length} resolved</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">B Compensations: </span>
+                    <span className="text-green-400">{comparisonB.compensationDeltas.filter(c => c.resolvedPercent >= 50).length} resolved</span>
+                  </div>
                 </div>
               </div>
             </>

@@ -367,10 +367,37 @@ function applyOverrideToMuscleIds(
   }
 }
 
+function computeBaselineAwareMagnitude(
+  baseMagnitude: number,
+  scenarioTarget: string,
+  muscleAnalysis: MuscleAnalysisResult | null
+): number {
+  if (!muscleAnalysis) return baseMagnitude;
+  const muscleIds = SCENARIO_TO_MUSCLE_IDS[scenarioTarget];
+  if (!muscleIds || muscleIds.length === 0) return baseMagnitude;
+
+  let totalDeficit = 0;
+  let count = 0;
+  for (const mId of muscleIds) {
+    const muscle = muscleAnalysis.allMuscles.find(m => m.id === mId);
+    if (muscle) {
+      const deficit = Math.max(0, 100 - muscle.activationPercent) / 100;
+      totalDeficit += deficit;
+      count++;
+    }
+  }
+
+  if (count === 0) return baseMagnitude;
+  const avgDeficit = totalDeficit / count;
+  const scaleFactor = 0.5 + avgDeficit * 0.8;
+  return baseMagnitude * clamp(scaleFactor, 0.3, 1.8);
+}
+
 export function applyScenarios(
   baseModelConfig: Record<string, any>,
   baseOverrides: Record<string, Partial<MuscleOverride>>,
-  scenarios: WhatIfScenario[]
+  scenarios: WhatIfScenario[],
+  baselineMuscleAnalysis?: MuscleAnalysisResult | null,
 ): { modelConfig: Record<string, any>; overrides: Record<string, Partial<MuscleOverride>>; forceMultiplier: number } {
   const config: Record<string, any> = JSON.parse(JSON.stringify(baseModelConfig));
   const overrides: Record<string, Partial<MuscleOverride>> = JSON.parse(JSON.stringify(baseOverrides));
@@ -382,13 +409,19 @@ export function applyScenarios(
       continue;
     }
 
+    const effectiveMagnitude = computeBaselineAwareMagnitude(
+      scenario.magnitude,
+      scenario.target,
+      baselineMuscleAnalysis ?? null
+    );
+
     const targets = expandBilateralTarget(scenario.target);
 
     for (const target of targets) {
       if (scenario.interventionType === 'strengthen') {
         const effectFn = STRENGTHEN_EFFECTS[target];
         if (effectFn) {
-          const effects = effectFn(scenario.magnitude);
+          const effects = effectFn(effectiveMagnitude);
           for (const [joint, params] of Object.entries(effects)) {
             if (!config[joint]) config[joint] = {};
             for (const [param, value] of Object.entries(params)) {
@@ -397,16 +430,16 @@ export function applyScenarios(
           }
         }
         applyOverrideToMuscleIds(overrides, target, {
-          tensionOffset: -(scenario.magnitude * 0.3),
-          activationOffset: scenario.magnitude * 0.4,
-          inhibition: -(scenario.magnitude * 0.5),
+          tensionOffset: -(effectiveMagnitude * 0.3),
+          activationOffset: effectiveMagnitude * 0.4,
+          inhibition: -(effectiveMagnitude * 0.5),
         });
       }
 
       if (scenario.interventionType === 'stretch') {
         const effectFn = STRETCH_EFFECTS[target];
         if (effectFn) {
-          const effects = effectFn(scenario.magnitude);
+          const effects = effectFn(effectiveMagnitude);
           for (const [joint, params] of Object.entries(effects)) {
             if (!config[joint]) config[joint] = {};
             for (const [param, value] of Object.entries(params)) {
@@ -415,15 +448,15 @@ export function applyScenarios(
           }
         }
         applyOverrideToMuscleIds(overrides, target, {
-          tensionOffset: -(scenario.magnitude * 0.5),
-          activationOffset: -(scenario.magnitude * 0.1),
+          tensionOffset: -(effectiveMagnitude * 0.5),
+          activationOffset: -(effectiveMagnitude * 0.1),
         });
       }
 
       if (scenario.interventionType === 'mobilize') {
         const effectFn = MOBILIZE_EFFECTS[target];
         if (effectFn) {
-          const effects = effectFn(scenario.magnitude);
+          const effects = effectFn(effectiveMagnitude);
           for (const [joint, params] of Object.entries(effects)) {
             if (!config[joint]) config[joint] = {};
             for (const [param, value] of Object.entries(params)) {
@@ -435,8 +468,8 @@ export function applyScenarios(
 
       if (scenario.interventionType === 'offload') {
         applyOverrideToMuscleIds(overrides, target, {
-          tensionOffset: -(scenario.magnitude * 0.4),
-          activationOffset: -(scenario.magnitude * 0.2),
+          tensionOffset: -(effectiveMagnitude * 0.4),
+          activationOffset: -(effectiveMagnitude * 0.2),
         });
       }
     }
@@ -645,31 +678,6 @@ export function generateScenariosFromDecisionEngine(
   return scenarios;
 }
 
-function computeBaselineAwareMagnitude(
-  baseMagnitude: number,
-  scenarioTarget: string,
-  muscleAnalysis: MuscleAnalysisResult | null
-): number {
-  if (!muscleAnalysis) return baseMagnitude;
-  const muscleIds = SCENARIO_TO_MUSCLE_IDS[scenarioTarget];
-  if (!muscleIds || muscleIds.length === 0) return baseMagnitude;
-
-  let totalDeficit = 0;
-  let count = 0;
-  for (const mId of muscleIds) {
-    const muscle = muscleAnalysis.allMuscles.find(m => m.id === mId);
-    if (muscle) {
-      const deficit = Math.max(0, 100 - muscle.activationPercent) / 100;
-      totalDeficit += deficit;
-      count++;
-    }
-  }
-
-  if (count === 0) return baseMagnitude;
-  const avgDeficit = totalDeficit / count;
-  const scaleFactor = 0.5 + avgDeficit * 0.8;
-  return baseMagnitude * clamp(scaleFactor, 0.3, 1.8);
-}
 
 function getRiskLevelFromScore(score: number): string {
   if (score < 20) return 'minimal';
@@ -723,7 +731,7 @@ export function computeWhatIfComparison(
   muscleAnalysis?: MuscleAnalysisResult | null,
   biomechanicsOutput?: any | null,
 ): WhatIfComparisonResult {
-  const { modelConfig: simConfig, overrides: simOverrides, forceMultiplier } = applyScenarios(baseModelConfig, baseOverrides, scenarios);
+  const { modelConfig: simConfig, overrides: simOverrides, forceMultiplier } = applyScenarios(baseModelConfig, baseOverrides, scenarios, muscleAnalysis);
   const effectiveBodyWeightKg = bodyWeightKg * forceMultiplier;
 
   const before = buildCorrelationInput(baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, 1.0);

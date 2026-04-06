@@ -498,6 +498,7 @@ export default function PhysioGPT() {
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif'>('mechanism');
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
+  const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
   const mechanismHighlightBones = useMemo(() => {
     if (!showInjuryMechanism || mechanismBoneIds.length === 0) return [];
@@ -3370,8 +3371,25 @@ ${ddxList}`;
       severity: (pm as Record<string, unknown>).severity as number ?? 5,
       description: pm.description,
     }));
-    return computeWhatIfComparison(effectiveModelConfig, compensatedOverrides, pmForComparison, bodyWeightKg, whatIfScenarios, null, null);
-  }, [whatIfScenarios, effectiveModelConfig, compensatedOverrides, painMarkers, bodyWeightKg]);
+    const baseMuscles = computeFullMuscleAnalysis(effectiveModelConfig);
+    const appliedMuscles = applyOverridesToAnalysis(baseMuscles, compensatedOverrides);
+    return computeWhatIfComparison(effectiveModelConfig, compensatedOverrides, pmForComparison, bodyWeightKg, whatIfScenarios, appliedMuscles, cachedBiomechanicsOutput);
+  }, [whatIfScenarios, effectiveModelConfig, compensatedOverrides, painMarkers, bodyWeightKg, cachedBiomechanicsOutput]);
+
+  const whatIfComparisonB = useMemo(() => {
+    if (whatIfComparisonBScenarios.length === 0) return null;
+    const pmForComparison = painMarkers.map(pm => ({
+      id: pm.id,
+      position: pm.position,
+      label: pm.anatomicalLabel || pm.nearestBone,
+      type: pm.type as 'point' | 'area' | 'referred' | 'line' | 'paint',
+      severity: (pm as Record<string, unknown>).severity as number ?? 5,
+      description: pm.description,
+    }));
+    const baseMuscles = computeFullMuscleAnalysis(effectiveModelConfig);
+    const appliedMuscles = applyOverridesToAnalysis(baseMuscles, compensatedOverrides);
+    return computeWhatIfComparison(effectiveModelConfig, compensatedOverrides, pmForComparison, bodyWeightKg, whatIfComparisonBScenarios, appliedMuscles, cachedBiomechanicsOutput);
+  }, [whatIfComparisonBScenarios, effectiveModelConfig, compensatedOverrides, painMarkers, bodyWeightKg, cachedBiomechanicsOutput]);
 
   const finalModelConfig = useMemo(() => {
     const baseConfig = (whatIfSimulatedConfig?.simulatedModelConfig)
@@ -7961,6 +7979,13 @@ ${ddxList}`;
                           dosage: i.dosage, evidenceGrade: i.evidenceGrade, score: i.score,
                         })),
                       } : null}
+                      comparisonB={whatIfComparisonB}
+                      onSetComparisonB={(scenarios) => setWhatIfComparisonBScenarios(scenarios)}
+                      painMarkers={painMarkers.map(pm => ({
+                        id: pm.id,
+                        label: pm.anatomicalLabel || pm.nearestBone,
+                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                      }))}
                     />
                   )}
                 </div>

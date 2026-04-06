@@ -20,14 +20,22 @@ import {
   ChevronDown,
   ChevronUp,
   Activity,
+  Sparkles,
+  GitCompareArrows,
+  Timer,
+  Link2,
 } from "lucide-react";
 import {
   type WhatIfScenario,
   type WhatIfComparisonResult,
   type InterventionType,
+  type DecisionEngineIntervention,
+  type SlingDelta,
+  type TimelinePoint,
   PRESET_SCENARIOS,
   MUSCLE_TARGETS,
   JOINT_TARGETS,
+  generateScenariosFromDecisionEngine,
 } from "@/lib/whatIfSimulationEngine";
 
 interface WhatIfSimulationPanelProps {
@@ -37,6 +45,9 @@ interface WhatIfSimulationPanelProps {
   onRemoveScenario: (id: string) => void;
   onClearAll: () => void;
   onApplyToSkeleton: () => void;
+  treatmentDecisionData?: { primary: DecisionEngineIntervention[]; adjunct: DecisionEngineIntervention[] } | null;
+  comparisonB?: WhatIfComparisonResult | null;
+  onSetComparisonB?: (scenarios: WhatIfScenario[]) => void;
 }
 
 const INTERVENTION_ICONS: Record<InterventionType, typeof Dumbbell> = {
@@ -62,6 +73,9 @@ export default function WhatIfSimulationPanel({
   onRemoveScenario,
   onClearAll,
   onApplyToSkeleton,
+  treatmentDecisionData,
+  comparisonB,
+  onSetComparisonB,
 }: WhatIfSimulationPanelProps) {
   const [showCustom, setShowCustom] = useState(false);
   const [customTarget, setCustomTarget] = useState(MUSCLE_TARGETS[0].id);
@@ -71,8 +85,22 @@ export default function WhatIfSimulationPanel({
   const [showForceDetails, setShowForceDetails] = useState(false);
   const [showRiskDetails, setShowRiskDetails] = useState(false);
   const [showMuscleDetails, setShowMuscleDetails] = useState(false);
+  const [showSlingDetails, setShowSlingDetails] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [showRecommended, setShowRecommended] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+  const [timelineWeek, setTimelineWeek] = useState(12);
 
   const activeIds = useMemo(() => new Set(activeScenarios.map(s => s.id)), [activeScenarios]);
+
+  const recommendedScenarios = useMemo(() => {
+    if (!treatmentDecisionData) return [];
+    const allInterventions = [
+      ...treatmentDecisionData.primary.map(i => ({ ...i, tier: 'primary' })),
+      ...treatmentDecisionData.adjunct.map(i => ({ ...i, tier: 'adjunct' })),
+    ];
+    return generateScenariosFromDecisionEngine(allInterventions);
+  }, [treatmentDecisionData]);
 
   const handleAddCustom = useCallback(() => {
     const targets = customTargetType === 'muscle' ? MUSCLE_TARGETS : JOINT_TARGETS;
@@ -110,8 +138,71 @@ export default function WhatIfSimulationPanel({
     return 'bg-green-500';
   };
 
+  const transferColor = (quality: string) => {
+    if (quality === 'good') return 'text-green-400';
+    if (quality === 'reduced') return 'text-yellow-400';
+    return 'text-red-400';
+  };
+
+  const timelinePoint = useMemo(() => {
+    if (!comparison?.timeline) return null;
+    return comparison.timeline.find(t => t.week === timelineWeek) || null;
+  }, [comparison, timelineWeek]);
+
   return (
     <div className="space-y-2">
+      {recommendedScenarios.length > 0 && (
+        <>
+          <button
+            onClick={() => setShowRecommended(!showRecommended)}
+            className="flex items-center justify-between w-full text-[10px] text-amber-300 hover:text-amber-200 mb-1"
+          >
+            <div className="flex items-center gap-1">
+              <Sparkles className="h-3 w-3" />
+              <span className="font-semibold">Recommended ({recommendedScenarios.length})</span>
+            </div>
+            {showRecommended ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {showRecommended && (
+            <div className="space-y-1 mb-2">
+              {recommendedScenarios.map(scenario => {
+                const isActive = activeIds.has(scenario.id);
+                const Icon = INTERVENTION_ICONS[scenario.interventionType];
+                return (
+                  <button
+                    key={scenario.id}
+                    onClick={() => isActive ? onRemoveScenario(scenario.id) : onAddScenario(scenario)}
+                    className={`w-full flex items-center gap-1.5 px-1.5 py-1 rounded-md border text-[9px] leading-tight transition-all ${
+                      isActive
+                        ? 'border-amber-400/60 bg-amber-500/20 text-amber-300'
+                        : 'border-gray-600/40 bg-gray-800/40 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
+                    }`}
+                    title={scenario.description}
+                  >
+                    <Icon className="h-3 w-3 flex-shrink-0" />
+                    <span className="text-left truncate flex-1">{scenario.label}</span>
+                    <Badge variant="outline" className="text-[7px] px-0.5 py-0 border-amber-500/30 text-amber-400">
+                      DE
+                    </Badge>
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => {
+                  for (const s of recommendedScenarios) {
+                    if (!activeIds.has(s.id)) onAddScenario(s);
+                  }
+                }}
+                className="w-full text-[9px] py-0.5 text-amber-400/70 hover:text-amber-300 transition-colors"
+              >
+                Add All Recommended
+              </button>
+            </div>
+          )}
+          <Separator className="bg-gray-700/50" />
+        </>
+      )}
+
       <div className="grid grid-cols-4 gap-1">
         {PRESET_SCENARIOS.map(preset => {
           const isActive = activeIds.has(preset.id);
@@ -222,9 +313,26 @@ export default function WhatIfSimulationPanel({
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-semibold text-gray-300">Active ({activeScenarios.length})</span>
-              <button onClick={onClearAll} className="text-[9px] text-gray-500 hover:text-red-400 transition-colors">
-                Clear All
-              </button>
+              <div className="flex items-center gap-2">
+                {onSetComparisonB && activeScenarios.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setShowCompare(!showCompare);
+                      if (!showCompare && onSetComparisonB) {
+                        onSetComparisonB(activeScenarios);
+                      }
+                    }}
+                    className={`text-[9px] flex items-center gap-0.5 ${showCompare ? 'text-purple-400' : 'text-gray-500 hover:text-purple-400'} transition-colors`}
+                    title="Compare as Programme A vs B"
+                  >
+                    <GitCompareArrows className="h-3 w-3" />
+                    Compare
+                  </button>
+                )}
+                <button onClick={onClearAll} className="text-[9px] text-gray-500 hover:text-red-400 transition-colors">
+                  Clear All
+                </button>
+              </div>
             </div>
             {activeScenarios.map(s => {
               const Icon = INTERVENTION_ICONS[s.interventionType];
@@ -292,6 +400,120 @@ export default function WhatIfSimulationPanel({
                     <span className="text-[9px] text-green-300">{imp}</span>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {comparison.timeline && comparison.timeline.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowTimeline(!showTimeline)}
+                  className="flex items-center justify-between w-full text-[10px] text-gray-300 hover:text-gray-100 mb-1"
+                >
+                  <div className="flex items-center gap-1">
+                    <Timer className="h-3 w-3 text-cyan-400" />
+                    <span className="font-semibold">Timeline (0-12 weeks)</span>
+                  </div>
+                  {showTimeline ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+                {showTimeline && (
+                  <div className="bg-gray-800/50 rounded-md p-2 border border-gray-700/40 space-y-2">
+                    <div className="flex justify-between text-[9px] text-gray-400">
+                      <span>Week {timelineWeek}</span>
+                      {timelinePoint && (
+                        <span className={riskColor(timelinePoint.riskLevel)}>
+                          Risk: {timelinePoint.riskScore}
+                        </span>
+                      )}
+                    </div>
+                    <Slider
+                      value={[timelineWeek]}
+                      onValueChange={v => setTimelineWeek(v[0])}
+                      min={0}
+                      max={12}
+                      step={1}
+                      className="w-full"
+                    />
+                    <div className="flex h-12 items-end gap-px">
+                      {comparison.timeline.map(tp => (
+                        <div key={tp.week} className="flex-1 flex flex-col items-center">
+                          <div
+                            className={`w-full rounded-t-sm transition-all ${
+                              tp.week === timelineWeek ? 'bg-cyan-400' : riskBarColor(tp.riskLevel) + ' opacity-60'
+                            }`}
+                            style={{ height: `${Math.max(4, tp.riskScore * 0.4)}px` }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between text-[7px] text-gray-500">
+                      <span>Wk 0</span>
+                      <span>Wk 6</span>
+                      <span>Wk 12</span>
+                    </div>
+                    {timelinePoint && (
+                      <div className="grid grid-cols-2 gap-1 text-[8px]">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Force ↓</span>
+                          <span className="text-green-400 font-mono">{Math.abs(timelinePoint.forceReduction).toFixed(1)}%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Comp ↓</span>
+                          <span className="text-green-400 font-mono">{timelinePoint.compensationResolution.toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {comparison.slingDeltas && comparison.slingDeltas.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowSlingDetails(!showSlingDetails)}
+                  className="flex items-center justify-between w-full text-[10px] text-gray-300 hover:text-gray-100 mb-1"
+                >
+                  <div className="flex items-center gap-1">
+                    <Link2 className="h-3 w-3 text-orange-400" />
+                    <span className="font-semibold">Sling Impact</span>
+                  </div>
+                  {showSlingDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+                {showSlingDetails && (
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {comparison.slingDeltas.map((sd: SlingDelta) => (
+                      <div key={sd.slingId} className="bg-gray-800/50 rounded p-1.5 border border-gray-700/30 space-y-0.5">
+                        <div className="flex items-center gap-1 text-[9px]">
+                          <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: sd.color }} />
+                          <span className="text-gray-300 flex-1 truncate">{sd.label}</span>
+                          <span className={`font-mono ${sd.activationDelta > 0 ? 'text-green-400' : sd.activationDelta < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                            {sd.activationDelta > 0 ? '↑' : sd.activationDelta < 0 ? '↓' : '='}{Math.abs(sd.activationDelta).toFixed(0)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[8px]">
+                          <span className="text-gray-500">Status:</span>
+                          <span className={sd.statusBefore === 'normal' ? 'text-green-400' : 'text-yellow-400'}>{sd.statusBefore}</span>
+                          <ArrowRight className="h-2 w-2 text-gray-600" />
+                          <span className={sd.statusAfter === 'normal' ? 'text-green-400' : 'text-yellow-400'}>{sd.statusAfter}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[8px]">
+                          <span className="text-gray-500">Transfer:</span>
+                          <span className={transferColor(sd.transferBefore)}>{sd.transferBefore}</span>
+                          <ArrowRight className="h-2 w-2 text-gray-600" />
+                          <span className={transferColor(sd.transferAfter)}>{sd.transferAfter}</span>
+                        </div>
+                        {sd.weakLinksBefore !== sd.weakLinksAfter && (
+                          <div className="text-[8px] text-gray-500">
+                            Weak links: {sd.weakLinksBefore} → {sd.weakLinksAfter}
+                            {sd.weakLinksAfter < sd.weakLinksBefore && (
+                              <span className="text-green-400 ml-1">↓{sd.weakLinksBefore - sd.weakLinksAfter}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -447,6 +669,43 @@ export default function WhatIfSimulationPanel({
                 ))}
               </div>
             </div>
+          )}
+
+          {showCompare && comparisonB && (
+            <>
+              <Separator className="bg-purple-500/30" />
+              <div className="bg-purple-500/10 rounded-md p-2 border border-purple-500/30 space-y-1.5">
+                <div className="flex items-center gap-1 text-[10px] text-purple-300 font-semibold">
+                  <GitCompareArrows className="h-3 w-3" />
+                  Programme A vs B
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[9px]">
+                  <div className="text-center">
+                    <div className="text-gray-400 mb-0.5">Programme A</div>
+                    <div className={`font-mono font-bold text-[11px] ${riskColor(comparison.riskLevelAfter)}`}>
+                      {comparison.overallRiskAfter.toFixed(0)}
+                    </div>
+                    <div className="text-gray-500">{comparison.scenarios.length} scenarios</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-gray-400 mb-0.5">Programme B</div>
+                    <div className={`font-mono font-bold text-[11px] ${riskColor(comparisonB.riskLevelAfter)}`}>
+                      {comparisonB.overallRiskAfter.toFixed(0)}
+                    </div>
+                    <div className="text-gray-500">{comparisonB.scenarios.length} scenarios</div>
+                  </div>
+                </div>
+                <div className="text-[8px] text-center">
+                  {comparison.overallRiskAfter < comparisonB.overallRiskAfter ? (
+                    <span className="text-green-400">Programme A achieves lower risk ({(comparisonB.overallRiskAfter - comparison.overallRiskAfter).toFixed(0)} pts better)</span>
+                  ) : comparison.overallRiskAfter > comparisonB.overallRiskAfter ? (
+                    <span className="text-purple-400">Programme B achieves lower risk ({(comparison.overallRiskAfter - comparisonB.overallRiskAfter).toFixed(0)} pts better)</span>
+                  ) : (
+                    <span className="text-gray-400">Both programmes achieve equal risk scores</span>
+                  )}
+                </div>
+              </div>
+            </>
           )}
 
           <Separator className="bg-gray-700/50" />

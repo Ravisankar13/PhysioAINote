@@ -6,6 +6,7 @@ import { calculateFullBiomechanics } from './biomechanicsEngine';
 import { calculateInjuryRisks, type InjuryRiskResult, type RiskScore, type BilateralRisk } from './injuryRiskEngine';
 import { analyzeInjuryMechanism, type InjuryMechanismResult } from './injuryMechanismEngine';
 import { KINETIC_CHAINS } from './kineticChainExplorer';
+import { computeSlingAnalysis, type SlingAnalysisResult, type SlingId } from './slingEngine';
 
 export type InterventionType = 'strengthen' | 'stretch' | 'mobilize' | 'offload';
 
@@ -67,6 +68,29 @@ export interface PainPredictionDelta {
   delta: number;
 }
 
+export interface SlingDelta {
+  slingId: SlingId;
+  label: string;
+  color: string;
+  activationBefore: number;
+  activationAfter: number;
+  activationDelta: number;
+  statusBefore: string;
+  statusAfter: string;
+  transferBefore: string;
+  transferAfter: string;
+  weakLinksBefore: number;
+  weakLinksAfter: number;
+}
+
+export interface TimelinePoint {
+  week: number;
+  riskScore: number;
+  riskLevel: string;
+  forceReduction: number;
+  compensationResolution: number;
+}
+
 export interface WhatIfComparisonResult {
   scenarios: WhatIfScenario[];
   overallRiskBefore: number;
@@ -79,6 +103,9 @@ export interface WhatIfComparisonResult {
   compensationDeltas: CompensationDelta[];
   muscleDeltas: MuscleDelta[];
   painPredictions: PainPredictionDelta[];
+  slingDeltas: SlingDelta[];
+  slingBefore: SlingAnalysisResult | null;
+  slingAfter: SlingAnalysisResult | null;
   correlationBefore: CrossSystemCorrelationResult | null;
   correlationAfter: CrossSystemCorrelationResult | null;
   mechanismBefore: InjuryMechanismResult | null;
@@ -86,6 +113,7 @@ export interface WhatIfComparisonResult {
   causalChainsResolved: number;
   causalChainsTotal: number;
   topImprovements: string[];
+  timeline: TimelinePoint[];
   simulatedModelConfig: Record<string, Record<string, number>>;
   simulatedOverrides: Record<string, Partial<MuscleOverride>>;
   forceMultiplier: number;
@@ -104,10 +132,32 @@ const SCENARIO_TO_MUSCLE_IDS: Record<string, string[]> = {
   spine: ['erector_spinae_thoracic', 'erector_spinae_lumbar', 'multifidus'],
   deltoid_l: ['l_ant_deltoid', 'l_mid_deltoid', 'l_post_deltoid'],
   deltoid_r: ['r_ant_deltoid', 'r_mid_deltoid', 'r_post_deltoid'],
-  neck: ['deep_neck_flexors', 'l_upper_trap', 'r_upper_trap'],
+  neck: ['deep_neck_flexors', 'l_upper_trap', 'r_upper_trap', 'scm', 'suboccipitals', 'levator_scapulae', 'scalenes'],
   chest: ['l_pec_major', 'r_pec_major', 'l_pec_minor', 'r_pec_minor'],
   shin_l: ['l_tib_ant'],
   shin_r: ['r_tib_ant'],
+  hamstring_l: ['l_hamstrings'],
+  hamstring_r: ['r_hamstrings'],
+  hip_flexor_l: ['l_hip_flexors', 'l_rect_fem'],
+  hip_flexor_r: ['r_hip_flexors', 'r_rect_fem'],
+  adductor_l: ['l_adductors'],
+  adductor_r: ['r_adductors'],
+  piriformis_l: ['l_piriformis'],
+  piriformis_r: ['r_piriformis'],
+  rotator_cuff_l: ['l_supraspinatus', 'l_infraspinatus'],
+  rotator_cuff_r: ['r_supraspinatus', 'r_infraspinatus'],
+  peroneal_l: ['l_peroneals'],
+  peroneal_r: ['r_peroneals'],
+  tib_post_l: ['l_tib_post'],
+  tib_post_r: ['r_tib_post'],
+  bicep_l: ['l_biceps'],
+  bicep_r: ['r_biceps'],
+  tricep_l: ['l_triceps'],
+  tricep_r: ['r_triceps'],
+  wrist_flex_l: ['l_wrist_flex'],
+  wrist_flex_r: ['r_wrist_flex'],
+  wrist_ext_l: ['l_wrist_ext'],
+  wrist_ext_r: ['r_wrist_ext'],
 };
 
 const STRENGTHEN_EFFECTS: Record<string, (mag: number) => Record<string, Record<string, number>>> = {
@@ -122,6 +172,28 @@ const STRENGTHEN_EFFECTS: Record<string, (mag: number) => Record<string, Record<
   calf_l: (m) => ({ leftAnkle: { dorsiflexion: m * 0.05 } }),
   calf_r: (m) => ({ rightAnkle: { dorsiflexion: m * 0.05 } }),
   neck: (m) => ({ spine: { forwardHead: -(m * 0.15) }, neck: { forwardHead: -(m * 0.15) } }),
+  hamstring_l: (m) => ({ leftKnee: { flexion: m * 0.08 }, leftHip: { extension: m * 0.12 }, pelvis: { tilt: m * 0.06 } }),
+  hamstring_r: (m) => ({ rightKnee: { flexion: m * 0.08 }, rightHip: { extension: m * 0.12 }, pelvis: { tilt: m * 0.06 } }),
+  hip_flexor_l: (m) => ({ leftHip: { flexion: m * 0.15 }, pelvis: { tilt: m * 0.08 } }),
+  hip_flexor_r: (m) => ({ rightHip: { flexion: m * 0.15 }, pelvis: { tilt: m * 0.08 } }),
+  adductor_l: (m) => ({ leftHip: { adduction: m * 0.1 } }),
+  adductor_r: (m) => ({ rightHip: { adduction: m * 0.1 } }),
+  piriformis_l: (m) => ({ leftHip: { externalRotation: m * 0.1 } }),
+  piriformis_r: (m) => ({ rightHip: { externalRotation: m * 0.1 } }),
+  rotator_cuff_l: (m) => ({ leftShoulder: { externalRotation: m * 0.15, abduction: m * 0.08 } }),
+  rotator_cuff_r: (m) => ({ rightShoulder: { externalRotation: m * 0.15, abduction: m * 0.08 } }),
+  peroneal_l: (m) => ({ leftAnkle: { eversion: m * 0.1, inversion: -(m * 0.08) } }),
+  peroneal_r: (m) => ({ rightAnkle: { eversion: m * 0.1, inversion: -(m * 0.08) } }),
+  tib_post_l: (m) => ({ leftAnkle: { inversion: m * 0.08 } }),
+  tib_post_r: (m) => ({ rightAnkle: { inversion: m * 0.08 } }),
+  bicep_l: (m) => ({ leftElbow: { flexion: m * 0.06 } }),
+  bicep_r: (m) => ({ rightElbow: { flexion: m * 0.06 } }),
+  tricep_l: (m) => ({ leftElbow: { flexion: -(m * 0.06) } }),
+  tricep_r: (m) => ({ rightElbow: { flexion: -(m * 0.06) } }),
+  wrist_flex_l: (m) => ({ leftWrist: { flexion: m * 0.05 } }),
+  wrist_flex_r: (m) => ({ rightWrist: { flexion: m * 0.05 } }),
+  wrist_ext_l: (m) => ({ leftWrist: { extension: m * 0.05 } }),
+  wrist_ext_r: (m) => ({ rightWrist: { extension: m * 0.05 } }),
 };
 
 const STRETCH_EFFECTS: Record<string, (m: number) => Record<string, Record<string, number>>> = {
@@ -134,6 +206,26 @@ const STRETCH_EFFECTS: Record<string, (m: number) => Record<string, Record<strin
   spine: (m) => ({ spine: { lumbarLordosis: -(m * 0.15) }, pelvis: { tilt: -(m * 0.1) } }),
   glute_l: (m) => ({ leftHip: { flexion: m * 0.15, internalRotation: m * 0.1 } }),
   glute_r: (m) => ({ rightHip: { flexion: m * 0.15, internalRotation: m * 0.1 } }),
+  hamstring_l: (m) => ({ leftHip: { flexion: m * 0.2 }, pelvis: { tilt: -(m * 0.12) } }),
+  hamstring_r: (m) => ({ rightHip: { flexion: m * 0.2 }, pelvis: { tilt: -(m * 0.12) } }),
+  hip_flexor_l: (m) => ({ pelvis: { tilt: -(m * 0.2) }, spine: { lumbarLordosis: -(m * 0.12) }, leftHip: { extension: m * 0.18 } }),
+  hip_flexor_r: (m) => ({ pelvis: { tilt: -(m * 0.2) }, spine: { lumbarLordosis: -(m * 0.12) }, rightHip: { extension: m * 0.18 } }),
+  adductor_l: (m) => ({ leftHip: { abduction: m * 0.15 } }),
+  adductor_r: (m) => ({ rightHip: { abduction: m * 0.15 } }),
+  piriformis_l: (m) => ({ leftHip: { internalRotation: m * 0.15 } }),
+  piriformis_r: (m) => ({ rightHip: { internalRotation: m * 0.15 } }),
+  rotator_cuff_l: (m) => ({ leftShoulder: { internalRotation: m * 0.1 } }),
+  rotator_cuff_r: (m) => ({ rightShoulder: { internalRotation: m * 0.1 } }),
+  peroneal_l: (m) => ({ leftAnkle: { inversion: m * 0.1 } }),
+  peroneal_r: (m) => ({ rightAnkle: { inversion: m * 0.1 } }),
+  tib_post_l: (m) => ({ leftAnkle: { eversion: m * 0.08 } }),
+  tib_post_r: (m) => ({ rightAnkle: { eversion: m * 0.08 } }),
+  bicep_l: (m) => ({ leftElbow: { flexion: -(m * 0.08) } }),
+  bicep_r: (m) => ({ rightElbow: { flexion: -(m * 0.08) } }),
+  wrist_flex_l: (m) => ({ leftWrist: { extension: m * 0.1 } }),
+  wrist_flex_r: (m) => ({ rightWrist: { extension: m * 0.1 } }),
+  wrist_ext_l: (m) => ({ leftWrist: { flexion: m * 0.1 } }),
+  wrist_ext_r: (m) => ({ rightWrist: { flexion: m * 0.1 } }),
 };
 
 const MOBILIZE_EFFECTS: Record<string, (m: number) => Record<string, Record<string, number>>> = {
@@ -147,6 +239,10 @@ const MOBILIZE_EFFECTS: Record<string, (m: number) => Record<string, Record<stri
   leftKnee: (m) => ({ leftKnee: { flexion: m * 0.1 } }),
   rightKnee: (m) => ({ rightKnee: { flexion: m * 0.1 } }),
   neck: (m) => ({ neck: { forwardHead: -(m * 0.2), lateralFlexion: m * 0.1 } }),
+  leftElbow: (m) => ({ leftElbow: { flexion: m * 0.08, pronation: m * 0.05 } }),
+  rightElbow: (m) => ({ rightElbow: { flexion: m * 0.08, pronation: m * 0.05 } }),
+  leftWrist: (m) => ({ leftWrist: { flexion: m * 0.08, extension: m * 0.08 } }),
+  rightWrist: (m) => ({ rightWrist: { flexion: m * 0.08, extension: m * 0.08 } }),
 };
 
 export const PRESET_SCENARIOS: WhatIfScenario[] = [
@@ -166,15 +262,37 @@ export const MUSCLE_TARGETS = [
   { id: 'core', label: 'Core' },
   { id: 'quad_l', label: 'L Quadriceps' },
   { id: 'quad_r', label: 'R Quadriceps' },
+  { id: 'hamstring_l', label: 'L Hamstrings' },
+  { id: 'hamstring_r', label: 'R Hamstrings' },
+  { id: 'hip_flexor_l', label: 'L Hip Flexors' },
+  { id: 'hip_flexor_r', label: 'R Hip Flexors' },
+  { id: 'adductor_l', label: 'L Adductors' },
+  { id: 'adductor_r', label: 'R Adductors' },
+  { id: 'piriformis_l', label: 'L Piriformis' },
+  { id: 'piriformis_r', label: 'R Piriformis' },
   { id: 'calf_l', label: 'L Calf' },
   { id: 'calf_r', label: 'R Calf' },
+  { id: 'peroneal_l', label: 'L Peroneals' },
+  { id: 'peroneal_r', label: 'R Peroneals' },
+  { id: 'tib_post_l', label: 'L Tib Posterior' },
+  { id: 'tib_post_r', label: 'R Tib Posterior' },
   { id: 'scapula_l', label: 'L Scapular' },
   { id: 'scapula_r', label: 'R Scapular' },
-  { id: 'spine', label: 'Erector Spinae' },
+  { id: 'rotator_cuff_l', label: 'L Rotator Cuff' },
+  { id: 'rotator_cuff_r', label: 'R Rotator Cuff' },
   { id: 'deltoid_l', label: 'L Deltoid' },
   { id: 'deltoid_r', label: 'R Deltoid' },
+  { id: 'spine', label: 'Erector Spinae' },
   { id: 'neck', label: 'Neck' },
   { id: 'chest', label: 'Chest/Pecs' },
+  { id: 'bicep_l', label: 'L Biceps' },
+  { id: 'bicep_r', label: 'R Biceps' },
+  { id: 'tricep_l', label: 'L Triceps' },
+  { id: 'tricep_r', label: 'R Triceps' },
+  { id: 'wrist_flex_l', label: 'L Wrist Flexors' },
+  { id: 'wrist_flex_r', label: 'R Wrist Flexors' },
+  { id: 'wrist_ext_l', label: 'L Wrist Extensors' },
+  { id: 'wrist_ext_r', label: 'R Wrist Extensors' },
 ];
 
 export const JOINT_TARGETS = [
@@ -187,6 +305,10 @@ export const JOINT_TARGETS = [
   { id: 'spine', label: 'Spine' },
   { id: 'leftShoulder', label: 'L Shoulder' },
   { id: 'rightShoulder', label: 'R Shoulder' },
+  { id: 'leftElbow', label: 'L Elbow' },
+  { id: 'rightElbow', label: 'R Elbow' },
+  { id: 'leftWrist', label: 'L Wrist' },
+  { id: 'rightWrist', label: 'R Wrist' },
   { id: 'neck', label: 'Neck' },
 ];
 
@@ -195,15 +317,31 @@ function clamp(v: number, min: number, max: number): number {
 }
 
 function expandBilateralTarget(target: string): string[] {
-  if (target === 'glute') return ['glute_l', 'glute_r'];
-  if (target === 'quad') return ['quad_l', 'quad_r'];
-  if (target === 'calf') return ['calf_l', 'calf_r'];
-  if (target === 'scapula') return ['scapula_l', 'scapula_r'];
-  if (target === 'ankle') return ['leftAnkle', 'rightAnkle'];
-  if (target === 'hip') return ['leftHip', 'rightHip'];
-  if (target === 'knee') return ['leftKnee', 'rightKnee'];
-  if (target === 'shoulder') return ['leftShoulder', 'rightShoulder'];
-  return [target];
+  const BILATERAL_MAP: Record<string, string[]> = {
+    glute: ['glute_l', 'glute_r'],
+    quad: ['quad_l', 'quad_r'],
+    calf: ['calf_l', 'calf_r'],
+    scapula: ['scapula_l', 'scapula_r'],
+    ankle: ['leftAnkle', 'rightAnkle'],
+    hip: ['leftHip', 'rightHip'],
+    knee: ['leftKnee', 'rightKnee'],
+    shoulder: ['leftShoulder', 'rightShoulder'],
+    hamstring: ['hamstring_l', 'hamstring_r'],
+    hip_flexor: ['hip_flexor_l', 'hip_flexor_r'],
+    adductor: ['adductor_l', 'adductor_r'],
+    piriformis: ['piriformis_l', 'piriformis_r'],
+    rotator_cuff: ['rotator_cuff_l', 'rotator_cuff_r'],
+    peroneal: ['peroneal_l', 'peroneal_r'],
+    tib_post: ['tib_post_l', 'tib_post_r'],
+    bicep: ['bicep_l', 'bicep_r'],
+    tricep: ['tricep_l', 'tricep_r'],
+    deltoid: ['deltoid_l', 'deltoid_r'],
+    elbow: ['leftElbow', 'rightElbow'],
+    wrist: ['leftWrist', 'rightWrist'],
+    wrist_flex: ['wrist_flex_l', 'wrist_flex_r'],
+    wrist_ext: ['wrist_ext_l', 'wrist_ext_r'],
+  };
+  return BILATERAL_MAP[target] || [target];
 }
 
 function applyOverrideToMuscleIds(
@@ -411,12 +549,179 @@ function buildCorrelationInput(
   return { forces, muscles, correlation };
 }
 
+export interface DecisionEngineIntervention {
+  id: string;
+  name: string;
+  category: string;
+  tier: string;
+  targetRegions: string[];
+  dosage: string;
+  evidenceGrade: string;
+  score?: number;
+}
+
+const REGION_TO_TARGETS: Record<string, { target: string; targetType: 'muscle' | 'joint'; intervention: InterventionType }> = {
+  lumbar: { target: 'spine', targetType: 'joint', intervention: 'mobilize' },
+  thoracic: { target: 'spine', targetType: 'joint', intervention: 'mobilize' },
+  cervical: { target: 'neck', targetType: 'joint', intervention: 'mobilize' },
+  shoulder: { target: 'rotator_cuff', targetType: 'muscle', intervention: 'strengthen' },
+  hip: { target: 'glute', targetType: 'muscle', intervention: 'strengthen' },
+  knee: { target: 'quad', targetType: 'muscle', intervention: 'strengthen' },
+  ankle: { target: 'ankle', targetType: 'joint', intervention: 'mobilize' },
+  elbow: { target: 'elbow', targetType: 'joint', intervention: 'mobilize' },
+  wrist: { target: 'wrist', targetType: 'joint', intervention: 'mobilize' },
+  core: { target: 'core', targetType: 'muscle', intervention: 'strengthen' },
+  gluteal: { target: 'glute', targetType: 'muscle', intervention: 'strengthen' },
+  hamstring: { target: 'hamstring', targetType: 'muscle', intervention: 'strengthen' },
+  calf: { target: 'calf', targetType: 'muscle', intervention: 'strengthen' },
+  scapular: { target: 'scapula', targetType: 'muscle', intervention: 'strengthen' },
+};
+
+const CATEGORY_INTERVENTION_MAP: Record<string, InterventionType> = {
+  exercise: 'strengthen',
+  manual_therapy: 'mobilize',
+  modality: 'offload',
+  load_management: 'offload',
+  neural: 'mobilize',
+  education: 'offload',
+};
+
+export function generateScenariosFromDecisionEngine(
+  interventions: DecisionEngineIntervention[]
+): WhatIfScenario[] {
+  const scenarios: WhatIfScenario[] = [];
+  const colors = ['#10b981', '#3b82f6', '#a855f7', '#f59e0b', '#06b6d4', '#ec4899', '#f97316', '#8b5cf6'];
+  const seen = new Set<string>();
+
+  for (const intervention of interventions.slice(0, 8)) {
+    const nameLC = intervention.name.toLowerCase();
+    const categoryIntervention = CATEGORY_INTERVENTION_MAP[intervention.category] || 'strengthen';
+    let matchedTarget: { target: string; targetType: 'muscle' | 'joint'; intervention: InterventionType } | null = null;
+
+    for (const region of intervention.targetRegions) {
+      const regionLC = region.toLowerCase();
+      for (const [key, mapping] of Object.entries(REGION_TO_TARGETS)) {
+        if (regionLC.includes(key)) {
+          matchedTarget = mapping;
+          break;
+        }
+      }
+      if (matchedTarget) break;
+    }
+
+    if (!matchedTarget) {
+      if (nameLC.includes('stretch')) {
+        matchedTarget = { target: 'hip_flexor', targetType: 'muscle', intervention: 'stretch' };
+      } else if (nameLC.includes('strengthen') || nameLC.includes('exercise')) {
+        matchedTarget = { target: 'core', targetType: 'muscle', intervention: 'strengthen' };
+      } else {
+        matchedTarget = { target: 'spine', targetType: 'joint', intervention: categoryIntervention };
+      }
+    }
+
+    const finalIntervention = nameLC.includes('stretch') ? 'stretch' as InterventionType
+      : nameLC.includes('mobiliz') || nameLC.includes('mobilise') ? 'mobilize' as InterventionType
+      : nameLC.includes('strengthen') || nameLC.includes('progressive') ? 'strengthen' as InterventionType
+      : matchedTarget.intervention;
+
+    const scenarioKey = `${matchedTarget.target}_${finalIntervention}`;
+    if (seen.has(scenarioKey)) continue;
+    seen.add(scenarioKey);
+
+    const magnitude = intervention.tier === 'primary' ? 20 : 12;
+    scenarios.push({
+      id: `de_${intervention.id}`,
+      label: intervention.name.length > 25 ? intervention.name.slice(0, 22) + '...' : intervention.name,
+      description: `${intervention.name} (${intervention.tier}, ${intervention.evidenceGrade})`,
+      interventionType: finalIntervention,
+      target: matchedTarget.target,
+      targetType: matchedTarget.targetType,
+      magnitude,
+      unit: finalIntervention === 'mobilize' ? '°' : '%',
+      color: colors[scenarios.length % colors.length],
+    });
+  }
+
+  return scenarios;
+}
+
+function computeBaselineAwareMagnitude(
+  baseMagnitude: number,
+  scenarioTarget: string,
+  muscleAnalysis: MuscleAnalysisResult | null
+): number {
+  if (!muscleAnalysis) return baseMagnitude;
+  const muscleIds = SCENARIO_TO_MUSCLE_IDS[scenarioTarget];
+  if (!muscleIds || muscleIds.length === 0) return baseMagnitude;
+
+  let totalDeficit = 0;
+  let count = 0;
+  for (const mId of muscleIds) {
+    const muscle = muscleAnalysis.allMuscles.find(m => m.id === mId);
+    if (muscle) {
+      const deficit = Math.max(0, 100 - muscle.activationPercent) / 100;
+      totalDeficit += deficit;
+      count++;
+    }
+  }
+
+  if (count === 0) return baseMagnitude;
+  const avgDeficit = totalDeficit / count;
+  const scaleFactor = 0.5 + avgDeficit * 0.8;
+  return baseMagnitude * clamp(scaleFactor, 0.3, 1.8);
+}
+
+function getRiskLevelFromScore(score: number): string {
+  if (score < 20) return 'minimal';
+  if (score < 40) return 'low';
+  if (score < 60) return 'moderate';
+  if (score < 80) return 'high';
+  return 'critical';
+}
+
+function computeTimelineProjection(
+  overallRiskBefore: number,
+  overallRiskAfter: number,
+  compensationDeltas: CompensationDelta[],
+  forceDeltas: ForceDelta[]
+): TimelinePoint[] {
+  const points: TimelinePoint[] = [];
+  const riskDelta = overallRiskAfter - overallRiskBefore;
+  const avgForceReduction = forceDeltas.length > 0
+    ? forceDeltas.reduce((s, f) => s + Math.min(0, f.deltaPercent), 0) / forceDeltas.length
+    : 0;
+  const avgCompResolution = compensationDeltas.length > 0
+    ? compensationDeltas.reduce((s, c) => s + c.resolvedPercent, 0) / compensationDeltas.length
+    : 0;
+
+  for (let week = 0; week <= 12; week++) {
+    const doseResponseCurve = week === 0 ? 0
+      : week <= 2 ? 0.15 * week
+      : week <= 6 ? 0.3 + (week - 2) * 0.12
+      : week <= 10 ? 0.78 + (week - 6) * 0.04
+      : 0.94 + (week - 10) * 0.015;
+    const progress = clamp(doseResponseCurve, 0, 1);
+
+    const projectedRisk = overallRiskBefore + riskDelta * progress;
+    points.push({
+      week,
+      riskScore: Math.round(clamp(projectedRisk, 0, 100)),
+      riskLevel: getRiskLevelFromScore(projectedRisk),
+      forceReduction: Math.round(avgForceReduction * progress * 10) / 10,
+      compensationResolution: Math.round(avgCompResolution * progress * 10) / 10,
+    });
+  }
+  return points;
+}
+
 export function computeWhatIfComparison(
   baseModelConfig: Record<string, any>,
   baseOverrides: Record<string, Partial<MuscleOverride>>,
   painMarkers: Array<{ id: string; position: { x: number; y: number; z: number }; label: string; type: 'point' | 'area' | 'referred' | 'line' | 'paint'; severity?: number; description?: string }>,
   bodyWeightKg: number,
-  scenarios: WhatIfScenario[]
+  scenarios: WhatIfScenario[],
+  muscleAnalysis?: MuscleAnalysisResult | null,
+  biomechanicsOutput?: any | null,
 ): WhatIfComparisonResult {
   const { modelConfig: simConfig, overrides: simOverrides, forceMultiplier } = applyScenarios(baseModelConfig, baseOverrides, scenarios);
   const effectiveBodyWeightKg = bodyWeightKg * forceMultiplier;
@@ -552,12 +857,78 @@ export function computeWhatIfComparison(
     console.warn('[WhatIf] Mechanism computation failed:', e instanceof Error ? e.message : e);
   }
 
+  let slingBefore: SlingAnalysisResult | null = null;
+  let slingAfter: SlingAnalysisResult | null = null;
+  const slingDeltas: SlingDelta[] = [];
+  try {
+    const slingInput = {
+      biomechanicsOutput: biomechanicsOutput || null,
+      muscleOverrides: baseOverrides as Record<string, { tension?: number; pathology?: string }>,
+    };
+    slingBefore = computeSlingAnalysis(slingInput);
+    slingAfter = computeSlingAnalysis({
+      biomechanicsOutput: biomechanicsOutput || null,
+      muscleOverrides: simOverrides as Record<string, { tension?: number; pathology?: string }>,
+    });
+    for (const bs of slingBefore.slings) {
+      const as_ = slingAfter.slings.find(s => s.slingId === bs.slingId);
+      if (as_) {
+        const delta = as_.activationScore - bs.activationScore;
+        if (Math.abs(delta) > 1 || bs.status !== as_.status) {
+          slingDeltas.push({
+            slingId: bs.slingId,
+            label: bs.label,
+            color: bs.color,
+            activationBefore: bs.activationScore,
+            activationAfter: as_.activationScore,
+            activationDelta: delta,
+            statusBefore: bs.status,
+            statusAfter: as_.status,
+            transferBefore: bs.forceTransferQuality,
+            transferAfter: as_.forceTransferQuality,
+            weakLinksBefore: bs.weakLinks.length,
+            weakLinksAfter: as_.weakLinks.length,
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[WhatIf] Sling computation failed:', e instanceof Error ? e.message : e);
+  }
+
   const painPredictions: PainPredictionDelta[] = [];
-  const painRegions = ['lumbar', 'cervical', 'knee', 'hip', 'ankle', 'shoulder'];
+  const PAIN_REGION_POSITIONS: Record<string, { x: number; y: number; z: number }> = {
+    lumbar: { x: 0, y: 1.0, z: -0.1 },
+    cervical: { x: 0, y: 1.5, z: 0 },
+    knee: { x: 0.15, y: 0.5, z: 0 },
+    hip: { x: 0.2, y: 0.9, z: 0 },
+    ankle: { x: 0.1, y: 0.1, z: 0 },
+    shoulder: { x: 0.35, y: 1.35, z: 0 },
+    elbow: { x: 0.4, y: 1.1, z: 0 },
+    wrist: { x: 0.45, y: 0.9, z: 0 },
+  };
+  const painRegions = ['lumbar', 'cervical', 'knee', 'hip', 'ankle', 'shoulder', 'elbow', 'wrist'];
   for (const region of painRegions) {
     const beforeRegionRisks = riskDeltas.filter(rd => rd.region.toLowerCase().includes(region) || rd.label.toLowerCase().includes(region));
     const beforeForceRegion = forceDeltas.filter(fd => fd.jointId.toLowerCase().includes(region));
     if (beforeRegionRisks.length === 0 && beforeForceRegion.length === 0) continue;
+
+    let markerWeight = 1.0;
+    const regionPos = PAIN_REGION_POSITIONS[region];
+    if (regionPos && painMarkers.length > 0) {
+      for (const pm of painMarkers) {
+        const dx = pm.position.x - regionPos.x;
+        const dy = pm.position.y - regionPos.y;
+        const dz = pm.position.z - regionPos.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist < 0.3) {
+          const severityFactor = (pm.severity ?? 5) / 5;
+          const proximityFactor = 1 - (dist / 0.3);
+          markerWeight += proximityFactor * severityFactor * 0.5;
+        }
+      }
+    }
+
     const avgRiskBefore = beforeRegionRisks.length > 0
       ? beforeRegionRisks.reduce((s, r) => s + r.before, 0) / beforeRegionRisks.length
       : 0;
@@ -567,8 +938,8 @@ export function computeWhatIfComparison(
     const avgForceDeltaPct = beforeForceRegion.length > 0
       ? beforeForceRegion.reduce((s, f) => s + f.deltaPercent, 0) / beforeForceRegion.length
       : 0;
-    const beforeLikelihood = clamp(avgRiskBefore * 0.7 + (avgForceDeltaPct > 0 ? 10 : 0), 0, 100);
-    const afterLikelihood = clamp(avgRiskAfter * 0.7 + (avgForceDeltaPct > 0 ? avgForceDeltaPct * 0.3 : avgForceDeltaPct * 0.2), 0, 100);
+    const beforeLikelihood = clamp((avgRiskBefore * 0.7 + (avgForceDeltaPct > 0 ? 10 : 0)) * markerWeight, 0, 100);
+    const afterLikelihood = clamp((avgRiskAfter * 0.7 + (avgForceDeltaPct > 0 ? avgForceDeltaPct * 0.3 : avgForceDeltaPct * 0.2)) * markerWeight, 0, 100);
     if (Math.abs(beforeLikelihood - afterLikelihood) > 1) {
       painPredictions.push({
         region: region.charAt(0).toUpperCase() + region.slice(1),
@@ -583,13 +954,13 @@ export function computeWhatIfComparison(
   if (overallAfter < overallBefore) {
     topImprovements.push(`Overall risk: ${overallBefore.toFixed(0)} → ${overallAfter.toFixed(0)} (↓${(overallBefore - overallAfter).toFixed(0)})`);
   }
-  const sortedForces = [...forceDeltas].sort((a, b) => a.delta - b.delta);
+  const sortedForces = [...forceDeltas].sort((a: ForceDelta, b: ForceDelta) => a.delta - b.delta);
   for (const fd of sortedForces.slice(0, 3)) {
     if (fd.delta < 0) {
       topImprovements.push(`${fd.jointLabel}: ${Math.abs(fd.deltaPercent).toFixed(0)}% force reduction`);
     }
   }
-  const sortedRisks = [...riskDeltas].sort((a, b) => a.delta - b.delta);
+  const sortedRisks = [...riskDeltas].sort((a: RiskDelta, b: RiskDelta) => a.delta - b.delta);
   for (const rd of sortedRisks.slice(0, 3)) {
     if (rd.delta < 0) {
       topImprovements.push(`${rd.label}: risk ↓${Math.abs(rd.delta).toFixed(0)} pts`);
@@ -605,6 +976,11 @@ export function computeWhatIfComparison(
   if (causalChainsResolved > 0) {
     topImprovements.push(`${causalChainsResolved}/${causalChainsTotal} causal chains resolved`);
   }
+  for (const sd of slingDeltas.filter(s => s.activationDelta > 3).slice(0, 2)) {
+    topImprovements.push(`${sd.label}: activation ↑${sd.activationDelta.toFixed(0)}`);
+  }
+
+  const timeline = computeTimelineProjection(overallBefore, overallAfter, compensationDeltas, forceDeltas);
 
   return {
     scenarios,
@@ -613,11 +989,14 @@ export function computeWhatIfComparison(
     overallRiskDelta: overallAfter - overallBefore,
     riskLevelBefore: beforeRisk?.overallRiskLevel ?? 'minimal',
     riskLevelAfter: afterRisk?.overallRiskLevel ?? 'minimal',
-    forceDeltas: forceDeltas.sort((a, b) => a.delta - b.delta),
-    riskDeltas: riskDeltas.sort((a, b) => a.delta - b.delta),
+    forceDeltas: forceDeltas.sort((a: ForceDelta, b: ForceDelta) => a.delta - b.delta),
+    riskDeltas: riskDeltas.sort((a: RiskDelta, b: RiskDelta) => a.delta - b.delta),
     compensationDeltas,
-    muscleDeltas: muscleDeltas.sort((a, b) => (a.activationAfter - a.activationBefore) - (b.activationAfter - b.activationBefore)),
-    painPredictions: painPredictions.sort((a, b) => a.delta - b.delta),
+    muscleDeltas: muscleDeltas.sort((a: MuscleDelta, b: MuscleDelta) => (a.activationAfter - a.activationBefore) - (b.activationAfter - b.activationBefore)),
+    painPredictions: painPredictions.sort((a: PainPredictionDelta, b: PainPredictionDelta) => a.delta - b.delta),
+    slingDeltas,
+    slingBefore,
+    slingAfter,
     correlationBefore: before.correlation,
     correlationAfter: after.correlation,
     mechanismBefore,
@@ -625,6 +1004,7 @@ export function computeWhatIfComparison(
     causalChainsResolved,
     causalChainsTotal,
     topImprovements,
+    timeline,
     simulatedModelConfig: simConfig,
     simulatedOverrides: simOverrides,
     forceMultiplier,

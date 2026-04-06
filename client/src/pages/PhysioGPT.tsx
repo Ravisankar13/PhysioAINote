@@ -3370,7 +3370,7 @@ ${ddxList}`;
       severity: (pm as Record<string, unknown>).severity as number ?? 5,
       description: pm.description,
     }));
-    return computeWhatIfComparison(effectiveModelConfig, compensatedOverrides, pmForComparison, bodyWeightKg, whatIfScenarios);
+    return computeWhatIfComparison(effectiveModelConfig, compensatedOverrides, pmForComparison, bodyWeightKg, whatIfScenarios, null, null);
   }, [whatIfScenarios, effectiveModelConfig, compensatedOverrides, painMarkers, bodyWeightKg]);
 
   const finalModelConfig = useMemo(() => {
@@ -7949,6 +7949,18 @@ ${ddxList}`;
                       onRemoveScenario={handleRemoveWhatIfScenario}
                       onClearAll={handleClearWhatIfScenarios}
                       onApplyToSkeleton={handleApplyWhatIfToSkeleton}
+                      treatmentDecisionData={treatmentDecisionData ? {
+                        primary: treatmentDecisionData.primary.map(i => ({
+                          id: i.id, name: i.name, category: i.category,
+                          tier: i.tier, targetRegions: i.targetRegions,
+                          dosage: i.dosage, evidenceGrade: i.evidenceGrade, score: i.score,
+                        })),
+                        adjunct: treatmentDecisionData.adjunct.map(i => ({
+                          id: i.id, name: i.name, category: i.category,
+                          tier: i.tier, targetRegions: i.targetRegions,
+                          dosage: i.dosage, evidenceGrade: i.evidenceGrade, score: i.score,
+                        })),
+                      } : null}
                     />
                   )}
                 </div>

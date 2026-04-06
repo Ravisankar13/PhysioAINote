@@ -53,7 +53,7 @@ const PAIN_RULES: PainRule[] = [
   {
     id: 'mid_thoracic_pain',
     label: 'Mid-Thoracic Pain',
-    boneName: 'Chest_M',
+    boneName: 'Spine1Part2_M',
     category: 'postural',
     position: { x: 0, y: 1.2, z: -0.1 },
     compute: (c) => {

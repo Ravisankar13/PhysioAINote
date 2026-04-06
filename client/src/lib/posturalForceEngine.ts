@@ -210,14 +210,14 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
 
   const costotransComp = upperThorAbove * 0.15 * (1 + 0.02 * thorRot + 0.02 * thorKyph);
   const costotransShear = upperThorAbove * 0.05 * (1 + 0.03 * thorRot);
-  joints.push({ id: 'costotrans', label: 'Costovertebral/Costotransverse', category: 'thoracic_spine', boneName: 'Chest_M', compression: costotransComp, tension: upperThorAbove * 0.08, shear: costotransShear, totalForce: costotransComp + costotransShear, status: getStatus(costotransComp), clinical: getClinicalNote(costotransComp, 'generic'), enabled: true });
+  joints.push({ id: 'costotrans', label: 'Costovertebral/Costotransverse', category: 'thoracic_spine', boneName: 'Spine1Part2_M', compression: costotransComp, tension: upperThorAbove * 0.08, shear: costotransShear, totalForce: costotransComp + costotransShear, status: getStatus(costotransComp), clinical: getClinicalNote(costotransComp, 'generic'), enabled: true });
 
   const midThorAbove = headMass + upperTrunkMass + armMass;
   const midThorComp = midThorAbove * thorMomentMult * 1.15 * (1 + 0.02 * thorScol);
   const midThorShear = midThorAbove * thorLeverArm * 0.5;
   const midThorDiscComp = midThorAbove * thorMomentMult * 1.2;
-  joints.push({ id: 't5t8_facet', label: 'T5-T8 Mid-Thoracic Facets', category: 'thoracic_spine', boneName: 'Chest_M', compression: midThorComp, tension: midThorAbove * 0.12, shear: midThorShear, totalForce: midThorComp + midThorShear, status: getStatus(midThorComp), clinical: getClinicalNote(midThorComp, 'facet'), enabled: true });
-  joints.push({ id: 't5t8_disc', label: 'T5-T8 Intervertebral Discs', category: 'thoracic_spine', boneName: 'Chest_M', compression: midThorDiscComp, tension: midThorAbove * 0.1, shear: midThorShear * 0.8, totalForce: midThorDiscComp + midThorShear * 0.8, status: getStatus(midThorDiscComp), clinical: getClinicalNote(midThorDiscComp, 'disc'), enabled: true });
+  joints.push({ id: 't5t8_facet', label: 'T5-T8 Mid-Thoracic Facets', category: 'thoracic_spine', boneName: 'Spine1Part2_M', compression: midThorComp, tension: midThorAbove * 0.12, shear: midThorShear, totalForce: midThorComp + midThorShear, status: getStatus(midThorComp), clinical: getClinicalNote(midThorComp, 'facet'), enabled: true });
+  joints.push({ id: 't5t8_disc', label: 'T5-T8 Intervertebral Discs', category: 'thoracic_spine', boneName: 'Spine1Part2_M', compression: midThorDiscComp, tension: midThorAbove * 0.1, shear: midThorShear * 0.8, totalForce: midThorDiscComp + midThorShear * 0.8, status: getStatus(midThorDiscComp), clinical: getClinicalNote(midThorDiscComp, 'disc'), enabled: true });
 
   const lowThorAbove = headMass + SEGMENT_MASS_PCT.trunk * 0.7 + armMass;
   const lowThorComp = lowThorAbove * thorMomentMult * 1.2 * (1 + 0.02 * thorScol + 0.01 * lumbarScol * 0.5);

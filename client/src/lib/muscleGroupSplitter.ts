@@ -25,7 +25,7 @@ export const MUSCLE_GROUPS: MuscleGroupDefinition[] = [
   { id: 'foot_r', label: 'Right Foot', color: '#e67e22', bones: ['Toes_R'] },
   { id: 'foot_l', label: 'Left Foot', color: '#e67e22', bones: ['Toes_L'] },
   { id: 'chest', label: 'Chest', color: '#e91e63', bones: ['Chest_M'] },
-  { id: 'spine', label: 'Spine', color: '#ff9800', bones: ['Spine1_M', 'Chest_M'] },
+  { id: 'spine', label: 'Spine', color: '#ff9800', bones: ['Spine1_M', 'Spine1Part2_M', 'Chest_M'] },
   { id: 'neck', label: 'Neck', color: '#795548', bones: ['Neck_M', 'NeckPart1_M', 'NeckPart2_M'] },
   { id: 'core', label: 'Core', color: '#f1c40f', bones: ['Root_M', 'RootPart1_M', 'RootPart2_M'] },
 ];

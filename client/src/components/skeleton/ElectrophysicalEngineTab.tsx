@@ -1,8 +1,13 @@
 import { useState, useCallback, useRef } from 'react';
-import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves } from 'lucide-react';
+import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
+
+interface ResourceLink {
+  title: string;
+  url: string;
+}
 
 interface ModalityItem {
   modality: string;
@@ -14,6 +19,8 @@ interface ModalityItem {
   contraindications: string;
   expectedPhysiologicalEffect: string;
   reassessmentCriteria: string;
+  modalityDescription?: string;
+  resourceLinks?: ResourceLink[];
 }
 
 interface ModalityGroup {
@@ -119,6 +126,37 @@ function ModalityCard({ modality, index }: { modality: ModalityItem; index: numb
                 Contraindications
               </div>
               <div className="text-[10px] text-red-300/80">{modality.contraindications}</div>
+            </div>
+          )}
+          {modality.modalityDescription && (
+            <div className="border border-teal-500/20 rounded bg-teal-500/5 p-1.5">
+              <div className="text-[9px] font-medium text-teal-400/80 uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                <HelpCircle className="h-2.5 w-2.5" />
+                What is this modality?
+              </div>
+              <div className="text-[10px] text-gray-300 leading-relaxed">{modality.modalityDescription}</div>
+            </div>
+          )}
+          {modality.resourceLinks && modality.resourceLinks.length > 0 && (
+            <div>
+              <div className="text-[9px] font-medium text-blue-400/80 uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                <ExternalLink className="h-2.5 w-2.5" />
+                Learn More
+              </div>
+              <div className="flex flex-col gap-0.5">
+                {modality.resourceLinks.map((link, li) => (
+                  <a
+                    key={li}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[9px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 transition-colors"
+                  >
+                    <ExternalLink className="h-2 w-2 shrink-0" />
+                    <span className="truncate">{link.title}</span>
+                  </a>
+                ))}
+              </div>
             </div>
           )}
         </div>

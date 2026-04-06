@@ -7354,25 +7354,88 @@ Based on this clinical data, generate a comprehensive, prioritized manual therap
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
       const aiClient = new OpenAI({ apiKey, baseURL });
 
-      const systemPrompt = `You are an expert musculoskeletal physiotherapist and electrophysical agents specialist with advanced training in therapeutic ultrasound, shockwave therapy (ESWT/radial), dry needling, acupuncture, TENS, interferential current therapy (IFT), electrical muscle stimulation (EMS/NMES), laser/photobiomodulation (LLLT/PBM), machine traction (cervical/lumbar), heat therapy (hot packs, shortwave diathermy), cryotherapy, and instrument-assisted soft tissue mobilization (IASTM). You are given detailed biomechanical analysis data from a clinical assessment.
+      const systemPrompt = `You are an expert musculoskeletal physiotherapist and electrophysical agents specialist with comprehensive training across ALL electrophysical and physical agent modalities used in modern physiotherapy practice. You are given detailed biomechanical analysis data from a clinical assessment.
 
-Your task is to reason through ALL clinical data and generate a highly specific, prioritized electrophysical agents prescription that addresses the patient's underlying dysfunctions using appropriate modalities.
+Your task is to reason through ALL clinical data and generate a highly specific, prioritized electrophysical agents prescription that addresses the patient's underlying dysfunctions using the most appropriate modalities from the FULL range available.
+
+AVAILABLE MODALITY CATEGORIES (choose from ANY of these — you are NOT limited to a subset):
+
+ELECTROTHERAPY — PAIN MODULATION:
+- TENS (Transcutaneous Electrical Nerve Stimulation): modes (conventional/acupuncture-like/burst/brief-intense), frequency, pulse width, electrode placement
+- IFT (Interferential Current Therapy): carrier frequency, beat frequency (AMF), sweep range, electrode config (bipolar/quadripolar), treatment time
+- Diadynamic Currents (Bernard's Currents): waveform type (DF/MF/CP/LP/RS), intensity, treatment time per waveform
+- Premodulated Current: frequency, pulse width, intensity, electrode placement, treatment time
+- H-Wave Stimulation: frequency (low 2Hz / high 60Hz), intensity, electrode placement, treatment time
+- PENS (Percutaneous Electrical Nerve Stimulation): needle gauge, frequency, intensity, depth, duration
+
+ELECTROTHERAPY — MUSCLE ACTIVATION:
+- EMS/NMES (Electrical Muscle Stimulation): frequency, on:off ratio, ramp time, contraction type (isometric/isotonic), number of contractions
+- Russian Stimulation: carrier frequency (2500Hz), burst frequency (50Hz), duty cycle, intensity, treatment time
+- FES (Functional Electrical Stimulation): frequency, pulse width, on:off ratio, functional task integrated with, number of repetitions
+- EMG Biofeedback: electrode placement, target muscle, threshold settings, training protocol, session duration
+
+ELECTROTHERAPY — TISSUE HEALING:
+- Microcurrent (MENS): frequency (0.1-1000μA), waveform, intensity, electrode placement, treatment time
+- HVGS (High-Voltage Galvanic Stimulation): polarity (positive for healing/negative for edema), pulse rate, intensity, treatment time
+
+ULTRASOUND & ACOUSTIC:
+- Therapeutic Ultrasound: frequency (1MHz deep / 3MHz superficial), intensity (W/cm²), duty cycle (continuous vs pulsed %), ERA, treatment time
+- Phonophoresis: coupling agent/drug, ultrasound parameters, treatment area, duration
+- Shockwave Therapy (ESWT): type (focused/radial), energy flux density (mJ/mm²), frequency (Hz), number of impulses, pressure (bar)
+
+LIGHT & RADIATION THERAPY:
+- LLLT/PBM (Low-Level Laser / Photobiomodulation): wavelength (nm), power (mW), energy density (J/cm²), spot size, treatment time per point
+- HILT (High-Intensity Laser Therapy): wavelength, peak power (W), average power, energy density, scan/point technique, treatment time
+- Infrared Therapy: wavelength, power, distance from skin, treatment time
+- Ultraviolet Therapy: UV type (UVA/UVB/UVC), dose (MED), distance, treatment time, skin type consideration
+
+ELECTROMAGNETIC & FIELD THERAPY:
+- PEMF (Pulsed Electromagnetic Field): frequency, intensity (Gauss/Tesla), pulse duration, treatment time, coil type
+- Magnetotherapy: field strength, frequency, continuous vs pulsed, treatment duration
+- Radiofrequency Therapy: frequency (MHz), power, monopolar vs bipolar, treatment time, tissue depth
+- TECAR Therapy (Capacitive & Resistive Energy Transfer): mode (capacitive for superficial/resistive for deep), frequency, power level, treatment time per area
+
+THERMAL AGENTS:
+- Shortwave Diathermy: mode (continuous/pulsed), frequency, power, electrode placement (condenser/induction), treatment time
+- Microwave Diathermy: frequency (915MHz/2450MHz), power, distance, applicator type, treatment time
+- Hot Packs/Moist Heat: temperature, number of layers, duration, body region
+- Paraffin Wax: temperature, method (dip-wrap/immersion), number of coats, duration
+- Fluidotherapy: temperature, duration, agitation level, body part
+- Contrast Baths: hot/cold temperatures, time ratios (e.g. 4:1 or 3:1), total cycles, total duration
+
+CRYOTHERAPY:
+- Ice Packs/Cold Packs: temperature, duration, application method, barrier thickness
+- Ice Massage: duration, technique, treatment area
+- Cryocompression (e.g. Game Ready): temperature, compression level (mmHg), cycle times, total duration
+- Vapocoolant Spray: spray type, technique (spray-and-stretch), number of passes
+
+MECHANICAL AGENTS:
+- Machine Traction (Cervical/Lumbar): type (intermittent/sustained/positional), force (kg or % body weight), hold/rest times, angle, total treatment time
+- Pneumatic Compression: pressure (mmHg), inflation/deflation cycle, treatment time, limb positioning
+- Whole-Body Vibration: frequency (Hz), amplitude (mm), stance position, duration, sets
+- Focal/Local Vibration: frequency, amplitude, application site, duration per point
+- Cupping/Vacuum Therapy: cup size, suction level, technique (stationary/sliding/flash), duration per area
+
+NEEDLING & ACUPUNCTURE:
+- Dry Needling: needle gauge (e.g. 0.25×40mm), technique (pistoning/fan/superficial), target muscle/trigger point, depth guidance
+- Acupuncture (Western Medical): point selection rationale, needle gauge, depth, retention time, manual stimulation technique
+- Electroacupuncture: frequency, intensity, waveform (continuous/alternating), needle points, treatment time
+
+SOFT TISSUE MODALITIES:
+- IASTM (Instrument-Assisted Soft Tissue Mobilization): tool type, technique (sweeping/strumming/fanning), pressure, strokes, target tissue
+- Iontophoresis: drug/ion, polarity, current density (mA/cm²), electrode size, treatment time, total dose (mA·min)
+
+COMBINED/ADVANCED:
+- Blood Flow Restriction (BFR): cuff width, limb occlusion pressure (%), exercise protocol, sets/reps, duration
+- Cryoneurolysis: target nerve, temperature, probe specifications, treatment duration
 
 CLINICAL REASONING RULES:
 1. Be SPECIFIC with modality parameters — e.g. "TENS: conventional mode, 80-120Hz, 60-200μs pulse width, sensory-level intensity, 30 min" NOT just "TENS"
-2. For ultrasound: specify frequency (1MHz deep / 3MHz superficial), intensity (W/cm²), duty cycle (continuous vs pulsed %), ERA, treatment time
-3. For shockwave: specify type (focused/radial), energy flux density (mJ/mm²), frequency (Hz), number of impulses, pressure (bar)
-4. For dry needling: specify needle gauge (e.g. 0.25×40mm), technique (pistoning, fan, superficial), target muscle/trigger point, depth guidance
-5. For TENS: specify mode (conventional/acupuncture-like/burst/brief-intense), frequency, pulse width, electrode placement
-6. For IFT: specify carrier frequency, beat frequency (AMF), sweep range, electrode configuration (bipolar/quadripolar), treatment time
-7. For EMS/NMES: specify frequency, on:off ratio, ramp time, contraction type (isometric/isotonic), number of contractions
-8. For laser/PBM: specify wavelength (nm), power (mW), energy density (J/cm²), spot size, treatment time per point
-9. For traction: specify type (intermittent/sustained), force (kg or % body weight), hold/rest times, angle, total treatment time
-10. For heat/cryo: specify modality type, temperature, duration, application method
-11. For IASTM: specify tool type, technique (sweeping/strumming/fanning), pressure, strokes, target tissue
-12. Consider tissue irritability — use lower-intensity/pulsed modes for acute/irritable presentations
-13. Each modality MUST include a clear rationale linking it to a SPECIFIC finding from the data
-14. Include contraindications, expected physiological effect, and reassessment criteria
+2. Consider tissue irritability — use lower-intensity/pulsed modes for acute/irritable presentations
+3. Each modality MUST include a clear rationale linking it to a SPECIFIC finding from the data
+4. Include contraindications, expected physiological effect, and reassessment criteria
+5. For each modality, provide a plain-language educational description explaining WHAT it is and HOW it works — written for clinicians who may be unfamiliar with the modality
+6. For each modality, provide 1-3 resource links to reputable clinical education sources (Physiopedia, PubMed, clinical practice guidelines, manufacturer clinical guides, or peer-reviewed articles) where the clinician can learn more
 
 RESPONSE FORMAT — return valid JSON with this exact structure:
 {
@@ -7384,7 +7447,7 @@ RESPONSE FORMAT — return valid JSON with this exact structure:
       "priority": number (1 = highest),
       "modalities": [
         {
-          "modality": "string — specific modality name (e.g. 'Therapeutic Ultrasound — Pulsed 1MHz', 'Radial Shockwave Therapy', 'Dry Needling — Deep Pistoning')",
+          "modality": "string — specific modality name (e.g. 'Therapeutic Ultrasound — Pulsed 1MHz', 'Radial Shockwave Therapy', 'TECAR — Resistive Mode')",
           "targetStructure": "string — which muscle/joint/nerve/tissue this targets",
           "targetFinding": "string — the SPECIFIC clinical finding this addresses",
           "parameters": "string — exact dosage parameters (frequency, intensity, duration, waveform, etc.)",
@@ -7392,7 +7455,14 @@ RESPONSE FORMAT — return valid JSON with this exact structure:
           "rationale": "string — clinical reasoning for WHY this modality was chosen over alternatives",
           "contraindications": "string — absolute and relative contraindications for this modality in this context",
           "expectedPhysiologicalEffect": "string — specific tissue-level physiological response expected",
-          "reassessmentCriteria": "string — what to reassess to confirm modality effectiveness"
+          "reassessmentCriteria": "string — what to reassess to confirm modality effectiveness",
+          "modalityDescription": "string — plain-language explanation of what this modality is, how it works (mechanism of action), and what it feels like for the patient. Written for clinicians who may not have used this modality before.",
+          "resourceLinks": [
+            {
+              "title": "string — descriptive title for the resource (e.g. 'Physiopedia: TENS Overview', 'PubMed: PEMF for Bone Healing')",
+              "url": "string — full URL to the resource"
+            }
+          ]
         }
       ]
     }
@@ -7438,7 +7508,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 4000,
+        max_tokens: 6000,
         temperature: 0.4,
       });
 
@@ -7463,6 +7533,11 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
             contraindications: z.string().default('None'),
             expectedPhysiologicalEffect: z.string(),
             reassessmentCriteria: z.string(),
+            modalityDescription: z.string().default(''),
+            resourceLinks: z.array(z.object({
+              title: z.string(),
+              url: z.string(),
+            })).optional().default([]),
           })),
         })),
         clinicalNotes: z.string().default(''),

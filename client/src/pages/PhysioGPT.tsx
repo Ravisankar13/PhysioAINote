@@ -7647,11 +7647,18 @@ ${ddxList}`;
                   setAdhesionBands([]);
 
                   setClinicalReasoningData(null);
+                  setClinicalReasoningProcessing(false);
+                  setClinicalReasoningPaused(false);
                   setStructuredReasoningData(null);
+                  setStructuredReasoningLoading(false);
                   setTreatmentDecisionData(null);
+                  setTreatmentDecisionLoading(false);
                   setTreatmentPlanData(null);
+                  setTreatmentPlanLoading(false);
                   setEvidenceEngineResult(null);
+                  setEvidenceLoading(false);
                   setExtractionResult(null);
+                  setExtractionResultsOpen(false);
                   setClinicalBubbleResults({});
 
                   setPreviousBiomechanicsOutput(null);
@@ -7696,6 +7703,8 @@ ${ddxList}`;
                   setSubjectiveHistoryInput('');
 
                   setForceAiSuggestions(null);
+                  setForceAiLoading(false);
+                  setVoiceProcessing(false);
                   setActiveBiomechanicalLink(null);
                   setBiomechanicalMuscleHighlights([]);
                   setMuscleHighlightColors({});

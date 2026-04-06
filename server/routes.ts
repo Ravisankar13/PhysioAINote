@@ -7240,6 +7240,252 @@ Based on this clinical data, generate a comprehensive, prioritized manual therap
     }
   });
 
+  app.post("/api/electrophysical-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const electroInputSchema = z.object({
+        mechanismSummary: z.string().optional().default(""),
+        causalChains: z.array(z.array(z.object({
+          step: z.number(),
+          structure: z.string(),
+          finding: z.string(),
+          mechanism: z.string().optional(),
+          category: z.string().optional(),
+          severity: z.string().optional(),
+        }))).optional().default([]),
+        compensationCards: z.array(z.object({
+          title: z.string(),
+          description: z.string().optional(),
+          severity: z.string().optional(),
+          primaryRegion: z.string().optional(),
+          compensatingRegion: z.string().optional(),
+        })).optional().default([]),
+        loadRedistribution: z.array(z.object({
+          joint: z.string(),
+          change: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+        slingData: z.object({
+          systemSummary: z.string().optional(),
+          overallForceTransferScore: z.number().optional(),
+          slings: z.array(z.object({
+            label: z.string(),
+            status: z.string(),
+            activationScore: z.number(),
+            forceTransferQuality: z.string(),
+            weakLinks: z.array(z.object({
+              muscle: z.string(),
+              activationPct: z.number(),
+              reason: z.string(),
+            })).optional().default([]),
+            treatmentTargets: z.array(z.object({
+              muscle: z.string(),
+              intervention: z.string(),
+              rationale: z.string(),
+            })).optional().default([]),
+            narrative: z.string().optional(),
+          })).optional().default([]),
+        }).optional(),
+        painMarkers: z.array(z.object({
+          label: z.string(),
+          severity: z.number().optional(),
+          type: z.string().optional(),
+        })).optional().default([]),
+        topContributors: z.array(z.string()).optional().default([]),
+        kineticChainDysfunctions: z.array(z.object({
+          chain: z.string().optional(),
+          dysfunction: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+      });
+
+      const parsed = electroInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const causalChainText = data.causalChains.length > 0
+        ? data.causalChains.map((chain, i) =>
+            `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
+          ).join('\n')
+        : 'None identified';
+
+      const compensationText = data.compensationCards.length > 0
+        ? data.compensationCards.map(c =>
+            `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
+          ).join('\n')
+        : 'None identified';
+
+      const loadText = data.loadRedistribution.length > 0
+        ? data.loadRedistribution.map(l =>
+            `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const slingText = data.slingData?.slings && data.slingData.slings.length > 0
+        ? data.slingData.slings.map(s => {
+            const weakLinkStr = s.weakLinks.length > 0
+              ? ` | Weak links: ${s.weakLinks.map(w => `${w.muscle} (${w.activationPct}%)`).join(', ')}`
+              : '';
+            const targetStr = s.treatmentTargets.length > 0
+              ? ` | Targets: ${s.treatmentTargets.map(t => `${t.intervention} ${t.muscle}`).join(', ')}`
+              : '';
+            return `- ${s.label}: status=${s.status}, activation=${s.activationScore}%, forceTransfer=${s.forceTransferQuality}${weakLinkStr}${targetStr}`;
+          }).join('\n')
+        : 'No sling data';
+
+      const painText = data.painMarkers.length > 0
+        ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
+        : 'None';
+
+      const contributorsText = data.topContributors.length > 0
+        ? data.topContributors.join(', ')
+        : 'None identified';
+
+      const kineticText = data.kineticChainDysfunctions.length > 0
+        ? data.kineticChainDysfunctions.map(k =>
+            `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const systemPrompt = `You are an expert musculoskeletal physiotherapist and electrophysical agents specialist with advanced training in therapeutic ultrasound, shockwave therapy (ESWT/radial), dry needling, acupuncture, TENS, interferential current therapy (IFT), electrical muscle stimulation (EMS/NMES), laser/photobiomodulation (LLLT/PBM), machine traction (cervical/lumbar), heat therapy (hot packs, shortwave diathermy), cryotherapy, and instrument-assisted soft tissue mobilization (IASTM). You are given detailed biomechanical analysis data from a clinical assessment.
+
+Your task is to reason through ALL clinical data and generate a highly specific, prioritized electrophysical agents prescription that addresses the patient's underlying dysfunctions using appropriate modalities.
+
+CLINICAL REASONING RULES:
+1. Be SPECIFIC with modality parameters — e.g. "TENS: conventional mode, 80-120Hz, 60-200μs pulse width, sensory-level intensity, 30 min" NOT just "TENS"
+2. For ultrasound: specify frequency (1MHz deep / 3MHz superficial), intensity (W/cm²), duty cycle (continuous vs pulsed %), ERA, treatment time
+3. For shockwave: specify type (focused/radial), energy flux density (mJ/mm²), frequency (Hz), number of impulses, pressure (bar)
+4. For dry needling: specify needle gauge (e.g. 0.25×40mm), technique (pistoning, fan, superficial), target muscle/trigger point, depth guidance
+5. For TENS: specify mode (conventional/acupuncture-like/burst/brief-intense), frequency, pulse width, electrode placement
+6. For IFT: specify carrier frequency, beat frequency (AMF), sweep range, electrode configuration (bipolar/quadripolar), treatment time
+7. For EMS/NMES: specify frequency, on:off ratio, ramp time, contraction type (isometric/isotonic), number of contractions
+8. For laser/PBM: specify wavelength (nm), power (mW), energy density (J/cm²), spot size, treatment time per point
+9. For traction: specify type (intermittent/sustained), force (kg or % body weight), hold/rest times, angle, total treatment time
+10. For heat/cryo: specify modality type, temperature, duration, application method
+11. For IASTM: specify tool type, technique (sweeping/strumming/fanning), pressure, strokes, target tissue
+12. Consider tissue irritability — use lower-intensity/pulsed modes for acute/irritable presentations
+13. Each modality MUST include a clear rationale linking it to a SPECIFIC finding from the data
+14. Include contraindications, expected physiological effect, and reassessment criteria
+
+RESPONSE FORMAT — return valid JSON with this exact structure:
+{
+  "modalityGroups": [
+    {
+      "groupId": "string",
+      "goalTitle": "string (MUST be one of: 'Pain Modulation', 'Tissue Healing & Repair', 'Muscle Activation & Facilitation', 'Joint Mobility & Traction', 'Myofascial Release & Trigger Points')",
+      "goalDescription": "string explaining WHY this group matters clinically",
+      "priority": number (1 = highest),
+      "modalities": [
+        {
+          "modality": "string — specific modality name (e.g. 'Therapeutic Ultrasound — Pulsed 1MHz', 'Radial Shockwave Therapy', 'Dry Needling — Deep Pistoning')",
+          "targetStructure": "string — which muscle/joint/nerve/tissue this targets",
+          "targetFinding": "string — the SPECIFIC clinical finding this addresses",
+          "parameters": "string — exact dosage parameters (frequency, intensity, duration, waveform, etc.)",
+          "patientPosition": "string — exact patient position",
+          "rationale": "string — clinical reasoning for WHY this modality was chosen over alternatives",
+          "contraindications": "string — absolute and relative contraindications for this modality in this context",
+          "expectedPhysiologicalEffect": "string — specific tissue-level physiological response expected",
+          "reassessmentCriteria": "string — what to reassess to confirm modality effectiveness"
+        }
+      ]
+    }
+  ],
+  "clinicalNotes": "string — overall clinical reasoning summary, treatment sequencing rationale, and modality interaction considerations",
+  "irritabilityConsiderations": "string — tissue irritability assessment, how it influenced modality selection and dosing, and safety precautions"
+}`;
+
+      const userPrompt = `CLINICAL ASSESSMENT DATA:
+
+OVERALL MECHANISM SUMMARY:
+${data.mechanismSummary || 'Not available'}
+
+CAUSAL CHAINS (root cause → symptom):
+${causalChainText}
+
+TOP CONTRIBUTORS:
+${contributorsText}
+
+COMPENSATION PATTERNS:
+${compensationText}
+
+LOAD REDISTRIBUTION:
+${loadText}
+
+KINETIC CHAIN DYSFUNCTIONS:
+${kineticText}
+
+SLING SYSTEM ANALYSIS:
+Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/A'}%
+System summary: ${data.slingData?.systemSummary || 'Not available'}
+${slingText}
+
+PAIN MARKERS:
+${painText}
+
+Based on this clinical data, generate a comprehensive, prioritized electrophysical agents prescription. Think through the tissue states (acute vs chronic, superficial vs deep), pain mechanisms (nociceptive/neuropathic/central), tissue healing phases, and functional deficits. Prescribe specific modalities with precise parameters that address the underlying dysfunction pattern.`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 4000,
+        temperature: 0.4,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const electroResponseSchema = z.object({
+        modalityGroups: z.array(z.object({
+          groupId: z.string(),
+          goalTitle: z.string(),
+          goalDescription: z.string(),
+          priority: z.number(),
+          modalities: z.array(z.object({
+            modality: z.string(),
+            targetStructure: z.string(),
+            targetFinding: z.string(),
+            parameters: z.string(),
+            patientPosition: z.string().default('Supine'),
+            rationale: z.string(),
+            contraindications: z.string().default('None'),
+            expectedPhysiologicalEffect: z.string(),
+            reassessmentCriteria: z.string(),
+          })),
+        })),
+        clinicalNotes: z.string().default(''),
+        irritabilityConsiderations: z.string().default(''),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = electroResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Electrophysical engine response validation failed:", validated.error.format());
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          validationErrors: validated.error.format(),
+        });
+      }
+      res.json(validated.data);
+    } catch (error: unknown) {
+      console.error("Electrophysical engine generation error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate electrophysical plan", details: message });
+    }
+  });
+
   app.post("/api/clinical-notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { reasoningData, subjectiveHistory } = req.body;

@@ -162,6 +162,10 @@ const SCENARIO_TO_MUSCLE_IDS: Record<string, string[]> = {
   wrist_flex_r: ['r_wrist_flex'],
   wrist_ext_l: ['l_wrist_ext'],
   wrist_ext_r: ['r_wrist_ext'],
+  scm: ['scm'],
+  suboccipitals: ['suboccipitals'],
+  levator_scapulae: ['levator_scapulae'],
+  scalenes: ['scalenes'],
 };
 
 const STRENGTHEN_EFFECTS: Record<string, (mag: number) => Record<string, Record<string, number>>> = {
@@ -198,6 +202,12 @@ const STRENGTHEN_EFFECTS: Record<string, (mag: number) => Record<string, Record<
   wrist_flex_r: (m) => ({ rightWrist: { flexion: m * 0.05 } }),
   wrist_ext_l: (m) => ({ leftWrist: { extension: m * 0.05 } }),
   wrist_ext_r: (m) => ({ rightWrist: { extension: m * 0.05 } }),
+  scm: (m) => ({ spine: { forwardHead: -(m * 0.1) }, neck: { forwardHead: -(m * 0.1) } }),
+  suboccipitals: (m) => ({ spine: { forwardHead: -(m * 0.12) }, neck: { forwardHead: -(m * 0.12) } }),
+  levator_scapulae: (m) => ({ leftShoulder: { elevation: -(m * 0.08) }, rightShoulder: { elevation: -(m * 0.08) } }),
+  scalenes: (m) => ({ spine: { forwardHead: -(m * 0.08) }, neck: { lateralFlexion: -(m * 0.06) } }),
+  shin_l: (m) => ({ leftAnkle: { dorsiflexion: m * 0.08 } }),
+  shin_r: (m) => ({ rightAnkle: { dorsiflexion: m * 0.08 } }),
 };
 
 const STRETCH_EFFECTS: Record<string, (m: number) => Record<string, Record<string, number>>> = {
@@ -230,6 +240,14 @@ const STRETCH_EFFECTS: Record<string, (m: number) => Record<string, Record<strin
   wrist_flex_r: (m) => ({ rightWrist: { extension: m * 0.1 } }),
   wrist_ext_l: (m) => ({ leftWrist: { flexion: m * 0.1 } }),
   wrist_ext_r: (m) => ({ rightWrist: { flexion: m * 0.1 } }),
+  tricep_l: (m) => ({ leftElbow: { flexion: m * 0.1 } }),
+  tricep_r: (m) => ({ rightElbow: { flexion: m * 0.1 } }),
+  scm: (m) => ({ spine: { forwardHead: -(m * 0.18) }, neck: { forwardHead: -(m * 0.18), lateralFlexion: m * 0.1 } }),
+  suboccipitals: (m) => ({ spine: { forwardHead: -(m * 0.2) }, neck: { forwardHead: -(m * 0.2) } }),
+  levator_scapulae: (m) => ({ leftShoulder: { elevation: -(m * 0.12) }, rightShoulder: { elevation: -(m * 0.12) }, neck: { lateralFlexion: m * 0.08 } }),
+  scalenes: (m) => ({ spine: { forwardHead: -(m * 0.12) }, neck: { lateralFlexion: m * 0.1 } }),
+  shin_l: (m) => ({ leftAnkle: { plantarflexion: m * 0.1 } }),
+  shin_r: (m) => ({ rightAnkle: { plantarflexion: m * 0.1 } }),
 };
 
 const MOBILIZE_EFFECTS: Record<string, (m: number) => Record<string, Record<string, number>>> = {
@@ -297,6 +315,12 @@ export const MUSCLE_TARGETS = [
   { id: 'wrist_flex_r', label: 'R Wrist Flexors' },
   { id: 'wrist_ext_l', label: 'L Wrist Extensors' },
   { id: 'wrist_ext_r', label: 'R Wrist Extensors' },
+  { id: 'scm', label: 'SCM' },
+  { id: 'suboccipitals', label: 'Suboccipitals' },
+  { id: 'levator_scapulae', label: 'Levator Scapulae' },
+  { id: 'scalenes', label: 'Scalenes' },
+  { id: 'shin_l', label: 'L Tibialis Anterior' },
+  { id: 'shin_r', label: 'R Tibialis Anterior' },
 ];
 
 export const JOINT_TARGETS = [
@@ -434,6 +458,42 @@ const JOINT_DEVIATION_TARGETS: Record<string, { configKey: string; paramKey: str
     { configKey: 'leftWrist', paramKey: 'flexion', normalValue: 0 },
   ],
   wrist_r: [
+    { configKey: 'rightWrist', paramKey: 'flexion', normalValue: 0 },
+  ],
+  leftHip: [
+    { configKey: 'leftHip', paramKey: 'flexion', normalValue: 0 },
+  ],
+  rightHip: [
+    { configKey: 'rightHip', paramKey: 'flexion', normalValue: 0 },
+  ],
+  leftKnee: [
+    { configKey: 'leftKnee', paramKey: 'flexion', normalValue: 0 },
+  ],
+  rightKnee: [
+    { configKey: 'rightKnee', paramKey: 'flexion', normalValue: 0 },
+  ],
+  leftAnkle: [
+    { configKey: 'leftAnkle', paramKey: 'dorsiflexion', normalValue: 0 },
+  ],
+  rightAnkle: [
+    { configKey: 'rightAnkle', paramKey: 'dorsiflexion', normalValue: 0 },
+  ],
+  leftShoulder: [
+    { configKey: 'leftShoulder', paramKey: 'protraction', normalValue: 0 },
+  ],
+  rightShoulder: [
+    { configKey: 'rightShoulder', paramKey: 'protraction', normalValue: 0 },
+  ],
+  leftElbow: [
+    { configKey: 'leftElbow', paramKey: 'flexion', normalValue: 0 },
+  ],
+  rightElbow: [
+    { configKey: 'rightElbow', paramKey: 'flexion', normalValue: 0 },
+  ],
+  leftWrist: [
+    { configKey: 'leftWrist', paramKey: 'flexion', normalValue: 0 },
+  ],
+  rightWrist: [
     { configKey: 'rightWrist', paramKey: 'flexion', normalValue: 0 },
   ],
 };

@@ -738,24 +738,24 @@ export default function WhatIfSimulationPanel({
                 <div className="grid grid-cols-2 gap-2 text-[9px]">
                   <div className="text-center">
                     <div className="text-gray-400 mb-0.5">A (saved)</div>
-                    <div className={`font-mono font-bold text-[11px] ${riskColor(comparison.riskLevelAfter)}`}>
-                      {comparison.overallRiskAfter.toFixed(0)}
-                    </div>
-                    <div className="text-gray-500">{comparison.scenarios.length} scenarios</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-gray-400 mb-0.5">B (current)</div>
                     <div className={`font-mono font-bold text-[11px] ${riskColor(comparisonB.riskLevelAfter)}`}>
                       {comparisonB.overallRiskAfter.toFixed(0)}
                     </div>
                     <div className="text-gray-500">{comparisonB.scenarios.length} scenarios</div>
                   </div>
+                  <div className="text-center">
+                    <div className="text-gray-400 mb-0.5">B (current)</div>
+                    <div className={`font-mono font-bold text-[11px] ${riskColor(comparison.riskLevelAfter)}`}>
+                      {comparison.overallRiskAfter.toFixed(0)}
+                    </div>
+                    <div className="text-gray-500">{comparison.scenarios.length} scenarios</div>
+                  </div>
                 </div>
                 <div className="text-[8px] text-center">
-                  {comparison.overallRiskAfter < comparisonB.overallRiskAfter ? (
-                    <span className="text-green-400">Programme A achieves lower risk ({(comparisonB.overallRiskAfter - comparison.overallRiskAfter).toFixed(0)} pts better)</span>
-                  ) : comparison.overallRiskAfter > comparisonB.overallRiskAfter ? (
-                    <span className="text-purple-400">Programme B achieves lower risk ({(comparison.overallRiskAfter - comparisonB.overallRiskAfter).toFixed(0)} pts better)</span>
+                  {comparisonB.overallRiskAfter < comparison.overallRiskAfter ? (
+                    <span className="text-green-400">Programme A achieves lower risk ({(comparison.overallRiskAfter - comparisonB.overallRiskAfter).toFixed(0)} pts better)</span>
+                  ) : comparisonB.overallRiskAfter > comparison.overallRiskAfter ? (
+                    <span className="text-purple-400">Programme B achieves lower risk ({(comparisonB.overallRiskAfter - comparison.overallRiskAfter).toFixed(0)} pts better)</span>
                   ) : (
                     <span className="text-gray-400">Both programmes achieve equal risk scores</span>
                   )}
@@ -763,7 +763,7 @@ export default function WhatIfSimulationPanel({
                 <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
                   <div className="space-y-0.5">
                     <div className="text-gray-500 font-semibold">A Forces</div>
-                    {comparison.forceDeltas.filter(f => Math.abs(f.deltaPercent) > 2).slice(0, 3).map(fd => (
+                    {comparisonB.forceDeltas.filter(f => Math.abs(f.deltaPercent) > 2).slice(0, 3).map(fd => (
                       <div key={fd.jointId} className={`font-mono ${fd.delta < 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {fd.jointLabel}: {fd.delta < 0 ? '↓' : '↑'}{Math.abs(fd.deltaPercent).toFixed(0)}%
                       </div>
@@ -771,7 +771,7 @@ export default function WhatIfSimulationPanel({
                   </div>
                   <div className="space-y-0.5">
                     <div className="text-gray-500 font-semibold">B Forces</div>
-                    {comparisonB.forceDeltas.filter(f => Math.abs(f.deltaPercent) > 2).slice(0, 3).map(fd => (
+                    {comparison.forceDeltas.filter(f => Math.abs(f.deltaPercent) > 2).slice(0, 3).map(fd => (
                       <div key={fd.jointId} className={`font-mono ${fd.delta < 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {fd.jointLabel}: {fd.delta < 0 ? '↓' : '↑'}{Math.abs(fd.deltaPercent).toFixed(0)}%
                       </div>
@@ -782,7 +782,7 @@ export default function WhatIfSimulationPanel({
                   <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
                     <div className="space-y-0.5">
                       <div className="text-gray-500 font-semibold">A Slings</div>
-                      {(comparison.slingDeltas || []).slice(0, 3).map(sd => (
+                      {(comparisonB.slingDeltas || []).slice(0, 3).map(sd => (
                         <div key={sd.slingId} className={`font-mono ${sd.activationDelta > 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {sd.label}: {sd.activationDelta > 0 ? '↑' : '↓'}{Math.abs(sd.activationDelta).toFixed(0)}
                         </div>
@@ -790,7 +790,7 @@ export default function WhatIfSimulationPanel({
                     </div>
                     <div className="space-y-0.5">
                       <div className="text-gray-500 font-semibold">B Slings</div>
-                      {(comparisonB.slingDeltas || []).slice(0, 3).map(sd => (
+                      {(comparison.slingDeltas || []).slice(0, 3).map(sd => (
                         <div key={sd.slingId} className={`font-mono ${sd.activationDelta > 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {sd.label}: {sd.activationDelta > 0 ? '↑' : '↓'}{Math.abs(sd.activationDelta).toFixed(0)}
                         </div>
@@ -801,18 +801,18 @@ export default function WhatIfSimulationPanel({
                 <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
                   <div>
                     <span className="text-gray-500">A Compensations: </span>
-                    <span className="text-green-400">{comparison.compensationDeltas.filter(c => c.resolvedPercent >= 50).length} resolved</span>
+                    <span className="text-green-400">{comparisonB.compensationDeltas.filter(c => c.resolvedPercent >= 50).length} resolved</span>
                   </div>
                   <div>
                     <span className="text-gray-500">B Compensations: </span>
-                    <span className="text-green-400">{comparisonB.compensationDeltas.filter(c => c.resolvedPercent >= 50).length} resolved</span>
+                    <span className="text-green-400">{comparison.compensationDeltas.filter(c => c.resolvedPercent >= 50).length} resolved</span>
                   </div>
                 </div>
                 {(comparison.muscleDeltas.length > 0 || comparisonB.muscleDeltas.length > 0) && (
                   <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
                     <div className="space-y-0.5">
                       <div className="text-gray-500 font-semibold">A Muscles</div>
-                      {comparison.muscleDeltas.filter(md => Math.abs(md.activationAfter - md.activationBefore) > 3).slice(0, 3).map(md => {
+                      {comparisonB.muscleDeltas.filter(md => Math.abs(md.activationAfter - md.activationBefore) > 3).slice(0, 3).map(md => {
                         const delta = md.activationAfter - md.activationBefore;
                         return (
                           <div key={md.muscleId} className={`font-mono ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -823,7 +823,7 @@ export default function WhatIfSimulationPanel({
                     </div>
                     <div className="space-y-0.5">
                       <div className="text-gray-500 font-semibold">B Muscles</div>
-                      {comparisonB.muscleDeltas.filter(md => Math.abs(md.activationAfter - md.activationBefore) > 3).slice(0, 3).map(md => {
+                      {comparison.muscleDeltas.filter(md => Math.abs(md.activationAfter - md.activationBefore) > 3).slice(0, 3).map(md => {
                         const delta = md.activationAfter - md.activationBefore;
                         return (
                           <div key={md.muscleId} className={`font-mono ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -837,14 +837,14 @@ export default function WhatIfSimulationPanel({
                 <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
                   <div>
                     <span className="text-gray-500">A Transfer: </span>
-                    <span className={comparison.forceTransferScoreAfter >= comparison.forceTransferScoreBefore ? 'text-green-400' : 'text-red-400'}>
-                      {comparison.forceTransferScoreAfter.toFixed(0)}
+                    <span className={comparisonB.forceTransferScoreAfter >= comparisonB.forceTransferScoreBefore ? 'text-green-400' : 'text-red-400'}>
+                      {comparisonB.forceTransferScoreAfter.toFixed(0)}
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-500">B Transfer: </span>
-                    <span className={comparisonB.forceTransferScoreAfter >= comparisonB.forceTransferScoreBefore ? 'text-green-400' : 'text-red-400'}>
-                      {comparisonB.forceTransferScoreAfter.toFixed(0)}
+                    <span className={comparison.forceTransferScoreAfter >= comparison.forceTransferScoreBefore ? 'text-green-400' : 'text-red-400'}>
+                      {comparison.forceTransferScoreAfter.toFixed(0)}
                     </span>
                   </div>
                 </div>

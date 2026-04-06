@@ -6997,6 +6997,249 @@ Based on this clinical data, generate a comprehensive, prioritized exercise pres
     }
   });
 
+  app.post("/api/manual-therapy-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+
+      const manualTherapyInputSchema = z.object({
+        mechanismSummary: z.string().optional().default(""),
+        causalChains: z.array(z.array(z.object({
+          step: z.number(),
+          structure: z.string(),
+          finding: z.string(),
+          mechanism: z.string().optional(),
+          category: z.string().optional(),
+          severity: z.string().optional(),
+        }))).optional().default([]),
+        compensationCards: z.array(z.object({
+          title: z.string(),
+          description: z.string().optional(),
+          severity: z.string().optional(),
+          primaryRegion: z.string().optional(),
+          compensatingRegion: z.string().optional(),
+        })).optional().default([]),
+        loadRedistribution: z.array(z.object({
+          joint: z.string(),
+          change: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+        slingData: z.object({
+          systemSummary: z.string().optional(),
+          overallForceTransferScore: z.number().optional(),
+          slings: z.array(z.object({
+            label: z.string(),
+            status: z.string(),
+            activationScore: z.number(),
+            forceTransferQuality: z.string(),
+            weakLinks: z.array(z.object({
+              muscle: z.string(),
+              activationPct: z.number(),
+              reason: z.string(),
+            })).optional().default([]),
+            treatmentTargets: z.array(z.object({
+              muscle: z.string(),
+              intervention: z.string(),
+              rationale: z.string(),
+            })).optional().default([]),
+            narrative: z.string().optional(),
+          })).optional().default([]),
+        }).optional(),
+        painMarkers: z.array(z.object({
+          label: z.string(),
+          severity: z.number().optional(),
+          type: z.string().optional(),
+        })).optional().default([]),
+        topContributors: z.array(z.string()).optional().default([]),
+        kineticChainDysfunctions: z.array(z.object({
+          chain: z.string().optional(),
+          dysfunction: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+      });
+
+      const parsed = manualTherapyInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const causalChainText = data.causalChains.length > 0
+        ? data.causalChains.map((chain, i) =>
+            `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
+          ).join('\n')
+        : 'None identified';
+
+      const compensationText = data.compensationCards.length > 0
+        ? data.compensationCards.map(c =>
+            `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
+          ).join('\n')
+        : 'None identified';
+
+      const loadText = data.loadRedistribution.length > 0
+        ? data.loadRedistribution.map(l =>
+            `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const slingText = data.slingData?.slings && data.slingData.slings.length > 0
+        ? data.slingData.slings.map(s => {
+            const weakLinkStr = s.weakLinks.length > 0
+              ? ` | Weak links: ${s.weakLinks.map(w => `${w.muscle} (${w.activationPct}%)`).join(', ')}`
+              : '';
+            const targetStr = s.treatmentTargets.length > 0
+              ? ` | Targets: ${s.treatmentTargets.map(t => `${t.intervention} ${t.muscle}`).join(', ')}`
+              : '';
+            return `- ${s.label}: status=${s.status}, activation=${s.activationScore}%, forceTransfer=${s.forceTransferQuality}${weakLinkStr}${targetStr}`;
+          }).join('\n')
+        : 'No sling data';
+
+      const painText = data.painMarkers.length > 0
+        ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
+        : 'None';
+
+      const contributorsText = data.topContributors.length > 0
+        ? data.topContributors.join(', ')
+        : 'None identified';
+
+      const kineticText = data.kineticChainDysfunctions.length > 0
+        ? data.kineticChainDysfunctions.map(k =>
+            `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const systemPrompt = `You are an expert musculoskeletal physiotherapist and manual therapy specialist with advanced training in Maitland, Mulligan, Kaltenborn, myofascial release, neural mobilization, and muscle energy techniques. You are given detailed biomechanical analysis data from a clinical assessment including injury mechanism analysis, sling system analysis, compensation patterns, force redistribution, and pain markers.
+
+Your task is to reason through ALL of this clinical data and generate a highly specific, prioritized manual therapy prescription that addresses the patient's underlying dysfunctions with hands-on techniques.
+
+CLINICAL REASONING RULES:
+1. Be SPECIFIC with techniques — e.g. "Maitland Grade III PA glide at L4/5" NOT just "mobilization"
+2. Consider tissue irritability — use lower grades/gentler techniques for acute/irritable presentations
+3. Address joint restrictions with appropriate mobilization grades and directions
+4. For overloaded tissues, prescribe specific soft tissue techniques (STM, trigger point release, IASTM, MFR) with target structures
+5. For neural tension, prescribe specific neurodynamic techniques (e.g. "median nerve slider in supine, elbow extension bias")
+6. For inhibited muscles, include facilitation techniques (e.g. "rhythmic stabilization for VMO activation")
+7. Consider the kinetic chain — treat upstream contributors, not just the symptomatic area
+8. Each technique MUST include a clear rationale linking it to a SPECIFIC finding from the data
+9. Include patient positioning, dosage (sets/duration/oscillations), and reassessment criteria
+
+RESPONSE FORMAT — return valid JSON with this exact structure:
+{
+  "techniqueGroups": [
+    {
+      "groupId": "string",
+      "goalTitle": "string (e.g. 'Restore Joint Mobility', 'Release Overloaded Tissues', 'Neural Mobilization', 'Facilitate Inhibited Muscles', 'Address Fascial Restrictions')",
+      "goalDescription": "string explaining WHY this group matters clinically",
+      "priority": number (1 = highest),
+      "techniques": [
+        {
+          "technique": "string — specific technique name (e.g. 'Maitland Grade III PA glide L4/5', 'Suboccipital inhibition technique')",
+          "targetStructure": "string — which muscle/joint/nerve this targets",
+          "targetFinding": "string — the SPECIFIC clinical finding this addresses",
+          "patientPosition": "string — exact patient position (e.g. 'Prone with pillow under abdomen')",
+          "dosage": "string — specific dosage (e.g. '3 sets × 30s oscillations', '5 × 10 reps neural glides')",
+          "rationale": "string — clinical reasoning for WHY this technique was chosen over alternatives",
+          "contraindications": "string — when to avoid or modify this technique",
+          "expectedOutcome": "string — what improvement to expect immediately post-treatment",
+          "reassessmentCriteria": "string — what to reassess to confirm technique effectiveness"
+        }
+      ]
+    }
+  ],
+  "clinicalNotes": "string — overall clinical reasoning summary, treatment sequencing rationale, and precautions",
+  "irritabilityConsiderations": "string — tissue irritability assessment and how it influenced technique selection and grading"
+}`;
+
+      const userPrompt = `CLINICAL ASSESSMENT DATA:
+
+OVERALL MECHANISM SUMMARY:
+${data.mechanismSummary || 'Not available'}
+
+CAUSAL CHAINS (root cause → symptom):
+${causalChainText}
+
+TOP CONTRIBUTORS:
+${contributorsText}
+
+COMPENSATION PATTERNS:
+${compensationText}
+
+LOAD REDISTRIBUTION:
+${loadText}
+
+KINETIC CHAIN DYSFUNCTIONS:
+${kineticText}
+
+SLING SYSTEM ANALYSIS:
+Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/A'}%
+System summary: ${data.slingData?.systemSummary || 'Not available'}
+${slingText}
+
+PAIN MARKERS:
+${painText}
+
+Based on this clinical data, generate a comprehensive, prioritized manual therapy prescription. Think through the tissue states, joint restrictions, neural tension, and fascial restrictions. Prescribe specific hands-on techniques that address the underlying dysfunction pattern — not generic "massage" or "mobilization."`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 4000,
+        temperature: 0.4,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const manualTherapyResponseSchema = z.object({
+        techniqueGroups: z.array(z.object({
+          groupId: z.string(),
+          goalTitle: z.string(),
+          goalDescription: z.string(),
+          priority: z.number(),
+          techniques: z.array(z.object({
+            technique: z.string(),
+            targetStructure: z.string(),
+            targetFinding: z.string(),
+            patientPosition: z.string().default('Supine'),
+            dosage: z.string(),
+            rationale: z.string(),
+            contraindications: z.string().default('None'),
+            expectedOutcome: z.string(),
+            reassessmentCriteria: z.string(),
+          })),
+        })),
+        clinicalNotes: z.string().default(''),
+        irritabilityConsiderations: z.string().default(''),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = manualTherapyResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Manual therapy engine response validation failed:", validated.error.format());
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          validationErrors: validated.error.format(),
+        });
+      }
+      res.json(validated.data);
+    } catch (error: unknown) {
+      console.error("Manual therapy engine generation error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate manual therapy plan", details: message });
+    }
+  });
+
   app.post("/api/clinical-notes/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { reasoningData, subjectiveHistory } = req.body;

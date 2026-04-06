@@ -127,6 +127,7 @@ import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
 import RiskPrognosisDashboard from "@/components/skeleton/RiskPrognosisDashboard";
 import InjuryMechanismPanel from "@/components/skeleton/InjuryMechanismPanel";
 import ExerciseEngineTab from "@/components/skeleton/ExerciseEngineTab";
+import ManualTherapyEngineTab from "@/components/skeleton/ManualTherapyEngineTab";
 import UnifiedBiomechanicsPanel from "@/components/skeleton/UnifiedBiomechanicsPanel";
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
@@ -495,7 +496,7 @@ export default function PhysioGPT() {
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
-  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise'>('mechanism');
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx'>('mechanism');
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
@@ -8046,6 +8047,13 @@ ${ddxList}`;
                       <Dumbbell className="h-3 w-3" />
                       Exercise
                     </button>
+                    <button
+                      onClick={() => setMechanismActiveTab('manualRx')}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'manualRx' ? 'bg-rose-500/30 text-rose-300 border border-rose-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                    >
+                      <Hand className="h-3 w-3" />
+                      Manual Rx
+                    </button>
                   </div>
                   {mechanismActiveTab === 'mechanism' && (
                     <InjuryMechanismPanel
@@ -8097,6 +8105,17 @@ ${ddxList}`;
                   )}
                   {mechanismActiveTab === 'exercise' && (
                     <ExerciseEngineTab
+                      mechanismAnalysis={mechanismAnalysisResult}
+                      slingAnalysis={slingAnalysis}
+                      painMarkers={painMarkers.map(pm => ({
+                        label: pm.anatomicalLabel || pm.nearestBone,
+                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        type: pm.type,
+                      }))}
+                    />
+                  )}
+                  {mechanismActiveTab === 'manualRx' && (
+                    <ManualTherapyEngineTab
                       mechanismAnalysis={mechanismAnalysisResult}
                       slingAnalysis={slingAnalysis}
                       painMarkers={painMarkers.map(pm => ({

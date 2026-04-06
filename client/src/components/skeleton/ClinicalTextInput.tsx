@@ -40,6 +40,14 @@ export interface FollowUpQuestion {
   clinical_relevance: string;
 }
 
+export interface CompromisedTissue {
+  tissue_type: "tendon" | "nerve" | "joint" | "fascia";
+  tissue_id: string;
+  severity: number;
+  rationale: string;
+  confidence?: "confirmed" | "predicted";
+}
+
 export interface ClinicalParseResult {
   pain_markers: ParsedPainMarker[];
   muscle_states: ParsedMuscleState[];
@@ -49,6 +57,7 @@ export interface ClinicalParseResult {
   original_description?: string;
   follow_up_questions?: FollowUpQuestion[];
   predictions_confidence?: "high" | "moderate" | "low";
+  compromised_tissues?: CompromisedTissue[];
 }
 
 interface QAEntry {

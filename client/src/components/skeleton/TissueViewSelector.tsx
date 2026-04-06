@@ -11,9 +11,13 @@ import {
   Layers,
   X,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   AlertTriangle,
   Info,
+  ShieldAlert,
 } from 'lucide-react';
+import type { CompromisedTissue } from './ClinicalTextInput';
 import {
   type TissueViewMode,
   type TissueOverlayEntry,
@@ -42,6 +46,7 @@ interface TissueViewSelectorProps {
   jointForceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }>;
   musclePathologyData?: Record<string, MuscleOverrideData>;
   clinicallyAffectedNerves?: Set<string>;
+  compromisedTissues?: CompromisedTissue[];
 }
 
 const MODE_ICONS: Record<Exclude<TissueViewMode, null>, typeof Dumbbell> = {
@@ -359,8 +364,10 @@ export default function TissueViewSelector({
   jointForceData,
   musclePathologyData,
   clinicallyAffectedNerves,
+  compromisedTissues,
 }: TissueViewSelectorProps) {
   const [showList, setShowList] = useState(false);
+  const [compromisedExpanded, setCompromisedExpanded] = useState(true);
   const entries = activeMode ? getTissueEntriesForMode(activeMode) : [];
   const selectedEntry = selectedEntryId ? entries.find(e => e.id === selectedEntryId) : null;
 
@@ -402,6 +409,62 @@ export default function TissueViewSelector({
           );
         })}
       </div>
+
+      {compromisedTissues && compromisedTissues.length > 0 && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 backdrop-blur-sm shadow-sm">
+          <button
+            className="w-full flex items-center justify-between p-2"
+            onClick={() => setCompromisedExpanded(!compromisedExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+              <span className="text-xs font-medium text-red-300">Compromised Tissues</span>
+              <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-red-900/40 text-red-300 border-red-700/40">
+                {compromisedTissues.length}
+              </Badge>
+            </div>
+            {compromisedExpanded ? <ChevronUp className="w-3 h-3 text-red-400" /> : <ChevronDown className="w-3 h-3 text-red-400" />}
+          </button>
+          {compromisedExpanded && (
+            <ScrollArea className="max-h-[180px]">
+              <div className="px-2 pb-2 space-y-1.5">
+                {compromisedTissues.map((ct, idx) => {
+                  const TypeIcon = MODE_ICONS[ct.tissue_type] || Cable;
+                  const modeColor = TISSUE_MODE_COLORS[ct.tissue_type];
+                  const allEntries = getTissueEntriesForMode(ct.tissue_type);
+                  const matchedEntry = allEntries.find(e => e.id === ct.tissue_id);
+                  const severityColor = ct.severity >= 0.7 ? 'text-red-400 border-red-500/40 bg-red-900/30' :
+                    ct.severity >= 0.4 ? 'text-orange-400 border-orange-500/40 bg-orange-900/30' :
+                    'text-yellow-400 border-yellow-500/40 bg-yellow-900/30';
+                  const severityLabel = ct.severity >= 0.7 ? 'High' : ct.severity >= 0.4 ? 'Moderate' : 'Low';
+
+                  return (
+                    <button
+                      key={`${ct.tissue_type}_${ct.tissue_id}_${idx}`}
+                      className="w-full text-left rounded bg-black/20 border border-gray-700/40 p-1.5 hover:bg-black/30 transition-colors"
+                      onClick={() => {
+                        onModeChange(ct.tissue_type);
+                        if (matchedEntry) onEntrySelect(ct.tissue_id);
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <TypeIcon className="w-3 h-3 flex-shrink-0" style={{ color: modeColor.css }} />
+                        <span className="text-[10px] font-medium text-gray-200 truncate flex-1">
+                          {matchedEntry ? matchedEntry.label : ct.tissue_id.replace(/_/g, ' ')}
+                        </span>
+                        <Badge variant="outline" className={`text-[8px] px-1 py-0 h-3.5 ${severityColor}`}>
+                          {severityLabel}
+                        </Badge>
+                      </div>
+                      <p className="text-[9px] text-gray-400 leading-tight">{ct.rationale}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          )}
+        </div>
+      )}
 
       {activeMode && activeMode !== 'muscle' && showList && (
         <div className="rounded-lg border bg-background/95 backdrop-blur-sm shadow-sm">

@@ -11421,7 +11421,15 @@ Return a JSON object with:
 
 6. "predictions_confidence": Overall confidence in your predictions — "high" (well-known condition with clear presentation), "moderate" (some ambiguity), or "low" (unusual or vague description).
 
-7. "follow_up_questions": Array of questions to ask the clinician to refine the prediction. Each has:
+7. "compromised_tissues": Array of specific anatomical tissues that are compromised/affected by the condition. Each has:
+   - "tissue_type": one of "tendon", "nerve", "joint", "fascia"
+   - "tissue_id": exact match from the tissue database. TENDON IDs: achilles_l, achilles_r, patellar_l, patellar_r, supraspinatus_l, supraspinatus_r, biceps_long_head_l, biceps_long_head_r, common_extensor_l, common_extensor_r, common_flexor_l, common_flexor_r, gluteus_medius_l, gluteus_medius_r, plantar_fascia_l, plantar_fascia_r. JOINT IDs: glenohumeral_l, glenohumeral_r, hip_l, hip_r, tibiofemoral_l, tibiofemoral_r, talocrural_l, talocrural_r, si_l, si_r, humeroulnar_l, humeroulnar_r, facet_lumbar, facet_cervical. NERVE IDs: median_l, median_r, ulnar_l, ulnar_r, sciatic_l, sciatic_r, femoral_l, femoral_r, peroneal_l, peroneal_r, radial_l, radial_r. FASCIA IDs: sfl, sbl, lateral_l, lateral_r, spiral, dfl, front_arm_l, front_arm_r.
+   - "severity": 0.0 to 1.0 (how severely compromised)
+   - "rationale": 1-2 sentence clinical reasoning for why this tissue is affected
+   - "confidence": "confirmed" or "predicted"
+   Include ALL tissues likely affected by the condition — for example, "lateral epicondylalgia" should flag common_extensor_r (tendon), humeroulnar_r (joint), radial_r (nerve), and front_arm_r (fascia). Include both sides if bilateral. Only include tissues that are clinically relevant.
+
+8. "follow_up_questions": Array of questions to ask the clinician to refine the prediction. Each has:
    - "id": unique string like "q1", "q2", etc.
    - "question": the question to ask (concise, clinical)
    - "options": optional array of preset answer choices (e.g., ["Acute (<2 weeks)", "Subacute (2-6 weeks)", "Chronic (>6 weeks)"])
@@ -11453,6 +11461,7 @@ EXAMPLES of good predictions:
         clinical_summary: parsed.clinical_summary || '',
         follow_up_questions: parsed.follow_up_questions || [],
         predictions_confidence: parsed.predictions_confidence || 'moderate',
+        compromised_tissues: parsed.compromised_tissues || [],
       });
     } catch (error: unknown) {
       console.error('Error parsing clinical text:', error);

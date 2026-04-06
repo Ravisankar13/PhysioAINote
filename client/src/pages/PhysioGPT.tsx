@@ -122,7 +122,7 @@ import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJo
 import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPainEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
-import ClinicalTextInput, { type ClinicalParseResult } from "@/components/skeleton/ClinicalTextInput";
+import ClinicalTextInput, { type ClinicalParseResult, type CompromisedTissue } from "@/components/skeleton/ClinicalTextInput";
 import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
 import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
 import RiskPrognosisDashboard from "@/components/skeleton/RiskPrognosisDashboard";
@@ -497,6 +497,8 @@ export default function PhysioGPT() {
   const [tissueViewMode, setTissueViewMode] = useState<TissueViewMode>(null);
   const [selectedTissueEntry, setSelectedTissueEntry] = useState<string | null>(null);
   const [tissueDisambiguationEntries, setTissueDisambiguationEntries] = useState<Array<{ id: string; label: string }>>([]);
+  const [compromisedTissues, setCompromisedTissues] = useState<CompromisedTissue[]>([]);
+  const tissueViewManualRef = useRef(false);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd'>('mechanism');
@@ -1221,6 +1223,31 @@ export default function PhysioGPT() {
         };
       });
       setClinicalHighlights(prev => [...prev, ...highlights]);
+    }
+
+    if (result.compromised_tissues && result.compromised_tissues.length > 0) {
+      setCompromisedTissues(result.compromised_tissues);
+      if (!tissueViewManualRef.current) {
+        const typeCounts: Record<string, number> = {};
+        const typeSeverity: Record<string, number> = {};
+        for (const ct of result.compromised_tissues) {
+          typeCounts[ct.tissue_type] = (typeCounts[ct.tissue_type] || 0) + 1;
+          typeSeverity[ct.tissue_type] = Math.max(typeSeverity[ct.tissue_type] || 0, ct.severity);
+        }
+        let bestMode: "tendon" | "nerve" | "joint" | "fascia" = "tendon";
+        let bestScore = -1;
+        for (const [type, count] of Object.entries(typeCounts)) {
+          const score = count * 2 + (typeSeverity[type] || 0) * 3;
+          if (score > bestScore) {
+            bestScore = score;
+            bestMode = type as typeof bestMode;
+          }
+        }
+        setTissueViewMode(bestMode);
+        setSelectedTissueEntry(null);
+      }
+    } else {
+      setCompromisedTissues([]);
     }
 
     const originalDesc = result.original_description || '';
@@ -4139,8 +4166,31 @@ ${ddxList}`;
       result.pathwayLines = buildFasciaChainLines(FASCIAL_LAYER_DATA);
       result.markers = buildFasciaRestrictionMarkers(FASCIAL_LAYER_DATA);
     }
+    if (compromisedTissues.length > 0) {
+      const relevantCompromised = compromisedTissues.filter(ct => ct.tissue_type === tissueViewMode);
+      if (relevantCompromised.length > 0) {
+        const compromisedMarkers: Array<{ boneName: string; color: number; size: number; label: string }> = [];
+        for (const ct of relevantCompromised) {
+          const allEntries = getTissueEntriesForMode(ct.tissue_type);
+          const matched = allEntries.find(e => e.id === ct.tissue_id);
+          if (matched && matched.bones.length > 0) {
+            const severityHex = ct.severity >= 0.7 ? 0xff2222 : ct.severity >= 0.4 ? 0xff8800 : 0xffcc00;
+            compromisedMarkers.push({
+              boneName: matched.bones[0],
+              color: severityHex,
+              size: 0.012 + ct.severity * 0.008,
+              label: `⚠ ${matched.label} — compromised (${Math.round(ct.severity * 100)}%)`,
+            });
+          }
+        }
+        if (compromisedMarkers.length > 0) {
+          result.markers = [...(result.markers || []), ...compromisedMarkers];
+        }
+      }
+    }
+
     return result;
-  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis, compensatedOverrides, painMarkers, hudChainIntegrity]);
+  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis, compensatedOverrides, painMarkers, hudChainIntegrity, compromisedTissues]);
 
   const clinicallyAffectedNerves = useMemo(() => {
     const affected = new Set<string>();
@@ -7509,8 +7559,10 @@ ${ddxList}`;
                   if (tissueViewMode) {
                     setTissueViewMode(null);
                     setSelectedTissueEntry(null);
+                    tissueViewManualRef.current = false;
                   } else {
                     setTissueViewMode('muscle');
+                    tissueViewManualRef.current = true;
                   }
                 }}
               >
@@ -7935,7 +7987,7 @@ ${ddxList}`;
                       <span className="text-xs font-semibold text-gray-200">Tissue View</span>
                     </div>
                     <button
-                      onClick={() => { setTissueViewMode(null); setSelectedTissueEntry(null); }}
+                      onClick={() => { setTissueViewMode(null); setSelectedTissueEntry(null); tissueViewManualRef.current = false; }}
                       className="text-gray-400 hover:text-white p-0.5"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -7943,7 +7995,8 @@ ${ddxList}`;
                   </div>
                   <TissueViewSelector
                     activeMode={tissueViewMode}
-                    onModeChange={setTissueViewMode}
+                    onModeChange={(mode) => { setTissueViewMode(mode); if (mode) tissueViewManualRef.current = true; }}
+                    compromisedTissues={compromisedTissues}
                     selectedEntryId={selectedTissueEntry}
                     onEntrySelect={(id) => { setSelectedTissueEntry(id); setTissueDisambiguationEntries([]); }}
                     chainIntegrityScores={hudChainIntegrity}

@@ -1236,7 +1236,7 @@ export default function PhysioGPT() {
           severity: Math.max(0, Math.min(1, ct.severity)),
         }));
       setCompromisedTissues(validatedTissues);
-      if (!tissueViewManualRef.current) {
+      if (validatedTissues.length > 0 && !tissueViewManualRef.current) {
         const typeCounts: Record<string, number> = {};
         const typeSeverity: Record<string, number> = {};
         for (const ct of validatedTissues) {

@@ -329,10 +329,10 @@ export default function WhatIfSimulationPanel({
                       }
                     }}
                     className={`text-[9px] flex items-center gap-0.5 ${showCompare ? 'text-purple-400' : 'text-gray-500 hover:text-purple-400'} transition-colors`}
-                    title="Compare as Programme A vs B"
+                    title="Save current as Programme A, then modify scenarios to build Programme B"
                   >
                     <GitCompareArrows className="h-3 w-3" />
-                    Compare
+                    {showCompare ? 'Hide Compare' : 'Save as A & Compare'}
                   </button>
                 )}
                 <button onClick={onClearAll} className="text-[9px] text-gray-500 hover:text-red-400 transition-colors">
@@ -733,18 +733,18 @@ export default function WhatIfSimulationPanel({
               <div className="bg-purple-500/10 rounded-md p-2 border border-purple-500/30 space-y-1.5">
                 <div className="flex items-center gap-1 text-[10px] text-purple-300 font-semibold">
                   <GitCompareArrows className="h-3 w-3" />
-                  Programme A vs B
+                  Programme A (saved) vs B (current)
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[9px]">
                   <div className="text-center">
-                    <div className="text-gray-400 mb-0.5">Programme A</div>
+                    <div className="text-gray-400 mb-0.5">A (saved)</div>
                     <div className={`font-mono font-bold text-[11px] ${riskColor(comparison.riskLevelAfter)}`}>
                       {comparison.overallRiskAfter.toFixed(0)}
                     </div>
                     <div className="text-gray-500">{comparison.scenarios.length} scenarios</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-gray-400 mb-0.5">Programme B</div>
+                    <div className="text-gray-400 mb-0.5">B (current)</div>
                     <div className={`font-mono font-bold text-[11px] ${riskColor(comparisonB.riskLevelAfter)}`}>
                       {comparisonB.overallRiskAfter.toFixed(0)}
                     </div>

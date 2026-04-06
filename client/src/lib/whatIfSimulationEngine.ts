@@ -384,21 +384,57 @@ const JOINT_DEVIATION_TARGETS: Record<string, { configKey: string; paramKey: str
     { configKey: 'leftHip', paramKey: 'flexion', normalValue: 0 },
     { configKey: 'rightHip', paramKey: 'flexion', normalValue: 0 },
   ],
+  hip_l: [
+    { configKey: 'leftHip', paramKey: 'flexion', normalValue: 0 },
+  ],
+  hip_r: [
+    { configKey: 'rightHip', paramKey: 'flexion', normalValue: 0 },
+  ],
   knee: [
     { configKey: 'leftKnee', paramKey: 'flexion', normalValue: 0 },
+    { configKey: 'rightKnee', paramKey: 'flexion', normalValue: 0 },
+  ],
+  knee_l: [
+    { configKey: 'leftKnee', paramKey: 'flexion', normalValue: 0 },
+  ],
+  knee_r: [
     { configKey: 'rightKnee', paramKey: 'flexion', normalValue: 0 },
   ],
   ankle: [
     { configKey: 'leftAnkle', paramKey: 'dorsiflexion', normalValue: 0 },
     { configKey: 'rightAnkle', paramKey: 'dorsiflexion', normalValue: 0 },
   ],
+  ankle_l: [
+    { configKey: 'leftAnkle', paramKey: 'dorsiflexion', normalValue: 0 },
+  ],
+  ankle_r: [
+    { configKey: 'rightAnkle', paramKey: 'dorsiflexion', normalValue: 0 },
+  ],
   shoulder: [
     { configKey: 'leftShoulder', paramKey: 'protraction', normalValue: 0 },
+    { configKey: 'rightShoulder', paramKey: 'protraction', normalValue: 0 },
+  ],
+  shoulder_l: [
+    { configKey: 'leftShoulder', paramKey: 'protraction', normalValue: 0 },
+  ],
+  shoulder_r: [
     { configKey: 'rightShoulder', paramKey: 'protraction', normalValue: 0 },
   ],
   elbow: [
     { configKey: 'leftElbow', paramKey: 'flexion', normalValue: 0 },
     { configKey: 'rightElbow', paramKey: 'flexion', normalValue: 0 },
+  ],
+  elbow_l: [
+    { configKey: 'leftElbow', paramKey: 'flexion', normalValue: 0 },
+  ],
+  elbow_r: [
+    { configKey: 'rightElbow', paramKey: 'flexion', normalValue: 0 },
+  ],
+  wrist_l: [
+    { configKey: 'leftWrist', paramKey: 'flexion', normalValue: 0 },
+  ],
+  wrist_r: [
+    { configKey: 'rightWrist', paramKey: 'flexion', normalValue: 0 },
   ],
 };
 

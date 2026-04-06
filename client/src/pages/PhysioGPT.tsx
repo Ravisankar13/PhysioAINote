@@ -7927,7 +7927,7 @@ ${ddxList}`;
             )}
 
             {tissueViewMode && (
-              <div className="absolute top-2 left-2 z-30 w-[280px] animate-in slide-in-from-left-2 duration-200">
+              <div className="absolute top-2 right-2 z-30 w-[280px] animate-in slide-in-from-right-2 duration-200">
                 <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -8264,7 +8264,7 @@ ${ddxList}`;
             />
 
             {(liveTreatmentPriorities.targets.length > 0 || predictedPainSpots.length > 0) && (
-              <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5">
+              <div className={`absolute right-4 z-20 flex flex-col gap-1.5 transition-all duration-200 ${tissueViewMode ? 'top-[320px]' : 'top-4'}`}>
                 {liveTreatmentPriorities.targets.length > 0 && (
                   <button
                     onClick={() => setShowTreatmentOverlay(prev => !prev)}

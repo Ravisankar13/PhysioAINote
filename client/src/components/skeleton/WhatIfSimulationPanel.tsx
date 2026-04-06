@@ -503,6 +503,18 @@ export default function WhatIfSimulationPanel({
                 </button>
                 {showSlingDetails && (
                   <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {comparison.forceTransferScoreBefore > 0 && (
+                      <div className="flex items-center justify-between text-[8px] bg-gray-800/40 rounded px-1.5 py-0.5 mb-1">
+                        <span className="text-gray-400">Overall Force Transfer</span>
+                        <div className="flex items-center gap-1 font-mono">
+                          <span className="text-gray-500">{comparison.forceTransferScoreBefore.toFixed(0)}</span>
+                          <ArrowRight className="h-2 w-2 text-gray-600" />
+                          <span className={comparison.forceTransferScoreAfter > comparison.forceTransferScoreBefore ? 'text-green-400' : comparison.forceTransferScoreAfter < comparison.forceTransferScoreBefore ? 'text-red-400' : 'text-gray-400'}>
+                            {comparison.forceTransferScoreAfter.toFixed(0)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     {comparison.slingDeltas.map((sd: SlingDelta) => (
                       <div key={sd.slingId} className="bg-gray-800/50 rounded p-1.5 border border-gray-700/30 space-y-0.5">
                         <div className="flex items-center gap-1 text-[9px]">
@@ -794,6 +806,46 @@ export default function WhatIfSimulationPanel({
                   <div>
                     <span className="text-gray-500">B Compensations: </span>
                     <span className="text-green-400">{comparisonB.compensationDeltas.filter(c => c.resolvedPercent >= 50).length} resolved</span>
+                  </div>
+                </div>
+                {(comparison.muscleDeltas.length > 0 || comparisonB.muscleDeltas.length > 0) && (
+                  <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
+                    <div className="space-y-0.5">
+                      <div className="text-gray-500 font-semibold">A Muscles</div>
+                      {comparison.muscleDeltas.filter(md => Math.abs(md.activationAfter - md.activationBefore) > 3).slice(0, 3).map(md => {
+                        const delta = md.activationAfter - md.activationBefore;
+                        return (
+                          <div key={md.muscleId} className={`font-mono ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {md.label}: {delta > 0 ? '↑' : '↓'}{Math.abs(delta).toFixed(0)}%
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="text-gray-500 font-semibold">B Muscles</div>
+                      {comparisonB.muscleDeltas.filter(md => Math.abs(md.activationAfter - md.activationBefore) > 3).slice(0, 3).map(md => {
+                        const delta = md.activationAfter - md.activationBefore;
+                        return (
+                          <div key={md.muscleId} className={`font-mono ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {md.label}: {delta > 0 ? '↑' : '↓'}{Math.abs(delta).toFixed(0)}%
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-1 text-[8px] mt-1">
+                  <div>
+                    <span className="text-gray-500">A Transfer: </span>
+                    <span className={comparison.forceTransferScoreAfter >= comparison.forceTransferScoreBefore ? 'text-green-400' : 'text-red-400'}>
+                      {comparison.forceTransferScoreAfter.toFixed(0)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">B Transfer: </span>
+                    <span className={comparisonB.forceTransferScoreAfter >= comparisonB.forceTransferScoreBefore ? 'text-green-400' : 'text-red-400'}>
+                      {comparisonB.forceTransferScoreAfter.toFixed(0)}
+                    </span>
                   </div>
                 </div>
               </div>

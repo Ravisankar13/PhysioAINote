@@ -79,6 +79,8 @@ export interface SlingDelta {
   statusAfter: string;
   transferBefore: string;
   transferAfter: string;
+  transferScoreBefore: number;
+  transferScoreAfter: number;
   weakLinksBefore: number;
   weakLinksAfter: number;
 }
@@ -106,6 +108,8 @@ export interface WhatIfComparisonResult {
   slingDeltas: SlingDelta[];
   slingBefore: SlingAnalysisResult | null;
   slingAfter: SlingAnalysisResult | null;
+  forceTransferScoreBefore: number;
+  forceTransferScoreAfter: number;
   correlationBefore: CrossSystemCorrelationResult | null;
   correlationAfter: CrossSystemCorrelationResult | null;
   mechanismBefore: InjuryMechanismResult | null;
@@ -367,11 +371,66 @@ function applyOverrideToMuscleIds(
   }
 }
 
+const JOINT_DEVIATION_TARGETS: Record<string, { configKey: string; paramKey: string; normalValue: number }[]> = {
+  spine: [
+    { configKey: 'spine', paramKey: 'thoracicKyphosis', normalValue: 40 },
+    { configKey: 'spine', paramKey: 'lumbarLordosis', normalValue: 30 },
+    { configKey: 'spine', paramKey: 'scoliosis', normalValue: 0 },
+  ],
+  neck: [
+    { configKey: 'spine', paramKey: 'forwardHead', normalValue: 0 },
+  ],
+  hip: [
+    { configKey: 'leftHip', paramKey: 'flexion', normalValue: 0 },
+    { configKey: 'rightHip', paramKey: 'flexion', normalValue: 0 },
+  ],
+  knee: [
+    { configKey: 'leftKnee', paramKey: 'flexion', normalValue: 0 },
+    { configKey: 'rightKnee', paramKey: 'flexion', normalValue: 0 },
+  ],
+  ankle: [
+    { configKey: 'leftAnkle', paramKey: 'dorsiflexion', normalValue: 0 },
+    { configKey: 'rightAnkle', paramKey: 'dorsiflexion', normalValue: 0 },
+  ],
+  shoulder: [
+    { configKey: 'leftShoulder', paramKey: 'protraction', normalValue: 0 },
+    { configKey: 'rightShoulder', paramKey: 'protraction', normalValue: 0 },
+  ],
+  elbow: [
+    { configKey: 'leftElbow', paramKey: 'flexion', normalValue: 0 },
+    { configKey: 'rightElbow', paramKey: 'flexion', normalValue: 0 },
+  ],
+};
+
 function computeBaselineAwareMagnitude(
   baseMagnitude: number,
   scenarioTarget: string,
-  muscleAnalysis: MuscleAnalysisResult | null
+  muscleAnalysis: MuscleAnalysisResult | null,
+  interventionType?: InterventionType,
+  modelConfig?: Record<string, unknown> | null,
 ): number {
+  if (interventionType === 'mobilize' && modelConfig) {
+    const deviations = JOINT_DEVIATION_TARGETS[scenarioTarget];
+    if (deviations && deviations.length > 0) {
+      let totalDeviation = 0;
+      let devCount = 0;
+      for (const dev of deviations) {
+        const jointConfig = modelConfig[dev.configKey] as Record<string, number> | undefined;
+        if (jointConfig && jointConfig[dev.paramKey] !== undefined) {
+          const actual = jointConfig[dev.paramKey];
+          const deviation = Math.abs(actual - dev.normalValue);
+          totalDeviation += deviation;
+          devCount++;
+        }
+      }
+      if (devCount > 0) {
+        const avgDeviation = totalDeviation / devCount;
+        const deviationScale = 0.6 + (avgDeviation / 30) * 0.8;
+        return baseMagnitude * clamp(deviationScale, 0.4, 2.0);
+      }
+    }
+  }
+
   if (!muscleAnalysis) return baseMagnitude;
   const muscleIds = SCENARIO_TO_MUSCLE_IDS[scenarioTarget];
   if (!muscleIds || muscleIds.length === 0) return baseMagnitude;
@@ -412,7 +471,9 @@ export function applyScenarios(
     const effectiveMagnitude = computeBaselineAwareMagnitude(
       scenario.magnitude,
       scenario.target,
-      baselineMuscleAnalysis ?? null
+      baselineMuscleAnalysis ?? null,
+      scenario.interventionType,
+      baseModelConfig,
     );
 
     const targets = expandBilateralTarget(scenario.target);
@@ -687,36 +748,67 @@ function getRiskLevelFromScore(score: number): string {
   return 'critical';
 }
 
+function getDoseResponseFraction(week: number): number {
+  if (week === 0) return 0;
+  if (week <= 2) return 0.15 * week;
+  if (week <= 6) return 0.3 + (week - 2) * 0.12;
+  if (week <= 10) return 0.78 + (week - 6) * 0.04;
+  return clamp(0.94 + (week - 10) * 0.015, 0, 1);
+}
+
+function getWeekScaledScenarios(scenarios: WhatIfScenario[], week: number): WhatIfScenario[] {
+  const fraction = getDoseResponseFraction(week);
+  return scenarios.map(s => ({
+    ...s,
+    magnitude: s.magnitude * fraction,
+  }));
+}
+
 function computeTimelineProjection(
+  baseModelConfig: Record<string, Record<string, number>>,
+  baseOverrides: Record<string, Partial<MuscleOverride>>,
+  painMarkers: Array<{ id: string; position: { x: number; y: number; z: number }; label: string; type: 'point' | 'area' | 'referred' | 'line' | 'paint'; severity?: number; description?: string }>,
+  bodyWeightKg: number,
+  scenarios: WhatIfScenario[],
   overallRiskBefore: number,
-  overallRiskAfter: number,
-  compensationDeltas: CompensationDelta[],
-  forceDeltas: ForceDelta[]
+  muscleAnalysis: MuscleAnalysisResult | null,
 ): TimelinePoint[] {
   const points: TimelinePoint[] = [];
-  const riskDelta = overallRiskAfter - overallRiskBefore;
-  const avgForceReduction = forceDeltas.length > 0
-    ? forceDeltas.reduce((s, f) => s + Math.min(0, f.deltaPercent), 0) / forceDeltas.length
-    : 0;
-  const avgCompResolution = compensationDeltas.length > 0
-    ? compensationDeltas.reduce((s, c) => s + c.resolvedPercent, 0) / compensationDeltas.length
-    : 0;
 
   for (let week = 0; week <= 12; week++) {
-    const doseResponseCurve = week === 0 ? 0
-      : week <= 2 ? 0.15 * week
-      : week <= 6 ? 0.3 + (week - 2) * 0.12
-      : week <= 10 ? 0.78 + (week - 6) * 0.04
-      : 0.94 + (week - 10) * 0.015;
-    const progress = clamp(doseResponseCurve, 0, 1);
+    if (week === 0) {
+      points.push({
+        week: 0,
+        riskScore: Math.round(clamp(overallRiskBefore, 0, 100)),
+        riskLevel: getRiskLevelFromScore(overallRiskBefore),
+        forceReduction: 0,
+        compensationResolution: 0,
+      });
+      continue;
+    }
 
-    const projectedRisk = overallRiskBefore + riskDelta * progress;
+    const weekScenarios = getWeekScaledScenarios(scenarios, week);
+    const { modelConfig: weekConfig, overrides: weekOverrides, forceMultiplier: weekFM } = applyScenarios(
+      baseModelConfig, baseOverrides, weekScenarios, muscleAnalysis ?? undefined
+    );
+
+    let weekOverallAfter = overallRiskBefore;
+    try {
+      const weekAfter = buildCorrelationInput(weekConfig, weekOverrides, painMarkers, bodyWeightKg, weekFM);
+      weekOverallAfter = weekAfter.correlation?.overallRiskScore ?? overallRiskBefore;
+    } catch { /* ignore */ }
+
+    const forceReduction = (1 - weekFM) * 100;
+
+    const fraction = getDoseResponseFraction(week);
+    const avgCompResolution = fraction * 60;
+
     points.push({
       week,
-      riskScore: Math.round(clamp(projectedRisk, 0, 100)),
-      riskLevel: getRiskLevelFromScore(projectedRisk),
-      forceReduction: Math.round(avgForceReduction * progress * 10) / 10,
-      compensationResolution: Math.round(avgCompResolution * progress * 10) / 10,
+      riskScore: Math.round(clamp(weekOverallAfter, 0, 100)),
+      riskLevel: getRiskLevelFromScore(weekOverallAfter),
+      forceReduction: Math.round(forceReduction * 10) / 10,
+      compensationResolution: Math.round(avgCompResolution * 10) / 10,
     });
   }
   return points;
@@ -869,20 +961,57 @@ export function computeWhatIfComparison(
   let slingAfter: SlingAnalysisResult | null = null;
   const slingDeltas: SlingDelta[] = [];
   try {
-    const slingInput = {
-      biomechanicsOutput: biomechanicsOutput || null,
-      muscleOverrides: baseOverrides as Record<string, { tension?: number; pathology?: string }>,
+    const toSlingOverrides = (overrides: Record<string, Partial<MuscleOverride>>): Record<string, { tension?: number; pathology?: string }> => {
+      const result: Record<string, { tension?: number; pathology?: string }> = {};
+      for (const [key, ov] of Object.entries(overrides)) {
+        const tensionBase = 50;
+        const tensionAdjust = (ov.tensionOffset ?? 0) * 0.5;
+        const activationAdjust = (ov.activationOffset ?? 0) * 0.3;
+        const inhibitionAdjust = (ov.inhibition ?? 0) * -0.2;
+        result[key] = {
+          tension: clamp(tensionBase + tensionAdjust + activationAdjust + inhibitionAdjust, 0, 100),
+          pathology: (ov.pathology && ov.pathology !== 'none') ? ov.pathology : undefined,
+        };
+      }
+      return result;
     };
-    slingBefore = computeSlingAnalysis(slingInput);
-    slingAfter = computeSlingAnalysis({
+
+    slingBefore = computeSlingAnalysis({
       biomechanicsOutput: biomechanicsOutput || null,
-      muscleOverrides: simOverrides as Record<string, { tension?: number; pathology?: string }>,
+      muscleOverrides: toSlingOverrides(baseOverrides as Record<string, MuscleOverride>),
     });
+
+    let simBiomechanicsOutput = biomechanicsOutput || null;
+    if (simBiomechanicsOutput) {
+      simBiomechanicsOutput = JSON.parse(JSON.stringify(simBiomechanicsOutput));
+      if (simBiomechanicsOutput.posture && simBiomechanicsOutput.posture.deviations) {
+        for (const dev of simBiomechanicsOutput.posture.deviations) {
+          if (dev.angleDeg !== undefined) {
+            const reductionFactor = 1 - (forceMultiplier < 1 ? (1 - forceMultiplier) * 2 : 0);
+            dev.angleDeg = dev.angleDeg * clamp(reductionFactor, 0.3, 1.0);
+          }
+        }
+      }
+      if (simBiomechanicsOutput.faults) {
+        simBiomechanicsOutput.faults.overallRiskScore = Math.round(
+          simBiomechanicsOutput.faults.overallRiskScore * clamp(forceMultiplier, 0.5, 1.2)
+        );
+      }
+    }
+
+    slingAfter = computeSlingAnalysis({
+      biomechanicsOutput: simBiomechanicsOutput,
+      muscleOverrides: toSlingOverrides(simOverrides as Record<string, MuscleOverride>),
+    });
+
+    const transferScoreMap = (quality: string): number =>
+      quality === 'good' ? 85 : quality === 'reduced' ? 55 : 25;
+
     for (const bs of slingBefore.slings) {
       const as_ = slingAfter.slings.find(s => s.slingId === bs.slingId);
       if (as_) {
         const delta = as_.activationScore - bs.activationScore;
-        if (Math.abs(delta) > 1 || bs.status !== as_.status) {
+        if (Math.abs(delta) > 1 || bs.status !== as_.status || bs.forceTransferQuality !== as_.forceTransferQuality) {
           slingDeltas.push({
             slingId: bs.slingId,
             label: bs.label,
@@ -894,6 +1023,8 @@ export function computeWhatIfComparison(
             statusAfter: as_.status,
             transferBefore: bs.forceTransferQuality,
             transferAfter: as_.forceTransferQuality,
+            transferScoreBefore: transferScoreMap(bs.forceTransferQuality),
+            transferScoreAfter: transferScoreMap(as_.forceTransferQuality),
             weakLinksBefore: bs.weakLinks.length,
             weakLinksAfter: as_.weakLinks.length,
           });
@@ -988,7 +1119,10 @@ export function computeWhatIfComparison(
     topImprovements.push(`${sd.label}: activation ↑${sd.activationDelta.toFixed(0)}`);
   }
 
-  const timeline = computeTimelineProjection(overallBefore, overallAfter, compensationDeltas, forceDeltas);
+  const timeline = computeTimelineProjection(
+    baseModelConfig, baseOverrides, painMarkers, bodyWeightKg,
+    scenarios, overallBefore, muscleAnalysis ?? null,
+  );
 
   return {
     scenarios,
@@ -1005,6 +1139,8 @@ export function computeWhatIfComparison(
     slingDeltas,
     slingBefore,
     slingAfter,
+    forceTransferScoreBefore: slingBefore?.overallForceTransferScore ?? 0,
+    forceTransferScoreAfter: slingAfter?.overallForceTransferScore ?? 0,
     correlationBefore: before.correlation,
     correlationAfter: after.correlation,
     mechanismBefore,

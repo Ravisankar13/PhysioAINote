@@ -6957,8 +6957,37 @@ Based on this clinical data, generate a comprehensive, prioritized exercise pres
         return res.status(500).json({ error: "AI returned empty response" });
       }
 
-      const result = JSON.parse(content);
-      res.json(result);
+      const exerciseResponseSchema = z.object({
+        exerciseGroups: z.array(z.object({
+          groupId: z.string(),
+          goalTitle: z.string(),
+          goalDescription: z.string(),
+          priority: z.number(),
+          exercises: z.array(z.object({
+            name: z.string(),
+            targetStructure: z.string(),
+            targetFinding: z.string(),
+            sets: z.string(),
+            reps: z.string(),
+            tempo: z.string().default('controlled'),
+            loadGuidance: z.string(),
+            rationale: z.string(),
+            contraindications: z.string().default('None'),
+            progression: z.string(),
+          })),
+        })),
+        clinicalNotes: z.string().default(''),
+        irritabilityConsiderations: z.string().default(''),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = exerciseResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Exercise engine response validation failed:", validated.error.format());
+        res.json(raw);
+      } else {
+        res.json(validated.data);
+      }
     } catch (error: unknown) {
       console.error("Exercise engine generation error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";

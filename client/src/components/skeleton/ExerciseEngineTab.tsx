@@ -207,9 +207,8 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
         };
       }
 
-      const response = await apiRequest('POST', '/api/exercise-engine/generate', payload);
+      const result = await apiRequest('/api/exercise-engine/generate', 'POST', payload) as ExercisePlan;
       if (controller.signal.aborted) return;
-      const result: ExercisePlan = await response.json();
       const sorted = {
         ...result,
         exerciseGroups: [...(result.exerciseGroups || [])].sort((a, b) => a.priority - b.priority),

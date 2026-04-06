@@ -1325,6 +1325,9 @@ export default function PhysioGPT() {
       setTimeout(() => triggerClinicalReasoningAnalysisRef.current(true), 300);
     }
 
+    setCompromisedTissues([]);
+    tissueViewManualRef.current = false;
+
     clinicalTextAppliedRef.current = null;
   }, []);
 
@@ -4152,40 +4155,90 @@ ${ddxList}`;
       }
     }
 
+    const relevantCompromised = compromisedTissues.filter(ct => ct.tissue_type === tissueViewMode);
+    const compromisedIds = new Set(relevantCompromised.map(ct => ct.tissue_id));
+    const hasCompromised = relevantCompromised.length > 0;
+
+    const allEntries = getTissueEntriesForMode(tissueViewMode);
+    const compromisedEntries = hasCompromised ? allEntries.filter(e => compromisedIds.has(e.id)) : [];
+    const nonCompromisedEntries = hasCompromised ? allEntries.filter(e => !compromisedIds.has(e.id)) : [];
+
     const allBones = getAllHighlightBonesForMode(tissueViewMode);
-    const result: OverlayResult = { bones: allBones, color: modeColor.hex, label: modeColor.label };
+    const dimmedColor = 0x555566;
+    const resultColor = hasCompromised ? dimmedColor : modeColor.hex;
+    const result: OverlayResult = { bones: allBones, color: resultColor, label: modeColor.label };
+
     if (tissueViewMode === 'tendon') {
-      result.markers = buildTendonMarkers(TENDON_DATA);
+      if (hasCompromised) {
+        const dimmedMarkers = buildTendonMarkers(nonCompromisedEntries as TendonEntry[]).map(m => ({
+          ...m, color: dimmedColor, size: 0.006, label: m.label + ' (unaffected)',
+        }));
+        const brightMarkers = buildTendonMarkers(compromisedEntries as TendonEntry[]);
+        result.markers = [...dimmedMarkers, ...brightMarkers];
+      } else {
+        result.markers = buildTendonMarkers(TENDON_DATA);
+      }
     } else if (tissueViewMode === 'nerve') {
-      result.pathwayLines = buildNervePathways(NERVE_PATHWAY_DATA);
-      result.markers = buildNerveEntrapmentMarkers(NERVE_PATHWAY_DATA);
+      if (hasCompromised) {
+        const dimmedPaths = buildNervePathways(nonCompromisedEntries as NervePathwayEntry[]).map(p => ({
+          ...p, color: dimmedColor, label: p.label + ' (unaffected)',
+        }));
+        const brightPaths = buildNervePathways(compromisedEntries as NervePathwayEntry[]);
+        result.pathwayLines = [...dimmedPaths, ...brightPaths];
+        const dimmedEntrap = buildNerveEntrapmentMarkers(nonCompromisedEntries as NervePathwayEntry[]).map(m => ({
+          ...m, color: dimmedColor, size: 0.006,
+        }));
+        const brightEntrap = buildNerveEntrapmentMarkers(compromisedEntries as NervePathwayEntry[]);
+        result.markers = [...dimmedEntrap, ...brightEntrap];
+      } else {
+        result.pathwayLines = buildNervePathways(NERVE_PATHWAY_DATA);
+        result.markers = buildNerveEntrapmentMarkers(NERVE_PATHWAY_DATA);
+      }
     } else if (tissueViewMode === 'joint') {
       result.loadIndicators = buildJointLoadIndicators();
-      result.markers = buildJointInstabilityMarkers(JOINT_SURFACE_DATA);
+      if (hasCompromised) {
+        const dimmedJoints = buildJointInstabilityMarkers(nonCompromisedEntries as JointSurfaceEntry[]).map(m => ({
+          ...m, color: dimmedColor, size: 0.006,
+        }));
+        const brightJoints = buildJointInstabilityMarkers(compromisedEntries as JointSurfaceEntry[]);
+        result.markers = [...dimmedJoints, ...brightJoints];
+      } else {
+        result.markers = buildJointInstabilityMarkers(JOINT_SURFACE_DATA);
+      }
     } else if (tissueViewMode === 'fascia') {
-      result.pathwayLines = buildFasciaChainLines(FASCIAL_LAYER_DATA);
-      result.markers = buildFasciaRestrictionMarkers(FASCIAL_LAYER_DATA);
+      if (hasCompromised) {
+        const dimmedChains = buildFasciaChainLines(nonCompromisedEntries as FascialLayerEntry[]).map(p => ({
+          ...p, color: dimmedColor, label: p.label + ' (unaffected)',
+        }));
+        const brightChains = buildFasciaChainLines(compromisedEntries as FascialLayerEntry[]);
+        result.pathwayLines = [...dimmedChains, ...brightChains];
+        const dimmedRestrict = buildFasciaRestrictionMarkers(nonCompromisedEntries as FascialLayerEntry[]).map(m => ({
+          ...m, color: dimmedColor, size: 0.006,
+        }));
+        const brightRestrict = buildFasciaRestrictionMarkers(compromisedEntries as FascialLayerEntry[]);
+        result.markers = [...dimmedRestrict, ...brightRestrict];
+      } else {
+        result.pathwayLines = buildFasciaChainLines(FASCIAL_LAYER_DATA);
+        result.markers = buildFasciaRestrictionMarkers(FASCIAL_LAYER_DATA);
+      }
     }
-    if (compromisedTissues.length > 0) {
-      const relevantCompromised = compromisedTissues.filter(ct => ct.tissue_type === tissueViewMode);
-      if (relevantCompromised.length > 0) {
-        const compromisedMarkers: Array<{ boneName: string; color: number; size: number; label: string }> = [];
-        for (const ct of relevantCompromised) {
-          const allEntries = getTissueEntriesForMode(ct.tissue_type);
-          const matched = allEntries.find(e => e.id === ct.tissue_id);
-          if (matched && matched.bones.length > 0) {
-            const severityHex = ct.severity >= 0.7 ? 0xff2222 : ct.severity >= 0.4 ? 0xff8800 : 0xffcc00;
-            compromisedMarkers.push({
-              boneName: matched.bones[0],
-              color: severityHex,
-              size: 0.012 + ct.severity * 0.008,
-              label: `⚠ ${matched.label} — compromised (${Math.round(ct.severity * 100)}%)`,
-            });
-          }
+
+    if (hasCompromised) {
+      const compromisedMarkers: Array<{ boneName: string; color: number; size: number; label: string }> = [];
+      for (const ct of relevantCompromised) {
+        const matched = allEntries.find(e => e.id === ct.tissue_id);
+        if (matched && matched.bones.length > 0) {
+          const severityHex = ct.severity >= 0.7 ? 0xff2222 : ct.severity >= 0.4 ? 0xff8800 : 0xffcc00;
+          compromisedMarkers.push({
+            boneName: matched.bones[0],
+            color: severityHex,
+            size: 0.012 + ct.severity * 0.008,
+            label: `⚠ ${matched.label} — compromised (${Math.round(ct.severity * 100)}%)`,
+          });
         }
-        if (compromisedMarkers.length > 0) {
-          result.markers = [...(result.markers || []), ...compromisedMarkers];
-        }
+      }
+      if (compromisedMarkers.length > 0) {
+        result.markers = [...(result.markers || []), ...compromisedMarkers];
       }
     }
 

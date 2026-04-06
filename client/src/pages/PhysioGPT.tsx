@@ -1226,11 +1226,20 @@ export default function PhysioGPT() {
     }
 
     if (result.compromised_tissues && result.compromised_tissues.length > 0) {
-      setCompromisedTissues(result.compromised_tissues);
+      const validatedTissues = result.compromised_tissues
+        .filter((ct: CompromisedTissue) => {
+          const validEntries = getTissueEntriesForMode(ct.tissue_type);
+          return validEntries.some(e => e.id === ct.tissue_id);
+        })
+        .map((ct: CompromisedTissue) => ({
+          ...ct,
+          severity: Math.max(0, Math.min(1, ct.severity)),
+        }));
+      setCompromisedTissues(validatedTissues);
       if (!tissueViewManualRef.current) {
         const typeCounts: Record<string, number> = {};
         const typeSeverity: Record<string, number> = {};
-        for (const ct of result.compromised_tissues) {
+        for (const ct of validatedTissues) {
           typeCounts[ct.tissue_type] = (typeCounts[ct.tissue_type] || 0) + 1;
           typeSeverity[ct.tissue_type] = Math.max(typeSeverity[ct.tissue_type] || 0, ct.severity);
         }
@@ -4183,7 +4192,12 @@ ${ddxList}`;
         const dimmedPaths = buildNervePathways(nonCompromisedEntries as NervePathwayEntry[]).map(p => ({
           ...p, color: dimmedColor, label: p.label + ' (unaffected)',
         }));
-        const brightPaths = buildNervePathways(compromisedEntries as NervePathwayEntry[]);
+        const brightPaths = buildNervePathways(compromisedEntries as NervePathwayEntry[]).map(p => {
+          const entry = compromisedEntries.find(e => p.label.startsWith(e.label));
+          const ct = entry ? relevantCompromised.find(c => c.tissue_id === entry.id) : null;
+          const sColor = ct ? (ct.severity >= 0.7 ? 0xff2222 : ct.severity >= 0.4 ? 0xff8800 : 0xffcc00) : p.color;
+          return { ...p, color: sColor };
+        });
         result.pathwayLines = [...dimmedPaths, ...brightPaths];
         const dimmedEntrap = buildNerveEntrapmentMarkers(nonCompromisedEntries as NervePathwayEntry[]).map(m => ({
           ...m, color: dimmedColor, size: 0.006,
@@ -4210,7 +4224,12 @@ ${ddxList}`;
         const dimmedChains = buildFasciaChainLines(nonCompromisedEntries as FascialLayerEntry[]).map(p => ({
           ...p, color: dimmedColor, label: p.label + ' (unaffected)',
         }));
-        const brightChains = buildFasciaChainLines(compromisedEntries as FascialLayerEntry[]);
+        const brightChains = buildFasciaChainLines(compromisedEntries as FascialLayerEntry[]).map(p => {
+          const entry = compromisedEntries.find(e => p.label.startsWith(e.label));
+          const ct = entry ? relevantCompromised.find(c => c.tissue_id === entry.id) : null;
+          const sColor = ct ? (ct.severity >= 0.7 ? 0xff2222 : ct.severity >= 0.4 ? 0xff8800 : 0xffcc00) : p.color;
+          return { ...p, color: sColor };
+        });
         result.pathwayLines = [...dimmedChains, ...brightChains];
         const dimmedRestrict = buildFasciaRestrictionMarkers(nonCompromisedEntries as FascialLayerEntry[]).map(m => ({
           ...m, color: dimmedColor, size: 0.006,

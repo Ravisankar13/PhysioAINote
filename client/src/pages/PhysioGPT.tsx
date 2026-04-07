@@ -74,7 +74,8 @@ import {
   Microscope,
   Link2,
   FlaskConical,
-  GraduationCap
+  GraduationCap,
+  Zap
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -470,28 +471,43 @@ export default function PhysioGPT() {
 
   useEffect(() => {
     if (!modelReady) return;
-    let raf1 = 0, raf2 = 0;
+    let cancelled = false;
+    const idleIds: number[] = [];
     const timers: number[] = [];
-    raf1 = requestAnimationFrame(() => {
+
+    const scheduleIdle = (fn: () => void, fallbackMs: number) => {
+      if (typeof requestIdleCallback === 'function') {
+        const id = requestIdleCallback(() => { if (!cancelled) fn(); }, { timeout: fallbackMs });
+        idleIds.push(id);
+      } else {
+        timers.push(window.setTimeout(() => { if (!cancelled) fn(); }, fallbackMs));
+      }
+    };
+
+    requestAnimationFrame(() => {
+      if (cancelled) return;
       setUiStage(1);
-      raf2 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
         setUiStage(2);
-        timers.push(window.setTimeout(() => {
+        scheduleIdle(() => {
           setUiStage(3);
           setComputeStage(1);
-        }, 600));
-        timers.push(window.setTimeout(() => {
-          setComputeStage(2);
-        }, 1200));
-        timers.push(window.setTimeout(() => {
-          setComputeStage(3);
-          setComputationsReady(true);
-        }, 2000));
+          scheduleIdle(() => {
+            setComputeStage(2);
+            scheduleIdle(() => {
+              setComputeStage(3);
+              setComputationsReady(true);
+            }, 800);
+          }, 600);
+        }, 500);
       });
     });
     return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
+      cancelled = true;
+      idleIds.forEach(id => {
+        if (typeof cancelIdleCallback === 'function') cancelIdleCallback(id);
+      });
       timers.forEach(t => clearTimeout(t));
     };
   }, [modelReady]);
@@ -3647,7 +3663,7 @@ ${ddxList}`;
   }, [whatIfSimulatedConfig, modelConfig, effectiveModelConfig]);
 
   const chainIntegrityScores = useMemo(() => {
-    if (!showUnifiedChainPanel) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
+    if (!showUnifiedChainPanel || (liteMode && computeStage < 3)) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     const baseAnalysis = computeFullMuscleAnalysis(effectiveModelConfig);
     const muscles = applyOverridesToAnalysis(baseAnalysis, compensatedOverrides, crossMuscleEffects);
     const scores = new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
@@ -4803,6 +4819,12 @@ ${ddxList}`;
       )}
       {/* Full-Page Skeleton Viewer */}
       <div className="h-full w-full relative flex">
+            {liteMode && computationsReady && (
+              <div className="absolute top-2 right-2 z-30 bg-amber-900/80 backdrop-blur-sm text-amber-200 text-[10px] px-2 py-1 rounded-md font-medium flex items-center gap-1">
+                <Zap className="h-3 w-3" />
+                Lite Mode
+              </div>
+            )}
             {cameraMode && (
               <div className="w-[40%] h-full flex-shrink-0 relative border-r border-gray-700">
                 <Suspense fallback={<LazyPanelFallback />}>

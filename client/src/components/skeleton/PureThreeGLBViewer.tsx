@@ -4765,6 +4765,15 @@ export default function PureThreeGLBViewer({
           (gltf) => {
             if (isDisposed) return;
             
+            if (gltf.parser) {
+              try {
+                const ext = gltf.parser.extensions;
+                if (ext) {
+                  Object.keys(ext).forEach(key => { delete ext[key]; });
+                }
+              } catch {}
+            }
+            
             const model = gltf.scene;
             
             const box = new THREE.Box3().setFromObject(model);
@@ -4781,8 +4790,6 @@ export default function PureThreeGLBViewer({
             
             const bones: { [name: string]: THREE.Object3D } = {};
             const boneNames: string[] = [];
-            
-            let skullMesh: THREE.Object3D | null = null;
             
             const muscleMeshes: THREE.Object3D[] = [];
             
@@ -4833,10 +4840,6 @@ export default function PureThreeGLBViewer({
                     }
                   }
                 }
-                
-                if (lowerName.includes('skull') || lowerName.includes('head') || lowerName.includes('cranium')) {
-                  skullMesh = child;
-                }
               }
               if (child instanceof THREE.Bone) {
                 bones[child.name] = child;
@@ -4850,28 +4853,38 @@ export default function PureThreeGLBViewer({
               }
             });
             
-            model.updateMatrixWorld(true);
-            
-            if (skullMesh !== null) {
-              const skull = skullMesh as THREE.SkinnedMesh;
-              if (skull instanceof THREE.SkinnedMesh && skull.skeleton) {
-                const geometry = skull.geometry;
-                if (geometry.attributes.skinIndex && geometry.attributes.skinWeight) {
-                  const skinIndices = geometry.attributes.skinIndex;
-                  const skinWeights = geometry.attributes.skinWeight;
-                  const sampleCount = Math.min(50, skinIndices.count);
-                  for (let i = 0; i < sampleCount; i++) {
-                    for (let j = 0; j < 4; j++) {
-                      const weight = skinWeights.getComponent(i, j);
-                      if (weight > 0.01) {
-                        skinIndices.getComponent(i, j);
-                      }
-                    }
-                  }
+            const materialCache = new Map<string, THREE.Material>();
+            model.traverse((child) => {
+              if (child instanceof THREE.Mesh && child.material) {
+                const mat = child.material as THREE.Material;
+                if (!mat.name) return;
+                const cached = materialCache.get(mat.name);
+                if (cached && cached !== mat) {
+                  mat.dispose();
+                  child.material = cached;
+                } else {
+                  materialCache.set(mat.name, mat);
                 }
               }
+            });
+            
+            if (!showMuscles) {
+              muscleMeshes.forEach((mesh) => {
+                const m = mesh as THREE.Mesh;
+                if (m.geometry) {
+                  const attrs = m.geometry.attributes;
+                  if (attrs.uv) {
+                    m.geometry.deleteAttribute('uv');
+                  }
+                  if (attrs.uv2) {
+                    m.geometry.deleteAttribute('uv2');
+                  }
+                }
+              });
             }
-
+            
+            model.updateMatrixWorld(true);
+            
             boneNames.forEach((name) => {
               const bone = bones[name];
               initialRotationsRef.current[name] = bone.rotation.clone();
@@ -4990,9 +5003,23 @@ export default function PureThreeGLBViewer({
               sceneRef.current.model = model;
             }
             
-            console.log('GLB model loaded successfully:', modelPath);
             setStatus('ready');
             onModelReady?.();
+            
+            if (initialDPR < window.devicePixelRatio && !isLowMemDevice) {
+              setTimeout(() => {
+                if (!isDisposed && sceneRef.current) {
+                  const targetDPR = Math.min(window.devicePixelRatio, 1.5);
+                  sceneRef.current.renderer.setPixelRatio(targetDPR);
+                  if (containerRef.current) {
+                    sceneRef.current.renderer.setSize(
+                      containerRef.current.clientWidth,
+                      containerRef.current.clientHeight
+                    );
+                  }
+                }
+              }, 3000);
+            }
           },
           (xhr) => {
             if (xhr.lengthComputable) {

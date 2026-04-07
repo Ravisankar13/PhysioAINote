@@ -2505,6 +2505,7 @@ ${ddxList}`;
   }, [compensatedOverrides, pathologyCompensation]);
 
   const effectiveModelConfig = useMemo(() => {
+    if (!computationsReady) return modelConfig;
     const config = JSON.parse(JSON.stringify(modelConfig));
 
     if (muscleDrivenEffects) {
@@ -2542,7 +2543,7 @@ ${ddxList}`;
     }
 
     return config;
-  }, [modelConfig, muscleDrivenEffects, pathologyCompensation]);
+  }, [modelConfig, muscleDrivenEffects, pathologyCompensation, computationsReady]);
 
   const handleAnalyzeSkeleton = useCallback(() => {
     const sections: string[] = [];
@@ -8581,7 +8582,7 @@ ${ddxList}`;
           </div>
 
       {/* Conversation History Sidebar - floating overlay inside skeleton */}
-      <div className={`absolute top-0 left-0 h-full z-30 transition-all duration-300 ${sidebarOpen ? 'w-[260px]' : 'w-0'} overflow-hidden`}>
+      {uiStage >= 1 && <div className={`absolute top-0 left-0 h-full z-30 transition-all duration-300 ${sidebarOpen ? 'w-[260px]' : 'w-0'} overflow-hidden`}>
         <div className="w-[260px] h-full bg-black/90 backdrop-blur-md border-r border-white/10 flex flex-col">
           <div className="flex items-center justify-between p-3 border-b border-white/10">
             <div className="flex items-center gap-2">
@@ -8648,10 +8649,10 @@ ${ddxList}`;
             </div>
           </ScrollArea>
         </div>
-      </div>
+      </div>}
 
       {/* Right Panel - Chat & Treatment tabs */}
-      <div className={`absolute top-0 right-0 h-full z-30 transition-all duration-300 ${chatPanelOpen ? 'w-[380px]' : 'w-0'} overflow-hidden`}>
+      {uiStage >= 2 && <div className={`absolute top-0 right-0 h-full z-30 transition-all duration-300 ${chatPanelOpen ? 'w-[380px]' : 'w-0'} overflow-hidden`}>
         <div className="w-[380px] h-full bg-white/95 backdrop-blur-md border-l border-gray-200 shadow-2xl flex flex-col">
           <div className="flex items-center justify-between px-2 py-1.5 border-b bg-white">
             <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
@@ -9750,7 +9751,7 @@ ${ddxList}`;
           </div>
           </>)}
         </div>
-      </div>
+      </div>}
 
       {!sidebarOpen && (
         <div className="absolute top-3 left-3 z-30 flex items-center gap-2">

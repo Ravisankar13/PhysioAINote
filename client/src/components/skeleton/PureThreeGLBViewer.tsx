@@ -4678,7 +4678,7 @@ export default function PureThreeGLBViewer({
         const renderer = new THREE.WebGLRenderer({ 
           antialias: false,
           alpha: false,
-          powerPreference: 'high-performance',
+          powerPreference: 'low-power',
           failIfMajorPerformanceCaveat: false
         });
         renderer.setSize(width, height);

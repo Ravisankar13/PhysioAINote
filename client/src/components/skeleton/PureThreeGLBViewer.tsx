@@ -2188,7 +2188,7 @@ export default function PureThreeGLBViewer({
   const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
   const muscleLayerManagerRef = useRef<MuscleLayerManager | null>(null);
   const muscleMeshesRef = useRef<THREE.Object3D[]>([]);
-  const hiddenGeometryCacheRef = useRef<Map<string, THREE.BufferGeometry>>(new Map());
+  const hiddenGeometryCacheRef = useRef<Map<string, { attrs: Record<string, { array: ArrayLike<number>; itemSize: number }>; index: { array: ArrayLike<number>; itemSize: number } | null; boundingSphere: THREE.Sphere | null }>>(new Map());
   const splitMuscleGroupsRef = useRef<Map<string, SplitMuscleGroup>>(new Map());
   const muscleHitProxiesRef = useRef<{ mesh: THREE.Mesh; groupId: string }[]>([]);
   const muscleGroupCentersRef = useRef<Map<string, THREE.Vector3>>(new Map());
@@ -4858,10 +4858,28 @@ export default function PureThreeGLBViewer({
                 const m = obj as THREE.Mesh;
                 if (m.geometry) {
                   const key = m.uuid;
-                  hiddenGeometryCacheRef.current.set(key, m.geometry);
+                  const origGeo = m.geometry;
+                  const savedAttrs: Record<string, { array: ArrayLike<number>; itemSize: number }> = {};
+                  for (const attrName of Object.keys(origGeo.attributes)) {
+                    const attr = origGeo.getAttribute(attrName);
+                    if (attr && 'array' in attr) {
+                      savedAttrs[attrName] = {
+                        array: (attr as THREE.BufferAttribute).array,
+                        itemSize: (attr as THREE.BufferAttribute).itemSize,
+                      };
+                    }
+                  }
+                  const savedIndex = origGeo.index
+                    ? { array: origGeo.index.array, itemSize: origGeo.index.itemSize }
+                    : null;
+                  const savedBoundingSphere = origGeo.boundingSphere?.clone() || null;
+                  hiddenGeometryCacheRef.current.set(key, { attrs: savedAttrs, index: savedIndex, boundingSphere: savedBoundingSphere });
+                  origGeo.dispose();
                   const placeholder = new THREE.BufferGeometry();
                   placeholder.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
-                  placeholder.boundingSphere = m.geometry.boundingSphere?.clone() || new THREE.Sphere(new THREE.Vector3(), 5);
+                  if (savedBoundingSphere) {
+                    placeholder.boundingSphere = savedBoundingSphere.clone();
+                  }
                   m.geometry = placeholder;
                 }
               });
@@ -5048,11 +5066,13 @@ export default function PureThreeGLBViewer({
         xhr.onload = () => {
           if (isDisposed) { activeXhr = null; return; }
           if (xhr.status >= 200 && xhr.status < 300) {
-            const buffer = xhr.response as ArrayBuffer;
+            let buffer: ArrayBuffer | null = xhr.response as ArrayBuffer;
             activeXhr = null;
-            loader.parse(buffer, '', (gltf) => {
+            loader.parse(buffer!, '', (gltf) => {
+              buffer = null;
               processGltf(gltf);
             }, (error: unknown) => {
+              buffer = null;
               console.error('Error parsing GLB:', error);
               const errorMsg = error instanceof Error ? error.message : String(error);
               setErrorMessage(`Failed to parse model: ${errorMsg || 'Unknown error'}`);
@@ -5303,7 +5323,6 @@ export default function PureThreeGLBViewer({
       if (animationId) {
         cancelAnimationFrame(animationId);
       }
-      hiddenGeometryCacheRef.current.forEach((geo) => geo.dispose());
       hiddenGeometryCacheRef.current.clear();
       if (sceneRef.current) {
         sceneRef.current.controls.dispose();
@@ -6655,7 +6674,26 @@ export default function PureThreeGLBViewer({
         const cached = hiddenGeometryCacheRef.current.get(m.uuid);
         if (cached) {
           const placeholder = m.geometry;
-          m.geometry = cached;
+          const rebuilt = new THREE.BufferGeometry();
+          for (const [attrName, data] of Object.entries(cached.attrs)) {
+            rebuilt.setAttribute(attrName, new THREE.BufferAttribute(
+              data.array instanceof Float32Array ? data.array : new Float32Array(data.array as number[]),
+              data.itemSize
+            ));
+          }
+          if (cached.index) {
+            rebuilt.setIndex(new THREE.BufferAttribute(
+              cached.index.array instanceof Uint16Array ? cached.index.array
+                : cached.index.array instanceof Uint32Array ? cached.index.array
+                : new Uint16Array(cached.index.array as number[]),
+              cached.index.itemSize
+            ));
+          }
+          if (cached.boundingSphere) {
+            rebuilt.boundingSphere = cached.boundingSphere.clone();
+          }
+          rebuilt.computeBoundingSphere();
+          m.geometry = rebuilt;
           placeholder.dispose();
           hiddenGeometryCacheRef.current.delete(m.uuid);
         }

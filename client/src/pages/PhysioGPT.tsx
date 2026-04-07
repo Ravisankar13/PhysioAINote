@@ -75,7 +75,6 @@ import {
   Link2,
   FlaskConical,
   GraduationCap,
-  Zap
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";

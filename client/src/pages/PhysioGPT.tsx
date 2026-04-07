@@ -35,6 +35,7 @@ import {
   ClipboardCheck,
   Hand,
   Bone,
+  AlertCircle,
   ArrowRight,
   CheckCircle2,
   Mic,
@@ -440,6 +441,7 @@ export default function PhysioGPT() {
 
   const [modelLoadProgress, setModelLoadProgress] = useState(0);
   const [modelReady, setModelReady] = useState(false);
+  const [modelLoadError, setModelLoadError] = useState<string | null>(null);
 
   const handleModelLoadProgress = useCallback((progress: number) => {
     setModelLoadProgress(progress);
@@ -448,6 +450,11 @@ export default function PhysioGPT() {
   const handleModelReady = useCallback(() => {
     setModelReady(true);
     setModelLoadProgress(100);
+    setModelLoadError(null);
+  }, []);
+
+  const handleModelLoadError = useCallback((error: string) => {
+    setModelLoadError(error);
   }, []);
 
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
@@ -4656,40 +4663,67 @@ ${ddxList}`;
       {!modelReady && (
         <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
           <div className="flex flex-col items-center gap-6 max-w-md w-full px-8">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full border-4 border-slate-700 border-t-emerald-500 animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Stethoscope className="h-8 w-8 text-emerald-400" />
-              </div>
-            </div>
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-white mb-2">PhysioGPT</h2>
-              <p className="text-sm text-slate-400 mb-6">
-                {modelLoadProgress > 0
-                  ? 'Loading anatomical model...'
-                  : 'Initializing clinical workspace...'}
-              </p>
-            </div>
-            <div className="w-full">
-              <div className="w-full bg-slate-700/50 rounded-full h-3 overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-emerald-500 to-teal-400 h-3 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${Math.max(modelLoadProgress, 2)}%` }}
-                />
-              </div>
-              <div className="flex justify-between mt-2">
-                <span className="text-xs text-slate-500">
-                  {modelLoadProgress < 10 ? 'Preparing 3D engine...' :
-                   modelLoadProgress < 50 ? 'Downloading skeleton model...' :
-                   modelLoadProgress < 90 ? 'Processing anatomical structures...' :
-                   'Finalizing...'}
-                </span>
-                <span className="text-xs text-emerald-400 font-mono">{modelLoadProgress}%</span>
-              </div>
-            </div>
-            <p className="text-xs text-slate-600 mt-4 text-center">
-              138MB high-fidelity model with 94 bones and 25+ muscle groups
-            </p>
+            {modelLoadError ? (
+              <>
+                <div className="w-20 h-20 rounded-full border-4 border-red-500/50 flex items-center justify-center">
+                  <AlertCircle className="h-10 w-10 text-red-400" />
+                </div>
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold text-white mb-2">Model Load Failed</h2>
+                  <p className="text-sm text-slate-400 mb-4">{modelLoadError}</p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10"
+                  onClick={() => {
+                    setModelLoadError(null);
+                    setModelLoadProgress(0);
+                    setModelReady(false);
+                    window.location.reload();
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry Loading
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full border-4 border-slate-700 border-t-emerald-500 animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Stethoscope className="h-8 w-8 text-emerald-400" />
+                  </div>
+                </div>
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold text-white mb-2">PhysioGPT</h2>
+                  <p className="text-sm text-slate-400 mb-6">
+                    {modelLoadProgress > 0
+                      ? 'Loading anatomical model...'
+                      : 'Initializing clinical workspace...'}
+                  </p>
+                </div>
+                <div className="w-full">
+                  <div className="w-full bg-slate-700/50 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-emerald-500 to-teal-400 h-3 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${Math.max(modelLoadProgress, 2)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-2">
+                    <span className="text-xs text-slate-500">
+                      {modelLoadProgress < 10 ? 'Preparing 3D engine...' :
+                       modelLoadProgress < 50 ? 'Downloading skeleton model...' :
+                       modelLoadProgress < 90 ? 'Processing anatomical structures...' :
+                       'Finalizing...'}
+                    </span>
+                    <span className="text-xs text-emerald-400 font-mono">{modelLoadProgress}%</span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 mt-4 text-center">
+                  138MB high-fidelity model with 94 bones and 25+ muscle groups
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -4697,6 +4731,7 @@ ${ddxList}`;
       <div className="h-full w-full relative flex">
             {cameraMode && (
               <div className="w-[40%] h-full flex-shrink-0 relative border-r border-gray-700">
+                <Suspense fallback={<LazyPanelFallback />}>
                 <FocusedCameraCapture
                   onPoseUpdate={handleCameraPoseUpdate}
                   onPartialPoseUpdate={handlePartialPoseUpdate}
@@ -4706,6 +4741,7 @@ ${ddxList}`;
                   onRegionChange={(region) => setFocusedRegion(region)}
                   className="h-full border-0 rounded-none"
                 />
+                </Suspense>
                 {cameraPoseActive && posturalMetrics && (
                   <div className="absolute top-2 left-2 right-2 z-20 pointer-events-none">
                     <div className="bg-black/75 backdrop-blur-sm rounded-lg p-2.5 text-xs space-y-1.5">
@@ -4932,6 +4968,7 @@ ${ddxList}`;
               biomechanicsFaultHighlights={biomechanicsFaultHighlights}
               onModelLoadProgress={handleModelLoadProgress}
               onModelReady={handleModelReady}
+              onModelLoadError={handleModelLoadError}
               slingPathwayVisualization={rightPanelTab === 'slings' && slingOverlayVisible && slingAnalysis ? {
                 enabled: true,
                 activeSlingId: selectedSlingId,
@@ -7250,6 +7287,7 @@ ${ddxList}`;
 
             {/* Clinical Bubble */}
             {clinicalBubbleMarker && (
+              <Suspense fallback={<LazyPanelFallback />}>
               <ClinicalBubble
                 key={clinicalBubbleMarker.id}
                 markerId={clinicalBubbleMarker.id}
@@ -7295,6 +7333,7 @@ ${ddxList}`;
                   setPainMarkers(prev => prev.map(m => m.id === mId ? { ...m, subjectiveHistory: history } : m));
                 }}
               />
+              </Suspense>
             )}
 
             {showPainIntelligence && clinicalBubbleMarker && (
@@ -8277,6 +8316,7 @@ ${ddxList}`;
                     />
                   )}
                   {mechanismActiveTab === 'treatment' && (
+                    <Suspense fallback={<LazyPanelFallback />}>
                     <MechanismTreatmentTab
                       analysis={mechanismAnalysisResult}
                       onNavigateToDecisionTab={() => {
@@ -8284,8 +8324,10 @@ ${ddxList}`;
                         setReasoningRequestedTab('decision');
                       }}
                     />
+                    </Suspense>
                   )}
                   {mechanismActiveTab === 'whatif' && (
+                    <Suspense fallback={<LazyPanelFallback />}>
                     <WhatIfSimulationPanel
                       comparison={whatIfSimulatedConfig}
                       activeScenarios={whatIfScenarios}
@@ -8313,6 +8355,7 @@ ${ddxList}`;
                         severity: (pm as Record<string, unknown>).severity as number | undefined,
                       }))}
                     />
+                    </Suspense>
                   )}
                   {mechanismActiveTab === 'exercise' && (
                     <ExerciseEngineTab
@@ -8364,6 +8407,7 @@ ${ddxList}`;
 
             {showShoulderAssessment && (
               <div className="absolute top-2 right-2 z-30 w-80 h-[calc(100%-50px)]">
+                <Suspense fallback={<LazyPanelFallback />}>
                 <ShoulderAssessmentPanel
                   modelConfig={modelConfig}
                   side={shoulderAssessmentSide}
@@ -8373,6 +8417,7 @@ ${ddxList}`;
                     handleSendMessage(msg);
                   }}
                 />
+                </Suspense>
               </div>
             )}
 
@@ -8488,6 +8533,7 @@ ${ddxList}`;
               </div>
             )}
 
+            <Suspense fallback={null}>
             <TreatmentOverlayBridge
               treatmentPriorities={liveTreatmentPriorities}
               positionsRef={boneScreenPositionsRef}
@@ -8497,6 +8543,7 @@ ${ddxList}`;
               predictedPainSpots={predictedPainSpots}
               showPredictedPain={showPredictedPain && predictedPainSpots.length > 0}
             />
+            </Suspense>
 
           </div>
           </div>
@@ -9198,6 +9245,7 @@ ${ddxList}`;
 
           {rightPanelTab === 'biomechanics' && (
             <div className="flex-1 overflow-hidden">
+              <Suspense fallback={<LazyPanelFallback />}>
               <UnifiedBiomechanicsPanel
                 output={unifiedBiomechanicsOutput}
                 onMovementTaskChange={setUnifiedBiomechanicsMovementTask}
@@ -9206,11 +9254,13 @@ ${ddxList}`;
                 selectedMovementTask={unifiedBiomechanicsMovementTask}
                 movementProgress={unifiedBiomechanicsProgress}
               />
+              </Suspense>
             </div>
           )}
 
           {rightPanelTab === 'slings' && (
             <div className="flex-1 overflow-hidden">
+              <Suspense fallback={<LazyPanelFallback />}>
               <SlingAnalysisPanel
                 analysis={slingAnalysis}
                 onSlingSelect={setSelectedSlingId}
@@ -9218,6 +9268,7 @@ ${ddxList}`;
                 overlayVisible={slingOverlayVisible}
                 onToggleOverlay={() => setSlingOverlayVisible(v => !v)}
               />
+              </Suspense>
             </div>
           )}
 
@@ -9727,6 +9778,7 @@ ${ddxList}`;
       )}
 
       <div className={`absolute top-14 z-30 transition-all duration-300 ${sidebarOpen ? 'left-[270px]' : 'left-3'}`}>
+        <Suspense fallback={<LazyPanelFallback />}>
         <ClinicalTextInput
           onParseResult={handleClinicalTextParse}
           onClearFindings={handleClinicalTextClear}
@@ -9743,6 +9795,7 @@ ${ddxList}`;
             return forces.joints.filter((j: { status: string }) => j.status === 'high' || j.status === 'very_high').map((j: { label: string; totalForce: number }) => ({ joint: j.label, force_percent: Math.round(j.totalForce * 100) }));
           })()}
         />
+        </Suspense>
       </div>
 
 

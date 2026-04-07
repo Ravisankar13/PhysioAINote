@@ -1700,6 +1700,7 @@ interface PureThreeGLBViewerProps {
   } | null;
   onModelLoadProgress?: (progress: number) => void;
   onModelReady?: () => void;
+  onModelLoadError?: (error: string) => void;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2169,6 +2170,7 @@ export default function PureThreeGLBViewer({
   slingPathwayVisualization,
   onModelLoadProgress,
   onModelReady,
+  onModelLoadError,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -5030,6 +5032,7 @@ export default function PureThreeGLBViewer({
             const errorMsg = error instanceof Error ? error.message : String(error);
             setErrorMessage(`Failed to load model: ${errorMsg || 'Unknown error'}`);
             setStatus('error');
+            onModelLoadError?.(`Failed to load model: ${errorMsg || 'Unknown error'}`);
           }
         );
 

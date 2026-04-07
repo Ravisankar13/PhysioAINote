@@ -4675,16 +4675,22 @@ export default function PureThreeGLBViewer({
           camera.lookAt(preset.lookAt.x, preset.lookAt.y, preset.lookAt.z);
         }
 
+        const nav = navigator as Navigator & { deviceMemory?: number };
+        const isLowMemDevice = nav.deviceMemory ? nav.deviceMemory <= 4 : false;
+        const initialDPR = isLowMemDevice ? 1.0 : Math.min(window.devicePixelRatio, 1.25);
+
         const renderer = new THREE.WebGLRenderer({ 
           antialias: false,
           alpha: false,
           powerPreference: 'low-power',
+          precision: 'mediump',
           failIfMajorPerformanceCaveat: false
         });
         renderer.setSize(width, height);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.setPixelRatio(initialDPR);
         renderer.shadowMap.enabled = false;
         renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.info.autoReset = false;
         container.appendChild(renderer.domElement);
 
         renderer.domElement.addEventListener('webglcontextlost', (e) => {
@@ -4775,7 +4781,6 @@ export default function PureThreeGLBViewer({
             
             const bones: { [name: string]: THREE.Object3D } = {};
             const boneNames: string[] = [];
-            const objectTypes: string[] = [];
             
             let skullMesh: THREE.Object3D | null = null;
             
@@ -4795,7 +4800,6 @@ export default function PureThreeGLBViewer({
             ]);
             
             model.traverse((child) => {
-              objectTypes.push(`${child.name}: ${child.type}`);
               if (child instanceof THREE.Mesh) {
                 child.castShadow = false;
                 child.receiveShadow = false;
@@ -4815,18 +4819,23 @@ export default function PureThreeGLBViewer({
                 if (isMuscle) {
                   muscleMeshes.push(child);
                   child.visible = showMuscles;
+                  child.frustumCulled = true;
                   if (child.geometry) {
                     child.geometry.computeBoundingSphere();
-                    child.geometry.computeBoundingBox();
                     if (child.geometry.boundingSphere) {
-                      child.geometry.boundingSphere.radius = Math.max(child.geometry.boundingSphere.radius * 5, 10);
+                      child.geometry.boundingSphere.radius = Math.max(child.geometry.boundingSphere.radius * 2.5, 5);
+                    }
+                    if (!showMuscles) {
+                      const attrs = child.geometry.attributes;
+                      if (attrs.normal) {
+                        (attrs.normal.array as Float32Array).fill(0);
+                      }
                     }
                   }
                 }
                 
                 if (lowerName.includes('skull') || lowerName.includes('head') || lowerName.includes('cranium')) {
                   skullMesh = child;
-                  console.log('Found skull mesh:', child.name);
                 }
               }
               if (child instanceof THREE.Bone) {
@@ -4843,65 +4852,35 @@ export default function PureThreeGLBViewer({
             
             model.updateMatrixWorld(true);
             
-            // Analyze skull mesh skeleton to find the controlling bone
             if (skullMesh !== null) {
               const skull = skullMesh as THREE.SkinnedMesh;
-              console.log('=== SKULL MESH ANALYSIS ===');
-              console.log('Is SkinnedMesh:', skull instanceof THREE.SkinnedMesh);
               if (skull instanceof THREE.SkinnedMesh && skull.skeleton) {
-                console.log('Skull skeleton bones:', skull.skeleton.bones.map(b => b.name));
-                
-                // Analyze bone weights to find which bones actually affect the skull
                 const geometry = skull.geometry;
                 if (geometry.attributes.skinIndex && geometry.attributes.skinWeight) {
                   const skinIndices = geometry.attributes.skinIndex;
                   const skinWeights = geometry.attributes.skinWeight;
-                  const usedBoneIndices = new Set<number>();
-                  
-                  // Sample first 100 vertices to find active bones
-                  const sampleCount = Math.min(100, skinIndices.count);
+                  const sampleCount = Math.min(50, skinIndices.count);
                   for (let i = 0; i < sampleCount; i++) {
                     for (let j = 0; j < 4; j++) {
                       const weight = skinWeights.getComponent(i, j);
                       if (weight > 0.01) {
-                        usedBoneIndices.add(skinIndices.getComponent(i, j));
+                        skinIndices.getComponent(i, j);
                       }
                     }
                   }
-                  
-                  const usedBoneNames = Array.from(usedBoneIndices).map(idx => skull.skeleton.bones[idx]?.name || `unknown-${idx}`);
-                  console.log('=== BONES THAT CONTROL SKULL VERTICES ===');
-                  console.log('Active bone indices:', Array.from(usedBoneIndices));
-                  console.log('Active bone names:', usedBoneNames);
                 }
               }
             }
-            
-            console.log('=== AVAILABLE BONES IN MODEL ===');
-            console.log('Total bones found:', boneNames.length);
-            boneNames.forEach((name, i) => {
+
+            boneNames.forEach((name) => {
               const bone = bones[name];
-              console.log(`${i + 1}. ${name} (parent: ${bone.parent?.name || 'none'})`);
               initialRotationsRef.current[name] = bone.rotation.clone();
-              // Also store bind-pose quaternion for quaternion-based live pose tracking
               bindPoseQuaternionsRef.current[name] = bone.quaternion.clone();
             });
-            console.log('=================================');
-            
-            
-            // New skeleton model has proper bone parenting:
-            // Chest_M → Scapula_L/R → Shoulder_L/R
-            // Arms follow chest naturally through the bone hierarchy - no manual syncing needed
-            console.log('New skeleton model loaded with proper bone hierarchy - arms follow chest naturally');
-            
-            // Default arm position is now set via modelConfig default slider values in TestSkeletonNew.tsx
-            // Left arm defaults: Flexion(-16°), Abduction(38°), ExtRotation(27°), Retroversion(-1°), Elevation(-10°), ClavicleLength(-3mm)
-            // Right arm uses the same values mirrored
-            console.log('Arms will be positioned by default slider values from modelConfig');
+            console.log(`Model loaded: ${boneNames.length} bones, ${muscleMeshes.length} muscles`);
             
             bonesRef.current = bones;
             muscleMeshesRef.current = muscleMeshes;
-            console.log(`Found ${muscleMeshes.length} muscle meshes, visibility: ${showMuscles}`);
             
             model.position.set(-0.15, -1.2, 0);
             scene.add(model);
@@ -5217,6 +5196,7 @@ export default function PureThreeGLBViewer({
           }
 
           sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
+          sceneRef.current.renderer.info.reset();
         };
         
         animate();

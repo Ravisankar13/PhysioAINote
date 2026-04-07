@@ -4765,15 +4765,6 @@ export default function PureThreeGLBViewer({
           (gltf) => {
             if (isDisposed) return;
             
-            if (gltf.parser) {
-              try {
-                const ext = gltf.parser.extensions;
-                if (ext) {
-                  Object.keys(ext).forEach(key => { delete ext[key]; });
-                }
-              } catch {}
-            }
-            
             const model = gltf.scene;
             
             const box = new THREE.Box3().setFromObject(model);
@@ -4832,12 +4823,6 @@ export default function PureThreeGLBViewer({
                     if (child.geometry.boundingSphere) {
                       child.geometry.boundingSphere.radius = Math.max(child.geometry.boundingSphere.radius * 2.5, 5);
                     }
-                    if (!showMuscles) {
-                      const attrs = child.geometry.attributes;
-                      if (attrs.normal) {
-                        (attrs.normal.array as Float32Array).fill(0);
-                      }
-                    }
                   }
                 }
               }
@@ -4867,21 +4852,6 @@ export default function PureThreeGLBViewer({
                 }
               }
             });
-            
-            if (!showMuscles) {
-              muscleMeshes.forEach((mesh) => {
-                const m = mesh as THREE.Mesh;
-                if (m.geometry) {
-                  const attrs = m.geometry.attributes;
-                  if (attrs.uv) {
-                    m.geometry.deleteAttribute('uv');
-                  }
-                  if (attrs.uv2) {
-                    m.geometry.deleteAttribute('uv2');
-                  }
-                }
-              });
-            }
             
             model.updateMatrixWorld(true);
             

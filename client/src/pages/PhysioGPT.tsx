@@ -497,8 +497,11 @@ export default function PhysioGPT() {
             setComputeStage(2);
             scheduleIdle(() => {
               setComputeStage(3);
-              setComputationsReady(true);
-            }, 800);
+              scheduleIdle(() => {
+                setComputeStage(4);
+                setComputationsReady(true);
+              }, 600);
+            }, 600);
           }, 600);
         }, 500);
       });
@@ -3618,7 +3621,7 @@ ${ddxList}`;
       kineticChains: KINETIC_CHAINS,
       bodyWeightKg,
     });
-  }, [finalModelConfig, effectiveOverrides, painMarkers, bodyWeightKg, correlationMode, showUnifiedChainPanel, showInjuryMechanism]);
+  }, [finalModelConfig, effectiveOverrides, painMarkers, bodyWeightKg, correlationMode, showUnifiedChainPanel, showInjuryMechanism, liteMode]);
 
   const handleAddWhatIfScenario = useCallback((scenario: WhatIfScenario) => {
     setWhatIfScenarios(prev => {
@@ -3696,7 +3699,7 @@ ${ddxList}`;
       scores.set(chain.id, { score: Math.max(0, Math.min(100, totalScore)), issues: issues.slice(0, 8), problematicLinks: problematicLinks.slice(0, 5), exercises: Array.from(new Set(exercises)).slice(0, 6) });
     }
     return scores;
-  }, [effectiveModelConfig, showUnifiedChainPanel, compensatedOverrides, crossMuscleEffects]);
+  }, [effectiveModelConfig, showUnifiedChainPanel, compensatedOverrides, crossMuscleEffects, liteMode, computeStage]);
 
   const hudForceAnalysis = useMemo(() => {
     if (computeStage < 2) return { joints: [], totalLoad: 0 };
@@ -3750,7 +3753,7 @@ ${ddxList}`;
   }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects, computeStage]);
 
   const unifiedBiomechanicsOutput = useMemo(() => {
-    if (computeStage < 2) return null;
+    if (computeStage < 3) return null;
     return computeUnifiedBiomechanics({
       modelConfig: finalModelConfig,
       heightCm: 170,
@@ -3770,7 +3773,7 @@ ${ddxList}`;
   }, [unifiedBiomechanicsOutput]);
 
   const slingAnalysis = useMemo(() => {
-    if (computeStage < 2) return null;
+    if (computeStage < 3) return null;
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
     const slingInput: SlingAnalysisInput = {
       biomechanicsOutput: bioSrc,
@@ -3849,7 +3852,7 @@ ${ddxList}`;
   }, [hudMuscleAnalysis, showUnifiedChainPanel, chainIntegrityScores]);
 
   const predictedPainSpots = useMemo((): PredictedPainSpot[] => {
-    if (computeStage < 3) return [];
+    if (computeStage < 4) return [];
     return computePredictedPain(effectiveModelConfig);
   }, [effectiveModelConfig, computeStage]);
 

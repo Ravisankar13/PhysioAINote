@@ -3051,17 +3051,10 @@ ${ddxList}`;
     voiceExtractingRef.current = false;
     setVoiceSessionActive(false);
 
-    if (voiceTranscriptRef.current.trim().length > 10) {
-      voiceSessionActiveRef.current = true;
-      triggerVoiceExtraction().finally(() => {
-        voiceSessionActiveRef.current = false;
-      });
-    }
-
     toast({ title: "Voice Session Ended", description: `Extracted ${voiceFindingsRef.current.length} findings from session.` });
 
     lastReasoningTriggerRef.current = '';
-  }, [toast, triggerVoiceExtraction]);
+  }, [toast]);
 
   useEffect(() => {
     return () => {

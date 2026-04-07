@@ -7113,7 +7113,7 @@ export default function PureThreeGLBViewer({
         const line = new THREE.Line(geometry, material);
         line.renderOrder = 997;
 
-        sceneRef.current.add(line);
+        sceneRef.current.scene.add(line);
         tissuePathwayLinesRef.current.push(line);
 
         const entrapmentGeo = new THREE.OctahedronGeometry(0.012, 0);

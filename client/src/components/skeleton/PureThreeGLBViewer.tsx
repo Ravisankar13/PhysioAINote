@@ -4676,14 +4676,14 @@ export default function PureThreeGLBViewer({
         }
 
         const renderer = new THREE.WebGLRenderer({ 
-          antialias: true,
+          antialias: false,
           alpha: false,
-          powerPreference: 'default',
+          powerPreference: 'high-performance',
           failIfMajorPerformanceCaveat: false
         });
         renderer.setSize(width, height);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.shadowMap.enabled = false;
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         container.appendChild(renderer.domElement);
 
@@ -4700,7 +4700,7 @@ export default function PureThreeGLBViewer({
 
         const directionalLight = new THREE.DirectionalLight(envPreset.directionalLight.color, envPreset.directionalLight.intensity);
         directionalLight.position.set(...envPreset.directionalLight.position);
-        directionalLight.castShadow = true;
+        directionalLight.castShadow = false;
         directionalLight.name = '__env_directional';
         scene.add(directionalLight);
 
@@ -4797,8 +4797,8 @@ export default function PureThreeGLBViewer({
             model.traverse((child) => {
               objectTypes.push(`${child.name}: ${child.type}`);
               if (child instanceof THREE.Mesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
+                child.castShadow = false;
+                child.receiveShadow = false;
                 
                 const lowerName = child.name.toLowerCase();
                 const getMaterialNames = (): string[] => {

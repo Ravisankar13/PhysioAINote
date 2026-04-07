@@ -442,6 +442,8 @@ export default function PhysioGPT() {
   const [modelLoadProgress, setModelLoadProgress] = useState(0);
   const [modelReady, setModelReady] = useState(false);
   const [modelLoadError, setModelLoadError] = useState<string | null>(null);
+  const [computationsReady, setComputationsReady] = useState(false);
+  const [uiStage, setUiStage] = useState<0 | 1 | 2 | 3>(0);
 
   const handleModelLoadProgress = useCallback((progress: number) => {
     setModelLoadProgress(progress);
@@ -452,6 +454,26 @@ export default function PhysioGPT() {
     setModelLoadProgress(100);
     setModelLoadError(null);
   }, []);
+
+  useEffect(() => {
+    if (!modelReady) return;
+    let raf1 = 0, raf2 = 0, timer = 0;
+    raf1 = requestAnimationFrame(() => {
+      setUiStage(1);
+      raf2 = requestAnimationFrame(() => {
+        setUiStage(2);
+        timer = window.setTimeout(() => {
+          setUiStage(3);
+          setComputationsReady(true);
+        }, 300);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      clearTimeout(timer);
+    };
+  }, [modelReady]);
 
   const handleModelLoadError = useCallback((error: string) => {
     setModelLoadError(error);
@@ -3378,6 +3400,7 @@ ${ddxList}`;
   }, [effectiveModelConfig, forceMode]);
 
   const baseMuscleTensions = useMemo(() => {
+    if (!computationsReady) return { tensions: {} as { [id: string]: number }, computedTensions: {} as { [id: string]: number } };
     const base = computeAllMuscleStates(effectiveModelConfig);
     const computedTensions: { [id: string]: number } = {};
     Object.entries(base).forEach(([id, s]) => { computedTensions[id] = s.tension; });
@@ -3386,19 +3409,21 @@ ${ddxList}`;
       tensions[id] = val;
     });
     return { tensions, computedTensions };
-  }, [effectiveModelConfig, manualChainTensions]);
+  }, [effectiveModelConfig, manualChainTensions, computationsReady]);
 
   const wholeBodyScore = useMemo(() => {
+    if (!computationsReady) return { overallScore: 50, regionScores: {}, syndromes: [] };
     return computeWholeBodyTensionScore(baseMuscleTensions.tensions, compensatedOverrides);
-  }, [baseMuscleTensions, compensatedOverrides]);
+  }, [baseMuscleTensions, compensatedOverrides, computationsReady]);
 
   const chainEffects = useMemo(() => {
+    if (!computationsReady) return [];
     return MYOFASCIAL_CHAINS.map(chain => {
       const tensions = chain.links.map(l => baseMuscleTensions.tensions[l.muscleId] ?? 50);
       const avgTension = tensions.length > 0 ? tensions.reduce((a, b) => a + b, 0) / tensions.length : 50;
       return { chainId: chain.id, avgTension };
     });
-  }, [baseMuscleTensions]);
+  }, [baseMuscleTensions, computationsReady]);
 
   const chainPropagation = useMemo(() => {
     const hasManualOverrides = Object.values(compensatedOverrides).some(o => o?.isManual);
@@ -3422,12 +3447,13 @@ ${ddxList}`;
   }, [propagatedEffects]);
 
   const clinicalConsequences = useMemo(() => {
+    if (!computationsReady) return { jointEffects: [], postureRisks: [], functionalLimitations: [] };
     return computeClinicalConsequences(
       baseMuscleTensions.computedTensions,
       manualChainTensions,
       propagationDeltas
     );
-  }, [baseMuscleTensions.computedTensions, manualChainTensions, propagationDeltas]);
+  }, [baseMuscleTensions.computedTensions, manualChainTensions, propagationDeltas, computationsReady]);
 
   const chainDrivenJointEffects = useMemo(() => {
     if (!chainPropagation || !bidirectionalMode) return null;
@@ -3615,6 +3641,7 @@ ${ddxList}`;
   }, [effectiveModelConfig, showUnifiedChainPanel, compensatedOverrides, crossMuscleEffects]);
 
   const hudForceAnalysis = useMemo(() => {
+    if (!computationsReady) return { joints: [], totalLoad: 0 };
     const hasActiveSimulation = whatIfSimulatedConfig && whatIfScenarios.length > 0;
     const base = (forceMode && forceAnalysis && !hasActiveSimulation)
       ? forceAnalysis
@@ -3636,7 +3663,7 @@ ${ddxList}`;
       return adjusted;
     }
     return base;
-  }, [finalModelConfig, forceMode, forceAnalysis, whatIfScenarios, whatIfSimulatedConfig]);
+  }, [finalModelConfig, forceMode, forceAnalysis, whatIfScenarios, whatIfSimulatedConfig, computationsReady]);
 
   const mechanismAnalysisResult = useMemo(() => {
     if (!showInjuryMechanism) return null;
@@ -3652,17 +3679,20 @@ ${ddxList}`;
   }, [showInjuryMechanism, hudForceAnalysis, pathologyCompensation, correlationResult, compensatedOverrides, bodyWeightKg]);
 
   const hudWeightDistribution = useMemo(() => {
+    if (!computationsReady) return null;
     if (forceMode && weightDistribution) return weightDistribution;
     return computeWeightDistribution(finalModelConfig, bodyWeightKg);
-  }, [finalModelConfig, bodyWeightKg, forceMode, weightDistribution]);
+  }, [finalModelConfig, bodyWeightKg, forceMode, weightDistribution, computationsReady]);
 
   const hudMuscleAnalysis = useMemo(() => {
+    if (!computationsReady) return null;
     if (muscleMode && muscleAnalysis) return muscleAnalysis;
     const base = computeFullMuscleAnalysis(finalModelConfig);
     return applyOverridesToAnalysis(base, effectiveOverrides, crossMuscleEffects);
-  }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects]);
+  }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects, computationsReady]);
 
   const unifiedBiomechanicsOutput = useMemo(() => {
+    if (!computationsReady) return null;
     return computeUnifiedBiomechanics({
       modelConfig: finalModelConfig,
       heightCm: 170,
@@ -3673,7 +3703,7 @@ ${ddxList}`;
       faultRuleOverrides: unifiedBiomechanicsFaultOverrides.length > 0 ? unifiedBiomechanicsFaultOverrides : undefined,
       previousOutput: previousBiomechanicsOutput,
     });
-  }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput]);
+  }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput, computationsReady]);
 
   useEffect(() => {
     if (unifiedBiomechanicsOutput) {
@@ -3682,6 +3712,7 @@ ${ddxList}`;
   }, [unifiedBiomechanicsOutput]);
 
   const slingAnalysis = useMemo(() => {
+    if (!computationsReady) return null;
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
     const slingInput: SlingAnalysisInput = {
       biomechanicsOutput: bioSrc,
@@ -3691,7 +3722,7 @@ ${ddxList}`;
     const result = computeSlingAnalysis(slingInput);
     slingAnalysisRef.current = result;
     return result;
-  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask]);
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computationsReady]);
 
   const biomechanicsFaultHighlights = useMemo(() => {
     const FAULT_JOINT_TO_BONE: Record<string, string> = {
@@ -3760,8 +3791,9 @@ ${ddxList}`;
   }, [hudMuscleAnalysis, showUnifiedChainPanel, chainIntegrityScores]);
 
   const predictedPainSpots = useMemo((): PredictedPainSpot[] => {
+    if (!computationsReady) return [];
     return computePredictedPain(effectiveModelConfig);
-  }, [effectiveModelConfig]);
+  }, [effectiveModelConfig, computationsReady]);
 
   const [showPredictedPain, setShowPredictedPain] = useState(true);
 

@@ -5033,7 +5033,7 @@ export default function PureThreeGLBViewer({
             onModelReady?.();
             
             if (initialDPR < window.devicePixelRatio && !isLowMemDevice) {
-              setTimeout(() => {
+              const upgradeDPR = () => {
                 if (!isDisposed && sceneRef.current) {
                   const targetDPR = Math.min(window.devicePixelRatio, 1.5);
                   sceneRef.current.renderer.setPixelRatio(targetDPR);
@@ -5044,7 +5044,14 @@ export default function PureThreeGLBViewer({
                     );
                   }
                 }
-              }, 3000);
+              };
+              if (typeof requestIdleCallback === 'function') {
+                setTimeout(() => {
+                  if (!isDisposed) requestIdleCallback(upgradeDPR, { timeout: 3000 });
+                }, 4000);
+              } else {
+                setTimeout(upgradeDPR, 5000);
+              }
             }
         };
 

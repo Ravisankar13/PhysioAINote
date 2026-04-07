@@ -2922,9 +2922,9 @@ ${ddxList}`;
     });
   }, []);
 
-  const triggerVoiceExtraction = useCallback(async () => {
+  const triggerVoiceExtraction = useCallback(async (isFinalFlush = false) => {
     if (voiceExtractingRef.current) return;
-    if (!voiceSessionActiveRef.current) return;
+    if (!isFinalFlush && !voiceSessionActiveRef.current) return;
     const transcript = voiceTranscriptRef.current;
     if (!transcript || transcript.trim().length < 10) return;
 
@@ -3051,30 +3051,12 @@ ${ddxList}`;
     voiceExtractingRef.current = false;
     setVoiceSessionActive(false);
 
-    const pendingTranscript = voiceTranscriptRef.current;
-    if (pendingTranscript && pendingTranscript.trim().length > 10 && !voiceExtractingRef.current) {
-      voiceExtractingRef.current = true;
-      setVoiceProcessing(true);
-      fetch('/api/physiogpt/voice-clinical-extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript: pendingTranscript,
-          previousFindings: {
-            painLocations: painMarkersRef.current.map(m => m.anatomicalLabel),
-            diagnoses: voiceFindingsRef.current.filter(f => f.type === 'diagnosis').map(f => f.label)
-          }
-        })
-      }).then(res => res.ok ? res.json() : null)
-        .then(data => { if (data) applyVoiceFindings(data); })
-        .catch(() => {})
-        .finally(() => { voiceExtractingRef.current = false; setVoiceProcessing(false); });
-    }
+    triggerVoiceExtraction(true);
 
     toast({ title: "Voice Session Ended", description: `Extracted ${voiceFindingsRef.current.length} findings from session.` });
 
     lastReasoningTriggerRef.current = '';
-  }, [toast, applyVoiceFindings]);
+  }, [toast, triggerVoiceExtraction]);
 
   useEffect(() => {
     return () => {

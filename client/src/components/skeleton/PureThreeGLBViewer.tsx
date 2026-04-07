@@ -2188,7 +2188,7 @@ export default function PureThreeGLBViewer({
   const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
   const muscleLayerManagerRef = useRef<MuscleLayerManager | null>(null);
   const muscleMeshesRef = useRef<THREE.Object3D[]>([]);
-  const hiddenGeometryCacheRef = useRef<Map<string, { attrs: Record<string, { array: ArrayLike<number>; itemSize: number }>; index: { array: ArrayLike<number>; itemSize: number } | null; boundingSphere: THREE.Sphere | null }>>(new Map());
+  const hiddenGeometryCacheRef = useRef<Map<string, { attrs: Record<string, { array: ArrayLike<number>; itemSize: number; normalized: boolean }>; index: { array: ArrayLike<number>; itemSize: number } | null; boundingSphere: THREE.Sphere | null }>>(new Map());
   const splitMuscleGroupsRef = useRef<Map<string, SplitMuscleGroup>>(new Map());
   const muscleHitProxiesRef = useRef<{ mesh: THREE.Mesh; groupId: string }[]>([]);
   const muscleGroupCentersRef = useRef<Map<string, THREE.Vector3>>(new Map());
@@ -4859,13 +4859,14 @@ export default function PureThreeGLBViewer({
                 if (m.geometry) {
                   const key = m.uuid;
                   const origGeo = m.geometry;
-                  const savedAttrs: Record<string, { array: ArrayLike<number>; itemSize: number }> = {};
+                  const savedAttrs: Record<string, { array: ArrayLike<number>; itemSize: number; normalized: boolean }> = {};
                   for (const attrName of Object.keys(origGeo.attributes)) {
                     const attr = origGeo.getAttribute(attrName);
                     if (attr && 'array' in attr) {
                       savedAttrs[attrName] = {
                         array: (attr as THREE.BufferAttribute).array,
                         itemSize: (attr as THREE.BufferAttribute).itemSize,
+                        normalized: (attr as THREE.BufferAttribute).normalized,
                       };
                     }
                   }
@@ -6676,9 +6677,15 @@ export default function PureThreeGLBViewer({
           const placeholder = m.geometry;
           const rebuilt = new THREE.BufferGeometry();
           for (const [attrName, data] of Object.entries(cached.attrs)) {
+            const typedArray = data.array instanceof Float32Array ? data.array
+              : data.array instanceof Uint16Array ? data.array
+              : data.array instanceof Uint8Array ? data.array
+              : data.array instanceof Int16Array ? data.array
+              : new Float32Array(data.array as number[]);
             rebuilt.setAttribute(attrName, new THREE.BufferAttribute(
-              data.array instanceof Float32Array ? data.array : new Float32Array(data.array as number[]),
-              data.itemSize
+              typedArray,
+              data.itemSize,
+              data.normalized
             ));
           }
           if (cached.index) {

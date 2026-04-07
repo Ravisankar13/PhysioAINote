@@ -4651,6 +4651,7 @@ export default function PureThreeGLBViewer({
     const container = containerRef.current;
     let animationId: number;
     let isDisposed = false;
+    let activeXhr: XMLHttpRequest | null = null;
 
     const init = async () => {
       try {
@@ -4760,9 +4761,7 @@ export default function PureThreeGLBViewer({
 
         const loader = new GLTFLoader();
         
-        loader.load(
-          modelPath,
-          (gltf) => {
+        const processGltf = (gltf: import('three/examples/jsm/loaders/GLTFLoader.js').GLTF) => {
             if (isDisposed) return;
             
             const model = gltf.scene;
@@ -4990,27 +4989,50 @@ export default function PureThreeGLBViewer({
                 }
               }, 3000);
             }
-          },
-          (xhr) => {
-            if (xhr.lengthComputable) {
-              const progress = Math.round((xhr.loaded / xhr.total) * 100);
-              setLoadProgress(progress);
-              onModelLoadProgress?.(progress);
-            } else if (xhr.loaded) {
-              const estimatedTotal = 145000000;
-              const progress = Math.min(95, Math.round((xhr.loaded / estimatedTotal) * 100));
-              setLoadProgress(progress);
-              onModelLoadProgress?.(progress);
-            }
-          },
-          (error: unknown) => {
-            console.error('Error loading GLB:', error);
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            setErrorMessage(`Failed to load model: ${errorMsg || 'Unknown error'}`);
-            setStatus('error');
-            onModelLoadError?.(`Failed to load model: ${errorMsg || 'Unknown error'}`);
+        };
+
+        activeXhr = new XMLHttpRequest();
+        const xhr = activeXhr;
+        xhr.open('GET', modelPath, true);
+        xhr.responseType = 'arraybuffer';
+        xhr.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.round((event.loaded / event.total) * 100);
+            setLoadProgress(progress);
+            onModelLoadProgress?.(progress);
+          } else if (event.loaded) {
+            const estimatedTotal = 145000000;
+            const progress = Math.min(95, Math.round((event.loaded / estimatedTotal) * 100));
+            setLoadProgress(progress);
+            onModelLoadProgress?.(progress);
           }
-        );
+        };
+        xhr.onload = () => {
+          if (isDisposed) return;
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const buffer = xhr.response as ArrayBuffer;
+            loader.parse(buffer, '', (gltf) => {
+              processGltf(gltf);
+            }, (error: unknown) => {
+              console.error('Error parsing GLB:', error);
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              setErrorMessage(`Failed to parse model: ${errorMsg || 'Unknown error'}`);
+              setStatus('error');
+              onModelLoadError?.(`Failed to parse model: ${errorMsg || 'Unknown error'}`);
+            });
+          } else {
+            setErrorMessage(`Failed to load model: HTTP ${xhr.status}`);
+            setStatus('error');
+            onModelLoadError?.(`Failed to load model: HTTP ${xhr.status}`);
+          }
+        };
+        xhr.onerror = () => {
+          console.error('Error loading GLB');
+          setErrorMessage('Failed to load model: network error');
+          setStatus('error');
+          onModelLoadError?.('Failed to load model: network error');
+        };
+        xhr.send();
 
         const animate = () => {
           if (isDisposed || !sceneRef.current) return;
@@ -5233,6 +5255,9 @@ export default function PureThreeGLBViewer({
 
     return () => {
       isDisposed = true;
+      if (activeXhr) {
+        try { activeXhr.abort(); } catch {}
+      }
       if (animationId) {
         cancelAnimationFrame(animationId);
       }

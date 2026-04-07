@@ -3450,14 +3450,14 @@ ${ddxList}`;
   }, [triggerClinicalReasoningAnalysis]);
 
   const forceAnalysis = useMemo(() => {
-    if (!forceMode) return null;
+    if (!forceMode || (liteMode && computeStage < 2)) return null;
     const result = calculatePosturalForces(effectiveModelConfig);
     if (enabledForceJoints.size === 0 && result.joints.length > 0) {
       const defaultEnabled = new Set(result.joints.map(j => j.id));
       setEnabledForceJoints(defaultEnabled);
     }
     return result;
-  }, [effectiveModelConfig, forceMode]);
+  }, [effectiveModelConfig, forceMode, liteMode, computeStage]);
 
   const baseMuscleTensions = useMemo(() => {
     if (computeStage < 1) return { tensions: {} as { [id: string]: number }, computedTensions: {} as { [id: string]: number } };
@@ -4058,6 +4058,7 @@ ${ddxList}`;
 
   const tissueViewOverlay = useMemo(() => {
     if (!tissueViewMode || tissueViewMode === 'muscle') return null;
+    if (liteMode && computeStage < 3) return null;
     const modeColor = TISSUE_MODE_COLORS[tissueViewMode];
 
     type OverlayResult = {
@@ -4388,7 +4389,7 @@ ${ddxList}`;
     }
 
     return result;
-  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis, compensatedOverrides, painMarkers, hudChainIntegrity, compromisedTissues]);
+  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis, compensatedOverrides, painMarkers, hudChainIntegrity, compromisedTissues, liteMode, computeStage]);
 
   const clinicallyAffectedNerves = useMemo(() => {
     const affected = new Set<string>();

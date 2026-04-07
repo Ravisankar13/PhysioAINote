@@ -34,7 +34,7 @@ export default defineConfig({
           if (id.includes('node_modules/three') || id.includes('node_modules/@react-three')) {
             return 'vendor-three';
           }
-          if (id.includes('node_modules/@tensorflow') || id.includes('node_modules/@mediapipe')) {
+          if (id.includes('node_modules/@tensorflow') || id.includes('node_modules/@tensorflow-models') || id.includes('node_modules/@mediapipe')) {
             return 'vendor-ml';
           }
           if (id.includes('node_modules/recharts') || id.includes('node_modules/framer-motion') || id.includes('node_modules/d3-')) {

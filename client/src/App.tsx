@@ -323,12 +323,14 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
+            <Suspense fallback={<PageLoadingFallback />}>
             <Switch>
               <Route path="/phone-camera/:roomId" component={PhoneCameraPage} />
               <Route>
                 <Router />
               </Route>
             </Switch>
+            </Suspense>
           </TooltipProvider>
         </AuthProvider>
       </ThemeProvider>

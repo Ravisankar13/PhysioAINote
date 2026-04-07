@@ -1698,6 +1698,8 @@ interface PureThreeGLBViewerProps {
       compensatingBoneIndices: number[];
     }>;
   } | null;
+  onModelLoadProgress?: (progress: number) => void;
+  onModelReady?: () => void;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2165,6 +2167,8 @@ export default function PureThreeGLBViewer({
   onTissueBoneClick,
   biomechanicsFaultHighlights,
   slingPathwayVisualization,
+  onModelLoadProgress,
+  onModelReady,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -5007,15 +5011,18 @@ export default function PureThreeGLBViewer({
             
             console.log('GLB model loaded successfully:', modelPath);
             setStatus('ready');
+            onModelReady?.();
           },
           (xhr) => {
             if (xhr.lengthComputable) {
               const progress = Math.round((xhr.loaded / xhr.total) * 100);
               setLoadProgress(progress);
+              onModelLoadProgress?.(progress);
             } else if (xhr.loaded) {
               const estimatedTotal = 145000000;
               const progress = Math.min(95, Math.round((xhr.loaded / estimatedTotal) * 100));
               setLoadProgress(progress);
+              onModelLoadProgress?.(progress);
             }
           },
           (error: unknown) => {

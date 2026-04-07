@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -84,22 +84,18 @@ import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState, AnimationConstraint } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
-import MovementPlayer from "@/components/skeleton/MovementPlayer";
 import type { CompensationResult } from "@/lib/jointConstraints";
-import FocusedCameraCapture, { type FocusedCameraResult, type FocusedRegion, FOCUSED_REGIONS } from "@/components/skeleton/FocusedCameraCapture";
-import ClinicalBubble, { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
+import { type FocusedCameraResult, type FocusedRegion, FOCUSED_REGIONS } from "@/components/skeleton/FocusedCameraCapture";
+import { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
-import ShoulderAssessmentPanel from "@/components/shoulder/ShoulderAssessmentPanel";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
 import type { Skeleton3DPose, PartialSkeleton3DPose, PosturalMetrics, CameraViewType } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
-import { pdfGenerator } from "@/services/pdfGenerator";
-import ClinicalReasoningPanel, { type ClinicalReasoningData, type BiomechanicalLink, type VisualizationRequest, type ClinicalHypothesis } from "@/components/skeleton/ClinicalReasoningPanel";
+import type { ClinicalReasoningData, BiomechanicalLink, VisualizationRequest, ClinicalHypothesis } from "@/components/skeleton/ClinicalReasoningPanel";
 import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypothesis } from "@/components/skeleton/StructuredReasoningTab";
 import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab";
 import type { TreatmentPlanResult } from "@/components/skeleton/PlanTab";
-import HypothesisChatPanel, { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
-import ExtractionResultsPanel from "@/components/skeleton/ExtractionResultsPanel";
+import { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
 import type { ClinicalExtractionResult } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
@@ -112,7 +108,6 @@ import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getCha
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
 import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors, computeClinicalConsequences, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
-import UnifiedChainPanel from "@/components/skeleton/UnifiedChainPanel";
 import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel, getInfluencePathwayAbbrev, getDominantPathway, type InfluenceMap, type InfluencePathway } from "@/lib/muscleInfluenceMap";
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
@@ -122,25 +117,43 @@ import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJo
 import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPainEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
-import ClinicalTextInput, { type ClinicalParseResult, type CompromisedTissue } from "@/components/skeleton/ClinicalTextInput";
-import PainIntelligencePanel from "@/components/skeleton/PainIntelligencePanel";
-import TissueViewSelector from "@/components/skeleton/TissueViewSelector";
-import RiskPrognosisDashboard from "@/components/skeleton/RiskPrognosisDashboard";
-import InjuryMechanismPanel from "@/components/skeleton/InjuryMechanismPanel";
-import ExerciseEngineTab from "@/components/skeleton/ExerciseEngineTab";
-import ManualTherapyEngineTab from "@/components/skeleton/ManualTherapyEngineTab";
-import ElectrophysicalEngineTab from "@/components/skeleton/ElectrophysicalEngineTab";
-import PatientEducationEngineTab from "@/components/skeleton/PatientEducationEngineTab";
-import UnifiedBiomechanicsPanel from "@/components/skeleton/UnifiedBiomechanicsPanel";
+import { type ClinicalParseResult, type CompromisedTissue } from "@/components/skeleton/ClinicalTextInput";
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
-import WhatIfSimulationPanel from "@/components/skeleton/WhatIfSimulationPanel";
-import MechanismTreatmentTab from "@/components/skeleton/MechanismTreatmentTab";
 import { generateMechanismTreatments } from "@/lib/mechanismTreatmentEngine";
 import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
-import SlingAnalysisPanel from "@/components/skeleton/SlingAnalysisPanel";
+
+const MovementPlayer = lazy(() => import("@/components/skeleton/MovementPlayer"));
+const FocusedCameraCapture = lazy(() => import("@/components/skeleton/FocusedCameraCapture"));
+const ClinicalBubble = lazy(() => import("@/components/skeleton/ClinicalBubble"));
+const ShoulderAssessmentPanel = lazy(() => import("@/components/shoulder/ShoulderAssessmentPanel"));
+const ClinicalReasoningPanel = lazy(() => import("@/components/skeleton/ClinicalReasoningPanel"));
+const HypothesisChatPanel = lazy(() => import("@/components/skeleton/HypothesisChatPanel"));
+const ExtractionResultsPanel = lazy(() => import("@/components/skeleton/ExtractionResultsPanel"));
+const UnifiedChainPanel = lazy(() => import("@/components/skeleton/UnifiedChainPanel"));
+const PainIntelligencePanel = lazy(() => import("@/components/skeleton/PainIntelligencePanel"));
+const TissueViewSelector = lazy(() => import("@/components/skeleton/TissueViewSelector"));
+const RiskPrognosisDashboard = lazy(() => import("@/components/skeleton/RiskPrognosisDashboard"));
+const InjuryMechanismPanel = lazy(() => import("@/components/skeleton/InjuryMechanismPanel"));
+const ExerciseEngineTab = lazy(() => import("@/components/skeleton/ExerciseEngineTab"));
+const ManualTherapyEngineTab = lazy(() => import("@/components/skeleton/ManualTherapyEngineTab"));
+const ElectrophysicalEngineTab = lazy(() => import("@/components/skeleton/ElectrophysicalEngineTab"));
+const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/PatientEducationEngineTab"));
+const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/UnifiedBiomechanicsPanel"));
+const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
+const MechanismTreatmentTab = lazy(() => import("@/components/skeleton/MechanismTreatmentTab"));
+const SlingAnalysisPanel = lazy(() => import("@/components/skeleton/SlingAnalysisPanel"));
+const ClinicalTextInput = lazy(() => import("@/components/skeleton/ClinicalTextInput"));
+
+const LazyPanelFallback = () => (
+  <div className="flex items-center justify-center p-8">
+    <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+  </div>
+);
+
+const loadPdfGenerator = () => import("@/services/pdfGenerator").then(m => m.pdfGenerator);
 
 const BODY_REGIONS = {
   cervical: {
@@ -423,6 +436,18 @@ export default function PhysioGPT() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [location] = useLocation();
+
+  const [modelLoadProgress, setModelLoadProgress] = useState(0);
+  const [modelReady, setModelReady] = useState(false);
+
+  const handleModelLoadProgress = useCallback((progress: number) => {
+    setModelLoadProgress(progress);
+  }, []);
+
+  const handleModelReady = useCallback(() => {
+    setModelReady(true);
+    setModelLoadProgress(100);
+  }, []);
 
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
@@ -4625,7 +4650,48 @@ ${ddxList}`;
   const getSeverityColor = (severity: 'mild' | 'moderate' | 'severe') => severity === 'severe' ? 'text-red-400' : severity === 'moderate' ? 'text-orange-400' : 'text-yellow-400';
 
   return (
+    <Suspense fallback={<LazyPanelFallback />}>
     <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 relative overflow-hidden">
+      {!modelReady && (
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
+          <div className="flex flex-col items-center gap-6 max-w-md w-full px-8">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full border-4 border-slate-700 border-t-emerald-500 animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Stethoscope className="h-8 w-8 text-emerald-400" />
+              </div>
+            </div>
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white mb-2">PhysioGPT</h2>
+              <p className="text-sm text-slate-400 mb-6">
+                {modelLoadProgress > 0
+                  ? 'Loading anatomical model...'
+                  : 'Initializing clinical workspace...'}
+              </p>
+            </div>
+            <div className="w-full">
+              <div className="w-full bg-slate-700/50 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-emerald-500 to-teal-400 h-3 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${Math.max(modelLoadProgress, 2)}%` }}
+                />
+              </div>
+              <div className="flex justify-between mt-2">
+                <span className="text-xs text-slate-500">
+                  {modelLoadProgress < 10 ? 'Preparing 3D engine...' :
+                   modelLoadProgress < 50 ? 'Downloading skeleton model...' :
+                   modelLoadProgress < 90 ? 'Processing anatomical structures...' :
+                   'Finalizing...'}
+                </span>
+                <span className="text-xs text-emerald-400 font-mono">{modelLoadProgress}%</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 mt-4 text-center">
+              138MB high-fidelity model with 94 bones and 25+ muscle groups
+            </p>
+          </div>
+        </div>
+      )}
       {/* Full-Page Skeleton Viewer */}
       <div className="h-full w-full relative flex">
             {cameraMode && (
@@ -4863,6 +4929,8 @@ ${ddxList}`;
               referralZoneBones={referralZoneBones}
               tissueViewOverlay={tissueViewOverlay}
               biomechanicsFaultHighlights={biomechanicsFaultHighlights}
+              onModelLoadProgress={handleModelLoadProgress}
+              onModelReady={handleModelReady}
               slingPathwayVisualization={rightPanelTab === 'slings' && slingOverlayVisible && slingAnalysis ? {
                 enabled: true,
                 activeSlingId: selectedSlingId,
@@ -9344,8 +9412,9 @@ ${ddxList}`;
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => {
-                                    pdfGenerator.downloadPDF({
+                                  onClick={async () => {
+                                    const gen = await loadPdfGenerator();
+                                    gen.downloadPDF({
                                       title: `Clinical Response - ${new Date().toLocaleDateString()}`,
                                       content: msg.content,
                                       type: 'general',
@@ -9769,5 +9838,6 @@ ${ddxList}`;
         }}
       />
     </div>
+    </Suspense>
   );
 }

@@ -16,6 +16,8 @@ Preferred communication style: Simple, everyday language.
 - **Styling**: Tailwind CSS
 - **State Management**: React hooks and context
 - **Build Tool**: Vite
+- **Code Splitting**: All routes lazy-loaded via React.lazy() with Suspense fallbacks; heavy sub-components in PhysioGPT lazy-loaded (21 panels/tabs); Vite manual chunks for three.js, tensorflow, recharts, pdf/docx vendors
+- **Performance**: PhysioGPT shows branded loading screen with progress bar during 138MB GLB model download; PDF generation dynamically imported on demand
 
 ### Backend
 - **Runtime**: Node.js 20 (Express.js)

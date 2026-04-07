@@ -3,89 +3,106 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { lazy, Suspense, Component, type ErrorInfo, type ReactNode } from "react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
-import ClinicalNotes from "@/pages/ClinicalNotes";
-import SoapNotes from "@/pages/SoapNotes";
-import EnhancedSoapNotes from "@/pages/EnhancedSoapNotes";
 import About from "@/pages/About";
 import Contact from "@/pages/Contact";
 import Terms from "@/pages/Terms";
 import AuthPage from "@/pages/auth-page";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
-import SharedNotes from "@/pages/SharedNotes";
-import MyNotes from "@/pages/MyNotes";
-
-import Skeleton3DTool from "@/pages/Skeleton3DTool";
-import MotionCapturePage from "@/pages/MotionCapturePage";
-import StaticPosturalAnalysisPage from "@/pages/StaticPosturalAnalysisPage";
-import IntegratedClinicalAssessment from "@/pages/IntegratedClinicalAssessment";
-import IntelligentAssessment from "@/pages/IntelligentAssessment";
-import ResearchHub from "@/pages/ResearchHub";
-import Research from "@/pages/Research";
-import ResearchGaps from "@/pages/ResearchGaps";
-import CreateResearchProject from "@/pages/CreateResearchProject";
-// Membership page redirects to Pricing now
 import Pricing from "@/pages/Pricing";
 import OnboardingComplete from "@/pages/OnboardingComplete";
 import RegistrationIncomplete from "@/pages/RegistrationIncomplete";
 import RegistrationComplete from "@/pages/RegistrationComplete";
 
-import ManualTherapyPage from "@/pages/ManualTherapyPage";
-import TestAudioTranscription from "@/pages/TestAudioTranscription";
-import TestNoteGenerator from "@/pages/TestNoteGenerator";
-import TestCaseStudiesPage from "@/pages/TestCaseStudiesPage";
-import SessionsPage from "@/pages/SessionsPage";
-import VirtualPatientPage from "@/pages/VirtualPatientPage";
-import VirtualPatients from "@/pages/VirtualPatients";
-import VirtualPatientsWorking from "@/pages/VirtualPatientsWorking";
-import VirtualPatientsSimple from "@/pages/VirtualPatientsSimple";
-import VirtualPatientsMinimal from "@/pages/VirtualPatientsMinimal";
-import VirtualPatientsFixed from "@/pages/VirtualPatientsFixed";
-import VirtualPatientsManagement from "@/pages/VirtualPatientsManagement";
-import VirtualPatient2 from "@/pages/VirtualPatient2";
-import SharedCasesPage from "@/pages/SharedCasesPage";
-import SharedCaseDetailPage from "@/pages/SharedCaseDetailPage";
-import SharedCaseFormPage from "@/pages/SharedCaseFormPage";
-import CaseStudyPage from "@/pages/CaseStudyPage";
-import AdminDashboard from "@/pages/admin-dashboard";
-import PhysioGPT from "@/pages/PhysioGPT";
-import TrialWelcome from "@/pages/TrialWelcome";
-import CompetitionPage from "@/pages/CompetitionPage";
-import CompetitionParticipationPage from "@/pages/CompetitionParticipationPage";
-import ComplexCasePage from "@/pages/ComplexCasePage";
-import ComplexCaseCompetitionsPage from "@/pages/ComplexCaseCompetitionsPage";
-import ComplexCaseCompetitionParticipationPage from "@/pages/ComplexCaseCompetitionParticipationPage";
-import CompetitionDiagnosisPage from "@/pages/CompetitionDiagnosisPage";
-import CompetitionResultsPage from "@/pages/CompetitionResultsPage";
-import GameCompetitions from "@/pages/GameCompetitions";
-import GameCompetitionPage from "@/pages/GameCompetitionPage";
-import ExerciseProgramBuilder from "@/pages/ExerciseProgramBuilder";
-import MovementAnalysis from "@/pages/MovementAnalysis";
-import CameraTest from "@/pages/CameraTest";
-import PhoneCameraPage from "@/pages/PhoneCameraPage";
-
-import TournamentWaitingRoom from "@/pages/TournamentWaitingRoom";
-import TournamentMatchPage from "@/pages/TournamentMatchPage";
-import TournamentResultsPage from "@/pages/TournamentResultsPage";
-import BodyScanner from "@/pages/BodyScanner";
-import JointAnalysisLab from "@/pages/JointAnalysisLab";
-import TestSkeleton from "@/pages/TestSkeleton";
-import TestSkeletonNew from "@/pages/TestSkeletonNew";
-import TestSkeletonNewSimple from "@/pages/TestSkeletonNewSimple";
-import TestSkeletonScapula from "@/pages/TestSkeletonScapula";
-import PatientAssessmentDashboard from "@/pages/PatientAssessmentDashboard";
-import Education from "@/pages/Education";
-import CourseContent from "@/pages/CourseContent";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
-import NotesClinical from "./pages/NotesClinical";
-import TreatmentNotes from "@/pages/TreatmentNotes";
-import { Component, type ErrorInfo, type ReactNode } from "react";
+
+const PhysioGPT = lazy(() => import("@/pages/PhysioGPT"));
+const ClinicalNotes = lazy(() => import("@/pages/ClinicalNotes"));
+const SoapNotes = lazy(() => import("@/pages/SoapNotes"));
+const EnhancedSoapNotes = lazy(() => import("@/pages/EnhancedSoapNotes"));
+const SharedNotes = lazy(() => import("@/pages/SharedNotes"));
+const MyNotes = lazy(() => import("@/pages/MyNotes"));
+const Skeleton3DTool = lazy(() => import("@/pages/Skeleton3DTool"));
+const MotionCapturePage = lazy(() => import("@/pages/MotionCapturePage"));
+const StaticPosturalAnalysisPage = lazy(() => import("@/pages/StaticPosturalAnalysisPage"));
+const IntegratedClinicalAssessment = lazy(() => import("@/pages/IntegratedClinicalAssessment"));
+const IntelligentAssessment = lazy(() => import("@/pages/IntelligentAssessment"));
+const ResearchHub = lazy(() => import("@/pages/ResearchHub"));
+const Research = lazy(() => import("@/pages/Research"));
+const ResearchGaps = lazy(() => import("@/pages/ResearchGaps"));
+const CreateResearchProject = lazy(() => import("@/pages/CreateResearchProject"));
+const ManualTherapyPage = lazy(() => import("@/pages/ManualTherapyPage"));
+const TestAudioTranscription = lazy(() => import("@/pages/TestAudioTranscription"));
+const TestNoteGenerator = lazy(() => import("@/pages/TestNoteGenerator"));
+const TestCaseStudiesPage = lazy(() => import("@/pages/TestCaseStudiesPage"));
+const SessionsPage = lazy(() => import("@/pages/SessionsPage"));
+const VirtualPatientPage = lazy(() => import("@/pages/VirtualPatientPage"));
+const VirtualPatients = lazy(() => import("@/pages/VirtualPatients"));
+const VirtualPatientsWorking = lazy(() => import("@/pages/VirtualPatientsWorking"));
+const VirtualPatientsSimple = lazy(() => import("@/pages/VirtualPatientsSimple"));
+const VirtualPatientsMinimal = lazy(() => import("@/pages/VirtualPatientsMinimal"));
+const VirtualPatientsFixed = lazy(() => import("@/pages/VirtualPatientsFixed"));
+const VirtualPatientsManagement = lazy(() => import("@/pages/VirtualPatientsManagement"));
+const VirtualPatient2 = lazy(() => import("@/pages/VirtualPatient2"));
+const SharedCasesPage = lazy(() => import("@/pages/SharedCasesPage"));
+const SharedCaseDetailPage = lazy(() => import("@/pages/SharedCaseDetailPage"));
+const SharedCaseFormPage = lazy(() => import("@/pages/SharedCaseFormPage"));
+const CaseStudyPage = lazy(() => import("@/pages/CaseStudyPage"));
+const AdminDashboard = lazy(() => import("@/pages/admin-dashboard"));
+const TrialWelcome = lazy(() => import("@/pages/TrialWelcome"));
+const CompetitionPage = lazy(() => import("@/pages/CompetitionPage"));
+const CompetitionParticipationPage = lazy(() => import("@/pages/CompetitionParticipationPage"));
+const ComplexCasePage = lazy(() => import("@/pages/ComplexCasePage"));
+const ComplexCaseCompetitionsPage = lazy(() => import("@/pages/ComplexCaseCompetitionsPage"));
+const ComplexCaseCompetitionParticipationPage = lazy(() => import("@/pages/ComplexCaseCompetitionParticipationPage"));
+const CompetitionDiagnosisPage = lazy(() => import("@/pages/CompetitionDiagnosisPage"));
+const CompetitionResultsPage = lazy(() => import("@/pages/CompetitionResultsPage"));
+const GameCompetitions = lazy(() => import("@/pages/GameCompetitions"));
+const GameCompetitionPage = lazy(() => import("@/pages/GameCompetitionPage"));
+const ExerciseProgramBuilder = lazy(() => import("@/pages/ExerciseProgramBuilder"));
+const MovementAnalysis = lazy(() => import("@/pages/MovementAnalysis"));
+const CameraTest = lazy(() => import("@/pages/CameraTest"));
+const PhoneCameraPage = lazy(() => import("@/pages/PhoneCameraPage"));
+const TournamentWaitingRoom = lazy(() => import("@/pages/TournamentWaitingRoom"));
+const TournamentMatchPage = lazy(() => import("@/pages/TournamentMatchPage"));
+const TournamentResultsPage = lazy(() => import("@/pages/TournamentResultsPage"));
+const BodyScanner = lazy(() => import("@/pages/BodyScanner"));
+const JointAnalysisLab = lazy(() => import("@/pages/JointAnalysisLab"));
+const TestSkeleton = lazy(() => import("@/pages/TestSkeleton"));
+const TestSkeletonNew = lazy(() => import("@/pages/TestSkeletonNew"));
+const TestSkeletonNewSimple = lazy(() => import("@/pages/TestSkeletonNewSimple"));
+const TestSkeletonScapula = lazy(() => import("@/pages/TestSkeletonScapula"));
+const PatientAssessmentDashboard = lazy(() => import("@/pages/PatientAssessmentDashboard"));
+const Education = lazy(() => import("@/pages/Education"));
+const CourseContent = lazy(() => import("@/pages/CourseContent"));
+const NotesClinical = lazy(() => import("./pages/NotesClinical"));
+const TreatmentNotes = lazy(() => import("@/pages/TreatmentNotes"));
+
+function PageLoadingFallback() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
+      <div className="flex flex-col items-center gap-6">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-full border-4 border-slate-700 border-t-emerald-500 animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20" />
+          </div>
+        </div>
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-white mb-1">Loading</h2>
+          <p className="text-sm text-slate-400">Preparing your workspace...</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 class PageErrorBoundary extends Component<
   { children: ReactNode; pageName: string },
@@ -135,6 +152,7 @@ function Router() {
     <div className="flex flex-col min-h-screen">
       <main className="flex-grow">
         <Header />
+        <Suspense fallback={<PageLoadingFallback />}>
         <Switch>
           <Route path="/" component={Home} />
           <Route path="/clinical-notes">
@@ -291,6 +309,7 @@ function Router() {
           <Route path="/camera-test" component={CameraTest} />
           <Route component={NotFound} />
         </Switch>
+        </Suspense>
       </main>
       <Footer />
     </div>

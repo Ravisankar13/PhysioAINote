@@ -27,5 +27,24 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/three') || id.includes('node_modules/@react-three')) {
+            return 'vendor-three';
+          }
+          if (id.includes('node_modules/@tensorflow') || id.includes('node_modules/@mediapipe')) {
+            return 'vendor-ml';
+          }
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/framer-motion') || id.includes('node_modules/d3-')) {
+            return 'vendor-charts';
+          }
+          if (id.includes('node_modules/pdf-lib') || id.includes('node_modules/jspdf') || id.includes('node_modules/docx') || id.includes('node_modules/mammoth')) {
+            return 'vendor-docs';
+          }
+        },
+      },
+    },
   },
 });

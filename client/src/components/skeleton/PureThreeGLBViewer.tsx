@@ -2188,6 +2188,7 @@ export default function PureThreeGLBViewer({
   const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
   const muscleLayerManagerRef = useRef<MuscleLayerManager | null>(null);
   const muscleMeshesRef = useRef<THREE.Object3D[]>([]);
+  const hiddenGeometryCacheRef = useRef<Map<string, THREE.BufferGeometry>>(new Map());
   const splitMuscleGroupsRef = useRef<Map<string, SplitMuscleGroup>>(new Map());
   const muscleHitProxiesRef = useRef<{ mesh: THREE.Mesh; groupId: string }[]>([]);
   const muscleGroupCentersRef = useRef<Map<string, THREE.Vector3>>(new Map());
@@ -4852,6 +4853,43 @@ export default function PureThreeGLBViewer({
               }
             });
             
+            if (!showMuscles) {
+              muscleMeshes.forEach((obj) => {
+                const m = obj as THREE.Mesh;
+                if (m.geometry) {
+                  const key = m.uuid;
+                  hiddenGeometryCacheRef.current.set(key, m.geometry);
+                  const placeholder = new THREE.BufferGeometry();
+                  placeholder.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+                  placeholder.boundingSphere = m.geometry.boundingSphere?.clone() || new THREE.Sphere(new THREE.Vector3(), 5);
+                  m.geometry = placeholder;
+                }
+              });
+            }
+
+            const textureSet = new Set<THREE.Texture>();
+            model.traverse((child) => {
+              if (child instanceof THREE.Mesh && child.material) {
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                for (const mat of mats) {
+                  if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhongMaterial || mat instanceof THREE.MeshLambertMaterial) {
+                    if (mat.map) textureSet.add(mat.map);
+                    if ((mat as THREE.MeshStandardMaterial).normalMap) textureSet.add((mat as THREE.MeshStandardMaterial).normalMap!);
+                    if ((mat as THREE.MeshStandardMaterial).roughnessMap) textureSet.add((mat as THREE.MeshStandardMaterial).roughnessMap!);
+                  }
+                }
+              }
+            });
+            const textures = Array.from(textureSet);
+            if (textures.length > 4) {
+              textures.forEach((tex, i) => {
+                if (i >= 4) {
+                  tex.generateMipmaps = false;
+                  tex.minFilter = THREE.LinearFilter;
+                }
+              });
+            }
+
             model.updateMatrixWorld(true);
             
             boneNames.forEach((name) => {
@@ -5008,9 +5046,10 @@ export default function PureThreeGLBViewer({
           }
         };
         xhr.onload = () => {
-          if (isDisposed) return;
+          if (isDisposed) { activeXhr = null; return; }
           if (xhr.status >= 200 && xhr.status < 300) {
             const buffer = xhr.response as ArrayBuffer;
+            activeXhr = null;
             loader.parse(buffer, '', (gltf) => {
               processGltf(gltf);
             }, (error: unknown) => {
@@ -5021,12 +5060,14 @@ export default function PureThreeGLBViewer({
               onModelLoadError?.(`Failed to parse model: ${errorMsg || 'Unknown error'}`);
             });
           } else {
+            activeXhr = null;
             setErrorMessage(`Failed to load model: HTTP ${xhr.status}`);
             setStatus('error');
             onModelLoadError?.(`Failed to load model: HTTP ${xhr.status}`);
           }
         };
         xhr.onerror = () => {
+          activeXhr = null;
           console.error('Error loading GLB');
           setErrorMessage('Failed to load model: network error');
           setStatus('error');
@@ -5257,10 +5298,13 @@ export default function PureThreeGLBViewer({
       isDisposed = true;
       if (activeXhr) {
         try { activeXhr.abort(); } catch {}
+        activeXhr = null;
       }
       if (animationId) {
         cancelAnimationFrame(animationId);
       }
+      hiddenGeometryCacheRef.current.forEach((geo) => geo.dispose());
+      hiddenGeometryCacheRef.current.clear();
       if (sceneRef.current) {
         sceneRef.current.controls.dispose();
         sceneRef.current.renderer.dispose();
@@ -6605,6 +6649,18 @@ export default function PureThreeGLBViewer({
   }, [muscleLayerVisibility, muscleLayerConfigs, status]);
 
   useEffect(() => {
+    if (showMuscles && hiddenGeometryCacheRef.current.size > 0) {
+      muscleMeshesRef.current.forEach((obj) => {
+        const m = obj as THREE.Mesh;
+        const cached = hiddenGeometryCacheRef.current.get(m.uuid);
+        if (cached) {
+          const placeholder = m.geometry;
+          m.geometry = cached;
+          placeholder.dispose();
+          hiddenGeometryCacheRef.current.delete(m.uuid);
+        }
+      });
+    }
     if (splitMuscleGroupsRef.current.size > 0) {
       setAllMuscleGroupsVisibility(splitMuscleGroupsRef.current, showMuscles);
       if (showMuscles && individualMuscleVisibility) {

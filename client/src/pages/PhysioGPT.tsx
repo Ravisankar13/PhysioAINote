@@ -477,6 +477,9 @@ export default function PhysioGPT() {
 
   const handleModelLoadError = useCallback((error: string) => {
     setModelLoadError(error);
+    setModelReady(false);
+    setComputationsReady(false);
+    setUiStage(0);
   }, []);
 
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);

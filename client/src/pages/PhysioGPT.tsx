@@ -119,7 +119,7 @@ import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJo
 import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPainEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
-import { type ClinicalParseResult, type CompromisedTissue } from "@/components/skeleton/ClinicalTextInput";
+import { type ClinicalParseResult, type CompromisedTissue, type ClinicalTextInputHandle, type FollowUpQuestion } from "@/components/skeleton/ClinicalTextInput";
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import { generateMechanismTreatments } from "@/lib/mechanismTreatmentEngine";
 import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
@@ -729,6 +729,9 @@ export default function PhysioGPT() {
   const [isAnalyzingSession, setIsAnalyzingSession] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
+  const clinicalTextInputRef = useRef<ClinicalTextInputHandle>(null);
+  const pendingFollowUpQuestionsRef = useRef<FollowUpQuestion[]>([]);
+  const voiceAutoSubmitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -774,6 +777,7 @@ export default function PhysioGPT() {
       if (abortControllerRef.current) abortControllerRef.current.abort();
       if (autoEvidenceTimerRef.current) clearTimeout(autoEvidenceTimerRef.current);
       if (evidenceAbortRef.current) evidenceAbortRef.current.abort();
+      if (voiceAutoSubmitTimerRef.current) clearTimeout(voiceAutoSubmitTimerRef.current);
     };
   }, []);
 
@@ -945,10 +949,13 @@ export default function PhysioGPT() {
       }
 
       analysisTimerRef.current = setInterval(() => {
-        const currentTranscript = liveTranscriptRef.current;
+        const currentTranscript = liveTranscriptRef.current.trim();
         const newContentLength = currentTranscript.length - lastAnalyzedLengthRef.current;
-        if (newContentLength > 50 && !isAnalyzingRef.current) {
-          triggerLiveAnalysisRef.current(currentTranscript);
+        if (newContentLength > 50 && !isAnalyzingRef.current && currentTranscript.length >= 20) {
+          lastAnalyzedLengthRef.current = currentTranscript.length;
+          if (clinicalTextInputRef.current) {
+            clinicalTextInputRef.current.triggerParse();
+          }
         }
       }, 10000);
 
@@ -956,6 +963,10 @@ export default function PhysioGPT() {
       toast({ title: "Microphone access denied", variant: "destructive" });
     }
   };
+
+  const handleVoiceFollowUpQuestionsChange = useCallback((questions: FollowUpQuestion[]) => {
+    pendingFollowUpQuestionsRef.current = questions;
+  }, []);
 
   const stopRecording = async () => {
     if (analysisTimerRef.current) {
@@ -986,17 +997,42 @@ export default function PhysioGPT() {
     setIsStreaming(false);
 
     if (finalTranscript.length > 20) {
-      setIsAnalyzingSession(true);
-      const durationMins = Math.floor(recordingDuration / 60);
-      const durationSecs = recordingDuration % 60;
-      const durationStr = durationMins > 0 ? `${durationMins}m ${durationSecs}s` : `${durationSecs}s`;
-      const voiceMessage = `[CLINICAL SESSION RECORDING - Duration: ${durationStr}]\n\nThe following is a transcription of a clinical physiotherapy session. Please analyze this as a professional diagnostician and provide a comprehensive clinical report:\n\n---\n${finalTranscript}\n---\n\nPlease provide:\n1. **Session Summary** - Key points discussed and chief complaint\n2. **Clinical Findings** - Relevant subjective and objective findings extracted\n3. **Differential Diagnosis** - Ranked list with reasoning for each\n4. **Assessment** - Your clinical impression based on the evidence\n5. **Treatment Plan** - Evidence-based interventions with dosage parameters\n6. **Prognosis** - Expected outcomes and timeline\n7. **Missing Information** - What additional information, tests, or assessments are needed to refine the diagnosis\n8. **Red Flags** - Any concerning signs that require urgent attention`;
-      
-      await new Promise(resolve => setTimeout(resolve, 300));
+      const pendingQuestions = pendingFollowUpQuestionsRef.current;
+      if (pendingQuestions.length > 0 && clinicalTextInputRef.current) {
+        const spokenWords = finalTranscript.toLowerCase();
+        for (const fq of pendingQuestions) {
+          if (fq.options && fq.options.length > 0) {
+            const matchedOption = fq.options.find(opt =>
+              spokenWords.includes(opt.toLowerCase())
+            );
+            if (matchedOption) {
+              clinicalTextInputRef.current.submitFollowUpAnswer(fq.id, matchedOption);
+              toast({ title: "Follow-up Answered", description: `"${fq.question}" answered with "${matchedOption}"` });
+              setLiveTranscript("");
+              setInterimTranscript("");
+              return;
+            }
+          }
+          const questionKeywords = fq.question.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+          const relevanceScore = questionKeywords.filter(kw => spokenWords.includes(kw)).length / Math.max(questionKeywords.length, 1);
+          if (relevanceScore > 0.2 || finalTranscript.length < 100) {
+            clinicalTextInputRef.current.submitFollowUpAnswer(fq.id, finalTranscript);
+            toast({ title: "Follow-up Answered", description: `Answered: "${fq.question.substring(0, 60)}..."` });
+            setLiveTranscript("");
+            setInterimTranscript("");
+            return;
+          }
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 200));
+      if (clinicalTextInputRef.current) {
+        clinicalTextInputRef.current.triggerParse();
+        toast({ title: "Analyzing Voice Input", description: "Updating skeleton from your clinical description..." });
+      }
       isAnalyzingRef.current = false;
       setLiveTranscript("");
       setInterimTranscript("");
-      sendMessageStreaming(voiceMessage, true);
     } else if (finalTranscript.length > 0) {
       toast({ title: "Recording too short", description: "Please speak more for a proper clinical analysis", variant: "destructive" });
       setLiveTranscript("");
@@ -9874,8 +9910,12 @@ ${ddxList}`;
       <div className={`absolute top-14 z-30 transition-all duration-300 ${sidebarOpen ? 'left-[270px]' : 'left-3'}`}>
         <Suspense fallback={<LazyPanelFallback />}>
         <ClinicalTextInput
+          ref={clinicalTextInputRef}
           onParseResult={handleClinicalTextParse}
           onClearFindings={handleClinicalTextClear}
+          voiceText={isRecording ? (liveTranscript + (interimTranscript ? ` ${interimTranscript}` : '')).trim() : undefined}
+          isVoiceActive={isRecording}
+          onFollowUpQuestionsChange={handleVoiceFollowUpQuestionsChange}
           chainIntegrityScores={(() => {
             const integrity = hudChainIntegrity;
             if (!integrity || integrity.size === 0) return undefined;

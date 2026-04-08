@@ -1,9 +1,9 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Brain, Sparkles, X, ChevronDown, ChevronUp, MessageCircle, HelpCircle, CheckCircle2, Lightbulb, FileText } from "lucide-react";
+import { Loader2, Brain, Sparkles, X, ChevronDown, ChevronUp, MessageCircle, HelpCircle, CheckCircle2, Lightbulb, FileText, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import ClinicalDiagnosisReport, { type DiagnosisReport } from "./ClinicalDiagnosisReport";
@@ -76,12 +76,21 @@ export interface ForceAnalysisData {
   force_percent: number;
 }
 
+export interface ClinicalTextInputHandle {
+  triggerParse: () => void;
+  submitFollowUpAnswer: (questionId: string, answer: string) => void;
+  getFollowUpQuestions: () => FollowUpQuestion[];
+}
+
 interface ClinicalTextInputProps {
   onParseResult: (result: ClinicalParseResult) => void;
   onClearFindings?: () => void;
   disabled?: boolean;
   chainIntegrityScores?: ChainIntegrityData[];
   forceAnalysis?: ForceAnalysisData[];
+  voiceText?: string;
+  isVoiceActive?: boolean;
+  onFollowUpQuestionsChange?: (questions: FollowUpQuestion[]) => void;
 }
 
 const EXAMPLE_DESCRIPTIONS = [
@@ -92,7 +101,7 @@ const EXAMPLE_DESCRIPTIONS = [
   "Elderly patient with lumbar spinal stenosis and kyphosis",
 ];
 
-export default function ClinicalTextInput({ onParseResult, onClearFindings, disabled, chainIntegrityScores, forceAnalysis }: ClinicalTextInputProps) {
+const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputProps>(function ClinicalTextInput({ onParseResult, onClearFindings, disabled, chainIntegrityScores, forceAnalysis, voiceText, isVoiceActive, onFollowUpQuestionsChange }, ref) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<ClinicalParseResult | null>(null);
@@ -107,6 +116,24 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
   const [reportLoading, setReportLoading] = useState(false);
   const originalTextRef = useRef("");
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (isVoiceActive && voiceText) {
+      setText(voiceText);
+    }
+  }, [voiceText, isVoiceActive]);
+
+  useEffect(() => {
+    if (isVoiceActive && !expanded) {
+      setExpanded(true);
+    }
+  }, [isVoiceActive, expanded]);
+
+  useEffect(() => {
+    if (onFollowUpQuestionsChange) {
+      onFollowUpQuestionsChange(followUpQuestions);
+    }
+  }, [followUpQuestions, onFollowUpQuestionsChange]);
 
   const doParseRequest = useCallback(async (inputText: string, context: QAEntry[]) => {
     setLoading(true);
@@ -196,6 +223,22 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
     if (onClearFindings) onClearFindings();
   }, [onClearFindings]);
 
+  useImperativeHandle(ref, () => ({
+    triggerParse: () => {
+      if (text.trim().length >= 3 && !loading) {
+        originalTextRef.current = text.trim();
+        setQaHistory([]);
+        setFollowUpQuestions([]);
+        setActiveQuestionId(null);
+        doParseRequest(text.trim(), []);
+      }
+    },
+    submitFollowUpAnswer: (questionId: string, answer: string) => {
+      handleAnswerSubmit(questionId, answer);
+    },
+    getFollowUpQuestions: () => followUpQuestions,
+  }), [text, loading, doParseRequest, handleAnswerSubmit, followUpQuestions]);
+
   const handleGenerateReport = useCallback(async () => {
     if (!lastResult) return;
     setReportLoading(true);
@@ -236,9 +279,18 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-1.5">
-          <Brain className="h-3.5 w-3.5 text-blue-400" />
+          {isVoiceActive ? (
+            <Mic className="h-3.5 w-3.5 text-red-400 animate-pulse" />
+          ) : (
+            <Brain className="h-3.5 w-3.5 text-blue-400" />
+          )}
           <span className="text-xs font-semibold text-blue-300">Clinical Prediction</span>
-          {lastResult && (
+          {isVoiceActive && (
+            <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-red-900/40 text-red-300 border-red-700/40 animate-pulse">
+              Voice
+            </Badge>
+          )}
+          {lastResult && !isVoiceActive && (
             <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-900/40 text-blue-300 border-blue-700/40">
               Active
             </Badge>
@@ -541,4 +593,6 @@ export default function ClinicalTextInput({ onParseResult, onClearFindings, disa
       )}
     </div>
   );
-}
+});
+
+export default ClinicalTextInput;

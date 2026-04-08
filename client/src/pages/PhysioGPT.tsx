@@ -918,17 +918,36 @@ export default function PhysioGPT() {
         let recognitionResultIndex = 0;
         recognition.onresult = (event: any) => {
           let interimText = "";
+          let hadFinal = false;
           for (let i = recognitionResultIndex; i < event.results.length; i++) {
             const result = event.results[i];
             if (result.isFinal) {
               liveTranscriptRef.current += result[0].transcript + " ";
               setLiveTranscript(liveTranscriptRef.current.trim());
               recognitionResultIndex = i + 1;
+              hadFinal = true;
             } else {
               interimText += result[0].transcript;
             }
           }
           setInterimTranscript(interimText);
+
+          if (hadFinal) {
+            if (voiceAutoSubmitTimerRef.current) clearTimeout(voiceAutoSubmitTimerRef.current);
+            voiceAutoSubmitTimerRef.current = setTimeout(() => {
+              voiceAutoSubmitTimerRef.current = null;
+              const transcript = liveTranscriptRef.current.trim();
+              if (transcript.length < 20 || !clinicalTextInputRef.current) return;
+              const pendingQs = pendingFollowUpQuestionsRef.current;
+              if (pendingQs.length > 0) {
+                const newContent = transcript.slice(lastAnalyzedLengthRef.current).trim();
+                if (newContent.length > 5) {
+                  tryMatchFollowUpAnswer(newContent, pendingQs);
+                  lastAnalyzedLengthRef.current = transcript.length;
+                }
+              }
+            }, 3000);
+          }
         };
 
         recognition.onerror = (event: any) => {
@@ -954,7 +973,15 @@ export default function PhysioGPT() {
         if (newContentLength > 50 && !isAnalyzingRef.current && currentTranscript.length >= 20) {
           lastAnalyzedLengthRef.current = currentTranscript.length;
           if (clinicalTextInputRef.current) {
-            clinicalTextInputRef.current.triggerParse();
+            const pendingQs = pendingFollowUpQuestionsRef.current;
+            if (pendingQs.length > 0) {
+              const newText = currentTranscript.slice(lastAnalyzedLengthRef.current - newContentLength).trim();
+              if (newText.length > 10) {
+                tryMatchFollowUpAnswer(newText, pendingQs);
+              }
+            } else {
+              clinicalTextInputRef.current.triggerIncrementalParse();
+            }
           }
         }
       }, 10000);
@@ -968,7 +995,46 @@ export default function PhysioGPT() {
     pendingFollowUpQuestionsRef.current = questions;
   }, []);
 
+  const tryMatchFollowUpAnswer = useCallback((spokenText: string, questions: FollowUpQuestion[]): boolean => {
+    if (!clinicalTextInputRef.current || questions.length === 0) return false;
+    const spoken = spokenText.toLowerCase().trim();
+    if (spoken.length < 3) return false;
+
+    for (const fq of questions) {
+      if (fq.options && fq.options.length > 0) {
+        const matchedOption = fq.options.find(opt =>
+          spoken.includes(opt.toLowerCase())
+        );
+        if (matchedOption) {
+          clinicalTextInputRef.current.submitFollowUpAnswer(fq.id, matchedOption);
+          toast({ title: "Follow-up Answered", description: `"${fq.question.substring(0, 50)}..." answered with "${matchedOption}"` });
+          return true;
+        }
+      }
+    }
+
+    for (const fq of questions) {
+      if (fq.options && fq.options.length > 0) continue;
+      const questionKeywords = fq.question.toLowerCase()
+        .replace(/[?.,!]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 3 && !['what', 'does', 'have', 'this', 'that', 'with', 'from', 'they', 'been', 'were', 'your'].includes(w));
+      const matchCount = questionKeywords.filter(kw => spoken.includes(kw)).length;
+      if (questionKeywords.length > 0 && matchCount / questionKeywords.length > 0.3) {
+        clinicalTextInputRef.current.submitFollowUpAnswer(fq.id, spokenText.trim());
+        toast({ title: "Follow-up Answered", description: `Answered: "${fq.question.substring(0, 50)}..."` });
+        return true;
+      }
+    }
+
+    return false;
+  }, [toast]);
+
   const stopRecording = async () => {
+    if (voiceAutoSubmitTimerRef.current) {
+      clearTimeout(voiceAutoSubmitTimerRef.current);
+      voiceAutoSubmitTimerRef.current = null;
+    }
     if (analysisTimerRef.current) {
       clearInterval(analysisTimerRef.current);
       analysisTimerRef.current = null;
@@ -998,38 +1064,22 @@ export default function PhysioGPT() {
 
     if (finalTranscript.length > 20) {
       const pendingQuestions = pendingFollowUpQuestionsRef.current;
-      if (pendingQuestions.length > 0 && clinicalTextInputRef.current) {
-        const spokenWords = finalTranscript.toLowerCase();
-        for (const fq of pendingQuestions) {
-          if (fq.options && fq.options.length > 0) {
-            const matchedOption = fq.options.find(opt =>
-              spokenWords.includes(opt.toLowerCase())
-            );
-            if (matchedOption) {
-              clinicalTextInputRef.current.submitFollowUpAnswer(fq.id, matchedOption);
-              toast({ title: "Follow-up Answered", description: `"${fq.question}" answered with "${matchedOption}"` });
-              setLiveTranscript("");
-              setInterimTranscript("");
-              return;
-            }
-          }
-          const questionKeywords = fq.question.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-          const relevanceScore = questionKeywords.filter(kw => spokenWords.includes(kw)).length / Math.max(questionKeywords.length, 1);
-          if (relevanceScore > 0.2 || finalTranscript.length < 100) {
-            clinicalTextInputRef.current.submitFollowUpAnswer(fq.id, finalTranscript);
-            toast({ title: "Follow-up Answered", description: `Answered: "${fq.question.substring(0, 60)}..."` });
-            setLiveTranscript("");
-            setInterimTranscript("");
-            return;
-          }
+      if (pendingQuestions.length > 0) {
+        const matched = tryMatchFollowUpAnswer(finalTranscript, pendingQuestions);
+        if (matched) {
+          setLiveTranscript("");
+          setInterimTranscript("");
+          return;
         }
       }
 
-      await new Promise(resolve => setTimeout(resolve, 200));
-      if (clinicalTextInputRef.current) {
-        clinicalTextInputRef.current.triggerParse();
-        toast({ title: "Analyzing Voice Input", description: "Updating skeleton from your clinical description..." });
-      }
+      voiceAutoSubmitTimerRef.current = setTimeout(() => {
+        if (clinicalTextInputRef.current) {
+          clinicalTextInputRef.current.triggerParse();
+          toast({ title: "Analyzing Voice Input", description: "Updating skeleton from your clinical description..." });
+        }
+        voiceAutoSubmitTimerRef.current = null;
+      }, 300);
       isAnalyzingRef.current = false;
       setLiveTranscript("");
       setInterimTranscript("");

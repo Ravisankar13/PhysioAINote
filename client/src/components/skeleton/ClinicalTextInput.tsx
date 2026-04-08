@@ -78,6 +78,7 @@ export interface ForceAnalysisData {
 
 export interface ClinicalTextInputHandle {
   triggerParse: () => void;
+  triggerIncrementalParse: () => void;
   submitFollowUpAnswer: (questionId: string, answer: string) => void;
   getFollowUpQuestions: () => FollowUpQuestion[];
 }
@@ -233,11 +234,19 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
         doParseRequest(text.trim(), []);
       }
     },
+    triggerIncrementalParse: () => {
+      if (text.trim().length >= 3 && !loading) {
+        if (!originalTextRef.current) {
+          originalTextRef.current = text.trim();
+        }
+        doParseRequest(text.trim(), qaHistory);
+      }
+    },
     submitFollowUpAnswer: (questionId: string, answer: string) => {
       handleAnswerSubmit(questionId, answer);
     },
     getFollowUpQuestions: () => followUpQuestions,
-  }), [text, loading, doParseRequest, handleAnswerSubmit, followUpQuestions]);
+  }), [text, loading, doParseRequest, handleAnswerSubmit, followUpQuestions, qaHistory]);
 
   const handleGenerateReport = useCallback(async () => {
     if (!lastResult) return;

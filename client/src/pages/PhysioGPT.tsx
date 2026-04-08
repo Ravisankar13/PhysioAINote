@@ -943,8 +943,10 @@ export default function PhysioGPT() {
               if (pendingQs.length > 0) {
                 const newContent = transcript.slice(lastAnalyzedLengthRef.current).trim();
                 if (newContent.length > 5) {
-                  tryMatchFollowUpAnswer(newContent, pendingQs);
-                  lastAnalyzedLengthRef.current = transcript.length;
+                  const matched = tryMatchFollowUpAnswer(newContent, pendingQs);
+                  if (matched) {
+                    lastAnalyzedLengthRef.current = transcript.length;
+                  }
                 }
               } else if (newContentLength > 10 && !isAnalyzingRef.current) {
                 lastAnalyzedLengthRef.current = transcript.length;
@@ -975,15 +977,18 @@ export default function PhysioGPT() {
         const currentTranscript = liveTranscriptRef.current.trim();
         const newContentLength = currentTranscript.length - lastAnalyzedLengthRef.current;
         if (newContentLength > 50 && !isAnalyzingRef.current && currentTranscript.length >= 20) {
-          lastAnalyzedLengthRef.current = currentTranscript.length;
           if (clinicalTextInputRef.current) {
             const pendingQs = pendingFollowUpQuestionsRef.current;
             if (pendingQs.length > 0) {
-              const newText = currentTranscript.slice(lastAnalyzedLengthRef.current - newContentLength).trim();
+              const newText = currentTranscript.slice(lastAnalyzedLengthRef.current).trim();
               if (newText.length > 10) {
-                tryMatchFollowUpAnswer(newText, pendingQs);
+                const matched = tryMatchFollowUpAnswer(newText, pendingQs);
+                if (matched) {
+                  lastAnalyzedLengthRef.current = currentTranscript.length;
+                }
               }
             } else {
+              lastAnalyzedLengthRef.current = currentTranscript.length;
               clinicalTextInputRef.current.triggerIncrementalParse();
             }
           }

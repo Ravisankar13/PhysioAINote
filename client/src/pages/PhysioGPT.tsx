@@ -939,12 +939,16 @@ export default function PhysioGPT() {
               const transcript = liveTranscriptRef.current.trim();
               if (transcript.length < 20 || !clinicalTextInputRef.current) return;
               const pendingQs = pendingFollowUpQuestionsRef.current;
+              const newContentLength = transcript.length - lastAnalyzedLengthRef.current;
               if (pendingQs.length > 0) {
                 const newContent = transcript.slice(lastAnalyzedLengthRef.current).trim();
                 if (newContent.length > 5) {
                   tryMatchFollowUpAnswer(newContent, pendingQs);
                   lastAnalyzedLengthRef.current = transcript.length;
                 }
+              } else if (newContentLength > 10 && !isAnalyzingRef.current) {
+                lastAnalyzedLengthRef.current = transcript.length;
+                clinicalTextInputRef.current.triggerIncrementalParse();
               }
             }, 3000);
           }

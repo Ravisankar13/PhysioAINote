@@ -937,7 +937,7 @@ export default function PhysioGPT() {
             voiceAutoSubmitTimerRef.current = setTimeout(() => {
               voiceAutoSubmitTimerRef.current = null;
               const transcript = liveTranscriptRef.current.trim();
-              if (transcript.length < 20 || !clinicalTextInputRef.current) return;
+              if (transcript.length < 10 || !clinicalTextInputRef.current) return;
               const pendingQs = pendingFollowUpQuestionsRef.current;
               const newContentLength = transcript.length - lastAnalyzedLengthRef.current;
               if (pendingQs.length > 0) {
@@ -1031,6 +1031,12 @@ export default function PhysioGPT() {
       }
     }
 
+    if (questions.length === 1 && spoken.length >= 3) {
+      clinicalTextInputRef.current.submitFollowUpAnswer(questions[0].id, spokenText.trim());
+      toast({ title: "Follow-up Answered", description: `Answered: "${questions[0].question.substring(0, 50)}..."` });
+      return true;
+    }
+
     return false;
   }, [toast]);
 
@@ -1066,7 +1072,7 @@ export default function PhysioGPT() {
     isStreamingRef.current = false;
     setIsStreaming(false);
 
-    if (finalTranscript.length > 20) {
+    if (finalTranscript.length > 10) {
       const pendingQuestions = pendingFollowUpQuestionsRef.current;
       if (pendingQuestions.length > 0) {
         const matched = tryMatchFollowUpAnswer(finalTranscript, pendingQuestions);
@@ -1087,8 +1093,8 @@ export default function PhysioGPT() {
       isAnalyzingRef.current = false;
       setLiveTranscript("");
       setInterimTranscript("");
-    } else if (finalTranscript.length > 0) {
-      toast({ title: "Recording too short", description: "Please speak more for a proper clinical analysis", variant: "destructive" });
+    } else if (finalTranscript.length > 0 && finalTranscript.length <= 10) {
+      toast({ title: "Recording too short", description: "Please speak a bit more for clinical analysis", variant: "destructive" });
       setLiveTranscript("");
       setInterimTranscript("");
     } else {

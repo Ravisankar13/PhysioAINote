@@ -1042,7 +1042,7 @@ export default function PhysioGPT() {
       }
     }
 
-    if (questions.length === 1 && spoken.length >= 3) {
+    if (questions.length === 1 && spoken.length >= 8) {
       clinicalTextInputRef.current.submitFollowUpAnswer(questions[0].id, spokenText.trim());
       toast({ title: "Follow-up Answered", description: `Answered: "${questions[0].question.substring(0, 50)}..."` });
       return true;

@@ -723,6 +723,12 @@ export default function PhysioGPT() {
   const [streamingContent, setStreamingContent] = useState("");
   const [evidenceData, setEvidenceData] = useState<Map<number, PhysioGptResponse>>(new Map());
 
+  const VOICE_MIN_PARSE_LENGTH = 10;
+  const VOICE_SILENCE_DEBOUNCE_MS = 3000;
+  const VOICE_STOP_DEBOUNCE_MS = 300;
+  const VOICE_INTERVAL_MS = 10000;
+  const VOICE_INTERVAL_MIN_NEW_CHARS = 50;
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -937,7 +943,7 @@ export default function PhysioGPT() {
             voiceAutoSubmitTimerRef.current = setTimeout(() => {
               voiceAutoSubmitTimerRef.current = null;
               const transcript = liveTranscriptRef.current.trim();
-              if (transcript.length < 10 || !clinicalTextInputRef.current) return;
+              if (transcript.length < VOICE_MIN_PARSE_LENGTH || !clinicalTextInputRef.current) return;
               const pendingQs = pendingFollowUpQuestionsRef.current;
               const newContentLength = transcript.length - lastAnalyzedLengthRef.current;
               if (pendingQs.length > 0) {
@@ -952,7 +958,7 @@ export default function PhysioGPT() {
                 lastAnalyzedLengthRef.current = transcript.length;
                 clinicalTextInputRef.current.triggerIncrementalParse();
               }
-            }, 3000);
+            }, VOICE_SILENCE_DEBOUNCE_MS);
           }
         };
 
@@ -976,7 +982,7 @@ export default function PhysioGPT() {
       analysisTimerRef.current = setInterval(() => {
         const currentTranscript = liveTranscriptRef.current.trim();
         const newContentLength = currentTranscript.length - lastAnalyzedLengthRef.current;
-        if (newContentLength > 50 && !isAnalyzingRef.current && currentTranscript.length >= 20) {
+        if (newContentLength > VOICE_INTERVAL_MIN_NEW_CHARS && !isAnalyzingRef.current && currentTranscript.length >= VOICE_MIN_PARSE_LENGTH) {
           if (clinicalTextInputRef.current) {
             const pendingQs = pendingFollowUpQuestionsRef.current;
             if (pendingQs.length > 0) {
@@ -993,7 +999,7 @@ export default function PhysioGPT() {
             }
           }
         }
-      }, 10000);
+      }, VOICE_INTERVAL_MS);
 
     } catch {
       toast({ title: "Microphone access denied", variant: "destructive" });
@@ -1077,7 +1083,7 @@ export default function PhysioGPT() {
     isStreamingRef.current = false;
     setIsStreaming(false);
 
-    if (finalTranscript.length > 10) {
+    if (finalTranscript.length > VOICE_MIN_PARSE_LENGTH) {
       const pendingQuestions = pendingFollowUpQuestionsRef.current;
       if (pendingQuestions.length > 0) {
         const matched = tryMatchFollowUpAnswer(finalTranscript, pendingQuestions);
@@ -1094,11 +1100,11 @@ export default function PhysioGPT() {
           toast({ title: "Analyzing Voice Input", description: "Updating skeleton from your clinical description..." });
         }
         voiceAutoSubmitTimerRef.current = null;
-      }, 300);
+      }, VOICE_STOP_DEBOUNCE_MS);
       isAnalyzingRef.current = false;
       setLiveTranscript("");
       setInterimTranscript("");
-    } else if (finalTranscript.length > 0 && finalTranscript.length <= 10) {
+    } else if (finalTranscript.length > 0 && finalTranscript.length <= VOICE_MIN_PARSE_LENGTH) {
       toast({ title: "Recording too short", description: "Please speak a bit more for clinical analysis", variant: "destructive" });
       setLiveTranscript("");
       setInterimTranscript("");

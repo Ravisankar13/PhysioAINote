@@ -119,8 +119,8 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
   const { toast } = useToast();
 
   useEffect(() => {
-    if (isVoiceActive && voiceText) {
-      setText(voiceText);
+    if (isVoiceActive) {
+      setText(voiceText || "");
     }
   }, [voiceText, isVoiceActive]);
 

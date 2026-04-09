@@ -676,11 +676,6 @@ export default function PhysioGPT() {
   const [romValues, setRomValues] = useState<Record<string, number>>({});
   const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
 
-  const [voiceSessionActive, setVoiceSessionActive] = useState(false);
-  const [voiceTranscript, setVoiceTranscript] = useState('');
-  const [voiceFindings, setVoiceFindings] = useState<any[]>([]);
-  const [voiceProcessing, setVoiceProcessing] = useState(false);
-  const [voicePanelOpen, setVoicePanelOpen] = useState(true);
   const [clinicalReasoningData, setClinicalReasoningData] = useState<ClinicalReasoningData | null>(null);
   const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
   const [clinicalReasoningProcessing, setClinicalReasoningProcessing] = useState(false);
@@ -709,15 +704,8 @@ export default function PhysioGPT() {
   const [activeVisualizationId, setActiveVisualizationId] = useState<string | null>(null);
   const lastReasoningTriggerRef = useRef<string>('');
   const compensationDataRef = useRef<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
-  const voiceSessionActiveRef = useRef(false);
-  const voiceStreamRef = useRef<MediaStream | null>(null);
-  const voiceSpeechRecRef = useRef<any>(null);
-  const voiceTranscriptRef = useRef('');
   const painMarkersRef = useRef(painMarkers);
   painMarkersRef.current = painMarkers;
-  const voiceFindingsRef = useRef(voiceFindings);
-  voiceFindingsRef.current = voiceFindings;
-  const voiceExtractingRef = useRef(false);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -2886,301 +2874,6 @@ ${ddxList}`;
     toast({ title: "Preset Applied", description: `${preset.name} posture loaded` });
   }, [modelConfig, toast]);
 
-  const applyVoiceFindings = useCallback((data: any) => {
-    const newFindings: any[] = [];
-
-    if (data.painLocations && data.painLocations.length > 0) {
-      const newMarkers: PainMarker[] = data.painLocations.map((loc: any, index: number) => {
-        const regionBones = (REGION_BONE_MAPPING as any)[loc.region];
-        const nearestBone = regionBones && regionBones.length > 0 ? regionBones[0] : '';
-        const marker: PainMarker = {
-          id: `pm_voice_${Date.now()}_${index}`,
-          type: loc.type || 'point',
-          position: { x: 0, y: 0, z: 0 },
-          nearestBone,
-          anatomicalLabel: loc.anatomicalLabel || loc.region,
-          subjectiveHistory: data.subjectiveHistory || '',
-          description: loc.description || '',
-        };
-        newFindings.push({ id: marker.id, type: 'pain', label: loc.anatomicalLabel || loc.region, region: loc.region, severity: loc.severity });
-        return marker;
-      });
-      setPainMarkers(prev => [...prev, ...newMarkers]);
-
-      if (data.painLocations[0]?.region) {
-        setZoomToRegion(data.painLocations[0].region);
-      }
-    }
-
-    if (data.postureObservations && Object.keys(data.postureObservations).length > 0) {
-      setModelConfig(prevConfig => {
-        const updatedConfig = { ...prevConfig };
-        Object.entries(data.postureObservations).forEach(([path, value]) => {
-          const parts = path.split('.');
-          if (parts.length === 2) {
-            const [group, prop] = parts;
-            const groupObj = (updatedConfig as any)[group];
-            if (groupObj && prop in groupObj) {
-              const previousValue = groupObj[prop];
-              newFindings.push({ id: `posture_${path}_${Date.now()}`, type: 'posture', label: path, value, previousValue });
-              (updatedConfig as any)[group] = { ...groupObj, [prop]: value };
-            }
-          }
-        });
-        return updatedConfig;
-      });
-    }
-
-    if (data.diagnoses && data.diagnoses.length > 0) {
-      data.diagnoses.forEach((d: string, i: number) => {
-        newFindings.push({ id: `dx_${Date.now()}_${i}`, type: 'diagnosis', label: d });
-      });
-    }
-
-    if (data.redFlags && data.redFlags.length > 0) {
-      data.redFlags.forEach((rf: string, i: number) => {
-        newFindings.push({ id: `rf_${Date.now()}_${i}`, type: 'redFlag', label: rf });
-      });
-    }
-
-    if (newFindings.length > 0) {
-      setVoiceFindings(prev => [...prev, ...newFindings]);
-    }
-
-    if (data.clinicalReasoning) {
-      const cr = data.clinicalReasoning;
-      const hasSubstantiveData = (cr.hypotheses?.length > 0) ||
-        (cr.findings?.length > 0) ||
-        (cr.flags?.length > 0) ||
-        (cr.reasoningChain?.length > 0) ||
-        (cr.biomechanicalLinks?.length > 0);
-
-      if (!hasSubstantiveData) return;
-
-      setClinicalReasoningData(prev => {
-        const existing = prev || {
-          hypotheses: [], findings: [], flags: [],
-          biomechanicalLinks: [], reasoningChain: [],
-          clinicalSummary: '', assessmentPriorities: [],
-        };
-
-        const normalize = (s: string) => s.toLowerCase().trim();
-
-        const mergedHypotheses = cr.hypotheses && cr.hypotheses.length > 0
-          ? cr.hypotheses
-          : existing.hypotheses;
-
-        const existingFindingTexts = new Set(existing.findings.map((f: any) => normalize(f.text)));
-        const newCrFindings = (cr.findings || [])
-          .filter((f: any) => f.text && !existingFindingTexts.has(normalize(f.text)))
-          .map((f: any) => ({ ...f, isNew: true }));
-        const mergedFindings = [
-          ...existing.findings.map((f: any) => ({ ...f, isNew: false })),
-          ...newCrFindings,
-        ];
-
-        const existingFlagTexts = new Set(existing.flags.map((f: any) => normalize(f.text)));
-        const newFlags = (cr.flags || []).filter((f: any) => f.text && !existingFlagTexts.has(normalize(f.text)));
-        const mergedFlags = [...existing.flags, ...newFlags];
-
-        const existingBioKeys = new Set(existing.biomechanicalLinks.map((b: any) => `${normalize(b.primaryRegion)}-${normalize(b.connectedRegion)}`));
-        const newBio = (cr.biomechanicalLinks || []).filter((b: any) => !existingBioKeys.has(`${normalize(b.primaryRegion)}-${normalize(b.connectedRegion)}`));
-        const mergedBio = [...existing.biomechanicalLinks, ...newBio];
-
-        const existingThoughts = new Set(existing.reasoningChain.map((r: any) => normalize(r.thought)));
-        const newReasoning = (cr.reasoningChain || [])
-          .filter((r: any) => r.thought && !existingThoughts.has(normalize(r.thought)))
-          .map((r: any, i: number) => ({ ...r, step: existing.reasoningChain.length + i + 1, isNew: true }));
-        const mergedReasoning = [
-          ...existing.reasoningChain.map((r: any) => ({ ...r, isNew: false })),
-          ...newReasoning,
-        ];
-
-        return {
-          hypotheses: mergedHypotheses,
-          findings: mergedFindings,
-          flags: mergedFlags,
-          biomechanicalLinks: mergedBio,
-          reasoningChain: mergedReasoning,
-          clinicalSummary: cr.clinicalSummary || existing.clinicalSummary,
-          assessmentPriorities: cr.assessmentPriorities && cr.assessmentPriorities.length > 0
-            ? cr.assessmentPriorities
-            : existing.assessmentPriorities,
-        };
-      });
-
-      if (!clinicalReasoningOpen) {
-        setClinicalReasoningOpen(true);
-      }
-    }
-  }, [clinicalReasoningOpen]);
-
-  const undoVoiceFinding = useCallback((findingId: string) => {
-    setVoiceFindings(prev => {
-      const finding = prev.find(f => f.id === findingId);
-      if (finding?.type === 'pain') {
-        setPainMarkers(markers => markers.filter(m => m.id !== findingId));
-      }
-      if (finding?.type === 'posture' && finding.label) {
-        updateModelConfig(finding.label, finding.previousValue ?? 0);
-      }
-      return prev.filter(f => f.id !== findingId);
-    });
-  }, []);
-
-  const triggerVoiceExtraction = useCallback(async (isFinalFlush = false) => {
-    if (voiceExtractingRef.current) return;
-    if (!isFinalFlush && !voiceSessionActiveRef.current) return;
-    const transcript = voiceTranscriptRef.current;
-    if (!transcript || transcript.trim().length < 10) return;
-
-    voiceExtractingRef.current = true;
-    setVoiceProcessing(true);
-    try {
-      const currentMarkers = painMarkersRef.current;
-      const currentFindings = voiceFindingsRef.current;
-      const extractRes = await fetch('/api/physiogpt/voice-clinical-extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript,
-          previousFindings: {
-            painLocations: currentMarkers.map(m => m.anatomicalLabel),
-            diagnoses: currentFindings.filter(f => f.type === 'diagnosis').map(f => f.label)
-          }
-        })
-      });
-      if (extractRes.ok) {
-        const extractData = await extractRes.json();
-        applyVoiceFindings(extractData);
-      }
-    } catch (err) {
-      console.error('Voice extraction error:', err);
-    } finally {
-      voiceExtractingRef.current = false;
-      setVoiceProcessing(false);
-    }
-  }, [applyVoiceFindings]);
-
-  const voiceExtractionTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const startVoiceSession = useCallback(async () => {
-    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognitionAPI) {
-      toast({ title: "Not Supported", description: "Your browser doesn't support speech recognition. Please use Chrome or Edge.", variant: "destructive" });
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      voiceStreamRef.current = stream;
-      voiceTranscriptRef.current = '';
-      voiceExtractingRef.current = false;
-      setVoiceTranscript('');
-      setVoiceFindings([]);
-      setVoicePanelOpen(true);
-
-      const recognition = new SpeechRecognitionAPI();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-      recognition.maxAlternatives = 1;
-      voiceSpeechRecRef.current = recognition;
-
-      let recognitionResultIndex = 0;
-
-      recognition.onresult = (event: any) => {
-        let interimText = '';
-        for (let i = recognitionResultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result.isFinal) {
-            voiceTranscriptRef.current += result[0].transcript + ' ';
-            recognitionResultIndex = i + 1;
-          } else {
-            interimText += result[0].transcript;
-          }
-        }
-        const display = voiceTranscriptRef.current.trim() + (interimText ? ' ' + interimText : '');
-        setVoiceTranscript(display);
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event.error !== 'no-speech' && event.error !== 'aborted') {
-          console.error("Voice session speech recognition error:", event.error);
-        }
-      };
-
-      recognition.onend = () => {
-        if (voiceSpeechRecRef.current === recognition) {
-          recognitionResultIndex = 0;
-          try { recognition.start(); } catch {}
-        }
-      };
-
-      recognition.start();
-
-      voiceSessionActiveRef.current = true;
-      voiceExtractionTimerRef.current = setInterval(() => {
-        if (!voiceSessionActiveRef.current) {
-          if (voiceExtractionTimerRef.current) {
-            clearInterval(voiceExtractionTimerRef.current);
-            voiceExtractionTimerRef.current = null;
-          }
-          return;
-        }
-        triggerVoiceExtraction();
-      }, 5000);
-
-      setVoiceSessionActive(true);
-      toast({ title: "Voice Session Started", description: "Speak naturally — clinical findings will be extracted automatically." });
-    } catch (error) {
-      console.error('Mic access error:', error);
-      toast({ title: "Microphone Access Denied", description: "Please allow microphone access to use voice extraction.", variant: "destructive" });
-    }
-  }, [triggerVoiceExtraction, toast]);
-
-  const stopVoiceSession = useCallback(() => {
-    voiceSessionActiveRef.current = false;
-    if (voiceExtractionTimerRef.current) {
-      clearInterval(voiceExtractionTimerRef.current);
-      voiceExtractionTimerRef.current = null;
-    }
-    if (voiceSpeechRecRef.current) {
-      const rec = voiceSpeechRecRef.current;
-      voiceSpeechRecRef.current = null;
-      try { rec.stop(); } catch {}
-    }
-    if (voiceStreamRef.current) {
-      voiceStreamRef.current.getTracks().forEach(t => t.stop());
-      voiceStreamRef.current = null;
-    }
-    voiceExtractingRef.current = false;
-    setVoiceSessionActive(false);
-
-    triggerVoiceExtraction(true);
-
-    toast({ title: "Voice Session Ended", description: `Extracted ${voiceFindingsRef.current.length} findings from session.` });
-
-    lastReasoningTriggerRef.current = '';
-  }, [toast, triggerVoiceExtraction]);
-
-  useEffect(() => {
-    return () => {
-      voiceSessionActiveRef.current = false;
-      if (voiceExtractionTimerRef.current) {
-        clearInterval(voiceExtractionTimerRef.current);
-        voiceExtractionTimerRef.current = null;
-      }
-      if (voiceSpeechRecRef.current) {
-        try { voiceSpeechRecRef.current.stop(); } catch {}
-        voiceSpeechRecRef.current = null;
-      }
-      if (voiceStreamRef.current) {
-        voiceStreamRef.current.getTracks().forEach(t => t.stop());
-        voiceStreamRef.current = null;
-      }
-    };
-  }, []);
 
   const computePostureDeviations = useCallback((config: typeof modelConfig) => {
     const deviations: { region: string; parameter: string; value: number; direction: string; severity: string }[] = [];
@@ -3510,7 +3203,7 @@ ${ddxList}`;
       return Object.entries(val).some(([k, v]) => Math.abs((v as number) - ((def[k] as number) || 0)) >= 3);
     });
     if (painMarkers.length === 0 && !hasPostureChanges) return;
-    if (voiceSessionActive) return;
+    if (isRecording) return;
 
     if (clinicalReasoningTimerRef.current) {
       clearTimeout(clinicalReasoningTimerRef.current);
@@ -3524,7 +3217,7 @@ ${ddxList}`;
         clearTimeout(clinicalReasoningTimerRef.current);
       }
     };
-  }, [painMarkers, modelConfig, triggerClinicalReasoningAnalysis, voiceSessionActive]);
+  }, [painMarkers, modelConfig, triggerClinicalReasoningAnalysis, isRecording]);
 
   useEffect(() => {
     if (pendingCameraAnalysisRef.current && focusedCameraResult) {
@@ -8132,13 +7825,10 @@ ${ddxList}`;
                   setRomValues({});
                   setSelectedRomJoint(null);
 
-                  setVoiceFindings([]);
-                  setVoiceTranscript('');
                   setSubjectiveHistoryInput('');
 
                   setForceAiSuggestions(null);
                   setForceAiLoading(false);
-                  setVoiceProcessing(false);
                   setActiveBiomechanicalLink(null);
                   setBiomechanicalMuscleHighlights([]);
                   setMuscleHighlightColors({});
@@ -8168,7 +7858,6 @@ ${ddxList}`;
                   lastReasoningTriggerRef.current = '';
                   slingAnalysisRef.current = null;
                   compensationDataRef.current = { result: null, movementName: null, restrictions: {} };
-                  voiceTranscriptRef.current = '';
                   subjectiveHistoryRef.current = '';
                   if (clinicalReasoningTimerRef.current) {
                     clearTimeout(clinicalReasoningTimerRef.current);
@@ -8619,70 +8308,6 @@ ${ddxList}`;
                   }}
                 />
                 </Suspense>
-              </div>
-            )}
-
-            {voiceSessionActive && (
-              <div className={`absolute bottom-12 left-2 z-40 animate-in slide-in-from-bottom-2 duration-200 ${clinicalReasoningOpen ? 'right-[330px]' : 'right-2'} transition-all`}>
-                <div className="bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-purple-500/30 overflow-hidden">
-                  <button
-                    onClick={() => setVoicePanelOpen(!voicePanelOpen)}
-                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-800/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="animate-pulse h-2 w-2 rounded-full bg-purple-400" />
-                      <Radio className="h-3.5 w-3.5 text-purple-400" />
-                      <span className="text-xs font-semibold text-purple-300">Voice Extraction</span>
-                      {voiceProcessing && <Loader2 className="h-3 w-3 animate-spin text-purple-400" />}
-                      {voiceFindings.length > 0 && (
-                        <span className="text-[10px] bg-purple-500/30 text-purple-300 px-1.5 py-0.5 rounded-full">{voiceFindings.length} findings</span>
-                      )}
-                    </div>
-                    <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${voicePanelOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {voicePanelOpen && (
-                    <div className="px-3 pb-3 space-y-2 max-h-48 overflow-y-auto">
-                      {voiceTranscript && (
-                        <div className="bg-gray-800/60 rounded-lg p-2">
-                          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Transcript</p>
-                          <p className="text-[11px] text-gray-300 leading-relaxed max-h-16 overflow-y-auto">{voiceTranscript}</p>
-                        </div>
-                      )}
-
-                      {!voiceTranscript && (
-                        <div className="flex items-center justify-center py-3 gap-2">
-                          <span className="animate-pulse h-2 w-2 rounded-full bg-purple-400" />
-                          <span className="text-[11px] text-gray-400">Listening...</span>
-                        </div>
-                      )}
-
-                      {voiceFindings.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Applied Findings</p>
-                          {voiceFindings.map(f => (
-                            <div key={f.id} className="flex items-center justify-between bg-gray-800/40 rounded px-2 py-1">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                {f.type === 'pain' && <MapPin className="h-3 w-3 text-red-400 flex-shrink-0" />}
-                                {f.type === 'posture' && <SlidersHorizontal className="h-3 w-3 text-blue-400 flex-shrink-0" />}
-                                {f.type === 'diagnosis' && <Stethoscope className="h-3 w-3 text-teal-400 flex-shrink-0" />}
-                                {f.type === 'redFlag' && <AlertTriangle className="h-3 w-3 text-amber-400 flex-shrink-0" />}
-                                <span className="text-[10px] text-gray-300 truncate">{f.label}</span>
-                                {f.severity && <span className="text-[9px] text-gray-500">({f.severity}/10)</span>}
-                              </div>
-                              <button
-                                onClick={() => undoVoiceFinding(f.id)}
-                                className="text-gray-500 hover:text-red-400 ml-1 flex-shrink-0"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
             )}
 
@@ -9932,16 +9557,16 @@ ${ddxList}`;
           </button>
           <button
             onClick={() => {
-              if (voiceSessionActive) {
-                stopVoiceSession();
+              if (isRecording) {
+                stopRecording();
               } else {
-                startVoiceSession();
+                startRecording();
               }
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${voiceSessionActive ? 'bg-purple-500 hover:bg-purple-600 text-white animate-pulse' : 'bg-black/70 hover:bg-black/80 text-white'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${isRecording ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-black/70 hover:bg-black/80 text-white'}`}
           >
-            {voiceSessionActive ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-            {voiceSessionActive ? 'Stop Voice' : 'Voice'}
+            {isRecording ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+            {isRecording ? 'Stop Voice' : 'Voice'}
           </button>
           <button
             onClick={toggleCameraMode}
@@ -10021,7 +9646,7 @@ ${ddxList}`;
 
       <ClinicalReasoningPanel
         data={clinicalReasoningData}
-        isProcessing={voiceProcessing || clinicalReasoningProcessing}
+        isProcessing={clinicalReasoningProcessing}
         isOpen={clinicalReasoningOpen}
         isPaused={clinicalReasoningPaused}
         onToggle={() => setClinicalReasoningOpen(!clinicalReasoningOpen)}

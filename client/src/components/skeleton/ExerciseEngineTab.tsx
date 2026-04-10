@@ -202,7 +202,7 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
     setIllustrationLoading(true);
     setIllustrationError(null);
     try {
-      const res = await apiRequest('/api/exercise-engine/generate-illustration', 'POST', {
+      const data = await apiRequest('/api/exercise-engine/generate-illustration', 'POST', {
         exerciseName: exercise.name,
         targetSystem: exercise.targetSystem,
         startingPosition: exercise.startingPosition,
@@ -217,7 +217,6 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
           role: a.role,
         })),
       });
-      const data = await res.json();
       if (data.imageUrl) {
         setIllustrationUrl(data.imageUrl);
       } else {

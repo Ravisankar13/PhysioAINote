@@ -7425,6 +7425,307 @@ Based on this clinical data, generate a comprehensive, prioritized manual therap
     }
   });
 
+  app.post("/api/manual-therapy-engine/design-custom", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+
+      const customManualTherapyInputSchema = z.object({
+        targetFocus: z.string().optional().default(""),
+        mechanismSummary: z.string().optional().default(""),
+        causalChains: z.array(z.array(z.object({
+          step: z.number(),
+          structure: z.string(),
+          finding: z.string(),
+          mechanism: z.string().optional(),
+          category: z.string().optional(),
+          severity: z.string().optional(),
+        }))).optional().default([]),
+        compensationCards: z.array(z.object({
+          title: z.string(),
+          description: z.string().optional(),
+          severity: z.string().optional(),
+          primaryRegion: z.string().optional(),
+          compensatingRegion: z.string().optional(),
+        })).optional().default([]),
+        loadRedistribution: z.array(z.object({
+          joint: z.string(),
+          change: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+        slingData: z.object({
+          systemSummary: z.string().optional(),
+          overallForceTransferScore: z.number().optional(),
+          slings: z.array(z.object({
+            label: z.string(),
+            status: z.string(),
+            activationScore: z.number(),
+            forceTransferQuality: z.string(),
+            weakLinks: z.array(z.object({
+              muscle: z.string(),
+              activationPct: z.number(),
+              reason: z.string(),
+            })).optional().default([]),
+            forceReroutes: z.array(z.object({
+              fromMuscle: z.string(),
+              toMuscle: z.string(),
+              reroutePct: z.number(),
+              clinical: z.string(),
+            })).optional().default([]),
+            treatmentTargets: z.array(z.object({
+              muscle: z.string(),
+              intervention: z.string(),
+              rationale: z.string(),
+            })).optional().default([]),
+            narrative: z.string().optional(),
+          })).optional().default([]),
+        }).optional(),
+        painMarkers: z.array(z.object({
+          label: z.string(),
+          severity: z.number().optional(),
+          type: z.string().optional(),
+        })).optional().default([]),
+        topContributors: z.array(z.string()).optional().default([]),
+        kineticChainDysfunctions: z.array(z.object({
+          chain: z.string().optional(),
+          dysfunction: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+      });
+
+      const parsed = customManualTherapyInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const causalChainText = data.causalChains.length > 0
+        ? data.causalChains.map((chain, i) =>
+            `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
+          ).join('\n')
+        : 'None identified';
+
+      const compensationText = data.compensationCards.length > 0
+        ? data.compensationCards.map(c =>
+            `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
+          ).join('\n')
+        : 'None identified';
+
+      const loadText = data.loadRedistribution.length > 0
+        ? data.loadRedistribution.map(l =>
+            `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const slingText = data.slingData?.slings && data.slingData.slings.length > 0
+        ? data.slingData.slings.map(s => {
+            const weakLinkStr = s.weakLinks.length > 0
+              ? ` | Weak links: ${s.weakLinks.map(w => `${w.muscle} (${w.activationPct}%)`).join(', ')}`
+              : '';
+            const rerouteStr = s.forceReroutes.length > 0
+              ? ` | Force reroutes: ${s.forceReroutes.map(r => `${r.fromMuscle}→${r.toMuscle} (${r.reroutePct}%)`).join(', ')}`
+              : '';
+            const targetStr = s.treatmentTargets.length > 0
+              ? ` | Targets: ${s.treatmentTargets.map(t => `${t.intervention} ${t.muscle}`).join(', ')}`
+              : '';
+            return `- ${s.label}: status=${s.status}, activation=${s.activationScore}%, forceTransfer=${s.forceTransferQuality}${weakLinkStr}${rerouteStr}${targetStr}\n  Narrative: ${s.narrative || 'N/A'}`;
+          }).join('\n')
+        : 'No sling data';
+
+      const painText = data.painMarkers.length > 0
+        ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
+        : 'None';
+
+      const contributorsText = data.topContributors.length > 0
+        ? data.topContributors.join(', ')
+        : 'None identified';
+
+      const kineticText = data.kineticChainDysfunctions.length > 0
+        ? data.kineticChainDysfunctions.map(k =>
+            `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const focusInstruction = data.targetFocus
+        ? `\n\nUSER-SPECIFIED TARGET FOCUS: "${data.targetFocus}"\nDesign manual therapy techniques that SPECIFICALLY address this target. If it names a fascial system, design techniques that work through ALL tissue layers along that line. If it names a joint or neural structure, design techniques that specifically mobilize that structure with appropriate grading and force application.`
+        : '';
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const systemPrompt = `You are a manual therapy architect — NOT a technique recommender. Your job is to DESIGN NOVEL HANDS-ON INTERVENTIONS from biomechanical first principles based on the patient's specific dysfunction pattern.
+
+DO NOT simply name well-known techniques. Instead, ENGINEER custom manual therapy interventions by reasoning through:
+1. Which TISSUE LAYERS need to be addressed and in what ORDER (superficial fascia → deep fascia → periosteum → joint capsule)
+2. What FORCE APPLICATION VECTORS are needed (direction, depth, rhythm, grade)
+3. What HAND CONTACT and POSITIONING optimally accesses the target tissue
+4. How the technique RESTORES TISSUE MOBILITY through a dysfunctional fascial continuity or joint complex
+5. What the clinician should FEEL at each phase (barrier quality, fascial creep, tissue release, end-feel changes)
+
+MANUAL THERAPY DESIGN PRINCIPLES:
+- For fascial restrictions: design techniques that work through connected fascial lines (superficial back line, lateral line, spiral line, deep front line) — specify the exact tissue layer and the direction of fascial pull
+- For joint restrictions: design mobilization techniques specifying the exact grade (I-IV), direction (PA, AP, lateral, medial, cephalad, caudad), oscillation rhythm, and barrier engagement strategy
+- For neural tension: design neurodynamic techniques with specific slider vs tensioner parameters, specifying which neural structure and the exact limb positioning sequence
+- For myofascial trigger points: design techniques with specific compression depth, hold duration, and tissue response cues (local twitch response, referred pain pattern, release sensation)
+- For visceral restrictions: design techniques considering organ mobility and motility
+- Consider the fascial continuity — techniques should address interconnected tissue planes
+- Specify EXACT clinician hand positioning (which hand, which contact surface — pisiform, thenar eminence, fingertips, knuckles), body mechanics, and force transmission
+
+For each custom technique, provide:
+- A descriptive biomechanical name (not just a standard technique name)
+- The target system (fascial line, joint complex, neural structure, myofascial unit)
+- Clinical target (the specific dysfunction being addressed)
+- Exact patient positioning with joint angles and support surfaces
+- Step-by-step hand placement instructions for the clinician
+- Force application sequence: ordered steps with direction, depth, rhythm, grade, and tissue response cues
+- What the clinician should feel at each phase (tissue response cues)
+- Why THIS specific technique addresses THIS specific dysfunction (biomechanical rationale)
+- Dosage parameters (duration, repetitions, sets, frequency)
+- Safety cues and contraindications
+- 3-stage progression (e.g., superficial → deep, grade II → grade IV, passive → active-assisted)
+- Self-treatment adaptation the patient can do at home
+
+RESPONSE FORMAT — return valid JSON:
+{
+  "customTechniques": [
+    {
+      "name": "Descriptive biomechanical technique name",
+      "targetSystem": "Which fascial line/joint complex/neural structure this targets",
+      "clinicalTarget": "The specific dysfunction this addresses",
+      "patientPositioning": "Exact body orientation, support surfaces, joint angles, pillow placement",
+      "handPlacementSteps": ["Step 1: Place dominant hand...", "Step 2: Stabilizing hand..."],
+      "forceApplicationSequence": [
+        {
+          "order": 1,
+          "action": "Description of the manual action",
+          "direction": "e.g., posterior-anterior with slight cephalad angle",
+          "depth": "e.g., superficial fascia layer, approximately 1-2cm",
+          "rhythm": "e.g., slow sustained, 2-3 second oscillations",
+          "grade": "e.g., Grade III-, approaching tissue barrier",
+          "tissueResponseCue": "What the clinician should feel — e.g., initial tissue resistance, fascial barrier engagement"
+        }
+      ],
+      "tissueResponseCues": ["Phase 1: Feel for...", "Phase 2: As tissue releases...", "Phase 3: End-feel should change to..."],
+      "biomechanicalRationale": "Detailed explanation of WHY this technique addresses the specific dysfunction — reference tissue layers, fascial lines, arthrokinematics, neurodynamics",
+      "dosage": { "duration": "30-60 seconds per application", "repetitions": "3-5 repetitions", "sets": "2-3 sets", "frequency": "2-3x/week" },
+      "safetyCues": ["safety cue 1", "safety cue 2"],
+      "contraindications": "When to avoid or modify",
+      "progressionStages": [
+        { "stage": 1, "name": "Superficial/Gentle", "description": "How to start — superficial tissue layers, lower grades, gentle rhythm" },
+        { "stage": 2, "name": "Intermediate/Deeper", "description": "Progress to deeper tissue layers, higher grades, sustained holds" },
+        { "stage": 3, "name": "Integration/Active", "description": "Combine with active patient movement, functional integration" }
+      ],
+      "selfTreatmentAdaptation": "What the patient can replicate at home — foam roller, lacrosse ball, towel techniques, self-mobilization"
+    }
+  ],
+  "designRationale": "Overall biomechanical reasoning for why these specific techniques were designed and how they work together as a treatment program",
+  "safetyNotes": "Global safety considerations for this manual therapy program"
+}
+
+Design 3-5 custom manual therapy techniques that work together as a cohesive treatment program. Each technique should target a DIFFERENT aspect of the dysfunction pattern.${focusInstruction}`;
+
+      const userPrompt = `CLINICAL ASSESSMENT DATA:
+
+OVERALL MECHANISM SUMMARY:
+${data.mechanismSummary || 'Not available'}
+
+CAUSAL CHAINS (root cause → symptom):
+${causalChainText}
+
+TOP CONTRIBUTORS:
+${contributorsText}
+
+COMPENSATION PATTERNS:
+${compensationText}
+
+LOAD REDISTRIBUTION:
+${loadText}
+
+KINETIC CHAIN DYSFUNCTIONS:
+${kineticText}
+
+SLING SYSTEM ANALYSIS:
+Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/A'}%
+System summary: ${data.slingData?.systemSummary || 'Not available'}
+${slingText}
+
+PAIN MARKERS:
+${painText}
+
+Based on this clinical data, DESIGN novel manual therapy techniques from first principles. DO NOT recommend standard named techniques — ENGINEER custom hands-on interventions that specifically address the tissue restrictions, joint dysfunctions, fascial continuity disruptions, and neural tension patterns identified above. Reason through tissue layers, force application vectors, hand contact points, and expected tissue responses.`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 6000,
+        temperature: 0.5,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const customManualTherapyResponseSchema = z.object({
+        customTechniques: z.array(z.object({
+          name: z.string(),
+          targetSystem: z.string(),
+          clinicalTarget: z.string(),
+          patientPositioning: z.string(),
+          handPlacementSteps: z.array(z.string()),
+          forceApplicationSequence: z.array(z.object({
+            order: z.number(),
+            action: z.string(),
+            direction: z.string(),
+            depth: z.string(),
+            rhythm: z.string(),
+            grade: z.string(),
+            tissueResponseCue: z.string(),
+          })),
+          tissueResponseCues: z.array(z.string()),
+          biomechanicalRationale: z.string(),
+          dosage: z.object({
+            duration: z.string().default('30-60 seconds'),
+            repetitions: z.string().default('3-5'),
+            sets: z.string().default('2-3'),
+            frequency: z.string().default('2-3x/week'),
+          }),
+          safetyCues: z.array(z.string()),
+          contraindications: z.string().default('None'),
+          progressionStages: z.array(z.object({
+            stage: z.number(),
+            name: z.string(),
+            description: z.string(),
+          })),
+          selfTreatmentAdaptation: z.string().default(''),
+        })),
+        designRationale: z.string().default(''),
+        safetyNotes: z.string().default(''),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = customManualTherapyResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Custom manual therapy design response validation failed:", validated.error.format());
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          validationErrors: validated.error.format(),
+        });
+      }
+      res.json(validated.data);
+    } catch (error: unknown) {
+      console.error("Custom manual therapy design error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to design custom manual therapy techniques", details: message });
+    }
+  });
+
   app.post("/api/electrophysical-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const electroInputSchema = z.object({

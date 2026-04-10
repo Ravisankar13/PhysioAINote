@@ -7677,7 +7677,31 @@ RESPONSE FORMAT — return valid JSON:
 
 Design 3-5 custom manual therapy techniques that work together as a cohesive treatment program. Each technique should target a DIFFERENT aspect of the dysfunction pattern.${focusInstruction}`;
 
+      const tissueSection = hasTissueData
+        ? `
+═══ SECTION 1: TISSUE-LAYER RESTRICTIONS (PRIORITY — address these FIRST) ═══
+
+SCAR TISSUE:
+${scarText}
+
+ADHESION BANDS:
+${adhesionText}
+
+MUSCLE PATHOLOGIES:
+${pathologyText}
+
+⚠️ These tissue restrictions must be addressed BEFORE biomechanical corrections. Scars, adhesions, and pathological tissue changes block fascial gliding, restrict ROM, and are often the upstream cause of the compensations and sling dysfunctions listed below.
+`
+        : '';
+
       const userPrompt = `CLINICAL ASSESSMENT DATA:
+${tissueSection}
+═══ SECTION ${hasTissueData ? '2' : '1'}: PAIN & SYMPTOM MARKERS ═══
+
+PAIN MARKERS:
+${painText}
+
+═══ SECTION ${hasTissueData ? '3' : '2'}: CAUSAL CHAINS & CONTRIBUTORS ═══
 
 OVERALL MECHANISM SUMMARY:
 ${data.mechanismSummary || 'Not available'}
@@ -7691,6 +7715,8 @@ ${contributorsText}
 COMPENSATION PATTERNS:
 ${compensationText}
 
+═══ SECTION ${hasTissueData ? '4' : '3'}: BIOMECHANICAL CONTEXT ═══
+
 LOAD REDISTRIBUTION:
 ${loadText}
 
@@ -7702,10 +7728,7 @@ Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/
 System summary: ${data.slingData?.systemSummary || 'Not available'}
 ${slingText}
 
-PAIN MARKERS:
-${painText}
-
-Based on this clinical data, DESIGN novel manual therapy techniques from first principles. DO NOT recommend standard named techniques — ENGINEER custom hands-on interventions that specifically address the tissue restrictions, joint dysfunctions, fascial continuity disruptions, and neural tension patterns identified above. Reason through tissue layers, force application vectors, hand contact points, and expected tissue responses.`;
+Based on this clinical data, DESIGN novel manual therapy techniques from first principles.${hasTissueData ? ' START with techniques that address the tissue-layer restrictions (scars, adhesions, pathologies) — these are the foundation. THEN address the biomechanical and sling dysfunctions.' : ''} DO NOT recommend standard named techniques — ENGINEER custom hands-on interventions that specifically address the tissue restrictions, joint dysfunctions, fascial continuity disruptions, and neural tension patterns identified above. Reason through tissue layers, force application vectors, hand contact points, and expected tissue responses.`;
 
       const response = await aiClient.chat.completions.create({
         model: "gpt-4o",

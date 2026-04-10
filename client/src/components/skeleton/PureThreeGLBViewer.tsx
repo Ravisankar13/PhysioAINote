@@ -6447,6 +6447,14 @@ export default function PureThreeGLBViewer({
               pelvisBone.position.z -= postZError / mScale;
             }
             pelvisBone.updateMatrixWorld(true);
+            
+            if (footGroundDebugRef.current % 60 === 0 && dropFraction > 0.01) {
+              leftAnkleBone.getWorldPosition(postLeftPos);
+              rightAnkleBone.getWorldPosition(postRightPos);
+              const finalYErr = Math.min(postLeftPos.y, postRightPos.y) - targetLowestY;
+              console.log(`[SquatIK] drop=${(dropFraction*100).toFixed(0)}% pelvisLocalY=${pelvisBone.position.y.toFixed(1)} ankleYErr=${finalYErr.toFixed(4)} scale=${mScale.toFixed(4)}`);
+            }
+            footGroundDebugRef.current++;
           }
         }
       } else {

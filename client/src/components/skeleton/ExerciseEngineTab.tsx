@@ -202,7 +202,7 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
     setIllustrationLoading(true);
     setIllustrationError(null);
     try {
-      const res = await apiRequest('POST', '/api/exercise-engine/generate-illustration', {
+      const res = await apiRequest('/api/exercise-engine/generate-illustration', 'POST', {
         exerciseName: exercise.name,
         targetSystem: exercise.targetSystem,
         startingPosition: exercise.startingPosition,
@@ -225,6 +225,7 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
       }
     } catch (err) {
       setIllustrationError(err instanceof Error ? err.message : 'Failed to generate');
+      setVisualMode('diagram');
     } finally {
       setIllustrationLoading(false);
     }

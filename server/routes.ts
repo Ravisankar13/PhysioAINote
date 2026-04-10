@@ -7166,8 +7166,13 @@ Based on this clinical data, DESIGN novel biomechanical exercises from first pri
         quality: "standard",
       });
 
+      const imageUrl = response.data?.[0]?.url;
+      if (!imageUrl) {
+        return res.status(502).json({ error: "AI returned no image URL" });
+      }
+
       res.json({
-        imageUrl: response.data[0].url,
+        imageUrl,
         exerciseName: data.exerciseName,
       });
     } catch (error: unknown) {

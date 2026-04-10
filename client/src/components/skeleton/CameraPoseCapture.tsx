@@ -8,10 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Camera, CameraOff, RefreshCw, AlertCircle, User } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, Posesmoother, Skeleton3DPose } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, Posesmoother, SmoothedPoseOutput } from '@/utils/mediapipeTo3D';
 
 interface CameraPoseCaptureProps {
-  onPoseUpdate?: (pose: Skeleton3DPose) => void;
+  onPoseUpdate?: (pose: SmoothedPoseOutput) => void;
   onRawLandmarks?: (landmarks: any[]) => void;
   className?: string;
   isActive?: boolean;

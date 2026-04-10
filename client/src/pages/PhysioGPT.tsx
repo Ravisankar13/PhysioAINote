@@ -91,7 +91,8 @@ import { type FocusedCameraResult } from "@/components/skeleton/FocusedCameraCap
 import { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
-import type { Skeleton3DPose, PartialSkeleton3DPose, PosturalMetrics, CameraViewType } from "@/utils/mediapipeTo3D";
+import type { ExtendedPoseInput } from "@/utils/poseToControllerMap";
+import type { Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, CameraViewType, SpineSegmentation, BodyProportions } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import type { ClinicalReasoningData, BiomechanicalLink, VisualizationRequest, ClinicalHypothesis } from "@/components/skeleton/ClinicalReasoningPanel";
 import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypothesis } from "@/components/skeleton/StructuredReasoningTab";
@@ -348,7 +349,7 @@ interface ModelConfig {
   limbScales: { upperArm: number; forearm: number; thigh: number; shin: number; overall: number };
   spine: { cervicalLordosis: number; thoracicKyphosis: number; lumbarLordosis: number; scoliosis: number; forwardHead: number; lateralShift: number; cervicalRotation: number; cervicalLateralFlexion: number; thoracicRotation: number; lumbarRotation: number; flexion: number; lateralFlexion: number; lumbarScoliosis: number; thoracicScoliosis: number; cervicalScoliosis: number };
   neck: { flexion: number; extension: number; rotation: number; lateralFlexion: number; forwardHead: number };
-  pelvis: { tilt: number; obliquity: number; rotation: number; drop: number; leftInnominateRotation: number; rightInnominateRotation: number };
+  pelvis: { tilt: number; obliquity: number; rotation: number; drop: number; xShift: number; yShift: number; zShift: number; leftInnominateRotation: number; rightInnominateRotation: number };
   sacrum: { nutation: number; counternutation: number; torsion: number; lateralFlexion: number };
   leftHip: { flexion: number; extension: number; abduction: number; adduction: number; internalRotation: number; externalRotation: number; anteversion: number; neckShaftAngle: number };
   rightHip: { flexion: number; extension: number; abduction: number; adduction: number; internalRotation: number; externalRotation: number; anteversion: number; neckShaftAngle: number };
@@ -370,7 +371,7 @@ const DEFAULT_MODEL_CONFIG: ModelConfig = {
   limbScales: { upperArm: 0, forearm: 0, thigh: 0, shin: 0, overall: 1 },
   spine: { cervicalLordosis: 0, thoracicKyphosis: 0, lumbarLordosis: 0, scoliosis: 0, forwardHead: 0, lateralShift: 0, cervicalRotation: 0, cervicalLateralFlexion: 0, thoracicRotation: 0, lumbarRotation: 0, flexion: 0, lateralFlexion: 0, lumbarScoliosis: 0, thoracicScoliosis: 0, cervicalScoliosis: 0 },
   neck: { flexion: 0, extension: 0, rotation: 0, lateralFlexion: 0, forwardHead: 0 },
-  pelvis: { tilt: 0, obliquity: 0, rotation: 0, drop: 0, leftInnominateRotation: 0, rightInnominateRotation: 0 },
+  pelvis: { tilt: 0, obliquity: 0, rotation: 0, drop: 0, xShift: 0, yShift: 0, zShift: 0, leftInnominateRotation: 0, rightInnominateRotation: 0 },
   sacrum: { nutation: 0, counternutation: 0, torsion: 0, lateralFlexion: 0 },
   leftHip: { flexion: 0, extension: 0, abduction: 0, adduction: 0, internalRotation: 0, externalRotation: 0, anteversion: 0, neckShaftAngle: 0 },
   rightHip: { flexion: 0, extension: 0, abduction: 0, adduction: 0, internalRotation: 0, externalRotation: 0, anteversion: 0, neckShaftAngle: 0 },
@@ -581,6 +582,7 @@ export default function PhysioGPT() {
   const [poseMode, setPoseMode] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
   const [cameraPoseActive, setCameraPoseActive] = useState(false);
+  const [poseTrackingQuality, setPoseTrackingQuality] = useState<{ overall: number; estimatedJoints: string[] }>({ overall: 1, estimatedJoints: [] });
   const [posturalMetrics, setPosturalMetrics] = useState<PosturalMetrics | null>(null);
   const [focusedCameraResult, setFocusedCameraResult] = useState<FocusedCameraResult | null>(null);
   const [focusedRegion, setFocusedRegion] = useState<FocusedRegion>(FOCUSED_REGIONS[0]);
@@ -2386,11 +2388,30 @@ ${ddxList}`;
     }));
   }, [cameraPoseActive]);
 
-  const handleCameraPoseUpdate = useCallback((pose: Skeleton3DPose) => {
+  const handleCameraPoseUpdate = useCallback((pose: SmoothedPoseOutput) => {
     if (!cameraPoseActive) return;
-    const controllerVals = poseToControllerValues(pose);
+    const extendedPose: ExtendedPoseInput = {
+      ...pose,
+      pelvisTilt: pose.pelvisTilt,
+      pelvisObliquity: pose.pelvisObliquity,
+      pelvisRotation: pose.pelvisRotation,
+      scapulaData: pose.scapulaData,
+      jointConfidence: pose.jointConfidence,
+      globalTranslation: pose.globalTranslation,
+    };
+    const controllerVals = poseToControllerValues(extendedPose);
     const smoothed = controllerSmootherRef.current.smooth(controllerVals);
     const rad2deg = (r: number) => Math.round((r * 180) / Math.PI);
+
+    if (pose.jointConfidence) {
+      const conf = pose.jointConfidence;
+      const LOW_CONF_THRESHOLD = 0.4;
+      const jointNames: (keyof typeof conf)[] = ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle', 'leftWrist', 'rightWrist', 'spine', 'neck'];
+      const confidenceValues = jointNames.map(k => conf[k] ?? 0.7);
+      const avgConfidence = confidenceValues.reduce((a, b) => a + b, 0) / confidenceValues.length;
+      const estimated = jointNames.filter(k => (conf[k] ?? 0.7) < LOW_CONF_THRESHOLD);
+      setPoseTrackingQuality({ overall: avgConfidence, estimatedJoints: estimated as string[] });
+    }
 
     setModelConfig(prev => ({
       ...prev,
@@ -2402,7 +2423,45 @@ ${ddxList}`;
       rightHip: { ...prev.rightHip, flexion: rad2deg(smoothed.rightHip.flexion), abduction: rad2deg(smoothed.rightHip.abduction) },
       leftKnee: { ...prev.leftKnee, flexion: rad2deg(smoothed.leftKnee.flexion) },
       rightKnee: { ...prev.rightKnee, flexion: rad2deg(smoothed.rightKnee.flexion) },
+      leftAnkle: { ...prev.leftAnkle, dorsiflexion: rad2deg(smoothed.leftAnkle.dorsiflexion), inversion: rad2deg(smoothed.leftAnkle.inversion) },
+      rightAnkle: { ...prev.rightAnkle, dorsiflexion: rad2deg(smoothed.rightAnkle.dorsiflexion), inversion: rad2deg(smoothed.rightAnkle.inversion) },
+      leftWrist: { ...prev.leftWrist, flexion: rad2deg(smoothed.leftWrist.flexion), deviation: rad2deg(smoothed.leftWrist.deviation) },
+      rightWrist: { ...prev.rightWrist, flexion: rad2deg(smoothed.rightWrist.flexion), deviation: rad2deg(smoothed.rightWrist.deviation) },
+      pelvis: {
+        ...prev.pelvis,
+        tilt: rad2deg(smoothed.pelvis.tilt),
+        obliquity: rad2deg(smoothed.pelvis.obliquity),
+        rotation: rad2deg(smoothed.pelvis.rotation),
+        zShift: pose.globalTranslation ? Math.round(pose.globalTranslation.lateralShift * 100) : (prev.pelvis?.zShift ?? 0),
+        yShift: pose.globalTranslation ? Math.round(pose.globalTranslation.forwardShift * 100) : (prev.pelvis?.yShift ?? 0),
+        xShift: pose.globalTranslation ? Math.round(pose.globalTranslation.verticalShift * 100) : (prev.pelvis?.xShift ?? 0),
+      },
+      spine: {
+        ...prev.spine,
+        flexion: rad2deg(smoothed.spine.flexion),
+        lateralFlexion: rad2deg(smoothed.spine.lateralFlexion),
+        thoracicKyphosis: rad2deg(smoothed.spine.kyphosis),
+        scoliosis: rad2deg(smoothed.spine.scoliosis),
+        forwardHead: rad2deg(smoothed.spine.forwardHead),
+        lateralShift: rad2deg(smoothed.spine.lateralShift),
+        cervicalRotation: rad2deg(smoothed.spine.cervicalRotation),
+        cervicalLateralFlexion: rad2deg(smoothed.spine.cervicalLateralFlexion),
+        thoracicRotation: rad2deg(smoothed.spine.thoracicRotation),
+        lumbarRotation: rad2deg(smoothed.spine.lumbarRotation),
+        lumbarScoliosis: rad2deg(smoothed.spine.lumbarLateralFlexion),
+        thoracicScoliosis: rad2deg(smoothed.spine.thoracicLateralFlexion),
+        cervicalScoliosis: rad2deg(smoothed.spine.cervicalLateralFlexion),
+      },
+      limbScales: pose.bodyProportions ? {
+        upperArm: Math.round((pose.bodyProportions.upperArmRatio - 0.55) * 100),
+        forearm: Math.round((pose.bodyProportions.forearmRatio - 0.45) * 100),
+        thigh: Math.round((pose.bodyProportions.thighRatio - 0.75) * 100),
+        shin: Math.round((pose.bodyProportions.shinRatio - 0.7) * 100),
+        overall: prev.limbScales.overall,
+      } : prev.limbScales,
       neck: { ...prev.neck, flexion: rad2deg(smoothed.neck.flexion), rotation: rad2deg(smoothed.neck.rotation), lateralFlexion: rad2deg(smoothed.neck.lateralFlexion) },
+      leftScapula: { ...prev.leftScapula, elevation: rad2deg(smoothed.scapula.leftElevation), protraction: rad2deg(smoothed.scapula.leftProtraction) },
+      rightScapula: { ...prev.rightScapula, elevation: rad2deg(smoothed.scapula.rightElevation), protraction: rad2deg(smoothed.scapula.rightProtraction) },
     }));
   }, [cameraPoseActive]);
 
@@ -2436,11 +2495,35 @@ ${ddxList}`;
       if (partialPose.rightKnee) {
         next.rightKnee = { ...prev.rightKnee, flexion: rad2deg(partialPose.rightKnee.x) };
       }
+      if (partialPose.leftAnkle) {
+        next.leftAnkle = { ...prev.leftAnkle, dorsiflexion: rad2deg(partialPose.leftAnkle.x), inversion: rad2deg(partialPose.leftAnkle.z) };
+      }
+      if (partialPose.rightAnkle) {
+        next.rightAnkle = { ...prev.rightAnkle, dorsiflexion: rad2deg(partialPose.rightAnkle.x), inversion: rad2deg(partialPose.rightAnkle.z) };
+      }
+      if (partialPose.leftWrist) {
+        next.leftWrist = { ...prev.leftWrist, flexion: rad2deg(partialPose.leftWrist.x), deviation: rad2deg(partialPose.leftWrist.z) };
+      }
+      if (partialPose.rightWrist) {
+        next.rightWrist = { ...prev.rightWrist, flexion: rad2deg(partialPose.rightWrist.x), deviation: rad2deg(partialPose.rightWrist.z) };
+      }
       if (partialPose.spine) {
-        next.spine = { ...prev.spine, thoracicKyphosis: rad2deg(partialPose.spine.x), scoliosis: rad2deg(partialPose.spine.z) };
+        next.spine = { ...prev.spine, flexion: rad2deg(partialPose.spine.x), lateralFlexion: rad2deg(partialPose.spine.z), thoracicKyphosis: rad2deg(partialPose.spine.x * 0.6), scoliosis: rad2deg(partialPose.spine.z * 1.2) };
       }
       if (partialPose.neck) {
         next.neck = { ...prev.neck, flexion: rad2deg(partialPose.neck.x), rotation: rad2deg(partialPose.neck.y), lateralFlexion: rad2deg(partialPose.neck.z) };
+      }
+      if (partialPose.pelvisTilt !== undefined || partialPose.pelvisObliquity !== undefined || partialPose.pelvisRotation !== undefined) {
+        next.pelvis = {
+          ...prev.pelvis,
+          tilt: partialPose.pelvisTilt !== undefined ? rad2deg(partialPose.pelvisTilt) : (prev.pelvis?.tilt ?? 0),
+          obliquity: partialPose.pelvisObliquity !== undefined ? rad2deg(partialPose.pelvisObliquity) : (prev.pelvis?.obliquity ?? 0),
+          rotation: partialPose.pelvisRotation !== undefined ? rad2deg(partialPose.pelvisRotation) : (prev.pelvis?.rotation ?? 0),
+        };
+      }
+      if (partialPose.scapulaData) {
+        next.leftScapula = { ...prev.leftScapula, elevation: rad2deg(partialPose.scapulaData.leftElevation), protraction: rad2deg(partialPose.scapulaData.leftProtraction) };
+        next.rightScapula = { ...prev.rightScapula, elevation: rad2deg(partialPose.scapulaData.rightElevation), protraction: rad2deg(partialPose.scapulaData.rightProtraction) };
       }
       return next;
     });
@@ -4759,6 +4842,27 @@ ${ddxList}`;
                           'Turn sideways for kyphosis/lordosis/pelvic tilt' :
                           'Face camera for scoliosis/shoulder level'}
                       </div>
+                    </div>
+                  </div>
+                )}
+                {cameraPoseActive && (
+                  <div className="absolute bottom-12 left-2 right-2 z-20 pointer-events-none">
+                    <div className="bg-black/70 backdrop-blur-sm rounded-md px-2.5 py-1.5 flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        poseTrackingQuality.overall >= 0.7 ? 'bg-green-400 animate-pulse' :
+                        poseTrackingQuality.overall >= 0.4 ? 'bg-yellow-400 animate-pulse' :
+                        'bg-red-400 animate-pulse'
+                      }`} />
+                      <span className="text-[10px] text-gray-300 font-medium">
+                        {poseTrackingQuality.overall >= 0.7 ? 'Tracked' :
+                         poseTrackingQuality.overall >= 0.4 ? 'Partial' : 'Estimated'}
+                      </span>
+                      <span className="text-[10px] text-gray-500">{Math.round(poseTrackingQuality.overall * 100)}%</span>
+                      {poseTrackingQuality.estimatedJoints.length > 0 && (
+                        <span className="text-[9px] text-yellow-400/80 ml-1">
+                          Est: {poseTrackingQuality.estimatedJoints.map(j => j.replace('left', 'L ').replace('right', 'R ')).join(', ')}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}

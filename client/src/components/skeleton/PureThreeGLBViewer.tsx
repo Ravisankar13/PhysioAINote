@@ -60,7 +60,7 @@ interface ModelConfig {
   rightElbow?: JointConfig;
   leftWrist?: JointConfig;
   rightWrist?: JointConfig;
-  pelvis?: { tilt?: number; obliquity?: number; rotation?: number; drop?: number; zShift?: number; leftInnominateRotation?: number; rightInnominateRotation?: number };
+  pelvis?: { tilt?: number; obliquity?: number; rotation?: number; drop?: number; zShift?: number; xShift?: number; yShift?: number; leftInnominateRotation?: number; rightInnominateRotation?: number };
   sacrum?: { nutation?: number; counternutation?: number; torsion?: number; lateralFlexion?: number };
   spine?: { cervicalLordosis?: number; thoracicKyphosis?: number; lumbarLordosis?: number; scoliosis?: number; forwardHead?: number; lateralShift?: number; cervicalRotation?: number; cervicalLateralFlexion?: number; thoracicRotation?: number; lumbarRotation?: number; flexion?: number; lateralFlexion?: number; lumbarScoliosis?: number; thoracicScoliosis?: number; cervicalScoliosis?: number };
   neck?: { flexion?: number; extension?: number; rotation?: number; lateralFlexion?: number; forwardHead?: number };
@@ -1887,6 +1887,8 @@ const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' |
   ],
   'pelvis.drop': [{ boneName: 'Root_M', axis: 'y', scale: -0.01, isPosition: true }],
   'pelvis.zShift': [{ boneName: 'Root_M', axis: 'z', scale: 0.01, isPosition: true }],
+  'pelvis.xShift': [{ boneName: 'Root_M', axis: 'x', scale: 0.01, isPosition: true }],
+  'pelvis.yShift': [{ boneName: 'Root_M', axis: 'y', scale: 0.01, isPosition: true }],
   
   // === SACRUM / SI JOINT ===
   // Verified axes (midline bones): LONG=x(Up), FLEX=z(Right), ABD=y(Fwd), ROT=x

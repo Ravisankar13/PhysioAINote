@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, PartialSkeleton3DPose, PosturalMetrics } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics } from '@/utils/mediapipeTo3D';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { type FocusedRegion, FOCUSED_REGIONS } from '@/lib/focusedRegions';
@@ -41,7 +41,7 @@ export interface FocusedCameraResult {
 }
 
 interface FocusedCameraCaptureProps {
-  onPoseUpdate?: (pose: Skeleton3DPose) => void;
+  onPoseUpdate?: (pose: SmoothedPoseOutput) => void;
   onPartialPoseUpdate?: (pose: PartialSkeleton3DPose) => void;
   onRawLandmarks?: (landmarks: any[]) => void;
   onPosturalMetrics?: (metrics: PosturalMetrics) => void;

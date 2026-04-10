@@ -63,6 +63,44 @@ export interface Skeleton3DPose {
   rightAnkle: Joint3DRotation;
 }
 
+export interface GlobalTranslation {
+  lateralShift: number;
+  forwardShift: number;
+  verticalShift: number;
+}
+
+export interface SpineSegmentation {
+  cervicalFlexion: number;
+  cervicalRotation: number;
+  cervicalLateralFlexion: number;
+  thoracicFlexion: number;
+  thoracicRotation: number;
+  thoracicLateralFlexion: number;
+  lumbarFlexion: number;
+  lumbarRotation: number;
+  lumbarLateralFlexion: number;
+}
+
+export interface BodyProportions {
+  shoulderWidth: number;
+  torsoLength: number;
+  upperArmRatio: number;
+  forearmRatio: number;
+  thighRatio: number;
+  shinRatio: number;
+}
+
+export interface SmoothedPoseOutput extends Skeleton3DPose {
+  pelvisTilt: number;
+  pelvisObliquity: number;
+  pelvisRotation: number;
+  scapulaData?: ScapulaEstimate;
+  jointConfidence?: JointConfidenceMap;
+  globalTranslation?: GlobalTranslation;
+  spineSegments?: SpineSegmentation;
+  bodyProportions?: BodyProportions;
+}
+
 // MediaPipe landmark indices
 const LANDMARKS = {
   NOSE: 0,
@@ -99,6 +137,10 @@ const LANDMARKS = {
   LEFT_FOOT_INDEX: 31,
   RIGHT_FOOT_INDEX: 32
 };
+
+function clampValue(val: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, val));
+}
 
 interface Vec3 {
   x: number;
@@ -228,6 +270,19 @@ function getLandmarkConfidence(landmarks: NormalizedLandmark[], indices: number[
   return count > 0 ? totalVis / count : 0;
 }
 
+function getDepthConfidence(landmarks: NormalizedLandmark[], indices: number[]): number {
+  let minVis = 1.0;
+  for (const i of indices) {
+    const vis = landmarks[i]?.visibility ?? 0.5;
+    minVis = Math.min(minVis, vis);
+  }
+  return Math.max(0.15, Math.min(1.0, minVis / 0.65));
+}
+
+function depthWeightedZ(z: number, depthConf: number): number {
+  return z * depthConf;
+}
+
 /**
  * Convert MediaPipe landmarks to 3D skeleton pose
  * All rotations are in radians
@@ -274,6 +329,8 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   };
 
   // === SPINE CALCULATIONS ===
+  const spineDepthConf = getDepthConfidence(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.RIGHT_SHOULDER, LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP]);
+
   const shoulderTilt = Math.atan2(
     -(rightShoulder.y - leftShoulder.y),
     rightShoulder.x - leftShoulder.x
@@ -285,9 +342,66 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const spineLateral = shoulderTilt - hipTilt;
   
   const spineForward = Math.atan2(
-    -(shoulderMid.z - hipMid.z),
+    depthWeightedZ(-(shoulderMid.z - hipMid.z), spineDepthConf),
     shoulderMid.y - hipMid.y
   );
+
+  const hipRotationRaw = Math.atan2(
+    -(rightHip.z - leftHip.z),
+    Math.abs(rightHip.x - leftHip.x) + 0.001
+  );
+  const shoulderRotationRaw = Math.atan2(
+    -(rightShoulder.z - leftShoulder.z),
+    Math.abs(rightShoulder.x - leftShoulder.x) + 0.001
+  );
+  const trunkRotation = (hipRotationRaw * 0.6 + shoulderRotationRaw * 0.4) * spineDepthConf;
+
+  const pelvisTiltAngle = Math.atan2(
+    depthWeightedZ(-(hipMid.z - shoulderMid.z), spineDepthConf) * 0.5,
+    shoulderMid.y - hipMid.y
+  ) * 0.7;
+  const pelvisObliquityAngle = Math.atan2(
+    -(rightHip.y - leftHip.y),
+    Math.abs(rightHip.x - leftHip.x) + 0.001
+  ) * 0.5;
+  const pelvisRotationAngle = hipRotationRaw * spineDepthConf * 0.6;
+
+  // === SPINE SEGMENTATION (cervical / thoracic / lumbar) ===
+  const thoracicFlexion = spineForward * 0.4;
+  const thoracicRotation = shoulderRotationRaw * spineDepthConf * 0.5;
+  const thoracicLateralFlexion = spineLateral * 0.4;
+  const lumbarFlexion = spineForward * 0.6;
+  const lumbarRotation = hipRotationRaw * spineDepthConf * 0.5;
+  const lumbarLateralFlexion = spineLateral * 0.6;
+
+  // === BODY PROPORTION ESTIMATION ===
+  const landmarkDist = (a: NormalizedLandmark, b: NormalizedLandmark): number =>
+    Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
+
+  const shoulderWidth = landmarkDist(leftShoulder, rightShoulder);
+  const torsoLength = landmarkDist(
+    { x: (leftShoulder.x + rightShoulder.x) / 2, y: (leftShoulder.y + rightShoulder.y) / 2, z: (leftShoulder.z + rightShoulder.z) / 2, visibility: 1 } as NormalizedLandmark,
+    { x: (leftHip.x + rightHip.x) / 2, y: (leftHip.y + rightHip.y) / 2, z: (leftHip.z + rightHip.z) / 2, visibility: 1 } as NormalizedLandmark
+  );
+  const refLength = torsoLength || 0.3;
+
+  const leftUpperArmLen = landmarkDist(leftShoulder, landmarks[LANDMARKS.LEFT_ELBOW]);
+  const rightUpperArmLen = landmarkDist(rightShoulder, landmarks[LANDMARKS.RIGHT_ELBOW]);
+  const leftForearmLen = landmarkDist(landmarks[LANDMARKS.LEFT_ELBOW], landmarks[LANDMARKS.LEFT_WRIST]);
+  const rightForearmLen = landmarkDist(landmarks[LANDMARKS.RIGHT_ELBOW], landmarks[LANDMARKS.RIGHT_WRIST]);
+  const leftThigh = landmarkDist(leftHip, landmarks[LANDMARKS.LEFT_KNEE]);
+  const rightThigh = landmarkDist(rightHip, landmarks[LANDMARKS.RIGHT_KNEE]);
+  const leftShin = landmarkDist(landmarks[LANDMARKS.LEFT_KNEE], landmarks[LANDMARKS.LEFT_ANKLE]);
+  const rightShin = landmarkDist(landmarks[LANDMARKS.RIGHT_KNEE], landmarks[LANDMARKS.RIGHT_ANKLE]);
+
+  const bodyProportions: BodyProportions = {
+    shoulderWidth: shoulderWidth / refLength,
+    torsoLength: refLength,
+    upperArmRatio: ((leftUpperArmLen + rightUpperArmLen) / 2) / refLength,
+    forearmRatio: ((leftForearmLen + rightForearmLen) / 2) / refLength,
+    thighRatio: ((leftThigh + rightThigh) / 2) / refLength,
+    shinRatio: ((leftShin + rightShin) / 2) / refLength,
+  };
 
   // === HEAD/NECK CALCULATIONS (Enhanced) ===
   const leftEar = landmarks[LANDMARKS.LEFT_EAR];
@@ -352,6 +466,16 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     ? noseShoulderPitch * 0.4 + noseEyePitch * 0.6
     : noseEyePitch;
 
+  const cervicalFlexion = clampValue(headPitch * 0.7, -0.4, 0.4);
+  const cervicalRotation = clampValue(headYaw * 0.6, -0.5, 0.5);
+  const cervicalLateralFlexion = clampValue(headRoll * 0.6, -0.35, 0.35);
+
+  const spineSegments: SpineSegmentation = {
+    cervicalFlexion, cervicalRotation, cervicalLateralFlexion,
+    thoracicFlexion, thoracicRotation, thoracicLateralFlexion,
+    lumbarFlexion, lumbarRotation, lumbarLateralFlexion,
+  };
+
   // === TORSO COORDINATE FRAME ===
   const torsoUp = normalize({
     x: shoulderMid.x - hipMid.x,
@@ -371,6 +495,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   });
 
   // === ARM CALCULATIONS ===
+  const armDepthConf = getDepthConfidence(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.RIGHT_SHOULDER, LANDMARKS.LEFT_ELBOW, LANDMARKS.RIGHT_ELBOW]);
   const leftUpperArm = normalize(createVector(leftShoulder, leftElbow));
   const leftForearm = normalize(createVector(leftElbow, leftWrist));
   const rightUpperArm = normalize(createVector(rightShoulder, rightElbow));
@@ -538,7 +663,22 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   );
   const rightAnkleDorsiflexion = (Math.PI / 2) - rightAnkleBendAngle;
 
+  const computeAnkleInversion = (shinDir: Vec3, footDir: Vec3, isLeft: boolean): number => {
+    const shinForward = normalize({ x: -shinDir.x, y: -shinDir.y, z: -shinDir.z });
+    const footLateral = normalize({
+      x: footDir.y * shinForward.z - footDir.z * shinForward.y,
+      y: footDir.z * shinForward.x - footDir.x * shinForward.z,
+      z: footDir.x * shinForward.y - footDir.y * shinForward.x
+    });
+    const dotRight = footLateral.x * torsoRight.x + footLateral.y * torsoRight.y + footLateral.z * torsoRight.z;
+    return isLeft ? -dotRight * 0.8 : dotRight * 0.8;
+  };
+  const leftAnkleInversion = computeAnkleInversion(leftShinDir, leftFootDir, true);
+  const rightAnkleInversion = computeAnkleInversion(rightShinDir, rightFootDir, false);
+
   // === WRIST CALCULATIONS ===
+  const leftPinky = landmarks[LANDMARKS.LEFT_PINKY];
+  const rightPinky = landmarks[LANDMARKS.RIGHT_PINKY];
   const leftHandDir = normalize(createVector(leftWrist, leftIndex));
   const leftWristBendAngle = angleBetweenVectors(leftForearm, leftHandDir);
   const leftWristFlexion = Math.PI - leftWristBendAngle;
@@ -546,6 +686,20 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightHandDir = normalize(createVector(rightWrist, rightIndex));
   const rightWristBendAngle = angleBetweenVectors(rightForearm, rightHandDir);
   const rightWristFlexion = Math.PI - rightWristBendAngle;
+
+  const computeWristDeviation = (forearm: Vec3, wristLm: NormalizedLandmark, indexLm: NormalizedLandmark, pinkyLm: NormalizedLandmark, isLeft: boolean): number => {
+    const handCenterDir = normalize(createVector(wristLm, { x: (indexLm.x + pinkyLm.x) / 2, y: (indexLm.y + pinkyLm.y) / 2, z: (indexLm.z + pinkyLm.z) / 2 } as NormalizedLandmark));
+    const handLateralDir = normalize(createVector(pinkyLm, indexLm));
+    const forearmCross = normalize({
+      x: forearm.y * handLateralDir.z - forearm.z * handLateralDir.y,
+      y: forearm.z * handLateralDir.x - forearm.x * handLateralDir.z,
+      z: forearm.x * handLateralDir.y - forearm.y * handLateralDir.x
+    });
+    const deviation = dotProduct(handCenterDir, forearmCross);
+    return isLeft ? deviation * 0.7 : -deviation * 0.7;
+  };
+  const leftWristDeviation = (leftPinky && leftIndex) ? computeWristDeviation(leftForearm, leftWrist, leftIndex, leftPinky, true) : 0;
+  const rightWristDeviation = (rightPinky && rightIndex) ? computeWristDeviation(rightForearm, rightWrist, rightIndex, rightPinky, false) : 0;
 
   // Clamp helper
   const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
@@ -594,12 +748,12 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const leftAnkleJoint: Joint3DRotation | null = landmarksVisible(landmarks, [LANDMARKS.LEFT_KNEE, LANDMARKS.LEFT_ANKLE, LANDMARKS.LEFT_HEEL]) ? {
     x: clamp(leftAnkleDorsiflexion, -0.87, 0.35),
     y: 0,
-    z: 0
+    z: clamp(leftAnkleInversion, -0.52, 0.52)
   } : null;
   const rightAnkleJoint: Joint3DRotation | null = landmarksVisible(landmarks, [LANDMARKS.RIGHT_KNEE, LANDMARKS.RIGHT_ANKLE, LANDMARKS.RIGHT_HEEL]) ? {
     x: clamp(rightAnkleDorsiflexion, -0.87, 0.35),
     y: 0,
-    z: 0
+    z: clamp(rightAnkleInversion, -0.52, 0.52)
   } : null;
 
   const spineVisible = landmarksVisible(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.RIGHT_SHOULDER, LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP]);
@@ -608,11 +762,24 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const leftWristVisible = landmarksVisible(landmarks, [LANDMARKS.LEFT_ELBOW, LANDMARKS.LEFT_WRIST, LANDMARKS.LEFT_INDEX]);
   const rightWristVisible = landmarksVisible(landmarks, [LANDMARKS.RIGHT_ELBOW, LANDMARKS.RIGHT_WRIST, LANDMARKS.RIGHT_INDEX]);
 
+  const scapulaData = computeScapulaFromLandmarks(landmarks, shoulderMid, hipMid);
+
+  const hipMidNorm: Vec3 = {
+    x: (leftHip.x + rightHip.x) / 2,
+    y: -((leftHip.y + rightHip.y) / 2),
+    z: -((leftHip.z + rightHip.z) / 2)
+  };
+  const globalTranslation: GlobalTranslation = {
+    lateralShift: clamp((hipMidNorm.x - 0.0) * 2.0, -0.3, 0.3),
+    forwardShift: clamp(hipMidNorm.z * 2.0, -0.3, 0.3),
+    verticalShift: clamp((hipMidNorm.y + 0.5) * 1.5, -0.2, 0.2),
+  };
+
   if (mirrorMode) {
     return {
       spine: spineVisible ? {
         x: clamp(spineForward, -0.8, 0.8),
-        y: 0,
+        y: clamp(-trunkRotation, -0.6, 0.6),
         z: clamp(-spineLateral, -0.5, 0.5)
       } : null,
       neck: neckVisible ? {
@@ -628,17 +795,38 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
       rightHip: leftHipJoint,
       leftKnee: rightKneeJoint,
       rightKnee: leftKneeJoint,
-      leftWrist: rightWristVisible ? { x: clamp(rightWristFlexion, -1.2, 1.2), y: 0, z: 0 } : null,
-      rightWrist: leftWristVisible ? { x: clamp(leftWristFlexion, -1.2, 1.2), y: 0, z: 0 } : null,
+      leftWrist: rightWristVisible ? { x: clamp(rightWristFlexion, -1.2, 1.2), y: 0, z: clamp(rightWristDeviation, -0.52, 0.35) } : null,
+      rightWrist: leftWristVisible ? { x: clamp(leftWristFlexion, -1.2, 1.2), y: 0, z: clamp(leftWristDeviation, -0.52, 0.35) } : null,
       leftAnkle: rightAnkleJoint,
-      rightAnkle: leftAnkleJoint
+      rightAnkle: leftAnkleJoint,
+      pelvisTilt: pelvisTiltAngle,
+      pelvisObliquity: -pelvisObliquityAngle,
+      pelvisRotation: -pelvisRotationAngle,
+      scapulaData: scapulaData ? {
+        leftElevation: scapulaData.rightElevation,
+        rightElevation: scapulaData.leftElevation,
+        leftProtraction: scapulaData.rightProtraction,
+        rightProtraction: scapulaData.leftProtraction
+      } : undefined,
+      jointConfidence: buildJointConfidence(landmarks, armDepthConf),
+      globalTranslation: { ...globalTranslation, lateralShift: -globalTranslation.lateralShift },
+      spineSegments: {
+        ...spineSegments,
+        cervicalRotation: -spineSegments.cervicalRotation,
+        cervicalLateralFlexion: -spineSegments.cervicalLateralFlexion,
+        thoracicRotation: -spineSegments.thoracicRotation,
+        thoracicLateralFlexion: -spineSegments.thoracicLateralFlexion,
+        lumbarRotation: -spineSegments.lumbarRotation,
+        lumbarLateralFlexion: -spineSegments.lumbarLateralFlexion,
+      },
+      bodyProportions,
     };
   }
 
   return {
     spine: spineVisible ? {
       x: clamp(spineForward, -0.8, 0.8),
-      y: 0,
+      y: clamp(trunkRotation, -0.6, 0.6),
       z: clamp(spineLateral, -0.5, 0.5)
     } : null,
     neck: neckVisible ? {
@@ -654,15 +842,112 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     rightHip: rightHipJoint,
     leftKnee: leftKneeJoint,
     rightKnee: rightKneeJoint,
-    leftWrist: leftWristVisible ? { x: clamp(leftWristFlexion, -1.2, 1.2), y: 0, z: 0 } : null,
-    rightWrist: rightWristVisible ? { x: clamp(rightWristFlexion, -1.2, 1.2), y: 0, z: 0 } : null,
+    leftWrist: leftWristVisible ? { x: clamp(leftWristFlexion, -1.2, 1.2), y: 0, z: clamp(leftWristDeviation, -0.52, 0.35) } : null,
+    rightWrist: rightWristVisible ? { x: clamp(rightWristFlexion, -1.2, 1.2), y: 0, z: clamp(rightWristDeviation, -0.52, 0.35) } : null,
     leftAnkle: leftAnkleJoint,
-    rightAnkle: rightAnkleJoint
+    rightAnkle: rightAnkleJoint,
+    pelvisTilt: pelvisTiltAngle,
+    pelvisObliquity: pelvisObliquityAngle,
+    pelvisRotation: pelvisRotationAngle,
+    scapulaData,
+    jointConfidence: buildJointConfidence(landmarks, armDepthConf),
+    globalTranslation,
+    spineSegments,
+    bodyProportions,
+  };
+}
+
+export interface ScapulaEstimate {
+  leftElevation: number;
+  rightElevation: number;
+  leftProtraction: number;
+  rightProtraction: number;
+}
+
+export interface JointConfidenceMap {
+  leftShoulder: number;
+  rightShoulder: number;
+  leftElbow: number;
+  rightElbow: number;
+  leftHip: number;
+  rightHip: number;
+  leftKnee: number;
+  rightKnee: number;
+  leftAnkle: number;
+  rightAnkle: number;
+  leftWrist: number;
+  rightWrist: number;
+  spine: number;
+  neck: number;
+}
+
+function buildJointConfidence(landmarks: NormalizedLandmark[], armDepthConf: number = 1.0): JointConfidenceMap {
+  const depthScale = Math.max(0.3, armDepthConf);
+  return {
+    leftShoulder: getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.LEFT_ELBOW]) * depthScale,
+    rightShoulder: getLandmarkConfidence(landmarks, [LANDMARKS.RIGHT_SHOULDER, LANDMARKS.RIGHT_ELBOW]) * depthScale,
+    leftElbow: getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.LEFT_ELBOW, LANDMARKS.LEFT_WRIST]) * depthScale,
+    rightElbow: getLandmarkConfidence(landmarks, [LANDMARKS.RIGHT_SHOULDER, LANDMARKS.RIGHT_ELBOW, LANDMARKS.RIGHT_WRIST]) * depthScale,
+    leftHip: getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_HIP, LANDMARKS.LEFT_KNEE]),
+    rightHip: getLandmarkConfidence(landmarks, [LANDMARKS.RIGHT_HIP, LANDMARKS.RIGHT_KNEE]),
+    leftKnee: getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_HIP, LANDMARKS.LEFT_KNEE, LANDMARKS.LEFT_ANKLE]),
+    rightKnee: getLandmarkConfidence(landmarks, [LANDMARKS.RIGHT_HIP, LANDMARKS.RIGHT_KNEE, LANDMARKS.RIGHT_ANKLE]),
+    leftAnkle: getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_KNEE, LANDMARKS.LEFT_ANKLE, LANDMARKS.LEFT_HEEL]),
+    rightAnkle: getLandmarkConfidence(landmarks, [LANDMARKS.RIGHT_KNEE, LANDMARKS.RIGHT_ANKLE, LANDMARKS.RIGHT_HEEL]),
+    leftWrist: getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_ELBOW, LANDMARKS.LEFT_WRIST, LANDMARKS.LEFT_INDEX]) * depthScale,
+    rightWrist: getLandmarkConfidence(landmarks, [LANDMARKS.RIGHT_ELBOW, LANDMARKS.RIGHT_WRIST, LANDMARKS.RIGHT_INDEX]) * depthScale,
+    spine: getLandmarkConfidence(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.RIGHT_SHOULDER, LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP]),
+    neck: getLandmarkConfidence(landmarks, [LANDMARKS.NOSE, LANDMARKS.LEFT_EAR, LANDMARKS.RIGHT_EAR]),
+  };
+}
+
+function computeScapulaFromLandmarks(
+  landmarks: NormalizedLandmark[],
+  shoulderMid: Vec3,
+  hipMid: Vec3
+): ScapulaEstimate | undefined {
+  const lShoulder = landmarks[LANDMARKS.LEFT_SHOULDER];
+  const rShoulder = landmarks[LANDMARKS.RIGHT_SHOULDER];
+  const lEar = landmarks[LANDMARKS.LEFT_EAR];
+  const rEar = landmarks[LANDMARKS.RIGHT_EAR];
+
+  if (!lShoulder || !rShoulder) return undefined;
+
+  const torsoHeight = Math.abs(shoulderMid.y - hipMid.y) + 0.001;
+
+  let leftElevation = 0;
+  let rightElevation = 0;
+  if (lEar && rEar) {
+    const earToShoulderL = lShoulder.y - lEar.y;
+    const earToShoulderR = rShoulder.y - rEar.y;
+    const avgEarToShoulder = ((earToShoulderL + earToShoulderR) / 2) || 0.001;
+    leftElevation = ((earToShoulderL - avgEarToShoulder) / Math.abs(avgEarToShoulder)) * -0.25;
+    rightElevation = ((earToShoulderR - avgEarToShoulder) / Math.abs(avgEarToShoulder)) * -0.25;
+  }
+
+  const shoulderMidZ = (lShoulder.z + rShoulder.z) / 2;
+  const leftProtraction = Math.atan2(lShoulder.z - shoulderMidZ, torsoHeight) * 2.5;
+  const rightProtraction = Math.atan2(rShoulder.z - shoulderMidZ, torsoHeight) * 2.5;
+
+  return {
+    leftElevation: Math.max(-0.3, Math.min(0.3, leftElevation)),
+    rightElevation: Math.max(-0.3, Math.min(0.3, rightElevation)),
+    leftProtraction: Math.max(-0.35, Math.min(0.35, leftProtraction)),
+    rightProtraction: Math.max(-0.35, Math.min(0.35, rightProtraction)),
   };
 }
 
 export type PartialSkeleton3DPose = {
   [K in keyof Skeleton3DPose]: Joint3DRotation | null;
+} & {
+  pelvisTilt?: number;
+  pelvisObliquity?: number;
+  pelvisRotation?: number;
+  scapulaData?: ScapulaEstimate;
+  jointConfidence?: JointConfidenceMap;
+  globalTranslation?: GlobalTranslation;
+  spineSegments?: SpineSegmentation;
+  bodyProportions?: BodyProportions;
 };
 
 function detectCameraView(landmarks: NormalizedLandmark[]): { viewType: CameraViewType; confidence: number } {
@@ -1366,14 +1651,64 @@ export class Posesmoother {
     return Posesmoother.SLOW_FACTOR + t * (Posesmoother.FAST_FACTOR - Posesmoother.SLOW_FACTOR);
   }
 
-  smooth(newPose: PartialSkeleton3DPose): Skeleton3DPose {
+  private static readonly JOINT_NOISE_PROFILE: Record<string, number> = {
+    leftWrist: 1.4,
+    rightWrist: 1.4,
+    leftAnkle: 1.3,
+    rightAnkle: 1.3,
+    leftElbow: 1.1,
+    rightElbow: 1.1,
+    leftShoulder: 1.0,
+    rightShoulder: 1.0,
+    leftHip: 0.8,
+    rightHip: 0.8,
+    leftKnee: 0.85,
+    rightKnee: 0.85,
+    spine: 0.7,
+    neck: 0.9,
+  };
+
+  private prevPelvisTilt = 0;
+  private prevPelvisObliquity = 0;
+  private prevPelvisRotation = 0;
+  private prevScapula: ScapulaEstimate = { leftElevation: 0, rightElevation: 0, leftProtraction: 0, rightProtraction: 0 };
+  private prevGlobalTranslation: GlobalTranslation = { lateralShift: 0, forwardShift: 0, verticalShift: 0 };
+  private prevSpineSegments: SpineSegmentation = {
+    cervicalFlexion: 0, cervicalRotation: 0, cervicalLateralFlexion: 0,
+    thoracicFlexion: 0, thoracicRotation: 0, thoracicLateralFlexion: 0,
+    lumbarFlexion: 0, lumbarRotation: 0, lumbarLateralFlexion: 0,
+  };
+  private prevBodyProportions: BodyProportions | undefined = undefined;
+
+  private static readonly CONFIDENCE_GATE_THRESHOLD = 0.3;
+
+  smooth(newPose: PartialSkeleton3DPose): SmoothedPoseOutput {
+    const confidence = newPose.jointConfidence;
+
     if (!this.previousPose) {
       const initial: Skeleton3DPose = {} as Skeleton3DPose;
       for (const joint of Posesmoother.ALL_JOINTS) {
         initial[joint] = newPose[joint] ?? { ...Posesmoother.DEFAULT_JOINT };
       }
       this.previousPose = initial;
-      return initial;
+      this.prevPelvisTilt = newPose.pelvisTilt ?? 0;
+      this.prevPelvisObliquity = newPose.pelvisObliquity ?? 0;
+      this.prevPelvisRotation = newPose.pelvisRotation ?? 0;
+      if (newPose.scapulaData) this.prevScapula = { ...newPose.scapulaData };
+      if (newPose.globalTranslation) this.prevGlobalTranslation = { ...newPose.globalTranslation };
+      if (newPose.spineSegments) this.prevSpineSegments = { ...newPose.spineSegments };
+      if (newPose.bodyProportions) this.prevBodyProportions = { ...newPose.bodyProportions };
+      return {
+        ...initial,
+        pelvisTilt: this.prevPelvisTilt,
+        pelvisObliquity: this.prevPelvisObliquity,
+        pelvisRotation: this.prevPelvisRotation,
+        scapulaData: newPose.scapulaData,
+        jointConfidence: confidence,
+        globalTranslation: this.prevGlobalTranslation,
+        spineSegments: this.prevSpineSegments,
+        bodyProportions: this.prevBodyProportions,
+      };
     }
     
     const smoothed: Skeleton3DPose = {} as Skeleton3DPose;
@@ -1391,13 +1726,25 @@ export class Posesmoother {
         smoothed[jointName] = { ...rotation };
         continue;
       }
+
+      const confWeight = confidence ? (confidence[jointName as keyof JointConfidenceMap] ?? 0.7) : 0.7;
+
+      if (confWeight < Posesmoother.CONFIDENCE_GATE_THRESHOLD) {
+        smoothed[jointName] = { ...prevRotation };
+        continue;
+      }
+
+      const noiseScale = Posesmoother.JOINT_NOISE_PROFILE[jointName] ?? 1.0;
       
       const deltaX = rotation.x - prevRotation.x;
       const deltaY = rotation.y - prevRotation.y;
       const deltaZ = rotation.z - prevRotation.z;
       const deltaMag = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
       
-      const factor = this.getAdaptiveFactor(jointName, deltaMag);
+      let factor = this.getAdaptiveFactor(jointName, deltaMag);
+      const confScale = confWeight >= 0.7 ? 1.0 : (confWeight - Posesmoother.CONFIDENCE_GATE_THRESHOLD) / (0.7 - Posesmoother.CONFIDENCE_GATE_THRESHOLD);
+      factor = factor * confScale;
+      factor = Math.max(0.05, Math.min(0.95, factor / noiseScale));
       
       smoothed[jointName] = {
         x: prevRotation.x + deltaX * factor,
@@ -1405,13 +1752,105 @@ export class Posesmoother {
         z: prevRotation.z + deltaZ * factor
       };
     }
+
+    const pelvisFactor = 0.3;
+    const incomingPelvisTilt = newPose.pelvisTilt !== undefined ? newPose.pelvisTilt : this.prevPelvisTilt;
+    const incomingPelvisObliquity = newPose.pelvisObliquity !== undefined ? newPose.pelvisObliquity : this.prevPelvisObliquity;
+    const incomingPelvisRotation = newPose.pelvisRotation !== undefined ? newPose.pelvisRotation : this.prevPelvisRotation;
+    const smoothedPelvisTilt = this.prevPelvisTilt + (incomingPelvisTilt - this.prevPelvisTilt) * pelvisFactor;
+    const smoothedPelvisObliquity = this.prevPelvisObliquity + (incomingPelvisObliquity - this.prevPelvisObliquity) * pelvisFactor;
+    const smoothedPelvisRotation = this.prevPelvisRotation + (incomingPelvisRotation - this.prevPelvisRotation) * pelvisFactor;
+    this.prevPelvisTilt = smoothedPelvisTilt;
+    this.prevPelvisObliquity = smoothedPelvisObliquity;
+    this.prevPelvisRotation = smoothedPelvisRotation;
+
+    let smoothedScapula = this.prevScapula;
+    if (newPose.scapulaData) {
+      const sf = 0.25;
+      smoothedScapula = {
+        leftElevation: this.prevScapula.leftElevation + (newPose.scapulaData.leftElevation - this.prevScapula.leftElevation) * sf,
+        rightElevation: this.prevScapula.rightElevation + (newPose.scapulaData.rightElevation - this.prevScapula.rightElevation) * sf,
+        leftProtraction: this.prevScapula.leftProtraction + (newPose.scapulaData.leftProtraction - this.prevScapula.leftProtraction) * sf,
+        rightProtraction: this.prevScapula.rightProtraction + (newPose.scapulaData.rightProtraction - this.prevScapula.rightProtraction) * sf,
+      };
+      this.prevScapula = smoothedScapula;
+    }
     
+    const translationFactor = 0.25;
+    let smoothedTranslation = this.prevGlobalTranslation;
+    if (newPose.globalTranslation) {
+      smoothedTranslation = {
+        lateralShift: this.prevGlobalTranslation.lateralShift + (newPose.globalTranslation.lateralShift - this.prevGlobalTranslation.lateralShift) * translationFactor,
+        forwardShift: this.prevGlobalTranslation.forwardShift + (newPose.globalTranslation.forwardShift - this.prevGlobalTranslation.forwardShift) * translationFactor,
+        verticalShift: this.prevGlobalTranslation.verticalShift + (newPose.globalTranslation.verticalShift - this.prevGlobalTranslation.verticalShift) * translationFactor,
+      };
+      this.prevGlobalTranslation = smoothedTranslation;
+    }
+
+    const spineSF = 0.3;
+    let smoothedSegments = this.prevSpineSegments;
+    if (newPose.spineSegments) {
+      const s = newPose.spineSegments;
+      const p = this.prevSpineSegments;
+      smoothedSegments = {
+        cervicalFlexion: p.cervicalFlexion + (s.cervicalFlexion - p.cervicalFlexion) * spineSF,
+        cervicalRotation: p.cervicalRotation + (s.cervicalRotation - p.cervicalRotation) * spineSF,
+        cervicalLateralFlexion: p.cervicalLateralFlexion + (s.cervicalLateralFlexion - p.cervicalLateralFlexion) * spineSF,
+        thoracicFlexion: p.thoracicFlexion + (s.thoracicFlexion - p.thoracicFlexion) * spineSF,
+        thoracicRotation: p.thoracicRotation + (s.thoracicRotation - p.thoracicRotation) * spineSF,
+        thoracicLateralFlexion: p.thoracicLateralFlexion + (s.thoracicLateralFlexion - p.thoracicLateralFlexion) * spineSF,
+        lumbarFlexion: p.lumbarFlexion + (s.lumbarFlexion - p.lumbarFlexion) * spineSF,
+        lumbarRotation: p.lumbarRotation + (s.lumbarRotation - p.lumbarRotation) * spineSF,
+        lumbarLateralFlexion: p.lumbarLateralFlexion + (s.lumbarLateralFlexion - p.lumbarLateralFlexion) * spineSF,
+      };
+      this.prevSpineSegments = smoothedSegments;
+    }
+
+    if (newPose.bodyProportions) {
+      if (!this.prevBodyProportions) {
+        this.prevBodyProportions = { ...newPose.bodyProportions };
+      } else {
+        const bf = 0.1;
+        const bp = this.prevBodyProportions;
+        const nb = newPose.bodyProportions;
+        this.prevBodyProportions = {
+          shoulderWidth: bp.shoulderWidth + (nb.shoulderWidth - bp.shoulderWidth) * bf,
+          torsoLength: bp.torsoLength + (nb.torsoLength - bp.torsoLength) * bf,
+          upperArmRatio: bp.upperArmRatio + (nb.upperArmRatio - bp.upperArmRatio) * bf,
+          forearmRatio: bp.forearmRatio + (nb.forearmRatio - bp.forearmRatio) * bf,
+          thighRatio: bp.thighRatio + (nb.thighRatio - bp.thighRatio) * bf,
+          shinRatio: bp.shinRatio + (nb.shinRatio - bp.shinRatio) * bf,
+        };
+      }
+    }
+
     this.previousPose = smoothed;
-    return smoothed;
+    return {
+      ...smoothed,
+      pelvisTilt: smoothedPelvisTilt,
+      pelvisObliquity: smoothedPelvisObliquity,
+      pelvisRotation: smoothedPelvisRotation,
+      scapulaData: smoothedScapula,
+      jointConfidence: confidence,
+      globalTranslation: smoothedTranslation,
+      spineSegments: smoothedSegments,
+      bodyProportions: this.prevBodyProportions,
+    };
   }
   
   reset() {
     this.previousPose = null;
     this.velocityHistory.clear();
+    this.prevPelvisTilt = 0;
+    this.prevPelvisObliquity = 0;
+    this.prevPelvisRotation = 0;
+    this.prevScapula = { leftElevation: 0, rightElevation: 0, leftProtraction: 0, rightProtraction: 0 };
+    this.prevGlobalTranslation = { lateralShift: 0, forwardShift: 0, verticalShift: 0 };
+    this.prevSpineSegments = {
+      cervicalFlexion: 0, cervicalRotation: 0, cervicalLateralFlexion: 0,
+      thoracicFlexion: 0, thoracicRotation: 0, thoracicLateralFlexion: 0,
+      lumbarFlexion: 0, lumbarRotation: 0, lumbarLateralFlexion: 0,
+    };
+    this.prevBodyProportions = undefined;
   }
 }

@@ -10,7 +10,7 @@
  * just clamp them to anatomical limits and pass through directly.
  */
 
-import { Skeleton3DPose } from './mediapipeTo3D';
+import { Skeleton3DPose, ScapulaEstimate, JointConfidenceMap, GlobalTranslation, SpineSegmentation, BodyProportions } from './mediapipeTo3D';
 
 /**
  * Joint movement ranges in radians (anatomical norms)
@@ -32,10 +32,12 @@ export const ANATOMICAL_RANGES = {
     flexion: { min: 0, max: 2.4 }                      // 0° to 140° (straight to fully bent)
   },
   ankle: {
-    dorsiflexion: { min: -0.87, max: 0.35 }            // -50° plantarflexion to 20° dorsiflexion
+    dorsiflexion: { min: -0.87, max: 0.35 },            // -50° plantarflexion to 20° dorsiflexion
+    inversion: { min: -0.52, max: 0.52 }                // ~-30° eversion to ~30° inversion
   },
   wrist: {
-    flexion: { min: -1.2, max: 1.2 }                   // ~-70° extension to ~70° flexion
+    flexion: { min: -1.2, max: 1.2 },                   // ~-70° extension to ~70° flexion
+    deviation: { min: -0.52, max: 0.35 }                 // ~-30° ulnar to ~20° radial
   },
   spine: {
     forward: { min: -0.5, max: 0.7 },                  // Extension to flexion
@@ -61,12 +63,12 @@ export interface ControllerValues {
   rightHip: { flexion: number; abduction: number };
   leftKnee: { flexion: number };
   rightKnee: { flexion: number };
-  leftAnkle: { dorsiflexion: number };
-  rightAnkle: { dorsiflexion: number };
-  leftWrist: { flexion: number };
-  rightWrist: { flexion: number };
+  leftAnkle: { dorsiflexion: number; inversion: number };
+  rightAnkle: { dorsiflexion: number; inversion: number };
+  leftWrist: { flexion: number; deviation: number };
+  rightWrist: { flexion: number; deviation: number };
   pelvis: { tilt: number; obliquity: number; rotation: number };
-  spine: { flexion: number; lateralFlexion: number; kyphosis: number; lordosis: number; scoliosis: number; forwardHead: number; lateralShift: number };
+  spine: { flexion: number; lateralFlexion: number; kyphosis: number; lordosis: number; scoliosis: number; forwardHead: number; lateralShift: number; cervicalFlexion: number; cervicalRotation: number; cervicalLateralFlexion: number; thoracicFlexion: number; thoracicRotation: number; thoracicLateralFlexion: number; lumbarFlexion: number; lumbarRotation: number; lumbarLateralFlexion: number };
   neck: { flexion: number; rotation: number; lateralFlexion: number };
   scapula: { leftElevation: number; rightElevation: number; leftProtraction: number; rightProtraction: number };
 }
@@ -186,16 +188,27 @@ function applyDeadZone(value: number, threshold: number = 0.03): number {
   return sign * abs * t * t;
 }
 
-const ARM_DEAD_ZONE = 0.025;
-const SPINE_DEAD_ZONE = 0.03;
-const HIP_DEAD_ZONE = 0.12;
-const KNEE_DEAD_ZONE = 0.1;
-const ANKLE_DEAD_ZONE = 0.08;
+const ARM_DEAD_ZONE = 0.02;
+const SPINE_DEAD_ZONE = 0.025;
+const HIP_DEAD_ZONE = 0.06;
+const KNEE_DEAD_ZONE = 0.05;
+const ANKLE_DEAD_ZONE = 0.04;
+
+export interface ExtendedPoseInput extends Skeleton3DPose {
+  pelvisTilt?: number;
+  pelvisObliquity?: number;
+  pelvisRotation?: number;
+  scapulaData?: ScapulaEstimate;
+  jointConfidence?: JointConfidenceMap;
+  globalTranslation?: GlobalTranslation;
+  spineSegments?: SpineSegmentation;
+  bodyProportions?: BodyProportions;
+}
 
 /**
  * Convert Skeleton3DPose to controller-compatible values
  */
-export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
+export function poseToControllerValues(pose: ExtendedPoseInput): ControllerValues {
   const { shoulder, elbow, hip, knee, spine, neck } = ANATOMICAL_RANGES;
   
   const leftShoulderFlexion = applyDeadZone(clamp(pose.leftShoulder.x, shoulder.flexion.min, shoulder.flexion.max), ARM_DEAD_ZONE);
@@ -227,16 +240,39 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
   
   const leftWristFlexion = applyDeadZone(clamp(pose.leftWrist.x, wrist.flexion.min, wrist.flexion.max), ARM_DEAD_ZONE);
   const rightWristFlexion = applyDeadZone(clamp(pose.rightWrist.x, wrist.flexion.min, wrist.flexion.max), ARM_DEAD_ZONE);
-  
-  const pelvisTilt = applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max)) * 0.5;
-  const pelvisObliquity = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max)) * 0.3;
+  const leftWristDeviation = applyDeadZone(clamp(pose.leftWrist.z, wrist.deviation.min, wrist.deviation.max), ARM_DEAD_ZONE);
+  const rightWristDeviation = applyDeadZone(clamp(pose.rightWrist.z, wrist.deviation.min, wrist.deviation.max), ARM_DEAD_ZONE);
+
+  const leftAnkleInversion = applyDeadZone(clamp(pose.leftAnkle.z, ankle.inversion.min, ankle.inversion.max), ANKLE_DEAD_ZONE);
+  const rightAnkleInversion = applyDeadZone(clamp(pose.rightAnkle.z, ankle.inversion.min, ankle.inversion.max), ANKLE_DEAD_ZONE);
+
+  const pelvisTilt = pose.pelvisTilt !== undefined
+    ? applyDeadZone(clamp(pose.pelvisTilt, -0.5, 0.5), SPINE_DEAD_ZONE)
+    : applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max)) * 0.5;
+  const pelvisObliquity = pose.pelvisObliquity !== undefined
+    ? applyDeadZone(clamp(pose.pelvisObliquity, -0.35, 0.35), SPINE_DEAD_ZONE)
+    : applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max)) * 0.3;
+  const pelvisRotation = pose.pelvisRotation !== undefined
+    ? applyDeadZone(clamp(pose.pelvisRotation, -0.5, 0.5), SPINE_DEAD_ZONE)
+    : applyDeadZone(clamp(pose.spine.y, -0.5, 0.5), SPINE_DEAD_ZONE) * 0.4;
   
   const spineFlexion = applyDeadZone(clamp(pose.spine.x, spine.forward.min, spine.forward.max), SPINE_DEAD_ZONE);
   const spineLateralFlexion = applyDeadZone(clamp(pose.spine.z, spine.lateral.min, spine.lateral.max), SPINE_DEAD_ZONE);
+
+  const spineKyphosis = clamp(pose.spine.x * 0.6, -0.15, 0.4);
+  const spineScoliosis = clamp(pose.spine.z * 1.2, -0.3, 0.3);
+  const spineForwardHead = clamp(pose.neck.x * 0.5, -0.15, 0.3);
+  const spineLateralShift = clamp(pose.spine.z * 0.8, -0.2, 0.2);
   
   const neckFlexion = applyDeadZone(clamp(pose.neck.x, neck.forward.min, neck.forward.max));
   const neckRotation = applyDeadZone(clamp(pose.neck.y, neck.rotation.min, neck.rotation.max));
   const neckLateralFlexion = applyDeadZone(clamp(pose.neck.z, neck.lateral.min, neck.lateral.max));
+
+  const scapData = pose.scapulaData;
+  const scapLeftElev = scapData ? applyDeadZone(clamp(scapData.leftElevation, -0.3, 0.3), 0.015) : 0;
+  const scapRightElev = scapData ? applyDeadZone(clamp(scapData.rightElevation, -0.3, 0.3), 0.015) : 0;
+  const scapLeftProt = scapData ? applyDeadZone(clamp(scapData.leftProtraction, -0.35, 0.35), 0.015) : 0;
+  const scapRightProt = scapData ? applyDeadZone(clamp(scapData.rightProtraction, -0.35, 0.35), 0.015) : 0;
   
   return {
     leftShoulder: { flexion: leftShoulderFlexion, abduction: leftShoulderAbduction, internalRotation: leftShoulderInternalRotation },
@@ -247,14 +283,25 @@ export function poseToControllerValues(pose: Skeleton3DPose): ControllerValues {
     rightHip: { flexion: rightHipFlexion, abduction: rightHipAbduction },
     leftKnee: { flexion: leftKneeFlexion },
     rightKnee: { flexion: rightKneeFlexion },
-    leftAnkle: { dorsiflexion: leftAnkleDorsiflexion },
-    rightAnkle: { dorsiflexion: rightAnkleDorsiflexion },
-    leftWrist: { flexion: leftWristFlexion },
-    rightWrist: { flexion: rightWristFlexion },
-    pelvis: { tilt: pelvisTilt, obliquity: pelvisObliquity, rotation: 0 },
-    spine: { flexion: spineFlexion, lateralFlexion: spineLateralFlexion, kyphosis: 0, lordosis: 0, scoliosis: 0, forwardHead: 0, lateralShift: 0 },
+    leftAnkle: { dorsiflexion: leftAnkleDorsiflexion, inversion: leftAnkleInversion },
+    rightAnkle: { dorsiflexion: rightAnkleDorsiflexion, inversion: rightAnkleInversion },
+    leftWrist: { flexion: leftWristFlexion, deviation: leftWristDeviation },
+    rightWrist: { flexion: rightWristFlexion, deviation: rightWristDeviation },
+    pelvis: { tilt: pelvisTilt, obliquity: pelvisObliquity, rotation: pelvisRotation },
+    spine: {
+      flexion: spineFlexion, lateralFlexion: spineLateralFlexion, kyphosis: spineKyphosis, lordosis: 0, scoliosis: spineScoliosis, forwardHead: spineForwardHead, lateralShift: spineLateralShift,
+      cervicalFlexion: pose.spineSegments ? clamp(pose.spineSegments.cervicalFlexion, -0.4, 0.4) : 0,
+      cervicalRotation: pose.spineSegments ? clamp(pose.spineSegments.cervicalRotation, -0.5, 0.5) : 0,
+      cervicalLateralFlexion: pose.spineSegments ? clamp(pose.spineSegments.cervicalLateralFlexion, -0.35, 0.35) : 0,
+      thoracicFlexion: pose.spineSegments ? clamp(pose.spineSegments.thoracicFlexion, -0.4, 0.35) : 0,
+      thoracicRotation: pose.spineSegments ? clamp(pose.spineSegments.thoracicRotation, -0.4, 0.4) : 0,
+      thoracicLateralFlexion: pose.spineSegments ? clamp(pose.spineSegments.thoracicLateralFlexion, -0.3, 0.3) : 0,
+      lumbarFlexion: pose.spineSegments ? clamp(pose.spineSegments.lumbarFlexion, -0.5, 0.5) : 0,
+      lumbarRotation: pose.spineSegments ? clamp(pose.spineSegments.lumbarRotation, -0.3, 0.3) : 0,
+      lumbarLateralFlexion: pose.spineSegments ? clamp(pose.spineSegments.lumbarLateralFlexion, -0.35, 0.35) : 0,
+    },
     neck: { flexion: neckFlexion, rotation: neckRotation, lateralFlexion: neckLateralFlexion },
-    scapula: { leftElevation: 0, rightElevation: 0, leftProtraction: 0, rightProtraction: 0 }
+    scapula: { leftElevation: scapLeftElev, rightElevation: scapRightElev, leftProtraction: scapLeftProt, rightProtraction: scapRightProt }
   };
 }
 
@@ -358,16 +405,20 @@ export class ControllerSmoother {
         flexion: smoothValue(current.rightKnee.flexion, this.previous.rightKnee.flexion)
       },
       leftAnkle: {
-        dorsiflexion: smoothValue(current.leftAnkle.dorsiflexion, this.previous.leftAnkle.dorsiflexion)
+        dorsiflexion: smoothValue(current.leftAnkle.dorsiflexion, this.previous.leftAnkle.dorsiflexion),
+        inversion: smoothValue(current.leftAnkle.inversion, this.previous.leftAnkle.inversion)
       },
       rightAnkle: {
-        dorsiflexion: smoothValue(current.rightAnkle.dorsiflexion, this.previous.rightAnkle.dorsiflexion)
+        dorsiflexion: smoothValue(current.rightAnkle.dorsiflexion, this.previous.rightAnkle.dorsiflexion),
+        inversion: smoothValue(current.rightAnkle.inversion, this.previous.rightAnkle.inversion)
       },
       leftWrist: {
-        flexion: smoothValue(current.leftWrist.flexion, this.previous.leftWrist.flexion)
+        flexion: smoothValue(current.leftWrist.flexion, this.previous.leftWrist.flexion),
+        deviation: smoothValue(current.leftWrist.deviation, this.previous.leftWrist.deviation)
       },
       rightWrist: {
-        flexion: smoothValue(current.rightWrist.flexion, this.previous.rightWrist.flexion)
+        flexion: smoothValue(current.rightWrist.flexion, this.previous.rightWrist.flexion),
+        deviation: smoothValue(current.rightWrist.deviation, this.previous.rightWrist.deviation)
       },
       pelvis: {
         tilt: smoothValue(current.pelvis.tilt, this.previous.pelvis.tilt),
@@ -381,7 +432,16 @@ export class ControllerSmoother {
         lordosis: smoothValue(current.spine.lordosis, this.previous.spine.lordosis),
         scoliosis: smoothValue(current.spine.scoliosis, this.previous.spine.scoliosis),
         forwardHead: smoothValue(current.spine.forwardHead, this.previous.spine.forwardHead),
-        lateralShift: smoothValue(current.spine.lateralShift, this.previous.spine.lateralShift)
+        lateralShift: smoothValue(current.spine.lateralShift, this.previous.spine.lateralShift),
+        cervicalFlexion: smoothValue(current.spine.cervicalFlexion, this.previous.spine.cervicalFlexion),
+        cervicalRotation: smoothValue(current.spine.cervicalRotation, this.previous.spine.cervicalRotation),
+        cervicalLateralFlexion: smoothValue(current.spine.cervicalLateralFlexion, this.previous.spine.cervicalLateralFlexion),
+        thoracicFlexion: smoothValue(current.spine.thoracicFlexion, this.previous.spine.thoracicFlexion),
+        thoracicRotation: smoothValue(current.spine.thoracicRotation, this.previous.spine.thoracicRotation),
+        thoracicLateralFlexion: smoothValue(current.spine.thoracicLateralFlexion, this.previous.spine.thoracicLateralFlexion),
+        lumbarFlexion: smoothValue(current.spine.lumbarFlexion, this.previous.spine.lumbarFlexion),
+        lumbarRotation: smoothValue(current.spine.lumbarRotation, this.previous.spine.lumbarRotation),
+        lumbarLateralFlexion: smoothValue(current.spine.lumbarLateralFlexion, this.previous.spine.lumbarLateralFlexion),
       },
       neck: {
         flexion: neckFlexionFinal,

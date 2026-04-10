@@ -516,15 +516,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
 
     const flexion = Math.atan2(dotFwd, -dotUp);
 
-    const horizontalMag = Math.sqrt(dotFwd * dotFwd + lateral * lateral);
-    let abduction: number;
-    if (horizontalMag > 0.05) {
-      const planeAngle = Math.atan2(dotFwd, lateral);
-      const lateralWeight = Math.cos(planeAngle);
-      abduction = elevation * lateralWeight;
-    } else {
-      abduction = 0;
-    }
+    const abduction = Math.asin(Math.max(-1, Math.min(1, lateral)));
 
     return { flexion, abduction };
   };

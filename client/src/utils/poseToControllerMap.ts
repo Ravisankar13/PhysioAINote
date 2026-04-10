@@ -269,8 +269,14 @@ export function poseToControllerValues(pose: ExtendedPoseInput): ControllerValue
   const neckLateralFlexion = applyDeadZone(clamp(pose.neck.z, neck.lateral.min, neck.lateral.max));
 
   const scapData = pose.scapulaData;
-  const scapLeftElev = scapData ? applyDeadZone(clamp(scapData.leftElevation, -0.3, 0.3), 0.015) : 0;
-  const scapRightElev = scapData ? applyDeadZone(clamp(scapData.rightElevation, -0.3, 0.3), 0.015) : 0;
+  const SCAP_RHYTHM_THRESHOLD = 1.05;
+  const SCAP_RHYTHM_RATIO = 0.5;
+  const leftGHPeak = Math.max(Math.abs(leftShoulderFlexion), Math.abs(leftShoulderAbduction));
+  const rightGHPeak = Math.max(Math.abs(rightShoulderFlexion), Math.abs(rightShoulderAbduction));
+  const leftScapRhythm = leftGHPeak > SCAP_RHYTHM_THRESHOLD ? (leftGHPeak - SCAP_RHYTHM_THRESHOLD) * SCAP_RHYTHM_RATIO : 0;
+  const rightScapRhythm = rightGHPeak > SCAP_RHYTHM_THRESHOLD ? (rightGHPeak - SCAP_RHYTHM_THRESHOLD) * SCAP_RHYTHM_RATIO : 0;
+  const scapLeftElev = (scapData ? applyDeadZone(clamp(scapData.leftElevation, -0.3, 0.3), 0.015) : 0) + leftScapRhythm;
+  const scapRightElev = (scapData ? applyDeadZone(clamp(scapData.rightElevation, -0.3, 0.3), 0.015) : 0) + rightScapRhythm;
   const scapLeftProt = scapData ? applyDeadZone(clamp(scapData.leftProtraction, -0.35, 0.35), 0.015) : 0;
   const scapRightProt = scapData ? applyDeadZone(clamp(scapData.rightProtraction, -0.35, 0.35), 0.015) : 0;
   

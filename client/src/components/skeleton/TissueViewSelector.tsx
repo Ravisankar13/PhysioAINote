@@ -426,7 +426,7 @@ export default function TissueViewSelector({
             {compromisedExpanded ? <ChevronUp className="w-3 h-3 text-red-400" /> : <ChevronDown className="w-3 h-3 text-red-400" />}
           </button>
           {compromisedExpanded && (
-            <div className="max-h-[180px] overflow-y-auto px-2 pb-2 space-y-1.5" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
+            <div className="max-h-[180px] overflow-y-auto px-2 pb-2 space-y-1.5 thin-scrollbar">
               {compromisedTissues.map((ct, idx) => {
                 const TypeIcon = MODE_ICONS[ct.tissue_type] || Cable;
                 const modeColor = TISSUE_MODE_COLORS[ct.tissue_type];

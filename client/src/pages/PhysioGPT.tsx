@@ -8050,8 +8050,8 @@ ${ddxList}`;
 
             {tissueViewMode && (
               <div className="absolute top-2 right-2 z-30 w-[280px] animate-in slide-in-from-right-2 duration-200">
-                <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5">
-                  <div className="flex items-center justify-between mb-2">
+                <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 max-h-[calc(100vh-2rem)] overflow-y-auto">
+                  <div className="flex items-center justify-between mb-2 sticky top-0 z-10 bg-black/85 -mx-3 px-3 -mt-2.5 pt-2.5 pb-1">
                     <div className="flex items-center gap-2">
                       <Microscope className="h-3.5 w-3.5 text-teal-400" />
                       <span className="text-xs font-semibold text-gray-200">Tissue View</span>

@@ -7822,6 +7822,180 @@ Based on this clinical data, DESIGN novel manual therapy techniques from first p
     }
   });
 
+  app.post("/api/manual-therapy-engine/refine-custom", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+
+      const refineInputSchema = z.object({
+        refinementInstruction: z.string().min(1),
+        conversationHistory: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+        })),
+        currentTechniques: z.object({
+          customTechniques: z.array(z.object({
+            name: z.string(),
+            targetSystem: z.string(),
+            clinicalTarget: z.string(),
+            patientPositioning: z.string(),
+            handPlacementSteps: z.array(z.string()),
+            forceApplicationSequence: z.array(z.object({
+              order: z.number(),
+              action: z.string(),
+              direction: z.string(),
+              depth: z.string(),
+              rhythm: z.string(),
+              grade: z.string(),
+              tissueResponseCue: z.string(),
+            })),
+            tissueResponseCues: z.array(z.string()),
+            biomechanicalRationale: z.string(),
+            dosage: z.object({
+              duration: z.string(),
+              repetitions: z.string(),
+              sets: z.string(),
+              frequency: z.string(),
+            }),
+            safetyCues: z.array(z.string()),
+            contraindications: z.string(),
+            progressionStages: z.array(z.object({
+              stage: z.number(),
+              name: z.string(),
+              description: z.string(),
+            })),
+            selfTreatmentAdaptation: z.string(),
+            tissueTargets: z.array(z.object({
+              tissueName: z.string(),
+              goalType: z.enum(['release', 'mobilize', 'activate', 'stabilize', 'decompress']),
+              goalText: z.string(),
+            })).optional().default([]),
+          })),
+          designRationale: z.string(),
+          safetyNotes: z.string(),
+        }),
+      });
+
+      const parsed = refineInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const systemPrompt = `You are a manual therapy architect performing ITERATIVE REFINEMENT on previously designed custom techniques. The user has already received an initial set of custom manual therapy techniques and is now providing feedback to refine them.
+
+RULES FOR REFINEMENT:
+1. PRESERVE techniques that the user did NOT mention — do not change them unless the feedback implies a global change.
+2. MODIFY only the specific aspects the user requests (e.g., patient positioning, hand placement, force application, dosage).
+3. You may ADD new techniques if the user requests them.
+4. You may REMOVE techniques if the user explicitly asks.
+5. Maintain the same JSON response format as the original design.
+6. Keep all technique numbering consistent so the user can reference techniques by number.
+7. If the user's feedback is vague, interpret it clinically and make reasonable professional decisions.
+
+RESPONSE FORMAT — return valid JSON with the COMPLETE updated set of techniques (not just the changed ones):
+{
+  "customTechniques": [ ... same format as original ... ],
+  "designRationale": "Updated rationale explaining the refinement changes and how the program now works together",
+  "safetyNotes": "Updated safety considerations"
+}
+
+IMPORTANT: For each technique, include a "tissueTargets" array listing the primary muscles/tissues targeted. Each entry must have:
+- "tissueName": the muscle or tissue name in snake_case
+- "goalType": one of "release", "mobilize", "activate", "stabilize", "decompress"
+- "goalText": a concise quantified clinical goal string`;
+
+      const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+        { role: "system", content: systemPrompt },
+      ];
+
+      for (const msg of data.conversationHistory) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+
+      const currentTechniquesJson = JSON.stringify(data.currentTechniques, null, 2);
+      messages.push({
+        role: "user",
+        content: `Here are the CURRENT techniques that need refinement:\n\n${currentTechniquesJson}\n\nREFINEMENT REQUEST:\n${data.refinementInstruction}\n\nReturn the COMPLETE updated set of techniques with the requested changes applied. Preserve unchanged techniques exactly as they are.`,
+      });
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages,
+        response_format: { type: "json_object" },
+        max_tokens: 6000,
+        temperature: 0.4,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const customManualTherapyResponseSchema = z.object({
+        customTechniques: z.array(z.object({
+          name: z.string(),
+          targetSystem: z.string(),
+          clinicalTarget: z.string(),
+          patientPositioning: z.string(),
+          handPlacementSteps: z.array(z.string()),
+          forceApplicationSequence: z.array(z.object({
+            order: z.number(),
+            action: z.string(),
+            direction: z.string(),
+            depth: z.string(),
+            rhythm: z.string(),
+            grade: z.string(),
+            tissueResponseCue: z.string(),
+          })),
+          tissueResponseCues: z.array(z.string()),
+          biomechanicalRationale: z.string(),
+          dosage: z.object({
+            duration: z.string().default('30-60 seconds'),
+            repetitions: z.string().default('3-5'),
+            sets: z.string().default('2-3'),
+            frequency: z.string().default('2-3x/week'),
+          }),
+          safetyCues: z.array(z.string()),
+          contraindications: z.string().default('None'),
+          progressionStages: z.array(z.object({
+            stage: z.number(),
+            name: z.string(),
+            description: z.string(),
+          })),
+          selfTreatmentAdaptation: z.string().default(''),
+          tissueTargets: z.array(z.object({
+            tissueName: z.string(),
+            goalType: z.enum(['release', 'mobilize', 'activate', 'stabilize', 'decompress']),
+            goalText: z.string(),
+          })).optional().default([]),
+        })),
+        designRationale: z.string().default(''),
+        safetyNotes: z.string().default(''),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = customManualTherapyResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Refine manual therapy response validation failed:", validated.error.format());
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          validationErrors: validated.error.format(),
+        });
+      }
+      res.json(validated.data);
+    } catch (error: unknown) {
+      console.error("Refine manual therapy error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to refine manual therapy techniques", details: message });
+    }
+  });
+
   app.post("/api/electrophysical-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const electroInputSchema = z.object({

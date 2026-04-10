@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Zap, Activity, Sparkles, ArrowRight, Clock, ShieldAlert, Crosshair, Home } from 'lucide-react';
+import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Zap, Activity, Sparkles, ArrowRight, Clock, ShieldAlert, Crosshair, Home, MessageSquare, Send, RotateCcw } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
@@ -197,6 +197,16 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; b
 };
 
 const DEFAULT_COLORS = { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-300', badge: 'bg-rose-500/20 text-rose-300' };
+
+const REFINEMENT_PRESETS = [
+  { label: 'Make gentler', value: 'Make all techniques gentler — reduce force grades, use slower rhythms, and prioritize patient comfort for an acute or irritable presentation.' },
+  { label: 'Avoid prone', value: 'Modify all techniques to avoid prone positioning. Use supine, sidelying, or seated alternatives instead.' },
+  { label: 'Add neural technique', value: 'Add a neurodynamic mobilization technique targeting the neural structures most relevant to this dysfunction pattern.' },
+  { label: 'Increase dosage', value: 'Increase the dosage parameters for all techniques — longer hold durations, more repetitions, and higher frequency.' },
+  { label: 'Add home exercise', value: 'Enhance the self-treatment adaptations — provide more detailed, specific home exercise alternatives the patient can do independently.' },
+  { label: 'More hands-on detail', value: 'Add more specific hand placement and force application detail to each technique — exact finger/palm contact points, pressure angles, and tissue response landmarks.' },
+  { label: 'Progress to active', value: 'Progress all techniques to include active patient participation — combine manual therapy with active movement integration.' },
+];
 
 function CustomTechniqueCard({ technique, index, isSelected, onSelect }: { technique: CustomTechnique; index: number; isSelected?: boolean; onSelect?: (index: number, expanded: boolean) => void }) {
   const expanded = isSelected ?? false;
@@ -500,6 +510,12 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
   const [selectedTechniqueIndex, setSelectedTechniqueIndex] = useState<number | null>(null);
   const customAbortRef = useRef<AbortController | null>(null);
 
+  const [refinementInput, setRefinementInput] = useState('');
+  const [conversationHistory, setConversationHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [isRefining, setIsRefining] = useState(false);
+  const [refinementCount, setRefinementCount] = useState(0);
+  const refineAbortRef = useRef<AbortController | null>(null);
+
   const toggleGroup = useCallback((groupId: string) => {
     setExpandedGroups(prev => {
       const next = new Set(prev);
@@ -656,6 +672,9 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       const result = await apiRequest('/api/manual-therapy-engine/design-custom', 'POST', payload) as CustomManualTherapyResult;
       if (controller.signal.aborted) return;
       setCustomResult(result);
+      setConversationHistory([]);
+      setRefinementCount(0);
+      setRefinementInput('');
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -664,6 +683,49 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       if (!controller.signal.aborted) setCustomLoading(false);
     }
   }, [buildPayload, targetFocus]);
+
+  const refineTechniques = useCallback(async (instruction: string) => {
+    if (!customResult || !instruction.trim()) return;
+
+    if (refineAbortRef.current) refineAbortRef.current.abort();
+    const controller = new AbortController();
+    refineAbortRef.current = controller;
+
+    setIsRefining(true);
+    setCustomError(null);
+
+    try {
+      const result = await apiRequest('/api/manual-therapy-engine/refine-custom', 'POST', {
+        refinementInstruction: instruction.trim(),
+        conversationHistory,
+        currentTechniques: customResult,
+      }) as CustomManualTherapyResult;
+
+      if (controller.signal.aborted) return;
+
+      setConversationHistory(prev => [
+        ...prev,
+        { role: 'user' as const, content: instruction.trim() },
+        { role: 'assistant' as const, content: JSON.stringify(result) },
+      ]);
+      setRefinementCount(prev => prev + 1);
+      setCustomResult(result);
+      setRefinementInput('');
+      setSelectedTechniqueIndex(null);
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setCustomError(msg);
+    } finally {
+      if (!controller.signal.aborted) setIsRefining(false);
+    }
+  }, [customResult, conversationHistory]);
+
+  const clearRefinementHistory = useCallback(() => {
+    setConversationHistory([]);
+    setRefinementCount(0);
+    setRefinementInput('');
+  }, []);
 
   const applyTissueHighlights = useCallback((techniques: CustomTechnique[]) => {
     if (!onHighlightMuscles || !onSetMuscleHighlightColors) return;
@@ -880,6 +942,67 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
               {customResult.customTechniques.map((tech, i) => (
                 <CustomTechniqueCard key={i} technique={tech} index={i} isSelected={selectedTechniqueIndex === i} onSelect={handleTechniqueSelect} />
               ))}
+
+              <div className="bg-gradient-to-r from-violet-950/30 to-gray-900/60 border border-violet-500/30 rounded-lg p-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5 text-violet-400" />
+                    <span className="text-[10px] font-medium text-violet-300">Refine Techniques</span>
+                    {refinementCount > 0 && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/25">
+                        Refinement {refinementCount}
+                      </span>
+                    )}
+                  </div>
+                  {refinementCount > 0 && (
+                    <button
+                      onClick={clearRefinementHistory}
+                      className="px-1.5 py-0.5 text-[8px] text-gray-400 hover:text-gray-200 border border-gray-600/30 rounded hover:bg-gray-700/40 transition-colors flex items-center gap-1"
+                    >
+                      <RotateCcw className="h-2.5 w-2.5" />
+                      Clear history
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {REFINEMENT_PRESETS.map(preset => (
+                    <button
+                      key={preset.label}
+                      onClick={() => setRefinementInput(preset.value)}
+                      className={`px-2 py-0.5 text-[8px] rounded-full border transition-colors ${
+                        refinementInput === preset.value
+                          ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                          : 'bg-gray-800/40 text-gray-400 border-gray-600/30 hover:text-gray-200 hover:border-gray-500/40'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={refinementInput}
+                    onChange={(e) => setRefinementInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && refinementInput.trim() && !isRefining) refineTechniques(refinementInput); }}
+                    placeholder="e.g., make technique 2 gentler, avoid prone positioning..."
+                    className="flex-1 px-2.5 py-1.5 text-[10px] bg-gray-800/70 border border-gray-600/40 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                    disabled={isRefining}
+                  />
+                  <button
+                    onClick={() => refineTechniques(refinementInput)}
+                    disabled={isRefining || !refinementInput.trim()}
+                    className="px-3 py-1.5 text-[10px] font-medium bg-violet-600/20 text-violet-300 border border-violet-500/40 rounded hover:bg-violet-600/30 transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isRefining ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Send className="h-3 w-3" />
+                    )}
+                    {isRefining ? 'Refining...' : 'Refine'}
+                  </button>
+                </div>
+              </div>
 
               {(customResult.designRationale || customResult.safetyNotes) && (
                 <div className="border border-cyan-800/30 rounded-lg overflow-hidden">

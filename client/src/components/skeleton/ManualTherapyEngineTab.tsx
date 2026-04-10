@@ -515,6 +515,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
   const [isRefining, setIsRefining] = useState(false);
   const [refinementCount, setRefinementCount] = useState(0);
   const refineAbortRef = useRef<AbortController | null>(null);
+  const [originalPayloadSnapshot, setOriginalPayloadSnapshot] = useState<Record<string, unknown> | null>(null);
 
   const toggleGroup = useCallback((groupId: string) => {
     setExpandedGroups(prev => {
@@ -669,6 +670,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       if (targetFocus) {
         payload.targetFocus = targetFocus;
       }
+      setOriginalPayloadSnapshot(payload as Record<string, unknown>);
       const result = await apiRequest('/api/manual-therapy-engine/design-custom', 'POST', payload) as CustomManualTherapyResult;
       if (controller.signal.aborted) return;
       setCustomResult(result);
@@ -685,7 +687,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
   }, [buildPayload, targetFocus]);
 
   const refineTechniques = useCallback(async (instruction: string) => {
-    if (!customResult || !instruction.trim()) return;
+    if (!customResult || !instruction.trim() || !originalPayloadSnapshot) return;
 
     if (refineAbortRef.current) refineAbortRef.current.abort();
     const controller = new AbortController();
@@ -699,6 +701,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
         refinementInstruction: instruction.trim(),
         conversationHistory,
         currentTechniques: customResult,
+        originalPayload: originalPayloadSnapshot,
       }) as CustomManualTherapyResult;
 
       if (controller.signal.aborted) return;
@@ -719,7 +722,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
     } finally {
       if (!controller.signal.aborted) setIsRefining(false);
     }
-  }, [customResult, conversationHistory]);
+  }, [customResult, conversationHistory, originalPayloadSnapshot]);
 
   const clearRefinementHistory = useCallback(() => {
     setConversationHistory([]);

@@ -7425,6 +7425,251 @@ Based on this clinical data, generate a comprehensive, prioritized manual therap
     }
   });
 
+  function buildManualTherapySystemPrompt(focusInstruction: string = ''): string {
+    return `You are a manual therapy architect — NOT a technique recommender. Your job is to DESIGN NOVEL HANDS-ON INTERVENTIONS from tissue-level first principles based on the patient's specific dysfunction pattern.
+
+CRITICAL PRIORITY: TISSUE-LAYER RESTRICTIONS FIRST.
+Before addressing biomechanical alignment, sling dysfunction, or kinetic chain issues, you MUST first assess and address tissue-layer restrictions:
+- Scar tissue, fascial adhesions, and fibrotic areas that block tissue gliding
+- Myofascial trigger points creating local and referred patterns
+- Muscle pathologies (strains, tears, contractures) limiting tissue extensibility
+These tissue restrictions are often the ROOT CAUSE of the biomechanical and sling dysfunctions seen downstream. Treat the tissue first, then address the biomechanics.
+
+DO NOT simply name well-known techniques. Instead, ENGINEER custom manual therapy interventions by reasoning through:
+1. What TISSUE-LAYER RESTRICTIONS exist (scars, adhesions, trigger points, pathologies) and how they disrupt local tissue gliding and force transmission
+2. Which TISSUE LAYERS need to be addressed and in what ORDER (superficial fascia → deep fascia → periosteum → joint capsule)
+3. What FORCE APPLICATION VECTORS are needed (direction, depth, rhythm, grade)
+4. What HAND CONTACT and POSITIONING optimally accesses the target tissue
+5. How the technique RESTORES TISSUE MOBILITY through a dysfunctional fascial continuity or joint complex
+6. What the clinician should FEEL at each phase (barrier quality, fascial creep, tissue release, end-feel changes)
+
+MANUAL THERAPY DESIGN PRINCIPLES:
+- For fascial restrictions: design techniques that work through connected fascial lines (superficial back line, lateral line, spiral line, deep front line) — specify the exact tissue layer and the direction of fascial pull
+- For joint restrictions: design mobilization techniques specifying the exact grade (I-IV), direction (PA, AP, lateral, medial, cephalad, caudad), oscillation rhythm, and barrier engagement strategy
+- For neural tension: design neurodynamic techniques with specific slider vs tensioner parameters, specifying which neural structure and the exact limb positioning sequence
+- For myofascial trigger points: design techniques with specific compression depth, hold duration, and tissue response cues (local twitch response, referred pain pattern, release sensation)
+- For visceral restrictions: design techniques considering organ mobility and motility
+- Consider the fascial continuity — techniques should address interconnected tissue planes
+- Specify EXACT clinician hand positioning (which hand, which contact surface — pisiform, thenar eminence, fingertips, knuckles), body mechanics, and force transmission
+
+For each custom technique, provide:
+- A descriptive biomechanical name (not just a standard technique name)
+- The target system (fascial line, joint complex, neural structure, myofascial unit)
+- Clinical target (the specific dysfunction being addressed)
+- Exact patient positioning with joint angles and support surfaces
+- Step-by-step hand placement instructions for the clinician
+- Force application sequence: ordered steps with direction, depth, rhythm, grade, and tissue response cues
+- What the clinician should feel at each phase (tissue response cues)
+- Why THIS specific technique addresses THIS specific dysfunction (biomechanical rationale)
+- Dosage parameters (duration, repetitions, sets, frequency)
+- Safety cues and contraindications
+- 3-stage progression (e.g., superficial → deep, grade II → grade IV, passive → active-assisted)
+- Self-treatment adaptation the patient can do at home
+
+RESPONSE FORMAT — return valid JSON:
+{
+  "customTechniques": [
+    {
+      "name": "Descriptive biomechanical technique name",
+      "targetSystem": "Which fascial line/joint complex/neural structure this targets",
+      "clinicalTarget": "The specific dysfunction this addresses",
+      "patientPositioning": "Exact body orientation, support surfaces, joint angles, pillow placement",
+      "handPlacementSteps": ["Step 1: Place dominant hand...", "Step 2: Stabilizing hand..."],
+      "forceApplicationSequence": [
+        {
+          "order": 1,
+          "action": "Description of the manual action",
+          "direction": "e.g., posterior-anterior with slight cephalad angle",
+          "depth": "e.g., superficial fascia layer, approximately 1-2cm",
+          "rhythm": "e.g., slow sustained, 2-3 second oscillations",
+          "grade": "e.g., Grade III-, approaching tissue barrier",
+          "tissueResponseCue": "What the clinician should feel — e.g., initial tissue resistance, fascial barrier engagement"
+        }
+      ],
+      "tissueResponseCues": ["Phase 1: Feel for...", "Phase 2: As tissue releases...", "Phase 3: End-feel should change to..."],
+      "biomechanicalRationale": "Detailed explanation of WHY this technique addresses the specific dysfunction — reference tissue layers, fascial lines, arthrokinematics, neurodynamics",
+      "dosage": { "duration": "30-60 seconds per application", "repetitions": "3-5 repetitions", "sets": "2-3 sets", "frequency": "2-3x/week" },
+      "safetyCues": ["safety cue 1", "safety cue 2"],
+      "contraindications": "When to avoid or modify",
+      "progressionStages": [
+        { "stage": 1, "name": "Superficial/Gentle", "description": "How to start — superficial tissue layers, lower grades, gentle rhythm" },
+        { "stage": 2, "name": "Intermediate/Deeper", "description": "Progress to deeper tissue layers, higher grades, sustained holds" },
+        { "stage": 3, "name": "Integration/Active", "description": "Combine with active patient movement, functional integration" }
+      ],
+      "selfTreatmentAdaptation": "What the patient can replicate at home — foam roller, lacrosse ball, towel techniques, self-mobilization",
+      "tissueTargets": [
+        {
+          "tissueName": "quadratus_lumborum",
+          "goalType": "release",
+          "goalText": "reduce tension by 20%"
+        },
+        {
+          "tissueName": "gluteus_medius",
+          "goalType": "activate",
+          "goalText": "increase activation by 40%"
+        }
+      ]
+    }
+  ],
+  "designRationale": "Overall biomechanical reasoning for why these specific techniques were designed and how they work together as a treatment program",
+  "safetyNotes": "Global safety considerations for this manual therapy program"
+}
+
+IMPORTANT: For each technique, include a "tissueTargets" array listing the primary muscles/tissues targeted. Each entry must have:
+- "tissueName": the muscle or tissue name in snake_case (e.g., "quadratus_lumborum", "gluteus_maximus", "piriformis", "erector_spinae", "psoas", "rectus_femoris", "biceps_femoris", "gastrocnemius", "soleus", "tibialis_anterior", "pectoralis_major", "latissimus_dorsi", "trapezius", "deltoid", "infraspinatus", "supraspinatus", "rhomboid", "levator_scapulae", "sternocleidomastoid", "scalene", "rectus_abdominis", "external_obliques", "internal_obliques", "transverse_abdominis", "multifidus", "diaphragm", "tensor_fasciae_latae", "iliotibial_band", "plantar_fascia", "thoracolumbar_fascia", "hip_flexor", "adductor", "obturator_externus")
+- "goalType": one of "release", "mobilize", "activate", "stabilize", "decompress"
+- "goalText": a concise quantified clinical goal string (e.g., "reduce tension by 20%", "increase ROM by 15°", "restore activation to 70%")
+
+Design 3-5 custom manual therapy techniques that work together as a cohesive treatment program. Each technique should target a DIFFERENT aspect of the dysfunction pattern.${focusInstruction}`;
+  }
+
+  interface ManualTherapyPayloadData {
+    targetFocus: string;
+    mechanismSummary: string;
+    causalChains: Array<Array<{ step: number; structure: string; finding: string; mechanism?: string; category?: string; severity?: string }>>;
+    compensationCards: Array<{ title: string; description?: string; severity?: string; primaryRegion?: string; compensatingRegion?: string }>;
+    loadRedistribution: Array<{ joint: string; change?: string; clinical?: string }>;
+    slingData?: {
+      systemSummary?: string;
+      overallForceTransferScore?: number;
+      slings?: Array<{
+        label: string; status: string; activationScore: number; forceTransferQuality: string;
+        weakLinks: Array<{ muscle: string; activationPct: number; reason: string }>;
+        forceReroutes: Array<{ fromMuscle: string; toMuscle: string; reroutePct: number; clinical: string }>;
+        treatmentTargets: Array<{ muscle: string; intervention: string; rationale: string }>;
+        narrative?: string;
+      }>;
+    };
+    painMarkers: Array<{ label: string; severity?: number; type?: string }>;
+    topContributors: string[];
+    kineticChainDysfunctions: Array<{ chain?: string; dysfunction?: string; clinical?: string }>;
+    scarMarkers: Array<{ anatomicalLabel: string; type: string; severity: number; age: string; mobility: string; affectedLayers: string[]; painOnPalpation: number; nearestBone: string }>;
+    adhesionBands: Array<{ startBone: string; endBone: string; tensionLevel: number; depth: string; restrictedMovements: string[] }>;
+    musclePathologies: Array<{ muscleId: string; label: string; pathology: string; severity: string }>;
+  }
+
+  function buildManualTherapyClinicalPrompt(data: ManualTherapyPayloadData): string {
+    const causalChainText = data.causalChains.length > 0
+      ? data.causalChains.map((chain, i) =>
+          `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
+        ).join('\n')
+      : 'None identified';
+
+    const compensationText = data.compensationCards.length > 0
+      ? data.compensationCards.map(c =>
+          `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
+        ).join('\n')
+      : 'None identified';
+
+    const loadText = data.loadRedistribution.length > 0
+      ? data.loadRedistribution.map(l =>
+          `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`
+        ).join('\n')
+      : 'None identified';
+
+    const slingText = data.slingData?.slings && data.slingData.slings.length > 0
+      ? data.slingData.slings.map(s => {
+          const weakLinkStr = s.weakLinks.length > 0
+            ? ` | Weak links: ${s.weakLinks.map(w => `${w.muscle} (${w.activationPct}%)`).join(', ')}`
+            : '';
+          const rerouteStr = s.forceReroutes.length > 0
+            ? ` | Force reroutes: ${s.forceReroutes.map(r => `${r.fromMuscle}→${r.toMuscle} (${r.reroutePct}%)`).join(', ')}`
+            : '';
+          const targetStr = s.treatmentTargets.length > 0
+            ? ` | Targets: ${s.treatmentTargets.map(t => `${t.intervention} ${t.muscle}`).join(', ')}`
+            : '';
+          return `- ${s.label}: status=${s.status}, activation=${s.activationScore}%, forceTransfer=${s.forceTransferQuality}${weakLinkStr}${rerouteStr}${targetStr}\n  Narrative: ${s.narrative || 'N/A'}`;
+        }).join('\n')
+      : 'No sling data';
+
+    const painText = data.painMarkers.length > 0
+      ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
+      : 'None';
+
+    const contributorsText = data.topContributors.length > 0
+      ? data.topContributors.join(', ')
+      : 'None identified';
+
+    const kineticText = data.kineticChainDysfunctions.length > 0
+      ? data.kineticChainDysfunctions.map(k =>
+          `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`
+        ).join('\n')
+      : 'None identified';
+
+    const scarText = data.scarMarkers.length > 0
+      ? data.scarMarkers.map(s =>
+          `- ${s.anatomicalLabel} (${s.type.replace(/_/g, ' ')}): severity ${s.severity}/5, age=${s.age}, mobility=${s.mobility}, layers=[${s.affectedLayers.join(', ')}], pain on palpation=${s.painOnPalpation}/10, near ${s.nearestBone}`
+        ).join('\n')
+      : 'None documented';
+
+    const adhesionText = data.adhesionBands.length > 0
+      ? data.adhesionBands.map(b =>
+          `- ${b.startBone} → ${b.endBone}: tension=${b.tensionLevel}%, depth=${b.depth}, restricts=[${b.restrictedMovements.join(', ')}]`
+        ).join('\n')
+      : 'None documented';
+
+    const pathologyText = data.musclePathologies.length > 0
+      ? data.musclePathologies.map(m =>
+          `- ${m.label}: ${m.pathology} [${m.severity}]`
+        ).join('\n')
+      : 'None identified';
+
+    const hasTissueData = data.scarMarkers.length > 0 || data.adhesionBands.length > 0 || data.musclePathologies.length > 0;
+
+    const tissueSection = hasTissueData
+      ? `
+═══ SECTION 1: TISSUE-LAYER RESTRICTIONS (PRIORITY — address these FIRST) ═══
+
+SCAR TISSUE:
+${scarText}
+
+ADHESION BANDS:
+${adhesionText}
+
+MUSCLE PATHOLOGIES:
+${pathologyText}
+
+⚠️ These tissue restrictions must be addressed BEFORE biomechanical corrections. Scars, adhesions, and pathological tissue changes block fascial gliding, restrict ROM, and are often the upstream cause of the compensations and sling dysfunctions listed below.
+`
+      : '';
+
+    return `CLINICAL ASSESSMENT DATA:
+${tissueSection}
+═══ SECTION ${hasTissueData ? '2' : '1'}: PAIN & SYMPTOM MARKERS ═══
+
+PAIN MARKERS:
+${painText}
+
+═══ SECTION ${hasTissueData ? '3' : '2'}: CAUSAL CHAINS & CONTRIBUTORS ═══
+
+OVERALL MECHANISM SUMMARY:
+${data.mechanismSummary || 'Not available'}
+
+CAUSAL CHAINS (root cause → symptom):
+${causalChainText}
+
+TOP CONTRIBUTORS:
+${contributorsText}
+
+COMPENSATION PATTERNS:
+${compensationText}
+
+═══ SECTION ${hasTissueData ? '4' : '3'}: BIOMECHANICAL CONTEXT ═══
+
+LOAD REDISTRIBUTION:
+${loadText}
+
+KINETIC CHAIN DYSFUNCTIONS:
+${kineticText}
+
+SLING SYSTEM ANALYSIS:
+Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/A'}%
+System summary: ${data.slingData?.systemSummary || 'Not available'}
+${slingText}
+
+Based on this clinical data, DESIGN novel manual therapy techniques from first principles.${hasTissueData ? ' START with techniques that address the tissue-layer restrictions (scars, adhesions, pathologies) — these are the foundation. THEN address the biomechanical and sling dysfunctions.' : ''} DO NOT recommend standard named techniques — ENGINEER custom hands-on interventions that specifically address the tissue restrictions, joint dysfunctions, fascial continuity disruptions, and neural tension patterns identified above. Reason through tissue layers, force application vectors, hand contact points, and expected tissue responses.`;
+  }
+
   app.post("/api/manual-therapy-engine/design-custom", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { z } = await import("zod");
@@ -7522,73 +7767,6 @@ Based on this clinical data, generate a comprehensive, prioritized manual therap
 
       const data = parsed.data;
 
-      const causalChainText = data.causalChains.length > 0
-        ? data.causalChains.map((chain, i) =>
-            `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
-          ).join('\n')
-        : 'None identified';
-
-      const compensationText = data.compensationCards.length > 0
-        ? data.compensationCards.map(c =>
-            `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
-          ).join('\n')
-        : 'None identified';
-
-      const loadText = data.loadRedistribution.length > 0
-        ? data.loadRedistribution.map(l =>
-            `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`
-          ).join('\n')
-        : 'None identified';
-
-      const slingText = data.slingData?.slings && data.slingData.slings.length > 0
-        ? data.slingData.slings.map(s => {
-            const weakLinkStr = s.weakLinks.length > 0
-              ? ` | Weak links: ${s.weakLinks.map(w => `${w.muscle} (${w.activationPct}%)`).join(', ')}`
-              : '';
-            const rerouteStr = s.forceReroutes.length > 0
-              ? ` | Force reroutes: ${s.forceReroutes.map(r => `${r.fromMuscle}→${r.toMuscle} (${r.reroutePct}%)`).join(', ')}`
-              : '';
-            const targetStr = s.treatmentTargets.length > 0
-              ? ` | Targets: ${s.treatmentTargets.map(t => `${t.intervention} ${t.muscle}`).join(', ')}`
-              : '';
-            return `- ${s.label}: status=${s.status}, activation=${s.activationScore}%, forceTransfer=${s.forceTransferQuality}${weakLinkStr}${rerouteStr}${targetStr}\n  Narrative: ${s.narrative || 'N/A'}`;
-          }).join('\n')
-        : 'No sling data';
-
-      const painText = data.painMarkers.length > 0
-        ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
-        : 'None';
-
-      const contributorsText = data.topContributors.length > 0
-        ? data.topContributors.join(', ')
-        : 'None identified';
-
-      const kineticText = data.kineticChainDysfunctions.length > 0
-        ? data.kineticChainDysfunctions.map(k =>
-            `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`
-          ).join('\n')
-        : 'None identified';
-
-      const scarText = data.scarMarkers.length > 0
-        ? data.scarMarkers.map(s =>
-            `- ${s.anatomicalLabel} (${s.type.replace(/_/g, ' ')}): severity ${s.severity}/5, age=${s.age}, mobility=${s.mobility}, layers=[${s.affectedLayers.join(', ')}], pain on palpation=${s.painOnPalpation}/10, near ${s.nearestBone}`
-          ).join('\n')
-        : 'None documented';
-
-      const adhesionText = data.adhesionBands.length > 0
-        ? data.adhesionBands.map(b =>
-            `- ${b.startBone} → ${b.endBone}: tension=${b.tensionLevel}%, depth=${b.depth}, restricts=[${b.restrictedMovements.join(', ')}]`
-          ).join('\n')
-        : 'None documented';
-
-      const pathologyText = data.musclePathologies.length > 0
-        ? data.musclePathologies.map(m =>
-            `- ${m.label}: ${m.pathology} [${m.severity}]`
-          ).join('\n')
-        : 'None identified';
-
-      const hasTissueData = data.scarMarkers.length > 0 || data.adhesionBands.length > 0 || data.musclePathologies.length > 0;
-
       const focusInstruction = data.targetFocus
         ? `\n\nUSER-SPECIFIED TARGET FOCUS: "${data.targetFocus}"\nDesign manual therapy techniques that SPECIFICALLY address this target. If it names a fascial system, design techniques that work through ALL tissue layers along that line. If it names a joint or neural structure, design techniques that specifically mobilize that structure with appropriate grading and force application.`
         : '';
@@ -7598,154 +7776,8 @@ Based on this clinical data, generate a comprehensive, prioritized manual therap
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
       const aiClient = new OpenAI({ apiKey, baseURL });
 
-      const systemPrompt = `You are a manual therapy architect — NOT a technique recommender. Your job is to DESIGN NOVEL HANDS-ON INTERVENTIONS from tissue-level first principles based on the patient's specific dysfunction pattern.
-
-CRITICAL PRIORITY: TISSUE-LAYER RESTRICTIONS FIRST.
-Before addressing biomechanical alignment, sling dysfunction, or kinetic chain issues, you MUST first assess and address tissue-layer restrictions:
-- Scar tissue, fascial adhesions, and fibrotic areas that block tissue gliding
-- Myofascial trigger points creating local and referred patterns
-- Muscle pathologies (strains, tears, contractures) limiting tissue extensibility
-These tissue restrictions are often the ROOT CAUSE of the biomechanical and sling dysfunctions seen downstream. Treat the tissue first, then address the biomechanics.
-
-DO NOT simply name well-known techniques. Instead, ENGINEER custom manual therapy interventions by reasoning through:
-1. What TISSUE-LAYER RESTRICTIONS exist (scars, adhesions, trigger points, pathologies) and how they disrupt local tissue gliding and force transmission
-2. Which TISSUE LAYERS need to be addressed and in what ORDER (superficial fascia → deep fascia → periosteum → joint capsule)
-3. What FORCE APPLICATION VECTORS are needed (direction, depth, rhythm, grade)
-4. What HAND CONTACT and POSITIONING optimally accesses the target tissue
-5. How the technique RESTORES TISSUE MOBILITY through a dysfunctional fascial continuity or joint complex
-6. What the clinician should FEEL at each phase (barrier quality, fascial creep, tissue release, end-feel changes)
-
-MANUAL THERAPY DESIGN PRINCIPLES:
-- For fascial restrictions: design techniques that work through connected fascial lines (superficial back line, lateral line, spiral line, deep front line) — specify the exact tissue layer and the direction of fascial pull
-- For joint restrictions: design mobilization techniques specifying the exact grade (I-IV), direction (PA, AP, lateral, medial, cephalad, caudad), oscillation rhythm, and barrier engagement strategy
-- For neural tension: design neurodynamic techniques with specific slider vs tensioner parameters, specifying which neural structure and the exact limb positioning sequence
-- For myofascial trigger points: design techniques with specific compression depth, hold duration, and tissue response cues (local twitch response, referred pain pattern, release sensation)
-- For visceral restrictions: design techniques considering organ mobility and motility
-- Consider the fascial continuity — techniques should address interconnected tissue planes
-- Specify EXACT clinician hand positioning (which hand, which contact surface — pisiform, thenar eminence, fingertips, knuckles), body mechanics, and force transmission
-
-For each custom technique, provide:
-- A descriptive biomechanical name (not just a standard technique name)
-- The target system (fascial line, joint complex, neural structure, myofascial unit)
-- Clinical target (the specific dysfunction being addressed)
-- Exact patient positioning with joint angles and support surfaces
-- Step-by-step hand placement instructions for the clinician
-- Force application sequence: ordered steps with direction, depth, rhythm, grade, and tissue response cues
-- What the clinician should feel at each phase (tissue response cues)
-- Why THIS specific technique addresses THIS specific dysfunction (biomechanical rationale)
-- Dosage parameters (duration, repetitions, sets, frequency)
-- Safety cues and contraindications
-- 3-stage progression (e.g., superficial → deep, grade II → grade IV, passive → active-assisted)
-- Self-treatment adaptation the patient can do at home
-
-RESPONSE FORMAT — return valid JSON:
-{
-  "customTechniques": [
-    {
-      "name": "Descriptive biomechanical technique name",
-      "targetSystem": "Which fascial line/joint complex/neural structure this targets",
-      "clinicalTarget": "The specific dysfunction this addresses",
-      "patientPositioning": "Exact body orientation, support surfaces, joint angles, pillow placement",
-      "handPlacementSteps": ["Step 1: Place dominant hand...", "Step 2: Stabilizing hand..."],
-      "forceApplicationSequence": [
-        {
-          "order": 1,
-          "action": "Description of the manual action",
-          "direction": "e.g., posterior-anterior with slight cephalad angle",
-          "depth": "e.g., superficial fascia layer, approximately 1-2cm",
-          "rhythm": "e.g., slow sustained, 2-3 second oscillations",
-          "grade": "e.g., Grade III-, approaching tissue barrier",
-          "tissueResponseCue": "What the clinician should feel — e.g., initial tissue resistance, fascial barrier engagement"
-        }
-      ],
-      "tissueResponseCues": ["Phase 1: Feel for...", "Phase 2: As tissue releases...", "Phase 3: End-feel should change to..."],
-      "biomechanicalRationale": "Detailed explanation of WHY this technique addresses the specific dysfunction — reference tissue layers, fascial lines, arthrokinematics, neurodynamics",
-      "dosage": { "duration": "30-60 seconds per application", "repetitions": "3-5 repetitions", "sets": "2-3 sets", "frequency": "2-3x/week" },
-      "safetyCues": ["safety cue 1", "safety cue 2"],
-      "contraindications": "When to avoid or modify",
-      "progressionStages": [
-        { "stage": 1, "name": "Superficial/Gentle", "description": "How to start — superficial tissue layers, lower grades, gentle rhythm" },
-        { "stage": 2, "name": "Intermediate/Deeper", "description": "Progress to deeper tissue layers, higher grades, sustained holds" },
-        { "stage": 3, "name": "Integration/Active", "description": "Combine with active patient movement, functional integration" }
-      ],
-      "selfTreatmentAdaptation": "What the patient can replicate at home — foam roller, lacrosse ball, towel techniques, self-mobilization",
-      "tissueTargets": [
-        {
-          "tissueName": "quadratus_lumborum",
-          "goalType": "release",
-          "goalText": "reduce tension by 20%"
-        },
-        {
-          "tissueName": "gluteus_medius",
-          "goalType": "activate",
-          "goalText": "increase activation by 40%"
-        }
-      ]
-    }
-  ],
-  "designRationale": "Overall biomechanical reasoning for why these specific techniques were designed and how they work together as a treatment program",
-  "safetyNotes": "Global safety considerations for this manual therapy program"
-}
-
-IMPORTANT: For each technique, include a "tissueTargets" array listing the primary muscles/tissues targeted. Each entry must have:
-- "tissueName": the muscle or tissue name in snake_case (e.g., "quadratus_lumborum", "gluteus_maximus", "piriformis", "erector_spinae", "psoas", "rectus_femoris", "biceps_femoris", "gastrocnemius", "soleus", "tibialis_anterior", "pectoralis_major", "latissimus_dorsi", "trapezius", "deltoid", "infraspinatus", "supraspinatus", "rhomboid", "levator_scapulae", "sternocleidomastoid", "scalene", "rectus_abdominis", "external_obliques", "internal_obliques", "transverse_abdominis", "multifidus", "diaphragm", "tensor_fasciae_latae", "iliotibial_band", "plantar_fascia", "thoracolumbar_fascia", "hip_flexor", "adductor", "obturator_externus")
-- "goalType": one of "release", "mobilize", "activate", "stabilize", "decompress"
-- "goalText": a concise quantified clinical goal string (e.g., "reduce tension by 20%", "increase ROM by 15°", "restore activation to 70%")
-
-Design 3-5 custom manual therapy techniques that work together as a cohesive treatment program. Each technique should target a DIFFERENT aspect of the dysfunction pattern.${focusInstruction}`;
-
-      const tissueSection = hasTissueData
-        ? `
-═══ SECTION 1: TISSUE-LAYER RESTRICTIONS (PRIORITY — address these FIRST) ═══
-
-SCAR TISSUE:
-${scarText}
-
-ADHESION BANDS:
-${adhesionText}
-
-MUSCLE PATHOLOGIES:
-${pathologyText}
-
-⚠️ These tissue restrictions must be addressed BEFORE biomechanical corrections. Scars, adhesions, and pathological tissue changes block fascial gliding, restrict ROM, and are often the upstream cause of the compensations and sling dysfunctions listed below.
-`
-        : '';
-
-      const userPrompt = `CLINICAL ASSESSMENT DATA:
-${tissueSection}
-═══ SECTION ${hasTissueData ? '2' : '1'}: PAIN & SYMPTOM MARKERS ═══
-
-PAIN MARKERS:
-${painText}
-
-═══ SECTION ${hasTissueData ? '3' : '2'}: CAUSAL CHAINS & CONTRIBUTORS ═══
-
-OVERALL MECHANISM SUMMARY:
-${data.mechanismSummary || 'Not available'}
-
-CAUSAL CHAINS (root cause → symptom):
-${causalChainText}
-
-TOP CONTRIBUTORS:
-${contributorsText}
-
-COMPENSATION PATTERNS:
-${compensationText}
-
-═══ SECTION ${hasTissueData ? '4' : '3'}: BIOMECHANICAL CONTEXT ═══
-
-LOAD REDISTRIBUTION:
-${loadText}
-
-KINETIC CHAIN DYSFUNCTIONS:
-${kineticText}
-
-SLING SYSTEM ANALYSIS:
-Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/A'}%
-System summary: ${data.slingData?.systemSummary || 'Not available'}
-${slingText}
-
-Based on this clinical data, DESIGN novel manual therapy techniques from first principles.${hasTissueData ? ' START with techniques that address the tissue-layer restrictions (scars, adhesions, pathologies) — these are the foundation. THEN address the biomechanical and sling dysfunctions.' : ''} DO NOT recommend standard named techniques — ENGINEER custom hands-on interventions that specifically address the tissue restrictions, joint dysfunctions, fascial continuity disruptions, and neural tension patterns identified above. Reason through tissue layers, force application vectors, hand contact points, and expected tissue responses.`;
+      const systemPrompt = buildManualTherapySystemPrompt(focusInstruction);
+      const userPrompt = buildManualTherapyClinicalPrompt(data);
 
       const response = await aiClient.chat.completions.create({
         model: "gpt-4o",
@@ -7873,6 +7905,91 @@ Based on this clinical data, DESIGN novel manual therapy techniques from first p
           designRationale: z.string(),
           safetyNotes: z.string(),
         }),
+        originalPayload: z.object({
+          targetFocus: z.string().optional().default(""),
+          mechanismSummary: z.string().optional().default(""),
+          causalChains: z.array(z.array(z.object({
+            step: z.number(),
+            structure: z.string(),
+            finding: z.string(),
+            mechanism: z.string().optional(),
+            category: z.string().optional(),
+            severity: z.string().optional(),
+          }))).optional().default([]),
+          compensationCards: z.array(z.object({
+            title: z.string(),
+            description: z.string().optional(),
+            severity: z.string().optional(),
+            primaryRegion: z.string().optional(),
+            compensatingRegion: z.string().optional(),
+          })).optional().default([]),
+          loadRedistribution: z.array(z.object({
+            joint: z.string(),
+            change: z.string().optional(),
+            clinical: z.string().optional(),
+          })).optional().default([]),
+          slingData: z.object({
+            systemSummary: z.string().optional(),
+            overallForceTransferScore: z.number().optional(),
+            slings: z.array(z.object({
+              label: z.string(),
+              status: z.string(),
+              activationScore: z.number(),
+              forceTransferQuality: z.string(),
+              weakLinks: z.array(z.object({
+                muscle: z.string(),
+                activationPct: z.number(),
+                reason: z.string(),
+              })).optional().default([]),
+              forceReroutes: z.array(z.object({
+                fromMuscle: z.string(),
+                toMuscle: z.string(),
+                reroutePct: z.number(),
+                clinical: z.string(),
+              })).optional().default([]),
+              treatmentTargets: z.array(z.object({
+                muscle: z.string(),
+                intervention: z.string(),
+                rationale: z.string(),
+              })).optional().default([]),
+              narrative: z.string().optional(),
+            })).optional().default([]),
+          }).optional(),
+          painMarkers: z.array(z.object({
+            label: z.string(),
+            severity: z.number().optional(),
+            type: z.string().optional(),
+          })).optional().default([]),
+          topContributors: z.array(z.string()).optional().default([]),
+          kineticChainDysfunctions: z.array(z.object({
+            chain: z.string().optional(),
+            dysfunction: z.string().optional(),
+            clinical: z.string().optional(),
+          })).optional().default([]),
+          scarMarkers: z.array(z.object({
+            anatomicalLabel: z.string(),
+            type: z.string(),
+            severity: z.number(),
+            age: z.string(),
+            mobility: z.string(),
+            affectedLayers: z.array(z.string()),
+            painOnPalpation: z.number(),
+            nearestBone: z.string(),
+          })).optional().default([]),
+          adhesionBands: z.array(z.object({
+            startBone: z.string(),
+            endBone: z.string(),
+            tensionLevel: z.number(),
+            depth: z.string(),
+            restrictedMovements: z.array(z.string()),
+          })).optional().default([]),
+          musclePathologies: z.array(z.object({
+            muscleId: z.string(),
+            label: z.string(),
+            pathology: z.string(),
+            severity: z.string(),
+          })).optional().default([]),
+        }),
       });
 
       const parsed = refineInputSchema.safeParse(req.body);
@@ -7887,41 +8004,35 @@ Based on this clinical data, DESIGN novel manual therapy techniques from first p
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
       const aiClient = new OpenAI({ apiKey, baseURL });
 
-      const systemPrompt = `You are a manual therapy architect performing ITERATIVE REFINEMENT on previously designed custom techniques. The user has already received an initial set of custom manual therapy techniques and is now providing feedback to refine them.
+      const focusInstruction = data.originalPayload.targetFocus
+        ? `\n\nUSER-SPECIFIED TARGET FOCUS: "${data.originalPayload.targetFocus}"\nDesign manual therapy techniques that SPECIFICALLY address this target.`
+        : '';
+      const systemPrompt = buildManualTherapySystemPrompt(focusInstruction) + `
 
-RULES FOR REFINEMENT:
-1. PRESERVE techniques that the user did NOT mention — do not change them unless the feedback implies a global change.
-2. MODIFY only the specific aspects the user requests (e.g., patient positioning, hand placement, force application, dosage).
-3. You may ADD new techniques if the user requests them.
-4. You may REMOVE techniques if the user explicitly asks.
-5. Maintain the same JSON response format as the original design.
-6. Keep all technique numbering consistent so the user can reference techniques by number.
-7. If the user's feedback is vague, interpret it clinically and make reasonable professional decisions.
+REFINEMENT MODE ACTIVE:
+You are now REFINING previously designed techniques based on user feedback. Rules:
+1. PRESERVE techniques the user did NOT mention — do not change them unless the feedback implies a global change.
+2. MODIFY only the specific aspects the user requests.
+3. You may ADD new techniques if requested, or REMOVE techniques if explicitly asked.
+4. Maintain the same JSON response format. Return the COMPLETE updated set of techniques.
+5. Keep technique numbering consistent so the user can reference techniques by number.
+6. If the user's feedback is vague, interpret it clinically and make reasonable professional decisions.`;
 
-RESPONSE FORMAT — return valid JSON with the COMPLETE updated set of techniques (not just the changed ones):
-{
-  "customTechniques": [ ... same format as original ... ],
-  "designRationale": "Updated rationale explaining the refinement changes and how the program now works together",
-  "safetyNotes": "Updated safety considerations"
-}
-
-IMPORTANT: For each technique, include a "tissueTargets" array listing the primary muscles/tissues targeted. Each entry must have:
-- "tissueName": the muscle or tissue name in snake_case
-- "goalType": one of "release", "mobilize", "activate", "stabilize", "decompress"
-- "goalText": a concise quantified clinical goal string`;
+      const originalClinicalPrompt = buildManualTherapyClinicalPrompt(data.originalPayload);
 
       const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
         { role: "system", content: systemPrompt },
+        { role: "user", content: originalClinicalPrompt },
+        { role: "assistant", content: JSON.stringify(data.currentTechniques) },
       ];
 
       for (const msg of data.conversationHistory) {
         messages.push({ role: msg.role, content: msg.content });
       }
 
-      const currentTechniquesJson = JSON.stringify(data.currentTechniques, null, 2);
       messages.push({
         role: "user",
-        content: `Here are the CURRENT techniques that need refinement:\n\n${currentTechniquesJson}\n\nREFINEMENT REQUEST:\n${data.refinementInstruction}\n\nReturn the COMPLETE updated set of techniques with the requested changes applied. Preserve unchanged techniques exactly as they are.`,
+        content: `REFINEMENT REQUEST:\n${data.refinementInstruction}\n\nReturn the COMPLETE updated set of techniques with the requested changes applied. Preserve unchanged techniques exactly as they are.`,
       });
 
       const response = await aiClient.chat.completions.create({

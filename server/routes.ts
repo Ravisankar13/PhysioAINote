@@ -7490,6 +7490,29 @@ Based on this clinical data, generate a comprehensive, prioritized manual therap
           dysfunction: z.string().optional(),
           clinical: z.string().optional(),
         })).optional().default([]),
+        scarMarkers: z.array(z.object({
+          anatomicalLabel: z.string(),
+          type: z.string(),
+          severity: z.number(),
+          age: z.string(),
+          mobility: z.string(),
+          affectedLayers: z.array(z.string()),
+          painOnPalpation: z.number(),
+          nearestBone: z.string(),
+        })).optional().default([]),
+        adhesionBands: z.array(z.object({
+          startBone: z.string(),
+          endBone: z.string(),
+          tensionLevel: z.number(),
+          depth: z.string(),
+          restrictedMovements: z.array(z.string()),
+        })).optional().default([]),
+        musclePathologies: z.array(z.object({
+          muscleId: z.string(),
+          label: z.string(),
+          pathology: z.string(),
+          severity: z.string(),
+        })).optional().default([]),
       });
 
       const parsed = customManualTherapyInputSchema.safeParse(req.body);
@@ -7546,6 +7569,26 @@ Based on this clinical data, generate a comprehensive, prioritized manual therap
           ).join('\n')
         : 'None identified';
 
+      const scarText = data.scarMarkers.length > 0
+        ? data.scarMarkers.map(s =>
+            `- ${s.anatomicalLabel} (${s.type.replace(/_/g, ' ')}): severity ${s.severity}/5, age=${s.age}, mobility=${s.mobility}, layers=[${s.affectedLayers.join(', ')}], pain on palpation=${s.painOnPalpation}/10, near ${s.nearestBone}`
+          ).join('\n')
+        : 'None documented';
+
+      const adhesionText = data.adhesionBands.length > 0
+        ? data.adhesionBands.map(b =>
+            `- ${b.startBone} → ${b.endBone}: tension=${b.tensionLevel}%, depth=${b.depth}, restricts=[${b.restrictedMovements.join(', ')}]`
+          ).join('\n')
+        : 'None documented';
+
+      const pathologyText = data.musclePathologies.length > 0
+        ? data.musclePathologies.map(m =>
+            `- ${m.label}: ${m.pathology} [${m.severity}]`
+          ).join('\n')
+        : 'None identified';
+
+      const hasTissueData = data.scarMarkers.length > 0 || data.adhesionBands.length > 0 || data.musclePathologies.length > 0;
+
       const focusInstruction = data.targetFocus
         ? `\n\nUSER-SPECIFIED TARGET FOCUS: "${data.targetFocus}"\nDesign manual therapy techniques that SPECIFICALLY address this target. If it names a fascial system, design techniques that work through ALL tissue layers along that line. If it names a joint or neural structure, design techniques that specifically mobilize that structure with appropriate grading and force application.`
         : '';
@@ -7555,14 +7598,22 @@ Based on this clinical data, generate a comprehensive, prioritized manual therap
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
       const aiClient = new OpenAI({ apiKey, baseURL });
 
-      const systemPrompt = `You are a manual therapy architect — NOT a technique recommender. Your job is to DESIGN NOVEL HANDS-ON INTERVENTIONS from biomechanical first principles based on the patient's specific dysfunction pattern.
+      const systemPrompt = `You are a manual therapy architect — NOT a technique recommender. Your job is to DESIGN NOVEL HANDS-ON INTERVENTIONS from tissue-level first principles based on the patient's specific dysfunction pattern.
+
+CRITICAL PRIORITY: TISSUE-LAYER RESTRICTIONS FIRST.
+Before addressing biomechanical alignment, sling dysfunction, or kinetic chain issues, you MUST first assess and address tissue-layer restrictions:
+- Scar tissue, fascial adhesions, and fibrotic areas that block tissue gliding
+- Myofascial trigger points creating local and referred patterns
+- Muscle pathologies (strains, tears, contractures) limiting tissue extensibility
+These tissue restrictions are often the ROOT CAUSE of the biomechanical and sling dysfunctions seen downstream. Treat the tissue first, then address the biomechanics.
 
 DO NOT simply name well-known techniques. Instead, ENGINEER custom manual therapy interventions by reasoning through:
-1. Which TISSUE LAYERS need to be addressed and in what ORDER (superficial fascia → deep fascia → periosteum → joint capsule)
-2. What FORCE APPLICATION VECTORS are needed (direction, depth, rhythm, grade)
-3. What HAND CONTACT and POSITIONING optimally accesses the target tissue
-4. How the technique RESTORES TISSUE MOBILITY through a dysfunctional fascial continuity or joint complex
-5. What the clinician should FEEL at each phase (barrier quality, fascial creep, tissue release, end-feel changes)
+1. What TISSUE-LAYER RESTRICTIONS exist (scars, adhesions, trigger points, pathologies) and how they disrupt local tissue gliding and force transmission
+2. Which TISSUE LAYERS need to be addressed and in what ORDER (superficial fascia → deep fascia → periosteum → joint capsule)
+3. What FORCE APPLICATION VECTORS are needed (direction, depth, rhythm, grade)
+4. What HAND CONTACT and POSITIONING optimally accesses the target tissue
+5. How the technique RESTORES TISSUE MOBILITY through a dysfunctional fascial continuity or joint complex
+6. What the clinician should FEEL at each phase (barrier quality, fascial creep, tissue release, end-feel changes)
 
 MANUAL THERAPY DESIGN PRINCIPLES:
 - For fascial restrictions: design techniques that work through connected fascial lines (superficial back line, lateral line, spiral line, deep front line) — specify the exact tissue layer and the direction of fascial pull

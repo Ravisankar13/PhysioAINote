@@ -8267,6 +8267,16 @@ ${ddxList}`;
                         severity: (pm as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                      scarMarkers={scarMarkers}
+                      adhesionBands={adhesionBands}
+                      musclePathologies={Object.entries(compensatedOverrides)
+                        .filter(([, ov]) => ov?.pathology && ov.pathology !== 'none')
+                        .map(([muscleId, ov]) => ({
+                          muscleId,
+                          label: muscleId.replace(/_/g, ' '),
+                          pathology: ov!.pathology as string,
+                          severity: ov!.tensionOffset > 20 ? 'severe' : ov!.tensionOffset > 10 ? 'moderate' : 'mild',
+                        }))}
                     />
                   )}
                   {mechanismActiveTab === 'electroRx' && (

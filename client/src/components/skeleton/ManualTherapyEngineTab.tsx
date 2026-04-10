@@ -3,6 +3,7 @@ import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, Trendin
 import { apiRequest } from '@/lib/queryClient';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
+import type { ScarMarker, AdhesionBand } from '@/lib/scarTissueMapping';
 
 interface TechniqueItem {
   technique: string;
@@ -74,17 +75,28 @@ interface CustomManualTherapyResult {
   safetyNotes: string;
 }
 
+interface MusclePathologyInput {
+  muscleId: string;
+  label: string;
+  pathology: string;
+  severity: string;
+}
+
 interface ManualTherapyEngineTabProps {
   mechanismAnalysis: InjuryMechanismResult | null;
   slingAnalysis: SlingAnalysisResult | null;
   painMarkers: PainMarkerInput[];
+  scarMarkers?: ScarMarker[];
+  adhesionBands?: AdhesionBand[];
+  musclePathologies?: MusclePathologyInput[];
 }
 
 const MT_FOCUS_PRESETS = [
   { label: 'Fascial Release', value: 'fascial release and myofascial continuity' },
+  { label: 'Myofascial Trigger Points', value: 'myofascial trigger point release' },
+  { label: 'Scar / Adhesion Release', value: 'scar tissue mobilization and adhesion release across tissue layers' },
   { label: 'Joint Mobilization', value: 'joint mobilization and arthrokinematics' },
   { label: 'Neural Mobilization', value: 'neural mobilization and neurodynamics' },
-  { label: 'Myofascial Trigger Points', value: 'myofascial trigger point release' },
   { label: 'Visceral Mobilization', value: 'visceral mobilization and organ motility' },
   { label: 'Thoracolumbar Fascia', value: 'thoracolumbar fascia and posterior chain' },
   { label: 'Posterior Oblique Sling', value: 'posterior oblique sling fascial continuity' },
@@ -390,7 +402,7 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
   );
 }
 
-export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers }: ManualTherapyEngineTabProps) {
+export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies }: ManualTherapyEngineTabProps) {
   const [plan, setPlan] = useState<ManualTherapyPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -453,6 +465,38 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       })),
     };
 
+    if (scarMarkers && scarMarkers.length > 0) {
+      payload.scarMarkers = scarMarkers.map(s => ({
+        anatomicalLabel: s.anatomicalLabel,
+        type: s.type,
+        severity: s.severity,
+        age: s.age,
+        mobility: s.mobility,
+        affectedLayers: s.affectedLayers,
+        painOnPalpation: s.painOnPalpation,
+        nearestBone: s.nearestBone,
+      }));
+    }
+
+    if (adhesionBands && adhesionBands.length > 0) {
+      payload.adhesionBands = adhesionBands.map(b => ({
+        startBone: b.startBone,
+        endBone: b.endBone,
+        tensionLevel: b.tensionLevel,
+        depth: b.depth,
+        restrictedMovements: b.restrictedMovements,
+      }));
+    }
+
+    if (musclePathologies && musclePathologies.length > 0) {
+      payload.musclePathologies = musclePathologies.map(m => ({
+        muscleId: m.muscleId,
+        label: m.label,
+        pathology: m.pathology,
+        severity: m.severity,
+      }));
+    }
+
     if (slingAnalysis) {
       payload.slingData = {
         systemSummary: slingAnalysis.systemSummary,
@@ -484,7 +528,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
     }
 
     return payload;
-  }, [mechanismAnalysis, slingAnalysis, painMarkers]);
+  }, [mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies]);
 
   const generatePlan = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();

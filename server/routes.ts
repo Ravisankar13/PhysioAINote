@@ -6818,6 +6818,304 @@ Based on this clinical data, generate a comprehensive, prioritized exercise pres
     }
   });
 
+  app.post("/api/exercise-engine/design-custom", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+
+      const customExerciseInputSchema = z.object({
+        targetFocus: z.string().optional().default(""),
+        mechanismSummary: z.string().optional().default(""),
+        causalChains: z.array(z.array(z.object({
+          step: z.number(),
+          structure: z.string(),
+          finding: z.string(),
+          mechanism: z.string().optional(),
+          category: z.string().optional(),
+          severity: z.string().optional(),
+        }))).optional().default([]),
+        compensationCards: z.array(z.object({
+          title: z.string(),
+          description: z.string().optional(),
+          severity: z.string().optional(),
+          primaryRegion: z.string().optional(),
+          compensatingRegion: z.string().optional(),
+        })).optional().default([]),
+        loadRedistribution: z.array(z.object({
+          joint: z.string(),
+          change: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+        slingData: z.object({
+          systemSummary: z.string().optional(),
+          overallForceTransferScore: z.number().optional(),
+          slings: z.array(z.object({
+            label: z.string(),
+            status: z.string(),
+            activationScore: z.number(),
+            forceTransferQuality: z.string(),
+            weakLinks: z.array(z.object({
+              muscle: z.string(),
+              activationPct: z.number(),
+              reason: z.string(),
+            })).optional().default([]),
+            forceReroutes: z.array(z.object({
+              fromMuscle: z.string(),
+              toMuscle: z.string(),
+              reroutePct: z.number(),
+              clinical: z.string(),
+            })).optional().default([]),
+            treatmentTargets: z.array(z.object({
+              muscle: z.string(),
+              intervention: z.string(),
+              rationale: z.string(),
+            })).optional().default([]),
+            narrative: z.string().optional(),
+          })).optional().default([]),
+        }).optional(),
+        painMarkers: z.array(z.object({
+          label: z.string(),
+          severity: z.number().optional(),
+          type: z.string().optional(),
+        })).optional().default([]),
+        topContributors: z.array(z.string()).optional().default([]),
+        kineticChainDysfunctions: z.array(z.object({
+          chain: z.string().optional(),
+          dysfunction: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+      });
+
+      const parsed = customExerciseInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const causalChainText = data.causalChains.length > 0
+        ? data.causalChains.map((chain, i) =>
+            `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
+          ).join('\n')
+        : 'None identified';
+
+      const compensationText = data.compensationCards.length > 0
+        ? data.compensationCards.map(c =>
+            `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
+          ).join('\n')
+        : 'None identified';
+
+      const loadText = data.loadRedistribution.length > 0
+        ? data.loadRedistribution.map(l =>
+            `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const slingText = data.slingData?.slings && data.slingData.slings.length > 0
+        ? data.slingData.slings.map(s => {
+            const weakLinkStr = s.weakLinks.length > 0
+              ? ` | Weak links: ${s.weakLinks.map(w => `${w.muscle} (${w.activationPct}%)`).join(', ')}`
+              : '';
+            const rerouteStr = s.forceReroutes.length > 0
+              ? ` | Force reroutes: ${s.forceReroutes.map(r => `${r.fromMuscle}→${r.toMuscle} (${r.reroutePct}%)`).join(', ')}`
+              : '';
+            const targetStr = s.treatmentTargets.length > 0
+              ? ` | Targets: ${s.treatmentTargets.map(t => `${t.intervention} ${t.muscle}`).join(', ')}`
+              : '';
+            return `- ${s.label}: status=${s.status}, activation=${s.activationScore}%, forceTransfer=${s.forceTransferQuality}${weakLinkStr}${rerouteStr}${targetStr}\n  Narrative: ${s.narrative || 'N/A'}`;
+          }).join('\n')
+        : 'No sling data';
+
+      const painText = data.painMarkers.length > 0
+        ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
+        : 'None';
+
+      const contributorsText = data.topContributors.length > 0
+        ? data.topContributors.join(', ')
+        : 'None identified';
+
+      const kineticText = data.kineticChainDysfunctions.length > 0
+        ? data.kineticChainDysfunctions.map(k =>
+            `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`
+          ).join('\n')
+        : 'None identified';
+
+      const focusInstruction = data.targetFocus
+        ? `\n\nUSER-SPECIFIED TARGET FOCUS: "${data.targetFocus}"\nDesign exercises that SPECIFICALLY address this target. If it names a sling (e.g., "anterior oblique sling"), design movements that restore force transfer through ALL muscles in that sling in the correct activation sequence. If it names a muscle or clinical goal, design movements that directly target that structure or objective.`
+        : '';
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const systemPrompt = `You are a biomechanical exercise architect — NOT an exercise recommender. Your job is to DESIGN NOVEL MOVEMENTS from first principles based on the patient's specific biomechanical dysfunction pattern.
+
+DO NOT simply name well-known exercises. Instead, ENGINEER custom movements by reasoning through:
+1. Which muscles need to activate and in what SEQUENCE (prime movers fire first, stabilizers co-contract, decelerators control)
+2. What FORCE VECTORS the movement should produce (direction, magnitude, plane of motion)
+3. What STARTING POSITION optimally pre-loads the target sling/chain
+4. How the movement RESTORES FORCE TRANSFER through a dysfunctional pathway
+
+BIOMECHANICAL DESIGN PRINCIPLES:
+- For sling restoration: design movements that demand SEQUENTIAL activation across all muscles in the sling chain
+- For weak links: position the body so the weak muscle is the PRIMARY force producer and cannot be bypassed
+- For force reroutes: create movements that mechanically BLOCK the compensation pathway, forcing the correct muscle to engage
+- For overloaded structures: design movements that REDISTRIBUTE load away from the overloaded tissue while maintaining function
+- Use gravity, resistance band vectors, body position, and limb leverage to create SPECIFIC force demands
+- Consider the fascial continuity — movements should "pull through" connected fascial lines
+- Specify the EXACT joint angles, body orientation, and resistance direction
+
+For each custom exercise, provide:
+- A descriptive biomechanical name (not a standard exercise name)
+- Detailed starting position with exact body positioning
+- Step-by-step movement instructions (numbered)
+- The activation pattern: which muscles fire, in what order, and their role (prime mover / stabilizer / decelerator / force transmitter)
+- Force vector description: direction, plane, and type of resistance
+- Why THIS specific movement addresses THIS specific dysfunction (biomechanical rationale)
+- Dosage with reasoning
+- Safety cues specific to the dysfunction pattern
+- 3-stage progression ladder
+
+RESPONSE FORMAT — return valid JSON:
+{
+  "customExercises": [
+    {
+      "name": "Descriptive biomechanical movement name",
+      "targetSystem": "Which sling/chain/structure this targets",
+      "clinicalTarget": "The specific dysfunction this addresses",
+      "startingPosition": "Detailed body position description including joint angles, orientation, surface, equipment",
+      "movementInstructions": ["Step 1: ...", "Step 2: ...", "Step 3: ..."],
+      "activationPattern": [
+        { "order": 1, "muscle": "muscle name", "role": "prime_mover", "timing": "initiates movement", "cue": "patient-friendly activation cue" },
+        { "order": 2, "muscle": "muscle name", "role": "stabilizer", "timing": "co-contracts throughout", "cue": "patient cue" },
+        { "order": 3, "muscle": "muscle name", "role": "decelerator", "timing": "controls eccentric return", "cue": "patient cue" }
+      ],
+      "forceVector": {
+        "direction": "e.g., posterior-lateral-inferior",
+        "plane": "e.g., transverse with sagittal component",
+        "resistanceType": "e.g., gravity, band, body weight, manual",
+        "loadDescription": "specific load application details"
+      },
+      "biomechanicalRationale": "Detailed explanation of WHY this movement design addresses the specific dysfunction — reference force vectors, activation sequences, fascial lines",
+      "dosage": { "sets": "3", "reps": "8-10", "tempo": "3-1-2-1", "restSeconds": "60", "frequency": "3x/week" },
+      "safetyCues": ["cue 1", "cue 2"],
+      "contraindications": "When to avoid or modify",
+      "progressionStages": [
+        { "stage": 1, "name": "Foundation", "description": "How to start — lower load, simpler pattern" },
+        { "stage": 2, "name": "Development", "description": "Increase complexity — add resistance, speed, or range" },
+        { "stage": 3, "name": "Integration", "description": "Full functional integration — sport/task-specific progression" }
+      ]
+    }
+  ],
+  "designRationale": "Overall biomechanical reasoning for why these specific movements were designed and how they work together as a program",
+  "safetyNotes": "Global safety considerations for this exercise set"
+}
+
+Design 3-5 custom exercises that work together as a cohesive rehabilitation program. Each exercise should target a DIFFERENT aspect of the dysfunction pattern.${focusInstruction}`;
+
+      const userPrompt = `CLINICAL ASSESSMENT DATA:
+
+OVERALL MECHANISM SUMMARY:
+${data.mechanismSummary || 'Not available'}
+
+CAUSAL CHAINS (root cause → symptom):
+${causalChainText}
+
+TOP CONTRIBUTORS:
+${contributorsText}
+
+COMPENSATION PATTERNS:
+${compensationText}
+
+LOAD REDISTRIBUTION:
+${loadText}
+
+KINETIC CHAIN DYSFUNCTIONS:
+${kineticText}
+
+SLING SYSTEM ANALYSIS:
+Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/A'}%
+System summary: ${data.slingData?.systemSummary || 'Not available'}
+${slingText}
+
+PAIN MARKERS:
+${painText}
+
+Based on this clinical data, DESIGN novel biomechanical exercises from first principles. DO NOT recommend standard exercises — ENGINEER custom movements that specifically address the force transfer deficits, activation sequence failures, and compensation patterns identified above.`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 6000,
+        temperature: 0.5,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const customExerciseResponseSchema = z.object({
+        customExercises: z.array(z.object({
+          name: z.string(),
+          targetSystem: z.string(),
+          clinicalTarget: z.string(),
+          startingPosition: z.string(),
+          movementInstructions: z.array(z.string()),
+          activationPattern: z.array(z.object({
+            order: z.number(),
+            muscle: z.string(),
+            role: z.string(),
+            timing: z.string(),
+            cue: z.string(),
+          })),
+          forceVector: z.object({
+            direction: z.string(),
+            plane: z.string(),
+            resistanceType: z.string(),
+            loadDescription: z.string(),
+          }),
+          biomechanicalRationale: z.string(),
+          dosage: z.object({
+            sets: z.string(),
+            reps: z.string(),
+            tempo: z.string().default('controlled'),
+            restSeconds: z.string().default('60'),
+            frequency: z.string().default('3x/week'),
+          }),
+          safetyCues: z.array(z.string()),
+          contraindications: z.string().default('None'),
+          progressionStages: z.array(z.object({
+            stage: z.number(),
+            name: z.string(),
+            description: z.string(),
+          })),
+        })),
+        designRationale: z.string().default(''),
+        safetyNotes: z.string().default(''),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = customExerciseResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Custom exercise design response validation failed:", validated.error.format());
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          validationErrors: validated.error.format(),
+        });
+      }
+      res.json(validated.data);
+    } catch (error: unknown) {
+      console.error("Custom exercise design error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to design custom exercises", details: message });
+    }
+  });
+
   app.post("/api/manual-therapy-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { z } = await import("zod");

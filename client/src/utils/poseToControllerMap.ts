@@ -70,7 +70,7 @@ export interface ControllerValues {
   pelvis: { tilt: number; obliquity: number; rotation: number };
   spine: { flexion: number; lateralFlexion: number; kyphosis: number; lordosis: number; scoliosis: number; forwardHead: number; lateralShift: number; cervicalFlexion: number; cervicalRotation: number; cervicalLateralFlexion: number; thoracicFlexion: number; thoracicRotation: number; thoracicLateralFlexion: number; lumbarFlexion: number; lumbarRotation: number; lumbarLateralFlexion: number };
   neck: { flexion: number; rotation: number; lateralFlexion: number };
-  scapula: { leftElevation: number; rightElevation: number; leftProtraction: number; rightProtraction: number };
+  scapula: { leftElevation: number; rightElevation: number; leftProtraction: number; rightProtraction: number; leftUpwardRotation: number; rightUpwardRotation: number };
 }
 
 /**
@@ -275,8 +275,8 @@ export function poseToControllerValues(pose: ExtendedPoseInput): ControllerValue
   const rightGHPeak = Math.max(Math.abs(rightShoulderFlexion), Math.abs(rightShoulderAbduction));
   const leftScapRhythm = leftGHPeak > SCAP_RHYTHM_THRESHOLD ? (leftGHPeak - SCAP_RHYTHM_THRESHOLD) * SCAP_RHYTHM_RATIO : 0;
   const rightScapRhythm = rightGHPeak > SCAP_RHYTHM_THRESHOLD ? (rightGHPeak - SCAP_RHYTHM_THRESHOLD) * SCAP_RHYTHM_RATIO : 0;
-  const scapLeftElev = (scapData ? applyDeadZone(clamp(scapData.leftElevation, -0.3, 0.3), 0.015) : 0) + leftScapRhythm;
-  const scapRightElev = (scapData ? applyDeadZone(clamp(scapData.rightElevation, -0.3, 0.3), 0.015) : 0) + rightScapRhythm;
+  const scapLeftElev = scapData ? applyDeadZone(clamp(scapData.leftElevation, -0.3, 0.3), 0.015) : 0;
+  const scapRightElev = scapData ? applyDeadZone(clamp(scapData.rightElevation, -0.3, 0.3), 0.015) : 0;
   const scapLeftProt = scapData ? applyDeadZone(clamp(scapData.leftProtraction, -0.35, 0.35), 0.015) : 0;
   const scapRightProt = scapData ? applyDeadZone(clamp(scapData.rightProtraction, -0.35, 0.35), 0.015) : 0;
   
@@ -307,7 +307,7 @@ export function poseToControllerValues(pose: ExtendedPoseInput): ControllerValue
       lumbarLateralFlexion: pose.spineSegments ? clamp(pose.spineSegments.lumbarLateralFlexion, -0.35, 0.35) : 0,
     },
     neck: { flexion: neckFlexion, rotation: neckRotation, lateralFlexion: neckLateralFlexion },
-    scapula: { leftElevation: scapLeftElev, rightElevation: scapRightElev, leftProtraction: scapLeftProt, rightProtraction: scapRightProt }
+    scapula: { leftElevation: scapLeftElev, rightElevation: scapRightElev, leftProtraction: scapLeftProt, rightProtraction: scapRightProt, leftUpwardRotation: clamp(leftScapRhythm, 0, 0.7), rightUpwardRotation: clamp(rightScapRhythm, 0, 0.7) }
   };
 }
 
@@ -458,7 +458,9 @@ export class ControllerSmoother {
         leftElevation: smoothValue(current.scapula.leftElevation, this.previous.scapula.leftElevation),
         rightElevation: smoothValue(current.scapula.rightElevation, this.previous.scapula.rightElevation),
         leftProtraction: smoothValue(current.scapula.leftProtraction, this.previous.scapula.leftProtraction),
-        rightProtraction: smoothValue(current.scapula.rightProtraction, this.previous.scapula.rightProtraction)
+        rightProtraction: smoothValue(current.scapula.rightProtraction, this.previous.scapula.rightProtraction),
+        leftUpwardRotation: smoothValue(current.scapula.leftUpwardRotation, this.previous.scapula.leftUpwardRotation),
+        rightUpwardRotation: smoothValue(current.scapula.rightUpwardRotation, this.previous.scapula.rightUpwardRotation)
       }
     };
     

@@ -2460,8 +2460,8 @@ ${ddxList}`;
         overall: prev.limbScales.overall,
       } : prev.limbScales,
       neck: { ...prev.neck, flexion: rad2deg(smoothed.neck.flexion), rotation: rad2deg(smoothed.neck.rotation), lateralFlexion: rad2deg(smoothed.neck.lateralFlexion) },
-      leftScapula: { ...prev.leftScapula, elevation: rad2deg(smoothed.scapula.leftElevation), protraction: rad2deg(smoothed.scapula.leftProtraction) },
-      rightScapula: { ...prev.rightScapula, elevation: rad2deg(smoothed.scapula.rightElevation), protraction: rad2deg(smoothed.scapula.rightProtraction) },
+      leftScapula: { ...prev.leftScapula, elevation: rad2deg(smoothed.scapula.leftElevation), protraction: rad2deg(smoothed.scapula.leftProtraction), upwardRotation: rad2deg(smoothed.scapula.leftUpwardRotation) },
+      rightScapula: { ...prev.rightScapula, elevation: rad2deg(smoothed.scapula.rightElevation), protraction: rad2deg(smoothed.scapula.rightProtraction), upwardRotation: rad2deg(smoothed.scapula.rightUpwardRotation) },
     }));
   }, [cameraPoseActive]);
 

@@ -7116,6 +7116,67 @@ Based on this clinical data, DESIGN novel biomechanical exercises from first pri
     }
   });
 
+  app.post("/api/exercise-engine/generate-illustration", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+
+      const inputSchema = z.object({
+        exerciseName: z.string(),
+        targetSystem: z.string(),
+        startingPosition: z.string(),
+        movementInstructions: z.array(z.string()),
+        forceVector: z.object({
+          direction: z.string(),
+          plane: z.string(),
+          resistanceType: z.string(),
+        }),
+        activationPattern: z.array(z.object({
+          muscle: z.string(),
+          role: z.string(),
+        })),
+      });
+
+      const parsed = inputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+      const primeMoverMuscles = data.activationPattern
+        .filter(a => a.role === 'prime_mover')
+        .map(a => a.muscle)
+        .join(', ');
+      const stabilizerMuscles = data.activationPattern
+        .filter(a => a.role === 'stabilizer')
+        .map(a => a.muscle)
+        .join(', ');
+
+      const illustrationPrompt = `Professional physiotherapy exercise illustration showing a person performing a therapeutic rehabilitation exercise. The person is in the following position: ${data.startingPosition}. The movement involves: ${data.movementInstructions.slice(0, 3).join('; ')}. Force direction: ${data.forceVector.direction} in the ${data.forceVector.plane} plane using ${data.forceVector.resistanceType}. Primary muscles engaged: ${primeMoverMuscles || 'core'}. Stabilizing muscles: ${stabilizerMuscles || 'trunk'}. Style: Clean clinical illustration with a neutral background, anatomical accuracy, showing muscle engagement zones with subtle color highlights (red for primary movers, blue for stabilizers). Professional medical textbook quality, clear body positioning, no text or labels in the image. The figure should be athletic and anatomically proportional.`;
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const response = await aiClient.images.generate({
+        model: "dall-e-3",
+        prompt: illustrationPrompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+      });
+
+      res.json({
+        imageUrl: response.data[0].url,
+        exerciseName: data.exerciseName,
+      });
+    } catch (error: unknown) {
+      console.error("Exercise illustration generation error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate illustration", details: message });
+    }
+  });
+
   app.post("/api/manual-therapy-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { z } = await import("zod");

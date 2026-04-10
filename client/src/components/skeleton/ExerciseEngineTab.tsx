@@ -1,6 +1,8 @@
-import { useState, useCallback, useRef } from 'react';
-import { Dumbbell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Sparkles, Zap, ArrowRight, Clock, Activity, ShieldAlert, Crosshair } from 'lucide-react';
+import { useState, useCallback, useRef, lazy, Suspense } from 'react';
+import { Dumbbell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Sparkles, Zap, ArrowRight, Clock, Activity, ShieldAlert, Crosshair, Image, BarChart3 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+
+const ExerciseBodyDiagram = lazy(() => import('./ExerciseBodyDiagram'));
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 
@@ -185,15 +187,62 @@ function ExerciseCard({ exercise, index }: { exercise: ExerciseItem; index: numb
 function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; index: number }) {
   const [expanded, setExpanded] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [visualMode, setVisualMode] = useState<'diagram' | 'illustration'>('diagram');
+  const [illustrationUrl, setIllustrationUrl] = useState<string | null>(null);
+  const [illustrationLoading, setIllustrationLoading] = useState(false);
+  const [illustrationError, setIllustrationError] = useState<string | null>(null);
+  const illustrationRequested = useRef(false);
 
   const toggleSection = (section: string) => {
     setActiveSection(prev => prev === section ? null : section);
   };
 
+  const generateIllustration = useCallback(async () => {
+    if (illustrationLoading || illustrationUrl) return;
+    setIllustrationLoading(true);
+    setIllustrationError(null);
+    try {
+      const res = await apiRequest('POST', '/api/exercise-engine/generate-illustration', {
+        exerciseName: exercise.name,
+        targetSystem: exercise.targetSystem,
+        startingPosition: exercise.startingPosition,
+        movementInstructions: exercise.movementInstructions,
+        forceVector: {
+          direction: exercise.forceVector.direction,
+          plane: exercise.forceVector.plane,
+          resistanceType: exercise.forceVector.resistanceType,
+        },
+        activationPattern: exercise.activationPattern.map(a => ({
+          muscle: a.muscle,
+          role: a.role,
+        })),
+      });
+      const data = await res.json();
+      if (data.imageUrl) {
+        setIllustrationUrl(data.imageUrl);
+      } else {
+        setIllustrationError('No image returned');
+      }
+    } catch (err) {
+      setIllustrationError(err instanceof Error ? err.message : 'Failed to generate');
+    } finally {
+      setIllustrationLoading(false);
+    }
+  }, [exercise, illustrationLoading, illustrationUrl]);
+
+  const handleExpand = useCallback(() => {
+    const willExpand = !expanded;
+    setExpanded(willExpand);
+    if (willExpand && !illustrationRequested.current) {
+      illustrationRequested.current = true;
+      generateIllustration();
+    }
+  }, [expanded, generateIllustration]);
+
   return (
     <div className="border border-cyan-500/30 rounded-lg bg-gradient-to-br from-cyan-950/30 to-gray-900/80 overflow-hidden">
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleExpand}
         className="w-full flex items-start gap-2 p-2.5 text-left hover:bg-cyan-900/10 transition-colors"
       >
         <span className="text-[10px] font-mono text-cyan-500/70 mt-0.5 min-w-[16px]">{index + 1}.</span>
@@ -228,6 +277,72 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
 
       {expanded && (
         <div className="border-t border-cyan-800/30">
+          <div className="p-2.5 border-b border-cyan-800/20">
+            <div className="flex items-center gap-1 mb-2">
+              <button
+                onClick={() => setVisualMode('diagram')}
+                className={`flex items-center gap-1 px-2 py-1 text-[9px] rounded transition-colors ${visualMode === 'diagram' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/40'}`}
+              >
+                <BarChart3 className="h-2.5 w-2.5" />
+                Muscle Map
+              </button>
+              <button
+                onClick={() => { setVisualMode('illustration'); if (!illustrationUrl && !illustrationLoading) generateIllustration(); }}
+                className={`flex items-center gap-1 px-2 py-1 text-[9px] rounded transition-colors ${visualMode === 'illustration' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/40'}`}
+              >
+                <Image className="h-2.5 w-2.5" />
+                AI Illustration
+                {illustrationLoading && <Loader2 className="h-2 w-2 animate-spin" />}
+              </button>
+            </div>
+
+            {visualMode === 'diagram' && (
+              <Suspense fallback={<div className="h-[160px] flex items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-cyan-500" /></div>}>
+                <ExerciseBodyDiagram
+                  activationPattern={exercise.activationPattern}
+                  forceVector={exercise.forceVector}
+                />
+              </Suspense>
+            )}
+
+            {visualMode === 'illustration' && (
+              <div className="relative min-h-[120px]">
+                {illustrationLoading && (
+                  <div className="flex flex-col items-center justify-center py-6 gap-2">
+                    <Loader2 className="h-6 w-6 animate-spin text-cyan-400" />
+                    <span className="text-[9px] text-gray-400">Generating exercise illustration...</span>
+                  </div>
+                )}
+                {illustrationUrl && (
+                  <img
+                    src={illustrationUrl}
+                    alt={`Illustration for ${exercise.name}`}
+                    className="w-full rounded border border-cyan-800/30"
+                    loading="lazy"
+                  />
+                )}
+                {illustrationError && !illustrationLoading && (
+                  <div className="flex flex-col items-center justify-center py-4 gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-400" />
+                    <span className="text-[9px] text-gray-400">Could not generate illustration</span>
+                    <button
+                      onClick={generateIllustration}
+                      className="text-[8px] text-cyan-400 hover:text-cyan-300 underline"
+                    >
+                      Try again
+                    </button>
+                    <button
+                      onClick={() => setVisualMode('diagram')}
+                      className="text-[8px] text-gray-400 hover:text-gray-300"
+                    >
+                      View muscle map instead
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-0.5 p-1.5 bg-gray-900/50">
             {['position', 'instructions', 'activation', 'forces', 'rationale', 'progression'].map(section => (
               <button

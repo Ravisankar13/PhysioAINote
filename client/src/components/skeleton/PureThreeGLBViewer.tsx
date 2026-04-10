@@ -2183,6 +2183,7 @@ export default function PureThreeGLBViewer({
   const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const legIKStateRef = useRef<LegIKState | null>(null);
+  const modelScaleRef = useRef<number>(0.02);
   const footGroundDebugRef = useRef<number>(0);
   const forceVisualizationRef = useRef<ForceVisualizationManager | null>(null);
   const muscleVisualizationRef = useRef<MuscleVisualizationManager | null>(null);
@@ -4774,6 +4775,7 @@ export default function PureThreeGLBViewer({
             const maxDim = Math.max(size.x, size.y, size.z);
             const scale = 4 / maxDim;
             model.scale.setScalar(scale);
+            modelScaleRef.current = scale;
             
             model.position.x = -center.x * scale;
             model.position.y = -box.min.y * scale - 0.5;
@@ -6271,6 +6273,7 @@ export default function PureThreeGLBViewer({
         const dropAmount = dropFraction * totalLegLength * 0.55;
         const zShiftFraction = pelvisZShiftValue / 100;
         const footShiftAmount = zShiftFraction * totalLegLength * 0.35;
+        const mScale = modelScaleRef.current || 0.02;
         
         const pelvisBoneNames = ['Root_M', 'RootPart1_M', 'RootPart2_M'];
         pelvisBoneNames.forEach(boneName => {
@@ -6317,7 +6320,7 @@ export default function PureThreeGLBViewer({
             (pelvisBone as any).initialPosition = pelvisBone.position.clone();
           }
           const initialPos = (pelvisBone as any).initialPosition as THREE.Vector3;
-          pelvisBone.position.y = initialPos.y - dropAmount;
+          pelvisBone.position.y = initialPos.y - dropAmount / mScale;
           
           const leftShinAngle = leftAngles.hipAngle - leftAngles.kneeAngle;
           const rightShinAngle = rightAngles.hipAngle - rightAngles.kneeAngle;
@@ -6325,7 +6328,7 @@ export default function PureThreeGLBViewer({
             leftThigh * Math.sin(leftAngles.hipAngle) + leftShin * Math.sin(leftShinAngle) +
             rightThigh * Math.sin(rightAngles.hipAngle) + rightShin * Math.sin(rightShinAngle)
           );
-          pelvisBone.position.z = initialPos.z - avgAnkleZ;
+          pelvisBone.position.z = initialPos.z - avgAnkleZ / mScale;
         }
         
         const applyFlexionQuaternion = (
@@ -6396,13 +6399,13 @@ export default function PureThreeGLBViewer({
             const targetLowestY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
             const footYError = actualLowestY - targetLowestY;
             if (Math.abs(footYError) > 0.001) {
-              pelvisBone.position.y -= footYError;
+              pelvisBone.position.y -= footYError / mScale;
             }
             const avgActualZ = 0.5 * (actualLeftPos.z + actualRightPos.z);
             const avgTargetZ = 0.5 * (ikState.leftInitialFootPos.z + ikState.rightInitialFootPos.z);
             const footZError = avgActualZ - avgTargetZ;
             if (Math.abs(footZError) > 0.001) {
-              pelvisBone.position.z -= footZError;
+              pelvisBone.position.z -= footZError / mScale;
             }
           }
         }
@@ -6435,13 +6438,13 @@ export default function PureThreeGLBViewer({
             const targetLowestY = Math.min(ikState.leftInitialFootPos.y, ikState.rightInitialFootPos.y);
             const postYError = postLowestY - targetLowestY;
             if (Math.abs(postYError) > 0.001) {
-              pelvisBone.position.y -= postYError;
+              pelvisBone.position.y -= postYError / mScale;
             }
             const postAvgZ = 0.5 * (postLeftPos.z + postRightPos.z);
             const postTargetZ = 0.5 * (ikState.leftInitialFootPos.z + ikState.rightInitialFootPos.z);
             const postZError = postAvgZ - postTargetZ;
             if (Math.abs(postZError) > 0.001) {
-              pelvisBone.position.z -= postZError;
+              pelvisBone.position.z -= postZError / mScale;
             }
             pelvisBone.updateMatrixWorld(true);
           }

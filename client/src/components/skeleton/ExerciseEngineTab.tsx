@@ -576,18 +576,161 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
     );
   }
 
+  const customDesignerSection = (
+    <div className={plan ? "border-t border-gray-700/50 pt-3 mt-3" : ""}>
+      <button
+        onClick={() => setShowCustomDesigner(!showCustomDesigner)}
+        className="w-full flex items-center gap-2 p-2.5 text-left bg-gradient-to-r from-cyan-950/40 to-gray-900/60 border border-cyan-500/30 rounded-lg hover:from-cyan-950/60 hover:to-gray-900/80 transition-all"
+      >
+        <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0">
+          <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-cyan-200">Custom Exercise Designer</span>
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/25">AI Architect</span>
+          </div>
+          <div className="text-[9px] text-gray-400 mt-0.5">Design novel movements from biomechanical first principles</div>
+        </div>
+        {showCustomDesigner ? <ChevronUp className="h-3.5 w-3.5 text-cyan-500 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-cyan-500 shrink-0" />}
+      </button>
+
+      {showCustomDesigner && (
+        <div className="mt-2 space-y-2">
+          <div className="bg-gray-900/60 rounded-lg border border-gray-700/40 p-2.5 space-y-2">
+            <div>
+              <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">Target Focus (optional)</div>
+              <input
+                type="text"
+                value={targetFocus}
+                onChange={(e) => setTargetFocus(e.target.value)}
+                placeholder="e.g., anterior oblique sling, hip-spine connection..."
+                className="w-full px-2.5 py-1.5 text-[10px] bg-gray-800/70 border border-gray-600/40 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {FOCUS_PRESETS.map(preset => (
+                <button
+                  key={preset.value}
+                  onClick={() => setTargetFocus(preset.value)}
+                  className={`px-2 py-0.5 text-[8px] rounded-full border transition-colors ${
+                    targetFocus === preset.value
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                      : 'bg-gray-800/40 text-gray-400 border-gray-600/30 hover:text-gray-200 hover:border-gray-500/40'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={designCustomExercises}
+            disabled={customLoading}
+            className="w-full px-4 py-2.5 text-[11px] font-medium bg-gradient-to-r from-cyan-600/20 to-cyan-500/10 text-cyan-300 border border-cyan-500/40 rounded-lg hover:from-cyan-600/30 hover:to-cyan-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {customLoading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Designing custom movements...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5" />
+                Design Custom Exercises
+              </>
+            )}
+          </button>
+
+          {customError && (
+            <div className="bg-red-950/30 border border-red-500/30 rounded-lg p-2.5">
+              <div className="text-[10px] text-red-300 flex items-center gap-1.5">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                {customError}
+              </div>
+              <button
+                onClick={designCustomExercises}
+                className="mt-1.5 text-[9px] text-red-400 hover:text-red-300 underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {customResult && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+                  <span className="text-[11px] font-medium text-cyan-200">
+                    {customResult.customExercises.length} Custom Exercises Designed
+                  </span>
+                </div>
+                <button
+                  onClick={designCustomExercises}
+                  disabled={customLoading}
+                  className="px-2 py-1 text-[9px] bg-cyan-900/30 text-cyan-400 border border-cyan-700/30 rounded hover:bg-cyan-900/50 transition-colors flex items-center gap-1"
+                >
+                  <RefreshCw className="h-2.5 w-2.5" />
+                  Redesign
+                </button>
+              </div>
+
+              {customResult.customExercises.map((ex, i) => (
+                <CustomExerciseCard key={i} exercise={ex} index={i} />
+              ))}
+
+              {(customResult.designRationale || customResult.safetyNotes) && (
+                <div className="border border-cyan-800/30 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setShowDesignRationale(!showDesignRationale)}
+                    className="w-full flex items-center gap-2 p-2 text-left bg-cyan-950/20 hover:bg-cyan-950/30 transition-colors"
+                  >
+                    <Zap className="h-3 w-3 text-cyan-400 shrink-0" />
+                    <span className="text-[10px] font-medium text-cyan-300 flex-1">Design Rationale & Safety</span>
+                    {showDesignRationale ? <ChevronUp className="h-3 w-3 text-cyan-500" /> : <ChevronDown className="h-3 w-3 text-cyan-500" />}
+                  </button>
+                  {showDesignRationale && (
+                    <div className="p-2.5 space-y-2 border-t border-cyan-800/30">
+                      {customResult.designRationale && (
+                        <div>
+                          <div className="text-[9px] font-medium text-cyan-400 uppercase tracking-wider mb-1">Program Design Rationale</div>
+                          <div className="text-[10px] text-gray-300 leading-relaxed">{customResult.designRationale}</div>
+                        </div>
+                      )}
+                      {customResult.safetyNotes && (
+                        <div>
+                          <div className="text-[9px] font-medium text-amber-400/80 uppercase tracking-wider mb-1">Safety Notes</div>
+                          <div className="text-[10px] text-amber-200/70 leading-relaxed">{customResult.safetyNotes}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   if (!plan) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 px-4">
-        <Dumbbell className="h-8 w-8 text-violet-400/60 mb-3" />
-        <div className="text-[11px] text-gray-300 mb-1">AI Exercise Prescription</div>
-        <div className="text-[9px] text-gray-500 mb-4 text-center max-w-[250px]">
-          Generate a custom exercise plan based on the current mechanism analysis, sling deficits, and compensation patterns.
+      <div className="space-y-4">
+        <div className="flex flex-col items-center justify-center py-8 px-4">
+          <Dumbbell className="h-8 w-8 text-violet-400/60 mb-3" />
+          <div className="text-[11px] text-gray-300 mb-1">AI Exercise Prescription</div>
+          <div className="text-[9px] text-gray-500 mb-4 text-center max-w-[250px]">
+            Generate a custom exercise plan based on the current mechanism analysis, sling deficits, and compensation patterns.
+          </div>
+          <button onClick={generatePlan} className="px-4 py-2 text-[11px] font-medium bg-violet-500/20 text-violet-300 border border-violet-500/40 rounded-lg hover:bg-violet-500/30 transition-colors flex items-center gap-2">
+            <Dumbbell className="h-3.5 w-3.5" />
+            Generate Exercise Plan
+          </button>
         </div>
-        <button onClick={generatePlan} className="px-4 py-2 text-[11px] font-medium bg-violet-500/20 text-violet-300 border border-violet-500/40 rounded-lg hover:bg-violet-500/30 transition-colors flex items-center gap-2">
-          <Dumbbell className="h-3.5 w-3.5" />
-          Generate Exercise Plan
-        </button>
+        {customDesignerSection}
       </div>
     );
   }
@@ -675,143 +818,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
         </div>
       )}
 
-      <div className="border-t border-gray-700/50 pt-3 mt-3">
-        <button
-          onClick={() => setShowCustomDesigner(!showCustomDesigner)}
-          className="w-full flex items-center gap-2 p-2.5 text-left bg-gradient-to-r from-cyan-950/40 to-gray-900/60 border border-cyan-500/30 rounded-lg hover:from-cyan-950/60 hover:to-gray-900/80 transition-all"
-        >
-          <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0">
-            <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-semibold text-cyan-200">Custom Exercise Designer</span>
-              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/25">AI Architect</span>
-            </div>
-            <div className="text-[9px] text-gray-400 mt-0.5">Design novel movements from biomechanical first principles</div>
-          </div>
-          {showCustomDesigner ? <ChevronUp className="h-3.5 w-3.5 text-cyan-500 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-cyan-500 shrink-0" />}
-        </button>
-
-        {showCustomDesigner && (
-          <div className="mt-2 space-y-2">
-            <div className="bg-gray-900/60 rounded-lg border border-gray-700/40 p-2.5 space-y-2">
-              <div>
-                <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">Target Focus (optional)</div>
-                <input
-                  type="text"
-                  value={targetFocus}
-                  onChange={(e) => setTargetFocus(e.target.value)}
-                  placeholder="e.g., anterior oblique sling, hip-spine connection..."
-                  className="w-full px-2.5 py-1.5 text-[10px] bg-gray-800/70 border border-gray-600/40 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20"
-                />
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {FOCUS_PRESETS.map(preset => (
-                  <button
-                    key={preset.value}
-                    onClick={() => setTargetFocus(preset.value)}
-                    className={`px-2 py-0.5 text-[8px] rounded-full border transition-colors ${
-                      targetFocus === preset.value
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                        : 'bg-gray-800/40 text-gray-400 border-gray-600/30 hover:text-gray-200 hover:border-gray-500/40'
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button
-              onClick={designCustomExercises}
-              disabled={customLoading}
-              className="w-full px-4 py-2.5 text-[11px] font-medium bg-gradient-to-r from-cyan-600/20 to-cyan-500/10 text-cyan-300 border border-cyan-500/40 rounded-lg hover:from-cyan-600/30 hover:to-cyan-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {customLoading ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Designing custom movements...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Design Custom Exercises
-                </>
-              )}
-            </button>
-
-            {customError && (
-              <div className="bg-red-950/30 border border-red-500/30 rounded-lg p-2.5">
-                <div className="text-[10px] text-red-300 flex items-center gap-1.5">
-                  <AlertTriangle className="h-3 w-3 shrink-0" />
-                  {customError}
-                </div>
-                <button
-                  onClick={designCustomExercises}
-                  className="mt-1.5 text-[9px] text-red-400 hover:text-red-300 underline"
-                >
-                  Try again
-                </button>
-              </div>
-            )}
-
-            {customResult && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-                    <span className="text-[11px] font-medium text-cyan-200">
-                      {customResult.customExercises.length} Custom Exercises Designed
-                    </span>
-                  </div>
-                  <button
-                    onClick={designCustomExercises}
-                    disabled={customLoading}
-                    className="px-2 py-1 text-[9px] bg-cyan-900/30 text-cyan-400 border border-cyan-700/30 rounded hover:bg-cyan-900/50 transition-colors flex items-center gap-1"
-                  >
-                    <RefreshCw className="h-2.5 w-2.5" />
-                    Redesign
-                  </button>
-                </div>
-
-                {customResult.customExercises.map((ex, i) => (
-                  <CustomExerciseCard key={i} exercise={ex} index={i} />
-                ))}
-
-                {(customResult.designRationale || customResult.safetyNotes) && (
-                  <div className="border border-cyan-800/30 rounded-lg overflow-hidden">
-                    <button
-                      onClick={() => setShowDesignRationale(!showDesignRationale)}
-                      className="w-full flex items-center gap-2 p-2 text-left bg-cyan-950/20 hover:bg-cyan-950/30 transition-colors"
-                    >
-                      <Zap className="h-3 w-3 text-cyan-400 shrink-0" />
-                      <span className="text-[10px] font-medium text-cyan-300 flex-1">Design Rationale & Safety</span>
-                      {showDesignRationale ? <ChevronUp className="h-3 w-3 text-cyan-500" /> : <ChevronDown className="h-3 w-3 text-cyan-500" />}
-                    </button>
-                    {showDesignRationale && (
-                      <div className="p-2.5 space-y-2 border-t border-cyan-800/30">
-                        {customResult.designRationale && (
-                          <div>
-                            <div className="text-[9px] font-medium text-cyan-400 uppercase tracking-wider mb-1">Program Design Rationale</div>
-                            <div className="text-[10px] text-gray-300 leading-relaxed">{customResult.designRationale}</div>
-                          </div>
-                        )}
-                        {customResult.safetyNotes && (
-                          <div>
-                            <div className="text-[9px] font-medium text-amber-400/80 uppercase tracking-wider mb-1">Safety Notes</div>
-                            <div className="text-[10px] text-amber-200/70 leading-relaxed">{customResult.safetyNotes}</div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      {customDesignerSection}
     </div>
   );
 }

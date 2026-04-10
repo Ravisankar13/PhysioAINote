@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Zap, Activity, Sparkles, ArrowRight, Clock, ShieldAlert, Crosshair, Home } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
@@ -53,6 +53,12 @@ interface ProgressionStage {
   description: string;
 }
 
+interface TissueTarget {
+  tissueName: string;
+  goalType: 'release' | 'mobilize' | 'activate' | 'stabilize' | 'decompress';
+  goalText: string;
+}
+
 interface CustomTechnique {
   name: string;
   targetSystem: string;
@@ -67,6 +73,7 @@ interface CustomTechnique {
   contraindications: string;
   progressionStages: ProgressionStage[];
   selfTreatmentAdaptation: string;
+  tissueTargets?: TissueTarget[];
 }
 
 interface CustomManualTherapyResult {
@@ -89,7 +96,77 @@ interface ManualTherapyEngineTabProps {
   scarMarkers?: ScarMarker[];
   adhesionBands?: AdhesionBand[];
   musclePathologies?: MusclePathologyInput[];
+  onHighlightMuscles?: (muscles: string[]) => void;
+  onSetMuscleHighlightColors?: (colors: Record<string, string>) => void;
+  onSetManualTherapyAnnotations?: (annotations: TissueTarget[] | null) => void;
 }
+
+const TISSUE_NAME_TO_MUSCLE_GROUP: Record<string, string[]> = {
+  'quadratus_lumborum': ['core'],
+  'rectus_abdominis': ['core'],
+  'rectus_abdominus': ['core'],
+  'external_obliques': ['core'],
+  'internal_obliques': ['core'],
+  'transverse_abdominis': ['core'],
+  'multifidus': ['spine', 'core'],
+  'erector_spinae': ['spine', 'core'],
+  'thoracolumbar_fascia': ['spine', 'core'],
+  'gluteus_maximus': ['glute_r', 'glute_l'],
+  'gluteus_medius': ['glute_r', 'glute_l'],
+  'gluteus_minimus': ['glute_r', 'glute_l'],
+  'piriformis': ['glute_r', 'glute_l'],
+  'obturator_externus': ['glute_r', 'glute_l'],
+  'quadratus_femoris': ['glute_r', 'glute_l'],
+  'psoas': ['core', 'quad_r', 'quad_l'],
+  'iliacus': ['core', 'quad_r', 'quad_l'],
+  'hip_flexor': ['core', 'quad_r', 'quad_l'],
+  'rectus_femoris': ['quad_r', 'quad_l'],
+  'vastus_lateralis': ['quad_r', 'quad_l'],
+  'vastus_medialis': ['quad_r', 'quad_l'],
+  'biceps_femoris': ['quad_r', 'quad_l'],
+  'semitendinosus': ['quad_r', 'quad_l'],
+  'semimembranosus': ['quad_r', 'quad_l'],
+  'hamstring': ['quad_r', 'quad_l'],
+  'adductor': ['quad_r', 'quad_l'],
+  'tensor_fasciae_latae': ['glute_r', 'glute_l', 'quad_r', 'quad_l'],
+  'iliotibial_band': ['glute_r', 'glute_l', 'quad_r', 'quad_l'],
+  'gastrocnemius': ['calf_r', 'calf_l'],
+  'soleus': ['calf_r', 'calf_l'],
+  'tibialis_anterior': ['shin_r', 'shin_l'],
+  'tibialis_posterior': ['shin_r', 'shin_l'],
+  'peroneal': ['shin_r', 'shin_l'],
+  'plantar_fascia': ['foot_r', 'foot_l'],
+  'pectoralis_major': ['chest'],
+  'pectoralis_minor': ['chest'],
+  'latissimus_dorsi': ['spine', 'scapula_r', 'scapula_l'],
+  'trapezius': ['spine', 'scapula_r', 'scapula_l'],
+  'trapezius_upper': ['neck'],
+  'trapezius_lower': ['spine'],
+  'rhomboid': ['scapula_r', 'scapula_l'],
+  'deltoid': ['deltoid_r', 'deltoid_l'],
+  'infraspinatus': ['scapula_r', 'scapula_l'],
+  'supraspinatus': ['scapula_r', 'scapula_l'],
+  'subscapularis': ['scapula_r', 'scapula_l'],
+  'teres_major': ['scapula_r', 'scapula_l'],
+  'teres_minor': ['scapula_r', 'scapula_l'],
+  'levator_scapulae': ['neck', 'scapula_r', 'scapula_l'],
+  'sternocleidomastoid': ['neck'],
+  'scalene': ['neck'],
+  'diaphragm': ['core', 'chest'],
+  'biceps': ['bicep_r', 'bicep_l'],
+  'triceps': ['bicep_r', 'bicep_l'],
+  'serratus_anterior': ['chest', 'scapula_r', 'scapula_l'],
+};
+
+const GOAL_TYPE_COLORS: Record<string, string> = {
+  'release': '#f97316',
+  'mobilize': '#3b82f6',
+  'activate': '#22c55e',
+  'stabilize': '#a855f7',
+  'decompress': '#06b6d4',
+};
+
+export type { TissueTarget };
 
 const MT_FOCUS_PRESETS = [
   { label: 'Fascial Release', value: 'fascial release and myofascial continuity' },
@@ -121,18 +198,22 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; b
 
 const DEFAULT_COLORS = { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-300', badge: 'bg-rose-500/20 text-rose-300' };
 
-function CustomTechniqueCard({ technique, index }: { technique: CustomTechnique; index: number }) {
-  const [expanded, setExpanded] = useState(false);
+function CustomTechniqueCard({ technique, index, isSelected, onSelect }: { technique: CustomTechnique; index: number; isSelected?: boolean; onSelect?: (index: number, expanded: boolean) => void }) {
+  const expanded = isSelected ?? false;
   const [activeSection, setActiveSection] = useState<string | null>(null);
 
   const toggleSection = (section: string) => {
     setActiveSection(prev => prev === section ? null : section);
   };
 
+  const handleToggle = () => {
+    onSelect?.(index, !expanded);
+  };
+
   return (
-    <div className="border border-cyan-500/30 rounded-lg bg-gradient-to-br from-cyan-950/30 to-gray-900/80 overflow-hidden">
+    <div className={`border rounded-lg bg-gradient-to-br from-cyan-950/30 to-gray-900/80 overflow-hidden ${isSelected ? 'border-cyan-400/60 ring-1 ring-cyan-400/20' : 'border-cyan-500/30'}`}>
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleToggle}
         className="w-full flex items-start gap-2 p-2.5 text-left hover:bg-cyan-900/10 transition-colors"
       >
         <span className="text-[10px] font-mono text-cyan-500/70 mt-0.5 min-w-[16px]">{index + 1}.</span>
@@ -402,7 +483,7 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
   );
 }
 
-export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies }: ManualTherapyEngineTabProps) {
+export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations }: ManualTherapyEngineTabProps) {
   const [plan, setPlan] = useState<ManualTherapyPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -416,6 +497,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
   const [targetFocus, setTargetFocus] = useState('');
   const [showCustomDesigner, setShowCustomDesigner] = useState(false);
   const [showDesignRationale, setShowDesignRationale] = useState(false);
+  const [selectedTechniqueIndex, setSelectedTechniqueIndex] = useState<number | null>(null);
   const customAbortRef = useRef<AbortController | null>(null);
 
   const toggleGroup = useCallback((groupId: string) => {
@@ -583,6 +665,82 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
     }
   }, [buildPayload, targetFocus]);
 
+  const applyTissueHighlights = useCallback((techniques: CustomTechnique[]) => {
+    if (!onHighlightMuscles || !onSetMuscleHighlightColors) return;
+    const muscleGroupIds = new Set<string>();
+    const colorMap: Record<string, string> = {};
+    const allAnnotations: TissueTarget[] = [];
+
+    for (const tech of techniques) {
+      if (!tech.tissueTargets || tech.tissueTargets.length === 0) continue;
+      for (const target of tech.tissueTargets) {
+        allAnnotations.push(target);
+        const groups = TISSUE_NAME_TO_MUSCLE_GROUP[target.tissueName.toLowerCase()];
+        const color = GOAL_TYPE_COLORS[target.goalType] || '#06b6d4';
+        if (groups) {
+          for (const g of groups) {
+            muscleGroupIds.add(g);
+            if (!colorMap[g]) colorMap[g] = color;
+          }
+        } else {
+          const lower = target.tissueName.toLowerCase().replace(/_/g, ' ');
+          for (const [key, grps] of Object.entries(TISSUE_NAME_TO_MUSCLE_GROUP)) {
+            const keyLower = key.replace(/_/g, ' ');
+            if (keyLower.includes(lower) || lower.includes(keyLower)) {
+              for (const g of grps) {
+                muscleGroupIds.add(g);
+                if (!colorMap[g]) colorMap[g] = color;
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    onHighlightMuscles(Array.from(muscleGroupIds));
+    onSetMuscleHighlightColors(colorMap);
+    onSetManualTherapyAnnotations?.(allAnnotations.length > 0 ? allAnnotations : null);
+  }, [onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations]);
+
+  const clearHighlights = useCallback(() => {
+    onHighlightMuscles?.([]);
+    onSetMuscleHighlightColors?.({});
+    onSetManualTherapyAnnotations?.(null);
+  }, [onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations]);
+
+  const handleTechniqueSelect = useCallback((index: number, expanded: boolean) => {
+    if (expanded && customResult) {
+      setSelectedTechniqueIndex(prev => prev === index ? null : index);
+      const technique = customResult.customTechniques[index];
+      if (technique) {
+        applyTissueHighlights([technique]);
+      }
+    } else {
+      setSelectedTechniqueIndex(null);
+      if (customResult && showCustomDesigner) {
+        applyTissueHighlights(customResult.customTechniques);
+      } else {
+        clearHighlights();
+      }
+    }
+  }, [customResult, showCustomDesigner, applyTissueHighlights, clearHighlights]);
+
+  useEffect(() => {
+    if (customResult && showCustomDesigner) {
+      setSelectedTechniqueIndex(null);
+      applyTissueHighlights(customResult.customTechniques);
+    } else {
+      clearHighlights();
+    }
+  }, [customResult, showCustomDesigner]);
+
+  useEffect(() => {
+    return () => {
+      clearHighlights();
+    };
+  }, []);
+
   const hasData = mechanismAnalysis !== null || (painMarkers && painMarkers.length > 0);
 
   if (!hasData) {
@@ -720,7 +878,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
               </div>
 
               {customResult.customTechniques.map((tech, i) => (
-                <CustomTechniqueCard key={i} technique={tech} index={i} />
+                <CustomTechniqueCard key={i} technique={tech} index={i} isSelected={selectedTechniqueIndex === i} onSelect={handleTechniqueSelect} />
               ))}
 
               {(customResult.designRationale || customResult.safetyNotes) && (

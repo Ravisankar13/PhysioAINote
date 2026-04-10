@@ -7668,12 +7668,29 @@ RESPONSE FORMAT — return valid JSON:
         { "stage": 2, "name": "Intermediate/Deeper", "description": "Progress to deeper tissue layers, higher grades, sustained holds" },
         { "stage": 3, "name": "Integration/Active", "description": "Combine with active patient movement, functional integration" }
       ],
-      "selfTreatmentAdaptation": "What the patient can replicate at home — foam roller, lacrosse ball, towel techniques, self-mobilization"
+      "selfTreatmentAdaptation": "What the patient can replicate at home — foam roller, lacrosse ball, towel techniques, self-mobilization",
+      "tissueTargets": [
+        {
+          "tissueName": "quadratus_lumborum",
+          "goalType": "release",
+          "goalText": "reduce tension by 20%"
+        },
+        {
+          "tissueName": "gluteus_medius",
+          "goalType": "activate",
+          "goalText": "increase activation by 40%"
+        }
+      ]
     }
   ],
   "designRationale": "Overall biomechanical reasoning for why these specific techniques were designed and how they work together as a treatment program",
   "safetyNotes": "Global safety considerations for this manual therapy program"
 }
+
+IMPORTANT: For each technique, include a "tissueTargets" array listing the primary muscles/tissues targeted. Each entry must have:
+- "tissueName": the muscle or tissue name in snake_case (e.g., "quadratus_lumborum", "gluteus_maximus", "piriformis", "erector_spinae", "psoas", "rectus_femoris", "biceps_femoris", "gastrocnemius", "soleus", "tibialis_anterior", "pectoralis_major", "latissimus_dorsi", "trapezius", "deltoid", "infraspinatus", "supraspinatus", "rhomboid", "levator_scapulae", "sternocleidomastoid", "scalene", "rectus_abdominis", "external_obliques", "internal_obliques", "transverse_abdominis", "multifidus", "diaphragm", "tensor_fasciae_latae", "iliotibial_band", "plantar_fascia", "thoracolumbar_fascia", "hip_flexor", "adductor", "obturator_externus")
+- "goalType": one of "release", "mobilize", "activate", "stabilize", "decompress"
+- "goalText": a concise quantified clinical goal string (e.g., "reduce tension by 20%", "increase ROM by 15°", "restore activation to 70%")
 
 Design 3-5 custom manual therapy techniques that work together as a cohesive treatment program. Each technique should target a DIFFERENT aspect of the dysfunction pattern.${focusInstruction}`;
 
@@ -7778,6 +7795,11 @@ Based on this clinical data, DESIGN novel manual therapy techniques from first p
             description: z.string(),
           })),
           selfTreatmentAdaptation: z.string().default(''),
+          tissueTargets: z.array(z.object({
+            tissueName: z.string(),
+            goalType: z.enum(['release', 'mobilize', 'activate', 'stabilize', 'decompress']),
+            goalText: z.string(),
+          })).optional().default([]),
         })),
         designRationale: z.string().default(''),
         safetyNotes: z.string().default(''),

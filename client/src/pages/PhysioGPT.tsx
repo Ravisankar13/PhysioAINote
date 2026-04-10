@@ -141,6 +141,7 @@ const RiskPrognosisDashboard = lazy(() => import("@/components/skeleton/RiskProg
 const InjuryMechanismPanel = lazy(() => import("@/components/skeleton/InjuryMechanismPanel"));
 const ExerciseEngineTab = lazy(() => import("@/components/skeleton/ExerciseEngineTab"));
 const ManualTherapyEngineTab = lazy(() => import("@/components/skeleton/ManualTherapyEngineTab"));
+import type { TissueTarget } from "@/components/skeleton/ManualTherapyEngineTab";
 const ElectrophysicalEngineTab = lazy(() => import("@/components/skeleton/ElectrophysicalEngineTab"));
 const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/PatientEducationEngineTab"));
 const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/UnifiedBiomechanicsPanel"));
@@ -700,6 +701,7 @@ export default function PhysioGPT() {
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
+  const [manualTherapyAnnotations, setManualTherapyAnnotations] = useState<TissueTarget[] | null>(null);
   const [visualizationBoneHighlights, setVisualizationBoneHighlights] = useState<Array<{ boneName: string; color: number; intensity: number }>>([]);
   const [activeVisualizationId, setActiveVisualizationId] = useState<string | null>(null);
   const lastReasoningTriggerRef = useRef<string>('');
@@ -5498,6 +5500,39 @@ ${ddxList}`;
               );
             })()}
 
+            {manualTherapyAnnotations && manualTherapyAnnotations.length > 0 && (
+              <div className="absolute bottom-2 left-2 z-20 w-[240px] max-h-[280px] overflow-y-auto bg-slate-900/95 backdrop-blur-md border border-rose-500/40 rounded-xl shadow-2xl scrollbar-thin">
+                <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md px-3 py-2 border-b border-white/10 flex items-center gap-2 rounded-t-xl z-10">
+                  <Hand className="h-3.5 w-3.5 text-rose-400" />
+                  <span className="text-[10px] font-bold text-white">Manual Therapy Targets</span>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/25 ml-auto">{manualTherapyAnnotations.length}</span>
+                </div>
+                <div className="px-2.5 py-2 space-y-1.5">
+                  {manualTherapyAnnotations.map((target, i) => {
+                    const goalColors: Record<string, { bg: string; text: string; border: string }> = {
+                      release: { bg: 'bg-orange-500/15', text: 'text-orange-400', border: 'border-orange-500/30' },
+                      mobilize: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30' },
+                      activate: { bg: 'bg-green-500/15', text: 'text-green-400', border: 'border-green-500/30' },
+                      stabilize: { bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/30' },
+                      decompress: { bg: 'bg-cyan-500/15', text: 'text-cyan-400', border: 'border-cyan-500/30' },
+                    };
+                    const style = goalColors[target.goalType] || goalColors.mobilize;
+                    return (
+                      <div key={i} className={`rounded-lg border ${style.border} ${style.bg} px-2.5 py-1.5`}>
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[9px] font-semibold text-white">{target.tissueName.replace(/_/g, ' ')}</span>
+                          <span className={`text-[7px] px-1.5 py-0.5 rounded-full ${style.bg} ${style.text} border ${style.border} font-medium uppercase tracking-wider`}>
+                            {target.goalType}
+                          </span>
+                        </div>
+                        <div className={`text-[8px] ${style.text} leading-relaxed`}>{target.goalText}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Force Analysis Overlay */}
             {forceMode && forceAnalysis && (
               <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[260px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin">
@@ -8147,27 +8182,27 @@ ${ddxList}`;
                   </div>
                   <div className="flex gap-1 mb-2">
                     <button
-                      onClick={() => setMechanismActiveTab('mechanism')}
+                      onClick={() => { setMechanismActiveTab('mechanism'); setManualTherapyAnnotations(null); }}
                       className={`flex-1 text-[10px] py-1 rounded transition-colors ${mechanismActiveTab === 'mechanism' ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       Mechanism
                     </button>
                     <button
-                      onClick={() => setMechanismActiveTab('treatment')}
+                      onClick={() => { setMechanismActiveTab('treatment'); setManualTherapyAnnotations(null); }}
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'treatment' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       <Stethoscope className="h-3 w-3" />
                       Treatment
                     </button>
                     <button
-                      onClick={() => setMechanismActiveTab('whatif')}
+                      onClick={() => { setMechanismActiveTab('whatif'); setManualTherapyAnnotations(null); }}
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'whatif' ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       <FlaskConical className="h-3 w-3" />
                       What-If
                     </button>
                     <button
-                      onClick={() => setMechanismActiveTab('exercise')}
+                      onClick={() => { setMechanismActiveTab('exercise'); setManualTherapyAnnotations(null); }}
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'exercise' ? 'bg-violet-500/30 text-violet-300 border border-violet-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       <Dumbbell className="h-3 w-3" />
@@ -8181,14 +8216,14 @@ ${ddxList}`;
                       Manual Rx
                     </button>
                     <button
-                      onClick={() => setMechanismActiveTab('electroRx')}
+                      onClick={() => { setMechanismActiveTab('electroRx'); setManualTherapyAnnotations(null); }}
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'electroRx' ? 'bg-teal-500/30 text-teal-300 border border-teal-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       <Zap className="h-3 w-3" />
                       Electro Rx
                     </button>
                     <button
-                      onClick={() => setMechanismActiveTab('patientEd')}
+                      onClick={() => { setMechanismActiveTab('patientEd'); setManualTherapyAnnotations(null); }}
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'patientEd' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       <GraduationCap className="h-3 w-3" />
@@ -8277,6 +8312,9 @@ ${ddxList}`;
                           pathology: ov!.pathology as string,
                           severity: ov!.tensionOffset > 20 ? 'severe' : ov!.tensionOffset > 10 ? 'moderate' : 'mild',
                         }))}
+                      onHighlightMuscles={setBiomechanicalMuscleHighlights}
+                      onSetMuscleHighlightColors={setMuscleHighlightColors}
+                      onSetManualTherapyAnnotations={setManualTherapyAnnotations}
                     />
                   )}
                   {mechanismActiveTab === 'electroRx' && (

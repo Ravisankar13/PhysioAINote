@@ -495,6 +495,9 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   });
 
   // === ARM CALCULATIONS ===
+  // armDepthConf is used ONLY for joint confidence display, not for angle attenuation.
+  // Shoulder flexion/abduction/rotation are computed from normalized direction vectors
+  // and are never scaled by depth confidence, preserving full arm motion fidelity.
   const armDepthConf = getDepthConfidence(landmarks, [LANDMARKS.LEFT_SHOULDER, LANDMARKS.RIGHT_SHOULDER, LANDMARKS.LEFT_ELBOW, LANDMARKS.RIGHT_ELBOW]);
   const leftUpperArm = normalize(createVector(leftShoulder, leftElbow));
   const leftForearm = normalize(createVector(leftElbow, leftWrist));
@@ -514,8 +517,16 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
       return { flexion: 0, abduction: 0 };
     }
 
+    // Flexion: angle in sagittal plane via atan2(forward, -downward)
+    // Verified sign convention:
+    //   arm at side (dotUp≈-1, dotFwd≈0) → atan2(0, 1) = 0°
+    //   arm forward horizontal (dotUp≈0, dotFwd≈1) → atan2(1, 0) = 90°
+    //   arm overhead (dotUp≈1, dotFwd≈0) → atan2(0, -1) = 180°
+    //   arm behind/extension (dotUp≈0, dotFwd≈-1) → atan2(-1, 0) = -90°
+    // Maps to BONE_MAPPING Shoulder_L/R Z-axis scale 1 (Z+ = forward)
     const flexion = Math.atan2(dotFwd, -dotUp);
 
+    // Abduction: direct lateral angle via asin, independent of flexion
     const abduction = Math.asin(Math.max(-1, Math.min(1, lateral)));
 
     return { flexion, abduction };
@@ -558,6 +569,10 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     };
     const dotSin = crossForRef.x * armAxis.x + crossForRef.y * armAxis.y + crossForRef.z * armAxis.z;
 
+    // Rotation sign convention verified:
+    //   Left: +rotation for internal rotation (BONE_MAPPING scale -1 → net negative on X)
+    //   Right: -rotation for internal rotation (BONE_MAPPING scale +1 → net negative on X)
+    //   Both produce symmetric internal rotation on ShoulderPart1_L/R X-axis
     const rotation = Math.atan2(dotSin, dotCos);
     return isLeft ? rotation : -rotation;
   };

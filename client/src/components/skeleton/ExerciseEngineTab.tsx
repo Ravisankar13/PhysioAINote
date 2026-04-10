@@ -221,6 +221,7 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
         setIllustrationUrl(data.imageUrl);
       } else {
         setIllustrationError('No image returned');
+        setVisualMode('diagram');
       }
     } catch (err) {
       setIllustrationError(err instanceof Error ? err.message : 'Failed to generate');

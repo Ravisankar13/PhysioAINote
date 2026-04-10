@@ -8023,11 +8023,14 @@ You are now REFINING previously designed techniques based on user feedback. Rule
       const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
         { role: "system", content: systemPrompt },
         { role: "user", content: originalClinicalPrompt },
-        { role: "assistant", content: JSON.stringify(data.currentTechniques) },
       ];
 
-      for (const msg of data.conversationHistory) {
-        messages.push({ role: msg.role, content: msg.content });
+      if (data.conversationHistory.length === 0) {
+        messages.push({ role: "assistant", content: JSON.stringify(data.currentTechniques) });
+      } else {
+        for (const msg of data.conversationHistory) {
+          messages.push({ role: msg.role, content: msg.content });
+        }
       }
 
       messages.push({

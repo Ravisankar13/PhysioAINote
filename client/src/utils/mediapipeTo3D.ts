@@ -623,23 +623,23 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightPronation = computeForearmPronation(rightForearm, rightWrist, rightIndex, false);
 
   // === LEG CALCULATIONS ===
-  const leftThigh = normalize(createVector(leftHip, leftKnee));
-  const rightThigh = normalize(createVector(rightHip, rightKnee));
+  const leftThighDir = normalize(createVector(leftHip, leftKnee));
+  const rightThighDir = normalize(createVector(rightHip, rightKnee));
   
-  const leftShin = normalize(createVector(leftKnee, leftAnkle));
-  const rightShin = normalize(createVector(rightKnee, rightAnkle));
+  const leftShinDir = normalize(createVector(leftKnee, leftAnkle));
+  const rightShinDir = normalize(createVector(rightKnee, rightAnkle));
 
   const dotProduct = (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + a.z * b.z;
 
-  const leftThighDotUp = dotProduct(leftThigh, torsoUp);
-  const leftThighDotFwd = dotProduct(leftThigh, torsoForward);
-  const leftThighDotRight = dotProduct(leftThigh, torsoRight);
+  const leftThighDotUp = dotProduct(leftThighDir, torsoUp);
+  const leftThighDotFwd = dotProduct(leftThighDir, torsoForward);
+  const leftThighDotRight = dotProduct(leftThighDir, torsoRight);
   const leftHipFlexion = Math.atan2(leftThighDotFwd, -leftThighDotUp);
   const leftHipAbduction = Math.atan2(-leftThighDotRight, -leftThighDotUp);
 
-  const rightThighDotUp = dotProduct(rightThigh, torsoUp);
-  const rightThighDotFwd = dotProduct(rightThigh, torsoForward);
-  const rightThighDotRight = dotProduct(rightThigh, torsoRight);
+  const rightThighDotUp = dotProduct(rightThighDir, torsoUp);
+  const rightThighDotFwd = dotProduct(rightThighDir, torsoForward);
+  const rightThighDotRight = dotProduct(rightThighDir, torsoRight);
   const rightHipFlexion = Math.atan2(rightThighDotFwd, -rightThighDotUp);
   const rightHipAbduction = Math.atan2(rightThighDotRight, -rightThighDotUp);
 
@@ -647,7 +647,6 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightKneeFlexion = calculateJointFlexion(rightHip, rightKnee, rightAnkle);
 
   // === ANKLE CALCULATIONS ===
-  const leftShinDir = normalize(createVector(leftKnee, leftAnkle));
   const leftFootDir = normalize(createVector(leftHeel, leftFootIndex));
   const leftAnkleBendAngle = angleBetweenVectors(
     { x: -leftShinDir.x, y: -leftShinDir.y, z: -leftShinDir.z },
@@ -655,7 +654,6 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   );
   const leftAnkleDorsiflexion = (Math.PI / 2) - leftAnkleBendAngle;
 
-  const rightShinDir = normalize(createVector(rightKnee, rightAnkle));
   const rightFootDir = normalize(createVector(rightHeel, rightFootIndex));
   const rightAnkleBendAngle = angleBetweenVectors(
     { x: -rightShinDir.x, y: -rightShinDir.y, z: -rightShinDir.z },

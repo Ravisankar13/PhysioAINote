@@ -3145,6 +3145,8 @@ export default function SimulationTimelinePanel({
         }
       });
     } else {
+      setSessionTimelineLoading(false);
+      setPhaseProgress(null);
       try {
         const result = buildSessionTimeline(
           customExercises ?? [], customTechniques ?? [], baseModelConfig, baseOverrides,

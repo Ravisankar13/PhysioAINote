@@ -2820,8 +2820,7 @@ export async function buildSessionTimelineAsync(
         ...accumulatedResult,
         sessions: [...preTransitionSessions, ...postTransitionSessions],
         treatments: [...accumulatedResult.treatments.filter(t => {
-          const phase0 = treatmentPhases[0];
-          return phase0 && preTransitionSessions.some(ps => ps.treatments.some(pt => pt.name === t.name));
+          return preTransitionSessions.some(ps => ps.treatments.some(pt => pt.name === t.name));
         }), ...rebuiltResult.treatments],
         milestones: [
           ...accumulatedResult.milestones.filter(m => {
@@ -2837,6 +2836,15 @@ export async function buildSessionTimelineAsync(
         endState: rebuiltResult.endState,
         correctionFactors: rebuiltResult.correctionFactors ?? accumulatedResult.correctionFactors,
       };
+
+      const updatedTransitions = detectPhaseTransitions(accumulatedResult.sessions);
+      for (let uti = ti + 1; uti < transitions.length; uti++) {
+        const oldTransition = transitions[uti];
+        const matching = updatedTransitions.find(ut => ut.toPhase === oldTransition.toPhase);
+        if (matching) {
+          transitions[uti] = matching;
+        }
+      }
     }
 
     onPhaseProgress?.({

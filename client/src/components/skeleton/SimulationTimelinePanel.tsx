@@ -117,15 +117,18 @@ const MILESTONE_COLORS: Record<string, string> = {
   sling_improvement: 'text-violet-400',
 };
 
-type SessionCurveTrack = 'risk' | 'pain' | 'sling' | 'rom' | 'comp';
+type SessionCurveTrack = 'risk' | 'pain' | 'sling' | 'rom' | 'comp' | 'muscle';
 
 const SESSION_TRACK_CONFIG: Record<SessionCurveTrack, { label: string; color: string; dash?: string }> = {
   risk: { label: 'Risk', color: '#ef4444' },
   pain: { label: 'Pain', color: '#f59e0b', dash: '3,2' },
   sling: { label: 'Sling', color: '#8b5cf6', dash: '2,2' },
   rom: { label: 'ROM', color: '#06b6d4', dash: '4,1' },
+  muscle: { label: 'Muscle', color: '#10b981', dash: '3,3' },
   comp: { label: 'Comp', color: '#f472b6', dash: '2,3' },
 };
+
+const ROM_JOINT_COLORS = ['#06b6d4', '#0ea5e9', '#38bdf8', '#7dd3fc', '#22d3ee', '#67e8f9', '#a5f3fc', '#0891b2'];
 
 function SessionRecoveryCurve({
   sessions,
@@ -173,9 +176,24 @@ function SessionRecoveryCurve({
     return s.romPredictions.reduce((sum, r) => sum + r.predictedDegrees / r.targetDegrees * 100, 0) / s.romPredictions.length;
   }, []);
 
+  const avgMuscleTension = useCallback((s: SessionSnapshot) => {
+    if (s.muscleStatePredictions.length === 0) return 50;
+    return s.muscleStatePredictions.reduce((sum, m) => sum + m.predictedTension, 0) / s.muscleStatePredictions.length;
+  }, []);
+
+  const allJointIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const s of sessions) {
+      for (const r of s.romPredictions) ids.add(r.jointId);
+    }
+    return Array.from(ids).slice(0, 8);
+  }, [sessions]);
+
+  const [showPerJointRom, setShowPerJointRom] = useState(false);
+
   const trackData = useMemo(() => {
     const data: Record<SessionCurveTrack, { x: number; y: number; session: number }[]> = {
-      risk: [], pain: [], sling: [], rom: [], comp: [],
+      risk: [], pain: [], sling: [], rom: [], muscle: [], comp: [],
     };
     for (const s of sessions) {
       const x = getX(s);
@@ -183,10 +201,23 @@ function SessionRecoveryCurve({
       data.pain.push({ x, y: s.painPrediction, session: s.sessionNumber });
       data.sling.push({ x, y: s.slingIntegrity, session: s.sessionNumber });
       data.rom.push({ x, y: avgRom(s), session: s.sessionNumber });
+      data.muscle.push({ x, y: avgMuscleTension(s), session: s.sessionNumber });
       data.comp.push({ x, y: 100 - s.compensationResolution, session: s.sessionNumber });
     }
     return data;
-  }, [sessions, getX, avgRom]);
+  }, [sessions, getX, avgRom, avgMuscleTension]);
+
+  const perJointRomData = useMemo(() => {
+    if (!showPerJointRom || !enabledTracks.has('rom')) return [];
+    return allJointIds.map((jointId, idx) => {
+      const pts = sessions.map(s => {
+        const rom = s.romPredictions.find(r => r.jointId === jointId);
+        const pct = rom ? (rom.predictedDegrees / rom.targetDegrees) * 100 : 50;
+        return { x: getX(s), y: pct, session: s.sessionNumber };
+      });
+      return { jointId, color: ROM_JOINT_COLORS[idx % ROM_JOINT_COLORS.length], pts };
+    });
+  }, [showPerJointRom, enabledTracks, allJointIds, sessions, getX]);
 
   const toSvgPoints = useCallback((pts: { x: number; y: number; session: number }[]) => {
     return pts.map(p => ({
@@ -261,6 +292,17 @@ function SessionRecoveryCurve({
             {cfg.label}
           </button>
         ))}
+        {enabledTracks.has('rom') && allJointIds.length > 0 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowPerJointRom(!showPerJointRom); }}
+            className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[7px] transition-colors ${
+              showPerJointRom ? 'bg-cyan-700/40 text-cyan-300' : 'bg-gray-800/30 text-gray-600'
+            }`}
+          >
+            <Bone className="h-2 w-2" />
+            Joints ({allJointIds.length})
+          </button>
+        )}
       </div>
 
       <svg
@@ -295,9 +337,24 @@ function SessionRecoveryCurve({
         {enabledTracks.has('rom') && (
           <path d={makePath(toSvgPoints(trackData.rom))} fill="none" stroke="#06b6d4" strokeWidth={1} strokeDasharray="4,1" />
         )}
+        {enabledTracks.has('muscle') && (
+          <path d={makePath(toSvgPoints(trackData.muscle))} fill="none" stroke="#10b981" strokeWidth={1} strokeDasharray="3,3" />
+        )}
         {enabledTracks.has('comp') && (
           <path d={makePath(toSvgPoints(trackData.comp))} fill="none" stroke="#f472b6" strokeWidth={1} strokeDasharray="2,3" />
         )}
+
+        {perJointRomData.map(jd => (
+          <path
+            key={`rom-${jd.jointId}`}
+            d={makePath(toSvgPoints(jd.pts))}
+            fill="none"
+            stroke={jd.color}
+            strokeWidth={0.7}
+            strokeDasharray="2,2"
+            opacity={0.6}
+          />
+        ))}
 
         {sessions.filter(s => modSessions.has(s.sessionNumber)).map(s => {
           const mx = getX(s);
@@ -809,6 +866,37 @@ function SessionCard({
               <div className="text-[9px] font-medium text-pink-400">{session.compensationResolution.toFixed(0)}%</div>
             </div>
           </div>
+          {(session.romPredictions.length > 0 || session.painMarkerPredictions.length > 0 || session.muscleStatePredictions.length > 0) && (
+            <div className="border-t border-gray-700/20 pt-1 mt-1">
+              <div className="text-[7px] text-gray-600 uppercase mb-0.5">Predicted Deltas</div>
+              <div className="space-y-0.5 text-[7px]">
+                {session.romPredictions.slice(0, 3).map(r => (
+                  <div key={r.jointId} className="flex items-center justify-between">
+                    <span className="text-gray-500 truncate max-w-[60%]">{r.jointLabel}</span>
+                    <span className={r.deltaFromBaseline >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      {r.deltaFromBaseline >= 0 ? '+' : ''}{r.deltaFromBaseline.toFixed(1)}° → {r.predictedDegrees.toFixed(0)}°
+                    </span>
+                  </div>
+                ))}
+                {session.painMarkerPredictions.slice(0, 2).map(p => (
+                  <div key={p.markerId} className="flex items-center justify-between">
+                    <span className="text-gray-500 truncate max-w-[60%]">{p.markerLabel}</span>
+                    <span className={p.deltaFromBaseline <= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      {p.deltaFromBaseline > 0 ? '+' : ''}{p.deltaFromBaseline.toFixed(1)} → {p.predictedSeverity.toFixed(1)}
+                    </span>
+                  </div>
+                ))}
+                {session.muscleStatePredictions.slice(0, 2).map(m => (
+                  <div key={m.muscleId} className="flex items-center justify-between">
+                    <span className="text-gray-500 truncate max-w-[60%]">{m.muscleLabel}</span>
+                    <span className={m.trendDirection === 'improving' ? 'text-emerald-400' : m.trendDirection === 'worsening' ? 'text-red-400' : 'text-gray-400'}>
+                      T:{m.predictedTension.toFixed(0)}% A:{m.predictedActivation.toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {session.recoveryPhaseLabel && (
             <div className="text-[7px] text-gray-500 mt-0.5">
               Phase: <span className="text-gray-300">{session.recoveryPhaseLabel}</span>
@@ -1785,33 +1873,77 @@ function SessionTimelineView({
             )}
           </div>
         </div>
-        {sessionTimeline.baseline.romBaselines.length > 0 && lastSession && (
+        {lastSession && (
           <div className="mt-1 pt-1 border-t border-gray-700/20">
-            <div className="text-[7px] text-gray-600 uppercase mb-0.5">Dimension Deltas</div>
-            <div className="grid grid-cols-4 gap-1 text-[7px]">
-              <div className="text-center">
-                <div className="text-gray-500">Risk</div>
-                <div className={`font-medium ${sessionTimeline.startingState.riskScore - sessionTimeline.endState.riskScore > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {sessionTimeline.startingState.riskScore > sessionTimeline.endState.riskScore ? '↓' : '↑'}{Math.abs(sessionTimeline.startingState.riskScore - sessionTimeline.endState.riskScore)}
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-gray-500">Pain</div>
-                <div className={`font-medium ${sessionTimeline.startingState.painBaseline - lastSession.painPrediction > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {sessionTimeline.startingState.painBaseline > lastSession.painPrediction ? '↓' : '↑'}{Math.abs(sessionTimeline.startingState.painBaseline - lastSession.painPrediction).toFixed(0)}
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-gray-500">Sling</div>
-                <div className={`font-medium ${sessionTimeline.endState.slingIntegrity > sessionTimeline.startingState.slingIntegrity ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {sessionTimeline.endState.slingIntegrity > sessionTimeline.startingState.slingIntegrity ? '↑' : '↓'}{Math.abs(sessionTimeline.endState.slingIntegrity - sessionTimeline.startingState.slingIntegrity)}%
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-gray-500">Comp</div>
-                <div className="text-emerald-400 font-medium">
-                  ↓{lastSession.compensationResolution.toFixed(0)}%
-                </div>
+            <div className="text-[7px] text-gray-600 uppercase mb-0.5">Dimension Improvement</div>
+            <div className="space-y-0.5 text-[7px]">
+              {(() => {
+                const riskDelta = sessionTimeline.startingState.riskScore - sessionTimeline.endState.riskScore;
+                const riskPct = sessionTimeline.startingState.riskScore > 0 ? (riskDelta / sessionTimeline.startingState.riskScore * 100).toFixed(0) : '0';
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Risk</span>
+                    <span className={riskDelta > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      {riskDelta > 0 ? '↓' : '↑'}{Math.abs(riskDelta)} pts ({riskPct}%)
+                    </span>
+                  </div>
+                );
+              })()}
+              {(() => {
+                const painDelta = sessionTimeline.startingState.painBaseline - lastSession.painPrediction;
+                const painPct = sessionTimeline.startingState.painBaseline > 0 ? (painDelta / sessionTimeline.startingState.painBaseline * 100).toFixed(0) : '0';
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Pain</span>
+                    <span className={painDelta > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      {painDelta > 0 ? '↓' : '↑'}{Math.abs(painDelta).toFixed(0)} ({painPct}%)
+                    </span>
+                  </div>
+                );
+              })()}
+              {(() => {
+                const slingDelta = sessionTimeline.endState.slingIntegrity - sessionTimeline.startingState.slingIntegrity;
+                const slingPct = sessionTimeline.startingState.slingIntegrity > 0 ? (slingDelta / sessionTimeline.startingState.slingIntegrity * 100).toFixed(0) : '0';
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Sling</span>
+                    <span className={slingDelta > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      {slingDelta > 0 ? '↑' : '↓'}{Math.abs(slingDelta)}% ({slingPct}%)
+                    </span>
+                  </div>
+                );
+              })()}
+              {sessionTimeline.baseline.romBaselines.length > 0 && lastSession.romPredictions.length > 0 && (() => {
+                const baseRom = sessionTimeline.baseline.romBaselines.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / sessionTimeline.baseline.romBaselines.length;
+                const finalRom = lastSession.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / lastSession.romPredictions.length;
+                const romDelta = finalRom - baseRom;
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Avg ROM</span>
+                    <span className={romDelta > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      {romDelta > 0 ? '↑' : '↓'}{Math.abs(romDelta).toFixed(1)}% ({baseRom > 0 ? (romDelta / baseRom * 100).toFixed(0) : '0'}%)
+                    </span>
+                  </div>
+                );
+              })()}
+              {sessionTimeline.baseline.muscleBaselines.length > 0 && lastSession.muscleStatePredictions.length > 0 && (() => {
+                const baseTension = sessionTimeline.baseline.muscleBaselines.reduce((s, m) => s + m.predictedTension, 0) / sessionTimeline.baseline.muscleBaselines.length;
+                const finalTension = lastSession.muscleStatePredictions.reduce((s, m) => s + m.predictedTension, 0) / lastSession.muscleStatePredictions.length;
+                const tensionDelta = baseTension - finalTension;
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">Muscle Tension</span>
+                    <span className={tensionDelta > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      {tensionDelta > 0 ? '↓' : '↑'}{Math.abs(tensionDelta).toFixed(1)}% ({baseTension > 0 ? (tensionDelta / baseTension * 100).toFixed(0) : '0'}%)
+                    </span>
+                  </div>
+                );
+              })()}
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Compensation</span>
+                <span className="text-emerald-400">
+                  ↓{lastSession.compensationResolution.toFixed(0)}% resolved
+                </span>
               </div>
             </div>
           </div>

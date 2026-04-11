@@ -745,6 +745,152 @@ export interface SessionApplyPayload {
   compensationUpdates: Array<{ patternId: string; predictedSeverity: number; resolutionPercent: number }>;
 }
 
+export interface ActualSessionOutcome {
+  sessionNumber: number;
+  actualRom?: Record<string, number>;
+  actualPain?: Record<string, number>;
+  actualMuscleTension?: Record<string, number>;
+  complianceRating?: number;
+  notes?: string;
+}
+
+export interface DimensionCorrectionFactor {
+  dimension: string;
+  label: string;
+  correctionMultiplier: number;
+  trend: 'faster' | 'slower' | 'as_expected';
+  magnitude: number;
+  sessionCount: number;
+}
+
+export interface CorrectionFactors {
+  rom: Record<string, DimensionCorrectionFactor>;
+  pain: Record<string, DimensionCorrectionFactor>;
+  muscle: Record<string, DimensionCorrectionFactor>;
+  overall: DimensionCorrectionFactor;
+  compliance: number;
+}
+
+function computeEWMACorrectionFactors(
+  sessions: SessionSnapshot[],
+  outcomes: ActualSessionOutcome[],
+  alpha: number = 0.4,
+): CorrectionFactors {
+  const romFactors: Record<string, { sumWeighted: number; sumWeights: number; count: number }> = {};
+  const painFactors: Record<string, { sumWeighted: number; sumWeights: number; count: number }> = {};
+  const muscleFactors: Record<string, { sumWeighted: number; sumWeights: number; count: number }> = {};
+  let overallSum = 0;
+  let overallWeightSum = 0;
+  let overallCount = 0;
+  let complianceSum = 0;
+  let complianceCount = 0;
+
+  const sortedOutcomes = [...outcomes].sort((a, b) => a.sessionNumber - b.sessionNumber);
+
+  for (let i = 0; i < sortedOutcomes.length; i++) {
+    const oc = sortedOutcomes[i];
+    const snap = sessions.find(s => s.sessionNumber === oc.sessionNumber);
+    if (!snap) continue;
+
+    const recency = Math.pow(1 - alpha, sortedOutcomes.length - 1 - i);
+
+    if (oc.actualRom) {
+      for (const [jointId, actualDeg] of Object.entries(oc.actualRom)) {
+        const pred = snap.romPredictions.find(r => r.jointId === jointId);
+        if (pred && pred.predictedDegrees > 0) {
+          const ratio = actualDeg / pred.predictedDegrees;
+          if (!romFactors[jointId]) romFactors[jointId] = { sumWeighted: 0, sumWeights: 0, count: 0 };
+          romFactors[jointId].sumWeighted += ratio * recency;
+          romFactors[jointId].sumWeights += recency;
+          romFactors[jointId].count++;
+          overallSum += ratio * recency;
+          overallWeightSum += recency;
+          overallCount++;
+        }
+      }
+    }
+
+    if (oc.actualPain) {
+      for (const [markerId, actualPain] of Object.entries(oc.actualPain)) {
+        const pred = snap.painMarkerPredictions.find(p => p.markerId === markerId);
+        if (pred && pred.predictedSeverity > 0) {
+          const ratio = actualPain / pred.predictedSeverity;
+          if (!painFactors[markerId]) painFactors[markerId] = { sumWeighted: 0, sumWeights: 0, count: 0 };
+          painFactors[markerId].sumWeighted += ratio * recency;
+          painFactors[markerId].sumWeights += recency;
+          painFactors[markerId].count++;
+          overallSum += ratio * recency;
+          overallWeightSum += recency;
+          overallCount++;
+        }
+      }
+    }
+
+    if (oc.actualMuscleTension) {
+      for (const [muscleId, actualT] of Object.entries(oc.actualMuscleTension)) {
+        const pred = snap.muscleStatePredictions.find(m => m.muscleId === muscleId);
+        if (pred && pred.predictedTension > 0) {
+          const ratio = actualT / pred.predictedTension;
+          if (!muscleFactors[muscleId]) muscleFactors[muscleId] = { sumWeighted: 0, sumWeights: 0, count: 0 };
+          muscleFactors[muscleId].sumWeighted += ratio * recency;
+          muscleFactors[muscleId].sumWeights += recency;
+          muscleFactors[muscleId].count++;
+        }
+      }
+    }
+
+    if (oc.complianceRating !== undefined) {
+      complianceSum += oc.complianceRating;
+      complianceCount++;
+    }
+  }
+
+  const buildFactor = (dim: string, label: string, data: { sumWeighted: number; sumWeights: number; count: number }): DimensionCorrectionFactor => {
+    const corr = data.sumWeights > 0 ? data.sumWeighted / data.sumWeights : 1;
+    const clamped = clamp(corr, 0.5, 2.0);
+    const magnitude = Math.abs(clamped - 1) * 100;
+    const trend: 'faster' | 'slower' | 'as_expected' = clamped > 1.05 ? 'faster' : clamped < 0.95 ? 'slower' : 'as_expected';
+    return { dimension: dim, label, correctionMultiplier: clamped, trend, magnitude: Math.round(magnitude), sessionCount: data.count };
+  };
+
+  const romResult: Record<string, DimensionCorrectionFactor> = {};
+  for (const [jId, data] of Object.entries(romFactors)) {
+    romResult[jId] = buildFactor('rom', jId, data);
+  }
+
+  const painResult: Record<string, DimensionCorrectionFactor> = {};
+  for (const [mId, data] of Object.entries(painFactors)) {
+    painResult[mId] = buildFactor('pain', mId, data);
+  }
+
+  const muscleResult: Record<string, DimensionCorrectionFactor> = {};
+  for (const [mId, data] of Object.entries(muscleFactors)) {
+    muscleResult[mId] = buildFactor('muscle', mId, data);
+  }
+
+  const overallCorr = overallWeightSum > 0 ? overallSum / overallWeightSum : 1;
+  const overallClamped = clamp(overallCorr, 0.5, 2.0);
+  const overallMag = Math.abs(overallClamped - 1) * 100;
+  const overallTrend: 'faster' | 'slower' | 'as_expected' = overallClamped > 1.05 ? 'faster' : overallClamped < 0.95 ? 'slower' : 'as_expected';
+
+  return {
+    rom: romResult,
+    pain: painResult,
+    muscle: muscleResult,
+    overall: {
+      dimension: 'overall',
+      label: 'Overall',
+      correctionMultiplier: overallClamped,
+      trend: overallTrend,
+      magnitude: Math.round(overallMag),
+      sessionCount: overallCount,
+    },
+    compliance: complianceCount > 0 ? complianceSum / complianceCount : 1,
+  };
+}
+
+export { computeEWMACorrectionFactors };
+
 export interface MultiDimensionalBaseline {
   romBaselines: RomPrediction[];
   painBaselines: PainMarkerPrediction[];
@@ -776,6 +922,8 @@ export interface SessionTimelineResult {
   };
   milestones: SimulationMilestone[];
   functionalMilestones: FunctionalMilestone[];
+  correctionFactors?: CorrectionFactors;
+  actualOutcomes?: ActualSessionOutcome[];
 }
 
 const JOINT_ROM_NORMS: Record<string, { label: string; plane: string; normalDegrees: number }> = {
@@ -1379,6 +1527,7 @@ export function buildSessionTimeline(
   biomechanicsOutput?: unknown | null,
   patientModifiers?: PatientModifierProfile | null,
   conditionProfile?: ConditionRecoveryProfile | null,
+  actualOutcomes?: ActualSessionOutcome[],
 ): SessionTimelineResult {
   const pm = patientModifiers ?? null;
   const cp = conditionProfile ?? null;
@@ -2160,6 +2309,50 @@ export function buildSessionTimeline(
     });
   }
 
+  let correctionFactors: CorrectionFactors | undefined;
+  const oc = actualOutcomes ?? [];
+
+  if (oc.length > 0) {
+    correctionFactors = computeEWMACorrectionFactors(sessions, oc);
+    const maxRecordedSession = Math.max(...oc.map(o => o.sessionNumber));
+
+    for (const snap of sessions) {
+      if (snap.sessionNumber <= maxRecordedSession) continue;
+
+      const romCorr = correctionFactors.overall.correctionMultiplier;
+      const complianceMod = correctionFactors.compliance;
+
+      for (const rp of snap.romPredictions) {
+        const jointCorr = correctionFactors.rom[rp.jointId]?.correctionMultiplier ?? romCorr;
+        const correctedPred = rp.currentDegrees + (rp.predictedDegrees - rp.currentDegrees) * jointCorr * complianceMod;
+        rp.predictedDegrees = Math.round(clamp(correctedPred, 0, rp.targetDegrees) * 10) / 10;
+        rp.deltaFromBaseline = Math.round((rp.predictedDegrees - rp.currentDegrees) * 10) / 10;
+      }
+
+      for (const pp of snap.painMarkerPredictions) {
+        const painCorr = correctionFactors.pain[pp.markerId]?.correctionMultiplier ?? romCorr;
+        const correctedPred = pp.baselineSeverity + (pp.predictedSeverity - pp.baselineSeverity) * painCorr * complianceMod;
+        pp.predictedSeverity = Math.round(clamp(correctedPred, 0, 10) * 10) / 10;
+        pp.deltaFromBaseline = Math.round((pp.predictedSeverity - pp.baselineSeverity) * 10) / 10;
+      }
+
+      for (const mp of snap.muscleStatePredictions) {
+        const muscleCorr = correctionFactors.muscle[mp.muscleId]?.correctionMultiplier ?? romCorr;
+        const correctedPred = mp.baselineTension + (mp.predictedTension - mp.baselineTension) * muscleCorr * complianceMod;
+        mp.predictedTension = Math.round(clamp(correctedPred, 10, 90));
+      }
+
+      const riskAdjust = (1 - correctionFactors.overall.correctionMultiplier) * 10;
+      snap.riskScore = Math.round(clamp(snap.riskScore + riskAdjust, 0, 100));
+      snap.riskLevel = getRiskLevelFromScore(snap.riskScore);
+
+      if (snap.painMarkerPredictions.length > 0) {
+        const avgPainCorrected = snap.painMarkerPredictions.reduce((s, p) => s + p.predictedSeverity, 0) / snap.painMarkerPredictions.length;
+        snap.painPrediction = Math.round(clamp(avgPainCorrected * 10, 0, 100));
+      }
+    }
+  }
+
   const lastSession = sessions[sessions.length - 1];
   const estimatedRecoverySessions = (() => {
     for (const snap of sessions) {
@@ -2190,5 +2383,7 @@ export function buildSessionTimeline(
     },
     milestones: milestones.sort((a, b) => a.week - b.week),
     functionalMilestones: funcMilestones,
+    correctionFactors,
+    actualOutcomes: oc.length > 0 ? oc : undefined,
   };
 }

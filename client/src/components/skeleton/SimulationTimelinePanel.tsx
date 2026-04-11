@@ -35,6 +35,9 @@ import {
   Flame,
   Trophy,
   Layers,
+  ClipboardCheck,
+  ArrowUpDown,
+  BarChart3,
 } from "lucide-react";
 import {
   buildSimulationTimeline,
@@ -55,6 +58,9 @@ import {
   type FunctionalMilestone,
   type InterSessionHealing,
   type SessionApplyPayload,
+  type ActualSessionOutcome,
+  type CorrectionFactors,
+  type DimensionCorrectionFactor,
 } from "@/lib/simulationTimelineEngine";
 import {
   type PatientFactors,
@@ -730,14 +736,230 @@ function SessionTreatmentBar({
   );
 }
 
+function CorrectionTrendBadge({ factors }: { factors: CorrectionFactors }) {
+  const { overall } = factors;
+  const trendColor = overall.trend === 'faster' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+    : overall.trend === 'slower' ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+    : 'text-gray-300 border-gray-500/30 bg-gray-500/10';
+  const trendIcon = overall.trend === 'faster' ? <TrendingUp className="h-2.5 w-2.5" />
+    : overall.trend === 'slower' ? <TrendingDown className="h-2.5 w-2.5" />
+    : <ArrowRight className="h-2.5 w-2.5" />;
+  const trendLabel = overall.trend === 'faster' ? 'Responding Faster'
+    : overall.trend === 'slower' ? 'Responding Slower'
+    : 'As Expected';
+
+  return (
+    <div className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[8px] font-medium ${trendColor}`}>
+      {trendIcon}
+      <span>{trendLabel}</span>
+      {overall.magnitude > 0 && (
+        <span className="opacity-70">({overall.magnitude}%)</span>
+      )}
+      <span className="text-gray-500 ml-auto">{overall.sessionCount} recorded</span>
+    </div>
+  );
+}
+
+function ActualOutcomeInput({
+  session,
+  existingOutcome,
+  onSave,
+}: {
+  session: SessionSnapshot;
+  existingOutcome?: ActualSessionOutcome;
+  onSave: (outcome: ActualSessionOutcome) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [romValues, setRomValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const r of session.romPredictions.slice(0, 4)) {
+      init[r.jointId] = existingOutcome?.actualRom?.[r.jointId]?.toString() ?? '';
+    }
+    return init;
+  });
+  const [painValues, setPainValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const p of session.painMarkerPredictions.slice(0, 3)) {
+      init[p.markerId] = existingOutcome?.actualPain?.[p.markerId]?.toString() ?? '';
+    }
+    return init;
+  });
+  const [compliance, setCompliance] = useState(existingOutcome?.complianceRating?.toString() ?? '1');
+  const [notes, setNotes] = useState(existingOutcome?.notes ?? '');
+
+  const handleSave = useCallback(() => {
+    const actualRom: Record<string, number> = {};
+    for (const [k, v] of Object.entries(romValues)) {
+      const n = parseFloat(v);
+      if (!isNaN(n) && n >= 0) actualRom[k] = n;
+    }
+    const actualPain: Record<string, number> = {};
+    for (const [k, v] of Object.entries(painValues)) {
+      const n = parseFloat(v);
+      if (!isNaN(n) && n >= 0 && n <= 10) actualPain[k] = n;
+    }
+    onSave({
+      sessionNumber: session.sessionNumber,
+      actualRom: Object.keys(actualRom).length > 0 ? actualRom : undefined,
+      actualPain: Object.keys(actualPain).length > 0 ? actualPain : undefined,
+      complianceRating: parseFloat(compliance) || 1,
+      notes: notes.trim() || undefined,
+    });
+    setIsEditing(false);
+  }, [romValues, painValues, compliance, notes, session.sessionNumber, onSave]);
+
+  if (!isEditing && !existingOutcome) {
+    return (
+      <button
+        onClick={() => setIsEditing(true)}
+        className="w-full flex items-center justify-center gap-1 text-[8px] text-cyan-400/70 hover:text-cyan-400 py-1 mt-1 border border-dashed border-cyan-500/20 rounded hover:border-cyan-500/40 transition-colors"
+      >
+        <ClipboardCheck className="h-2.5 w-2.5" />
+        Record Actual Outcome
+      </button>
+    );
+  }
+
+  if (!isEditing && existingOutcome) {
+    return (
+      <div className="mt-1 border border-emerald-500/20 rounded bg-emerald-500/5 p-1.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[7px] text-emerald-400 font-medium flex items-center gap-1">
+            <ClipboardCheck className="h-2.5 w-2.5" />
+            Actual Outcome Recorded
+          </span>
+          <button onClick={() => setIsEditing(true)} className="text-[7px] text-gray-500 hover:text-gray-300">Edit</button>
+        </div>
+        <div className="space-y-0.5">
+          {session.romPredictions.slice(0, 4).map(r => {
+            const actual = existingOutcome.actualRom?.[r.jointId];
+            if (actual === undefined) return null;
+            const diff = actual - r.predictedDegrees;
+            return (
+              <div key={r.jointId} className="flex items-center justify-between text-[7px]">
+                <span className="text-gray-500 truncate max-w-[40%]">{r.jointLabel}</span>
+                <span className="text-gray-400">Pred: {r.predictedDegrees.toFixed(0)}°</span>
+                <span className={diff >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                  Act: {actual.toFixed(0)}° ({diff >= 0 ? '+' : ''}{diff.toFixed(0)}°)
+                </span>
+              </div>
+            );
+          })}
+          {session.painMarkerPredictions.slice(0, 3).map(p => {
+            const actual = existingOutcome.actualPain?.[p.markerId];
+            if (actual === undefined) return null;
+            const diff = actual - p.predictedSeverity;
+            return (
+              <div key={p.markerId} className="flex items-center justify-between text-[7px]">
+                <span className="text-gray-500 truncate max-w-[40%]">{p.markerLabel}</span>
+                <span className="text-gray-400">Pred: {p.predictedSeverity.toFixed(1)}</span>
+                <span className={diff <= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                  Act: {actual.toFixed(1)} ({diff > 0 ? '+' : ''}{diff.toFixed(1)})
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1 border border-cyan-500/20 rounded bg-cyan-500/5 p-1.5 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[8px] text-cyan-400 font-medium">Record Actual Measurements</span>
+        <button onClick={() => setIsEditing(false)} className="text-[7px] text-gray-500 hover:text-gray-300">Cancel</button>
+      </div>
+      {session.romPredictions.length > 0 && (
+        <div>
+          <div className="text-[7px] text-gray-500 mb-0.5">ROM (degrees)</div>
+          <div className="space-y-0.5">
+            {session.romPredictions.slice(0, 4).map(r => (
+              <div key={r.jointId} className="flex items-center gap-1 text-[7px]">
+                <span className="text-gray-400 w-[45%] truncate">{r.jointLabel}</span>
+                <span className="text-gray-600 text-[6px]">pred:{r.predictedDegrees.toFixed(0)}°</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="360"
+                  step="1"
+                  value={romValues[r.jointId] ?? ''}
+                  onChange={e => setRomValues(prev => ({ ...prev, [r.jointId]: e.target.value }))}
+                  className="flex-1 bg-gray-800/60 border border-gray-600/40 rounded px-1 py-0.5 text-[8px] text-gray-200 w-12"
+                  placeholder="°"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {session.painMarkerPredictions.length > 0 && (
+        <div>
+          <div className="text-[7px] text-gray-500 mb-0.5">Pain (0-10)</div>
+          <div className="space-y-0.5">
+            {session.painMarkerPredictions.slice(0, 3).map(p => (
+              <div key={p.markerId} className="flex items-center gap-1 text-[7px]">
+                <span className="text-gray-400 w-[45%] truncate">{p.markerLabel}</span>
+                <span className="text-gray-600 text-[6px]">pred:{p.predictedSeverity.toFixed(1)}</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  value={painValues[p.markerId] ?? ''}
+                  onChange={e => setPainValues(prev => ({ ...prev, [p.markerId]: e.target.value }))}
+                  className="flex-1 bg-gray-800/60 border border-gray-600/40 rounded px-1 py-0.5 text-[8px] text-gray-200 w-12"
+                  placeholder="/10"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex items-center gap-2 text-[7px]">
+        <span className="text-gray-400">Compliance:</span>
+        <select
+          value={compliance}
+          onChange={e => setCompliance(e.target.value)}
+          className="bg-gray-800/60 border border-gray-600/40 rounded px-1 py-0.5 text-[8px] text-gray-200"
+        >
+          <option value="1.2">Excellent</option>
+          <option value="1.0">Good</option>
+          <option value="0.8">Fair</option>
+          <option value="0.6">Poor</option>
+        </select>
+      </div>
+      <div>
+        <input
+          type="text"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="Session notes (optional)"
+          className="w-full bg-gray-800/60 border border-gray-600/40 rounded px-1.5 py-0.5 text-[8px] text-gray-200 placeholder-gray-600"
+        />
+      </div>
+      <button
+        onClick={handleSave}
+        className="w-full bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 text-[8px] py-1 rounded border border-cyan-500/30 transition-colors"
+      >
+        Save Outcome
+      </button>
+    </div>
+  );
+}
+
 function SessionCard({
   session,
   isExpanded,
   onToggle,
+  actualOutcome,
+  onRecordOutcome,
 }: {
   session: SessionSnapshot;
   isExpanded: boolean;
   onToggle: () => void;
+  actualOutcome?: ActualSessionOutcome;
+  onRecordOutcome?: (outcome: ActualSessionOutcome) => void;
 }) {
   const exerciseCount = session.treatments.filter(t => t.type === 'exercise').length;
   const manualCount = session.treatments.filter(t => t.type === 'manual_therapy').length;
@@ -913,6 +1135,13 @@ function SessionCard({
             <div className="text-[7px] text-gray-500 mt-0.5">
               Phase: <span className="text-gray-300">{session.recoveryPhaseLabel}</span>
             </div>
+          )}
+          {onRecordOutcome && (
+            <ActualOutcomeInput
+              session={session}
+              existingOutcome={actualOutcome}
+              onSave={onRecordOutcome}
+            />
           )}
         </div>
       )}
@@ -1343,6 +1572,8 @@ function SessionTimelineView({
   onApplyToSkeleton,
   activeCondition,
   modifiers,
+  actualOutcomes,
+  onRecordOutcome,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -1350,6 +1581,8 @@ function SessionTimelineView({
   onApplyToSkeleton?: (payload: SessionApplyPayload) => void;
   activeCondition?: ConditionRecoveryProfile | null;
   modifiers?: PatientModifierProfile | null;
+  actualOutcomes: ActualSessionOutcome[];
+  onRecordOutcome: (outcome: ActualSessionOutcome) => void;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1469,6 +1702,10 @@ function SessionTimelineView({
           <span className="text-[8px] text-gray-400">every {sessionTimeline.sessionIntervalDays}d</span>
         </div>
       </div>
+
+      {sessionTimeline.correctionFactors && (
+        <CorrectionTrendBadge factors={sessionTimeline.correctionFactors} />
+      )}
 
       {(activeCondition || modifiers) && (
         <div className="bg-gray-800/40 rounded border border-gray-700/40 p-1.5">
@@ -1762,6 +1999,8 @@ function SessionTimelineView({
                   session={s}
                   isExpanded={expandedSessionCard === s.sessionNumber}
                   onToggle={() => setExpandedSessionCard(expandedSessionCard === s.sessionNumber ? null : s.sessionNumber)}
+                  actualOutcome={actualOutcomes.find(o => o.sessionNumber === s.sessionNumber)}
+                  onRecordOutcome={onRecordOutcome}
                 />
               ))}
             {sessionTimeline.sessions.length > 6 && (
@@ -2570,6 +2809,14 @@ export default function SimulationTimelinePanel({
   const detectedCondition = useMemo(() => autoDetectCondition(structuredReasoning ?? null), [structuredReasoning]);
 
   const [conditionOverrideId, setConditionOverrideId] = useState<string | null>(null);
+  const [actualOutcomes, setActualOutcomes] = useState<ActualSessionOutcome[]>([]);
+
+  const handleRecordOutcome = useCallback((outcome: ActualSessionOutcome) => {
+    setActualOutcomes(prev => {
+      const filtered = prev.filter(o => o.sessionNumber !== outcome.sessionNumber);
+      return [...filtered, outcome].sort((a, b) => a.sessionNumber - b.sessionNumber);
+    });
+  }, []);
 
   const activeCondition = useMemo(() => {
     if (conditionOverrideId) {
@@ -2600,12 +2847,13 @@ export default function SimulationTimelinePanel({
         biomechanicsOutput,
         modifiers,
         adjustedProfile,
+        actualOutcomes.length > 0 ? actualOutcomes : undefined,
       );
     } catch (e) {
       console.warn('[SimTimeline] Session build failed:', e);
       return null;
     }
-  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile]);
+  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile, actualOutcomes]);
 
   const weekTimeline = useMemo(() => {
     if (hasCustomTreatments) return null;
@@ -2653,6 +2901,8 @@ export default function SimulationTimelinePanel({
           onApplyToSkeleton={onApplyWeekToSkeleton}
           activeCondition={activeCondition}
           modifiers={modifiers}
+          actualOutcomes={actualOutcomes}
+          onRecordOutcome={handleRecordOutcome}
         />
       </div>
     );

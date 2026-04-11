@@ -933,6 +933,8 @@ function captureRomBaselines(
   baseModelConfig: Record<string, Record<string, number>>,
   treatments: SessionTreatment[],
   painMarkers: Array<{ severity?: number }>,
+  baseOverrides: Record<string, Partial<MuscleOverride>>,
+  muscleAnalysis: MuscleAnalysisResult,
 ): RomPrediction[] {
   const relevantJoints = new Set<string>();
   for (const t of treatments) {
@@ -947,15 +949,69 @@ function captureRomBaselines(
     }
   }
 
-  const avgPainSeverity = painMarkers.length > 0
-    ? painMarkers.reduce((s, p) => s + (p.severity ?? 5), 0) / painMarkers.length
-    : 5;
-  const painRomReduction = avgPainSeverity / 10;
+  const posture = baseModelConfig['posture'] || {};
+  const jointConfig = baseModelConfig['joints'] || {};
+
+  const perMarkerSeverity: Record<string, number> = {};
+  const relevantJointArr = Array.from(relevantJoints);
+  for (const pm of painMarkers) {
+    const sev = pm.severity ?? 5;
+    for (const jId of relevantJointArr) {
+      const norm = JOINT_ROM_NORMS[jId];
+      if (!norm) continue;
+      perMarkerSeverity[jId] = Math.max(perMarkerSeverity[jId] ?? 0, sev);
+    }
+  }
+
+  const pathologyPenalties: Record<string, number> = {};
+  for (const [muscleId, override] of Object.entries(baseOverrides)) {
+    if (!override.pathology || override.pathology === 'none') continue;
+    const joints = TARGET_TO_JOINTS[muscleId] || [];
+    const pathStr = String(override.pathology).toLowerCase();
+    const penalty = pathStr === 'tear' ? 0.4
+      : pathStr === 'strain' ? 0.25
+      : pathStr === 'tendinopathy' ? 0.2
+      : pathStr === 'impingement' ? 0.15
+      : 0.1;
+    for (const jId of joints) {
+      pathologyPenalties[jId] = Math.max(pathologyPenalties[jId] ?? 0, penalty);
+    }
+  }
+
+  const tightnessPenalties: Record<string, number> = {};
+  for (const group of muscleAnalysis.groups) {
+    const avgTight = group.avgTightness ?? 50;
+    if (avgTight > 65) {
+      const joints = TARGET_TO_JOINTS[group.id] || [];
+      const penalty = (avgTight - 65) / 100;
+      for (const jId of joints) {
+        tightnessPenalties[jId] = Math.max(tightnessPenalties[jId] ?? 0, penalty);
+      }
+    }
+  }
 
   return Array.from(relevantJoints).map(jointId => {
     const norm = JOINT_ROM_NORMS[jointId];
     if (!norm) return null;
-    const currentDeg = Math.round(norm.normalDegrees * (1 - painRomReduction * 0.3));
+
+    const configuredRom = jointConfig[jointId] ?? norm.normalDegrees;
+    const painSev = perMarkerSeverity[jointId] ?? 0;
+    const painReduction = painSev / 10 * 0.3;
+    const pathPenalty = pathologyPenalties[jointId] ?? 0;
+    const tightPenalty = tightnessPenalties[jointId] ?? 0;
+    const posturalDeviation = Object.values(posture).reduce((sum, v) => sum + Math.abs(v as number), 0) / 100 * 0.05;
+
+    const totalReduction = clamp(painReduction + pathPenalty + tightPenalty + posturalDeviation, 0, 0.8);
+    const currentDeg = Math.round(configuredRom * (1 - totalReduction));
+
+    const limitingFactor = pathPenalty > painReduction && pathPenalty > tightPenalty
+      ? 'Pathology-limited'
+      : painReduction > tightPenalty
+      ? 'Pain-limited'
+      : tightPenalty > 0.05
+      ? 'Muscle tightness'
+      : 'Tissue restriction';
+
     return {
       jointId,
       jointLabel: norm.label,
@@ -964,7 +1020,7 @@ function captureRomBaselines(
       targetDegrees: norm.normalDegrees,
       predictedDegrees: currentDeg,
       deltaFromBaseline: 0,
-      limitingFactor: painRomReduction > 0.5 ? 'Pain-limited' : 'Tissue restriction',
+      limitingFactor,
     };
   }).filter((r): r is RomPrediction => r !== null);
 }
@@ -978,13 +1034,17 @@ function capturePainBaselines(
     baselineSeverity: pm.severity ?? 5,
     predictedSeverity: pm.severity ?? 5,
     deltaFromBaseline: 0,
-    mechanism: pm.type === 'referred' ? 'Referred pain' : 'Local nociceptive',
+    mechanism: pm.type === 'referred' ? 'Referred pain'
+      : pm.type === 'area' ? 'Regional nociceptive'
+      : pm.type === 'line' ? 'Linear tension pattern'
+      : pm.type === 'paint' ? 'Diffuse pain region'
+      : 'Local nociceptive',
   }));
 }
 
 function captureMuscleBaselines(
   baseOverrides: Record<string, Partial<MuscleOverride>>,
-  baseTensions: Record<string, number>,
+  muscleAnalysis: MuscleAnalysisResult,
   treatments: SessionTreatment[],
 ): MuscleStatePrediction[] {
   const relevantMuscles = new Set<string>();
@@ -997,40 +1057,66 @@ function captureMuscleBaselines(
 
   return Array.from(relevantMuscles).map(muscleId => {
     const override = baseOverrides[muscleId];
-    const tension = baseTensions[muscleId] ?? 50;
-    const activation = tension > 60 ? 0.8 : tension > 40 ? 0.5 : 0.3;
+    const group = muscleAnalysis.groups.find(g => g.id === muscleId);
+    const tension = group?.avgTightness ?? 50;
+    const activation = group?.avgActivation ?? (tension > 60 ? 0.8 : tension > 40 ? 0.5 : 0.3);
+    const pathology = override?.pathology && override.pathology !== 'none' ? override.pathology : null;
+
+    let clinicalNote = 'Within normal limits';
+    if (pathology) {
+      clinicalNote = `Active pathology: ${pathology}`;
+    } else if (tension > 70) {
+      clinicalNote = `Hypertonic (${Math.round(tension)}% tension)`;
+    } else if (tension < 30) {
+      clinicalNote = `Inhibited (${Math.round(tension)}% tension)`;
+    }
+
     return {
       muscleId,
-      muscleLabel: muscleId.replace(/_/g, ' '),
+      muscleLabel: group?.label ?? muscleId.replace(/_/g, ' '),
       baselineTension: tension,
       predictedTension: tension,
       baselineActivation: activation,
       predictedActivation: activation,
       trendDirection: 'stable' as const,
-      clinicalNote: override?.pathology && override.pathology !== 'none'
-        ? `Active pathology: ${override.pathology}`
-        : tension > 70 ? 'Hypertonic' : tension < 30 ? 'Inhibited' : 'Within normal limits',
+      clinicalNote,
     };
   });
 }
 
 function captureSlingBaselines(
-  baseTensions: Record<string, number>,
+  muscleAnalysis: MuscleAnalysisResult,
+  baseOverrides: Record<string, Partial<MuscleOverride>>,
+  slingAnalysis: SlingAnalysisResult | null,
 ): SlingPrediction[] {
+  if (slingAnalysis && slingAnalysis.slings.length > 0) {
+    return slingAnalysis.slings.map(sr => ({
+      slingId: sr.slingId,
+      slingName: sr.label,
+      baselineIntegrity: Math.round(sr.activationScore),
+      predictedIntegrity: Math.round(sr.activationScore),
+      deltaFromBaseline: 0,
+      weakLinks: sr.weakLinks.map(wl => wl.muscle),
+    }));
+  }
+
   return SLING_DEFINITIONS.map(sling => {
-    let totalTension = 0;
+    let totalScore = 0;
     let count = 0;
     const weakLinks: string[] = [];
     for (const muscle of sling.muscles) {
-      const tension = baseTensions[muscle] ?? 50;
-      totalTension += tension;
+      const group = muscleAnalysis.groups.find(g => g.id === muscle);
+      const tension = group?.avgTightness ?? 50;
+      const override = baseOverrides[muscle];
+      const hasPathology = override?.pathology && override.pathology !== 'none';
+      totalScore += tension;
       count++;
-      if (tension < 35 || tension > 75) {
+      if (tension < 35 || tension > 75 || hasPathology) {
         weakLinks.push(muscle);
       }
     }
-    const avgTension = count > 0 ? totalTension / count : 50;
-    const integrity = clamp(100 - Math.abs(avgTension - 50) * 2 - weakLinks.length * 10, 0, 100);
+    const avgTension = count > 0 ? totalScore / count : 50;
+    const integrity = clamp(100 - Math.abs(avgTension - 50) * 2 - weakLinks.length * 12, 0, 100);
     return {
       slingId: sling.id,
       slingName: sling.name,
@@ -1061,43 +1147,61 @@ function capturePosturalBaselines(
 
 function captureCompensationBaselines(
   baseOverrides: Record<string, Partial<MuscleOverride>>,
-  baseTensions: Record<string, number>,
+  muscleAnalysis: MuscleAnalysisResult,
+  whatIfComparison: WhatIfComparisonResult | null,
 ): CompensationPrediction[] {
   const patterns: CompensationPrediction[] = [];
-  const highTensionMuscles: string[] = [];
-  const lowTensionMuscles: string[] = [];
 
-  for (const [id, tension] of Object.entries(baseTensions)) {
-    if (tension > 70) highTensionMuscles.push(id);
-    if (tension < 30) lowTensionMuscles.push(id);
+  if (whatIfComparison && whatIfComparison.compensationDeltas.length > 0) {
+    for (const cd of whatIfComparison.compensationDeltas) {
+      const patId = cd.pattern.replace(/\s+/g, '_').toLowerCase();
+      patterns.push({
+        patternId: `comp_${patId}`,
+        patternLabel: `${cd.pattern} Compensation`,
+        baselineSeverity: Math.round(cd.before),
+        predictedSeverity: Math.round(cd.before),
+        resolutionPercent: 0,
+        contributingFactors: [cd.pattern],
+      });
+    }
   }
 
-  if (highTensionMuscles.length > 0 && lowTensionMuscles.length > 0) {
-    patterns.push({
-      patternId: 'comp_tension_imbalance',
-      patternLabel: 'Tension Imbalance Pattern',
-      baselineSeverity: Math.min(100, (highTensionMuscles.length + lowTensionMuscles.length) * 15),
-      predictedSeverity: Math.min(100, (highTensionMuscles.length + lowTensionMuscles.length) * 15),
-      resolutionPercent: 0,
-      contributingFactors: [
-        `Hypertonic: ${highTensionMuscles.join(', ')}`,
-        `Inhibited: ${lowTensionMuscles.join(', ')}`,
-      ],
-    });
-  }
+  if (patterns.length === 0) {
+    const highTensionMuscles: string[] = [];
+    const lowTensionMuscles: string[] = [];
+    for (const group of muscleAnalysis.groups) {
+      const t = group.avgTightness ?? 50;
+      if (t > 70) highTensionMuscles.push(group.id);
+      if (t < 30) lowTensionMuscles.push(group.id);
+    }
 
-  const pathologyMuscles = Object.entries(baseOverrides)
-    .filter(([_, o]) => o.pathology && o.pathology !== 'none')
-    .map(([id]) => id);
-  if (pathologyMuscles.length > 0) {
-    patterns.push({
-      patternId: 'comp_pathology_guard',
-      patternLabel: 'Pathology Guarding Pattern',
-      baselineSeverity: Math.min(100, pathologyMuscles.length * 25),
-      predictedSeverity: Math.min(100, pathologyMuscles.length * 25),
-      resolutionPercent: 0,
-      contributingFactors: pathologyMuscles.map(m => `${m}: protective guarding`),
-    });
+    if (highTensionMuscles.length > 0 && lowTensionMuscles.length > 0) {
+      patterns.push({
+        patternId: 'comp_tension_imbalance',
+        patternLabel: 'Tension Imbalance Pattern',
+        baselineSeverity: Math.min(100, (highTensionMuscles.length + lowTensionMuscles.length) * 15),
+        predictedSeverity: Math.min(100, (highTensionMuscles.length + lowTensionMuscles.length) * 15),
+        resolutionPercent: 0,
+        contributingFactors: [
+          `Hypertonic: ${highTensionMuscles.join(', ')}`,
+          `Inhibited: ${lowTensionMuscles.join(', ')}`,
+        ],
+      });
+    }
+
+    const pathologyMuscles = Object.entries(baseOverrides)
+      .filter(([_, o]) => o.pathology && o.pathology !== 'none')
+      .map(([id]) => id);
+    if (pathologyMuscles.length > 0) {
+      patterns.push({
+        patternId: 'comp_pathology_guard',
+        patternLabel: 'Pathology Guarding Pattern',
+        baselineSeverity: Math.min(100, pathologyMuscles.length * 25),
+        predictedSeverity: Math.min(100, pathologyMuscles.length * 25),
+        resolutionPercent: 0,
+        contributingFactors: pathologyMuscles.map(m => `${m}: protective guarding`),
+      });
+    }
   }
 
   return patterns;
@@ -1317,17 +1421,29 @@ export function buildSessionTimeline(
     console.warn('[SessionTimeline] Baseline risk computation failed, using defaults');
   }
 
-  const baseTensionMap: Record<string, number> = {};
-  for (const group of appliedMuscles.groups) {
-    baseTensionMap[group.id] = group.avgTightness ?? 50;
-  }
+  let baselineComparison: WhatIfComparisonResult | null = null;
+  try {
+    baselineComparison = computeWhatIfComparison(
+      baseModelConfig, baseOverrides, painMarkers, bodyWeightKg,
+      [{ id: '__noop', label: '', description: '', interventionType: 'offload', target: 'cadence', targetType: 'joint', magnitude: 0, unit: '%', color: '#000' }],
+      appliedMuscles, biomechanicsOutput
+    );
+  } catch { /* use null */ }
 
-  const romBaselines = captureRomBaselines(baseModelConfig, treatments, painMarkers);
+  let slingAnalysis: SlingAnalysisResult | null = null;
+  try {
+    slingAnalysis = computeSlingAnalysis({
+      biomechanicsOutput: biomechanicsOutput as Parameters<typeof computeSlingAnalysis>[0]['biomechanicsOutput'],
+      muscleOverrides: baseOverrides as Record<string, { tension?: number; pathology?: string }>,
+    });
+  } catch { /* use null */ }
+
+  const romBaselines = captureRomBaselines(baseModelConfig, treatments, painMarkers, baseOverrides, appliedMuscles);
   const painBaselines = capturePainBaselines(painMarkers.map(pm => ({ id: pm.id, label: pm.label, severity: pm.severity, type: pm.type })));
-  const muscleBaselines = captureMuscleBaselines(baseOverrides, baseTensionMap, treatments);
-  const slingBaselines = captureSlingBaselines(baseTensionMap);
+  const muscleBaselines = captureMuscleBaselines(baseOverrides, appliedMuscles, treatments);
+  const slingBaselines = captureSlingBaselines(appliedMuscles, baseOverrides, slingAnalysis);
   const posturalBaselines = capturePosturalBaselines(baseModelConfig);
-  const compensationBaselines = captureCompensationBaselines(baseOverrides, baseTensionMap);
+  const compensationBaselines = captureCompensationBaselines(baseOverrides, appliedMuscles, baselineComparison);
   const funcMilestones = selectRelevantMilestones(treatments, painMarkers);
 
   const baseline: MultiDimensionalBaseline = {
@@ -1339,70 +1455,103 @@ export function buildSessionTimeline(
     compensationBaselines,
   };
 
-  const treatmentDeltaMap = new Map<string, {
+  interface TreatmentDeltaProfile {
     romDeltas: Record<string, number>;
     painDelta: number;
     tensionDelta: number;
     slingBoost: Record<string, number>;
     posturalCorrection: Record<string, number>;
     compensationReduction: number;
-  }>();
+    loadIntensity: number;
+  }
+
+  const treatmentDeltaMap = new Map<string, TreatmentDeltaProfile>();
 
   for (const t of treatments) {
+    const instanceKey = `${t.name}_${t.target}_${t.interventionType}`;
+
+    const dosageParts = t.dosageLabel.match(/(\d+)/g);
+    const sets = dosageParts && dosageParts[0] ? parseInt(dosageParts[0], 10) : 3;
+    const reps = dosageParts && dosageParts[1] ? parseInt(dosageParts[1], 10) : 10;
+    const dosageIntensity = clamp((sets * reps) / 36, 0.3, 2.0);
+
+    const nameHints = t.name.toLowerCase();
+    const isEccentric = nameHints.includes('eccentric') || nameHints.includes('negative');
+    const isIsometric = nameHints.includes('isometric') || nameHints.includes('hold');
+    const isOscillatory = nameHints.includes('oscillat') || nameHints.includes('grade') || nameHints.includes('mobilisation');
+    const isSoftTissue = nameHints.includes('release') || nameHints.includes('massage') || nameHints.includes('needling');
+    const isStretching = nameHints.includes('stretch') || nameHints.includes('lengthen');
+    const isStrengthening = nameHints.includes('strengthen') || nameHints.includes('resist') || nameHints.includes('load');
+
     const romDeltas: Record<string, number> = {};
     const joints = TARGET_TO_JOINTS[t.target] || [];
     for (const jId of joints) {
       const norm = JOINT_ROM_NORMS[jId];
-      if (norm) {
-        const delta = t.interventionType === 'mobilize' ? 3.0
-          : t.interventionType === 'stretch' ? 2.0
-          : 1.0;
-        romDeltas[jId] = delta;
-      }
+      if (!norm) continue;
+      let baseDelta = t.interventionType === 'mobilize' ? 3.0
+        : t.interventionType === 'stretch' ? 2.0
+        : 1.0;
+      if (isOscillatory) baseDelta *= 1.4;
+      if (isEccentric) baseDelta *= 0.8;
+      if (isStretching) baseDelta *= 1.3;
+      romDeltas[jId] = baseDelta * dosageIntensity;
     }
 
-    const painDelta = t.interventionType === 'mobilize' ? -0.4
+    let painDelta = t.interventionType === 'mobilize' ? -0.4
       : t.interventionType === 'stretch' ? -0.3
       : t.interventionType === 'strengthen' ? -0.2
       : -0.15;
+    if (isSoftTissue) painDelta *= 1.5;
+    if (isIsometric) painDelta *= 1.3;
+    if (isEccentric && t.interventionType === 'strengthen') painDelta *= 0.7;
+    painDelta *= dosageIntensity;
 
-    const tensionDelta = t.interventionType === 'stretch' ? -3
+    let tensionDelta = t.interventionType === 'stretch' ? -3
       : t.interventionType === 'mobilize' ? -2
       : t.interventionType === 'strengthen' ? 2
       : 0;
+    if (isSoftTissue) tensionDelta = Math.min(tensionDelta, -4);
+    if (isIsometric) tensionDelta *= 0.5;
+    tensionDelta *= dosageIntensity;
 
     const slingBoost: Record<string, number> = {};
     for (const sling of SLING_DEFINITIONS) {
       if (sling.muscles.includes(t.target)) {
-        slingBoost[sling.id] = t.interventionType === 'strengthen' ? 2.0
+        let base = t.interventionType === 'strengthen' ? 2.0
           : t.interventionType === 'mobilize' ? 1.5
           : 1.0;
+        if (isEccentric) base *= 1.3;
+        slingBoost[sling.id] = base * dosageIntensity;
       }
     }
 
     const posturalCorrection: Record<string, number> = {};
     if (t.target === 'core' || t.target === 'spine') {
-      posturalCorrection['lumbarLordosis'] = 0.5;
-      posturalCorrection['pelvicTilt'] = 0.4;
+      posturalCorrection['lumbarLordosis'] = 0.5 * dosageIntensity;
+      posturalCorrection['pelvicTilt'] = 0.4 * dosageIntensity;
     }
     if (t.target === 'scapula' || t.target === 'rotator_cuff') {
-      posturalCorrection['shoulderProtraction'] = 0.5;
-      posturalCorrection['thoracicKyphosis'] = 0.3;
+      posturalCorrection['shoulderProtraction'] = 0.5 * dosageIntensity;
+      posturalCorrection['thoracicKyphosis'] = 0.3 * dosageIntensity;
     }
     if (t.target === 'neck') {
-      posturalCorrection['headForward'] = 0.6;
-      posturalCorrection['headTilt'] = 0.3;
+      posturalCorrection['headForward'] = 0.6 * dosageIntensity;
+      posturalCorrection['headTilt'] = 0.3 * dosageIntensity;
     }
     if (t.target === 'glute' || t.target === 'hip_flexor') {
-      posturalCorrection['pelvicTilt'] = 0.5;
+      posturalCorrection['pelvicTilt'] = 0.5 * dosageIntensity;
     }
 
-    const compensationReduction = t.interventionType === 'strengthen' ? 3
+    let compensationReduction = t.interventionType === 'strengthen' ? 3
       : t.interventionType === 'mobilize' ? 2
       : 1.5;
+    if (isEccentric) compensationReduction *= 1.4;
+    compensationReduction *= dosageIntensity;
 
-    treatmentDeltaMap.set(`${t.target}_${t.interventionType}`, {
-      romDeltas, painDelta, tensionDelta, slingBoost, posturalCorrection, compensationReduction,
+    const loadIntensity = dosageIntensity * (isEccentric ? 1.4 : isIsometric ? 0.7 : 1.0) * t.magnitude / 10;
+
+    treatmentDeltaMap.set(instanceKey, {
+      romDeltas, painDelta, tensionDelta, slingBoost, posturalCorrection, compensationReduction, loadIntensity,
     });
   }
 
@@ -1424,10 +1573,17 @@ export function buildSessionTimeline(
   let cumulativeSlingBoosts: Record<string, number> = {};
   let cumulativePosturalCorrections: Record<string, number> = {};
   let cumulativeCompReduction = 0;
+  let cumulativeLoadIntensity = 0;
+  const reinforcedJointsThisSession = new Set<string>();
+  const reinforcedMusclesThisSession = new Set<string>();
+  const reinforcedSlingsThisSession = new Set<string>();
 
   for (let s = 1; s <= totalSessions; s++) {
     const dayOffset = (s - 1) * sessionIntervalDays;
     const sessionTreatments: SessionTreatment[] = [];
+    reinforcedJointsThisSession.clear();
+    reinforcedMusclesThisSession.clear();
+    reinforcedSlingsThisSession.clear();
 
     for (const t of treatments) {
       const treatmentInterval = parseFrequencyToDaysInterval(t.frequency);
@@ -1458,12 +1614,17 @@ export function buildSessionTimeline(
       ? computeInterSessionHealing(sessionIntervalDays, s, totalSessions, pm)
       : null;
 
+    const irritabilityThreshold = pm ? (10 / pm.painSensitivityMultiplier) : 10;
+    let sessionLoadSum = 0;
+
     const scenarios: WhatIfScenario[] = [];
     const seen = new Set<string>();
     let colorIdx = 0;
 
     for (const t of sessionTreatments) {
       const key = `${t.target}_${t.interventionType}`;
+      const instanceKey = `${t.name}_${t.target}_${t.interventionType}`;
+
       if (seen.has(key)) {
         const existing = scenarios.find(sc => sc.id.startsWith(`sess_${key}_`));
         if (existing) {
@@ -1494,23 +1655,27 @@ export function buildSessionTimeline(
       const scaledMag = t.magnitude * doseResp * conditionResponsiveFactor * doseScale * nonLinear.factor;
       if (scaledMag < 0.5) continue;
 
-      const deltas = treatmentDeltaMap.get(key);
+      const deltas = treatmentDeltaMap.get(instanceKey) || treatmentDeltaMap.get(key);
       if (deltas) {
         const recoveryFactor = nonLinear.factor * conditionResponsiveFactor * doseScale;
         for (const [jId, delta] of Object.entries(deltas.romDeltas)) {
           cumulativeRomDeltas[jId] = (cumulativeRomDeltas[jId] ?? 0) + delta * recoveryFactor;
+          reinforcedJointsThisSession.add(jId);
         }
         for (const pmk of painBaselines) {
           cumulativePainDeltas[pmk.markerId] = (cumulativePainDeltas[pmk.markerId] ?? 0) + deltas.painDelta * recoveryFactor;
         }
         cumulativeTensionDeltas[t.target] = (cumulativeTensionDeltas[t.target] ?? 0) + deltas.tensionDelta * recoveryFactor;
+        reinforcedMusclesThisSession.add(t.target);
         for (const [sId, boost] of Object.entries(deltas.slingBoost)) {
           cumulativeSlingBoosts[sId] = (cumulativeSlingBoosts[sId] ?? 0) + boost * recoveryFactor;
+          reinforcedSlingsThisSession.add(sId);
         }
         for (const [pId, corr] of Object.entries(deltas.posturalCorrection)) {
           cumulativePosturalCorrections[pId] = (cumulativePosturalCorrections[pId] ?? 0) + corr * recoveryFactor;
         }
         cumulativeCompReduction += deltas.compensationReduction * recoveryFactor;
+        sessionLoadSum += deltas.loadIntensity;
       }
 
       scenarios.push({
@@ -1526,12 +1691,46 @@ export function buildSessionTimeline(
       });
     }
 
+    cumulativeLoadIntensity += sessionLoadSum;
+
+    const loadExceedsIrritability = cumulativeLoadIntensity > irritabilityThreshold * (s * 0.7);
+    if (loadExceedsIrritability) {
+      nonLinear.isSetbackSession = true;
+      nonLinear.factor *= 0.5;
+    }
+
     if (interSessionHealing) {
       for (const jId of Object.keys(cumulativeRomDeltas)) {
-        cumulativeRomDeltas[jId] += interSessionHealing.tissueRemodeling * 0.3;
+        if (reinforcedJointsThisSession.has(jId)) {
+          cumulativeRomDeltas[jId] += interSessionHealing.tissueRemodeling * 0.3;
+        } else {
+          const regressionRate = 0.15 * sessionIntervalDays / 7;
+          cumulativeRomDeltas[jId] = Math.max(0, (cumulativeRomDeltas[jId] ?? 0) - regressionRate);
+        }
       }
       for (const pmId of Object.keys(cumulativePainDeltas)) {
         cumulativePainDeltas[pmId] -= interSessionHealing.inflammationResolution * 0.1;
+      }
+      for (const muscleId of Object.keys(cumulativeTensionDeltas)) {
+        if (!reinforcedMusclesThisSession.has(muscleId)) {
+          const currentDelta = cumulativeTensionDeltas[muscleId] ?? 0;
+          const regressionRate = 0.1 * sessionIntervalDays / 7;
+          if (currentDelta < 0) {
+            cumulativeTensionDeltas[muscleId] = Math.min(0, currentDelta + regressionRate * 2);
+          } else if (currentDelta > 0) {
+            cumulativeTensionDeltas[muscleId] = Math.max(0, currentDelta - regressionRate);
+          }
+        }
+      }
+      for (const slingId of Object.keys(cumulativeSlingBoosts)) {
+        if (!reinforcedSlingsThisSession.has(slingId)) {
+          const regressionRate = 0.2 * sessionIntervalDays / 7;
+          cumulativeSlingBoosts[slingId] = Math.max(0, (cumulativeSlingBoosts[slingId] ?? 0) - regressionRate);
+        }
+      }
+      for (const pId of Object.keys(cumulativePosturalCorrections)) {
+        const regressionRate = 0.05 * sessionIntervalDays / 7;
+        cumulativePosturalCorrections[pId] = Math.max(0, (cumulativePosturalCorrections[pId] ?? 0) - regressionRate);
       }
     }
 
@@ -1673,6 +1872,14 @@ export function buildSessionTimeline(
         sessRisk = clamp(sessRisk - interSessionHealing.netHealingDelta, 0, 100);
       }
 
+      const riskDeltaEmpty = prevRisk - sessRisk;
+      if (riskDeltaEmpty < 1 && s > 3) {
+        plateauCount++;
+      } else {
+        plateauCount = 0;
+      }
+      prevRisk = sessRisk;
+
       sessions.push({
         sessionNumber: s,
         dayOffset,
@@ -1776,13 +1983,18 @@ export function buildSessionTimeline(
     }
 
     if (nonLinear.isSetbackSession || sessRisk > prevRisk + 5) {
+      const isLoadBased = loadExceedsIrritability;
       modifications.push({
         sessionNumber: s,
         type: 'regress',
-        message: nonLinear.isSetbackSession
+        message: isLoadBased
+          ? `Cumulative load (${Math.round(cumulativeLoadIntensity)}) exceeds irritability tolerance (${Math.round(irritabilityThreshold * s * 0.7)}) — tissue overload setback`
+          : nonLinear.isSetbackSession
           ? `Early-phase setback — tissue sensitivity exceeds tolerance`
           : `Risk score increased from ${Math.round(prevRisk)} to ${Math.round(sessRisk)}`,
-        suggestion: 'Consider reducing load, checking for overtraining, or reviewing exercise form and technique',
+        suggestion: isLoadBased
+          ? 'Reduce treatment volume or intensity; allow additional rest days between sessions'
+          : 'Consider reducing load, checking for overtraining, or reviewing exercise form and technique',
       });
     }
 

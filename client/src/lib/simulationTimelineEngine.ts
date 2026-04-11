@@ -1566,9 +1566,12 @@ export function buildSessionTimeline(
 
     const loadIntensity = dosageIntensity * (isEccentric ? 1.4 : isIsometric ? 0.7 : 1.0) * t.magnitude / 10;
 
-    treatmentDeltaMap.set(instanceKey, {
-      romDeltas, painDelta, tensionDelta, slingBoost, posturalCorrection, compensationReduction, loadIntensity,
-    });
+    const profile = { romDeltas, painDelta, tensionDelta, slingBoost, posturalCorrection, compensationReduction, loadIntensity };
+    treatmentDeltaMap.set(instanceKey, profile);
+    const genericKey = `${t.target}_${t.interventionType}`;
+    if (!treatmentDeltaMap.has(genericKey)) {
+      treatmentDeltaMap.set(genericKey, profile);
+    }
   }
 
   const sessions: SessionSnapshot[] = [];
@@ -1588,7 +1591,7 @@ export function buildSessionTimeline(
   let cumulativeTensionDeltas: Record<string, number> = {};
   let cumulativeSlingBoosts: Record<string, number> = {};
   let cumulativePosturalCorrections: Record<string, number> = {};
-  let cumulativeCompReduction = 0;
+  let cumulativeCompReductions: Record<string, number> = {};
   let cumulativeLoadIntensity = 0;
   const reinforcedJointsThisSession = new Set<string>();
   const reinforcedMusclesThisSession = new Set<string>();
@@ -1704,7 +1707,12 @@ export function buildSessionTimeline(
             cumulativeSlingBoosts[sId] = (cumulativeSlingBoosts[sId] ?? 0) - 1.0;
             reinforcedSlingsThisSession.add(sId);
           }
-          cumulativeCompReduction -= deltas.compensationReduction * 0.3;
+          for (const cp of compensationBaselines) {
+            const isRelevant = cp.contributingFactors.some(f => f.toLowerCase().includes(t.target));
+            if (isRelevant) {
+              cumulativeCompReductions[cp.patternId] = (cumulativeCompReductions[cp.patternId] ?? 0) - deltas.compensationReduction * 0.3;
+            }
+          }
         } else {
           for (const [jId, delta] of Object.entries(deltas.romDeltas)) {
             cumulativeRomDeltas[jId] = (cumulativeRomDeltas[jId] ?? 0) + delta * recoveryFactor;
@@ -1722,7 +1730,11 @@ export function buildSessionTimeline(
           for (const [pId, corr] of Object.entries(deltas.posturalCorrection)) {
             cumulativePosturalCorrections[pId] = (cumulativePosturalCorrections[pId] ?? 0) + corr * recoveryFactor;
           }
-          cumulativeCompReduction += deltas.compensationReduction * recoveryFactor;
+          for (const cpb of compensationBaselines) {
+            const isRelevant = cpb.contributingFactors.some(f => f.toLowerCase().includes(t.target));
+            const compFactor = isRelevant ? 1.0 : 0.2;
+            cumulativeCompReductions[cpb.patternId] = (cumulativeCompReductions[cpb.patternId] ?? 0) + deltas.compensationReduction * recoveryFactor * compFactor;
+          }
         }
         sessionLoadSum += deltas.loadIntensity;
       }
@@ -1741,6 +1753,8 @@ export function buildSessionTimeline(
     }
 
     cumulativeLoadIntensity += sessionLoadSum;
+    const loadDecayFactor = Math.exp(-0.08 * sessionIntervalDays);
+    cumulativeLoadIntensity *= loadDecayFactor;
 
     if (interSessionHealing) {
       const carryOverDecay = Math.exp(-0.12 * sessionIntervalDays);
@@ -1857,7 +1871,8 @@ export function buildSessionTimeline(
     });
 
     const sessionCompPredictions: CompensationPrediction[] = compensationBaselines.map(cb => {
-      const resPct = clamp((cumulativeCompReduction / Math.max(cb.baselineSeverity, 1)) * 100, 0, 100);
+      const patternDelta = cumulativeCompReductions[cb.patternId] ?? 0;
+      const resPct = clamp((patternDelta / Math.max(cb.baselineSeverity, 1)) * 100, 0, 100);
       const predicted = cb.baselineSeverity * (1 - resPct / 100);
       return {
         ...cb,

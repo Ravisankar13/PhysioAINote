@@ -99,6 +99,7 @@ interface ManualTherapyEngineTabProps {
   onHighlightMuscles?: (muscles: string[]) => void;
   onSetMuscleHighlightColors?: (colors: Record<string, string>) => void;
   onSetManualTherapyAnnotations?: (annotations: TissueTarget[] | null) => void;
+  onCustomManualTherapyResult?: (result: CustomManualTherapyResult | null) => void;
 }
 
 const TISSUE_NAME_TO_MUSCLE_GROUP: Record<string, string[]> = {
@@ -166,7 +167,7 @@ const GOAL_TYPE_COLORS: Record<string, string> = {
   'decompress': '#06b6d4',
 };
 
-export type { TissueTarget };
+export type { TissueTarget, CustomTechnique, CustomManualTherapyResult };
 
 const MT_FOCUS_PRESETS = [
   { label: 'Fascial Release', value: 'fascial release and myofascial continuity' },
@@ -493,7 +494,7 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
   );
 }
 
-export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations }: ManualTherapyEngineTabProps) {
+export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult }: ManualTherapyEngineTabProps) {
   const [plan, setPlan] = useState<ManualTherapyPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -674,6 +675,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       const result = await apiRequest('/api/manual-therapy-engine/design-custom', 'POST', payload) as CustomManualTherapyResult;
       if (controller.signal.aborted) return;
       setCustomResult(result);
+      onCustomManualTherapyResult?.(result);
       setConversationHistory([]);
       setRefinementCount(0);
       setRefinementInput('');
@@ -713,6 +715,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       ]);
       setRefinementCount(prev => prev + 1);
       setCustomResult(result);
+      onCustomManualTherapyResult?.(result);
       setRefinementInput('');
       setSelectedTechniqueIndex(null);
     } catch (err: unknown) {

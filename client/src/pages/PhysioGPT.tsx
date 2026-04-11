@@ -691,6 +691,8 @@ export default function PhysioGPT() {
   const [treatmentDecisionLoading, setTreatmentDecisionLoading] = useState(false);
   const [treatmentPlanData, setTreatmentPlanData] = useState<TreatmentPlanResult | null>(null);
   const [treatmentPlanLoading, setTreatmentPlanLoading] = useState(false);
+  const [customExerciseResult, setCustomExerciseResult] = useState<import("@/components/skeleton/ExerciseEngineTab").CustomExerciseResult | null>(null);
+  const [customManualTherapyResult, setCustomManualTherapyResult] = useState<import("@/components/skeleton/ManualTherapyEngineTab").CustomManualTherapyResult | null>(null);
   const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
   const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
@@ -8432,6 +8434,7 @@ ${ddxList}`;
                         severity: (pm as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                      onCustomExerciseResult={setCustomExerciseResult}
                     />
                   )}
                   {mechanismActiveTab === 'manualRx' && (
@@ -8456,6 +8459,7 @@ ${ddxList}`;
                       onHighlightMuscles={setBiomechanicalMuscleHighlights}
                       onSetMuscleHighlightColors={setMuscleHighlightColors}
                       onSetManualTherapyAnnotations={setManualTherapyAnnotations}
+                      onCustomManualTherapyResult={setCustomManualTherapyResult}
                     />
                   )}
                   {mechanismActiveTab === 'electroRx' && (
@@ -8497,6 +8501,8 @@ ${ddxList}`;
                       bodyWeightKg={bodyWeightKg}
                       biomechanicsOutput={unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput}
                       onApplyWeekToSkeleton={handleApplySimTimelineWeek}
+                      customExercises={customExerciseResult?.customExercises ?? null}
+                      customTechniques={customManualTherapyResult?.customTechniques ?? null}
                     />
                     </Suspense>
                   )}

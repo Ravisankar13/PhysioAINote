@@ -81,10 +81,13 @@ interface PainMarkerInput {
   type?: string;
 }
 
+export type { CustomExercise, CustomExerciseResult };
+
 interface ExerciseEngineTabProps {
   mechanismAnalysis: InjuryMechanismResult | null;
   slingAnalysis: SlingAnalysisResult | null;
   painMarkers: PainMarkerInput[];
+  onCustomExerciseResult?: (result: CustomExerciseResult | null) => void;
 }
 
 const GROUP_ICONS: Record<string, typeof Dumbbell> = {
@@ -508,7 +511,7 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
   );
 }
 
-export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers }: ExerciseEngineTabProps) {
+export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult }: ExerciseEngineTabProps) {
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -648,6 +651,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
       const result = await apiRequest('/api/exercise-engine/design-custom', 'POST', payload) as CustomExerciseResult;
       if (controller.signal.aborted) return;
       setCustomResult(result);
+      onCustomExerciseResult?.(result);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';

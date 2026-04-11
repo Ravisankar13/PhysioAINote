@@ -9,6 +9,8 @@ import { computeFullMuscleAnalysis, applyOverridesToAnalysis, type MuscleOverrid
 import { calculatePosturalForces } from './posturalForceEngine';
 import { computeSlingAnalysis, type SlingAnalysisResult } from './slingEngine';
 import type { TreatmentPlanResult, PlanPhase, PlanExercise } from '../components/skeleton/PlanTab';
+import type { CustomExercise } from '../components/skeleton/ExerciseEngineTab';
+import type { CustomTechnique } from '../components/skeleton/ManualTherapyEngineTab';
 
 export interface SimulationPhase {
   id: string;
@@ -558,6 +560,457 @@ export function buildSimulationTimeline(
       riskLevel: lastSnapshot?.riskLevel ?? getRiskLevelFromScore(startingRisk),
       slingIntegrity: lastSnapshot?.slingIntegrity ?? Math.round(startingSlingIntegrity),
       estimatedRecoveryWeeks,
+    },
+    milestones: milestones.sort((a, b) => a.week - b.week),
+  };
+}
+
+export interface SessionTreatment {
+  name: string;
+  type: 'exercise' | 'manual_therapy';
+  targetStructure: string;
+  interventionType: InterventionType;
+  target: string;
+  targetType: 'muscle' | 'joint';
+  magnitude: number;
+  dosageLabel: string;
+  frequency: string;
+}
+
+export interface SessionModification {
+  sessionNumber: number;
+  type: 'progress' | 'plateau' | 'regress';
+  message: string;
+  suggestion: string;
+}
+
+export interface SessionSnapshot {
+  sessionNumber: number;
+  dayOffset: number;
+  treatments: SessionTreatment[];
+  riskScore: number;
+  riskLevel: string;
+  painPrediction: number;
+  slingIntegrity: number;
+  forceReduction: number;
+  compensationResolution: number;
+  doseResponseFraction: number;
+  activeScenarios: WhatIfScenario[];
+  modelConfig: Record<string, Record<string, number>>;
+  overrides: Record<string, Partial<MuscleOverride>>;
+  forceMultiplier: number;
+}
+
+export interface SessionTimelineResult {
+  sessions: SessionSnapshot[];
+  totalSessions: number;
+  totalDays: number;
+  sessionIntervalDays: number;
+  treatments: SessionTreatment[];
+  modifications: SessionModification[];
+  startingState: {
+    riskScore: number;
+    riskLevel: string;
+    slingIntegrity: number;
+    painBaseline: number;
+  };
+  endState: {
+    riskScore: number;
+    riskLevel: string;
+    slingIntegrity: number;
+    estimatedRecoverySessions: number;
+  };
+  milestones: SimulationMilestone[];
+}
+
+function parseFrequencyToDaysInterval(frequency: string): number {
+  const lower = frequency.toLowerCase().trim();
+  if (/daily|every\s*day|1x?\s*\/?\s*day|7\s*x?\s*\/?\s*week/i.test(lower)) return 1;
+  if (/2x?\s*\/?\s*day|twice\s*(a|per)\s*day|bid/i.test(lower)) return 1;
+  if (/6x?\s*\/?\s*week/i.test(lower)) return 1;
+  if (/5x?\s*\/?\s*week/i.test(lower)) return 1.4;
+  if (/4x?\s*\/?\s*week/i.test(lower)) return 1.75;
+  if (/3x?\s*\/?\s*week/i.test(lower)) return 2.33;
+  if (/2x?\s*\/?\s*week|twice\s*(a|per)\s*week/i.test(lower)) return 3.5;
+  if (/1x?\s*\/?\s*week|once\s*(a|per)\s*week|weekly/i.test(lower)) return 7;
+  if (/every\s*other\s*day|alternate/i.test(lower)) return 2;
+  if (/2x?\s*\/?\s*month|fortnightly|bi-?weekly/i.test(lower)) return 14;
+  if (/1x?\s*\/?\s*month|monthly/i.test(lower)) return 30;
+  const match = lower.match(/(\d+)\s*x?\s*\/?\s*(week|day|month)/i);
+  if (match) {
+    const count = parseInt(match[1]);
+    const period = match[2].toLowerCase();
+    if (period === 'day') return 1 / Math.max(count, 1);
+    if (period === 'week') return 7 / Math.max(count, 1);
+    if (period === 'month') return 30 / Math.max(count, 1);
+  }
+  return 2.33;
+}
+
+function estimateTotalDuration(
+  painMarkers: Array<{ severity?: number }>,
+  numExercises: number,
+  numTechniques: number,
+): number {
+  const avgSeverity = painMarkers.length > 0
+    ? painMarkers.reduce((s, p) => s + (p.severity ?? 5), 0) / painMarkers.length
+    : 5;
+  const complexityFactor = Math.min((numExercises + numTechniques) / 4, 2);
+  const severityWeeks = avgSeverity <= 3 ? 6 : avgSeverity <= 5 ? 8 : avgSeverity <= 7 ? 10 : 12;
+  return Math.round(severityWeeks * (0.8 + complexityFactor * 0.2));
+}
+
+function classifyCustomExerciseTarget(
+  exercise: CustomExercise,
+): { target: string; targetType: 'muscle' | 'joint'; intervention: InterventionType } {
+  const nameLower = exercise.name.toLowerCase().replace(/[-\s]+/g, '_');
+  const systemLower = exercise.targetSystem.toLowerCase();
+  const clinicalLower = exercise.clinicalTarget.toLowerCase();
+  const combined = `${nameLower} ${systemLower} ${clinicalLower}`;
+
+  for (const [keyword, mapping] of Object.entries(EXERCISE_NAME_TO_TARGET)) {
+    if (combined.includes(keyword)) {
+      return mapping;
+    }
+  }
+  for (const [keyword, mapping] of Object.entries(REGION_TARGET_MAP)) {
+    if (combined.includes(keyword)) {
+      return mapping;
+    }
+  }
+  return { target: 'core', targetType: 'muscle', intervention: 'strengthen' };
+}
+
+function classifyCustomTechniqueTarget(
+  technique: CustomTechnique,
+): { target: string; targetType: 'muscle' | 'joint'; intervention: InterventionType } {
+  const nameLower = technique.name.toLowerCase().replace(/[-\s]+/g, '_');
+  const systemLower = technique.targetSystem.toLowerCase();
+  const clinicalLower = technique.clinicalTarget.toLowerCase();
+  const combined = `${nameLower} ${systemLower} ${clinicalLower}`;
+
+  for (const [keyword, mapping] of Object.entries(EXERCISE_NAME_TO_TARGET)) {
+    if (combined.includes(keyword)) {
+      return { ...mapping, intervention: mapping.intervention === 'strengthen' ? 'mobilize' : mapping.intervention };
+    }
+  }
+  for (const [keyword, mapping] of Object.entries(REGION_TARGET_MAP)) {
+    if (combined.includes(keyword)) {
+      return { ...mapping, intervention: 'mobilize' };
+    }
+  }
+  return { target: 'spine', targetType: 'joint', intervention: 'mobilize' };
+}
+
+function getSessionDoseResponse(sessionNumber: number, totalSessions: number, interventionType: InterventionType): number {
+  const fraction = totalSessions > 1 ? sessionNumber / (totalSessions - 1) : 1;
+  switch (interventionType) {
+    case 'mobilize':
+      if (fraction <= 0.2) return fraction * 2.5 * 0.4;
+      if (fraction <= 0.5) return 0.4 + (fraction - 0.2) * (0.55 / 0.3);
+      return Math.min(0.95 + (fraction - 0.5) * 0.1, 1);
+    case 'stretch':
+      if (fraction <= 0.3) return fraction * (0.45 / 0.3);
+      if (fraction <= 0.7) return 0.45 + (fraction - 0.3) * (0.4 / 0.4);
+      return Math.min(0.85 + (fraction - 0.7) * 0.5, 1);
+    case 'strengthen':
+      if (fraction <= 0.15) return fraction * (0.15 / 0.15);
+      if (fraction <= 0.4) return 0.15 + (fraction - 0.15) * (0.35 / 0.25);
+      if (fraction <= 0.7) return 0.5 + (fraction - 0.4) * (0.35 / 0.3);
+      return Math.min(0.85 + (fraction - 0.7) * 0.5, 1);
+    case 'offload':
+      return Math.min(fraction * 1.5, 1);
+    default:
+      return getDoseResponseFraction(Math.round(fraction * 12));
+  }
+}
+
+export function buildSessionTimeline(
+  customExercises: CustomExercise[],
+  customTechniques: CustomTechnique[],
+  baseModelConfig: Record<string, Record<string, number>>,
+  baseOverrides: Record<string, Partial<MuscleOverride>>,
+  painMarkers: Array<{ id: string; position: { x: number; y: number; z: number }; label: string; type: 'point' | 'area' | 'referred' | 'line' | 'paint'; severity?: number; description?: string }>,
+  bodyWeightKg: number,
+  biomechanicsOutput?: unknown | null,
+): SessionTimelineResult {
+  const allFrequencies: number[] = [];
+  for (const ex of customExercises) {
+    allFrequencies.push(parseFrequencyToDaysInterval(ex.dosage.frequency));
+  }
+  for (const tech of customTechniques) {
+    allFrequencies.push(parseFrequencyToDaysInterval(tech.dosage.frequency));
+  }
+  const sessionIntervalDays = allFrequencies.length > 0
+    ? Math.max(1, Math.round(Math.min(...allFrequencies)))
+    : 2;
+
+  const totalDurationWeeks = estimateTotalDuration(painMarkers, customExercises.length, customTechniques.length);
+  const totalDays = totalDurationWeeks * 7;
+  const totalSessions = Math.max(4, Math.ceil(totalDays / sessionIntervalDays));
+
+  const treatments: SessionTreatment[] = [];
+  for (const ex of customExercises) {
+    const classification = classifyCustomExerciseTarget(ex);
+    treatments.push({
+      name: ex.name,
+      type: 'exercise',
+      targetStructure: ex.targetSystem,
+      interventionType: classification.intervention,
+      target: classification.target,
+      targetType: classification.targetType,
+      magnitude: classification.intervention === 'mobilize' ? 10 : 15,
+      dosageLabel: `${ex.dosage.sets}×${ex.dosage.reps} @ ${ex.dosage.tempo}`,
+      frequency: ex.dosage.frequency,
+    });
+  }
+  for (const tech of customTechniques) {
+    const classification = classifyCustomTechniqueTarget(tech);
+    treatments.push({
+      name: tech.name,
+      type: 'manual_therapy',
+      targetStructure: tech.targetSystem,
+      interventionType: classification.intervention,
+      target: classification.target,
+      targetType: classification.targetType,
+      magnitude: classification.intervention === 'mobilize' ? 12 : 10,
+      dosageLabel: `${tech.dosage.sets}×${tech.dosage.repetitions}, ${tech.dosage.duration}`,
+      frequency: tech.dosage.frequency,
+    });
+  }
+
+  const baseMuscles = computeFullMuscleAnalysis(baseModelConfig);
+  const appliedMuscles = applyOverridesToAnalysis(baseMuscles, baseOverrides as Record<string, MuscleOverride>);
+
+  let startingRisk = 50;
+  let startingSlingIntegrity = 50;
+  try {
+    const baseComparison = computeWhatIfComparison(
+      baseModelConfig, baseOverrides, painMarkers, bodyWeightKg,
+      [{ id: '__noop', label: '', description: '', interventionType: 'offload', target: 'cadence', targetType: 'joint', magnitude: 0, unit: '%', color: '#000' }],
+      appliedMuscles, biomechanicsOutput
+    );
+    startingRisk = baseComparison.overallRiskBefore;
+    startingSlingIntegrity = baseComparison.forceTransferScoreBefore;
+  } catch {
+    console.warn('[SessionTimeline] Baseline risk computation failed, using defaults');
+  }
+
+  const sessions: SessionSnapshot[] = [];
+  const milestones: SimulationMilestone[] = [];
+  const modifications: SessionModification[] = [];
+  let prevRisk = startingRisk;
+  let plateauCount = 0;
+  const colors = ['#22c55e', '#3b82f6', '#a855f7', '#f59e0b', '#06b6d4', '#ec4899', '#f97316', '#8b5cf6', '#10b981', '#ef4444'];
+
+  for (let s = 0; s <= totalSessions; s++) {
+    const dayOffset = s * sessionIntervalDays;
+    const sessionTreatments: SessionTreatment[] = [];
+
+    for (const t of treatments) {
+      const treatmentInterval = parseFrequencyToDaysInterval(t.frequency);
+      if (s === 0 || dayOffset % Math.max(1, Math.round(treatmentInterval)) === 0 || treatmentInterval <= sessionIntervalDays) {
+        sessionTreatments.push(t);
+      }
+    }
+
+    const scenarios: WhatIfScenario[] = [];
+    const seen = new Set<string>();
+    let colorIdx = 0;
+
+    for (const t of treatments) {
+      const key = `${t.target}_${t.interventionType}`;
+      if (seen.has(key)) {
+        const existing = scenarios.find(sc => sc.id.startsWith(`sess_${key}_`));
+        if (existing) {
+          const doseResp = getSessionDoseResponse(s, totalSessions, t.interventionType);
+          existing.magnitude = Math.min(existing.magnitude + t.magnitude * doseResp * 0.3, existing.magnitude * 1.5);
+        }
+        continue;
+      }
+      seen.add(key);
+
+      const doseResp = getSessionDoseResponse(s, totalSessions, t.interventionType);
+      const scaledMag = t.magnitude * doseResp;
+      if (scaledMag < 0.5) continue;
+
+      scenarios.push({
+        id: `sess_${key}_s${s}`,
+        label: t.name.length > 20 ? t.name.slice(0, 17) + '...' : t.name,
+        description: `${t.interventionType} ${t.target} (session ${s}, day ${dayOffset})`,
+        interventionType: t.interventionType,
+        target: t.target,
+        targetType: t.targetType,
+        magnitude: scaledMag,
+        unit: t.interventionType === 'mobilize' ? '°' : '%',
+        color: colors[colorIdx++ % colors.length],
+      });
+    }
+
+    if (s === 0 || scenarios.length === 0) {
+      sessions.push({
+        sessionNumber: s,
+        dayOffset,
+        treatments: sessionTreatments,
+        riskScore: Math.round(startingRisk),
+        riskLevel: getRiskLevelFromScore(startingRisk),
+        painPrediction: Math.round(startingRisk * 0.8),
+        slingIntegrity: Math.round(startingSlingIntegrity),
+        forceReduction: 0,
+        compensationResolution: 0,
+        doseResponseFraction: 0,
+        activeScenarios: scenarios,
+        modelConfig: JSON.parse(JSON.stringify(baseModelConfig)),
+        overrides: JSON.parse(JSON.stringify(baseOverrides)),
+        forceMultiplier: 1.0,
+      });
+      continue;
+    }
+
+    const { modelConfig: sessConfig, overrides: sessOverrides, forceMultiplier } = applyScenarios(
+      baseModelConfig, baseOverrides, scenarios, appliedMuscles
+    );
+
+    let sessRisk = startingRisk;
+    let sessSling = startingSlingIntegrity;
+    let sessPain = startingRisk * 0.8;
+    try {
+      const sessComparison = computeWhatIfComparison(
+        baseModelConfig, baseOverrides, painMarkers, bodyWeightKg,
+        scenarios, appliedMuscles, biomechanicsOutput
+      );
+      sessRisk = sessComparison.overallRiskAfter;
+      sessSling = sessComparison.forceTransferScoreAfter;
+      sessPain = sessComparison.painPredictions.length > 0
+        ? sessComparison.painPredictions.reduce((sum, p) => sum + p.afterLikelihood, 0) / sessComparison.painPredictions.length
+        : sessRisk * 0.7;
+    } catch {
+      const prev = sessions[sessions.length - 1];
+      if (prev) {
+        sessRisk = prev.riskScore;
+        sessSling = prev.slingIntegrity;
+        sessPain = prev.painPrediction;
+      }
+    }
+
+    const forceReduction = (1 - forceMultiplier) * 100;
+    const avgDose = scenarios.length > 0
+      ? scenarios.reduce((sum, sc) => sum + getSessionDoseResponse(s, totalSessions, sc.interventionType), 0) / scenarios.length
+      : 0;
+    const compensationResolution = avgDose * 60;
+
+    const riskDelta = prevRisk - sessRisk;
+    if (riskDelta < 1 && s > 3) {
+      plateauCount++;
+    } else {
+      plateauCount = 0;
+    }
+
+    if (plateauCount >= 3) {
+      modifications.push({
+        sessionNumber: s,
+        type: 'plateau',
+        message: `Progress has plateaued — risk score unchanged for ${plateauCount} sessions`,
+        suggestion: 'Consider increasing exercise intensity, adding new movement patterns, or progressing to more challenging variations',
+      });
+      plateauCount = 0;
+    }
+
+    if (sessRisk > prevRisk + 5) {
+      modifications.push({
+        sessionNumber: s,
+        type: 'regress',
+        message: `Risk score increased from ${Math.round(prevRisk)} to ${Math.round(sessRisk)}`,
+        suggestion: 'Consider reducing load, checking for overtraining, or reviewing exercise form and technique',
+      });
+    }
+
+    if (sessRisk < prevRisk - 10) {
+      const newLevel = getRiskLevelFromScore(sessRisk);
+      const oldLevel = getRiskLevelFromScore(prevRisk);
+      if (newLevel !== oldLevel) {
+        milestones.push({
+          week: Math.round(dayOffset / 7),
+          label: `Risk reduced to ${newLevel} (${Math.round(sessRisk)}) — session ${s}`,
+          type: 'risk_reduction',
+        });
+      }
+    }
+
+    if (sessSling > startingSlingIntegrity + 15 && !milestones.some(m => m.type === 'sling_improvement')) {
+      milestones.push({
+        week: Math.round(dayOffset / 7),
+        label: `Sling integrity improved to ${Math.round(sessSling)}%`,
+        type: 'sling_improvement',
+      });
+    }
+
+    if (sessPain < startingRisk * 0.4 && !milestones.some(m => m.type === 'pain_milestone')) {
+      milestones.push({
+        week: Math.round(dayOffset / 7),
+        label: `Significant pain reduction predicted`,
+        type: 'pain_milestone',
+      });
+    }
+
+    const sessionThird = totalSessions / 3;
+    if (s === Math.round(sessionThird) || s === Math.round(sessionThird * 2)) {
+      modifications.push({
+        sessionNumber: s,
+        type: 'progress',
+        message: `Checkpoint: ${Math.round((s / totalSessions) * 100)}% through program`,
+        suggestion: s <= sessionThird
+          ? 'Consider progressing load and complexity if patient is tolerating well'
+          : 'Consider transitioning to more functional, sport-specific exercises',
+      });
+    }
+
+    prevRisk = sessRisk;
+
+    sessions.push({
+      sessionNumber: s,
+      dayOffset,
+      treatments: sessionTreatments,
+      riskScore: Math.round(clamp(sessRisk, 0, 100)),
+      riskLevel: getRiskLevelFromScore(sessRisk),
+      painPrediction: Math.round(clamp(sessPain, 0, 100)),
+      slingIntegrity: Math.round(clamp(sessSling, 0, 100)),
+      forceReduction: Math.round(forceReduction * 10) / 10,
+      compensationResolution: Math.round(compensationResolution * 10) / 10,
+      doseResponseFraction: avgDose,
+      activeScenarios: scenarios,
+      modelConfig: sessConfig as Record<string, Record<string, number>>,
+      overrides: sessOverrides,
+      forceMultiplier,
+    });
+  }
+
+  const lastSession = sessions[sessions.length - 1];
+  const estimatedRecoverySessions = (() => {
+    for (const snap of sessions) {
+      if (snap.riskScore <= 25) return snap.sessionNumber;
+    }
+    return totalSessions;
+  })();
+
+  return {
+    sessions,
+    totalSessions,
+    totalDays,
+    sessionIntervalDays,
+    treatments,
+    modifications,
+    startingState: {
+      riskScore: Math.round(startingRisk),
+      riskLevel: getRiskLevelFromScore(startingRisk),
+      slingIntegrity: Math.round(startingSlingIntegrity),
+      painBaseline: Math.round(startingRisk * 0.8),
+    },
+    endState: {
+      riskScore: lastSession?.riskScore ?? Math.round(startingRisk),
+      riskLevel: lastSession?.riskLevel ?? getRiskLevelFromScore(startingRisk),
+      slingIntegrity: lastSession?.slingIntegrity ?? Math.round(startingSlingIntegrity),
+      estimatedRecoverySessions,
     },
     milestones: milestones.sort((a, b) => a.week - b.week),
   };

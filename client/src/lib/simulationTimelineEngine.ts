@@ -941,6 +941,22 @@ function captureRomBaselines(
     const joints = TARGET_TO_JOINTS[t.target] || [];
     for (const j of joints) relevantJoints.add(j);
   }
+
+  for (const [muscleId, override] of Object.entries(baseOverrides)) {
+    if (override.pathology && override.pathology !== 'none') {
+      const joints = TARGET_TO_JOINTS[muscleId] || [];
+      for (const j of joints) relevantJoints.add(j);
+    }
+  }
+
+  for (const group of muscleAnalysis.groups) {
+    const t = group.avgTightness ?? 50;
+    if (t > 70 || t < 25) {
+      const joints = TARGET_TO_JOINTS[group.id] || [];
+      for (const j of joints) relevantJoints.add(j);
+    }
+  }
+
   if (relevantJoints.size === 0) {
     for (const t of treatments) {
       for (const [_, joints] of Object.entries(TARGET_TO_JOINTS)) {
@@ -1615,11 +1631,26 @@ export function buildSessionTimeline(
       : null;
 
     const irritabilityThreshold = pm ? (10 / pm.painSensitivityMultiplier) : 10;
-    let sessionLoadSum = 0;
+
+    let predictedSessionLoad = 0;
+    for (const t of sessionTreatments) {
+      const instanceKey = `${t.name}_${t.target}_${t.interventionType}`;
+      const key = `${t.target}_${t.interventionType}`;
+      const deltas = treatmentDeltaMap.get(instanceKey) || treatmentDeltaMap.get(key);
+      if (deltas) predictedSessionLoad += deltas.loadIntensity;
+    }
+    const projectedCumulativeLoad = cumulativeLoadIntensity + predictedSessionLoad;
+    const loadExceedsIrritability = projectedCumulativeLoad > irritabilityThreshold * (s * 0.7);
+
+    if (loadExceedsIrritability) {
+      nonLinear.isSetbackSession = true;
+      nonLinear.factor *= 0.4;
+    }
 
     const scenarios: WhatIfScenario[] = [];
     const seen = new Set<string>();
     let colorIdx = 0;
+    let sessionLoadSum = 0;
 
     for (const t of sessionTreatments) {
       const key = `${t.target}_${t.interventionType}`;
@@ -1658,23 +1689,41 @@ export function buildSessionTimeline(
       const deltas = treatmentDeltaMap.get(instanceKey) || treatmentDeltaMap.get(key);
       if (deltas) {
         const recoveryFactor = nonLinear.factor * conditionResponsiveFactor * doseScale;
-        for (const [jId, delta] of Object.entries(deltas.romDeltas)) {
-          cumulativeRomDeltas[jId] = (cumulativeRomDeltas[jId] ?? 0) + delta * recoveryFactor;
-          reinforcedJointsThisSession.add(jId);
+
+        if (loadExceedsIrritability) {
+          for (const [jId, delta] of Object.entries(deltas.romDeltas)) {
+            cumulativeRomDeltas[jId] = (cumulativeRomDeltas[jId] ?? 0) - delta * 0.3;
+            reinforcedJointsThisSession.add(jId);
+          }
+          for (const pmk of painBaselines) {
+            cumulativePainDeltas[pmk.markerId] = (cumulativePainDeltas[pmk.markerId] ?? 0) + Math.abs(deltas.painDelta) * 0.5;
+          }
+          cumulativeTensionDeltas[t.target] = (cumulativeTensionDeltas[t.target] ?? 0) + Math.abs(deltas.tensionDelta) * 0.4;
+          reinforcedMusclesThisSession.add(t.target);
+          for (const [sId] of Object.entries(deltas.slingBoost)) {
+            cumulativeSlingBoosts[sId] = (cumulativeSlingBoosts[sId] ?? 0) - 1.0;
+            reinforcedSlingsThisSession.add(sId);
+          }
+          cumulativeCompReduction -= deltas.compensationReduction * 0.3;
+        } else {
+          for (const [jId, delta] of Object.entries(deltas.romDeltas)) {
+            cumulativeRomDeltas[jId] = (cumulativeRomDeltas[jId] ?? 0) + delta * recoveryFactor;
+            reinforcedJointsThisSession.add(jId);
+          }
+          for (const pmk of painBaselines) {
+            cumulativePainDeltas[pmk.markerId] = (cumulativePainDeltas[pmk.markerId] ?? 0) + deltas.painDelta * recoveryFactor;
+          }
+          cumulativeTensionDeltas[t.target] = (cumulativeTensionDeltas[t.target] ?? 0) + deltas.tensionDelta * recoveryFactor;
+          reinforcedMusclesThisSession.add(t.target);
+          for (const [sId, boost] of Object.entries(deltas.slingBoost)) {
+            cumulativeSlingBoosts[sId] = (cumulativeSlingBoosts[sId] ?? 0) + boost * recoveryFactor;
+            reinforcedSlingsThisSession.add(sId);
+          }
+          for (const [pId, corr] of Object.entries(deltas.posturalCorrection)) {
+            cumulativePosturalCorrections[pId] = (cumulativePosturalCorrections[pId] ?? 0) + corr * recoveryFactor;
+          }
+          cumulativeCompReduction += deltas.compensationReduction * recoveryFactor;
         }
-        for (const pmk of painBaselines) {
-          cumulativePainDeltas[pmk.markerId] = (cumulativePainDeltas[pmk.markerId] ?? 0) + deltas.painDelta * recoveryFactor;
-        }
-        cumulativeTensionDeltas[t.target] = (cumulativeTensionDeltas[t.target] ?? 0) + deltas.tensionDelta * recoveryFactor;
-        reinforcedMusclesThisSession.add(t.target);
-        for (const [sId, boost] of Object.entries(deltas.slingBoost)) {
-          cumulativeSlingBoosts[sId] = (cumulativeSlingBoosts[sId] ?? 0) + boost * recoveryFactor;
-          reinforcedSlingsThisSession.add(sId);
-        }
-        for (const [pId, corr] of Object.entries(deltas.posturalCorrection)) {
-          cumulativePosturalCorrections[pId] = (cumulativePosturalCorrections[pId] ?? 0) + corr * recoveryFactor;
-        }
-        cumulativeCompReduction += deltas.compensationReduction * recoveryFactor;
         sessionLoadSum += deltas.loadIntensity;
       }
 
@@ -1693,16 +1742,16 @@ export function buildSessionTimeline(
 
     cumulativeLoadIntensity += sessionLoadSum;
 
-    const loadExceedsIrritability = cumulativeLoadIntensity > irritabilityThreshold * (s * 0.7);
-    if (loadExceedsIrritability) {
-      nonLinear.isSetbackSession = true;
-      nonLinear.factor *= 0.5;
-    }
-
     if (interSessionHealing) {
+      const carryOverDecay = Math.exp(-0.12 * sessionIntervalDays);
+      const tissueBonus = interSessionHealing.tissueRemodeling * 0.3;
+      const exerciseCarryOverRom = interSessionHealing.exerciseCarryOver * 0.2 * carryOverDecay;
+      const exerciseCarryOverMuscle = interSessionHealing.exerciseCarryOver * 0.15 * carryOverDecay;
+      const exerciseCarryOverSling = interSessionHealing.exerciseCarryOver * 0.25 * carryOverDecay;
+
       for (const jId of Object.keys(cumulativeRomDeltas)) {
         if (reinforcedJointsThisSession.has(jId)) {
-          cumulativeRomDeltas[jId] += interSessionHealing.tissueRemodeling * 0.3;
+          cumulativeRomDeltas[jId] += tissueBonus + exerciseCarryOverRom;
         } else {
           const regressionRate = 0.15 * sessionIntervalDays / 7;
           cumulativeRomDeltas[jId] = Math.max(0, (cumulativeRomDeltas[jId] ?? 0) - regressionRate);
@@ -1712,7 +1761,14 @@ export function buildSessionTimeline(
         cumulativePainDeltas[pmId] -= interSessionHealing.inflammationResolution * 0.1;
       }
       for (const muscleId of Object.keys(cumulativeTensionDeltas)) {
-        if (!reinforcedMusclesThisSession.has(muscleId)) {
+        if (reinforcedMusclesThisSession.has(muscleId)) {
+          const currentDelta = cumulativeTensionDeltas[muscleId] ?? 0;
+          if (currentDelta < 0) {
+            cumulativeTensionDeltas[muscleId] += exerciseCarryOverMuscle;
+          } else {
+            cumulativeTensionDeltas[muscleId] -= exerciseCarryOverMuscle * 0.5;
+          }
+        } else {
           const currentDelta = cumulativeTensionDeltas[muscleId] ?? 0;
           const regressionRate = 0.1 * sessionIntervalDays / 7;
           if (currentDelta < 0) {
@@ -1723,7 +1779,9 @@ export function buildSessionTimeline(
         }
       }
       for (const slingId of Object.keys(cumulativeSlingBoosts)) {
-        if (!reinforcedSlingsThisSession.has(slingId)) {
+        if (reinforcedSlingsThisSession.has(slingId)) {
+          cumulativeSlingBoosts[slingId] += exerciseCarryOverSling;
+        } else {
           const regressionRate = 0.2 * sessionIntervalDays / 7;
           cumulativeSlingBoosts[slingId] = Math.max(0, (cumulativeSlingBoosts[slingId] ?? 0) - regressionRate);
         }

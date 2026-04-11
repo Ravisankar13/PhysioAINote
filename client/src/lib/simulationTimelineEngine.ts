@@ -918,7 +918,8 @@ export function buildSessionTimeline(
 
       const cumulativeCount = treatmentSessionCounts.get(key) ?? 1;
       const doseResp = getSessionDoseResponse(cumulativeCount, totalSessions, t.interventionType);
-      const scaledMag = t.magnitude * doseResp * conditionResponsiveFactor;
+      const doseScale = pm ? pm.perSessionDoseScale : 1;
+      const scaledMag = t.magnitude * doseResp * conditionResponsiveFactor * doseScale;
       if (scaledMag < 0.5) continue;
 
       scenarios.push({

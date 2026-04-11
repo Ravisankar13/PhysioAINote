@@ -1486,7 +1486,10 @@ export default function PhysioGPT() {
       highlightLabels: [...(prev?.highlightLabels || []), ...applied.highlightLabels],
       predictionText,
     };
-    setHasClinicalTextData(true);
+    const hasFindings = applied.markerIds.length > 0 || applied.muscleIds.length > 0 || applied.highlightLabels.length > 0;
+    if (hasFindings) {
+      setHasClinicalTextData(true);
+    }
   }, []);
 
   const handleClinicalTextClear = useCallback(() => {

@@ -33,6 +33,7 @@ import {
 import {
   buildSimulationTimeline,
   buildSessionTimeline,
+  deriveModifierInput,
   type SimulationTimelineResult,
   type WeekSnapshot,
   type SimulationMilestone,
@@ -1044,6 +1045,8 @@ function PatientFactorsForm({
   modifiers,
   detectedCondition,
   adjustedProfile,
+  conditionOverrideId,
+  onConditionOverrideChange,
 }: {
   factors: PatientFactors;
   onChange: (updated: PatientFactors) => void;
@@ -1052,6 +1055,8 @@ function PatientFactorsForm({
   modifiers: PatientModifierProfile;
   detectedCondition: ConditionRecoveryProfile | null;
   adjustedProfile: ConditionRecoveryProfile | null;
+  conditionOverrideId: string | null;
+  onConditionOverrideChange: (id: string | null) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showModifiers, setShowModifiers] = useState(false);
@@ -1410,78 +1415,101 @@ function PatientFactorsForm({
             )}
           </div>
 
-          {detectedCondition && (
-            <div className="rounded border border-cyan-500/30 bg-cyan-500/10 p-1.5">
-              <button
-                onClick={() => setShowCondition(!showCondition)}
-                className="w-full flex items-center justify-between"
+          <div className="rounded border border-cyan-500/30 bg-cyan-500/10 p-1.5">
+            <div className="mb-1.5">
+              <label className="text-[8px] text-gray-500 block mb-0.5">Condition Profile</label>
+              <select
+                value={conditionOverrideId ?? ""}
+                onChange={e => onConditionOverrideChange(e.target.value || null)}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-cyan-500/50 focus:outline-none"
               >
-                <div className="flex items-center gap-1.5">
-                  <Target className="h-3 w-3 text-cyan-400" />
-                  <span className="text-[9px] font-medium text-cyan-300">{detectedCondition.conditionName}</span>
-                </div>
-                {showCondition ? <ChevronUp className="h-2.5 w-2.5 text-gray-500" /> : <ChevronDown className="h-2.5 w-2.5 text-gray-500" />}
-              </button>
-              {showCondition && (
-                <div className="mt-1.5 space-y-1.5 border-t border-cyan-500/20 pt-1.5">
-                  <div className="flex items-center gap-2 text-[8px]">
-                    <span className="text-gray-500">Recovery:</span>
-                    <span className="text-cyan-300">
-                      {adjustedProfile ? `${adjustedProfile.totalRecoveryWeeksMin}–${adjustedProfile.totalRecoveryWeeksMax}` : `${detectedCondition.totalRecoveryWeeksMin}–${detectedCondition.totalRecoveryWeeksMax}`} weeks
-                    </span>
-                    {adjustedProfile && adjustedProfile.totalRecoveryWeeksMax !== detectedCondition.totalRecoveryWeeksMax && (
-                      <span className="text-gray-600 line-through text-[7px]">
-                        {detectedCondition.totalRecoveryWeeksMin}–{detectedCondition.totalRecoveryWeeksMax}
-                      </span>
+                <option value="">
+                  {detectedCondition ? `Auto-detect: ${detectedCondition.conditionName}` : "Auto-detect (none found)"}
+                </option>
+                {CONDITION_RECOVERY_PROFILES.map(p => (
+                  <option key={p.conditionId} value={p.conditionId}>
+                    {p.conditionName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {detectedCondition && (
+              <>
+                <button
+                  onClick={() => setShowCondition(!showCondition)}
+                  className="w-full flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Target className="h-3 w-3 text-cyan-400" />
+                    <span className="text-[9px] font-medium text-cyan-300">{detectedCondition.conditionName}</span>
+                    {conditionOverrideId && (
+                      <Badge variant="outline" className="text-[6px] py-0 px-0.5 border-cyan-500/30 text-cyan-400/60">MANUAL</Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-[8px]">
-                    <span className="text-gray-500">ROM recovery:</span>
-                    <span className="text-cyan-300">{adjustedProfile?.expectedRomRecoveryPercent ?? detectedCondition.expectedRomRecoveryPercent}%</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[8px]">
-                    <span className="text-gray-500">Recurrence risk:</span>
-                    <span className={`${(adjustedProfile?.recurrenceRiskPercent ?? detectedCondition.recurrenceRiskPercent) > 35 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                      {adjustedProfile?.recurrenceRiskPercent ?? detectedCondition.recurrenceRiskPercent}%
-                    </span>
-                  </div>
-                  <div className="space-y-0.5">
-                    <div className="text-[7px] text-gray-500 uppercase">Phases</div>
-                    {(adjustedProfile ?? detectedCondition).phases.map((ph, i) => (
-                      <div key={i} className="flex items-center gap-1 text-[8px]">
-                        <div className={`w-1.5 h-1.5 rounded-full ${PHASE_COLORS[i % PHASE_COLORS.length].bg.replace('/20', '')}`} />
-                        <span className="text-gray-300 flex-1 truncate">{ph.name}</span>
-                        <span className="text-gray-500 shrink-0">{ph.durationWeeksMin}–{ph.durationWeeksMax}w</span>
-                      </div>
-                    ))}
-                  </div>
-                  {detectedCondition.keyPrognosticFactors.length > 0 && (
-                    <div className="space-y-0.5">
-                      <div className="text-[7px] text-gray-500 uppercase">Key Prognostic Factors</div>
-                      <div className="flex flex-wrap gap-1">
-                        {detectedCondition.keyPrognosticFactors.map((kpf, i) => (
-                          <Badge key={i} variant="outline" className="text-[7px] py-0 px-1 border-cyan-500/20 text-cyan-400/70">
-                            {kpf}
-                          </Badge>
-                        ))}
-                      </div>
+                  {showCondition ? <ChevronUp className="h-2.5 w-2.5 text-gray-500" /> : <ChevronDown className="h-2.5 w-2.5 text-gray-500" />}
+                </button>
+                {showCondition && (
+                  <div className="mt-1.5 space-y-1.5 border-t border-cyan-500/20 pt-1.5">
+                    <div className="flex items-center gap-2 text-[8px]">
+                      <span className="text-gray-500">Recovery:</span>
+                      <span className="text-cyan-300">
+                        {adjustedProfile ? `${adjustedProfile.totalRecoveryWeeksMin}–${adjustedProfile.totalRecoveryWeeksMax}` : `${detectedCondition.totalRecoveryWeeksMin}–${detectedCondition.totalRecoveryWeeksMax}`} weeks
+                      </span>
+                      {adjustedProfile && adjustedProfile.totalRecoveryWeeksMax !== detectedCondition.totalRecoveryWeeksMax && (
+                        <span className="text-gray-600 line-through text-[7px]">
+                          {detectedCondition.totalRecoveryWeeksMin}–{detectedCondition.totalRecoveryWeeksMax}
+                        </span>
+                      )}
                     </div>
-                  )}
-                  {detectedCondition.contraindicatedInterventions.length > 0 && (
+                    <div className="flex items-center gap-2 text-[8px]">
+                      <span className="text-gray-500">ROM recovery:</span>
+                      <span className="text-cyan-300">{adjustedProfile?.expectedRomRecoveryPercent ?? detectedCondition.expectedRomRecoveryPercent}%</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[8px]">
+                      <span className="text-gray-500">Recurrence risk:</span>
+                      <span className={`${(adjustedProfile?.recurrenceRiskPercent ?? detectedCondition.recurrenceRiskPercent) > 35 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                        {adjustedProfile?.recurrenceRiskPercent ?? detectedCondition.recurrenceRiskPercent}%
+                      </span>
+                    </div>
                     <div className="space-y-0.5">
-                      <div className="text-[7px] text-gray-500 uppercase">Contraindicated</div>
-                      {detectedCondition.contraindicatedInterventions.map((ci, i) => (
-                        <div key={i} className="flex items-start gap-1 text-[8px]">
-                          <AlertTriangle className="h-2.5 w-2.5 text-red-400 shrink-0 mt-0.5" />
-                          <span className="text-red-300/70">{ci}</span>
+                      <div className="text-[7px] text-gray-500 uppercase">Phases</div>
+                      {(adjustedProfile ?? detectedCondition).phases.map((ph, i) => (
+                        <div key={i} className="flex items-center gap-1 text-[8px]">
+                          <div className={`w-1.5 h-1.5 rounded-full ${PHASE_COLORS[i % PHASE_COLORS.length].bg.replace('/20', '')}`} />
+                          <span className="text-gray-300 flex-1 truncate">{ph.name}</span>
+                          <span className="text-gray-500 shrink-0">{ph.durationWeeksMin}–{ph.durationWeeksMax}w</span>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                    {detectedCondition.keyPrognosticFactors.length > 0 && (
+                      <div className="space-y-0.5">
+                        <div className="text-[7px] text-gray-500 uppercase">Key Prognostic Factors</div>
+                        <div className="flex flex-wrap gap-1">
+                          {detectedCondition.keyPrognosticFactors.map((kpf, i) => (
+                            <Badge key={i} variant="outline" className="text-[7px] py-0 px-1 border-cyan-500/20 text-cyan-400/70">
+                              {kpf}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {detectedCondition.contraindicatedInterventions.length > 0 && (
+                      <div className="space-y-0.5">
+                        <div className="text-[7px] text-gray-500 uppercase">Contraindicated</div>
+                        {detectedCondition.contraindicatedInterventions.map((ci, i) => (
+                          <div key={i} className="flex items-start gap-1 text-[8px]">
+                            <AlertTriangle className="h-2.5 w-2.5 text-red-400 shrink-0 mt-0.5" />
+                            <span className="text-red-300/70">{ci}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1527,10 +1555,21 @@ export default function SimulationTimelinePanel({
 
   const detectedCondition = useMemo(() => autoDetectCondition(structuredReasoning ?? null), [structuredReasoning]);
 
+  const [conditionOverrideId, setConditionOverrideId] = useState<string | null>(null);
+
+  const activeCondition = useMemo(() => {
+    if (conditionOverrideId) {
+      return CONDITION_RECOVERY_PROFILES.find(p => p.conditionId === conditionOverrideId) ?? detectedCondition;
+    }
+    return detectedCondition;
+  }, [conditionOverrideId, detectedCondition]);
+
   const adjustedProfile = useMemo(() => {
-    if (!detectedCondition) return null;
-    return adjustProfileForPatient(detectedCondition, modifiers);
-  }, [detectedCondition, modifiers]);
+    if (!activeCondition) return null;
+    return adjustProfileForPatient(activeCondition, modifiers);
+  }, [activeCondition, modifiers]);
+
+  const modifierInput = useMemo(() => deriveModifierInput(modifiers), [modifiers]);
 
   const hasCustomTreatments = (customExercises && customExercises.length > 0) || (customTechniques && customTechniques.length > 0);
 
@@ -1545,12 +1584,13 @@ export default function SimulationTimelinePanel({
         painMarkers,
         bodyWeightKg,
         biomechanicsOutput,
+        modifierInput,
       );
     } catch (e) {
       console.warn('[SimTimeline] Session build failed:', e);
       return null;
     }
-  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput]);
+  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifierInput]);
 
   const weekTimeline = useMemo(() => {
     if (hasCustomTreatments) return null;
@@ -1563,12 +1603,13 @@ export default function SimulationTimelinePanel({
         painMarkers,
         bodyWeightKg,
         biomechanicsOutput,
+        modifierInput,
       );
     } catch (e) {
       console.warn('[SimTimeline] Week build failed:', e);
       return null;
     }
-  }, [hasCustomTreatments, treatmentPlan, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput]);
+  }, [hasCustomTreatments, treatmentPlan, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifierInput]);
 
   const patientFactorsPanel = (
     <PatientFactorsForm
@@ -1577,8 +1618,10 @@ export default function SimulationTimelinePanel({
       onAutoPopulate={handleAutoPopulate}
       hasAutoPopulateData={hasAutoPopulateData}
       modifiers={modifiers}
-      detectedCondition={detectedCondition}
+      detectedCondition={activeCondition}
       adjustedProfile={adjustedProfile}
+      conditionOverrideId={conditionOverrideId}
+      onConditionOverrideChange={setConditionOverrideId}
     />
   );
 

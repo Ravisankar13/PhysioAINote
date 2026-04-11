@@ -11,6 +11,36 @@ import { computeSlingAnalysis, type SlingAnalysisResult } from './slingEngine';
 import type { TreatmentPlanResult, PlanPhase, PlanExercise } from '../components/skeleton/PlanTab';
 import type { CustomExercise } from '../components/skeleton/ExerciseEngineTab';
 import type { CustomTechnique } from '../components/skeleton/ManualTherapyEngineTab';
+import type { PatientModifierProfile } from './patientFactorsEngine';
+
+export interface PatientModifierInput {
+  healingRateMultiplier: number;
+  painSensitivityMultiplier: number;
+  complianceMultiplier: number;
+  tissueQualityMultiplier: number;
+  overallRecoveryMultiplier: number;
+  durationMultiplier: number;
+  doseScaleMultiplier: number;
+  interSessionHealingMultiplier: number;
+  romCeilingMultiplier: number;
+  phaseTimingMultiplier: number;
+}
+
+export function deriveModifierInput(profile: PatientModifierProfile): PatientModifierInput {
+  const healRate = profile.healingRateMultiplier;
+  return {
+    healingRateMultiplier: healRate,
+    painSensitivityMultiplier: profile.painSensitivityMultiplier,
+    complianceMultiplier: profile.complianceMultiplier,
+    tissueQualityMultiplier: profile.tissueQualityMultiplier,
+    overallRecoveryMultiplier: profile.overallRecoveryMultiplier,
+    durationMultiplier: healRate > 0 ? 1 / healRate : 2,
+    doseScaleMultiplier: profile.complianceMultiplier * Math.min(1.2, Math.max(0.5, profile.tissueQualityMultiplier)),
+    interSessionHealingMultiplier: healRate * profile.tissueQualityMultiplier,
+    romCeilingMultiplier: profile.tissueQualityMultiplier,
+    phaseTimingMultiplier: healRate > 0 ? 1 / healRate : 2,
+  };
+}
 
 export interface SimulationPhase {
   id: string;
@@ -290,9 +320,12 @@ export function buildSimulationTimeline(
   painMarkers: Array<{ id: string; position: { x: number; y: number; z: number }; label: string; type: 'point' | 'area' | 'referred' | 'line' | 'paint'; severity?: number; description?: string }>,
   bodyWeightKg: number,
   biomechanicsOutput?: any | null,
+  patientModifiers?: PatientModifierInput | null,
 ): SimulationTimelineResult {
+  const pm = patientModifiers ?? null;
   const phaseRanges = computePhaseWeekRanges(treatmentPlan.phases);
-  const totalDuration = phaseRanges.length > 0 ? phaseRanges[phaseRanges.length - 1].endWeek : 12;
+  const rawDuration = phaseRanges.length > 0 ? phaseRanges[phaseRanges.length - 1].endWeek : 12;
+  const totalDuration = pm ? Math.round(rawDuration * pm.phaseTimingMultiplier) : rawDuration;
   const totalPhases = treatmentPlan.phases.length;
 
   const simPhases: SimulationPhase[] = phaseRanges.map(({ phase, startWeek, endWeek }) => {
@@ -382,7 +415,8 @@ export function buildSimulationTimeline(
     }
     prevPhaseId = activePhase.id;
 
-    const doseResponse = getDoseResponseFraction(week);
+    const rawDoseResponse = getDoseResponseFraction(week);
+    const doseResponse = pm ? rawDoseResponse * pm.doseScaleMultiplier : rawDoseResponse;
 
     const scenarios: WhatIfScenario[] = [];
     const seen = new Set<string>();
@@ -479,6 +513,13 @@ export function buildSimulationTimeline(
         weekSling = prevSnapshot.slingIntegrity;
         weekPain = prevSnapshot.painPrediction;
       }
+    }
+
+    if (pm) {
+      const healingBoost = (1 - pm.healingRateMultiplier) * week * 0.5;
+      weekRisk = clamp(weekRisk + healingBoost, 0, 100);
+      weekPain = clamp(weekPain * pm.painSensitivityMultiplier, 0, 100);
+      weekSling = clamp(weekSling * pm.romCeilingMultiplier, 0, 100);
     }
 
     const forceReduction = (1 - forceMultiplier) * 100;
@@ -733,7 +774,9 @@ export function buildSessionTimeline(
   painMarkers: Array<{ id: string; position: { x: number; y: number; z: number }; label: string; type: 'point' | 'area' | 'referred' | 'line' | 'paint'; severity?: number; description?: string }>,
   bodyWeightKg: number,
   biomechanicsOutput?: unknown | null,
+  patientModifiers?: PatientModifierInput | null,
 ): SessionTimelineResult {
+  const pm = patientModifiers ?? null;
   const allFrequencies: number[] = [];
   for (const ex of customExercises) {
     allFrequencies.push(parseFrequencyToDaysInterval(ex.dosage.frequency));
@@ -745,7 +788,8 @@ export function buildSessionTimeline(
     ? Math.max(1, Math.round(Math.min(...allFrequencies)))
     : 2;
 
-  const totalDurationWeeks = estimateTotalDuration(painMarkers, customExercises.length, customTechniques.length);
+  const rawDurationWeeks = estimateTotalDuration(painMarkers, customExercises.length, customTechniques.length);
+  const totalDurationWeeks = pm ? Math.round(rawDurationWeeks * pm.durationMultiplier) : rawDurationWeeks;
   const totalDays = totalDurationWeeks * 7;
   const totalSessions = Math.max(4, Math.ceil(totalDays / sessionIntervalDays));
 
@@ -907,12 +951,21 @@ export function buildSessionTimeline(
       }
     }
 
+    if (pm) {
+      const sessionFraction = s / totalSessions;
+      const healingBoost = (1 - pm.healingRateMultiplier) * sessionFraction * 15;
+      sessRisk = clamp(sessRisk + healingBoost, 0, 100);
+      sessPain = clamp(sessPain * pm.painSensitivityMultiplier, 0, 100);
+      sessSling = clamp(sessSling * pm.romCeilingMultiplier, 0, 100);
+    }
+
     const forceReduction = (1 - forceMultiplier) * 100;
     const avgDose = scenarios.length > 0
       ? scenarios.reduce((sum, sc) => {
           const key = `${sc.target}_${sc.interventionType}`;
           const cumCount = treatmentSessionCounts.get(key) ?? 1;
-          return sum + getSessionDoseResponse(cumCount, totalSessions, sc.interventionType);
+          const raw = getSessionDoseResponse(cumCount, totalSessions, sc.interventionType);
+          return sum + (pm ? raw * pm.doseScaleMultiplier : raw);
         }, 0) / scenarios.length
       : 0;
     const compensationResolution = avgDose * 60;

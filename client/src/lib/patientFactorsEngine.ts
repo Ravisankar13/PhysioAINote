@@ -81,6 +81,11 @@ export interface PatientModifierProfile {
   tissueQualityMultiplier: number;
   psychosocialMultiplier: number;
   overallRecoveryMultiplier: number;
+  durationMultiplier: number;
+  perSessionDoseScale: number;
+  interSessionHealingMultiplier: number;
+  romCeilingAdjustment: number;
+  phaseTimingMultiplier: number;
   riskFlags: string[];
   positiveFactors: string[];
   modifierBreakdown: { factor: string; effect: string; multiplier: number }[];
@@ -105,7 +110,7 @@ function agePainMultiplier(age: number | null): number {
   return 1.2;
 }
 
-export function computePatientModifiers(factors: PatientFactors): PatientModifierProfile {
+export function computePatientModifiers(factors: PatientFactors, conditionProfile?: ConditionRecoveryProfile | null): PatientModifierProfile {
   const breakdown: PatientModifierProfile["modifierBreakdown"] = [];
   const riskFlags: string[] = [];
   const positiveFactors: string[] = [];
@@ -269,6 +274,20 @@ export function computePatientModifiers(factors: PatientFactors): PatientModifie
     psychosocial * 0.15
   ));
 
+  const durationMult = healingRate > 0 ? 1 / healingRate : 2;
+  let conditionDurationScale = 1.0;
+  if (conditionProfile) {
+    const avgPhaseDuration = conditionProfile.phases.reduce((s, p) => s + (p.durationWeeksMin + p.durationWeeksMax) / 2, 0) / Math.max(1, conditionProfile.phases.length);
+    conditionDurationScale = avgPhaseDuration > 8 ? 1.1 : avgPhaseDuration < 3 ? 0.9 : 1.0;
+  }
+
+  const perSessionDose = complianceMult * Math.min(1.2, Math.max(0.5, tissueQuality));
+  const interSessionHealing = healingRate * tissueQuality;
+  const romCeiling = tissueQuality * (conditionProfile
+    ? (conditionProfile.expectedRomRecoveryPercent / 100)
+    : 1.0);
+  const phaseTiming = durationMult * conditionDurationScale;
+
   return {
     healingRateMultiplier: Math.round(healingRate * 100) / 100,
     painSensitivityMultiplier: Math.round(painSensitivity * 100) / 100,
@@ -277,6 +296,11 @@ export function computePatientModifiers(factors: PatientFactors): PatientModifie
     tissueQualityMultiplier: Math.round(tissueQuality * 100) / 100,
     psychosocialMultiplier: Math.round(psychosocial * 100) / 100,
     overallRecoveryMultiplier: Math.round(overallRecovery * 100) / 100,
+    durationMultiplier: Math.round(durationMult * 100) / 100,
+    perSessionDoseScale: Math.round(perSessionDose * 100) / 100,
+    interSessionHealingMultiplier: Math.round(interSessionHealing * 100) / 100,
+    romCeilingAdjustment: Math.round(romCeiling * 100) / 100,
+    phaseTimingMultiplier: Math.round(phaseTiming * 100) / 100,
     riskFlags,
     positiveFactors,
     modifierBreakdown: breakdown,

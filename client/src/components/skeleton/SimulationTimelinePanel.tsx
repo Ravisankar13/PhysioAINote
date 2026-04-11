@@ -33,7 +33,6 @@ import {
 import {
   buildSimulationTimeline,
   buildSessionTimeline,
-  deriveModifierInput,
   type SimulationTimelineResult,
   type WeekSnapshot,
   type SimulationMilestone,
@@ -1375,6 +1374,26 @@ function PatientFactorsForm({
                     </div>
                   </div>
                 </div>
+                <div className="grid grid-cols-3 gap-1 mt-0.5">
+                  <div className="text-center">
+                    <div className="text-[7px] text-gray-500">Duration</div>
+                    <div className={`text-[9px] font-medium ${modifiers.durationMultiplier <= 1.1 ? 'text-emerald-400' : modifiers.durationMultiplier <= 1.5 ? 'text-amber-400' : 'text-red-400'}`}>
+                      ×{modifiers.durationMultiplier.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[7px] text-gray-500">Dose Scale</div>
+                    <div className={`text-[9px] font-medium ${modifiers.perSessionDoseScale >= 0.8 ? 'text-emerald-400' : modifiers.perSessionDoseScale >= 0.5 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {(modifiers.perSessionDoseScale * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[7px] text-gray-500">ROM Ceiling</div>
+                    <div className={`text-[9px] font-medium ${modifiers.romCeilingAdjustment >= 0.85 ? 'text-emerald-400' : modifiers.romCeilingAdjustment >= 0.6 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {(modifiers.romCeilingAdjustment * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                </div>
 
                 {modifiers.modifierBreakdown.length > 0 && (
                   <div className="space-y-0.5 mt-1">
@@ -1551,8 +1570,6 @@ export default function SimulationTimelinePanel({
     setHasAutoPopulated(true);
   }, [extractionResult, structuredReasoning, patientFactors]);
 
-  const modifiers = useMemo(() => computePatientModifiers(patientFactors), [patientFactors]);
-
   const detectedCondition = useMemo(() => autoDetectCondition(structuredReasoning ?? null), [structuredReasoning]);
 
   const [conditionOverrideId, setConditionOverrideId] = useState<string | null>(null);
@@ -1564,12 +1581,12 @@ export default function SimulationTimelinePanel({
     return detectedCondition;
   }, [conditionOverrideId, detectedCondition]);
 
+  const modifiers = useMemo(() => computePatientModifiers(patientFactors, activeCondition), [patientFactors, activeCondition]);
+
   const adjustedProfile = useMemo(() => {
     if (!activeCondition) return null;
     return adjustProfileForPatient(activeCondition, modifiers);
   }, [activeCondition, modifiers]);
-
-  const modifierInput = useMemo(() => deriveModifierInput(modifiers), [modifiers]);
 
   const hasCustomTreatments = (customExercises && customExercises.length > 0) || (customTechniques && customTechniques.length > 0);
 
@@ -1584,13 +1601,14 @@ export default function SimulationTimelinePanel({
         painMarkers,
         bodyWeightKg,
         biomechanicsOutput,
-        modifierInput,
+        modifiers,
+        adjustedProfile,
       );
     } catch (e) {
       console.warn('[SimTimeline] Session build failed:', e);
       return null;
     }
-  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifierInput]);
+  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile]);
 
   const weekTimeline = useMemo(() => {
     if (hasCustomTreatments) return null;
@@ -1603,13 +1621,14 @@ export default function SimulationTimelinePanel({
         painMarkers,
         bodyWeightKg,
         biomechanicsOutput,
-        modifierInput,
+        modifiers,
+        adjustedProfile,
       );
     } catch (e) {
       console.warn('[SimTimeline] Week build failed:', e);
       return null;
     }
-  }, [hasCustomTreatments, treatmentPlan, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifierInput]);
+  }, [hasCustomTreatments, treatmentPlan, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile]);
 
   const patientFactorsPanel = (
     <PatientFactorsForm

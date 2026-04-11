@@ -907,6 +907,35 @@ export interface MultiDimensionalBaseline {
   compensationBaselines: CompensationPrediction[];
 }
 
+export interface TreatmentPhaseBlock {
+  phaseLabel: string;
+  phaseIndex: number;
+  startSession: number;
+  endSession: number;
+  exercises: CustomExercise[];
+  techniques: CustomTechnique[];
+  designRationale: string;
+  safetyNotes: string;
+  predictedStateAtTransition: {
+    avgPain: number;
+    avgRomPercent: number;
+    avgSlingIntegrity: number;
+    avgCompensationResolution: number;
+    riskScore: number;
+    achievedMilestones: string[];
+    correctionTrend?: 'faster' | 'slower' | 'as_expected';
+  } | null;
+  phaseGoals: string;
+  previousProgressionStages: Array<{ exerciseName: string; stages: Array<{ stage: number; name: string; description: string }> }>;
+}
+
+export interface PhaseProgressEvent {
+  phaseIndex: number;
+  phaseLabel: string;
+  status: 'building' | 'requerying' | 'complete';
+  message: string;
+}
+
 export interface SessionTimelineResult {
   sessions: SessionSnapshot[];
   totalSessions: number;
@@ -931,6 +960,7 @@ export interface SessionTimelineResult {
   functionalMilestones: FunctionalMilestone[];
   correctionFactors?: CorrectionFactors;
   actualOutcomes?: ActualSessionOutcome[];
+  treatmentPhases?: TreatmentPhaseBlock[];
 }
 
 const JOINT_ROM_NORMS: Record<string, { label: string; plane: string; normalDegrees: number }> = {
@@ -2436,4 +2466,368 @@ export function buildSessionTimeline(
     correctionFactors,
     actualOutcomes: oc.length > 0 ? oc : undefined,
   };
+}
+
+const PHASE_TREATMENT_GOALS: Record<string, string> = {
+  'Acute/Protective': 'Pain management, gentle isometric loading below pain threshold, activity modification, education. Avoid aggressive loading or end-range stretching.',
+  'Proliferative': 'Progressive loading, motor control re-education, early strengthening in mid-range, controlled mobility. Begin to restore functional movement patterns.',
+  'Remodeling': 'Tissue remodeling through graded exposure, increased resistance, eccentric loading, full-range functional movements. Build load tolerance and endurance.',
+  'Functional': 'Sport/task-specific movements, power development, agility drills, dynamic stability challenges. Integrate multi-planar functional patterns.',
+  'Return to Activity': 'Full return to sport/work demands, plyometrics, high-velocity training, advanced proprioception. Injury prevention and maintenance programming.',
+};
+
+function synthesizeReQueryPayload(
+  snapshot: SessionSnapshot,
+  phaseLabel: string,
+  previousExercises: CustomExercise[],
+  previousTechniques: CustomTechnique[],
+  correctionFactors?: CorrectionFactors,
+): {
+  exercisePayload: Record<string, unknown>;
+  techniquePayload: Record<string, unknown>;
+} {
+  const avgRomPct = snapshot.romPredictions.length > 0
+    ? snapshot.romPredictions.reduce((s, r) => s + (r.targetDegrees > 0 ? (r.predictedDegrees / r.targetDegrees) * 100 : 50), 0) / snapshot.romPredictions.length
+    : 50;
+  const avgPain = snapshot.painMarkerPredictions.length > 0
+    ? snapshot.painMarkerPredictions.reduce((s, p) => s + p.predictedSeverity, 0) / snapshot.painMarkerPredictions.length
+    : 5;
+  const avgSling = snapshot.slingPredictions.length > 0
+    ? snapshot.slingPredictions.reduce((s, sl) => s + sl.predictedIntegrity, 0) / snapshot.slingPredictions.length
+    : 50;
+  const avgCompRes = snapshot.compensationPredictions.length > 0
+    ? snapshot.compensationPredictions.reduce((s, c) => s + c.resolutionPercent, 0) / snapshot.compensationPredictions.length
+    : 0;
+
+  const achievedMilestones = snapshot.functionalMilestones
+    .filter(m => m.achieved)
+    .map(m => m.label);
+
+  const phaseGoals = PHASE_TREATMENT_GOALS[phaseLabel] ?? PHASE_TREATMENT_GOALS['Remodeling'];
+
+  const prevProgressionContext = previousExercises.map(ex => {
+    const stages = (ex.progressionStages ?? []).map(s => `Stage ${s.stage} (${s.name}): ${s.description}`).join('; ');
+    return `- ${ex.name} [${ex.targetSystem}]: ${stages}`;
+  }).join('\n');
+
+  const prevTechniqueContext = previousTechniques.map(t => {
+    const stages = (t.progressionStages ?? []).map(s => `Stage ${s.stage} (${s.name}): ${s.description}`).join('; ');
+    return `- ${t.name} [${t.targetSystem}]: ${stages}`;
+  }).join('\n');
+
+  let correctionContext = '';
+  if (correctionFactors) {
+    const trend = correctionFactors.overall.trend;
+    const mag = correctionFactors.overall.magnitude;
+    correctionContext = `\nPATIENT RESPONSE CORRECTION: Patient is responding ${trend === 'faster' ? `${mag}% faster` : trend === 'slower' ? `${mag}% slower` : 'as expected'} compared to predictions. ${trend === 'faster' ? 'Consider more aggressive progression.' : trend === 'slower' ? 'Consider gentler progression with longer adaptation periods.' : ''}`;
+  }
+
+  const painMarkers = snapshot.painMarkerPredictions.map(p => ({
+    label: p.markerLabel,
+    severity: p.predictedSeverity,
+    type: 'predicted' as const,
+  }));
+
+  const slingData = {
+    systemSummary: `Predicted state at session ${snapshot.sessionNumber}: average sling integrity ${Math.round(avgSling)}%`,
+    overallForceTransferScore: Math.round(avgSling),
+    slings: snapshot.slingPredictions.map(sp => ({
+      label: sp.slingName,
+      status: sp.predictedIntegrity >= 70 ? 'good' : sp.predictedIntegrity >= 40 ? 'compromised' : 'dysfunctional',
+      activationScore: sp.predictedIntegrity,
+      forceTransferQuality: sp.predictedIntegrity >= 70 ? 'good' : sp.predictedIntegrity >= 40 ? 'moderate' : 'poor',
+      weakLinks: sp.weakLinks.map(w => ({ muscle: w, activationPct: Math.round(sp.predictedIntegrity * 0.6), reason: 'Predicted remaining weak link' })),
+      forceReroutes: [] as Array<{ fromMuscle: string; toMuscle: string; reroutePct: number; clinical: string }>,
+      treatmentTargets: [] as Array<{ muscle: string; intervention: string; rationale: string }>,
+      narrative: `Predicted integrity: ${sp.predictedIntegrity}% (${sp.deltaFromBaseline > 0 ? '+' : ''}${sp.deltaFromBaseline}% from baseline)`,
+    })),
+  };
+
+  const compensationCards = snapshot.compensationPredictions
+    .filter(c => c.resolutionPercent < 80)
+    .map(c => ({
+      title: c.patternName,
+      description: `${Math.round(c.resolutionPercent)}% resolved, predicted severity: ${c.predictedSeverity}`,
+      severity: c.predictedSeverity > 5 ? 'high' : c.predictedSeverity > 2 ? 'moderate' : 'low',
+    }));
+
+  const kineticChainDysfunctions = snapshot.muscleStatePredictions
+    .filter(m => m.trendDirection === 'worsening' || m.predictedTension > 70 || m.predictedTension < 30)
+    .map(m => ({
+      chain: m.muscleId,
+      dysfunction: m.predictedTension > 70 ? 'Hypertonic' : m.predictedTension < 30 ? 'Inhibited' : 'Abnormal tone',
+      clinical: m.clinicalNote,
+    }));
+
+  const targetFocusBase = `PHASE TRANSITION TO: ${phaseLabel}\n\nPHASE-SPECIFIC TREATMENT GOALS:\n${phaseGoals}\n\nPREDICTED PATIENT STATE AT THIS POINT:\n- Pain: ${avgPain.toFixed(1)}/10\n- ROM recovery: ${avgRomPct.toFixed(0)}%\n- Sling integrity: ${avgSling.toFixed(0)}%\n- Compensation resolution: ${avgCompRes.toFixed(0)}%\n- Risk score: ${snapshot.riskScore}\n- Achieved milestones: ${achievedMilestones.length > 0 ? achievedMilestones.join(', ') : 'None yet'}${correctionContext}`;
+
+  const exerciseTargetFocus = `${targetFocusBase}\n\nPREVIOUS EXERCISE PROGRAM (being retired):\n${prevProgressionContext || 'None'}\n\nDesign NEW exercises appropriate for the ${phaseLabel} phase. These should BUILD on the gains from the previous phase while progressing toward the phase goals listed above. Consider where each previous exercise left off (see progression stages) and design the next level of challenge.`;
+
+  const techniqueTargetFocus = `${targetFocusBase}\n\nPREVIOUS MANUAL THERAPY PROGRAM (being retired):\n${prevTechniqueContext || 'None'}\n\nDesign NEW manual therapy techniques appropriate for the ${phaseLabel} phase. These should address remaining tissue restrictions while matching the phase goals listed above.`;
+
+  const exercisePayload = {
+    targetFocus: exerciseTargetFocus,
+    mechanismSummary: `Predicted state at session ${snapshot.sessionNumber}, transitioning to ${phaseLabel} phase`,
+    causalChains: [] as unknown[],
+    compensationCards,
+    loadRedistribution: [] as unknown[],
+    slingData,
+    painMarkers,
+    topContributors: snapshot.muscleStatePredictions
+      .filter(m => m.trendDirection === 'worsening')
+      .map(m => `${m.muscleId} (${m.clinicalNote})`),
+    kineticChainDysfunctions,
+  };
+
+  const techniquePayload = {
+    targetFocus: techniqueTargetFocus,
+    mechanismSummary: `Predicted state at session ${snapshot.sessionNumber}, transitioning to ${phaseLabel} phase`,
+    causalChains: [] as unknown[],
+    compensationCards,
+    loadRedistribution: [] as unknown[],
+    slingData,
+    painMarkers,
+    topContributors: snapshot.muscleStatePredictions
+      .filter(m => m.trendDirection === 'worsening')
+      .map(m => `${m.muscleId} (${m.clinicalNote})`),
+    kineticChainDysfunctions,
+    scarMarkers: [] as unknown[],
+    adhesionBands: [] as unknown[],
+    musclePathologies: [] as unknown[],
+  };
+
+  return { exercisePayload, techniquePayload };
+}
+
+function detectPhaseTransitions(sessions: SessionSnapshot[]): Array<{ sessionIndex: number; fromPhase: string; toPhase: string }> {
+  const transitions: Array<{ sessionIndex: number; fromPhase: string; toPhase: string }> = [];
+  for (let i = 1; i < sessions.length; i++) {
+    const prev = sessions[i - 1].recoveryPhaseLabel;
+    const curr = sessions[i].recoveryPhaseLabel;
+    if (prev && curr && prev !== curr) {
+      transitions.push({ sessionIndex: i, fromPhase: prev, toPhase: curr });
+    }
+  }
+  return transitions;
+}
+
+export async function buildSessionTimelineAsync(
+  customExercises: CustomExercise[],
+  customTechniques: CustomTechnique[],
+  baseModelConfig: Record<string, Record<string, number>>,
+  baseOverrides: Record<string, Partial<MuscleOverride>>,
+  painMarkers: Array<{ id: string; position: { x: number; y: number; z: number }; label: string; type: 'point' | 'area' | 'referred' | 'line' | 'paint'; severity?: number; description?: string }>,
+  bodyWeightKg: number,
+  biomechanicsOutput?: unknown | null,
+  patientModifiers?: PatientModifierProfile | null,
+  conditionProfile?: ConditionRecoveryProfile | null,
+  actualOutcomes?: ActualSessionOutcome[],
+  onPhaseProgress?: (event: PhaseProgressEvent) => void,
+  signal?: AbortSignal,
+): Promise<SessionTimelineResult> {
+  onPhaseProgress?.({ phaseIndex: 0, phaseLabel: 'Initial', status: 'building', message: 'Building initial timeline with current treatments...' });
+
+  const initialResult = buildSessionTimeline(
+    customExercises, customTechniques, baseModelConfig, baseOverrides,
+    painMarkers, bodyWeightKg, biomechanicsOutput, patientModifiers, conditionProfile, actualOutcomes,
+  );
+
+  const transitions = detectPhaseTransitions(initialResult.sessions);
+
+  if (transitions.length === 0) {
+    const singlePhase: TreatmentPhaseBlock = {
+      phaseLabel: initialResult.sessions[0]?.recoveryPhaseLabel ?? 'Initial',
+      phaseIndex: 0,
+      startSession: 1,
+      endSession: initialResult.totalSessions,
+      exercises: customExercises,
+      techniques: customTechniques,
+      designRationale: 'Initial treatment design — no phase transitions detected',
+      safetyNotes: '',
+      predictedStateAtTransition: null,
+      phaseGoals: PHASE_TREATMENT_GOALS[initialResult.sessions[0]?.recoveryPhaseLabel ?? 'Remodeling'] ?? '',
+      previousProgressionStages: [],
+    };
+    onPhaseProgress?.({ phaseIndex: 0, phaseLabel: singlePhase.phaseLabel, status: 'complete', message: 'Timeline complete — single phase' });
+    return { ...initialResult, treatmentPhases: [singlePhase] };
+  }
+
+  const treatmentPhases: TreatmentPhaseBlock[] = [];
+  let currentExercises = customExercises;
+  let currentTechniques = customTechniques;
+  let accumulatedResult = initialResult;
+
+  const firstTransitionSession = transitions[0].sessionIndex;
+  treatmentPhases.push({
+    phaseLabel: transitions[0].fromPhase,
+    phaseIndex: 0,
+    startSession: 1,
+    endSession: accumulatedResult.sessions[firstTransitionSession - 1]?.sessionNumber ?? firstTransitionSession,
+    exercises: currentExercises,
+    techniques: currentTechniques,
+    designRationale: 'Initial treatment design by practitioner',
+    safetyNotes: '',
+    predictedStateAtTransition: null,
+    phaseGoals: PHASE_TREATMENT_GOALS[transitions[0].fromPhase] ?? '',
+    previousProgressionStages: [],
+  });
+
+  for (let ti = 0; ti < transitions.length; ti++) {
+    if (signal?.aborted) break;
+
+    const transition = transitions[ti];
+    const transitionSnap = accumulatedResult.sessions[transition.sessionIndex];
+    if (!transitionSnap) continue;
+
+    onPhaseProgress?.({
+      phaseIndex: ti + 1,
+      phaseLabel: transition.toPhase,
+      status: 'requerying',
+      message: `Generating ${transition.toPhase} phase treatments...`,
+    });
+
+    const prevProgressionStages = [
+      ...currentExercises.map(ex => ({
+        exerciseName: ex.name,
+        stages: (ex.progressionStages ?? []).map(s => ({ stage: s.stage, name: s.name, description: s.description })),
+      })),
+      ...currentTechniques.map(t => ({
+        exerciseName: t.name,
+        stages: (t.progressionStages ?? []).map(s => ({ stage: s.stage, name: s.name, description: s.description })),
+      })),
+    ];
+
+    const { exercisePayload, techniquePayload } = synthesizeReQueryPayload(
+      transitionSnap,
+      transition.toPhase,
+      currentExercises,
+      currentTechniques,
+      accumulatedResult.correctionFactors,
+    );
+
+    const avgRomPct = transitionSnap.romPredictions.length > 0
+      ? transitionSnap.romPredictions.reduce((s, r) => s + (r.targetDegrees > 0 ? (r.predictedDegrees / r.targetDegrees) * 100 : 50), 0) / transitionSnap.romPredictions.length
+      : 50;
+    const avgPain = transitionSnap.painMarkerPredictions.length > 0
+      ? transitionSnap.painMarkerPredictions.reduce((s, p) => s + p.predictedSeverity, 0) / transitionSnap.painMarkerPredictions.length
+      : 5;
+    const avgSling = transitionSnap.slingPredictions.length > 0
+      ? transitionSnap.slingPredictions.reduce((s, sl) => s + sl.predictedIntegrity, 0) / transitionSnap.slingPredictions.length
+      : 50;
+    const avgCompRes = transitionSnap.compensationPredictions.length > 0
+      ? transitionSnap.compensationPredictions.reduce((s, c) => s + c.resolutionPercent, 0) / transitionSnap.compensationPredictions.length
+      : 0;
+
+    let newExercises: CustomExercise[] = currentExercises;
+    let newTechniques: CustomTechnique[] = currentTechniques;
+    let exerciseRationale = '';
+    let exerciseSafety = '';
+    let techniqueRationale = '';
+
+    try {
+      const { apiRequest } = await import('@/lib/queryClient');
+
+      const [exResponse, mtResponse] = await Promise.all([
+        apiRequest('/api/exercise-engine/design-custom', 'POST', exercisePayload)
+          .then(r => r.json())
+          .catch(() => null),
+        apiRequest('/api/manual-therapy-engine/design-custom', 'POST', techniquePayload)
+          .then(r => r.json())
+          .catch(() => null),
+      ]);
+
+      if (exResponse?.customExercises && Array.isArray(exResponse.customExercises) && exResponse.customExercises.length > 0) {
+        newExercises = exResponse.customExercises;
+        exerciseRationale = exResponse.designRationale ?? '';
+        exerciseSafety = exResponse.safetyNotes ?? '';
+      }
+
+      if (mtResponse?.customTechniques && Array.isArray(mtResponse.customTechniques) && mtResponse.customTechniques.length > 0) {
+        newTechniques = mtResponse.customTechniques;
+        techniqueRationale = mtResponse.designRationale ?? '';
+      }
+    } catch (err) {
+      console.warn(`[SessionTimeline] Re-query failed for phase ${transition.toPhase}:`, err);
+    }
+
+    const nextTransitionSession = ti + 1 < transitions.length
+      ? accumulatedResult.sessions[transitions[ti + 1].sessionIndex]?.sessionNumber ?? accumulatedResult.totalSessions
+      : accumulatedResult.totalSessions;
+
+    treatmentPhases.push({
+      phaseLabel: transition.toPhase,
+      phaseIndex: ti + 1,
+      startSession: transitionSnap.sessionNumber,
+      endSession: nextTransitionSession,
+      exercises: newExercises,
+      techniques: newTechniques,
+      designRationale: [exerciseRationale, techniqueRationale].filter(Boolean).join('\n\n') || `AI-generated treatments for ${transition.toPhase} phase`,
+      safetyNotes: exerciseSafety,
+      predictedStateAtTransition: {
+        avgPain: Math.round(avgPain * 10) / 10,
+        avgRomPercent: Math.round(avgRomPct),
+        avgSlingIntegrity: Math.round(avgSling),
+        avgCompensationResolution: Math.round(avgCompRes),
+        riskScore: transitionSnap.riskScore,
+        achievedMilestones: transitionSnap.functionalMilestones.filter(m => m.achieved).map(m => m.label),
+        correctionTrend: accumulatedResult.correctionFactors?.overall.trend,
+      },
+      phaseGoals: PHASE_TREATMENT_GOALS[transition.toPhase] ?? '',
+      previousProgressionStages: prevProgressionStages,
+    });
+
+    currentExercises = newExercises;
+    currentTechniques = newTechniques;
+
+    if (newExercises !== customExercises || newTechniques !== customTechniques) {
+      onPhaseProgress?.({
+        phaseIndex: ti + 1,
+        phaseLabel: transition.toPhase,
+        status: 'building',
+        message: `Rebuilding timeline from session ${transitionSnap.sessionNumber} with new treatments...`,
+      });
+
+      const rebuiltResult = buildSessionTimeline(
+        newExercises, newTechniques, baseModelConfig, baseOverrides,
+        painMarkers, bodyWeightKg, biomechanicsOutput, patientModifiers, conditionProfile, actualOutcomes,
+      );
+
+      const transitionSessionNum = transitionSnap.sessionNumber;
+      const preTransitionSessions = accumulatedResult.sessions.filter(s => s.sessionNumber < transitionSessionNum);
+      const postTransitionSessions = rebuiltResult.sessions
+        .filter(s => s.sessionNumber >= transitionSessionNum)
+        .map(s => ({ ...s }));
+
+      accumulatedResult = {
+        ...accumulatedResult,
+        sessions: [...preTransitionSessions, ...postTransitionSessions],
+        treatments: [...accumulatedResult.treatments.filter(t => {
+          const phase0 = treatmentPhases[0];
+          return phase0 && preTransitionSessions.some(ps => ps.treatments.some(pt => pt.name === t.name));
+        }), ...rebuiltResult.treatments],
+        milestones: [
+          ...accumulatedResult.milestones.filter(m => {
+            const weekDay = m.week * 7;
+            return weekDay < (transitionSessionNum - 1) * accumulatedResult.sessionIntervalDays;
+          }),
+          ...rebuiltResult.milestones,
+        ],
+        modifications: [
+          ...accumulatedResult.modifications.filter(m => m.sessionNumber < transitionSessionNum),
+          ...rebuiltResult.modifications.filter(m => m.sessionNumber >= transitionSessionNum),
+        ],
+        endState: rebuiltResult.endState,
+        correctionFactors: rebuiltResult.correctionFactors ?? accumulatedResult.correctionFactors,
+      };
+    }
+
+    onPhaseProgress?.({
+      phaseIndex: ti + 1,
+      phaseLabel: transition.toPhase,
+      status: 'complete',
+      message: `${transition.toPhase} phase treatments ready`,
+    });
+  }
+
+  return { ...accumulatedResult, treatmentPhases };
 }

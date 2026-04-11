@@ -40,6 +40,7 @@ import {
 import {
   buildSimulationTimeline,
   buildSessionTimeline,
+  buildSessionTimelineAsync,
   type SimulationTimelineResult,
   type WeekSnapshot,
   type SimulationMilestone,
@@ -58,6 +59,8 @@ import {
   type SessionApplyPayload,
   type ActualSessionOutcome,
   type CorrectionFactors,
+  type TreatmentPhaseBlock,
+  type PhaseProgressEvent,
 } from "@/lib/simulationTimelineEngine";
 import {
   type PatientFactors,
@@ -1615,6 +1618,131 @@ function MultiDimensionalPredictions({ snapshot }: { snapshot: SessionSnapshot }
   );
 }
 
+function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
+  const [expanded, setExpanded] = useState(false);
+  const st = phase.predictedStateAtTransition;
+
+  return (
+    <div className="border border-cyan-600/40 rounded bg-gradient-to-r from-cyan-950/30 to-gray-900/40 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-cyan-900/20 transition-colors"
+      >
+        <div className="flex items-center gap-1.5">
+          <ArrowRight className="h-3 w-3 text-cyan-400" />
+          <span className="text-[9px] font-semibold text-cyan-300">{phase.phaseLabel} Phase</span>
+          <Badge variant="outline" className="text-[7px] px-1 py-0 border-cyan-600/40 text-cyan-400">
+            S{phase.startSession}–S{phase.endSession}
+          </Badge>
+          {phase.exercises.length > 0 && (
+            <Badge variant="outline" className="text-[7px] px-1 py-0 border-emerald-600/40 text-emerald-400">
+              {phase.exercises.length} exercises
+            </Badge>
+          )}
+          {phase.techniques.length > 0 && (
+            <Badge variant="outline" className="text-[7px] px-1 py-0 border-purple-600/40 text-purple-400">
+              {phase.techniques.length} techniques
+            </Badge>
+          )}
+        </div>
+        {expanded ? <ChevronUp className="h-3 w-3 text-gray-400" /> : <ChevronDown className="h-3 w-3 text-gray-400" />}
+      </button>
+
+      {expanded && (
+        <div className="px-2 pb-2 space-y-1.5">
+          {st && (
+            <div className="grid grid-cols-5 gap-1">
+              <div className="bg-gray-800/40 rounded px-1.5 py-1 text-center">
+                <div className="text-[7px] text-gray-500">Pain</div>
+                <div className="text-[10px] font-bold text-red-400">{st.avgPain}/10</div>
+              </div>
+              <div className="bg-gray-800/40 rounded px-1.5 py-1 text-center">
+                <div className="text-[7px] text-gray-500">ROM</div>
+                <div className="text-[10px] font-bold text-blue-400">{st.avgRomPercent}%</div>
+              </div>
+              <div className="bg-gray-800/40 rounded px-1.5 py-1 text-center">
+                <div className="text-[7px] text-gray-500">Sling</div>
+                <div className="text-[10px] font-bold text-amber-400">{st.avgSlingIntegrity}%</div>
+              </div>
+              <div className="bg-gray-800/40 rounded px-1.5 py-1 text-center">
+                <div className="text-[7px] text-gray-500">Comp</div>
+                <div className="text-[10px] font-bold text-emerald-400">{st.avgCompensationResolution}%</div>
+              </div>
+              <div className="bg-gray-800/40 rounded px-1.5 py-1 text-center">
+                <div className="text-[7px] text-gray-500">Risk</div>
+                <div className={`text-[10px] font-bold ${st.riskScore > 6 ? 'text-red-400' : st.riskScore > 3 ? 'text-amber-400' : 'text-emerald-400'}`}>{st.riskScore}</div>
+              </div>
+            </div>
+          )}
+
+          {st?.correctionTrend && st.correctionTrend !== 'as_expected' && (
+            <div className={`flex items-center gap-1 text-[8px] ${st.correctionTrend === 'faster' ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {st.correctionTrend === 'faster' ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+              Patient responding {st.correctionTrend} than predicted
+            </div>
+          )}
+
+          {phase.phaseGoals && (
+            <div className="text-[8px] text-gray-400 bg-gray-800/30 rounded px-1.5 py-1">
+              <span className="text-cyan-400 font-medium">Goals: </span>{phase.phaseGoals}
+            </div>
+          )}
+
+          {phase.designRationale && phase.phaseIndex > 0 && (
+            <div className="text-[8px] text-gray-400 bg-gray-800/30 rounded px-1.5 py-1">
+              <span className="text-purple-400 font-medium">AI Rationale: </span>{phase.designRationale}
+            </div>
+          )}
+
+          {phase.safetyNotes && (
+            <div className="text-[8px] text-amber-400/80 bg-amber-950/20 rounded px-1.5 py-1 flex items-start gap-1">
+              <AlertTriangle className="h-2.5 w-2.5 mt-0.5 shrink-0" />
+              {phase.safetyNotes}
+            </div>
+          )}
+
+          {phase.exercises.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="text-[7px] font-medium text-emerald-400 flex items-center gap-1">
+                <Dumbbell className="h-2.5 w-2.5" /> Exercises
+              </div>
+              {phase.exercises.map((ex, ei) => (
+                <div key={ei} className="text-[8px] text-gray-300 bg-gray-800/20 rounded px-1.5 py-0.5 flex items-center gap-1">
+                  <span className="text-emerald-500">•</span>
+                  <span className="font-medium">{ex.name}</span>
+                  <span className="text-gray-500">— {ex.targetSystem}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {phase.techniques.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="text-[7px] font-medium text-purple-400 flex items-center gap-1">
+                <Hand className="h-2.5 w-2.5" /> Manual Therapy
+              </div>
+              {phase.techniques.map((t, ti) => (
+                <div key={ti} className="text-[8px] text-gray-300 bg-gray-800/20 rounded px-1.5 py-0.5 flex items-center gap-1">
+                  <span className="text-purple-500">•</span>
+                  <span className="font-medium">{t.name}</span>
+                  <span className="text-gray-500">— {t.targetSystem}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {st?.achievedMilestones && st.achievedMilestones.length > 0 && (
+            <div className="text-[8px] text-amber-400 flex items-center gap-1 flex-wrap">
+              <Trophy className="h-2.5 w-2.5 shrink-0" />
+              {st.achievedMilestones.join(', ')}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SessionTimelineView({
   sessionTimeline,
   baseModelConfig,
@@ -1636,7 +1764,7 @@ function SessionTimelineView({
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | null>('curve');
+  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | null>('curve');
   const [expandedSessionCard, setExpandedSessionCard] = useState<number | null>(null);
   const [appliedSession, setAppliedSession] = useState<number | null>(null);
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1707,7 +1835,7 @@ function SessionTimelineView({
     playIntervalRef.current = interval;
   }, [isPlaying, selectedSession, sessionTimeline.totalSessions, currentSnapshot, onApplyToSkeleton, buildApplyPayload]);
 
-  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing') => {
+  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases') => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
@@ -2041,18 +2169,39 @@ function SessionTimelineView({
         </button>
         {expandedSection === 'sessions' && (
           <div className="p-2 bg-gray-900/30 space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
-            {sessionTimeline.sessions
-              .filter(s => s.sessionNumber >= Math.max(0, selectedSession - 2) && s.sessionNumber <= selectedSession + 3)
-              .map(s => (
-                <SessionCard
-                  key={s.sessionNumber}
-                  session={s}
-                  isExpanded={expandedSessionCard === s.sessionNumber}
-                  onToggle={() => setExpandedSessionCard(expandedSessionCard === s.sessionNumber ? null : s.sessionNumber)}
-                  actualOutcome={actualOutcomes.find(o => o.sessionNumber === s.sessionNumber)}
-                  onRecordOutcome={s.sessionNumber <= selectedSession ? onRecordOutcome : undefined}
-                />
-              ))}
+            {(() => {
+              const visibleSessions = sessionTimeline.sessions
+                .filter(s => s.sessionNumber >= Math.max(0, selectedSession - 2) && s.sessionNumber <= selectedSession + 3);
+              const phases = sessionTimeline.treatmentPhases ?? [];
+              const elements: Array<{ type: 'session' | 'phase'; key: string; session?: SessionSnapshot; phase?: TreatmentPhaseBlock }> = [];
+
+              for (const s of visibleSessions) {
+                const matchingPhase = phases.find(p => p.phaseIndex > 0 && p.startSession === s.sessionNumber);
+                if (matchingPhase) {
+                  elements.push({ type: 'phase', key: `phase-${matchingPhase.phaseIndex}`, phase: matchingPhase });
+                }
+                elements.push({ type: 'session', key: `session-${s.sessionNumber}`, session: s });
+              }
+
+              return elements.map(el => {
+                if (el.type === 'phase' && el.phase) {
+                  return <PhaseTransitionCard key={el.key} phase={el.phase} />;
+                }
+                if (el.type === 'session' && el.session) {
+                  return (
+                    <SessionCard
+                      key={el.key}
+                      session={el.session}
+                      isExpanded={expandedSessionCard === el.session.sessionNumber}
+                      onToggle={() => setExpandedSessionCard(expandedSessionCard === el.session!.sessionNumber ? null : el.session!.sessionNumber)}
+                      actualOutcome={actualOutcomes.find(o => o.sessionNumber === el.session!.sessionNumber)}
+                      onRecordOutcome={el.session.sessionNumber <= selectedSession ? onRecordOutcome : undefined}
+                    />
+                  );
+                }
+                return null;
+              });
+            })()}
             {sessionTimeline.sessions.length > 6 && (
               <div className="text-[8px] text-gray-600 text-center pt-1">
                 Showing sessions near S{selectedSession}. Use scrubber to navigate.
@@ -2061,6 +2210,28 @@ function SessionTimelineView({
           </div>
         )}
       </div>
+
+      {sessionTimeline.treatmentPhases && sessionTimeline.treatmentPhases.length > 1 && (
+        <div className="border border-cyan-700/30 rounded overflow-hidden">
+          <button
+            onClick={() => toggleSection('phases')}
+            className="w-full flex items-center justify-between px-2 py-1.5 bg-cyan-950/20 hover:bg-cyan-950/30 text-gray-300"
+          >
+            <span className="text-[9px] font-medium flex items-center gap-1">
+              <Sparkles className="h-3 w-3 text-cyan-400" />
+              Treatment Phases ({sessionTimeline.treatmentPhases.length})
+            </span>
+            {expandedSection === 'phases' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {expandedSection === 'phases' && (
+            <div className="p-2 bg-gray-900/30 space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
+              {sessionTimeline.treatmentPhases.map(phase => (
+                <PhaseTransitionCard key={phase.phaseIndex} phase={phase} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {sessionTimeline.modifications.length > 0 && (
         <div className="border border-gray-700/40 rounded overflow-hidden">
@@ -2884,10 +3055,26 @@ export default function SimulationTimelinePanel({
 
   const hasCustomTreatments = (customExercises && customExercises.length > 0) || (customTechniques && customTechniques.length > 0);
 
-  const sessionTimeline = useMemo(() => {
-    if (!hasCustomTreatments) return null;
-    try {
-      return buildSessionTimeline(
+  const [sessionTimeline, setSessionTimeline] = useState<SessionTimelineResult | null>(null);
+  const [sessionTimelineLoading, setSessionTimelineLoading] = useState(false);
+  const [phaseProgress, setPhaseProgress] = useState<PhaseProgressEvent | null>(null);
+  const [enableReQuery, setEnableReQuery] = useState(false);
+
+  useEffect(() => {
+    if (!hasCustomTreatments) {
+      setSessionTimeline(null);
+      setSessionTimelineLoading(false);
+      setPhaseProgress(null);
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    if (enableReQuery) {
+      setSessionTimelineLoading(true);
+      setPhaseProgress({ phaseIndex: 0, phaseLabel: 'Initial', status: 'building', message: 'Building initial timeline...' });
+
+      buildSessionTimelineAsync(
         customExercises ?? [],
         customTechniques ?? [],
         baseModelConfig,
@@ -2898,12 +3085,48 @@ export default function SimulationTimelinePanel({
         modifiers,
         adjustedProfile,
         actualOutcomes.length > 0 ? actualOutcomes : undefined,
-      );
-    } catch (e) {
-      console.warn('[SimTimeline] Session build failed:', e);
-      return null;
+        (event) => { if (!abortController.signal.aborted) setPhaseProgress(event); },
+        abortController.signal,
+      ).then(result => {
+        if (!abortController.signal.aborted) {
+          setSessionTimeline(result);
+          setSessionTimelineLoading(false);
+          setPhaseProgress(null);
+        }
+      }).catch(err => {
+        if (!abortController.signal.aborted) {
+          console.warn('[SimTimeline] Async session build failed:', err);
+          try {
+            const fallback = buildSessionTimeline(
+              customExercises ?? [], customTechniques ?? [], baseModelConfig, baseOverrides,
+              painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile,
+              actualOutcomes.length > 0 ? actualOutcomes : undefined,
+            );
+            setSessionTimeline(fallback);
+          } catch (e2) {
+            console.warn('[SimTimeline] Fallback also failed:', e2);
+            setSessionTimeline(null);
+          }
+          setSessionTimelineLoading(false);
+          setPhaseProgress(null);
+        }
+      });
+    } else {
+      try {
+        const result = buildSessionTimeline(
+          customExercises ?? [], customTechniques ?? [], baseModelConfig, baseOverrides,
+          painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile,
+          actualOutcomes.length > 0 ? actualOutcomes : undefined,
+        );
+        setSessionTimeline(result);
+      } catch (e) {
+        console.warn('[SimTimeline] Session build failed:', e);
+        setSessionTimeline(null);
+      }
     }
-  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile, actualOutcomes]);
+
+    return () => { abortController.abort(); };
+  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile, actualOutcomes, enableReQuery]);
 
   const weekTimeline = useMemo(() => {
     if (hasCustomTreatments) return null;
@@ -2940,10 +3163,61 @@ export default function SimulationTimelinePanel({
     />
   );
 
+  if (hasCustomTreatments && sessionTimelineLoading) {
+    return (
+      <div className="flex flex-col gap-2">
+        {patientFactorsPanel}
+        <div className="border border-gray-700/40 rounded bg-gray-900/40 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <RefreshCw className="h-4 w-4 text-cyan-400 animate-spin" />
+            <span className="text-[11px] font-medium text-gray-200">Building Adaptive Timeline</span>
+          </div>
+          {phaseProgress && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={`text-[8px] px-1.5 py-0 ${
+                  phaseProgress.status === 'requerying' ? 'border-purple-500/40 text-purple-400' :
+                  phaseProgress.status === 'building' ? 'border-cyan-500/40 text-cyan-400' :
+                  'border-emerald-500/40 text-emerald-400'
+                }`}>
+                  {phaseProgress.status === 'requerying' ? 'AI Generating' : phaseProgress.status === 'building' ? 'Computing' : 'Done'}
+                </Badge>
+                <span className="text-[9px] text-gray-400">{phaseProgress.phaseLabel} Phase</span>
+              </div>
+              <p className="text-[9px] text-gray-500">{phaseProgress.message}</p>
+              <div className="w-full bg-gray-800 rounded-full h-1">
+                <div
+                  className="bg-gradient-to-r from-cyan-500 to-purple-500 h-1 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(((phaseProgress.phaseIndex + 1) / 4) * 100, 95)}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (hasCustomTreatments && sessionTimeline) {
     return (
       <div className="flex flex-col gap-2">
         {patientFactorsPanel}
+        {!enableReQuery && (
+          <div className="border border-cyan-700/30 rounded bg-cyan-950/20 px-3 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+              <span className="text-[9px] text-gray-300">Auto-evolve treatments at phase transitions</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-5 text-[8px] px-2 border-cyan-600/40 text-cyan-400 hover:bg-cyan-900/30"
+              onClick={() => setEnableReQuery(true)}
+            >
+              Enable Re-Query Engine
+            </Button>
+          </div>
+        )}
         <SessionTimelineView
           sessionTimeline={sessionTimeline}
           baseModelConfig={baseModelConfig}

@@ -54,6 +54,7 @@ import {
   type CompensationPrediction,
   type FunctionalMilestone,
   type InterSessionHealing,
+  type SessionApplyPayload,
 } from "@/lib/simulationTimelineEngine";
 import {
   type PatientFactors,
@@ -88,7 +89,7 @@ interface SimulationTimelinePanelProps {
   }>;
   bodyWeightKg: number;
   biomechanicsOutput?: unknown | null;
-  onApplyWeekToSkeleton?: (modelConfig: Record<string, Record<string, number>>, overrides: Record<string, Partial<MuscleOverride>>) => void;
+  onApplyWeekToSkeleton?: (payload: SessionApplyPayload) => void;
   customExercises?: CustomExercise[] | null;
   customTechniques?: CustomTechnique[] | null;
   extractionResult?: ClinicalExtractionResult | null;
@@ -1344,7 +1345,7 @@ function SessionTimelineView({
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
   baseOverrides: Record<string, Partial<MuscleOverride>>;
-  onApplyToSkeleton?: (modelConfig: Record<string, Record<string, number>>, overrides: Record<string, Partial<MuscleOverride>>) => void;
+  onApplyToSkeleton?: (payload: SessionApplyPayload) => void;
   activeCondition?: ConditionRecoveryProfile | null;
   modifiers?: PatientModifierProfile | null;
 }) {
@@ -1372,18 +1373,26 @@ function SessionTimelineView({
     setSelectedSession(value[0]);
   }, []);
 
+  const buildApplyPayload = useCallback((snap: SessionSnapshot): SessionApplyPayload => ({
+    modelConfig: snap.modelConfig,
+    overrides: snap.overrides,
+    painMarkerUpdates: snap.painMarkerPredictions.map(p => ({ markerId: p.markerId, predictedSeverity: p.predictedSeverity })),
+    posturalUpdates: snap.posturalPredictions.map(p => ({ sliderId: p.sliderId, predictedValue: p.predictedValue })),
+    compensationUpdates: snap.compensationPredictions.map(c => ({ patternId: c.patternId, predictedSeverity: c.predictedSeverity, resolutionPercent: c.resolutionPercent })),
+  }), []);
+
   const handleApply = useCallback(() => {
     if (!currentSnapshot || !onApplyToSkeleton) return;
-    onApplyToSkeleton(currentSnapshot.modelConfig, currentSnapshot.overrides);
+    onApplyToSkeleton(buildApplyPayload(currentSnapshot));
     setAppliedSession(selectedSession);
-  }, [currentSnapshot, onApplyToSkeleton, selectedSession]);
+  }, [currentSnapshot, onApplyToSkeleton, selectedSession, buildApplyPayload]);
 
   useEffect(() => {
     if (isPlaying && currentSnapshot && onApplyToSkeleton) {
-      onApplyToSkeleton(currentSnapshot.modelConfig, currentSnapshot.overrides);
+      onApplyToSkeleton(buildApplyPayload(currentSnapshot));
       setAppliedSession(currentSnapshot.sessionNumber);
     }
-  }, [isPlaying, currentSnapshot, onApplyToSkeleton]);
+  }, [isPlaying, currentSnapshot, onApplyToSkeleton, buildApplyPayload]);
 
   const handlePlay = useCallback(() => {
     if (isPlaying) {
@@ -1396,7 +1405,7 @@ function SessionTimelineView({
     }
     setIsPlaying(true);
     if (currentSnapshot && onApplyToSkeleton) {
-      onApplyToSkeleton(currentSnapshot.modelConfig, currentSnapshot.overrides);
+      onApplyToSkeleton(buildApplyPayload(currentSnapshot));
       setAppliedSession(selectedSession);
     }
     let sess = selectedSession;
@@ -1411,7 +1420,7 @@ function SessionTimelineView({
       setSelectedSession(sess);
     }, 600);
     playIntervalRef.current = interval;
-  }, [isPlaying, selectedSession, sessionTimeline.totalSessions, currentSnapshot, onApplyToSkeleton]);
+  }, [isPlaying, selectedSession, sessionTimeline.totalSessions, currentSnapshot, onApplyToSkeleton, buildApplyPayload]);
 
   const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing') => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -2690,7 +2699,7 @@ function WeekTimelineView({
   onApplyWeekToSkeleton,
 }: {
   timeline: SimulationTimelineResult;
-  onApplyWeekToSkeleton?: (modelConfig: Record<string, Record<string, number>>, overrides: Record<string, Partial<MuscleOverride>>) => void;
+  onApplyWeekToSkeleton?: (payload: SessionApplyPayload) => void;
 }) {
   const [selectedWeek, setSelectedWeek] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2717,7 +2726,13 @@ function WeekTimelineView({
 
   const handleApply = useCallback(() => {
     if (!currentSnapshot || !onApplyWeekToSkeleton) return;
-    onApplyWeekToSkeleton(currentSnapshot.modelConfig, currentSnapshot.overrides);
+    onApplyWeekToSkeleton({
+      modelConfig: currentSnapshot.modelConfig,
+      overrides: currentSnapshot.overrides,
+      painMarkerUpdates: [],
+      posturalUpdates: [],
+      compensationUpdates: [],
+    });
     setAppliedWeek(selectedWeek);
   }, [currentSnapshot, onApplyWeekToSkeleton, selectedWeek]);
 

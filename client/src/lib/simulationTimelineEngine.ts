@@ -737,6 +737,14 @@ export interface SessionSnapshot {
   isSetbackSession: boolean;
 }
 
+export interface SessionApplyPayload {
+  modelConfig: Record<string, Record<string, number>>;
+  overrides: Record<string, Partial<MuscleOverride>>;
+  painMarkerUpdates: Array<{ markerId: string; predictedSeverity: number }>;
+  posturalUpdates: Array<{ sliderId: string; predictedValue: number }>;
+  compensationUpdates: Array<{ patternId: string; predictedSeverity: number; resolutionPercent: number }>;
+}
+
 export interface MultiDimensionalBaseline {
   romBaselines: RomPrediction[];
   painBaselines: PainMarkerPrediction[];

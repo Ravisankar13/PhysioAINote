@@ -3553,9 +3553,9 @@ ${ddxList}`;
     setMechanismActiveTab('mechanism');
   }, [whatIfSimulatedConfig, modelConfig, effectiveModelConfig]);
 
-  const handleApplySimTimelineWeek = useCallback((simConfig: Record<string, any>, simOverrides: Record<string, Partial<import('@/lib/muscleBiomechanicsEngine').MuscleOverride>>) => {
+  const handleApplySimTimelineWeek = useCallback((payload: import('@/lib/simulationTimelineEngine').SessionApplyPayload) => {
     const newModelConfig = JSON.parse(JSON.stringify(modelConfig));
-    for (const [joint, params] of Object.entries(simConfig)) {
+    for (const [joint, params] of Object.entries(payload.modelConfig)) {
       if (typeof params === 'object' && params !== null) {
         if (!newModelConfig[joint]) newModelConfig[joint] = {};
         const effectiveJoint = (effectiveModelConfig[joint] as Record<string, number> | undefined) ?? {};
@@ -3571,8 +3571,28 @@ ${ddxList}`;
       }
     }
     setModelConfig(newModelConfig);
-    for (const [key, val] of Object.entries(simOverrides)) {
+    for (const [key, val] of Object.entries(payload.overrides)) {
       setMuscleOverrides(prev => ({ ...prev, [key]: { ...prev[key], ...val } }));
+    }
+    if (payload.painMarkerUpdates.length > 0) {
+      setPainMarkers(prev => prev.map(m => {
+        const update = payload.painMarkerUpdates.find(u => u.markerId === m.id);
+        if (update) {
+          return { ...m, severity: Math.max(0, Math.min(10, update.predictedSeverity)) };
+        }
+        return m;
+      }));
+    }
+    if (payload.posturalUpdates.length > 0) {
+      const posturalConfig = JSON.parse(JSON.stringify(newModelConfig));
+      for (const pu of payload.posturalUpdates) {
+        const parts = pu.sliderId.split('.');
+        if (parts.length === 2) {
+          if (!posturalConfig[parts[0]]) posturalConfig[parts[0]] = {};
+          posturalConfig[parts[0]][parts[1]] = pu.predictedValue;
+        }
+      }
+      setModelConfig(posturalConfig);
     }
   }, [modelConfig, effectiveModelConfig]);
 

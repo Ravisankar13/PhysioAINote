@@ -385,8 +385,16 @@ function SessionRecoveryCurve({
 
         {funcMilestoneAchieved.map(s => {
           const mx = getX(s);
+          const ms = s.functionalMilestones.find(m => m.achieved && m.triggeredAtSession === s.sessionNumber);
           return (
-            <circle key={`fm-${s.sessionNumber}`} cx={mx} cy={padding.top + chartH + 3} r={2.5} fill="#eab308" stroke="#fff" strokeWidth={0.5} opacity={0.9} />
+            <g key={`fm-${s.sessionNumber}`}>
+              <circle cx={mx} cy={padding.top + chartH + 3} r={2.5} fill="#eab308" stroke="#fff" strokeWidth={0.5} opacity={0.9} />
+              {ms && (
+                <text x={mx} y={padding.top + chartH + 10} textAnchor="middle" fill="#eab308" fontSize={5} opacity={0.7}>
+                  {ms.label.length > 12 ? ms.label.substring(0, 12) + '…' : ms.label}
+                </text>
+              )}
+            </g>
           );
         })}
 
@@ -823,7 +831,8 @@ function SessionCard({
                   <div className="text-gray-200 font-medium truncate">{t.name}</div>
                   <div className="text-gray-500 text-[8px]">{t.dosageLabel}</div>
                   {contribs.length > 0 && (
-                    <div className="flex gap-1.5 mt-0.5">
+                    <div className="flex gap-1.5 mt-0.5 items-center">
+                      <span className="text-[6px] text-gray-600 italic">est.</span>
                       {contribs.map((c, ci) => (
                         <span key={ci} className={`text-[7px] ${c.color}`}>{c.value} {c.label}</span>
                       ))}

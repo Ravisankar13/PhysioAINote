@@ -803,34 +803,47 @@ export function buildSessionTimeline(
   let plateauCount = 0;
   const colors = ['#22c55e', '#3b82f6', '#a855f7', '#f59e0b', '#06b6d4', '#ec4899', '#f97316', '#8b5cf6', '#10b981', '#ef4444'];
 
-  for (let s = 0; s <= totalSessions; s++) {
-    const dayOffset = s * sessionIntervalDays;
+  const treatmentSessionCounts = new Map<string, number>();
+  for (const t of treatments) {
+    treatmentSessionCounts.set(`${t.target}_${t.interventionType}`, 0);
+  }
+
+  for (let s = 1; s <= totalSessions; s++) {
+    const dayOffset = (s - 1) * sessionIntervalDays;
     const sessionTreatments: SessionTreatment[] = [];
 
     for (const t of treatments) {
       const treatmentInterval = parseFrequencyToDaysInterval(t.frequency);
-      if (s === 0 || dayOffset % Math.max(1, Math.round(treatmentInterval)) === 0 || treatmentInterval <= sessionIntervalDays) {
+      const roundedInterval = Math.max(1, Math.round(treatmentInterval));
+      if (treatmentInterval <= sessionIntervalDays || dayOffset % roundedInterval === 0) {
         sessionTreatments.push(t);
       }
+    }
+
+    for (const t of sessionTreatments) {
+      const key = `${t.target}_${t.interventionType}`;
+      treatmentSessionCounts.set(key, (treatmentSessionCounts.get(key) ?? 0) + 1);
     }
 
     const scenarios: WhatIfScenario[] = [];
     const seen = new Set<string>();
     let colorIdx = 0;
 
-    for (const t of treatments) {
+    for (const t of sessionTreatments) {
       const key = `${t.target}_${t.interventionType}`;
       if (seen.has(key)) {
         const existing = scenarios.find(sc => sc.id.startsWith(`sess_${key}_`));
         if (existing) {
-          const doseResp = getSessionDoseResponse(s, totalSessions, t.interventionType);
+          const cumulativeCount = treatmentSessionCounts.get(key) ?? 1;
+          const doseResp = getSessionDoseResponse(cumulativeCount, totalSessions, t.interventionType);
           existing.magnitude = Math.min(existing.magnitude + t.magnitude * doseResp * 0.3, existing.magnitude * 1.5);
         }
         continue;
       }
       seen.add(key);
 
-      const doseResp = getSessionDoseResponse(s, totalSessions, t.interventionType);
+      const cumulativeCount = treatmentSessionCounts.get(key) ?? 1;
+      const doseResp = getSessionDoseResponse(cumulativeCount, totalSessions, t.interventionType);
       const scaledMag = t.magnitude * doseResp;
       if (scaledMag < 0.5) continue;
 
@@ -847,22 +860,23 @@ export function buildSessionTimeline(
       });
     }
 
-    if (s === 0 || scenarios.length === 0) {
+    if (scenarios.length === 0) {
+      const prev = sessions[sessions.length - 1];
       sessions.push({
         sessionNumber: s,
         dayOffset,
         treatments: sessionTreatments,
-        riskScore: Math.round(startingRisk),
-        riskLevel: getRiskLevelFromScore(startingRisk),
-        painPrediction: Math.round(startingRisk * 0.8),
-        slingIntegrity: Math.round(startingSlingIntegrity),
-        forceReduction: 0,
-        compensationResolution: 0,
+        riskScore: prev?.riskScore ?? Math.round(startingRisk),
+        riskLevel: prev?.riskLevel ?? getRiskLevelFromScore(startingRisk),
+        painPrediction: prev?.painPrediction ?? Math.round(startingRisk * 0.8),
+        slingIntegrity: prev?.slingIntegrity ?? Math.round(startingSlingIntegrity),
+        forceReduction: prev?.forceReduction ?? 0,
+        compensationResolution: prev?.compensationResolution ?? 0,
         doseResponseFraction: 0,
         activeScenarios: scenarios,
-        modelConfig: JSON.parse(JSON.stringify(baseModelConfig)),
-        overrides: JSON.parse(JSON.stringify(baseOverrides)),
-        forceMultiplier: 1.0,
+        modelConfig: prev?.modelConfig ?? JSON.parse(JSON.stringify(baseModelConfig)),
+        overrides: prev?.overrides ?? JSON.parse(JSON.stringify(baseOverrides)),
+        forceMultiplier: prev?.forceMultiplier ?? 1.0,
       });
       continue;
     }
@@ -895,7 +909,11 @@ export function buildSessionTimeline(
 
     const forceReduction = (1 - forceMultiplier) * 100;
     const avgDose = scenarios.length > 0
-      ? scenarios.reduce((sum, sc) => sum + getSessionDoseResponse(s, totalSessions, sc.interventionType), 0) / scenarios.length
+      ? scenarios.reduce((sum, sc) => {
+          const key = `${sc.target}_${sc.interventionType}`;
+          const cumCount = treatmentSessionCounts.get(key) ?? 1;
+          return sum + getSessionDoseResponse(cumCount, totalSessions, sc.interventionType);
+        }, 0) / scenarios.length
       : 0;
     const compensationResolution = avgDose * 60;
 

@@ -602,7 +602,7 @@ function SessionTimelineView({
   baseOverrides: Record<string, Partial<MuscleOverride>>;
   onApplyToSkeleton?: (modelConfig: Record<string, Record<string, number>>, overrides: Record<string, Partial<MuscleOverride>>) => void;
 }) {
-  const [selectedSession, setSelectedSession] = useState(0);
+  const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | null>('curve');
   const [expandedSessionCard, setExpandedSessionCard] = useState<number | null>(null);
@@ -717,9 +717,9 @@ function SessionTimelineView({
 
         <div className="mt-2 flex items-center gap-2">
           <button
-            onClick={() => setSelectedSession(Math.max(0, selectedSession - 1))}
+            onClick={() => setSelectedSession(Math.max(1, selectedSession - 1))}
             className="p-0.5 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200"
-            disabled={selectedSession === 0}
+            disabled={selectedSession <= 1}
           >
             <SkipBack className="h-3 w-3" />
           </button>
@@ -733,7 +733,7 @@ function SessionTimelineView({
             <Slider
               value={[selectedSession]}
               onValueChange={handleSessionChange}
-              min={0}
+              min={1}
               max={sessionTimeline.totalSessions}
               step={1}
               className="w-full"
@@ -972,7 +972,7 @@ function SessionTimelineView({
         <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">Before / After</div>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-0.5">
-            <div className="text-[7px] text-gray-600 uppercase">Session 0</div>
+            <div className="text-[7px] text-gray-600 uppercase">Baseline</div>
             <SummaryRow label="Risk" value={sessionTimeline.startingState.riskScore} color="red" />
             <SummaryRow label="Sling" value={`${sessionTimeline.startingState.slingIntegrity}%`} color="amber" />
           </div>

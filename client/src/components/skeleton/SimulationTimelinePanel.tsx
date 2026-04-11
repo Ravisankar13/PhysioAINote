@@ -117,6 +117,16 @@ const MILESTONE_COLORS: Record<string, string> = {
   sling_improvement: 'text-violet-400',
 };
 
+type SessionCurveTrack = 'risk' | 'pain' | 'sling' | 'rom' | 'comp';
+
+const SESSION_TRACK_CONFIG: Record<SessionCurveTrack, { label: string; color: string; dash?: string }> = {
+  risk: { label: 'Risk', color: '#ef4444' },
+  pain: { label: 'Pain', color: '#f59e0b', dash: '3,2' },
+  sling: { label: 'Sling', color: '#8b5cf6', dash: '2,2' },
+  rom: { label: 'ROM', color: '#06b6d4', dash: '4,1' },
+  comp: { label: 'Comp', color: '#f472b6', dash: '2,3' },
+};
+
 function SessionRecoveryCurve({
   sessions,
   selectedSession,
@@ -132,30 +142,59 @@ function SessionRecoveryCurve({
   modifications: SessionModification[];
   onSessionClick: (session: number) => void;
 }) {
+  const [enabledTracks, setEnabledTracks] = useState<Set<SessionCurveTrack>>(() => new Set(['risk', 'pain', 'sling']));
+
+  const toggleTrack = useCallback((track: SessionCurveTrack) => {
+    setEnabledTracks(prev => {
+      const next = new Set(prev);
+      if (next.has(track)) {
+        if (next.size > 1) next.delete(track);
+      } else {
+        next.add(track);
+      }
+      return next;
+    });
+  }, []);
+
   const width = 280;
-  const height = 110;
+  const height = 120;
   const padding = { top: 10, right: 10, bottom: 22, left: 28 };
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
 
-  const maxRisk = Math.max(100, ...sessions.map(s => s.riskScore));
   const maxDay = sessions.length > 0 ? sessions[sessions.length - 1].dayOffset : 1;
 
-  const riskPoints = sessions.map(s => ({
-    x: padding.left + (maxDay > 0 ? (s.dayOffset / maxDay) : (s.sessionNumber / totalSessions)) * chartW,
-    y: padding.top + (1 - s.riskScore / maxRisk) * chartH,
-    session: s.sessionNumber,
-  }));
+  const getX = useCallback((s: SessionSnapshot) => {
+    return padding.left + (maxDay > 0 ? (s.dayOffset / maxDay) : (s.sessionNumber / totalSessions)) * chartW;
+  }, [maxDay, totalSessions, chartW]);
 
-  const painPoints = sessions.map(s => ({
-    x: padding.left + (maxDay > 0 ? (s.dayOffset / maxDay) : (s.sessionNumber / totalSessions)) * chartW,
-    y: padding.top + (1 - s.painPrediction / maxRisk) * chartH,
-  }));
+  const avgRom = useCallback((s: SessionSnapshot) => {
+    if (s.romPredictions.length === 0) return 50;
+    return s.romPredictions.reduce((sum, r) => sum + r.predictedDegrees / r.normalDegrees * 100, 0) / s.romPredictions.length;
+  }, []);
 
-  const slingPoints = sessions.map(s => ({
-    x: padding.left + (maxDay > 0 ? (s.dayOffset / maxDay) : (s.sessionNumber / totalSessions)) * chartW,
-    y: padding.top + (1 - s.slingIntegrity / maxRisk) * chartH,
-  }));
+  const trackData = useMemo(() => {
+    const data: Record<SessionCurveTrack, { x: number; y: number; session: number }[]> = {
+      risk: [], pain: [], sling: [], rom: [], comp: [],
+    };
+    for (const s of sessions) {
+      const x = getX(s);
+      data.risk.push({ x, y: s.riskScore, session: s.sessionNumber });
+      data.pain.push({ x, y: s.painPrediction, session: s.sessionNumber });
+      data.sling.push({ x, y: s.slingIntegrity, session: s.sessionNumber });
+      data.rom.push({ x, y: avgRom(s), session: s.sessionNumber });
+      data.comp.push({ x, y: 100 - s.compensationResolution, session: s.sessionNumber });
+    }
+    return data;
+  }, [sessions, getX, avgRom]);
+
+  const toSvgPoints = useCallback((pts: { x: number; y: number; session: number }[]) => {
+    return pts.map(p => ({
+      x: p.x,
+      y: padding.top + (1 - p.y / 100) * chartH,
+      session: p.session,
+    }));
+  }, [chartH]);
 
   const makePath = (pts: { x: number; y: number }[]) => {
     if (pts.length === 0) return '';
@@ -169,9 +208,7 @@ function SessionRecoveryCurve({
   };
 
   const selectedSnap = sessions.find(s => s.sessionNumber === selectedSession);
-  const selectedX = selectedSnap
-    ? padding.left + (maxDay > 0 ? (selectedSnap.dayOffset / maxDay) : (selectedSession / totalSessions)) * chartW
-    : padding.left;
+  const selectedX = selectedSnap ? getX(selectedSnap) : padding.left;
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -191,64 +228,125 @@ function SessionRecoveryCurve({
   };
 
   const modSessions = new Set(modifications.map(m => m.sessionNumber));
+  const breakthroughSessions = sessions.filter(s => s.isBreakthroughSession);
+  const setbackSessions = sessions.filter(s => s.isSetbackSession);
+  const funcMilestoneAchieved = sessions.filter(s => s.functionalMilestones.some(m => m.achieved && m.achievedAtSession === s.sessionNumber));
 
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      className="w-full cursor-pointer"
-      onClick={handleClick}
-    >
-      {[0, 25, 50, 75, 100].map(v => {
-        const y = padding.top + (1 - v / maxRisk) * chartH;
-        return (
-          <g key={v}>
-            <line x1={padding.left} y1={y} x2={padding.left + chartW} y2={y} stroke="#374151" strokeWidth={0.5} strokeDasharray="2,2" />
-            <text x={padding.left - 3} y={y + 3} textAnchor="end" fill="#6b7280" fontSize={7}>{v}</text>
-          </g>
-        );
-      })}
+    <div>
+      <div className="flex gap-0.5 mb-1 flex-wrap">
+        {(Object.entries(SESSION_TRACK_CONFIG) as [SessionCurveTrack, typeof SESSION_TRACK_CONFIG.risk][]).map(([key, cfg]) => (
+          <button
+            key={key}
+            onClick={(e) => { e.stopPropagation(); toggleTrack(key); }}
+            className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[7px] transition-colors ${
+              enabledTracks.has(key) ? 'bg-gray-700/60 text-gray-200' : 'bg-gray-800/30 text-gray-600'
+            }`}
+          >
+            <div className="w-2 h-[2px] rounded" style={{ backgroundColor: enabledTracks.has(key) ? cfg.color : '#4b5563' }} />
+            {cfg.label}
+          </button>
+        ))}
+      </div>
 
-      <path d={makeAreaPath(riskPoints)} fill="url(#sessRiskGrad)" opacity={0.3} />
-      <path d={makePath(riskPoints)} fill="none" stroke="#ef4444" strokeWidth={1.5} />
-      <path d={makePath(painPoints)} fill="none" stroke="#f59e0b" strokeWidth={1} strokeDasharray="3,2" />
-      <path d={makePath(slingPoints)} fill="none" stroke="#8b5cf6" strokeWidth={1} strokeDasharray="2,2" />
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full cursor-pointer"
+        onClick={handleClick}
+      >
+        {[0, 25, 50, 75, 100].map(v => {
+          const y = padding.top + (1 - v / 100) * chartH;
+          return (
+            <g key={v}>
+              <line x1={padding.left} y1={y} x2={padding.left + chartW} y2={y} stroke="#374151" strokeWidth={0.5} strokeDasharray="2,2" />
+              <text x={padding.left - 3} y={y + 3} textAnchor="end" fill="#6b7280" fontSize={7}>{v}</text>
+            </g>
+          );
+        })}
 
-      {sessions.filter(s => modSessions.has(s.sessionNumber)).map(s => {
-        const mx = padding.left + (maxDay > 0 ? (s.dayOffset / maxDay) : (s.sessionNumber / totalSessions)) * chartW;
-        return (
-          <line key={`mod-${s.sessionNumber}`} x1={mx} y1={padding.top} x2={mx} y2={padding.top + chartH} stroke="#f59e0b" strokeWidth={0.6} strokeDasharray="2,2" opacity={0.5} />
-        );
-      })}
+        {enabledTracks.has('risk') && (
+          <>
+            <path d={makeAreaPath(toSvgPoints(trackData.risk))} fill="url(#sessRiskGrad)" opacity={0.2} />
+            <path d={makePath(toSvgPoints(trackData.risk))} fill="none" stroke="#ef4444" strokeWidth={1.5} />
+          </>
+        )}
+        {enabledTracks.has('pain') && (
+          <path d={makePath(toSvgPoints(trackData.pain))} fill="none" stroke="#f59e0b" strokeWidth={1} strokeDasharray="3,2" />
+        )}
+        {enabledTracks.has('sling') && (
+          <path d={makePath(toSvgPoints(trackData.sling))} fill="none" stroke="#8b5cf6" strokeWidth={1} strokeDasharray="2,2" />
+        )}
+        {enabledTracks.has('rom') && (
+          <path d={makePath(toSvgPoints(trackData.rom))} fill="none" stroke="#06b6d4" strokeWidth={1} strokeDasharray="4,1" />
+        )}
+        {enabledTracks.has('comp') && (
+          <path d={makePath(toSvgPoints(trackData.comp))} fill="none" stroke="#f472b6" strokeWidth={1} strokeDasharray="2,3" />
+        )}
 
-      <line x1={selectedX} y1={padding.top} x2={selectedX} y2={padding.top + chartH} stroke="#22d3ee" strokeWidth={1.5} />
-      {riskPoints.find(p => p.session === selectedSession) && (
-        <circle
-          cx={riskPoints.find(p => p.session === selectedSession)!.x}
-          cy={riskPoints.find(p => p.session === selectedSession)!.y}
-          r={3}
-          fill="#ef4444"
-          stroke="#fff"
-          strokeWidth={1}
-        />
-      )}
+        {sessions.filter(s => modSessions.has(s.sessionNumber)).map(s => {
+          const mx = getX(s);
+          return (
+            <line key={`mod-${s.sessionNumber}`} x1={mx} y1={padding.top} x2={mx} y2={padding.top + chartH} stroke="#f59e0b" strokeWidth={0.6} strokeDasharray="2,2" opacity={0.4} />
+          );
+        })}
 
-      {sessions.length > 0 && (
-        <>
-          <text x={padding.left} y={height - 2} fill="#6b7280" fontSize={7}>Day 0</text>
-          <text x={padding.left + chartW} y={height - 2} textAnchor="end" fill="#6b7280" fontSize={7}>Day {maxDay}</text>
-          <text x={padding.left + chartW / 2} y={height - 2} textAnchor="middle" fill="#4b5563" fontSize={6}>{totalSessions} sessions</text>
-        </>
-      )}
+        {breakthroughSessions.map(s => {
+          const bx = getX(s);
+          return (
+            <g key={`bt-${s.sessionNumber}`}>
+              <line x1={bx} y1={padding.top} x2={bx} y2={padding.top + chartH} stroke="#10b981" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.6} />
+              <polygon points={`${bx},${padding.top + 2} ${bx - 3},${padding.top + 8} ${bx + 3},${padding.top + 8}`} fill="#10b981" opacity={0.8} />
+            </g>
+          );
+        })}
 
-      <defs>
-        <linearGradient id="sessRiskGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ef4444" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-    </svg>
+        {setbackSessions.map(s => {
+          const sx = getX(s);
+          return (
+            <g key={`sb-${s.sessionNumber}`}>
+              <line x1={sx} y1={padding.top} x2={sx} y2={padding.top + chartH} stroke="#ef4444" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.6} />
+              <polygon points={`${sx},${padding.top + chartH - 2} ${sx - 3},${padding.top + chartH - 8} ${sx + 3},${padding.top + chartH - 8}`} fill="#ef4444" opacity={0.8} />
+            </g>
+          );
+        })}
+
+        {funcMilestoneAchieved.map(s => {
+          const mx = getX(s);
+          return (
+            <circle key={`fm-${s.sessionNumber}`} cx={mx} cy={padding.top + chartH + 3} r={2.5} fill="#eab308" stroke="#fff" strokeWidth={0.5} opacity={0.9} />
+          );
+        })}
+
+        <line x1={selectedX} y1={padding.top} x2={selectedX} y2={padding.top + chartH} stroke="#22d3ee" strokeWidth={1.5} />
+        {enabledTracks.has('risk') && toSvgPoints(trackData.risk).find(p => p.session === selectedSession) && (
+          <circle
+            cx={toSvgPoints(trackData.risk).find(p => p.session === selectedSession)!.x}
+            cy={toSvgPoints(trackData.risk).find(p => p.session === selectedSession)!.y}
+            r={3}
+            fill="#ef4444"
+            stroke="#fff"
+            strokeWidth={1}
+          />
+        )}
+
+        {sessions.length > 0 && (
+          <>
+            <text x={padding.left} y={height - 2} fill="#6b7280" fontSize={7}>Day 0</text>
+            <text x={padding.left + chartW} y={height - 2} textAnchor="end" fill="#6b7280" fontSize={7}>Day {maxDay}</text>
+            <text x={padding.left + chartW / 2} y={height - 2} textAnchor="middle" fill="#4b5563" fontSize={6}>{totalSessions} sessions</text>
+          </>
+        )}
+
+        <defs>
+          <linearGradient id="sessRiskGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ef4444" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
   );
 }
 
@@ -495,6 +593,13 @@ function SessionCard({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const exerciseCount = session.treatments.filter(t => t.type === 'exercise').length;
+  const manualCount = session.treatments.filter(t => t.type === 'manual_therapy').length;
+  const isRestSession = session.treatments.length === 0;
+  const avgRomPct = session.romPredictions.length > 0
+    ? (session.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.normalDegrees * 100, 0) / session.romPredictions.length).toFixed(0)
+    : null;
+
   return (
     <div className={`border rounded overflow-hidden transition-colors ${isExpanded ? 'border-cyan-500/40 bg-gray-800/60' : 'border-gray-700/30 bg-gray-800/30'}`}>
       <button
@@ -504,16 +609,28 @@ function SessionCard({
         <span className="text-[9px] font-mono text-cyan-500/70 min-w-[28px]">S{session.sessionNumber}</span>
         <span className="text-[8px] text-gray-500">Day {session.dayOffset}</span>
         <div className="flex-1 flex items-center gap-1">
-          {session.treatments.filter(t => t.type === 'exercise').length > 0 && (
+          {session.isBreakthroughSession && (
+            <span className="text-[7px] text-emerald-400">★</span>
+          )}
+          {session.isSetbackSession && (
+            <span className="text-[7px] text-red-400">▼</span>
+          )}
+          {exerciseCount > 0 && (
             <Badge variant="outline" className="text-[7px] py-0 px-1 border-violet-500/30 text-violet-400">
               <Dumbbell className="h-2 w-2 mr-0.5" />
-              {session.treatments.filter(t => t.type === 'exercise').length}
+              {exerciseCount}
             </Badge>
           )}
-          {session.treatments.filter(t => t.type === 'manual_therapy').length > 0 && (
+          {manualCount > 0 && (
             <Badge variant="outline" className="text-[7px] py-0 px-1 border-rose-500/30 text-rose-400">
               <Hand className="h-2 w-2 mr-0.5" />
-              {session.treatments.filter(t => t.type === 'manual_therapy').length}
+              {manualCount}
+            </Badge>
+          )}
+          {isRestSession && (
+            <Badge variant="outline" className="text-[7px] py-0 px-1 border-gray-500/30 text-gray-400">
+              <RefreshCw className="h-2 w-2 mr-0.5" />
+              Rest
             </Badge>
           )}
         </div>
@@ -524,6 +641,27 @@ function SessionCard({
       </button>
       {isExpanded && (
         <div className="px-2 pb-2 space-y-1.5 border-t border-gray-700/30 pt-1.5">
+          {isRestSession && session.interSessionHealing && (
+            <div className="bg-emerald-500/10 rounded border border-emerald-500/20 px-2 py-1">
+              <div className="text-[8px] text-emerald-300 font-medium mb-0.5">Natural Healing (Rest Day)</div>
+              <div className="grid grid-cols-3 gap-1 text-[7px]">
+                <div>
+                  <span className="text-gray-500">Tissue: </span>
+                  <span className="text-emerald-400">+{session.interSessionHealing.tissueRemodeling.toFixed(1)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Inflam: </span>
+                  <span className="text-cyan-400">-{session.interSessionHealing.inflammationResolution.toFixed(1)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Net: </span>
+                  <span className={session.interSessionHealing.netHealingDelta > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                    {session.interSessionHealing.netHealingDelta > 0 ? '+' : ''}{session.interSessionHealing.netHealingDelta.toFixed(1)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
           {session.treatments.map((t, i) => (
             <div key={i} className="flex items-start gap-1.5 text-[9px]">
               {t.type === 'exercise' ? (
@@ -540,7 +678,7 @@ function SessionCard({
               </Badge>
             </div>
           ))}
-          <div className="grid grid-cols-3 gap-1 mt-1">
+          <div className="grid grid-cols-5 gap-1 mt-1">
             <div className="text-center">
               <div className="text-[7px] text-gray-500">Pain</div>
               <div className={`text-[9px] font-medium ${session.painPrediction > 50 ? 'text-red-400' : session.painPrediction > 25 ? 'text-amber-400' : 'text-emerald-400'}`}>
@@ -559,7 +697,22 @@ function SessionCard({
                 {(session.doseResponseFraction * 100).toFixed(0)}%
               </div>
             </div>
+            {avgRomPct && (
+              <div className="text-center">
+                <div className="text-[7px] text-gray-500">ROM</div>
+                <div className="text-[9px] font-medium text-cyan-300">{avgRomPct}%</div>
+              </div>
+            )}
+            <div className="text-center">
+              <div className="text-[7px] text-gray-500">Comp</div>
+              <div className="text-[9px] font-medium text-pink-400">{session.compensationResolution.toFixed(0)}%</div>
+            </div>
           </div>
+          {session.recoveryPhaseLabel && (
+            <div className="text-[7px] text-gray-500 mt-0.5">
+              Phase: <span className="text-gray-300">{session.recoveryPhaseLabel}</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -987,11 +1140,15 @@ function SessionTimelineView({
   baseModelConfig,
   baseOverrides,
   onApplyToSkeleton,
+  activeCondition,
+  modifiers,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
   baseOverrides: Record<string, Partial<MuscleOverride>>;
   onApplyToSkeleton?: (modelConfig: Record<string, Record<string, number>>, overrides: Record<string, Partial<MuscleOverride>>) => void;
+  activeCondition?: ConditionRecoveryProfile | null;
+  modifiers?: PatientModifierProfile | null;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1054,6 +1211,8 @@ function SessionTimelineView({
   const riskDelta = sessionTimeline.startingState.riskScore - (currentSnapshot?.riskScore ?? sessionTimeline.startingState.riskScore);
   const slingDelta = (currentSnapshot?.slingIntegrity ?? sessionTimeline.startingState.slingIntegrity) - sessionTimeline.startingState.slingIntegrity;
 
+  const lastSession = sessionTimeline.sessions.length > 0 ? sessionTimeline.sessions[sessionTimeline.sessions.length - 1] : null;
+
   const currentMods = sessionTimeline.modifications.filter(m => m.sessionNumber === selectedSession);
   const nearbyMods = sessionTimeline.modifications.filter(m =>
     Math.abs(m.sessionNumber - selectedSession) <= 2 && m.sessionNumber !== selectedSession
@@ -1090,6 +1249,48 @@ function SessionTimelineView({
           <span className="text-[8px] text-gray-400">every {sessionTimeline.sessionIntervalDays}d</span>
         </div>
       </div>
+
+      {(activeCondition || modifiers) && (
+        <div className="bg-gray-800/40 rounded border border-gray-700/40 p-1.5">
+          <div className="flex items-center gap-1 flex-wrap">
+            {activeCondition && (
+              <Badge variant="outline" className="text-[7px] py-0 px-1.5 border-cyan-500/30 text-cyan-400">
+                <Target className="h-2 w-2 mr-0.5" />
+                {activeCondition.conditionName}
+              </Badge>
+            )}
+            {currentSnapshot?.recoveryPhaseLabel && (
+              <Badge variant="outline" className="text-[7px] py-0 px-1.5 border-violet-500/30 text-violet-400">
+                {currentSnapshot.recoveryPhaseLabel}
+              </Badge>
+            )}
+            {modifiers && (
+              <>
+                {modifiers.overallRecoveryMultiplier < 0.85 && (
+                  <Badge variant="outline" className="text-[7px] py-0 px-1 border-red-500/30 text-red-400">
+                    Recovery ×{modifiers.overallRecoveryMultiplier.toFixed(2)}
+                  </Badge>
+                )}
+                {modifiers.overallRecoveryMultiplier >= 0.85 && modifiers.overallRecoveryMultiplier <= 1.15 && (
+                  <Badge variant="outline" className="text-[7px] py-0 px-1 border-gray-500/30 text-gray-400">
+                    Recovery ×{modifiers.overallRecoveryMultiplier.toFixed(2)}
+                  </Badge>
+                )}
+                {modifiers.overallRecoveryMultiplier > 1.15 && (
+                  <Badge variant="outline" className="text-[7px] py-0 px-1 border-emerald-500/30 text-emerald-400">
+                    Recovery ×{modifiers.overallRecoveryMultiplier.toFixed(2)}
+                  </Badge>
+                )}
+                {modifiers.painSensitivityMultiplier > 1.2 && (
+                  <Badge variant="outline" className="text-[7px] py-0 px-1 border-amber-500/30 text-amber-400">
+                    Pain ×{modifiers.painSensitivityMultiplier.toFixed(1)}
+                  </Badge>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="bg-gray-800/50 rounded border border-gray-700/50 p-2">
         <div className="flex items-center justify-between mb-1.5">
@@ -1237,20 +1438,6 @@ function SessionTimelineView({
               modifications={sessionTimeline.modifications}
               onSessionClick={setSelectedSession}
             />
-            <div className="flex items-center justify-center gap-3 mt-1">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-[2px] bg-red-500" />
-                <span className="text-[7px] text-gray-500">Risk</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-[2px] bg-amber-500 border-dashed" style={{ borderTop: '1px dashed #f59e0b', height: 0 }} />
-                <span className="text-[7px] text-gray-500">Pain</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-[2px] bg-violet-500 border-dashed" style={{ borderTop: '1px dashed #8b5cf6', height: 0 }} />
-                <span className="text-[7px] text-gray-500">Sling</span>
-              </div>
-            </div>
           </div>
         )}
       </div>
@@ -1431,23 +1618,89 @@ function SessionTimelineView({
       )}
 
       <div className="bg-gray-800/30 rounded border border-gray-700/30 p-2">
-        <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">Before / After</div>
+        <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">Before / After — Multi-Dimensional</div>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-0.5">
-            <div className="text-[7px] text-gray-600 uppercase">Baseline</div>
+            <div className="text-[7px] text-gray-600 uppercase">Baseline (S1)</div>
             <SummaryRow label="Risk" value={sessionTimeline.startingState.riskScore} color="red" />
+            <SummaryRow label="Pain" value={sessionTimeline.startingState.painBaseline} color="amber" />
             <SummaryRow label="Sling" value={`${sessionTimeline.startingState.slingIntegrity}%`} color="amber" />
+            {sessionTimeline.baseline.romBaselines.length > 0 && (
+              <SummaryRow
+                label="Avg ROM"
+                value={`${(sessionTimeline.baseline.romBaselines.reduce((s, r) => s + r.predictedDegrees / r.normalDegrees * 100, 0) / sessionTimeline.baseline.romBaselines.length).toFixed(0)}%`}
+                color="amber"
+              />
+            )}
+            {sessionTimeline.baseline.compensationBaselines.length > 0 && (
+              <SummaryRow
+                label="Comp"
+                value={`${sessionTimeline.baseline.compensationBaselines.length} active`}
+                color="red"
+              />
+            )}
           </div>
           <div className="space-y-0.5">
-            <div className="text-[7px] text-gray-600 uppercase">Session {sessionTimeline.totalSessions}</div>
+            <div className="text-[7px] text-gray-600 uppercase">Final (S{sessionTimeline.totalSessions})</div>
             <SummaryRow label="Risk" value={sessionTimeline.endState.riskScore} color="emerald" />
+            {lastSession && <SummaryRow label="Pain" value={lastSession.painPrediction} color={lastSession.painPrediction > 30 ? 'amber' : 'emerald'} />}
             <SummaryRow label="Sling" value={`${sessionTimeline.endState.slingIntegrity}%`} color="emerald" />
+            {lastSession && lastSession.romPredictions.length > 0 && (
+              <SummaryRow
+                label="Avg ROM"
+                value={`${(lastSession.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.normalDegrees * 100, 0) / lastSession.romPredictions.length).toFixed(0)}%`}
+                color="emerald"
+              />
+            )}
+            {lastSession && (
+              <SummaryRow
+                label="Comp"
+                value={`${lastSession.compensationResolution.toFixed(0)}% resolved`}
+                color="emerald"
+              />
+            )}
           </div>
         </div>
+        {sessionTimeline.baseline.romBaselines.length > 0 && lastSession && (
+          <div className="mt-1 pt-1 border-t border-gray-700/20">
+            <div className="text-[7px] text-gray-600 uppercase mb-0.5">Dimension Deltas</div>
+            <div className="grid grid-cols-4 gap-1 text-[7px]">
+              <div className="text-center">
+                <div className="text-gray-500">Risk</div>
+                <div className={`font-medium ${sessionTimeline.startingState.riskScore - sessionTimeline.endState.riskScore > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {sessionTimeline.startingState.riskScore > sessionTimeline.endState.riskScore ? '↓' : '↑'}{Math.abs(sessionTimeline.startingState.riskScore - sessionTimeline.endState.riskScore)}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-500">Pain</div>
+                <div className={`font-medium ${sessionTimeline.startingState.painBaseline - lastSession.painPrediction > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {sessionTimeline.startingState.painBaseline > lastSession.painPrediction ? '↓' : '↑'}{Math.abs(sessionTimeline.startingState.painBaseline - lastSession.painPrediction).toFixed(0)}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-500">Sling</div>
+                <div className={`font-medium ${sessionTimeline.endState.slingIntegrity > sessionTimeline.startingState.slingIntegrity ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {sessionTimeline.endState.slingIntegrity > sessionTimeline.startingState.slingIntegrity ? '↑' : '↓'}{Math.abs(sessionTimeline.endState.slingIntegrity - sessionTimeline.startingState.slingIntegrity)}%
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-500">Comp</div>
+                <div className="text-emerald-400 font-medium">
+                  ↓{lastSession.compensationResolution.toFixed(0)}%
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="mt-1.5 pt-1.5 border-t border-gray-700/30 flex items-center gap-1 text-[9px]">
           <TrendingDown className="h-3 w-3 text-emerald-400" />
           <span className="text-gray-400">Est. recovery:</span>
           <span className="text-emerald-300 font-medium">{sessionTimeline.endState.estimatedRecoverySessions} sessions</span>
+          {sessionTimeline.functionalMilestones.length > 0 && (
+            <span className="text-gray-500 ml-1">
+              ({sessionTimeline.functionalMilestones.filter(m => m.achieved).length}/{sessionTimeline.functionalMilestones.length} milestones)
+            </span>
+          )}
         </div>
       </div>
 
@@ -2122,6 +2375,8 @@ export default function SimulationTimelinePanel({
           baseModelConfig={baseModelConfig}
           baseOverrides={baseOverrides}
           onApplyToSkeleton={onApplyWeekToSkeleton}
+          activeCondition={activeCondition}
+          modifiers={modifiers}
         />
       </div>
     );

@@ -29,6 +29,12 @@ import {
   AlertCircle,
   Sparkles,
   RefreshCw,
+  Gauge,
+  Brain,
+  Bone,
+  Flame,
+  Trophy,
+  Layers,
 } from "lucide-react";
 import {
   buildSimulationTimeline,
@@ -40,6 +46,14 @@ import {
   type SessionSnapshot,
   type SessionModification,
   type SessionTreatment,
+  type RomPrediction,
+  type PainMarkerPrediction,
+  type MuscleStatePrediction,
+  type SlingPrediction,
+  type PosturalPrediction,
+  type CompensationPrediction,
+  type FunctionalMilestone,
+  type InterSessionHealing,
 } from "@/lib/simulationTimelineEngine";
 import {
   type PatientFactors,
@@ -612,6 +626,362 @@ function SummaryRow({ label, value, color }: { label: string; value: string | nu
   );
 }
 
+function SessionStatusBadges({ snapshot }: { snapshot: SessionSnapshot }) {
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      <Badge variant="outline" className="text-[7px] py-0 px-1 border-gray-600/30 text-gray-400">
+        {snapshot.recoveryPhaseLabel}
+      </Badge>
+      {snapshot.isBreakthroughSession && (
+        <Badge variant="outline" className="text-[7px] py-0 px-1 border-emerald-500/40 text-emerald-400 bg-emerald-500/10">
+          <Sparkles className="h-2 w-2 mr-0.5" />Breakthrough
+        </Badge>
+      )}
+      {snapshot.isPlateauSession && (
+        <Badge variant="outline" className="text-[7px] py-0 px-1 border-amber-500/40 text-amber-400 bg-amber-500/10">
+          <AlertTriangle className="h-2 w-2 mr-0.5" />Plateau
+        </Badge>
+      )}
+      {snapshot.isSetbackSession && (
+        <Badge variant="outline" className="text-[7px] py-0 px-1 border-red-500/40 text-red-400 bg-red-500/10">
+          <AlertCircle className="h-2 w-2 mr-0.5" />Setback
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+function RomPredictionsSection({ predictions }: { predictions: RomPrediction[] }) {
+  if (predictions.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      {predictions.map(rom => {
+        const pct = rom.targetDegrees > 0 ? (rom.predictedDegrees / rom.targetDegrees) * 100 : 0;
+        const deltaColor = rom.deltaFromBaseline > 0 ? 'text-emerald-400' : rom.deltaFromBaseline < -1 ? 'text-red-400' : 'text-gray-500';
+        return (
+          <div key={rom.jointId} className="bg-gray-800/30 rounded px-1.5 py-1">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[8px] text-gray-300 truncate flex-1">{rom.jointLabel}</span>
+              <span className="text-[8px] text-gray-400 ml-1">{Math.round(rom.predictedDegrees)}° / {rom.targetDegrees}°</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-700/50 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${pct >= 90 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                style={{ width: `${Math.min(pct, 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-0.5">
+              <span className="text-[7px] text-gray-600">{rom.limitingFactor}</span>
+              {Math.abs(rom.deltaFromBaseline) > 0.5 && (
+                <span className={`text-[7px] font-medium ${deltaColor}`}>
+                  {rom.deltaFromBaseline > 0 ? '+' : ''}{rom.deltaFromBaseline.toFixed(1)}°
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PainPredictionsSection({ predictions }: { predictions: PainMarkerPrediction[] }) {
+  if (predictions.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      {predictions.map(pm => {
+        const sevColor = pm.predictedSeverity > 6 ? 'text-red-400' : pm.predictedSeverity > 3 ? 'text-amber-400' : 'text-emerald-400';
+        const deltaColor = pm.deltaFromBaseline < 0 ? 'text-emerald-400' : pm.deltaFromBaseline > 0.5 ? 'text-red-400' : 'text-gray-500';
+        const barPct = (pm.predictedSeverity / 10) * 100;
+        return (
+          <div key={pm.markerId} className="bg-gray-800/30 rounded px-1.5 py-1">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[8px] text-gray-300 truncate flex-1">{pm.markerLabel}</span>
+              <span className={`text-[8px] font-medium ${sevColor}`}>{pm.predictedSeverity.toFixed(1)}/10</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-700/50 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${pm.predictedSeverity > 6 ? 'bg-red-500' : pm.predictedSeverity > 3 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                style={{ width: `${barPct}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-0.5">
+              <span className="text-[7px] text-gray-600">{pm.mechanism}</span>
+              {Math.abs(pm.deltaFromBaseline) > 0.1 && (
+                <span className={`text-[7px] font-medium ${deltaColor}`}>
+                  {pm.deltaFromBaseline > 0 ? '+' : ''}{pm.deltaFromBaseline.toFixed(1)}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MuscleStatePredictionsSection({ predictions }: { predictions: MuscleStatePrediction[] }) {
+  if (predictions.length === 0) return null;
+  const trendIcon = (dir: string) =>
+    dir === 'improving' ? <TrendingDown className="h-2 w-2 text-emerald-400" />
+    : dir === 'worsening' ? <TrendingUp className="h-2 w-2 text-red-400" />
+    : <ArrowRight className="h-2 w-2 text-gray-500" />;
+  return (
+    <div className="space-y-1">
+      {predictions.map(ms => {
+        const tensionColor = ms.predictedTension > 70 ? 'text-red-400' : ms.predictedTension < 30 ? 'text-blue-400' : 'text-emerald-400';
+        return (
+          <div key={ms.muscleId} className="bg-gray-800/30 rounded px-1.5 py-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                {trendIcon(ms.trendDirection)}
+                <span className="text-[8px] text-gray-300">{ms.muscleLabel}</span>
+              </div>
+              <span className={`text-[8px] font-medium ${tensionColor}`}>{ms.predictedTension}%</span>
+            </div>
+            <div className="w-full h-1 bg-gray-700/50 rounded-full overflow-hidden mt-0.5">
+              <div
+                className={`h-full rounded-full ${ms.predictedTension > 70 ? 'bg-red-500' : ms.predictedTension < 30 ? 'bg-blue-500' : 'bg-emerald-500'}`}
+                style={{ width: `${ms.predictedTension}%` }}
+              />
+            </div>
+            <div className="text-[7px] text-gray-600 mt-0.5">{ms.clinicalNote}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SlingPredictionsSection({ predictions }: { predictions: SlingPrediction[] }) {
+  if (predictions.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      {predictions.map(sl => {
+        const intColor = sl.predictedIntegrity >= 70 ? 'text-emerald-400' : sl.predictedIntegrity >= 40 ? 'text-amber-400' : 'text-red-400';
+        const deltaColor = sl.deltaFromBaseline > 0 ? 'text-emerald-400' : sl.deltaFromBaseline < -2 ? 'text-red-400' : 'text-gray-500';
+        return (
+          <div key={sl.slingId} className="bg-gray-800/30 rounded px-1.5 py-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[8px] text-gray-300 truncate flex-1">{sl.slingName}</span>
+              <div className="flex items-center gap-1">
+                <span className={`text-[8px] font-medium ${intColor}`}>{sl.predictedIntegrity}%</span>
+                {Math.abs(sl.deltaFromBaseline) > 0.5 && (
+                  <span className={`text-[7px] ${deltaColor}`}>
+                    ({sl.deltaFromBaseline > 0 ? '+' : ''}{sl.deltaFromBaseline})
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="w-full h-1 bg-gray-700/50 rounded-full overflow-hidden mt-0.5">
+              <div
+                className={`h-full rounded-full ${sl.predictedIntegrity >= 70 ? 'bg-emerald-500' : sl.predictedIntegrity >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                style={{ width: `${sl.predictedIntegrity}%` }}
+              />
+            </div>
+            {sl.weakLinks.length > 0 && (
+              <div className="text-[7px] text-amber-400/70 mt-0.5">
+                Weak: {sl.weakLinks.join(', ')}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PosturalPredictionsSection({ predictions }: { predictions: PosturalPrediction[] }) {
+  if (predictions.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      {predictions.map(pp => {
+        const corrColor = pp.correctionPercent >= 70 ? 'text-emerald-400' : pp.correctionPercent >= 30 ? 'text-amber-400' : 'text-gray-400';
+        return (
+          <div key={pp.sliderId} className="flex items-center justify-between bg-gray-800/30 rounded px-1.5 py-1">
+            <span className="text-[8px] text-gray-300">{pp.sliderLabel}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[7px] text-gray-500">{pp.predictedValue.toFixed(1)}</span>
+              <div className="w-10 h-1 bg-gray-700/50 rounded-full overflow-hidden">
+                <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${Math.min(pp.correctionPercent, 100)}%` }} />
+              </div>
+              <span className={`text-[7px] font-medium ${corrColor}`}>{pp.correctionPercent}%</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CompensationPredictionsSection({ predictions }: { predictions: CompensationPrediction[] }) {
+  if (predictions.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      {predictions.map(cp => {
+        const resColor = cp.resolutionPercent >= 70 ? 'text-emerald-400' : cp.resolutionPercent >= 30 ? 'text-amber-400' : 'text-red-400';
+        return (
+          <div key={cp.patternId} className="bg-gray-800/30 rounded px-1.5 py-1">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[8px] text-gray-300 truncate flex-1">{cp.patternLabel}</span>
+              <span className={`text-[8px] font-medium ${resColor}`}>{cp.resolutionPercent}% resolved</span>
+            </div>
+            <div className="w-full h-1 bg-gray-700/50 rounded-full overflow-hidden">
+              <div className="h-full bg-violet-500 rounded-full" style={{ width: `${cp.resolutionPercent}%` }} />
+            </div>
+            {cp.contributingFactors.length > 0 && (
+              <div className="text-[7px] text-gray-600 mt-0.5 truncate">
+                {cp.contributingFactors.join(' | ')}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FunctionalMilestonesSection({
+  milestones,
+  selectedSession,
+  onSessionClick,
+}: {
+  milestones: FunctionalMilestone[];
+  selectedSession: number;
+  onSessionClick: (s: number) => void;
+}) {
+  if (milestones.length === 0) return null;
+  const achieved = milestones.filter(m => m.achieved);
+  const pending = milestones.filter(m => !m.achieved);
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5 mb-0.5">
+        <span className="text-[8px] text-gray-500">{achieved.length}/{milestones.length} achieved</span>
+        <div className="flex-1 h-1 bg-gray-700/50 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-emerald-500 rounded-full transition-all"
+            style={{ width: `${milestones.length > 0 ? (achieved.length / milestones.length) * 100 : 0}%` }}
+          />
+        </div>
+      </div>
+      {achieved.map(fm => (
+        <div
+          key={fm.id}
+          className="flex items-start gap-1.5 px-1.5 py-1 bg-emerald-500/10 rounded border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/15"
+          onClick={() => fm.triggeredAtSession !== null && onSessionClick(fm.triggeredAtSession)}
+        >
+          <Trophy className="h-3 w-3 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[8px] text-emerald-300 font-medium">{fm.label}</div>
+            <div className="text-[7px] text-gray-500">{fm.description}</div>
+          </div>
+          {fm.triggeredAtSession !== null && (
+            <span className="text-[7px] text-emerald-400/70 shrink-0">S{fm.triggeredAtSession}</span>
+          )}
+        </div>
+      ))}
+      {pending.map(fm => {
+        const progressPct = fm.thresholdType === 'pain'
+          ? Math.max(0, 100 - (fm.currentValue / Math.max(fm.thresholdValue, 0.01)) * 100)
+          : Math.min(100, (fm.currentValue / Math.max(fm.thresholdValue, 0.01)) * 100);
+        return (
+          <div key={fm.id} className="px-1.5 py-1 bg-gray-800/30 rounded">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[8px] text-gray-400">{fm.label}</span>
+              <span className="text-[7px] text-gray-600">{Math.round(progressPct)}%</span>
+            </div>
+            <div className="w-full h-1 bg-gray-700/50 rounded-full overflow-hidden">
+              <div className="h-full bg-cyan-500/60 rounded-full" style={{ width: `${Math.min(progressPct, 100)}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function InterSessionHealingSection({ healing }: { healing: InterSessionHealing }) {
+  const components = [
+    { label: 'Tissue Remodeling', value: healing.tissueRemodeling, color: 'text-emerald-400', icon: <Bone className="h-2.5 w-2.5" /> },
+    { label: 'Exercise Carry-Over', value: healing.exerciseCarryOver, color: 'text-cyan-400', icon: <Dumbbell className="h-2.5 w-2.5" /> },
+    { label: 'Inflammation Resolution', value: healing.inflammationResolution, color: 'text-amber-400', icon: <Flame className="h-2.5 w-2.5" /> },
+  ];
+  const netColor = healing.netHealingDelta > 0 ? 'text-emerald-400' : healing.netHealingDelta < -0.5 ? 'text-red-400' : 'text-gray-400';
+  return (
+    <div className="space-y-1">
+      {components.map(c => (
+        <div key={c.label} className="flex items-center justify-between px-1.5 py-0.5">
+          <div className="flex items-center gap-1">
+            <span className={c.color}>{c.icon}</span>
+            <span className="text-[8px] text-gray-400">{c.label}</span>
+          </div>
+          <span className={`text-[8px] font-medium ${c.value > 0 ? 'text-emerald-400' : c.value < -0.5 ? 'text-red-400' : 'text-gray-500'}`}>
+            {c.value > 0 ? '+' : ''}{c.value.toFixed(2)}
+          </span>
+        </div>
+      ))}
+      <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-gray-700/30 mt-0.5 pt-0.5">
+        <span className="text-[8px] text-gray-300 font-medium">Net Healing</span>
+        <span className={`text-[9px] font-bold ${netColor}`}>
+          {healing.netHealingDelta > 0 ? '+' : ''}{healing.netHealingDelta.toFixed(2)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+type MultiDimTab = 'rom' | 'pain' | 'muscle' | 'sling' | 'posture' | 'comp';
+
+function MultiDimensionalPredictions({ snapshot }: { snapshot: SessionSnapshot }) {
+  const [activeTab, setActiveTab] = useState<MultiDimTab>('rom');
+
+  const allTabs: Array<{ id: MultiDimTab; label: string; icon: typeof Bone; count: number }> = [
+    { id: 'rom', label: 'ROM', icon: Gauge, count: snapshot.romPredictions.length },
+    { id: 'pain', label: 'Pain', icon: Target, count: snapshot.painMarkerPredictions.length },
+    { id: 'muscle', label: 'Muscle', icon: Activity, count: snapshot.muscleStatePredictions.length },
+    { id: 'sling', label: 'Sling', icon: Layers, count: snapshot.slingPredictions.length },
+    { id: 'posture', label: 'Posture', icon: Brain, count: snapshot.posturalPredictions.length },
+    { id: 'comp', label: 'Comp', icon: Shield, count: snapshot.compensationPredictions.length },
+  ];
+  const tabs = allTabs.filter(t => t.count > 0);
+
+  if (tabs.length === 0) return null;
+
+  const effectiveTab = tabs.find(t => t.id === activeTab) ? activeTab : (tabs[0]?.id ?? 'rom');
+
+  return (
+    <div>
+      <div className="flex gap-0.5 mb-1.5 flex-wrap">
+        {tabs.map(t => {
+          const Icon = t.icon;
+          const isActive = effectiveTab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[7px] transition-colors ${
+                isActive ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-gray-800/40 text-gray-500 border border-transparent hover:text-gray-300'
+              }`}
+            >
+              <Icon className="h-2.5 w-2.5" />
+              {t.label}
+              <span className="text-[6px] opacity-60">{t.count}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="max-h-36 overflow-y-auto custom-scrollbar">
+        {effectiveTab === 'rom' && <RomPredictionsSection predictions={snapshot.romPredictions} />}
+        {effectiveTab === 'pain' && <PainPredictionsSection predictions={snapshot.painMarkerPredictions} />}
+        {effectiveTab === 'muscle' && <MuscleStatePredictionsSection predictions={snapshot.muscleStatePredictions} />}
+        {effectiveTab === 'sling' && <SlingPredictionsSection predictions={snapshot.slingPredictions} />}
+        {effectiveTab === 'posture' && <PosturalPredictionsSection predictions={snapshot.posturalPredictions} />}
+        {effectiveTab === 'comp' && <CompensationPredictionsSection predictions={snapshot.compensationPredictions} />}
+      </div>
+    </div>
+  );
+}
+
 function SessionTimelineView({
   sessionTimeline,
   baseModelConfig,
@@ -625,7 +995,7 @@ function SessionTimelineView({
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | null>('curve');
+  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | null>('curve');
   const [expandedSessionCard, setExpandedSessionCard] = useState<number | null>(null);
   const [appliedSession, setAppliedSession] = useState<number | null>(null);
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -677,7 +1047,7 @@ function SessionTimelineView({
     playIntervalRef.current = interval;
   }, [isPlaying, selectedSession, sessionTimeline.totalSessions]);
 
-  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary') => {
+  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing') => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
@@ -817,6 +1187,10 @@ function SessionTimelineView({
         </div>
       )}
 
+      {currentSnapshot && (
+        <SessionStatusBadges snapshot={currentSnapshot} />
+      )}
+
       {currentMods.length > 0 && (
         <div className="bg-amber-500/10 rounded border border-amber-500/30 p-2 space-y-1">
           {currentMods.map((mod, i) => (
@@ -880,6 +1254,73 @@ function SessionTimelineView({
           </div>
         )}
       </div>
+
+      {currentSnapshot && (
+        <div className="border border-gray-700/40 rounded overflow-hidden">
+          <button
+            onClick={() => toggleSection('multidim')}
+            className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-800/40 hover:bg-gray-800/60 text-gray-300"
+          >
+            <span className="text-[9px] font-medium flex items-center gap-1">
+              <Layers className="h-3 w-3 text-cyan-400" />
+              Multi-Dimensional Predictions
+            </span>
+            {expandedSection === 'multidim' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {expandedSection === 'multidim' && (
+            <div className="p-2 bg-gray-900/30">
+              <MultiDimensionalPredictions snapshot={currentSnapshot} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {currentSnapshot && currentSnapshot.functionalMilestones.length > 0 && (
+        <div className="border border-gray-700/40 rounded overflow-hidden">
+          <button
+            onClick={() => toggleSection('funcmilestones')}
+            className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-800/40 hover:bg-gray-800/60 text-gray-300"
+          >
+            <span className="text-[9px] font-medium flex items-center gap-1">
+              <Trophy className="h-3 w-3 text-amber-400" />
+              Functional Milestones ({currentSnapshot.functionalMilestones.filter(m => m.achieved).length}/{currentSnapshot.functionalMilestones.length})
+            </span>
+            {expandedSection === 'funcmilestones' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {expandedSection === 'funcmilestones' && (
+            <div className="p-2 bg-gray-900/30">
+              <FunctionalMilestonesSection
+                milestones={currentSnapshot.functionalMilestones}
+                selectedSession={selectedSession}
+                onSessionClick={setSelectedSession}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {currentSnapshot?.interSessionHealing && (
+        <div className="border border-gray-700/40 rounded overflow-hidden">
+          <button
+            onClick={() => toggleSection('healing')}
+            className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-800/40 hover:bg-gray-800/60 text-gray-300"
+          >
+            <span className="text-[9px] font-medium flex items-center gap-1">
+              <Heart className="h-3 w-3 text-rose-400" />
+              Inter-Session Healing
+              <span className={`text-[8px] ml-1 ${currentSnapshot.interSessionHealing.netHealingDelta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                ({currentSnapshot.interSessionHealing.netHealingDelta > 0 ? '+' : ''}{currentSnapshot.interSessionHealing.netHealingDelta.toFixed(1)})
+              </span>
+            </span>
+            {expandedSection === 'healing' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {expandedSection === 'healing' && (
+            <div className="p-2 bg-gray-900/30">
+              <InterSessionHealingSection healing={currentSnapshot.interSessionHealing} />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="border border-gray-700/40 rounded overflow-hidden">
         <button

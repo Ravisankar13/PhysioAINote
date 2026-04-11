@@ -1701,16 +1701,41 @@ function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
             </div>
           )}
 
+          {phase.previousProgressionStages.length > 0 && phase.phaseIndex > 0 && (
+            <div className="space-y-0.5">
+              <div className="text-[7px] font-medium text-red-400 flex items-center gap-1">
+                <TrendingDown className="h-2.5 w-2.5" /> Retiring from Previous Phase
+              </div>
+              {phase.previousProgressionStages.map((prev, pi) => (
+                <div key={pi} className="text-[8px] text-gray-500 bg-red-950/10 rounded px-1.5 py-0.5">
+                  <span className="text-red-400/70 line-through">{prev.exerciseName}</span>
+                  {prev.stages.length > 0 && (
+                    <span className="text-gray-600 ml-1 text-[7px]">
+                      (reached: {prev.stages[prev.stages.length - 1]?.name ?? 'N/A'})
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {phase.exercises.length > 0 && (
             <div className="space-y-0.5">
               <div className="text-[7px] font-medium text-emerald-400 flex items-center gap-1">
-                <Dumbbell className="h-2.5 w-2.5" /> Exercises
+                <Dumbbell className="h-2.5 w-2.5" /> {phase.phaseIndex > 0 ? 'New Exercises Introduced' : 'Exercises'}
               </div>
               {phase.exercises.map((ex, ei) => (
-                <div key={ei} className="text-[8px] text-gray-300 bg-gray-800/20 rounded px-1.5 py-0.5 flex items-center gap-1">
-                  <span className="text-emerald-500">•</span>
-                  <span className="font-medium">{ex.name}</span>
-                  <span className="text-gray-500">— {ex.targetSystem}</span>
+                <div key={ei} className="text-[8px] text-gray-300 bg-emerald-950/10 rounded px-1.5 py-0.5">
+                  <div className="flex items-center gap-1">
+                    <span className="text-emerald-500">+</span>
+                    <span className="font-medium">{ex.name}</span>
+                    <span className="text-gray-500">— {ex.targetSystem}</span>
+                  </div>
+                  {ex.progressionStages && ex.progressionStages.length > 0 && (
+                    <div className="text-[7px] text-gray-600 ml-3 mt-0.5">
+                      Stages: {ex.progressionStages.map(s => s.name).join(' → ')}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1719,13 +1744,20 @@ function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
           {phase.techniques.length > 0 && (
             <div className="space-y-0.5">
               <div className="text-[7px] font-medium text-purple-400 flex items-center gap-1">
-                <Hand className="h-2.5 w-2.5" /> Manual Therapy
+                <Hand className="h-2.5 w-2.5" /> {phase.phaseIndex > 0 ? 'New Techniques Introduced' : 'Manual Therapy'}
               </div>
               {phase.techniques.map((t, ti) => (
-                <div key={ti} className="text-[8px] text-gray-300 bg-gray-800/20 rounded px-1.5 py-0.5 flex items-center gap-1">
-                  <span className="text-purple-500">•</span>
-                  <span className="font-medium">{t.name}</span>
-                  <span className="text-gray-500">— {t.targetSystem}</span>
+                <div key={ti} className="text-[8px] text-gray-300 bg-purple-950/10 rounded px-1.5 py-0.5">
+                  <div className="flex items-center gap-1">
+                    <span className="text-purple-500">+</span>
+                    <span className="font-medium">{t.name}</span>
+                    <span className="text-gray-500">— {t.targetSystem}</span>
+                  </div>
+                  {t.progressionStages && t.progressionStages.length > 0 && (
+                    <div className="text-[7px] text-gray-600 ml-3 mt-0.5">
+                      Stages: {t.progressionStages.map(s => s.name).join(' → ')}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -3087,6 +3119,7 @@ export default function SimulationTimelinePanel({
         actualOutcomes.length > 0 ? actualOutcomes : undefined,
         (event) => { if (!abortController.signal.aborted) setPhaseProgress(event); },
         abortController.signal,
+        (partial) => { if (!abortController.signal.aborted) setSessionTimeline(partial); },
       ).then(result => {
         if (!abortController.signal.aborted) {
           setSessionTimeline(result);
@@ -3163,46 +3196,11 @@ export default function SimulationTimelinePanel({
     />
   );
 
-  if (hasCustomTreatments && sessionTimelineLoading) {
+  if (hasCustomTreatments && (sessionTimeline || sessionTimelineLoading)) {
     return (
       <div className="flex flex-col gap-2">
         {patientFactorsPanel}
-        <div className="border border-gray-700/40 rounded bg-gray-900/40 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <RefreshCw className="h-4 w-4 text-cyan-400 animate-spin" />
-            <span className="text-[11px] font-medium text-gray-200">Building Adaptive Timeline</span>
-          </div>
-          {phaseProgress && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className={`text-[8px] px-1.5 py-0 ${
-                  phaseProgress.status === 'requerying' ? 'border-purple-500/40 text-purple-400' :
-                  phaseProgress.status === 'building' ? 'border-cyan-500/40 text-cyan-400' :
-                  'border-emerald-500/40 text-emerald-400'
-                }`}>
-                  {phaseProgress.status === 'requerying' ? 'AI Generating' : phaseProgress.status === 'building' ? 'Computing' : 'Done'}
-                </Badge>
-                <span className="text-[9px] text-gray-400">{phaseProgress.phaseLabel} Phase</span>
-              </div>
-              <p className="text-[9px] text-gray-500">{phaseProgress.message}</p>
-              <div className="w-full bg-gray-800 rounded-full h-1">
-                <div
-                  className="bg-gradient-to-r from-cyan-500 to-purple-500 h-1 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(((phaseProgress.phaseIndex + 1) / 4) * 100, 95)}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (hasCustomTreatments && sessionTimeline) {
-    return (
-      <div className="flex flex-col gap-2">
-        {patientFactorsPanel}
-        {!enableReQuery && (
+        {!enableReQuery && !sessionTimelineLoading && (
           <div className="border border-cyan-700/30 rounded bg-cyan-950/20 px-3 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
@@ -3218,16 +3216,46 @@ export default function SimulationTimelinePanel({
             </Button>
           </div>
         )}
-        <SessionTimelineView
-          sessionTimeline={sessionTimeline}
-          baseModelConfig={baseModelConfig}
-          baseOverrides={baseOverrides}
-          onApplyToSkeleton={onApplyWeekToSkeleton}
-          activeCondition={activeCondition}
-          modifiers={modifiers}
-          actualOutcomes={actualOutcomes}
-          onRecordOutcome={handleRecordOutcome}
-        />
+        {sessionTimelineLoading && phaseProgress && (
+          <div className="border border-cyan-700/30 rounded bg-cyan-950/20 px-3 py-2">
+            <div className="flex items-center gap-2 mb-1.5">
+              <RefreshCw className="h-3.5 w-3.5 text-cyan-400 animate-spin" />
+              <span className="text-[10px] font-medium text-gray-200">Re-Query Engine Active</span>
+              <Badge variant="outline" className={`text-[7px] px-1 py-0 ${
+                phaseProgress.status === 'requerying' ? 'border-purple-500/40 text-purple-400' :
+                phaseProgress.status === 'building' ? 'border-cyan-500/40 text-cyan-400' :
+                'border-emerald-500/40 text-emerald-400'
+              }`}>
+                {phaseProgress.status === 'requerying' ? 'AI Generating' : phaseProgress.status === 'building' ? 'Computing' : 'Done'}
+              </Badge>
+            </div>
+            <p className="text-[8px] text-gray-500 mb-1">{phaseProgress.message}</p>
+            <div className="w-full bg-gray-800 rounded-full h-1">
+              <div
+                className="bg-gradient-to-r from-cyan-500 to-purple-500 h-1 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(((phaseProgress.phaseIndex + 1) / 4) * 100, 95)}%` }}
+              />
+            </div>
+          </div>
+        )}
+        {sessionTimeline && (
+          <SessionTimelineView
+            sessionTimeline={sessionTimeline}
+            baseModelConfig={baseModelConfig}
+            baseOverrides={baseOverrides}
+            onApplyToSkeleton={onApplyWeekToSkeleton}
+            activeCondition={activeCondition}
+            modifiers={modifiers}
+            actualOutcomes={actualOutcomes}
+            onRecordOutcome={handleRecordOutcome}
+          />
+        )}
+        {sessionTimelineLoading && !sessionTimeline && (
+          <div className="border border-gray-700/40 rounded bg-gray-900/40 p-4 text-center">
+            <RefreshCw className="h-5 w-5 text-cyan-400 animate-spin mx-auto mb-2" />
+            <span className="text-[10px] text-gray-400">Building initial timeline...</span>
+          </div>
+        )}
       </div>
     );
   }

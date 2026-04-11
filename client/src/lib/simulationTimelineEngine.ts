@@ -2624,6 +2624,7 @@ export async function buildSessionTimelineAsync(
   actualOutcomes?: ActualSessionOutcome[],
   onPhaseProgress?: (event: PhaseProgressEvent) => void,
   signal?: AbortSignal,
+  onPartialResult?: (partial: SessionTimelineResult) => void,
 ): Promise<SessionTimelineResult> {
   onPhaseProgress?.({ phaseIndex: 0, phaseLabel: 'Initial', status: 'building', message: 'Building initial timeline with current treatments...' });
 
@@ -2648,8 +2649,10 @@ export async function buildSessionTimelineAsync(
       phaseGoals: PHASE_TREATMENT_GOALS[initialResult.sessions[0]?.recoveryPhaseLabel ?? 'Remodeling'] ?? '',
       previousProgressionStages: [],
     };
+    const singleResult = { ...initialResult, treatmentPhases: [singlePhase] };
     onPhaseProgress?.({ phaseIndex: 0, phaseLabel: singlePhase.phaseLabel, status: 'complete', message: 'Timeline complete — single phase' });
-    return { ...initialResult, treatmentPhases: [singlePhase] };
+    onPartialResult?.(singleResult);
+    return singleResult;
   }
 
   const treatmentPhases: TreatmentPhaseBlock[] = [];
@@ -2671,6 +2674,8 @@ export async function buildSessionTimelineAsync(
     phaseGoals: PHASE_TREATMENT_GOALS[transitions[0].fromPhase] ?? '',
     previousProgressionStages: [],
   });
+
+  onPartialResult?.({ ...accumulatedResult, treatmentPhases: [...treatmentPhases] });
 
   for (let ti = 0; ti < transitions.length; ti++) {
     if (signal?.aborted) break;
@@ -2729,10 +2734,8 @@ export async function buildSessionTimelineAsync(
 
       const [exResponse, mtResponse] = await Promise.all([
         apiRequest('/api/exercise-engine/design-custom', 'POST', exercisePayload)
-          .then(r => r.json())
           .catch(() => null),
         apiRequest('/api/manual-therapy-engine/design-custom', 'POST', techniquePayload)
-          .then(r => r.json())
           .catch(() => null),
       ]);
 
@@ -2827,6 +2830,8 @@ export async function buildSessionTimelineAsync(
       status: 'complete',
       message: `${transition.toPhase} phase treatments ready`,
     });
+
+    onPartialResult?.({ ...accumulatedResult, treatmentPhases: [...treatmentPhases] });
   }
 
   return { ...accumulatedResult, treatmentPhases };

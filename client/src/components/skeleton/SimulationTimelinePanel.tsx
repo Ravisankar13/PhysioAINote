@@ -142,7 +142,7 @@ function SessionRecoveryCurve({
   modifications: SessionModification[];
   onSessionClick: (session: number) => void;
 }) {
-  const [enabledTracks, setEnabledTracks] = useState<Set<SessionCurveTrack>>(() => new Set(['risk', 'pain', 'sling']));
+  const [enabledTracks, setEnabledTracks] = useState<Set<SessionCurveTrack>>(() => new Set<SessionCurveTrack>(['risk', 'pain', 'sling']));
 
   const toggleTrack = useCallback((track: SessionCurveTrack) => {
     setEnabledTracks(prev => {
@@ -170,7 +170,7 @@ function SessionRecoveryCurve({
 
   const avgRom = useCallback((s: SessionSnapshot) => {
     if (s.romPredictions.length === 0) return 50;
-    return s.romPredictions.reduce((sum, r) => sum + r.predictedDegrees / r.normalDegrees * 100, 0) / s.romPredictions.length;
+    return s.romPredictions.reduce((sum, r) => sum + r.predictedDegrees / r.targetDegrees * 100, 0) / s.romPredictions.length;
   }, []);
 
   const trackData = useMemo(() => {
@@ -230,7 +230,21 @@ function SessionRecoveryCurve({
   const modSessions = new Set(modifications.map(m => m.sessionNumber));
   const breakthroughSessions = sessions.filter(s => s.isBreakthroughSession);
   const setbackSessions = sessions.filter(s => s.isSetbackSession);
-  const funcMilestoneAchieved = sessions.filter(s => s.functionalMilestones.some(m => m.achieved && m.achievedAtSession === s.sessionNumber));
+  const funcMilestoneAchieved = sessions.filter(s => s.functionalMilestones.some(m => m.achieved && m.triggeredAtSession === s.sessionNumber));
+
+  const phaseTransitions = useMemo(() => {
+    const transitions: Array<{ session: SessionSnapshot; fromPhase: string; toPhase: string }> = [];
+    for (let i = 1; i < sessions.length; i++) {
+      if (sessions[i].recoveryPhaseLabel && sessions[i - 1].recoveryPhaseLabel && sessions[i].recoveryPhaseLabel !== sessions[i - 1].recoveryPhaseLabel) {
+        transitions.push({
+          session: sessions[i],
+          fromPhase: sessions[i - 1].recoveryPhaseLabel,
+          toPhase: sessions[i].recoveryPhaseLabel,
+        });
+      }
+    }
+    return transitions;
+  }, [sessions]);
 
   return (
     <div>
@@ -316,6 +330,18 @@ function SessionRecoveryCurve({
           const mx = getX(s);
           return (
             <circle key={`fm-${s.sessionNumber}`} cx={mx} cy={padding.top + chartH + 3} r={2.5} fill="#eab308" stroke="#fff" strokeWidth={0.5} opacity={0.9} />
+          );
+        })}
+
+        {phaseTransitions.map((pt, i) => {
+          const px = getX(pt.session);
+          return (
+            <g key={`pt-${i}`}>
+              <line x1={px} y1={padding.top} x2={px} y2={padding.top + chartH} stroke="#06b6d4" strokeWidth={1} strokeDasharray="4,2" opacity={0.7} />
+              <rect x={px - 1} y={padding.top - 1} width={2} height={chartH + 2} fill="#06b6d4" opacity={0.08} />
+              <title>{`Phase: ${pt.fromPhase} → ${pt.toPhase} (S${pt.session.sessionNumber})`}</title>
+              <circle cx={px} cy={padding.top + 1} r={2} fill="#06b6d4" stroke="#1e293b" strokeWidth={0.5} />
+            </g>
           );
         })}
 
@@ -597,7 +623,7 @@ function SessionCard({
   const manualCount = session.treatments.filter(t => t.type === 'manual_therapy').length;
   const isRestSession = session.treatments.length === 0;
   const avgRomPct = session.romPredictions.length > 0
-    ? (session.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.normalDegrees * 100, 0) / session.romPredictions.length).toFixed(0)
+    ? (session.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / session.romPredictions.length).toFixed(0)
     : null;
 
   return (
@@ -662,22 +688,45 @@ function SessionCard({
               </div>
             </div>
           )}
-          {session.treatments.map((t, i) => (
-            <div key={i} className="flex items-start gap-1.5 text-[9px]">
-              {t.type === 'exercise' ? (
-                <Dumbbell className="h-2.5 w-2.5 text-violet-400 shrink-0 mt-0.5" />
-              ) : (
-                <Hand className="h-2.5 w-2.5 text-rose-400 shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="text-gray-200 font-medium truncate">{t.name}</div>
-                <div className="text-gray-500 text-[8px]">{t.dosageLabel}</div>
+          {session.treatments.map((t, i) => {
+            const contribs: Array<{ label: string; value: string; color: string }> = [];
+            if (t.interventionType === 'stretch') {
+              contribs.push({ label: 'ROM', value: `+${(t.magnitude * 3).toFixed(0)}°`, color: 'text-cyan-400' });
+              contribs.push({ label: 'tension', value: `-${(t.magnitude * 5).toFixed(0)}%`, color: 'text-violet-400' });
+            } else if (t.interventionType === 'mobilize') {
+              contribs.push({ label: 'ROM', value: `+${(t.magnitude * 4).toFixed(0)}°`, color: 'text-cyan-400' });
+              contribs.push({ label: 'pain', value: `-${(t.magnitude * 1.5).toFixed(1)}`, color: 'text-amber-400' });
+            } else if (t.interventionType === 'strengthen') {
+              contribs.push({ label: 'activation', value: `+${(t.magnitude * 6).toFixed(0)}%`, color: 'text-emerald-400' });
+              contribs.push({ label: 'sling', value: `+${(t.magnitude * 2).toFixed(0)}%`, color: 'text-violet-400' });
+            } else if (t.interventionType === 'offload') {
+              contribs.push({ label: 'pain', value: `-${(t.magnitude * 2.5).toFixed(1)}`, color: 'text-amber-400' });
+              contribs.push({ label: 'force', value: `-${(t.magnitude * 4).toFixed(0)}%`, color: 'text-emerald-400' });
+            }
+            return (
+              <div key={i} className="flex items-start gap-1.5 text-[9px]">
+                {t.type === 'exercise' ? (
+                  <Dumbbell className="h-2.5 w-2.5 text-violet-400 shrink-0 mt-0.5" />
+                ) : (
+                  <Hand className="h-2.5 w-2.5 text-rose-400 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-gray-200 font-medium truncate">{t.name}</div>
+                  <div className="text-gray-500 text-[8px]">{t.dosageLabel}</div>
+                  {contribs.length > 0 && (
+                    <div className="flex gap-1.5 mt-0.5">
+                      {contribs.map((c, ci) => (
+                        <span key={ci} className={`text-[7px] ${c.color}`}>{c.value} {c.label}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Badge variant="outline" className="text-[7px] py-0 px-1 border-gray-600/40 text-gray-400 shrink-0">
+                  {t.interventionType}
+                </Badge>
               </div>
-              <Badge variant="outline" className="text-[7px] py-0 px-1 border-gray-600/40 text-gray-400 shrink-0">
-                {t.interventionType}
-              </Badge>
-            </div>
-          ))}
+            );
+          })}
           <div className="grid grid-cols-5 gap-1 mt-1">
             <div className="text-center">
               <div className="text-[7px] text-gray-500">Pain</div>
@@ -1406,16 +1455,28 @@ function SessionTimelineView({
         </div>
       )}
 
-      <Button
-        onClick={handleApply}
-        disabled={!currentSnapshot || !onApplyToSkeleton}
-        size="sm"
-        className="w-full h-7 text-[10px] bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30"
-        variant="outline"
-      >
-        <Zap className="h-3 w-3 mr-1" />
-        {appliedSession === selectedSession ? `Applied Session ${selectedSession}` : `Apply Session ${selectedSession} to Skeleton`}
-      </Button>
+      <div>
+        <Button
+          onClick={handleApply}
+          disabled={!currentSnapshot || !onApplyToSkeleton}
+          size="sm"
+          className="w-full h-7 text-[10px] bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30"
+          variant="outline"
+        >
+          <Zap className="h-3 w-3 mr-1" />
+          {appliedSession === selectedSession ? `Applied Session ${selectedSession}` : `Apply Session ${selectedSession} to Skeleton`}
+        </Button>
+        {currentSnapshot && (
+          <div className="flex gap-1 mt-0.5 flex-wrap justify-center">
+            <span className="text-[7px] text-gray-600">Applies:</span>
+            <span className="text-[7px] text-gray-500">posture</span>
+            <span className="text-[7px] text-gray-500">muscle tension</span>
+            {currentSnapshot.romPredictions.length > 0 && <span className="text-[7px] text-gray-500">ROM ({currentSnapshot.romPredictions.length})</span>}
+            {currentSnapshot.painMarkerPredictions.length > 0 && <span className="text-[7px] text-gray-500">pain ({currentSnapshot.painMarkerPredictions.length})</span>}
+            {currentSnapshot.compensationPredictions.length > 0 && <span className="text-[7px] text-gray-500">comp ({currentSnapshot.compensationPredictions.length})</span>}
+          </div>
+        )}
+      </div>
 
       <div className="border border-gray-700/40 rounded overflow-hidden">
         <button
@@ -1628,7 +1689,7 @@ function SessionTimelineView({
             {sessionTimeline.baseline.romBaselines.length > 0 && (
               <SummaryRow
                 label="Avg ROM"
-                value={`${(sessionTimeline.baseline.romBaselines.reduce((s, r) => s + r.predictedDegrees / r.normalDegrees * 100, 0) / sessionTimeline.baseline.romBaselines.length).toFixed(0)}%`}
+                value={`${(sessionTimeline.baseline.romBaselines.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / sessionTimeline.baseline.romBaselines.length).toFixed(0)}%`}
                 color="amber"
               />
             )}
@@ -1648,7 +1709,7 @@ function SessionTimelineView({
             {lastSession && lastSession.romPredictions.length > 0 && (
               <SummaryRow
                 label="Avg ROM"
-                value={`${(lastSession.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.normalDegrees * 100, 0) / lastSession.romPredictions.length).toFixed(0)}%`}
+                value={`${(lastSession.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / lastSession.romPredictions.length).toFixed(0)}%`}
                 color="emerald"
               />
             )}

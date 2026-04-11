@@ -2818,8 +2818,9 @@ export async function buildSessionTimelineAsync(
         .filter(s => s.sessionNumber >= transitionSessionNum)
         .map(s => {
           const corrected = { ...s };
-          corrected.riskScore = Math.max(0, Math.min(10, Math.round((s.riskScore + riskOffset) * 10) / 10));
-          corrected.slingIntegrity = Math.max(0, Math.min(100, Math.round(s.slingIntegrity + slingOffset)));
+          corrected.riskScore = clamp(Math.round(s.riskScore + riskOffset), 0, 100);
+          corrected.riskLevel = getRiskLevelFromScore(corrected.riskScore);
+          corrected.slingIntegrity = clamp(Math.round(s.slingIntegrity + slingOffset), 0, 100);
 
           if (rebuiltTransitionSnap) {
             corrected.painMarkerPredictions = s.painMarkerPredictions.map((p, pi) => {

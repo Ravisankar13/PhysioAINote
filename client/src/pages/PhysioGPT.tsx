@@ -3594,6 +3594,26 @@ ${ddxList}`;
       }
       setModelConfig(posturalConfig);
     }
+    if (payload.compensationUpdates.length > 0) {
+      for (const cu of payload.compensationUpdates) {
+        const resolutionFactor = cu.resolutionPercent / 100;
+        const overrideKey = cu.patternId.replace(/[^a-zA-Z0-9_]/g, '_');
+        setMuscleOverrides(prev => {
+          const existing = prev[overrideKey];
+          if (existing) {
+            const tensionReduction = -Math.round(resolutionFactor * 15);
+            return {
+              ...prev,
+              [overrideKey]: {
+                ...existing,
+                tensionOffset: (existing.tensionOffset ?? 0) + tensionReduction,
+              },
+            };
+          }
+          return prev;
+        });
+      }
+    }
   }, [modelConfig, effectiveModelConfig]);
 
   const chainIntegrityScores = useMemo(() => {

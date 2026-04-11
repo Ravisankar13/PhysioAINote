@@ -3090,7 +3090,7 @@ export default function SimulationTimelinePanel({
   const [sessionTimeline, setSessionTimeline] = useState<SessionTimelineResult | null>(null);
   const [sessionTimelineLoading, setSessionTimelineLoading] = useState(false);
   const [phaseProgress, setPhaseProgress] = useState<PhaseProgressEvent | null>(null);
-  const [enableReQuery, setEnableReQuery] = useState(false);
+  const [enableReQuery, setEnableReQuery] = useState(true);
 
   useEffect(() => {
     if (!hasCustomTreatments) {
@@ -3200,19 +3200,21 @@ export default function SimulationTimelinePanel({
     return (
       <div className="flex flex-col gap-2">
         {patientFactorsPanel}
-        {!enableReQuery && !sessionTimelineLoading && (
+        {!sessionTimelineLoading && (
           <div className="border border-cyan-700/30 rounded bg-cyan-950/20 px-3 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-              <span className="text-[9px] text-gray-300">Auto-evolve treatments at phase transitions</span>
+              <span className="text-[9px] text-gray-300">
+                {enableReQuery ? 'Auto-evolving treatments at phase transitions' : 'Auto-evolve treatments at phase transitions'}
+              </span>
             </div>
             <Button
               variant="outline"
               size="sm"
-              className="h-5 text-[8px] px-2 border-cyan-600/40 text-cyan-400 hover:bg-cyan-900/30"
-              onClick={() => setEnableReQuery(true)}
+              className={`h-5 text-[8px] px-2 ${enableReQuery ? 'border-emerald-600/40 text-emerald-400 hover:bg-emerald-900/30' : 'border-cyan-600/40 text-cyan-400 hover:bg-cyan-900/30'}`}
+              onClick={() => setEnableReQuery(!enableReQuery)}
             >
-              Enable Re-Query Engine
+              {enableReQuery ? 'Disable Re-Query' : 'Enable Re-Query'}
             </Button>
           </div>
         )}

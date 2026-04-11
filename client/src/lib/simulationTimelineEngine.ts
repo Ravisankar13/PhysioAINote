@@ -2661,11 +2661,14 @@ export async function buildSessionTimelineAsync(
   let accumulatedResult = initialResult;
 
   const firstTransitionSession = transitions[0].sessionIndex;
+  const firstPhaseEndSession = accumulatedResult.sessions[firstTransitionSession]?.sessionNumber
+    ? accumulatedResult.sessions[firstTransitionSession].sessionNumber - 1
+    : firstTransitionSession;
   treatmentPhases.push({
     phaseLabel: transitions[0].fromPhase,
     phaseIndex: 0,
     startSession: 1,
-    endSession: accumulatedResult.sessions[firstTransitionSession - 1]?.sessionNumber ?? firstTransitionSession,
+    endSession: firstPhaseEndSession,
     exercises: currentExercises,
     techniques: currentTechniques,
     designRationale: 'Initial treatment design by practitioner',
@@ -2675,7 +2678,13 @@ export async function buildSessionTimelineAsync(
     previousProgressionStages: [],
   });
 
-  onPartialResult?.({ ...accumulatedResult, treatmentPhases: [...treatmentPhases] });
+  const firstPhaseSessions = accumulatedResult.sessions.filter(s => s.sessionNumber <= firstPhaseEndSession);
+  onPartialResult?.({
+    ...accumulatedResult,
+    sessions: firstPhaseSessions,
+    totalSessions: firstPhaseSessions.length,
+    treatmentPhases: [...treatmentPhases],
+  });
 
   for (let ti = 0; ti < transitions.length; ti++) {
     if (signal?.aborted) break;
@@ -2723,11 +2732,14 @@ export async function buildSessionTimelineAsync(
       ? transitionSnap.compensationPredictions.reduce((s, c) => s + c.resolutionPercent, 0) / transitionSnap.compensationPredictions.length
       : 0;
 
+    const previousPhaseExercises = currentExercises;
+    const previousPhaseTechniques = currentTechniques;
     let newExercises: CustomExercise[] = currentExercises;
     let newTechniques: CustomTechnique[] = currentTechniques;
     let exerciseRationale = '';
     let exerciseSafety = '';
     let techniqueRationale = '';
+    let treatmentsChanged = false;
 
     try {
       const { apiRequest } = await import('@/lib/queryClient');
@@ -2743,25 +2755,28 @@ export async function buildSessionTimelineAsync(
         newExercises = exResponse.customExercises;
         exerciseRationale = exResponse.designRationale ?? '';
         exerciseSafety = exResponse.safetyNotes ?? '';
+        treatmentsChanged = true;
       }
 
       if (mtResponse?.customTechniques && Array.isArray(mtResponse.customTechniques) && mtResponse.customTechniques.length > 0) {
         newTechniques = mtResponse.customTechniques;
         techniqueRationale = mtResponse.designRationale ?? '';
+        treatmentsChanged = true;
       }
     } catch (err) {
       console.warn(`[SessionTimeline] Re-query failed for phase ${transition.toPhase}:`, err);
     }
 
-    const nextTransitionSession = ti + 1 < transitions.length
+    const nextTransitionSessionNum = ti + 1 < transitions.length
       ? accumulatedResult.sessions[transitions[ti + 1].sessionIndex]?.sessionNumber ?? accumulatedResult.totalSessions
       : accumulatedResult.totalSessions;
+    const phaseEndSession = ti + 1 < transitions.length ? nextTransitionSessionNum - 1 : nextTransitionSessionNum;
 
     treatmentPhases.push({
       phaseLabel: transition.toPhase,
       phaseIndex: ti + 1,
       startSession: transitionSnap.sessionNumber,
-      endSession: nextTransitionSession,
+      endSession: phaseEndSession,
       exercises: newExercises,
       techniques: newTechniques,
       designRationale: [exerciseRationale, techniqueRationale].filter(Boolean).join('\n\n') || `AI-generated treatments for ${transition.toPhase} phase`,
@@ -2782,7 +2797,7 @@ export async function buildSessionTimelineAsync(
     currentExercises = newExercises;
     currentTechniques = newTechniques;
 
-    if (newExercises !== customExercises || newTechniques !== customTechniques) {
+    if (treatmentsChanged) {
       onPhaseProgress?.({
         phaseIndex: ti + 1,
         phaseLabel: transition.toPhase,
@@ -2831,7 +2846,13 @@ export async function buildSessionTimelineAsync(
       message: `${transition.toPhase} phase treatments ready`,
     });
 
-    onPartialResult?.({ ...accumulatedResult, treatmentPhases: [...treatmentPhases] });
+    const completedPhaseSessions = accumulatedResult.sessions.filter(s => s.sessionNumber <= phaseEndSession);
+    onPartialResult?.({
+      ...accumulatedResult,
+      sessions: completedPhaseSessions,
+      totalSessions: completedPhaseSessions.length,
+      treatmentPhases: [...treatmentPhases],
+    });
   }
 
   return { ...accumulatedResult, treatmentPhases };

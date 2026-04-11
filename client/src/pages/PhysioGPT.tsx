@@ -147,6 +147,7 @@ const ElectrophysicalEngineTab = lazy(() => import("@/components/skeleton/Electr
 const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/PatientEducationEngineTab"));
 const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/UnifiedBiomechanicsPanel"));
 const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
+const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
 const MechanismTreatmentTab = lazy(() => import("@/components/skeleton/MechanismTreatmentTab"));
 const SlingAnalysisPanel = lazy(() => import("@/components/skeleton/SlingAnalysisPanel"));
 const ClinicalTextInput = lazy(() => import("@/components/skeleton/ClinicalTextInput"));
@@ -602,7 +603,7 @@ export default function PhysioGPT() {
   const tissueViewManualRef = useRef(false);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
-  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd'>('mechanism');
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd' | 'simTimeline'>('mechanism');
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
@@ -3549,6 +3550,29 @@ ${ddxList}`;
     setWhatIfScenarios([]);
     setMechanismActiveTab('mechanism');
   }, [whatIfSimulatedConfig, modelConfig, effectiveModelConfig]);
+
+  const handleApplySimTimelineWeek = useCallback((simConfig: Record<string, any>, simOverrides: Record<string, Partial<import('@/lib/muscleBiomechanicsEngine').MuscleOverride>>) => {
+    const newModelConfig = JSON.parse(JSON.stringify(modelConfig));
+    for (const [joint, params] of Object.entries(simConfig)) {
+      if (typeof params === 'object' && params !== null) {
+        if (!newModelConfig[joint]) newModelConfig[joint] = {};
+        const effectiveJoint = (effectiveModelConfig[joint] as Record<string, number> | undefined) ?? {};
+        const rawJoint = (modelConfig[joint] as Record<string, number> | undefined) ?? {};
+        for (const [param, simVal] of Object.entries(params as Record<string, number>)) {
+          const effectiveVal = effectiveJoint[param] ?? 0;
+          const rawVal = rawJoint[param] ?? 0;
+          const delta = (simVal as number) - effectiveVal;
+          if (Math.abs(delta) > 0.001) {
+            newModelConfig[joint][param] = rawVal + delta;
+          }
+        }
+      }
+    }
+    setModelConfig(newModelConfig);
+    for (const [key, val] of Object.entries(simOverrides)) {
+      setMuscleOverrides(prev => ({ ...prev, [key]: { ...prev[key], ...val } }));
+    }
+  }, [modelConfig, effectiveModelConfig]);
 
   const chainIntegrityScores = useMemo(() => {
     if (!showUnifiedChainPanel || (liteMode && computeStage < 3)) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
@@ -8339,6 +8363,13 @@ ${ddxList}`;
                       <GraduationCap className="h-3 w-3" />
                       Patient Ed
                     </button>
+                    <button
+                      onClick={() => { setMechanismActiveTab('simTimeline'); setManualTherapyAnnotations(null); }}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'simTimeline' ? 'bg-sky-500/30 text-sky-300 border border-sky-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                    >
+                      <Clock className="h-3 w-3" />
+                      Timeline
+                    </button>
                   </div>
                   {mechanismActiveTab === 'mechanism' && (
                     <InjuryMechanismPanel
@@ -8448,6 +8479,26 @@ ${ddxList}`;
                         type: pm.type,
                       }))}
                     />
+                  )}
+                  {mechanismActiveTab === 'simTimeline' && (
+                    <Suspense fallback={<LazyPanelFallback />}>
+                    <SimulationTimelinePanel
+                      treatmentPlan={treatmentPlanData}
+                      baseModelConfig={effectiveModelConfig}
+                      baseOverrides={compensatedOverrides}
+                      painMarkers={painMarkers.map(pm => ({
+                        id: pm.id,
+                        position: pm.position,
+                        label: pm.anatomicalLabel || pm.nearestBone,
+                        type: pm.type,
+                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        description: pm.description,
+                      }))}
+                      bodyWeightKg={bodyWeightKg}
+                      biomechanicsOutput={unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput}
+                      onApplyWeekToSkeleton={handleApplySimTimelineWeek}
+                    />
+                    </Suspense>
                   )}
                 </div>
               </div>

@@ -603,6 +603,7 @@ export default function PhysioGPT() {
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd'>('mechanism');
+  const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
@@ -1485,6 +1486,7 @@ export default function PhysioGPT() {
       highlightLabels: [...(prev?.highlightLabels || []), ...applied.highlightLabels],
       predictionText,
     };
+    setHasClinicalTextData(true);
   }, []);
 
   const handleClinicalTextClear = useCallback(() => {
@@ -1536,6 +1538,7 @@ export default function PhysioGPT() {
     tissueViewManualRef.current = false;
 
     clinicalTextAppliedRef.current = null;
+    setHasClinicalTextData(false);
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
@@ -9778,6 +9781,28 @@ ${ddxList}`;
           })()}
         />
         </Suspense>
+        {hasClinicalTextData && (
+          <div className="flex gap-1.5 mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 text-[11px] bg-violet-600/90 text-white hover:bg-violet-500 border border-violet-400/30 shadow-lg shadow-violet-900/30"
+              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('exercise'); }}
+            >
+              <Dumbbell className="h-3 w-3 mr-1" />
+              Exercise Rx
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 text-[11px] bg-rose-600/90 text-white hover:bg-rose-500 border border-rose-400/30 shadow-lg shadow-rose-900/30"
+              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('manualRx'); }}
+            >
+              <Hand className="h-3 w-3 mr-1" />
+              Manual Therapy
+            </Button>
+          </div>
+        )}
       </div>
 
 

@@ -172,10 +172,12 @@ function SessionRecoveryCurve({
     return padding.left + (maxDay > 0 ? (s.dayOffset / maxDay) : (s.sessionNumber / totalSessions)) * chartW;
   }, [maxDay, totalSessions, chartW]);
 
+  const safeRomPct = useCallback((r: RomPrediction) => r.targetDegrees > 0 ? (r.predictedDegrees / r.targetDegrees) * 100 : 50, []);
+
   const avgRom = useCallback((s: SessionSnapshot) => {
     if (s.romPredictions.length === 0) return 50;
-    return s.romPredictions.reduce((sum, r) => sum + r.predictedDegrees / r.targetDegrees * 100, 0) / s.romPredictions.length;
-  }, []);
+    return s.romPredictions.reduce((sum, r) => sum + safeRomPct(r), 0) / s.romPredictions.length;
+  }, [safeRomPct]);
 
   const avgMuscleTension = useCallback((s: SessionSnapshot) => {
     if (s.muscleStatePredictions.length === 0) return 50;
@@ -213,7 +215,7 @@ function SessionRecoveryCurve({
     return allJointIds.map((jointId, idx) => {
       const pts = sessions.map(s => {
         const rom = s.romPredictions.find(r => r.jointId === jointId);
-        const pct = rom ? (rom.predictedDegrees / rom.targetDegrees) * 100 : 50;
+        const pct = rom ? safeRomPct(rom) : 50;
         return { x: getX(s), y: pct, session: s.sessionNumber };
       });
       return { jointId, color: ROM_JOINT_COLORS[idx % ROM_JOINT_COLORS.length], pts };
@@ -741,7 +743,7 @@ function SessionCard({
   const manualCount = session.treatments.filter(t => t.type === 'manual_therapy').length;
   const isRestSession = session.treatments.length === 0;
   const avgRomPct = session.romPredictions.length > 0
-    ? (session.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / session.romPredictions.length).toFixed(0)
+    ? (session.romPredictions.reduce((s, r) => s + (r.targetDegrees > 0 ? r.predictedDegrees / r.targetDegrees * 100 : 50), 0) / session.romPredictions.length).toFixed(0)
     : null;
 
   return (
@@ -1858,7 +1860,7 @@ function SessionTimelineView({
             {sessionTimeline.baseline.romBaselines.length > 0 && (
               <SummaryRow
                 label="Avg ROM"
-                value={`${(sessionTimeline.baseline.romBaselines.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / sessionTimeline.baseline.romBaselines.length).toFixed(0)}%`}
+                value={`${(sessionTimeline.baseline.romBaselines.reduce((s, r) => s + (r.targetDegrees > 0 ? r.predictedDegrees / r.targetDegrees * 100 : 50), 0) / sessionTimeline.baseline.romBaselines.length).toFixed(0)}%`}
                 color="amber"
               />
             )}
@@ -1878,7 +1880,7 @@ function SessionTimelineView({
             {lastSession && lastSession.romPredictions.length > 0 && (
               <SummaryRow
                 label="Avg ROM"
-                value={`${(lastSession.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / lastSession.romPredictions.length).toFixed(0)}%`}
+                value={`${(lastSession.romPredictions.reduce((s, r) => s + (r.targetDegrees > 0 ? r.predictedDegrees / r.targetDegrees * 100 : 50), 0) / lastSession.romPredictions.length).toFixed(0)}%`}
                 color="emerald"
               />
             )}
@@ -1932,8 +1934,8 @@ function SessionTimelineView({
                 );
               })()}
               {sessionTimeline.baseline.romBaselines.length > 0 && lastSession.romPredictions.length > 0 && (() => {
-                const baseRom = sessionTimeline.baseline.romBaselines.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / sessionTimeline.baseline.romBaselines.length;
-                const finalRom = lastSession.romPredictions.reduce((s, r) => s + r.predictedDegrees / r.targetDegrees * 100, 0) / lastSession.romPredictions.length;
+                const baseRom = sessionTimeline.baseline.romBaselines.reduce((s, r) => s + (r.targetDegrees > 0 ? r.predictedDegrees / r.targetDegrees * 100 : 50), 0) / sessionTimeline.baseline.romBaselines.length;
+                const finalRom = lastSession.romPredictions.reduce((s, r) => s + (r.targetDegrees > 0 ? r.predictedDegrees / r.targetDegrees * 100 : 50), 0) / lastSession.romPredictions.length;
                 const romDelta = finalRom - baseRom;
                 return (
                   <div className="flex items-center justify-between">

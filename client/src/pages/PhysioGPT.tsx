@@ -3585,12 +3585,9 @@ ${ddxList}`;
     }
     if (payload.posturalUpdates.length > 0) {
       const posturalConfig = JSON.parse(JSON.stringify(newModelConfig));
+      if (!posturalConfig['posture']) posturalConfig['posture'] = {};
       for (const pu of payload.posturalUpdates) {
-        const parts = pu.sliderId.split('.');
-        if (parts.length === 2) {
-          if (!posturalConfig[parts[0]]) posturalConfig[parts[0]] = {};
-          posturalConfig[parts[0]][parts[1]] = pu.predictedValue;
-        }
+        posturalConfig['posture'][pu.sliderId] = pu.predictedValue;
       }
       setModelConfig(posturalConfig);
     }

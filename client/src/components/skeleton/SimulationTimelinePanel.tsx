@@ -24,6 +24,11 @@ import {
   Dumbbell,
   Hand,
   Lightbulb,
+  User,
+  Heart,
+  AlertCircle,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import {
   buildSimulationTimeline,
@@ -36,6 +41,20 @@ import {
   type SessionModification,
   type SessionTreatment,
 } from "@/lib/simulationTimelineEngine";
+import {
+  type PatientFactors,
+  type PatientModifierProfile,
+  type ConditionRecoveryProfile,
+  DEFAULT_PATIENT_FACTORS,
+  computePatientModifiers,
+  autoPopulateFromPipeline,
+  autoDetectCondition,
+  findConditionProfile,
+  adjustProfileForPatient,
+  CONDITION_RECOVERY_PROFILES,
+} from "@/lib/patientFactorsEngine";
+import type { ClinicalExtractionResult } from "@shared/clinicalIntakeTypes";
+import type { StructuredReasoningResult } from "./StructuredReasoningTab";
 import type { TreatmentPlanResult } from "./PlanTab";
 import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
 import type { CustomExercise } from "./ExerciseEngineTab";
@@ -58,6 +77,8 @@ interface SimulationTimelinePanelProps {
   onApplyWeekToSkeleton?: (modelConfig: Record<string, Record<string, number>>, overrides: Record<string, Partial<MuscleOverride>>) => void;
   customExercises?: CustomExercise[] | null;
   customTechniques?: CustomTechnique[] | null;
+  extractionResult?: ClinicalExtractionResult | null;
+  structuredReasoning?: StructuredReasoningResult | null;
 }
 
 const PHASE_COLORS = [
@@ -1015,6 +1036,458 @@ function SessionTimelineView({
   );
 }
 
+function PatientFactorsForm({
+  factors,
+  onChange,
+  onAutoPopulate,
+  hasAutoPopulateData,
+  modifiers,
+  detectedCondition,
+  adjustedProfile,
+}: {
+  factors: PatientFactors;
+  onChange: (updated: PatientFactors) => void;
+  onAutoPopulate: () => void;
+  hasAutoPopulateData: boolean;
+  modifiers: PatientModifierProfile;
+  detectedCondition: ConditionRecoveryProfile | null;
+  adjustedProfile: ConditionRecoveryProfile | null;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [showModifiers, setShowModifiers] = useState(false);
+  const [showCondition, setShowCondition] = useState(false);
+
+  const updateField = <K extends keyof PatientFactors>(key: K, value: PatientFactors[K]) => {
+    onChange({ ...factors, [key]: value });
+  };
+
+  const overallColor = modifiers.overallRecoveryMultiplier >= 0.85
+    ? 'text-emerald-400' : modifiers.overallRecoveryMultiplier >= 0.6
+    ? 'text-amber-400' : 'text-red-400';
+
+  const overallBg = modifiers.overallRecoveryMultiplier >= 0.85
+    ? 'bg-emerald-500/10 border-emerald-500/30' : modifiers.overallRecoveryMultiplier >= 0.6
+    ? 'bg-amber-500/10 border-amber-500/30' : 'bg-red-500/10 border-red-500/30';
+
+  return (
+    <div className="border border-gray-700/40 rounded overflow-hidden">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-800/40 hover:bg-gray-800/60 text-gray-300"
+      >
+        <span className="text-[9px] font-medium flex items-center gap-1">
+          <User className="h-3 w-3 text-violet-400" />
+          Patient Factors
+          {factors.age !== null && (
+            <Badge variant="outline" className="text-[7px] py-0 px-1 border-violet-500/30 text-violet-300 ml-1">
+              {factors.age}y
+            </Badge>
+          )}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[8px] font-medium ${overallColor}`}>
+            {(modifiers.overallRecoveryMultiplier * 100).toFixed(0)}% recovery
+          </span>
+          {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="p-2 bg-gray-900/30 space-y-2">
+          {hasAutoPopulateData && (
+            <Button
+              onClick={onAutoPopulate}
+              size="sm"
+              variant="outline"
+              className="w-full h-6 text-[9px] bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border-violet-500/30"
+            >
+              <RefreshCw className="h-2.5 w-2.5 mr-1" />
+              Auto-fill from Clinical Pipeline
+            </Button>
+          )}
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Age</label>
+              <input
+                type="number"
+                value={factors.age ?? ''}
+                onChange={e => updateField('age', e.target.value ? parseInt(e.target.value) : null)}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1.5 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                placeholder="Age"
+                min={1}
+                max={120}
+              />
+            </div>
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">BMI</label>
+              <select
+                value={factors.bmi}
+                onChange={e => updateField('bmi', e.target.value as PatientFactors['bmi'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="underweight">Underweight</option>
+                <option value="normal">Normal</option>
+                <option value="overweight">Overweight</option>
+                <option value="obese">Obese</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Diabetes</label>
+              <select
+                value={factors.diabetes}
+                onChange={e => updateField('diabetes', e.target.value as PatientFactors['diabetes'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="none">None</option>
+                <option value="prediabetic">Pre-diabetic</option>
+                <option value="type2">Type 2</option>
+                <option value="type1">Type 1</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Thyroid</label>
+              <select
+                value={factors.thyroid}
+                onChange={e => updateField('thyroid', e.target.value as PatientFactors['thyroid'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="normal">Normal</option>
+                <option value="hypothyroid">Hypothyroid</option>
+                <option value="hyperthyroid">Hyperthyroid</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Smoking</label>
+              <select
+                value={factors.smoking}
+                onChange={e => updateField('smoking', e.target.value as PatientFactors['smoking'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="never">Never</option>
+                <option value="former">Former</option>
+                <option value="current">Current</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Activity Level</label>
+              <select
+                value={factors.activityLevel}
+                onChange={e => updateField('activityLevel', e.target.value as PatientFactors['activityLevel'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="sedentary">Sedentary</option>
+                <option value="light">Light</option>
+                <option value="moderate">Moderate</option>
+                <option value="active">Active</option>
+                <option value="athletic">Athletic</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Chronicity</label>
+              <select
+                value={factors.chronicity}
+                onChange={e => updateField('chronicity', e.target.value as PatientFactors['chronicity'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="acute">Acute</option>
+                <option value="subacute">Subacute</option>
+                <option value="chronic">Chronic</option>
+                <option value="recurrent">Recurrent</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Irritability</label>
+              <select
+                value={factors.irritability}
+                onChange={e => updateField('irritability', e.target.value as PatientFactors['irritability'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="low">Low</option>
+                <option value="moderate">Moderate</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Psych Risk</label>
+              <select
+                value={factors.psychologicalRisk}
+                onChange={e => updateField('psychologicalRisk', e.target.value as PatientFactors['psychologicalRisk'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="low">Low</option>
+                <option value="moderate">Moderate</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Sleep Quality</label>
+              <select
+                value={factors.sleepQuality}
+                onChange={e => updateField('sleepQuality', e.target.value as PatientFactors['sleepQuality'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="good">Good</option>
+                <option value="fair">Fair</option>
+                <option value="poor">Poor</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Side Affected</label>
+              <select
+                value={factors.sideAffected}
+                onChange={e => updateField('sideAffected', e.target.value as PatientFactors['sideAffected'])}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="dominant">Dominant</option>
+                <option value="non_dominant">Non-dominant</option>
+                <option value="bilateral">Bilateral</option>
+                <option value="axial">Axial</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[8px] text-gray-500 block mb-0.5">Previous Episodes</label>
+              <input
+                type="number"
+                value={factors.previousEpisodes}
+                onChange={e => updateField('previousEpisodes', Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1.5 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                min={0}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-0.5">
+              <label className="text-[8px] text-gray-500">Compliance ({factors.compliance}%)</label>
+            </div>
+            <Slider
+              value={[factors.compliance]}
+              onValueChange={v => updateField('compliance', v[0])}
+              min={10}
+              max={100}
+              step={5}
+              className="w-full"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-[9px] text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={factors.steroidInjectionHistory}
+                onChange={e => {
+                  updateField('steroidInjectionHistory', e.target.checked);
+                  if (!e.target.checked) updateField('steroidInjectionCount', 0);
+                }}
+                className="rounded border-gray-600 bg-gray-800 text-violet-500 h-3 w-3"
+              />
+              Steroid injections
+            </label>
+            {factors.steroidInjectionHistory && (
+              <input
+                type="number"
+                value={factors.steroidInjectionCount}
+                onChange={e => updateField('steroidInjectionCount', Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-12 bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                min={0}
+                placeholder="count"
+              />
+            )}
+          </div>
+
+          <div className={`rounded p-1.5 border ${overallBg}`}>
+            <button
+              onClick={() => setShowModifiers(!showModifiers)}
+              className="w-full flex items-center justify-between"
+            >
+              <div className="flex items-center gap-1.5">
+                <Heart className="h-3 w-3 text-rose-400" />
+                <span className="text-[9px] font-medium text-gray-200">Recovery Modifier Impact</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className={`text-[10px] font-bold ${overallColor}`}>
+                  {(modifiers.overallRecoveryMultiplier * 100).toFixed(0)}%
+                </span>
+                {showModifiers ? <ChevronUp className="h-2.5 w-2.5 text-gray-500" /> : <ChevronDown className="h-2.5 w-2.5 text-gray-500" />}
+              </div>
+            </button>
+            {showModifiers && (
+              <div className="mt-1.5 space-y-1 border-t border-gray-700/30 pt-1.5">
+                <div className="grid grid-cols-3 gap-1">
+                  <div className="text-center">
+                    <div className="text-[7px] text-gray-500">Healing</div>
+                    <div className={`text-[9px] font-medium ${modifiers.healingRateMultiplier >= 0.9 ? 'text-emerald-400' : modifiers.healingRateMultiplier >= 0.7 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {(modifiers.healingRateMultiplier * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[7px] text-gray-500">Tissue</div>
+                    <div className={`text-[9px] font-medium ${modifiers.tissueQualityMultiplier >= 0.9 ? 'text-emerald-400' : modifiers.tissueQualityMultiplier >= 0.7 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {(modifiers.tissueQualityMultiplier * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[7px] text-gray-500">Pain Sens.</div>
+                    <div className={`text-[9px] font-medium ${modifiers.painSensitivityMultiplier <= 1.0 ? 'text-emerald-400' : modifiers.painSensitivityMultiplier <= 1.2 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {(modifiers.painSensitivityMultiplier * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  <div className="text-center">
+                    <div className="text-[7px] text-gray-500">Compliance</div>
+                    <div className={`text-[9px] font-medium ${modifiers.complianceMultiplier >= 0.8 ? 'text-emerald-400' : modifiers.complianceMultiplier >= 0.5 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {(modifiers.complianceMultiplier * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[7px] text-gray-500">Recurrence</div>
+                    <div className={`text-[9px] font-medium ${modifiers.recurrenceRiskMultiplier <= 1.0 ? 'text-emerald-400' : modifiers.recurrenceRiskMultiplier <= 1.3 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {(modifiers.recurrenceRiskMultiplier * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[7px] text-gray-500">Psychosocial</div>
+                    <div className={`text-[9px] font-medium ${modifiers.psychosocialMultiplier >= 0.85 ? 'text-emerald-400' : modifiers.psychosocialMultiplier >= 0.7 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {(modifiers.psychosocialMultiplier * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                </div>
+
+                {modifiers.modifierBreakdown.length > 0 && (
+                  <div className="space-y-0.5 mt-1">
+                    {modifiers.modifierBreakdown.map((b, i) => (
+                      <div key={i} className="flex items-center justify-between text-[8px]">
+                        <span className="text-gray-400">{b.factor}</span>
+                        <span className="text-gray-500">{b.effect}</span>
+                        <span className={b.multiplier >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}>
+                          ×{b.multiplier.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {modifiers.riskFlags.length > 0 && (
+                  <div className="mt-1 space-y-0.5">
+                    {modifiers.riskFlags.map((flag, i) => (
+                      <div key={i} className="flex items-start gap-1 text-[8px]">
+                        <AlertCircle className="h-2.5 w-2.5 text-red-400 shrink-0 mt-0.5" />
+                        <span className="text-red-300/80">{flag}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {modifiers.positiveFactors.length > 0 && (
+                  <div className="mt-1 space-y-0.5">
+                    {modifiers.positiveFactors.map((pf, i) => (
+                      <div key={i} className="flex items-start gap-1 text-[8px]">
+                        <Sparkles className="h-2.5 w-2.5 text-emerald-400 shrink-0 mt-0.5" />
+                        <span className="text-emerald-300/80">{pf}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {detectedCondition && (
+            <div className="rounded border border-cyan-500/30 bg-cyan-500/10 p-1.5">
+              <button
+                onClick={() => setShowCondition(!showCondition)}
+                className="w-full flex items-center justify-between"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Target className="h-3 w-3 text-cyan-400" />
+                  <span className="text-[9px] font-medium text-cyan-300">{detectedCondition.conditionName}</span>
+                </div>
+                {showCondition ? <ChevronUp className="h-2.5 w-2.5 text-gray-500" /> : <ChevronDown className="h-2.5 w-2.5 text-gray-500" />}
+              </button>
+              {showCondition && (
+                <div className="mt-1.5 space-y-1.5 border-t border-cyan-500/20 pt-1.5">
+                  <div className="flex items-center gap-2 text-[8px]">
+                    <span className="text-gray-500">Recovery:</span>
+                    <span className="text-cyan-300">
+                      {adjustedProfile ? `${adjustedProfile.totalRecoveryWeeksMin}–${adjustedProfile.totalRecoveryWeeksMax}` : `${detectedCondition.totalRecoveryWeeksMin}–${detectedCondition.totalRecoveryWeeksMax}`} weeks
+                    </span>
+                    {adjustedProfile && adjustedProfile.totalRecoveryWeeksMax !== detectedCondition.totalRecoveryWeeksMax && (
+                      <span className="text-gray-600 line-through text-[7px]">
+                        {detectedCondition.totalRecoveryWeeksMin}–{detectedCondition.totalRecoveryWeeksMax}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-[8px]">
+                    <span className="text-gray-500">ROM recovery:</span>
+                    <span className="text-cyan-300">{adjustedProfile?.expectedRomRecoveryPercent ?? detectedCondition.expectedRomRecoveryPercent}%</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[8px]">
+                    <span className="text-gray-500">Recurrence risk:</span>
+                    <span className={`${(adjustedProfile?.recurrenceRiskPercent ?? detectedCondition.recurrenceRiskPercent) > 35 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {adjustedProfile?.recurrenceRiskPercent ?? detectedCondition.recurrenceRiskPercent}%
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-[7px] text-gray-500 uppercase">Phases</div>
+                    {(adjustedProfile ?? detectedCondition).phases.map((ph, i) => (
+                      <div key={i} className="flex items-center gap-1 text-[8px]">
+                        <div className={`w-1.5 h-1.5 rounded-full ${PHASE_COLORS[i % PHASE_COLORS.length].bg.replace('/20', '')}`} />
+                        <span className="text-gray-300 flex-1 truncate">{ph.name}</span>
+                        <span className="text-gray-500 shrink-0">{ph.durationWeeksMin}–{ph.durationWeeksMax}w</span>
+                      </div>
+                    ))}
+                  </div>
+                  {detectedCondition.keyPrognosticFactors.length > 0 && (
+                    <div className="space-y-0.5">
+                      <div className="text-[7px] text-gray-500 uppercase">Key Prognostic Factors</div>
+                      <div className="flex flex-wrap gap-1">
+                        {detectedCondition.keyPrognosticFactors.map((kpf, i) => (
+                          <Badge key={i} variant="outline" className="text-[7px] py-0 px-1 border-cyan-500/20 text-cyan-400/70">
+                            {kpf}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {detectedCondition.contraindicatedInterventions.length > 0 && (
+                    <div className="space-y-0.5">
+                      <div className="text-[7px] text-gray-500 uppercase">Contraindicated</div>
+                      {detectedCondition.contraindicatedInterventions.map((ci, i) => (
+                        <div key={i} className="flex items-start gap-1 text-[8px]">
+                          <AlertTriangle className="h-2.5 w-2.5 text-red-400 shrink-0 mt-0.5" />
+                          <span className="text-red-300/70">{ci}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SimulationTimelinePanel({
   treatmentPlan,
   baseModelConfig,
@@ -1025,7 +1498,40 @@ export default function SimulationTimelinePanel({
   onApplyWeekToSkeleton,
   customExercises,
   customTechniques,
+  extractionResult,
+  structuredReasoning,
 }: SimulationTimelinePanelProps) {
+  const [patientFactors, setPatientFactors] = useState<PatientFactors>(DEFAULT_PATIENT_FACTORS);
+  const [hasAutoPopulated, setHasAutoPopulated] = useState(false);
+
+  const hasAutoPopulateData = !!(extractionResult || structuredReasoning);
+
+  useEffect(() => {
+    if (hasAutoPopulateData && !hasAutoPopulated) {
+      const populated = autoPopulateFromPipeline(extractionResult ?? null, structuredReasoning ?? null, DEFAULT_PATIENT_FACTORS);
+      const isDifferent = JSON.stringify(populated) !== JSON.stringify(DEFAULT_PATIENT_FACTORS);
+      if (isDifferent) {
+        setPatientFactors(populated);
+        setHasAutoPopulated(true);
+      }
+    }
+  }, [extractionResult, structuredReasoning, hasAutoPopulateData, hasAutoPopulated]);
+
+  const handleAutoPopulate = useCallback(() => {
+    const populated = autoPopulateFromPipeline(extractionResult ?? null, structuredReasoning ?? null, patientFactors);
+    setPatientFactors(populated);
+    setHasAutoPopulated(true);
+  }, [extractionResult, structuredReasoning, patientFactors]);
+
+  const modifiers = useMemo(() => computePatientModifiers(patientFactors), [patientFactors]);
+
+  const detectedCondition = useMemo(() => autoDetectCondition(structuredReasoning ?? null), [structuredReasoning]);
+
+  const adjustedProfile = useMemo(() => {
+    if (!detectedCondition) return null;
+    return adjustProfileForPatient(detectedCondition, modifiers);
+  }, [detectedCondition, modifiers]);
+
   const hasCustomTreatments = (customExercises && customExercises.length > 0) || (customTechniques && customTechniques.length > 0);
 
   const sessionTimeline = useMemo(() => {
@@ -1064,28 +1570,47 @@ export default function SimulationTimelinePanel({
     }
   }, [hasCustomTreatments, treatmentPlan, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput]);
 
+  const patientFactorsPanel = (
+    <PatientFactorsForm
+      factors={patientFactors}
+      onChange={setPatientFactors}
+      onAutoPopulate={handleAutoPopulate}
+      hasAutoPopulateData={hasAutoPopulateData}
+      modifiers={modifiers}
+      detectedCondition={detectedCondition}
+      adjustedProfile={adjustedProfile}
+    />
+  );
+
   if (hasCustomTreatments && sessionTimeline) {
     return (
-      <SessionTimelineView
-        sessionTimeline={sessionTimeline}
-        baseModelConfig={baseModelConfig}
-        baseOverrides={baseOverrides}
-        onApplyToSkeleton={onApplyWeekToSkeleton}
-      />
+      <div className="flex flex-col gap-2">
+        {patientFactorsPanel}
+        <SessionTimelineView
+          sessionTimeline={sessionTimeline}
+          baseModelConfig={baseModelConfig}
+          baseOverrides={baseOverrides}
+          onApplyToSkeleton={onApplyWeekToSkeleton}
+        />
+      </div>
     );
   }
 
   if (weekTimeline) {
     return (
-      <WeekTimelineView
-        timeline={weekTimeline}
-        onApplyWeekToSkeleton={onApplyWeekToSkeleton}
-      />
+      <div className="flex flex-col gap-2">
+        {patientFactorsPanel}
+        <WeekTimelineView
+          timeline={weekTimeline}
+          onApplyWeekToSkeleton={onApplyWeekToSkeleton}
+        />
+      </div>
     );
   }
 
   return (
     <div className="p-3 text-center space-y-3">
+      {patientFactorsPanel}
       <div className="text-gray-500 text-[10px] mb-2">No simulation data available</div>
       <div className="bg-gray-800/40 rounded border border-gray-700/30 p-3 space-y-2">
         <div className="flex items-center gap-1.5 text-[10px] text-gray-300">

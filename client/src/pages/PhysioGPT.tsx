@@ -8505,6 +8505,8 @@ ${ddxList}`;
                       onApplyWeekToSkeleton={handleApplySimTimelineWeek}
                       customExercises={customExerciseResult?.customExercises ?? null}
                       customTechniques={customManualTherapyResult?.customTechniques ?? null}
+                      extractionResult={extractionResult}
+                      structuredReasoning={structuredReasoningData}
                     />
                     </Suspense>
                   )}

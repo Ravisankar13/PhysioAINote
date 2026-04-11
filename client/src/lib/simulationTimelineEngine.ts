@@ -2767,16 +2767,13 @@ export async function buildSessionTimelineAsync(
       console.warn(`[SessionTimeline] Re-query failed for phase ${transition.toPhase}:`, err);
     }
 
-    const nextTransitionSessionNum = ti + 1 < transitions.length
-      ? accumulatedResult.sessions[transitions[ti + 1].sessionIndex]?.sessionNumber ?? accumulatedResult.totalSessions
-      : accumulatedResult.totalSessions;
-    const phaseEndSession = ti + 1 < transitions.length ? nextTransitionSessionNum - 1 : nextTransitionSessionNum;
+    let phaseEndSession: number;
 
     treatmentPhases.push({
       phaseLabel: transition.toPhase,
       phaseIndex: ti + 1,
       startSession: transitionSnap.sessionNumber,
-      endSession: phaseEndSession,
+      endSession: 0,
       exercises: newExercises,
       techniques: newTechniques,
       designRationale: [exerciseRationale, techniqueRationale].filter(Boolean).join('\n\n') || `AI-generated treatments for ${transition.toPhase} phase`,
@@ -2812,9 +2809,82 @@ export async function buildSessionTimelineAsync(
 
       const transitionSessionNum = transitionSnap.sessionNumber;
       const preTransitionSessions = accumulatedResult.sessions.filter(s => s.sessionNumber < transitionSessionNum);
+
+      const rebuiltTransitionSnap = rebuiltResult.sessions.find(s => s.sessionNumber === transitionSessionNum);
+      const riskOffset = rebuiltTransitionSnap ? transitionSnap.riskScore - rebuiltTransitionSnap.riskScore : 0;
+      const slingOffset = rebuiltTransitionSnap ? transitionSnap.slingIntegrity - rebuiltTransitionSnap.slingIntegrity : 0;
+
       const postTransitionSessions = rebuiltResult.sessions
         .filter(s => s.sessionNumber >= transitionSessionNum)
-        .map(s => ({ ...s }));
+        .map(s => {
+          const corrected = { ...s };
+          corrected.riskScore = Math.max(0, Math.min(10, Math.round((s.riskScore + riskOffset) * 10) / 10));
+          corrected.slingIntegrity = Math.max(0, Math.min(100, Math.round(s.slingIntegrity + slingOffset)));
+
+          if (rebuiltTransitionSnap) {
+            corrected.painMarkerPredictions = s.painMarkerPredictions.map((p, pi) => {
+              const actualPrev = transitionSnap.painMarkerPredictions[pi];
+              const rebuiltPrev = rebuiltTransitionSnap.painMarkerPredictions[pi];
+              if (actualPrev && rebuiltPrev) {
+                const offset = actualPrev.predictedSeverity - rebuiltPrev.predictedSeverity;
+                return { ...p, predictedSeverity: Math.max(0, Math.min(10, Math.round((p.predictedSeverity + offset) * 10) / 10)) };
+              }
+              return p;
+            });
+
+            corrected.romPredictions = s.romPredictions.map((r, ri) => {
+              const actualPrev = transitionSnap.romPredictions[ri];
+              const rebuiltPrev = rebuiltTransitionSnap.romPredictions[ri];
+              if (actualPrev && rebuiltPrev) {
+                const offset = actualPrev.predictedDegrees - rebuiltPrev.predictedDegrees;
+                return { ...r, predictedDegrees: Math.max(0, Math.round((r.predictedDegrees + offset) * 10) / 10) };
+              }
+              return r;
+            });
+
+            corrected.slingPredictions = s.slingPredictions.map((sl, si) => {
+              const actualPrev = transitionSnap.slingPredictions[si];
+              const rebuiltPrev = rebuiltTransitionSnap.slingPredictions[si];
+              if (actualPrev && rebuiltPrev) {
+                const offset = actualPrev.predictedIntegrity - rebuiltPrev.predictedIntegrity;
+                return { ...sl, predictedIntegrity: Math.max(0, Math.min(100, Math.round(sl.predictedIntegrity + offset))) };
+              }
+              return sl;
+            });
+
+            corrected.compensationPredictions = s.compensationPredictions.map((c, ci) => {
+              const actualPrev = transitionSnap.compensationPredictions[ci];
+              const rebuiltPrev = rebuiltTransitionSnap.compensationPredictions[ci];
+              if (actualPrev && rebuiltPrev) {
+                const sevOffset = actualPrev.predictedSeverity - rebuiltPrev.predictedSeverity;
+                const resOffset = actualPrev.resolutionPercent - rebuiltPrev.resolutionPercent;
+                return {
+                  ...c,
+                  predictedSeverity: Math.max(0, Math.min(10, Math.round((c.predictedSeverity + sevOffset) * 10) / 10)),
+                  resolutionPercent: Math.max(0, Math.min(100, Math.round(c.resolutionPercent + resOffset))),
+                };
+              }
+              return c;
+            });
+
+            corrected.muscleStatePredictions = s.muscleStatePredictions.map((m, mi) => {
+              const actualPrev = transitionSnap.muscleStatePredictions[mi];
+              const rebuiltPrev = rebuiltTransitionSnap.muscleStatePredictions[mi];
+              if (actualPrev && rebuiltPrev) {
+                const offset = actualPrev.predictedTension - rebuiltPrev.predictedTension;
+                return { ...m, predictedTension: Math.max(0, Math.min(100, Math.round(m.predictedTension + offset))) };
+              }
+              return m;
+            });
+          }
+
+          return corrected;
+        });
+
+      const postTransitionMilestones = rebuiltResult.milestones.filter(m => {
+        const weekDay = m.week * 7;
+        return weekDay >= (transitionSessionNum - 1) * accumulatedResult.sessionIntervalDays;
+      });
 
       accumulatedResult = {
         ...accumulatedResult,
@@ -2827,7 +2897,7 @@ export async function buildSessionTimelineAsync(
             const weekDay = m.week * 7;
             return weekDay < (transitionSessionNum - 1) * accumulatedResult.sessionIntervalDays;
           }),
-          ...rebuiltResult.milestones,
+          ...postTransitionMilestones,
         ],
         modifications: [
           ...accumulatedResult.modifications.filter(m => m.sessionNumber < transitionSessionNum),
@@ -2845,6 +2915,16 @@ export async function buildSessionTimelineAsync(
           transitions[uti] = matching;
         }
       }
+    }
+
+    const updatedNextTransitionNum = ti + 1 < transitions.length
+      ? accumulatedResult.sessions[transitions[ti + 1].sessionIndex]?.sessionNumber ?? accumulatedResult.totalSessions
+      : accumulatedResult.totalSessions;
+    phaseEndSession = ti + 1 < transitions.length ? updatedNextTransitionNum - 1 : updatedNextTransitionNum;
+
+    const currentPhaseBlock = treatmentPhases[treatmentPhases.length - 1];
+    if (currentPhaseBlock) {
+      currentPhaseBlock.endSession = phaseEndSession;
     }
 
     onPhaseProgress?.({

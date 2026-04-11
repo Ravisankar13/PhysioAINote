@@ -814,12 +814,13 @@ function computeEWMACorrectionFactors(
       for (const [markerId, actualPain] of Object.entries(oc.actualPain)) {
         const pred = snap.painMarkerPredictions.find(p => p.markerId === markerId);
         if (pred && pred.predictedSeverity > 0) {
-          const ratio = actualPain / pred.predictedSeverity;
+          const ratio = pred.predictedSeverity / actualPain;
+          const safeRatio = actualPain > 0 ? ratio : (pred.predictedSeverity > actualPain ? 2.0 : 1.0);
           if (!painFactors[markerId]) painFactors[markerId] = { sumWeighted: 0, sumWeights: 0, count: 0 };
-          painFactors[markerId].sumWeighted += ratio * recency;
+          painFactors[markerId].sumWeighted += safeRatio * recency;
           painFactors[markerId].sumWeights += recency;
           painFactors[markerId].count++;
-          overallSum += ratio * recency;
+          overallSum += safeRatio * recency;
           overallWeightSum += recency;
           overallCount++;
         }
@@ -2331,7 +2332,8 @@ export function buildSessionTimeline(
 
       for (const pp of snap.painMarkerPredictions) {
         const painCorr = correctionFactors.pain[pp.markerId]?.correctionMultiplier ?? romCorr;
-        const correctedPred = pp.baselineSeverity + (pp.predictedSeverity - pp.baselineSeverity) * painCorr * complianceMod;
+        const painInvCorr = painCorr > 0 ? 1 / painCorr : 1;
+        const correctedPred = pp.baselineSeverity + (pp.predictedSeverity - pp.baselineSeverity) * painInvCorr * complianceMod;
         pp.predictedSeverity = Math.round(clamp(correctedPred, 0, 10) * 10) / 10;
         pp.deltaFromBaseline = Math.round((pp.predictedSeverity - pp.baselineSeverity) * 10) / 10;
       }
@@ -2349,6 +2351,48 @@ export function buildSessionTimeline(
       if (snap.painMarkerPredictions.length > 0) {
         const avgPainCorrected = snap.painMarkerPredictions.reduce((s, p) => s + p.predictedSeverity, 0) / snap.painMarkerPredictions.length;
         snap.painPrediction = Math.round(clamp(avgPainCorrected * 10, 0, 100));
+      }
+
+      snap.doseResponseFraction = clamp(snap.doseResponseFraction * correctionFactors.overall.correctionMultiplier, 0, 1);
+
+      if (snap.interSessionHealing) {
+        const healCorr = correctionFactors.overall.correctionMultiplier;
+        snap.interSessionHealing = {
+          ...snap.interSessionHealing,
+          tissueRemodeling: snap.interSessionHealing.tissueRemodeling * healCorr,
+          exerciseCarryOver: snap.interSessionHealing.exerciseCarryOver * healCorr,
+          inflammationResolution: snap.interSessionHealing.inflammationResolution * healCorr,
+          netHealingDelta: snap.interSessionHealing.netHealingDelta * healCorr,
+        };
+      }
+
+      for (const sp of snap.slingPredictions) {
+        const slingCorr = correctionFactors.overall.correctionMultiplier;
+        const correctedIntegrity = sp.baselineIntegrity + (sp.predictedIntegrity - sp.baselineIntegrity) * slingCorr * complianceMod;
+        sp.predictedIntegrity = Math.round(clamp(correctedIntegrity, 0, 100));
+        sp.deltaFromBaseline = Math.round(sp.predictedIntegrity - sp.baselineIntegrity);
+      }
+
+      const corrOverall = correctionFactors.overall.correctionMultiplier;
+      const sessionFrac = snap.sessionNumber / sessions.length;
+      if (corrOverall > 1.1 && sessionFrac > 0.5) {
+        const phaseLabels = ['Acute/Protective', 'Proliferative', 'Remodeling', 'Functional', 'Return to Activity'];
+        const currentIdx = phaseLabels.indexOf(snap.recoveryPhaseLabel ?? '');
+        if (currentIdx >= 0 && currentIdx < phaseLabels.length - 1) {
+          const advancement = (corrOverall - 1) * sessionFrac;
+          if (advancement > 0.15) {
+            snap.recoveryPhaseLabel = phaseLabels[Math.min(currentIdx + 1, phaseLabels.length - 1)];
+          }
+        }
+      } else if (corrOverall < 0.9 && sessionFrac > 0.3) {
+        const phaseLabels = ['Acute/Protective', 'Proliferative', 'Remodeling', 'Functional', 'Return to Activity'];
+        const currentIdx = phaseLabels.indexOf(snap.recoveryPhaseLabel ?? '');
+        if (currentIdx > 0) {
+          const regression = (1 - corrOverall) * sessionFrac;
+          if (regression > 0.15) {
+            snap.recoveryPhaseLabel = phaseLabels[Math.max(currentIdx - 1, 0)];
+          }
+        }
       }
     }
   }

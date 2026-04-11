@@ -784,6 +784,13 @@ function ActualOutcomeInput({
     }
     return init;
   });
+  const [muscleValues, setMuscleValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const m of session.muscleStatePredictions.slice(0, 3)) {
+      init[m.muscleId] = existingOutcome?.actualMuscleTension?.[m.muscleId]?.toString() ?? '';
+    }
+    return init;
+  });
   const [compliance, setCompliance] = useState(existingOutcome?.complianceRating?.toString() ?? '1');
   const [notes, setNotes] = useState(existingOutcome?.notes ?? '');
 
@@ -798,15 +805,21 @@ function ActualOutcomeInput({
       const n = parseFloat(v);
       if (!isNaN(n) && n >= 0 && n <= 10) actualPain[k] = n;
     }
+    const actualMuscleTension: Record<string, number> = {};
+    for (const [k, v] of Object.entries(muscleValues)) {
+      const n = parseFloat(v);
+      if (!isNaN(n) && n >= 0 && n <= 100) actualMuscleTension[k] = n;
+    }
     onSave({
       sessionNumber: session.sessionNumber,
       actualRom: Object.keys(actualRom).length > 0 ? actualRom : undefined,
       actualPain: Object.keys(actualPain).length > 0 ? actualPain : undefined,
+      actualMuscleTension: Object.keys(actualMuscleTension).length > 0 ? actualMuscleTension : undefined,
       complianceRating: parseFloat(compliance) || 1,
       notes: notes.trim() || undefined,
     });
     setIsEditing(false);
-  }, [romValues, painValues, compliance, notes, session.sessionNumber, onSave]);
+  }, [romValues, painValues, muscleValues, compliance, notes, session.sessionNumber, onSave]);
 
   if (!isEditing && !existingOutcome) {
     return (
@@ -855,6 +868,23 @@ function ActualOutcomeInput({
                 <span className="text-gray-400">Pred: {p.predictedSeverity.toFixed(1)}</span>
                 <span className={diff <= 0 ? 'text-emerald-400' : 'text-red-400'}>
                   Act: {actual.toFixed(1)} ({diff > 0 ? '+' : ''}{diff.toFixed(1)})
+                </span>
+              </div>
+            );
+          })}
+          {session.muscleStatePredictions.slice(0, 3).map(m => {
+            const actual = existingOutcome.actualMuscleTension?.[m.muscleId];
+            if (actual === undefined) return null;
+            const diff = actual - m.predictedTension;
+            const normalDist = Math.abs(actual - 50);
+            const predNormalDist = Math.abs(m.predictedTension - 50);
+            const isBetter = normalDist < predNormalDist;
+            return (
+              <div key={m.muscleId} className="flex items-center justify-between text-[7px]">
+                <span className="text-gray-500 truncate max-w-[40%]">{m.muscleLabel}</span>
+                <span className="text-gray-400">Pred: {m.predictedTension}%</span>
+                <span className={isBetter ? 'text-emerald-400' : 'text-amber-400'}>
+                  Act: {actual}% ({diff > 0 ? '+' : ''}{diff}%)
                 </span>
               </div>
             );
@@ -910,6 +940,29 @@ function ActualOutcomeInput({
                   onChange={e => setPainValues(prev => ({ ...prev, [p.markerId]: e.target.value }))}
                   className="flex-1 bg-gray-800/60 border border-gray-600/40 rounded px-1 py-0.5 text-[8px] text-gray-200 w-12"
                   placeholder="/10"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {session.muscleStatePredictions.length > 0 && (
+        <div>
+          <div className="text-[7px] text-gray-500 mb-0.5">Muscle Tension (0-100%)</div>
+          <div className="space-y-0.5">
+            {session.muscleStatePredictions.slice(0, 3).map(m => (
+              <div key={m.muscleId} className="flex items-center gap-1 text-[7px]">
+                <span className="text-gray-400 w-[45%] truncate">{m.muscleLabel}</span>
+                <span className="text-gray-600 text-[6px]">pred:{m.predictedTension}%</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={muscleValues[m.muscleId] ?? ''}
+                  onChange={e => setMuscleValues(prev => ({ ...prev, [m.muscleId]: e.target.value }))}
+                  className="flex-1 bg-gray-800/60 border border-gray-600/40 rounded px-1 py-0.5 text-[8px] text-gray-200 w-12"
+                  placeholder="%"
                 />
               </div>
             ))}

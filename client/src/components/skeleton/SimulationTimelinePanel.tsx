@@ -1046,6 +1046,7 @@ function PatientFactorsForm({
   adjustedProfile,
   conditionOverrideId,
   onConditionOverrideChange,
+  autoPopulatedFields,
 }: {
   factors: PatientFactors;
   onChange: (updated: PatientFactors) => void;
@@ -1056,6 +1057,7 @@ function PatientFactorsForm({
   adjustedProfile: ConditionRecoveryProfile | null;
   conditionOverrideId: string | null;
   onConditionOverrideChange: (id: string | null) => void;
+  autoPopulatedFields: Set<string>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showModifiers, setShowModifiers] = useState(false);
@@ -1064,6 +1066,18 @@ function PatientFactorsForm({
   const updateField = <K extends keyof PatientFactors>(key: K, value: PatientFactors[K]) => {
     onChange({ ...factors, [key]: value });
   };
+
+  const autoFieldBorder = (field: string) =>
+    autoPopulatedFields.has(field) ? 'border-violet-500/50 ring-1 ring-violet-500/20' : 'border-gray-700/40';
+
+  const autoFieldLabel = (field: string, label: string) => (
+    <label className="text-[8px] text-gray-500 block mb-0.5">
+      {label}
+      {autoPopulatedFields.has(field) && (
+        <span className="ml-1 text-[6px] text-violet-400 font-medium">AUTO</span>
+      )}
+    </label>
+  );
 
   const overallColor = modifiers.overallRecoveryMultiplier >= 0.85
     ? 'text-emerald-400' : modifiers.overallRecoveryMultiplier >= 0.6
@@ -1112,23 +1126,23 @@ function PatientFactorsForm({
 
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Age</label>
+              {autoFieldLabel('age', 'Age')}
               <input
                 type="number"
                 value={factors.age ?? ''}
                 onChange={e => updateField('age', e.target.value ? parseInt(e.target.value) : null)}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1.5 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('age')} rounded px-1.5 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
                 placeholder="Age"
                 min={1}
                 max={120}
               />
             </div>
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">BMI</label>
+              {autoFieldLabel('bmi', 'BMI')}
               <select
                 value={factors.bmi}
                 onChange={e => updateField('bmi', e.target.value as PatientFactors['bmi'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('bmi')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="underweight">Underweight</option>
                 <option value="normal">Normal</option>
@@ -1140,11 +1154,11 @@ function PatientFactorsForm({
 
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Diabetes</label>
+              {autoFieldLabel('diabetes', 'Diabetes')}
               <select
                 value={factors.diabetes}
                 onChange={e => updateField('diabetes', e.target.value as PatientFactors['diabetes'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('diabetes')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="none">None</option>
                 <option value="prediabetic">Pre-diabetic</option>
@@ -1153,11 +1167,11 @@ function PatientFactorsForm({
               </select>
             </div>
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Thyroid</label>
+              {autoFieldLabel('thyroid', 'Thyroid')}
               <select
                 value={factors.thyroid}
                 onChange={e => updateField('thyroid', e.target.value as PatientFactors['thyroid'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('thyroid')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="normal">Normal</option>
                 <option value="hypothyroid">Hypothyroid</option>
@@ -1168,11 +1182,11 @@ function PatientFactorsForm({
 
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Smoking</label>
+              {autoFieldLabel('smoking', 'Smoking')}
               <select
                 value={factors.smoking}
                 onChange={e => updateField('smoking', e.target.value as PatientFactors['smoking'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('smoking')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="never">Never</option>
                 <option value="former">Former</option>
@@ -1180,11 +1194,11 @@ function PatientFactorsForm({
               </select>
             </div>
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Activity Level</label>
+              {autoFieldLabel('activityLevel', 'Activity Level')}
               <select
                 value={factors.activityLevel}
                 onChange={e => updateField('activityLevel', e.target.value as PatientFactors['activityLevel'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('activityLevel')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="sedentary">Sedentary</option>
                 <option value="light">Light</option>
@@ -1197,11 +1211,11 @@ function PatientFactorsForm({
 
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Chronicity</label>
+              {autoFieldLabel('chronicity', 'Chronicity')}
               <select
                 value={factors.chronicity}
                 onChange={e => updateField('chronicity', e.target.value as PatientFactors['chronicity'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('chronicity')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="acute">Acute</option>
                 <option value="subacute">Subacute</option>
@@ -1211,11 +1225,11 @@ function PatientFactorsForm({
               </select>
             </div>
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Irritability</label>
+              {autoFieldLabel('irritability', 'Irritability')}
               <select
                 value={factors.irritability}
                 onChange={e => updateField('irritability', e.target.value as PatientFactors['irritability'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('irritability')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="low">Low</option>
                 <option value="moderate">Moderate</option>
@@ -1226,11 +1240,11 @@ function PatientFactorsForm({
 
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Psych Risk</label>
+              {autoFieldLabel('psychologicalRisk', 'Psych Risk')}
               <select
                 value={factors.psychologicalRisk}
                 onChange={e => updateField('psychologicalRisk', e.target.value as PatientFactors['psychologicalRisk'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('psychologicalRisk')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="low">Low</option>
                 <option value="moderate">Moderate</option>
@@ -1238,11 +1252,11 @@ function PatientFactorsForm({
               </select>
             </div>
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Sleep Quality</label>
+              {autoFieldLabel('sleepQuality', 'Sleep Quality')}
               <select
                 value={factors.sleepQuality}
                 onChange={e => updateField('sleepQuality', e.target.value as PatientFactors['sleepQuality'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('sleepQuality')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="good">Good</option>
                 <option value="fair">Fair</option>
@@ -1253,11 +1267,11 @@ function PatientFactorsForm({
 
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Side Affected</label>
+              {autoFieldLabel('sideAffected', 'Side Affected')}
               <select
                 value={factors.sideAffected}
                 onChange={e => updateField('sideAffected', e.target.value as PatientFactors['sideAffected'])}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('sideAffected')} rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
               >
                 <option value="dominant">Dominant</option>
                 <option value="non_dominant">Non-dominant</option>
@@ -1266,12 +1280,12 @@ function PatientFactorsForm({
               </select>
             </div>
             <div>
-              <label className="text-[8px] text-gray-500 block mb-0.5">Previous Episodes</label>
+              {autoFieldLabel('previousEpisodes', 'Previous Episodes')}
               <input
                 type="number"
                 value={factors.previousEpisodes}
                 onChange={e => updateField('previousEpisodes', Math.max(0, parseInt(e.target.value) || 0))}
-                className="w-full bg-gray-800/60 border border-gray-700/40 rounded px-1.5 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none"
+                className={`w-full bg-gray-800/60 border ${autoFieldBorder('previousEpisodes')} rounded px-1.5 py-0.5 text-[9px] text-gray-200 focus:border-violet-500/50 focus:outline-none`}
                 min={0}
               />
             </div>
@@ -1550,25 +1564,38 @@ export default function SimulationTimelinePanel({
 }: SimulationTimelinePanelProps) {
   const [patientFactors, setPatientFactors] = useState<PatientFactors>(DEFAULT_PATIENT_FACTORS);
   const [hasAutoPopulated, setHasAutoPopulated] = useState(false);
+  const [autoPopulatedFields, setAutoPopulatedFields] = useState<Set<string>>(new Set());
 
   const hasAutoPopulateData = !!(extractionResult || structuredReasoning);
+
+  const detectAutoFields = useCallback((before: PatientFactors, after: PatientFactors): Set<string> => {
+    const fields = new Set<string>();
+    for (const key of Object.keys(after) as (keyof PatientFactors)[]) {
+      if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+        fields.add(key);
+      }
+    }
+    return fields;
+  }, []);
 
   useEffect(() => {
     if (hasAutoPopulateData && !hasAutoPopulated) {
       const populated = autoPopulateFromPipeline(extractionResult ?? null, structuredReasoning ?? null, DEFAULT_PATIENT_FACTORS);
       const isDifferent = JSON.stringify(populated) !== JSON.stringify(DEFAULT_PATIENT_FACTORS);
       if (isDifferent) {
+        setAutoPopulatedFields(detectAutoFields(DEFAULT_PATIENT_FACTORS, populated));
         setPatientFactors(populated);
         setHasAutoPopulated(true);
       }
     }
-  }, [extractionResult, structuredReasoning, hasAutoPopulateData, hasAutoPopulated]);
+  }, [extractionResult, structuredReasoning, hasAutoPopulateData, hasAutoPopulated, detectAutoFields]);
 
   const handleAutoPopulate = useCallback(() => {
     const populated = autoPopulateFromPipeline(extractionResult ?? null, structuredReasoning ?? null, patientFactors);
+    setAutoPopulatedFields(detectAutoFields(patientFactors, populated));
     setPatientFactors(populated);
     setHasAutoPopulated(true);
-  }, [extractionResult, structuredReasoning, patientFactors]);
+  }, [extractionResult, structuredReasoning, patientFactors, detectAutoFields]);
 
   const detectedCondition = useMemo(() => autoDetectCondition(structuredReasoning ?? null), [structuredReasoning]);
 
@@ -1641,6 +1668,7 @@ export default function SimulationTimelinePanel({
       adjustedProfile={adjustedProfile}
       conditionOverrideId={conditionOverrideId}
       onConditionOverrideChange={setConditionOverrideId}
+      autoPopulatedFields={autoPopulatedFields}
     />
   );
 

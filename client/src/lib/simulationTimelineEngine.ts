@@ -878,6 +878,14 @@ export function buildSessionTimeline(
       treatmentSessionCounts.set(key, (treatmentSessionCounts.get(key) ?? 0) + 1);
     }
 
+    let conditionTreatmentResponsiveness: Record<string, number> = {};
+    if (cp && cp.phases.length > 0) {
+      const sessionFrac = totalSessions > 0 ? s / totalSessions : 0;
+      const cpPhaseIdx = cp.phases.findIndex((_, i) => sessionFrac <= (i + 1) / cp.phases.length);
+      const cpPhase = cp.phases[cpPhaseIdx >= 0 ? cpPhaseIdx : cp.phases.length - 1];
+      conditionTreatmentResponsiveness = cpPhase.treatmentResponsiveness;
+    }
+
     const scenarios: WhatIfScenario[] = [];
     const seen = new Set<string>();
     let colorIdx = 0;
@@ -895,9 +903,22 @@ export function buildSessionTimeline(
       }
       seen.add(key);
 
+      let conditionResponsiveFactor = 1.0;
+      if (Object.keys(conditionTreatmentResponsiveness).length > 0) {
+        const entryKey = t.interventionType.toLowerCase();
+        const entryName = t.name.toLowerCase().replace(/[-\s]+/g, '_');
+        for (const [trKey, trVal] of Object.entries(conditionTreatmentResponsiveness)) {
+          const trKeyLower = trKey.toLowerCase();
+          if (entryKey.includes(trKeyLower) || entryName.includes(trKeyLower) || trKeyLower.includes(entryKey)) {
+            conditionResponsiveFactor = trVal;
+            break;
+          }
+        }
+      }
+
       const cumulativeCount = treatmentSessionCounts.get(key) ?? 1;
       const doseResp = getSessionDoseResponse(cumulativeCount, totalSessions, t.interventionType);
-      const scaledMag = t.magnitude * doseResp;
+      const scaledMag = t.magnitude * doseResp * conditionResponsiveFactor;
       if (scaledMag < 0.5) continue;
 
       scenarios.push({

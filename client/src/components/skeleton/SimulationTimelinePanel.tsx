@@ -36,8 +36,6 @@ import {
   Trophy,
   Layers,
   ClipboardCheck,
-  ArrowUpDown,
-  BarChart3,
 } from "lucide-react";
 import {
   buildSimulationTimeline,
@@ -60,7 +58,6 @@ import {
   type SessionApplyPayload,
   type ActualSessionOutcome,
   type CorrectionFactors,
-  type DimensionCorrectionFactor,
 } from "@/lib/simulationTimelineEngine";
 import {
   type PatientFactors,
@@ -2053,7 +2050,7 @@ function SessionTimelineView({
                   isExpanded={expandedSessionCard === s.sessionNumber}
                   onToggle={() => setExpandedSessionCard(expandedSessionCard === s.sessionNumber ? null : s.sessionNumber)}
                   actualOutcome={actualOutcomes.find(o => o.sessionNumber === s.sessionNumber)}
-                  onRecordOutcome={onRecordOutcome}
+                  onRecordOutcome={s.sessionNumber <= selectedSession ? onRecordOutcome : undefined}
                 />
               ))}
             {sessionTimeline.sessions.length > 6 && (

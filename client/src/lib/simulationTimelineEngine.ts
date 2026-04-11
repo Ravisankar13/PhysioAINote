@@ -831,11 +831,17 @@ function computeEWMACorrectionFactors(
       for (const [muscleId, actualT] of Object.entries(oc.actualMuscleTension)) {
         const pred = snap.muscleStatePredictions.find(m => m.muscleId === muscleId);
         if (pred && pred.predictedTension > 0) {
-          const ratio = actualT / pred.predictedTension;
+          const actualDist = Math.abs(actualT - 50);
+          const predDist = Math.abs(pred.predictedTension - 50);
+          const ratio = predDist > 0 ? (predDist - actualDist) / predDist + 1 : 1;
+          const safeRatio = clamp(ratio, 0.5, 2.0);
           if (!muscleFactors[muscleId]) muscleFactors[muscleId] = { sumWeighted: 0, sumWeights: 0, count: 0 };
-          muscleFactors[muscleId].sumWeighted += ratio * recency;
+          muscleFactors[muscleId].sumWeighted += safeRatio * recency;
           muscleFactors[muscleId].sumWeights += recency;
           muscleFactors[muscleId].count++;
+          overallSum += safeRatio * recency;
+          overallWeightSum += recency;
+          overallCount++;
         }
       }
     }

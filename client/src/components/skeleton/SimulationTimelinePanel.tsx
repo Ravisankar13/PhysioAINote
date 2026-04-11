@@ -1670,7 +1670,7 @@ function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
               </div>
               <div className="bg-gray-800/40 rounded px-1.5 py-1 text-center">
                 <div className="text-[7px] text-gray-500">Risk</div>
-                <div className={`text-[10px] font-bold ${st.riskScore > 6 ? 'text-red-400' : st.riskScore > 3 ? 'text-amber-400' : 'text-emerald-400'}`}>{st.riskScore}</div>
+                <div className={`text-[10px] font-bold ${st.riskScore >= 60 ? 'text-red-400' : st.riskScore >= 30 ? 'text-amber-400' : 'text-emerald-400'}`}>{st.riskScore}</div>
               </div>
             </div>
           )}

@@ -573,10 +573,56 @@ function SessionTreatmentBar({
 }) {
   const maxDay = sessions.length > 0 ? sessions[sessions.length - 1].dayOffset : 1;
 
+  const phaseTransitions = useMemo(() => {
+    const pts: Array<{ session: SessionSnapshot; toPhase: string }> = [];
+    for (let i = 1; i < sessions.length; i++) {
+      if (sessions[i].recoveryPhaseLabel && sessions[i - 1].recoveryPhaseLabel && sessions[i].recoveryPhaseLabel !== sessions[i - 1].recoveryPhaseLabel) {
+        pts.push({ session: sessions[i], toPhase: sessions[i].recoveryPhaseLabel });
+      }
+    }
+    return pts;
+  }, [sessions]);
+
+  const milestoneAchievedSessions = useMemo(() => {
+    return sessions.filter(s => s.functionalMilestones.some(m => m.achieved && m.triggeredAtSession === s.sessionNumber));
+  }, [sessions]);
+
+  const getLeftPct = (s: SessionSnapshot) =>
+    maxDay > 0 ? (s.dayOffset / maxDay) * 100 : (s.sessionNumber / totalSessions) * 100;
+
   return (
-    <div className="relative w-full h-10 bg-gray-800/30 rounded border border-gray-700/40 overflow-hidden">
+    <div className="relative w-full h-12 bg-gray-800/30 rounded border border-gray-700/40 overflow-hidden">
+      {phaseTransitions.map((pt, i) => {
+        const leftPct = getLeftPct(pt.session);
+        return (
+          <div
+            key={`phase-${i}`}
+            className="absolute top-0 bottom-0 w-px bg-cyan-500/50 z-5 pointer-events-none"
+            style={{ left: `${leftPct}%` }}
+            title={`Phase: ${pt.toPhase}`}
+          >
+            <div className="absolute -top-0.5 -left-[3px] w-[7px] h-[7px] bg-cyan-500 rounded-full border border-gray-900" title={pt.toPhase} />
+          </div>
+        );
+      })}
+
+      {milestoneAchievedSessions.map(s => {
+        const leftPct = getLeftPct(s);
+        const ms = s.functionalMilestones.find(m => m.achieved && m.triggeredAtSession === s.sessionNumber);
+        return (
+          <div
+            key={`ms-${s.sessionNumber}`}
+            className="absolute bottom-0 z-6 pointer-events-none"
+            style={{ left: `${leftPct}%`, transform: 'translateX(-50%)' }}
+            title={ms ? ms.label : 'Milestone'}
+          >
+            <div className="w-[6px] h-[6px] bg-amber-400 rotate-45 border border-gray-900" />
+          </div>
+        );
+      })}
+
       {sessions.map(s => {
-        const leftPct = maxDay > 0 ? (s.dayOffset / maxDay) * 100 : (s.sessionNumber / totalSessions) * 100;
+        const leftPct = getLeftPct(s);
         const isSelected = s.sessionNumber === selectedSession;
         const hasExercise = s.treatments.some(t => t.type === 'exercise');
         const hasManual = s.treatments.some(t => t.type === 'manual_therapy');
@@ -584,10 +630,16 @@ function SessionTreatmentBar({
         return (
           <button
             key={s.sessionNumber}
-            className={`absolute top-1 flex flex-col items-center gap-0.5 transition-all ${isSelected ? 'scale-125 z-10' : 'hover:scale-110'}`}
+            className={`absolute top-1.5 flex flex-col items-center gap-0.5 transition-all ${isSelected ? 'scale-125 z-10' : 'hover:scale-110'}`}
             style={{ left: `${leftPct}%`, transform: `translateX(-50%) ${isSelected ? 'scale(1.25)' : ''}` }}
             onClick={() => onSessionClick(s.sessionNumber)}
           >
+            {s.isBreakthroughSession && (
+              <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-b-[4px] border-b-emerald-400 mb-[-2px]" />
+            )}
+            {s.isSetbackSession && (
+              <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[4px] border-t-red-400 mb-[-2px]" />
+            )}
             {hasExercise && (
               <div className={`w-2 h-2 rounded-full ${isSelected ? 'bg-violet-400' : 'bg-violet-500/60'}`} />
             )}
@@ -1229,6 +1281,13 @@ function SessionTimelineView({
     setAppliedSession(selectedSession);
   }, [currentSnapshot, onApplyToSkeleton, selectedSession]);
 
+  useEffect(() => {
+    if (isPlaying && currentSnapshot && onApplyToSkeleton) {
+      onApplyToSkeleton(currentSnapshot.modelConfig, currentSnapshot.overrides);
+      setAppliedSession(currentSnapshot.sessionNumber);
+    }
+  }, [isPlaying, currentSnapshot, onApplyToSkeleton]);
+
   const handlePlay = useCallback(() => {
     if (isPlaying) {
       setIsPlaying(false);
@@ -1239,6 +1298,10 @@ function SessionTimelineView({
       return;
     }
     setIsPlaying(true);
+    if (currentSnapshot && onApplyToSkeleton) {
+      onApplyToSkeleton(currentSnapshot.modelConfig, currentSnapshot.overrides);
+      setAppliedSession(selectedSession);
+    }
     let sess = selectedSession;
     const interval = setInterval(() => {
       sess++;
@@ -1251,7 +1314,7 @@ function SessionTimelineView({
       setSelectedSession(sess);
     }, 600);
     playIntervalRef.current = interval;
-  }, [isPlaying, selectedSession, sessionTimeline.totalSessions]);
+  }, [isPlaying, selectedSession, sessionTimeline.totalSessions, currentSnapshot, onApplyToSkeleton]);
 
   const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing') => {
     setExpandedSection(expandedSection === section ? null : section);

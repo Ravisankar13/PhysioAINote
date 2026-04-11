@@ -7967,6 +7967,8 @@ ${ddxList}`;
                   setUnifiedBiomechanicsProgress(0.5);
                   setUnifiedBiomechanicsFaultOverrides([]);
 
+                  setCustomExerciseResult(null);
+                  setCustomManualTherapyResult(null);
                   setWhatIfScenarios([]);
                   setWhatIfComparisonBScenarios([]);
                   setShowInjuryMechanism(false);

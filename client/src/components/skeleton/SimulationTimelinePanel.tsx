@@ -957,7 +957,7 @@ function SessionTimelineView({
                   <div key={i} className="px-1.5 py-1 rounded text-[9px]">
                     <div className="flex items-center gap-1.5">
                       <MIcon className={`h-3 w-3 ${mColor} shrink-0`} />
-                      <span className="text-gray-400">Wk {m.week}</span>
+                      <span className="text-gray-400">Day {m.week * 7}</span>
                       <span className="flex-1 truncate text-gray-200">{m.label}</span>
                     </div>
                   </div>

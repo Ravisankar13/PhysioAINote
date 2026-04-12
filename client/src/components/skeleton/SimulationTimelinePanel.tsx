@@ -80,7 +80,7 @@ import type { TreatmentPlanResult } from "./PlanTab";
 import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
 import type { CustomExercise } from "./ExerciseEngineTab";
 import type { CustomTechnique } from "./ManualTherapyEngineTab";
-import { generateGoalProfile, computeGoalGap, type RecoveryGoalProfile, type GoalGapAnalysis } from "@/lib/goalStateEngine";
+import { generateGoalProfile, computeGoalGap, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput } from "@/lib/goalStateEngine";
 
 interface GoalOverlayData {
   enabled: boolean;
@@ -154,6 +154,7 @@ function SessionRecoveryCurve({
   milestones,
   modifications,
   onSessionClick,
+  goalProfile,
 }: {
   sessions: SessionSnapshot[];
   selectedSession: number;
@@ -161,6 +162,7 @@ function SessionRecoveryCurve({
   milestones: SimulationMilestone[];
   modifications: SessionModification[];
   onSessionClick: (session: number) => void;
+  goalProfile?: RecoveryGoalProfile | null;
 }) {
   const [enabledTracks, setEnabledTracks] = useState<Set<SessionCurveTrack>>(() => new Set<SessionCurveTrack>(['risk', 'pain', 'sling']));
 
@@ -362,6 +364,57 @@ function SessionRecoveryCurve({
         )}
         {enabledTracks.has('comp') && (
           <path d={makePath(toSvgPoints(trackData.comp))} fill="none" stroke="#f472b6" strokeWidth={1} strokeDasharray="2,3" />
+        )}
+        {goalProfile && enabledTracks.has('risk') && (
+          <line
+            x1={padding.left}
+            y1={padding.top + (1 - goalProfile.riskScoreTarget / 100) * chartH}
+            x2={padding.left + chartW}
+            y2={padding.top + (1 - goalProfile.riskScoreTarget / 100) * chartH}
+            stroke="#ef4444"
+            strokeWidth={0.6}
+            strokeDasharray="4,4"
+            opacity={0.4}
+          />
+        )}
+        {goalProfile && enabledTracks.has('pain') && (
+          <line
+            x1={padding.left}
+            y1={padding.top + (1 - goalProfile.painTarget / 100) * chartH}
+            x2={padding.left + chartW}
+            y2={padding.top + (1 - goalProfile.painTarget / 100) * chartH}
+            stroke="#f59e0b"
+            strokeWidth={0.6}
+            strokeDasharray="4,4"
+            opacity={0.4}
+          />
+        )}
+        {goalProfile && enabledTracks.has('sling') && goalProfile.slingTargets.length > 0 && (() => {
+          const avgSlingTarget = goalProfile.slingTargets.reduce((s, t) => s + t.targetIntegrity, 0) / goalProfile.slingTargets.length;
+          return (
+            <line
+              x1={padding.left}
+              y1={padding.top + (1 - avgSlingTarget / 100) * chartH}
+              x2={padding.left + chartW}
+              y2={padding.top + (1 - avgSlingTarget / 100) * chartH}
+              stroke="#8b5cf6"
+              strokeWidth={0.6}
+              strokeDasharray="4,4"
+              opacity={0.4}
+            />
+          );
+        })()}
+        {goalProfile && enabledTracks.has('comp') && (
+          <line
+            x1={padding.left}
+            y1={padding.top + (1 - (100 - goalProfile.compensationResolutionTarget) / 100) * chartH}
+            x2={padding.left + chartW}
+            y2={padding.top + (1 - (100 - goalProfile.compensationResolutionTarget) / 100) * chartH}
+            stroke="#f472b6"
+            strokeWidth={0.6}
+            strokeDasharray="4,4"
+            opacity={0.4}
+          />
         )}
         {enabledTracks.has('goal') && trackData.goal.length > 0 && (
           <>
@@ -1812,6 +1865,7 @@ function SessionTimelineView({
   actualOutcomes,
   onRecordOutcome,
   onGoalOverlayChange,
+  clinicalState,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -1822,6 +1876,7 @@ function SessionTimelineView({
   actualOutcomes: ActualSessionOutcome[];
   onRecordOutcome: (outcome: ActualSessionOutcome) => void;
   onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
+  clinicalState?: ClinicalStateInput | null;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1914,8 +1969,13 @@ function SessionTimelineView({
   const goalProfile = useMemo<RecoveryGoalProfile | null>(() => {
     if (!activeCondition) return null;
     const romJointIds = sessionTimeline.baseline?.romBaselines?.map(r => r.jointId) ?? [];
-    return generateGoalProfile(activeCondition, modifiers ?? undefined, romJointIds.length > 0 ? romJointIds : undefined);
-  }, [activeCondition, modifiers, sessionTimeline.baseline]);
+    return generateGoalProfile(
+      activeCondition,
+      modifiers ?? undefined,
+      romJointIds.length > 0 ? romJointIds : undefined,
+      clinicalState ?? undefined,
+    );
+  }, [activeCondition, modifiers, sessionTimeline.baseline, clinicalState]);
 
   const currentGoalGap = useMemo<GoalGapAnalysis | null>(() => {
     if (!goalProfile || !currentSnapshot) return null;
@@ -1940,21 +2000,35 @@ function SessionTimelineView({
       onGoalOverlayChange(null);
       return;
     }
-    const painTargets = goalProfile.painTarget !== undefined && currentSnapshot
-      ? [{ boneName: 'Spine1_M', targetIntensity: goalProfile.painTarget, currentIntensity: currentSnapshot.painPrediction }]
+    const painBones: string[] = clinicalState?.painMarkers?.map(pm => pm.boneName) ?? [];
+    const uniquePainBones = painBones.length > 0 ? Array.from(new Set(painBones)) : ['Spine1_M'];
+    const painTargets = currentSnapshot
+      ? uniquePainBones.map(boneName => ({
+          boneName,
+          targetIntensity: goalProfile.painTarget,
+          currentIntensity: currentSnapshot.painPrediction,
+        }))
       : undefined;
-    const muscleTargets = goalProfile.muscleTensionTargets?.map(mt => ({
-      groupId: mt.muscleId,
-      targetTension: (mt.targetTensionMin + mt.targetTensionMax) / 2,
-      currentTension: ((mt.targetTensionMin + mt.targetTensionMax) / 2) + (100 - currentGoalGap.overallAchievementPct) * 0.3,
-    }));
+
+    const muscleTargets = goalProfile.muscleTensionTargets?.map(mt => {
+      const sessionPred = currentSnapshot?.muscleStatePredictions?.find(m =>
+        m.muscleId.toLowerCase().includes(mt.muscleId.toLowerCase()) ||
+        mt.muscleId.toLowerCase().includes(m.muscleId.toLowerCase())
+      );
+      const midTarget = (mt.targetTensionMin + mt.targetTensionMax) / 2;
+      return {
+        groupId: mt.muscleId,
+        targetTension: midTarget,
+        currentTension: sessionPred?.predictedTension ?? midTarget,
+      };
+    });
     onGoalOverlayChange({
       enabled: true,
       painTargets,
       muscleTargets,
       overallPct: currentGoalGap.overallAchievementPct,
     });
-  }, [goalOverlayEnabled, currentGoalGap, goalProfile, currentSnapshot, onGoalOverlayChange]);
+  }, [goalOverlayEnabled, currentGoalGap, goalProfile, currentSnapshot, onGoalOverlayChange, clinicalState]);
 
   return (
     <div className="flex flex-col gap-2 text-[10px] max-h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar">
@@ -2234,6 +2308,7 @@ function SessionTimelineView({
               milestones={sessionTimeline.milestones}
               modifications={sessionTimeline.modifications}
               onSessionClick={setSelectedSession}
+              goalProfile={goalProfile}
             />
           </div>
         )}
@@ -3371,6 +3446,39 @@ export default function SimulationTimelinePanel({
     return detectedCondition;
   }, [conditionOverrideId, detectedCondition]);
 
+  const clinicalStateForGoals = useMemo<ClinicalStateInput | null>(() => {
+    const state: ClinicalStateInput = {};
+    if (painMarkers && painMarkers.length > 0) {
+      state.painMarkers = painMarkers.map(pm => ({
+        boneName: pm.label || 'Spine1_M',
+        intensity: (pm.severity ?? 5) * 10,
+      }));
+    }
+    if (baseOverrides && Object.keys(baseOverrides).length > 0) {
+      state.muscleStates = Object.entries(baseOverrides)
+        .filter(([, ov]) => ov.tensionOffset !== undefined)
+        .map(([muscleId, ov]) => ({
+          muscleId,
+          tension: 50 + (ov.tensionOffset ?? 0),
+        }));
+    }
+    if (extractionResult) {
+      if (extractionResult.functionalLimitations && extractionResult.functionalLimitations.length > 0) {
+        state.compensationPatterns = extractionResult.functionalLimitations.map(fl => fl.limitation);
+      }
+    }
+    if (structuredReasoning) {
+      const modLabels = structuredReasoning.modifiers
+        ?.filter(m => m.label?.toLowerCase().includes('postur') || m.label?.toLowerCase().includes('compensat'))
+        .map(m => m.label) ?? [];
+      if (modLabels.length > 0) {
+        state.posturalDeviations = modLabels;
+      }
+    }
+    const hasData = state.painMarkers || state.muscleStates || state.compensationPatterns || state.posturalDeviations;
+    return hasData ? state : null;
+  }, [painMarkers, baseOverrides, extractionResult, structuredReasoning]);
+
   const modifiers = useMemo(() => computePatientModifiers(patientFactors, activeCondition), [patientFactors, activeCondition]);
 
   const adjustedProfile = useMemo(() => {
@@ -3546,6 +3654,7 @@ export default function SimulationTimelinePanel({
             actualOutcomes={actualOutcomes}
             onRecordOutcome={handleRecordOutcome}
             onGoalOverlayChange={onGoalOverlayChange}
+            clinicalState={clinicalStateForGoals}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (

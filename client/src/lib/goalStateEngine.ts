@@ -1,6 +1,14 @@
 import type { ConditionRecoveryProfile, PatientModifierProfile } from './patientFactorsEngine';
 import type { SessionSnapshot, RomPrediction } from './simulationTimelineEngine';
 
+export interface ClinicalStateInput {
+  painMarkers?: Array<{ boneName: string; intensity: number }>;
+  muscleStates?: Array<{ muscleId: string; tension: number }>;
+  compensationPatterns?: string[];
+  posturalDeviations?: string[];
+  slingAnalysis?: Array<{ slingName: string; integrity: number }>;
+}
+
 export interface RomGoalTarget {
   jointId: string;
   label: string;
@@ -115,6 +123,7 @@ export function generateGoalProfile(
   conditionProfile: ConditionRecoveryProfile,
   patientModifiers?: PatientModifierProfile | null,
   existingRomJointIds?: string[],
+  clinicalState?: ClinicalStateInput | null,
 ): RecoveryGoalProfile {
   const romCeilingPct = conditionProfile.expectedRomRecoveryPercent ?? 95;
   const modifiedCeiling = patientModifiers
@@ -147,7 +156,7 @@ export function generateGoalProfile(
     };
   }).filter(r => r.normalDegrees > 0);
 
-  const painTarget = conditionProfile.recurrenceRiskPercent > 30 ? 1 : 0;
+  const painTarget = conditionProfile.recurrenceRiskPercent > 30 ? 10 : 5;
 
   const slingTargets: SlingGoalTarget[] = DEFAULT_SLING_NAMES.map(name => ({
     slingName: name,
@@ -156,22 +165,71 @@ export function generateGoalProfile(
       : 75,
   }));
 
+  const muscleTensionTargets: MuscleGoalTarget[] = buildMuscleTensionTargets(
+    conditionProfile, clinicalState
+  );
+
   const functionalGoals: FunctionalGoal[] = buildFunctionalGoals(conditionProfile);
 
   const riskTarget = 15;
+
+  const compTarget = clinicalState?.compensationPatterns && clinicalState.compensationPatterns.length > 3
+    ? 85 : 90;
 
   return {
     conditionId: conditionProfile.conditionId,
     conditionName: conditionProfile.conditionName,
     romTargets,
     painTarget,
-    muscleTensionTargets: [],
+    muscleTensionTargets,
     slingTargets,
-    compensationResolutionTarget: 90,
+    compensationResolutionTarget: compTarget,
     functionalGoals,
     riskScoreTarget: riskTarget,
     overallRomRecoveryPercent: modifiedCeiling,
   };
+}
+
+const CONDITION_KEY_MUSCLES: Record<string, string[]> = {
+  shoulder: ['deltoid', 'rotator_cuff', 'trapezius', 'pec_major', 'lat_dorsi', 'serratus_anterior'],
+  knee: ['quadriceps', 'hamstrings', 'gluteus_maximus', 'gastrocnemius', 'hip_flexors'],
+  hip: ['gluteus_maximus', 'gluteus_medius', 'gluteus_minimus', 'piriformis', 'hip_flexors', 'adductors'],
+  spine: ['erector_spinae', 'rectus_abdominus', 'obliques', 'multifidus', 'transverse_abdominis'],
+  cervical: ['trapezius', 'sternocleidomastoid', 'scalenes', 'deep_neck_flexors'],
+  ankle: ['gastrocnemius', 'soleus', 'tibialis_anterior', 'peroneal'],
+  elbow: ['biceps', 'triceps', 'forearm_extensors', 'forearm_flexors'],
+};
+
+function buildMuscleTensionTargets(
+  profile: ConditionRecoveryProfile,
+  clinicalState?: ClinicalStateInput | null,
+): MuscleGoalTarget[] {
+  const targets: MuscleGoalTarget[] = [];
+  const keyMuscles = CONDITION_KEY_MUSCLES[profile.category] ?? [];
+
+  const clinicalMuscleIds = clinicalState?.muscleStates?.map(m => m.muscleId) ?? [];
+  const allMuscleIdsArr = Array.from(new Set([...keyMuscles, ...clinicalMuscleIds]));
+
+  for (const muscleId of allMuscleIdsArr) {
+    const clinicalEntry = clinicalState?.muscleStates?.find(m => m.muscleId === muscleId);
+
+    let targetMin = 35;
+    let targetMax = 55;
+
+    if (clinicalEntry) {
+      if (clinicalEntry.tension > 70) {
+        targetMin = 30;
+        targetMax = 50;
+      } else if (clinicalEntry.tension < 30) {
+        targetMin = 40;
+        targetMax = 60;
+      }
+    }
+
+    targets.push({ muscleId, targetTensionMin: targetMin, targetTensionMax: targetMax });
+  }
+
+  return targets;
 }
 
 function buildFunctionalGoals(profile: ConditionRecoveryProfile): FunctionalGoal[] {
@@ -244,7 +302,7 @@ export function computeGoalGap(
 
   const painCurrent = snapshot.painPrediction;
   const painTarget = goalProfile.painTarget;
-  const maxPain = 10;
+  const maxPain = 100;
   const painAchievement = painCurrent <= painTarget
     ? 100
     : clamp(((maxPain - painCurrent) / (maxPain - painTarget)) * 100, 0, 100);
@@ -253,14 +311,14 @@ export function computeGoalGap(
   dimensions.push({
     dimension: 'pain',
     label: 'Pain Level',
-    current: Math.round(painCurrent * 10) / 10,
+    current: Math.round(painCurrent),
     target: painTarget,
     achievementPct: Math.round(painAchievement),
-    gap: Math.round((painCurrent - painTarget) * 10) / 10,
+    gap: Math.round(painCurrent - painTarget),
     priority: painAchievement < 50 ? 'high' : painAchievement < 75 ? 'medium' : 'low',
     trend: prevPain === null ? 'unknown'
-      : painCurrent < prevPain - 0.3 ? 'improving'
-      : painCurrent > prevPain + 0.3 ? 'worsening'
+      : painCurrent < prevPain - 3 ? 'improving'
+      : painCurrent > prevPain + 3 ? 'worsening'
       : 'stalled',
   });
 
@@ -324,7 +382,48 @@ export function computeGoalGap(
   });
 
   let muscleTensionAchievement = 100;
-  if (snapshot.muscleStatePredictions.length > 0) {
+  if (goalProfile.muscleTensionTargets.length > 0 && snapshot.muscleStatePredictions.length > 0) {
+    const tensionScores: number[] = [];
+    for (const target of goalProfile.muscleTensionTargets) {
+      const pred = snapshot.muscleStatePredictions.find(m =>
+        m.muscleId.toLowerCase().includes(target.muscleId.toLowerCase()) ||
+        target.muscleId.toLowerCase().includes(m.muscleId.toLowerCase())
+      );
+      if (pred) {
+        const midTarget = (target.targetTensionMin + target.targetTensionMax) / 2;
+        const range = (target.targetTensionMax - target.targetTensionMin) / 2;
+        const deviation = Math.abs(pred.predictedTension - midTarget);
+        const score = deviation <= range ? 100 : clamp(100 - (deviation - range) * 3, 0, 100);
+        tensionScores.push(score);
+
+        const prevPred = previousSnapshot?.muscleStatePredictions.find(m =>
+          m.muscleId.toLowerCase().includes(target.muscleId.toLowerCase()) ||
+          target.muscleId.toLowerCase().includes(m.muscleId.toLowerCase())
+        );
+        const prevDev = prevPred ? Math.abs(prevPred.predictedTension - midTarget) : null;
+        const prevScore = prevDev !== null
+          ? (prevDev <= range ? 100 : clamp(100 - (prevDev - range) * 3, 0, 100))
+          : null;
+
+        dimensions.push({
+          dimension: `muscle_${target.muscleId}`,
+          label: `Muscle: ${target.muscleId.replace(/_/g, ' ')}`,
+          current: Math.round(pred.predictedTension),
+          target: Math.round(midTarget),
+          achievementPct: Math.round(score),
+          gap: Math.round(deviation),
+          priority: score < 60 ? 'high' : score < 80 ? 'medium' : 'low',
+          trend: prevScore === null ? 'unknown'
+            : score > prevScore + 2 ? 'improving'
+            : score < prevScore - 2 ? 'worsening'
+            : 'stalled',
+        });
+      }
+    }
+    muscleTensionAchievement = tensionScores.length > 0
+      ? tensionScores.reduce((a, b) => a + b, 0) / tensionScores.length
+      : 100;
+  } else if (snapshot.muscleStatePredictions.length > 0) {
     const tensionScores: number[] = [];
     for (const msp of snapshot.muscleStatePredictions) {
       const deviation = Math.abs(msp.predictedTension - 50);
@@ -438,7 +537,7 @@ export function formatGoalContextForPrompt(
     }
   }
 
-  lines.push(`\nPain Target: ${goalProfile.painTarget}/10`);
+  lines.push(`\nPain Target: ≤${goalProfile.painTarget}/100 (0=no pain, 100=worst pain)`);
   lines.push(`Risk Score Target: <${goalProfile.riskScoreTarget}/100`);
   lines.push(`Compensation Resolution Target: >${goalProfile.compensationResolutionTarget}%`);
 
@@ -446,6 +545,13 @@ export function formatGoalContextForPrompt(
     lines.push(`\nSling Integrity Targets:`);
     for (const s of goalProfile.slingTargets) {
       lines.push(`  - ${s.slingName}: >${s.targetIntegrity}%`);
+    }
+  }
+
+  if (goalProfile.muscleTensionTargets.length > 0) {
+    lines.push(`\nMuscle Tension Targets (optimal range):`);
+    for (const mt of goalProfile.muscleTensionTargets.slice(0, 8)) {
+      lines.push(`  - ${mt.muscleId.replace(/_/g, ' ')}: ${mt.targetTensionMin}-${mt.targetTensionMax}%`);
     }
   }
 

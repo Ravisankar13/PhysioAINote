@@ -2855,7 +2855,7 @@ export async function buildSessionTimelineAsync(
 
       const rebuiltResult = buildSessionTimeline(
         newExercises, newTechniques, baseModelConfig, baseOverrides,
-        painMarkers, bodyWeightKg, biomechanicsOutput, patientModifiers, conditionProfile, actualOutcomes,
+        painMarkers, bodyWeightKg, biomechanicsOutput, patientModifiers, conditionProfile, actualOutcomes, clinicalState,
       );
 
       const transitionSessionNum = transitionSnap.sessionNumber;
@@ -2958,6 +2958,29 @@ export async function buildSessionTimelineAsync(
         endState: rebuiltResult.endState,
         correctionFactors: rebuiltResult.correctionFactors ?? accumulatedResult.correctionFactors,
       };
+
+      if (conditionProfile) {
+        const goalProf = generateGoalProfile(conditionProfile, patientModifiers, undefined, clinicalState);
+        const mergedSessions = accumulatedResult.sessions;
+        const updatedGoalTimeline: NonNullable<SessionTimelineResult['goalAchievementTimeline']> = [];
+        for (let gi = 0; gi < mergedSessions.length; gi++) {
+          const prevS = gi > 0 ? mergedSessions[gi - 1] : null;
+          const gap = computeGoalGap(goalProf, mergedSessions[gi], prevS);
+          mergedSessions[gi].goalAchievementPct = gap.overallAchievementPct;
+          mergedSessions[gi].goalDimensions = gap.dimensions.map(d => ({
+            dimension: d.dimension,
+            label: d.label,
+            achievementPct: d.achievementPct,
+            priority: d.priority,
+            trend: d.trend,
+          }));
+          updatedGoalTimeline.push({
+            sessionNumber: mergedSessions[gi].sessionNumber,
+            achievementPct: gap.overallAchievementPct,
+          });
+        }
+        accumulatedResult.goalAchievementTimeline = updatedGoalTimeline;
+      }
 
       const updatedTransitions = detectPhaseTransitions(accumulatedResult.sessions);
       for (let uti = ti + 1; uti < transitions.length; uti++) {

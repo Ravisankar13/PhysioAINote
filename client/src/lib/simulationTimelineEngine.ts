@@ -2971,12 +2971,18 @@ export async function buildSessionTimelineAsync(
             dimension: d.dimension,
             label: d.label,
             achievementPct: d.achievementPct,
+            gap: d.gap,
             priority: d.priority,
             trend: d.trend,
           }));
           updatedGoalTimeline.push({
             sessionNumber: mergedSessions[gi].sessionNumber,
-            achievementPct: gap.overallAchievementPct,
+            overallPct: gap.overallAchievementPct,
+            romPct: gap.romAchievementPct,
+            painPct: gap.painAchievementPct,
+            slingPct: gap.slingAchievementPct,
+            compPct: gap.compensationAchievementPct,
+            riskPct: gap.riskAchievementPct,
           });
         }
         accumulatedResult.goalAchievementTimeline = updatedGoalTimeline;

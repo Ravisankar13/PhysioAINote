@@ -341,6 +341,7 @@ export interface RecoveryGoalProfile {
   strengthTarget: number;
   jointStressTarget: number;
   overallRomRecoveryPercent: number;
+  contraindications?: string[];
 }
 
 export interface DimensionGap {
@@ -548,6 +549,7 @@ export function generateGoalProfile(
     strengthTarget,
     jointStressTarget,
     overallRomRecoveryPercent: modifiedCeiling,
+    contraindications: pathOverride?.contraindications ?? [],
   };
 }
 
@@ -760,6 +762,7 @@ export function generateGenericGoalProfile(
     strengthTarget,
     jointStressTarget: 20,
     overallRomRecoveryPercent: romCeilingPct,
+    contraindications: pathOverride?.contraindications ?? [],
   };
 }
 

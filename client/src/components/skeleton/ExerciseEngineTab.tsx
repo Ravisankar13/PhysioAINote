@@ -6,7 +6,7 @@ const ExerciseBodyDiagram = lazy(() => import('./ExerciseBodyDiagram'));
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 import type { RecoveryGoalProfile, GoalGapAnalysis, ClinicalStateInput } from '@/lib/goalStateEngine';
-import { buildPrescriptionContext, type PrescriptionContext } from '@/lib/prescriptionAdapterEngine';
+import { buildPrescriptionContext, scaleDosage, type PrescriptionContext, type DosageScaling } from '@/lib/prescriptionAdapterEngine';
 
 interface ExerciseItem {
   name: string;
@@ -129,8 +129,14 @@ const FOCUS_PRESETS = [
   { label: 'Compensation Offloading', value: 'offload compensating structures' },
 ];
 
-function ExerciseCard({ exercise, index }: { exercise: ExerciseItem; index: number }) {
+function ExerciseCard({ exercise, index, dosageScalingData }: { exercise: ExerciseItem; index: number; dosageScalingData?: DosageScaling | null }) {
   const [expanded, setExpanded] = useState(false);
+
+  const displaySets = exercise.sets || '?';
+  const displayReps = exercise.reps || '?';
+  const scaled = dosageScalingData && exercise.sets && exercise.reps
+    ? scaleDosage(parseInt(exercise.sets) || 3, exercise.reps, dosageScalingData)
+    : null;
 
   return (
     <div className="border border-gray-600/30 rounded bg-gray-800/40">
@@ -148,7 +154,7 @@ function ExerciseCard({ exercise, index }: { exercise: ExerciseItem; index: numb
             </div>
           )}
           <div className="flex gap-2 mt-1 text-[9px]">
-            <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300">{exercise.sets || '?'} × {exercise.reps || '?'}</span>
+            <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300">{scaled ? `${scaled.sets} × ${scaled.reps}` : `${displaySets} × ${displayReps}`}</span>
             {exercise.tempo && exercise.tempo !== 'controlled' && (
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Tempo: {exercise.tempo}</span>
             )}
@@ -192,7 +198,7 @@ function ExerciseCard({ exercise, index }: { exercise: ExerciseItem; index: numb
   );
 }
 
-function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; index: number }) {
+function CustomExerciseCard({ exercise, index, dosageScalingData }: { exercise: CustomExercise; index: number; dosageScalingData?: DosageScaling | null }) {
   const [expanded, setExpanded] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [visualMode, setVisualMode] = useState<'diagram' | 'illustration'>('diagram');
@@ -200,6 +206,10 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
   const [illustrationLoading, setIllustrationLoading] = useState(false);
   const [illustrationError, setIllustrationError] = useState<string | null>(null);
   const illustrationRequested = useRef(false);
+
+  const scaledCustomDosage = dosageScalingData && exercise.dosage.sets && exercise.dosage.reps
+    ? scaleDosage(parseInt(exercise.dosage.sets) || 3, exercise.dosage.reps, dosageScalingData)
+    : null;
 
   const toggleSection = (section: string) => {
     setActiveSection(prev => prev === section ? null : section);
@@ -270,7 +280,7 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
           <div className="text-[9px] text-gray-400 mt-0.5 truncate">{exercise.clinicalTarget}</div>
           <div className="flex gap-2 mt-1.5 text-[9px] flex-wrap">
             <span className="px-1.5 py-0.5 rounded bg-cyan-800/40 text-cyan-300 border border-cyan-700/30">
-              {exercise.dosage.sets} × {exercise.dosage.reps}
+              {scaledCustomDosage ? `${scaledCustomDosage.sets} × ${scaledCustomDosage.reps}` : `${exercise.dosage.sets} × ${exercise.dosage.reps}`}
             </span>
             <span className="px-1.5 py-0.5 rounded bg-cyan-800/40 text-cyan-300/70 border border-cyan-700/30">
               {exercise.dosage.tempo}
@@ -829,7 +839,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
               </div>
 
               {customResult.customExercises.map((ex, i) => (
-                <CustomExerciseCard key={i} exercise={ex} index={i} />
+                <CustomExerciseCard key={i} exercise={ex} index={i} dosageScalingData={prescriptionCtx?.dosageScaling} />
               ))}
 
               {(customResult.designRationale || customResult.safetyNotes) && (
@@ -1018,7 +1028,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
                             </span>
                           </div>
                         )}
-                        <ExerciseCard exercise={ex} index={i} />
+                        <ExerciseCard exercise={ex} index={i} dosageScalingData={prescriptionCtx?.dosageScaling} />
                       </div>
                     );
                   })}

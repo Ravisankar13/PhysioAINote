@@ -138,20 +138,30 @@ function computeDosageScaling(
 
   if (isLowAchievement) {
     return {
-      setsMultiplier: 1.1,
-      repMultiplier: 1.1,
+      setsMultiplier: 0.8,
+      repMultiplier: 0.9,
+      intensityLabel: 'light-moderate',
+      painCeiling: Math.max(painTarget + 10, 30),
+      rationale: `Goal achievement at ${Math.round(achievementPct)}% — conservative dosage, avoid overloading recovering tissues`,
+    };
+  }
+
+  if (achievementPct > 70) {
+    return {
+      setsMultiplier: 1.2,
+      repMultiplier: 1.2,
       intensityLabel: 'moderate-heavy',
       painCeiling: Math.max(painTarget + 20, 40),
-      rationale: `Goal achievement at ${Math.round(achievementPct)}% — increased dosage to close gap`,
+      rationale: 'Near goal — progressive overload to close remaining gap',
     };
   }
 
   return {
-    setsMultiplier: 1.2,
-    repMultiplier: 1.2,
-    intensityLabel: 'heavy',
-    painCeiling: Math.max(painTarget + 20, 40),
-    rationale: 'Phase 3+ — progressive overload, functional loading',
+    setsMultiplier: 1.0,
+    repMultiplier: 1.0,
+    intensityLabel: 'moderate',
+    painCeiling: Math.max(painTarget + 15, 35),
+    rationale: 'Phase 3+ — steady loading, building towards functional targets',
   };
 }
 
@@ -280,8 +290,8 @@ function selectRecommendedManualTherapy(
 }
 
 function parseGradeNumber(grade: string): number {
-  if (grade.includes('V') || grade.includes('5')) return 5;
   if (grade.includes('IV') || grade.includes('4')) return 4;
+  if (grade.includes('V') || grade.includes('5')) return 5;
   if (grade.includes('III') || grade.includes('3')) return 3;
   if (grade.includes('II') || grade.includes('2')) return 2;
   if (grade.includes('I') || grade.includes('1')) return 1;
@@ -303,9 +313,8 @@ export function buildPrescriptionContext(
   const achievementPct = goalGap?.overallAchievementPct ?? 0;
 
   const contraindications: string[] = [];
-  const pathOverrideContras = (goalProfile as Record<string, unknown>)['contraindications'];
-  if (Array.isArray(pathOverrideContras)) {
-    contraindications.push(...pathOverrideContras.filter((c): c is string => typeof c === 'string'));
+  if (goalProfile.contraindications && goalProfile.contraindications.length > 0) {
+    contraindications.push(...goalProfile.contraindications);
   }
 
   const dimensions: DimensionGap[] = goalGap?.dimensions ?? [];

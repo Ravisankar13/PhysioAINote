@@ -445,7 +445,7 @@ export function generateGoalProfile(
 
   const effectiveRomCaps = { ...(pathOverride?.romCaps ?? {}), ...(phaseGating?.romCaps ?? {}) };
 
-  const romTargets: RomGoalTarget[] = jointSet
+  let romTargets: RomGoalTarget[] = jointSet
     .filter(jid => !romSkipSet.has(jid))
     .map(jointId => {
       const norm = JOINT_ROM_NORMS[jointId];
@@ -500,9 +500,23 @@ export function generateGoalProfile(
     conditionProfile, clinicalState
   );
 
-  const functionalGoals: FunctionalGoal[] = pathOverride?.functionalGoalOverrides
+  let functionalGoals: FunctionalGoal[] = pathOverride?.functionalGoalOverrides
     ? [...pathOverride.functionalGoalOverrides]
     : buildFunctionalGoals(conditionProfile);
+
+  if (pathOverride?.contraindications && pathOverride.contraindications.length > 0) {
+    const ciLower = pathOverride.contraindications.map(c => c.toLowerCase());
+    romTargets = romTargets.filter(rt => {
+      const label = rt.label.toLowerCase();
+      const jid = rt.jointId.toLowerCase();
+      return !ciLower.some(ci => label.includes(ci) || ci.includes(label) || jid.includes(ci) || ci.includes(jid));
+    });
+    functionalGoals = functionalGoals.filter(fg => {
+      const label = fg.label.toLowerCase();
+      const metric = fg.metric.toLowerCase();
+      return !ciLower.some(ci => label.includes(ci) || ci.includes(label) || metric.includes(ci) || ci.includes(metric));
+    });
+  }
 
   const riskTarget = 15;
 
@@ -589,7 +603,7 @@ export function generateGenericGoalProfile(
 
   const genericEffectiveRomCaps = { ...(pathOverride?.romCaps ?? {}), ...(phaseGating?.romCaps ?? {}) };
 
-  const romTargets: RomGoalTarget[] = jointIds.map(jointId => {
+  let romTargets: RomGoalTarget[] = jointIds.map(jointId => {
     const norm = JOINT_ROM_NORMS[jointId];
     if (!norm) return null;
 
@@ -709,6 +723,20 @@ export function generateGenericGoalProfile(
   } else {
     functionalGoals.push({ label: 'Pain-free ADLs', metric: 'adl_pain', targetValue: 0, unit: '/10' });
     functionalGoals.push({ label: 'Return to activity', metric: 'activity_level', targetValue: 80, unit: '%' });
+  }
+
+  if (pathOverride?.contraindications && pathOverride.contraindications.length > 0) {
+    const ciLower = pathOverride.contraindications.map(c => c.toLowerCase());
+    romTargets = romTargets.filter(rt => {
+      const label = rt.label.toLowerCase();
+      const jid = rt.jointId.toLowerCase();
+      return !ciLower.some(ci => label.includes(ci) || ci.includes(label) || jid.includes(ci) || ci.includes(jid));
+    });
+    functionalGoals = functionalGoals.filter(fg => {
+      const label = fg.label.toLowerCase();
+      const metric = fg.metric.toLowerCase();
+      return !ciLower.some(ci => label.includes(ci) || ci.includes(label) || metric.includes(ci) || ci.includes(metric));
+    });
   }
 
   const baseStrength = detectedCategory === 'knee' || detectedCategory === 'hip' ? 80

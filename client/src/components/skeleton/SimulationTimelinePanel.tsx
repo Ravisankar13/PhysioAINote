@@ -3875,14 +3875,32 @@ export default function SimulationTimelinePanel({
       state.currentRom = currentRom;
     }
     if (activeCondition && activeCondition.phases.length > 0) {
-      state.activePhaseIndex = 0;
+      const chronicity = patientFactors?.chronicity ?? 'unknown';
+      const estimatedWeeks: Record<string, number> = {
+        acute: 2,
+        subacute: 6,
+        chronic: 16,
+        recurrent: 12,
+        unknown: 0,
+      };
+      const weeksElapsed = estimatedWeeks[chronicity] ?? 0;
+      let cumulativeWeeks = 0;
+      let derivedPhase = 0;
+      for (let i = 0; i < activeCondition.phases.length; i++) {
+        const avgDuration = (activeCondition.phases[i].durationWeeksMin + activeCondition.phases[i].durationWeeksMax) / 2;
+        cumulativeWeeks += avgDuration;
+        if (weeksElapsed >= cumulativeWeeks && i < activeCondition.phases.length - 1) {
+          derivedPhase = i + 1;
+        }
+      }
+      state.activePhaseIndex = derivedPhase;
     }
 
     const hasData = state.painMarkers || state.muscleStates || state.compensationPatterns
       || state.posturalDeviations || state.scarSummary || state.chainTensionAverages
       || state.postureMeasurements || state.currentRom;
     return hasData ? state : null;
-  }, [painMarkers, baseOverrides, extractionResult, structuredReasoning, scarSummary, chainTensionAverages, postureMeasurements, currentRom, activeCondition]);
+  }, [painMarkers, baseOverrides, extractionResult, structuredReasoning, scarSummary, chainTensionAverages, postureMeasurements, currentRom, activeCondition, patientFactors]);
 
   const modifiers = useMemo(() => computePatientModifiers(patientFactors, activeCondition), [patientFactors, activeCondition]);
 
@@ -3919,6 +3937,11 @@ export default function SimulationTimelinePanel({
         m: clinicalStateForGoals.muscleStates?.map(s => `${s.muscleId}:${s.tension}`).sort() ?? [],
         c: [...(clinicalStateForGoals.compensationPatterns ?? [])].sort(),
         d: [...(clinicalStateForGoals.posturalDeviations ?? [])].sort(),
+        sc: clinicalStateForGoals.scarSummary?.map(s => `${s.jointId}:${s.stage}:${s.severity}`).sort() ?? [],
+        ct: clinicalStateForGoals.chainTensionAverages ? Object.entries(clinicalStateForGoals.chainTensionAverages).sort().map(([k, v]) => `${k}:${v}`) : [],
+        pm2: clinicalStateForGoals.postureMeasurements ? `${clinicalStateForGoals.postureMeasurements.kyphosisAngle ?? 0}:${clinicalStateForGoals.postureMeasurements.lordosisAngle ?? 0}:${clinicalStateForGoals.postureMeasurements.forwardHeadAngle ?? 0}:${clinicalStateForGoals.postureMeasurements.pelvicTiltAngle ?? 0}:${clinicalStateForGoals.postureMeasurements.scoliosisAngle ?? 0}` : '',
+        cr: clinicalStateForGoals.currentRom?.map(r => `${r.jointId}:${r.currentDegrees}`).sort() ?? [],
+        api: clinicalStateForGoals.activePhaseIndex ?? -1,
       } : null,
     });
 

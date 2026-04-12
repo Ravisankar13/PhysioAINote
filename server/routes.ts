@@ -8191,19 +8191,21 @@ You are now REFINING previously designed techniques based on user feedback. Rule
 
       const cacheKeySource = JSON.stringify({
         cn: data.conditionName,
-        h: data.hypotheses.map(h => h.condition).sort(),
+        h: data.hypotheses.map(h => `${h.condition}:${h.likelihood ?? ''}:${h.reasoning ?? ''}`).sort(),
         pm: data.painMarkers.map(p => `${p.boneName}:${p.intensity}`).sort(),
         ms: data.muscleStates.map(m => `${m.muscleId}:${m.tension}`).sort(),
         cp: [...data.compensationPatterns].sort(),
         pd: [...data.posturalDeviations].sort(),
         sa: data.slingAnalysis.map(s => `${s.slingName}:${s.integrity}`).sort(),
         pf: data.patientFactors ?? null,
+        es: data.extractionSummary || '',
       });
       const cacheKey = crypto.createHash("md5").update(cacheKeySource).digest("hex");
 
       pruneRecoveryGoalCache();
       const cached = recoveryGoalCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < RECOVERY_GOAL_CACHE_TTL) {
+        cached.timestamp = Date.now();
         return res.json(cached.data);
       }
 

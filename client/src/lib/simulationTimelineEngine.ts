@@ -737,7 +737,7 @@ export interface SessionSnapshot {
   isBreakthroughSession: boolean;
   isSetbackSession: boolean;
   goalAchievementPct?: number;
-  goalDimensions?: Array<{ dimension: string; label: string; achievementPct: number; gap: number; priority: string; trend: string }>;
+  goalDimensions?: Array<{ dimension: string; label: string; achievementPct: number; gap: number; current: number; target: number; priority: string; trend: string }>;
 }
 
 export interface SessionApplyPayload {
@@ -2460,6 +2460,8 @@ export function buildSessionTimeline(
         label: d.label,
         achievementPct: d.achievementPct,
         gap: d.gap,
+        current: d.current,
+        target: d.target,
         priority: d.priority,
         trend: d.trend,
       }));
@@ -2972,6 +2974,8 @@ export async function buildSessionTimelineAsync(
             label: d.label,
             achievementPct: d.achievementPct,
             gap: d.gap,
+            current: d.current,
+            target: d.target,
             priority: d.priority,
             trend: d.trend,
           }));

@@ -603,7 +603,8 @@ export default function PhysioGPT() {
   const tissueViewManualRef = useRef(false);
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
-  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd' | 'simTimeline'>('mechanism');
+  const [showSimTimeline, setShowSimTimeline] = useState(false);
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd'>('mechanism');
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
@@ -7886,6 +7887,15 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
+                className={`h-7 text-xs shadow-sm ${showSimTimeline ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => setShowSimTimeline(!showSimTimeline)}
+              >
+                <Clock className="h-3 w-3 mr-1" />
+                Timeline
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 className={`h-7 text-xs shadow-sm ${clinicalReasoningOpen && reasoningActiveTab === 'evidence' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   if (clinicalReasoningOpen && reasoningActiveTab === 'evidence') {
@@ -8418,13 +8428,6 @@ ${ddxList}`;
                       <GraduationCap className="h-3 w-3" />
                       Patient Ed
                     </button>
-                    <button
-                      onClick={() => { setMechanismActiveTab('simTimeline'); setManualTherapyAnnotations(null); }}
-                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'simTimeline' ? 'bg-sky-500/30 text-sky-300 border border-sky-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
-                    >
-                      <Clock className="h-3 w-3" />
-                      Timeline
-                    </button>
                   </div>
                   {mechanismActiveTab === 'mechanism' && (
                     <InjuryMechanismPanel
@@ -8537,8 +8540,26 @@ ${ddxList}`;
                       }))}
                     />
                   )}
-                  {mechanismActiveTab === 'simTimeline' && (
-                    <Suspense fallback={<LazyPanelFallback />}>
+                </div>
+              </div>
+            )}
+
+            {showSimTimeline && (
+              <div className="absolute top-2 right-2 z-30 w-[280px] max-h-[calc(100%-50px)] overflow-y-auto animate-in slide-in-from-right-2 duration-200">
+                <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-3.5 w-3.5 text-sky-400" />
+                      <span className="text-xs font-semibold text-gray-200">Recovery Timeline</span>
+                    </div>
+                    <button
+                      onClick={() => setShowSimTimeline(false)}
+                      className="text-gray-400 hover:text-white p-0.5"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <Suspense fallback={<LazyPanelFallback />}>
                     <SimulationTimelinePanel
                       treatmentPlan={treatmentPlanData}
                       baseModelConfig={effectiveModelConfig}
@@ -8560,8 +8581,7 @@ ${ddxList}`;
                       structuredReasoning={structuredReasoningData}
                       onGoalOverlayChange={handleGoalOverlayChange}
                     />
-                    </Suspense>
-                  )}
+                  </Suspense>
                 </div>
               </div>
             )}

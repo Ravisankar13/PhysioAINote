@@ -6883,6 +6883,7 @@ Based on this clinical data, generate a comprehensive, prioritized exercise pres
           dysfunction: z.string().optional(),
           clinical: z.string().optional(),
         })).optional().default([]),
+        goalTargets: z.string().optional().default(""),
       });
 
       const parsed = customExerciseInputSchema.safeParse(req.body);
@@ -7040,8 +7041,8 @@ ${slingText}
 
 PAIN MARKERS:
 ${painText}
-
-Based on this clinical data, DESIGN novel biomechanical exercises from first principles. DO NOT recommend standard exercises — ENGINEER custom movements that specifically address the force transfer deficits, activation sequence failures, and compensation patterns identified above.`;
+${data.goalTargets ? `\n═══ RECOVERY GOAL TARGETS ═══\n${data.goalTargets}\n` : ''}
+Based on this clinical data, DESIGN novel biomechanical exercises from first principles. DO NOT recommend standard exercises — ENGINEER custom movements that specifically address the force transfer deficits, activation sequence failures, and compensation patterns identified above.${data.goalTargets ? ' Pay special attention to the RECOVERY GOAL TARGETS — design exercises that specifically CLOSE the gap between the current state and the defined recovery end-state targets. Prioritize dimensions with the largest gaps.' : ''}`;
 
       const response = await aiClient.chat.completions.create({
         model: "gpt-4o",
@@ -7546,6 +7547,7 @@ Design 3-5 custom manual therapy techniques that work together as a cohesive tre
     scarMarkers: Array<{ anatomicalLabel: string; type: string; severity: number; age: string; mobility: string; affectedLayers: string[]; painOnPalpation: number; nearestBone: string }>;
     adhesionBands: Array<{ startBone: string; endBone: string; tensionLevel: number; depth: string; restrictedMovements: string[] }>;
     musclePathologies: Array<{ muscleId: string; label: string; pathology: string; severity: string }>;
+    goalTargets?: string;
   }
 
   function buildManualTherapyClinicalPrompt(data: ManualTherapyPayloadData): string {
@@ -7667,7 +7669,7 @@ Overall force transfer score: ${data.slingData?.overallForceTransferScore ?? 'N/
 System summary: ${data.slingData?.systemSummary || 'Not available'}
 ${slingText}
 
-Based on this clinical data, DESIGN novel manual therapy techniques from first principles.${hasTissueData ? ' START with techniques that address the tissue-layer restrictions (scars, adhesions, pathologies) — these are the foundation. THEN address the biomechanical and sling dysfunctions.' : ''} DO NOT recommend standard named techniques — ENGINEER custom hands-on interventions that specifically address the tissue restrictions, joint dysfunctions, fascial continuity disruptions, and neural tension patterns identified above. Reason through tissue layers, force application vectors, hand contact points, and expected tissue responses.`;
+${data.goalTargets ? `\n═══ RECOVERY GOAL TARGETS ═══\n${data.goalTargets}\n` : ''}Based on this clinical data, DESIGN novel manual therapy techniques from first principles.${hasTissueData ? ' START with techniques that address the tissue-layer restrictions (scars, adhesions, pathologies) — these are the foundation. THEN address the biomechanical and sling dysfunctions.' : ''} DO NOT recommend standard named techniques — ENGINEER custom hands-on interventions that specifically address the tissue restrictions, joint dysfunctions, fascial continuity disruptions, and neural tension patterns identified above.${data.goalTargets ? ' Pay special attention to the RECOVERY GOAL TARGETS — design techniques that specifically CLOSE the gap between the current state and the defined recovery end-state targets. Prioritize dimensions with the largest gaps.' : ''} Reason through tissue layers, force application vectors, hand contact points, and expected tissue responses.`;
   }
 
   app.post("/api/manual-therapy-engine/design-custom", ensureAuthenticated, async (req: Request, res: Response) => {
@@ -7758,6 +7760,7 @@ Based on this clinical data, DESIGN novel manual therapy techniques from first p
           pathology: z.string(),
           severity: z.string(),
         })).optional().default([]),
+        goalTargets: z.string().optional().default(""),
       });
 
       const parsed = customManualTherapyInputSchema.safeParse(req.body);

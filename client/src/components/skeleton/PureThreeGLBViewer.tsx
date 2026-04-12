@@ -1701,6 +1701,12 @@ interface PureThreeGLBViewerProps {
   onModelLoadProgress?: (progress: number) => void;
   onModelReady?: () => void;
   onModelLoadError?: (error: string) => void;
+  goalStateOverlay?: {
+    enabled: boolean;
+    painTargets?: Array<{ boneName: string; targetIntensity: number; currentIntensity: number }>;
+    muscleTargets?: Array<{ groupId: string; targetTension: number; currentTension: number }>;
+    overallPct?: number;
+  } | null;
 }
 
 const FORCE_JOINT_TO_BONE: Record<string, string> = {
@@ -2173,6 +2179,7 @@ export default function PureThreeGLBViewer({
   onModelLoadProgress,
   onModelReady,
   onModelLoadError,
+  goalStateOverlay = null,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -7188,6 +7195,65 @@ export default function PureThreeGLBViewer({
     }
   }, [tissueViewOverlay]);
 
+  const goalOverlayObjectsRef = useRef<THREE.Object3D[]>([]);
+  useEffect(() => {
+    for (const obj of goalOverlayObjectsRef.current) {
+      obj.parent?.remove(obj);
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry?.dispose();
+        if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+        else obj.material?.dispose();
+      }
+    }
+    goalOverlayObjectsRef.current = [];
+
+    if (!goalStateOverlay?.enabled || !sceneRef.current) return;
+
+    const bones = bonesRef.current;
+
+    if (goalStateOverlay.painTargets) {
+      for (const pt of goalStateOverlay.painTargets) {
+        const bone = bones[pt.boneName];
+        if (!bone) continue;
+        const gap = Math.max(0, pt.currentIntensity - pt.targetIntensity);
+        if (gap <= 0) continue;
+        const ringGeo = new THREE.RingGeometry(0.6, 0.8, 24);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color().setHSL(0.33 * (1 - gap / 100), 0.8, 0.5),
+          transparent: true,
+          opacity: 0.35 + gap * 0.004,
+          side: THREE.DoubleSide,
+          depthTest: false,
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.renderOrder = 998;
+        ring.rotation.x = -Math.PI / 2;
+        bone.add(ring);
+        goalOverlayObjectsRef.current.push(ring);
+      }
+    }
+
+    if (goalStateOverlay.muscleTargets) {
+      const groups = splitMuscleGroupsRef.current;
+      for (const mt of goalStateOverlay.muscleTargets) {
+        const group = groups.get(mt.groupId);
+        if (!group) continue;
+        const gap = Math.abs(mt.currentTension - mt.targetTension);
+        if (gap < 5) continue;
+        const hue = mt.currentTension > mt.targetTension ? 0 : 0.6;
+        const ghostColor = new THREE.Color().setHSL(hue, 0.4, 0.6);
+        for (const mesh of group.meshes) {
+          if (mesh instanceof THREE.Mesh && mesh.material) {
+            const mat = (mesh.material as THREE.MeshStandardMaterial);
+            if (mat.emissive) {
+              mat.emissive.lerp(ghostColor, Math.min(gap / 100, 0.4));
+            }
+          }
+        }
+      }
+    }
+  }, [goalStateOverlay]);
+
   // Mouse move handler for hover tooltips
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (!forceVisualizationRef.current || !containerRef.current || !biomechanicsData) {
@@ -7676,6 +7742,20 @@ export default function PureThreeGLBViewer({
           <div className="px-3 py-1.5 rounded-lg shadow-lg bg-cyan-600/90 backdrop-blur text-white text-sm font-medium whitespace-nowrap">
             {muscleHoverInfo.label}
             <div className="text-[9px] text-cyan-200">Click for details</div>
+          </div>
+        </div>
+      )}
+      {goalStateOverlay?.enabled && goalStateOverlay.overallPct !== undefined && (
+        <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
+          <div className="px-2 py-1 rounded-lg bg-slate-900/85 backdrop-blur-sm border border-green-500/30 shadow-lg">
+            <div className="text-[8px] text-green-400 uppercase tracking-wider mb-0.5">Goal</div>
+            <div className={`text-sm font-bold ${
+              goalStateOverlay.overallPct >= 90 ? 'text-green-400' :
+              goalStateOverlay.overallPct >= 70 ? 'text-emerald-400' :
+              goalStateOverlay.overallPct >= 50 ? 'text-yellow-400' : 'text-red-400'
+            }`}>
+              {goalStateOverlay.overallPct}%
+            </div>
           </div>
         </div>
       )}

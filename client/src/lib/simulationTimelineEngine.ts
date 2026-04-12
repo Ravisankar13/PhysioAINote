@@ -12,6 +12,7 @@ import type { TreatmentPlanResult, PlanPhase, PlanExercise } from '../components
 import type { CustomExercise } from '../components/skeleton/ExerciseEngineTab';
 import type { CustomTechnique } from '../components/skeleton/ManualTherapyEngineTab';
 import type { PatientModifierProfile, ConditionRecoveryProfile } from './patientFactorsEngine';
+import { generateGoalProfile, computeGoalGap, formatGoalContextForPrompt, type RecoveryGoalProfile, type GoalGapAnalysis } from './goalStateEngine';
 
 export interface SimulationPhase {
   id: string;
@@ -735,6 +736,8 @@ export interface SessionSnapshot {
   isPlateauSession: boolean;
   isBreakthroughSession: boolean;
   isSetbackSession: boolean;
+  goalAchievementPct?: number;
+  goalDimensions?: Array<{ dimension: string; label: string; achievementPct: number; gap: number; priority: string; trend: string }>;
 }
 
 export interface SessionApplyPayload {
@@ -961,6 +964,7 @@ export interface SessionTimelineResult {
   correctionFactors?: CorrectionFactors;
   actualOutcomes?: ActualSessionOutcome[];
   treatmentPhases?: TreatmentPhaseBlock[];
+  goalAchievementTimeline?: Array<{ sessionNumber: number; overallPct: number; romPct: number; painPct: number; slingPct: number; compPct: number; riskPct: number }>;
 }
 
 const JOINT_ROM_NORMS: Record<string, { label: string; plane: string; normalDegrees: number }> = {
@@ -2441,6 +2445,35 @@ export function buildSessionTimeline(
     return totalSessions;
   })();
 
+  let goalAchievementTimeline: SessionTimelineResult['goalAchievementTimeline'] | undefined;
+  if (cp) {
+    const goalProf = generateGoalProfile(cp, pm, sessions[0]?.romPredictions.map(r => r.jointId));
+    const timeline: NonNullable<SessionTimelineResult['goalAchievementTimeline']> = [];
+    for (let i = 0; i < sessions.length; i++) {
+      const prev = i > 0 ? sessions[i - 1] : null;
+      const gap = computeGoalGap(goalProf, sessions[i], prev);
+      sessions[i].goalAchievementPct = gap.overallAchievementPct;
+      sessions[i].goalDimensions = gap.dimensions.map(d => ({
+        dimension: d.dimension,
+        label: d.label,
+        achievementPct: d.achievementPct,
+        gap: d.gap,
+        priority: d.priority,
+        trend: d.trend,
+      }));
+      timeline.push({
+        sessionNumber: sessions[i].sessionNumber,
+        overallPct: gap.overallAchievementPct,
+        romPct: gap.romAchievementPct,
+        painPct: gap.painAchievementPct,
+        slingPct: gap.slingAchievementPct,
+        compPct: gap.compensationAchievementPct,
+        riskPct: gap.riskAchievementPct,
+      });
+    }
+    goalAchievementTimeline = timeline;
+  }
+
   return {
     sessions,
     totalSessions,
@@ -2465,6 +2498,7 @@ export function buildSessionTimeline(
     functionalMilestones: funcMilestones,
     correctionFactors,
     actualOutcomes: oc.length > 0 ? oc : undefined,
+    goalAchievementTimeline,
   };
 }
 
@@ -2482,6 +2516,8 @@ function synthesizeReQueryPayload(
   previousExercises: CustomExercise[],
   previousTechniques: CustomTechnique[],
   correctionFactors?: CorrectionFactors,
+  goalProfile?: RecoveryGoalProfile | null,
+  previousSnapshot?: SessionSnapshot | null,
 ): {
   exercisePayload: Record<string, unknown>;
   techniquePayload: Record<string, unknown>;
@@ -2565,6 +2601,12 @@ function synthesizeReQueryPayload(
 
   const techniqueTargetFocus = `${targetFocusBase}\n\nPREVIOUS MANUAL THERAPY PROGRAM (being retired):\n${prevTechniqueContext || 'None'}\n\nDesign NEW manual therapy techniques appropriate for the ${phaseLabel} phase. These should address remaining tissue restrictions while matching the phase goals listed above.`;
 
+  let goalTargetsText = '';
+  if (goalProfile) {
+    const gapAnalysis = computeGoalGap(goalProfile, snapshot, previousSnapshot);
+    goalTargetsText = formatGoalContextForPrompt(goalProfile, gapAnalysis);
+  }
+
   const exercisePayload = {
     targetFocus: exerciseTargetFocus,
     mechanismSummary: `Predicted state at session ${snapshot.sessionNumber}, transitioning to ${phaseLabel} phase`,
@@ -2577,6 +2619,7 @@ function synthesizeReQueryPayload(
       .filter(m => m.trendDirection === 'worsening')
       .map(m => `${m.muscleId} (${m.clinicalNote})`),
     kineticChainDysfunctions,
+    goalTargets: goalTargetsText,
   };
 
   const techniquePayload = {
@@ -2594,6 +2637,7 @@ function synthesizeReQueryPayload(
     scarMarkers: [] as unknown[],
     adhesionBands: [] as unknown[],
     musclePathologies: [] as unknown[],
+    goalTargets: goalTargetsText,
   };
 
   return { exercisePayload, techniquePayload };
@@ -2711,12 +2755,16 @@ export async function buildSessionTimelineAsync(
       })),
     ];
 
+    const goalProf = conditionProfile ? generateGoalProfile(conditionProfile, patientModifiers) : null;
+    const prevSnap = transition.sessionIndex > 0 ? accumulatedResult.sessions[transition.sessionIndex - 1] : null;
     const { exercisePayload, techniquePayload } = synthesizeReQueryPayload(
       transitionSnap,
       transition.toPhase,
       currentExercises,
       currentTechniques,
       accumulatedResult.correctionFactors,
+      goalProf,
+      prevSnap,
     );
 
     const avgRomPct = transitionSnap.romPredictions.length > 0

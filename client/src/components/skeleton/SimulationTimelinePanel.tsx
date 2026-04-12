@@ -124,7 +124,7 @@ const MILESTONE_COLORS: Record<string, string> = {
   sling_improvement: 'text-violet-400',
 };
 
-type SessionCurveTrack = 'risk' | 'pain' | 'sling' | 'rom' | 'comp' | 'muscle';
+type SessionCurveTrack = 'risk' | 'pain' | 'sling' | 'rom' | 'comp' | 'muscle' | 'goal';
 
 const SESSION_TRACK_CONFIG: Record<SessionCurveTrack, { label: string; color: string; dash?: string }> = {
   risk: { label: 'Risk', color: '#ef4444' },
@@ -133,6 +133,7 @@ const SESSION_TRACK_CONFIG: Record<SessionCurveTrack, { label: string; color: st
   rom: { label: 'ROM', color: '#06b6d4', dash: '4,1' },
   muscle: { label: 'Muscle', color: '#10b981', dash: '3,3' },
   comp: { label: 'Comp', color: '#f472b6', dash: '2,3' },
+  goal: { label: 'Goal%', color: '#22c55e', dash: '5,2' },
 };
 
 const ROM_JOINT_COLORS = ['#06b6d4', '#0ea5e9', '#38bdf8', '#7dd3fc', '#22d3ee', '#67e8f9', '#a5f3fc', '#0891b2'];
@@ -202,7 +203,7 @@ function SessionRecoveryCurve({
 
   const trackData = useMemo(() => {
     const data: Record<SessionCurveTrack, { x: number; y: number; session: number }[]> = {
-      risk: [], pain: [], sling: [], rom: [], muscle: [], comp: [],
+      risk: [], pain: [], sling: [], rom: [], muscle: [], comp: [], goal: [],
     };
     for (const s of sessions) {
       const x = getX(s);
@@ -212,6 +213,7 @@ function SessionRecoveryCurve({
       data.rom.push({ x, y: avgRom(s), session: s.sessionNumber });
       data.muscle.push({ x, y: avgMuscleTension(s), session: s.sessionNumber });
       data.comp.push({ x, y: 100 - s.compensationResolution, session: s.sessionNumber });
+      data.goal.push({ x, y: s.goalAchievementPct ?? 0, session: s.sessionNumber });
     }
     return data;
   }, [sessions, getX, avgRom, avgMuscleTension]);
@@ -351,6 +353,22 @@ function SessionRecoveryCurve({
         )}
         {enabledTracks.has('comp') && (
           <path d={makePath(toSvgPoints(trackData.comp))} fill="none" stroke="#f472b6" strokeWidth={1} strokeDasharray="2,3" />
+        )}
+        {enabledTracks.has('goal') && trackData.goal.length > 0 && (
+          <>
+            <line
+              x1={padding.left}
+              y1={padding.top}
+              x2={padding.left + chartW}
+              y2={padding.top}
+              stroke="#22c55e"
+              strokeWidth={0.8}
+              strokeDasharray="6,3"
+              opacity={0.5}
+            />
+            <text x={padding.left + chartW - 2} y={padding.top - 2} textAnchor="end" fill="#22c55e" fontSize={7} opacity={0.7}>100% Goal</text>
+            <path d={makePath(toSvgPoints(trackData.goal))} fill="none" stroke="#22c55e" strokeWidth={1.2} strokeDasharray="5,2" />
+          </>
         )}
 
         {perJointRomData.map(jd => (
@@ -2035,6 +2053,49 @@ function SessionTimelineView({
             invertDelta
             icon={<Activity className="h-3 w-3" />}
           />
+        </div>
+      )}
+
+      {currentSnapshot && currentSnapshot.goalAchievementPct !== undefined && currentSnapshot.goalAchievementPct > 0 && (
+        <div className="bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-700/30 rounded p-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[8px] text-green-400 font-medium flex items-center gap-1">
+              <Target className="h-3 w-3" />
+              Recovery Goal Progress
+            </span>
+            <span className={`text-[10px] font-bold ${
+              currentSnapshot.goalAchievementPct >= 90 ? 'text-green-400' :
+              currentSnapshot.goalAchievementPct >= 70 ? 'text-emerald-400' :
+              currentSnapshot.goalAchievementPct >= 50 ? 'text-yellow-400' : 'text-red-400'
+            }`}>
+              {currentSnapshot.goalAchievementPct}%
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                currentSnapshot.goalAchievementPct >= 90 ? 'bg-green-500' :
+                currentSnapshot.goalAchievementPct >= 70 ? 'bg-emerald-500' :
+                currentSnapshot.goalAchievementPct >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+              }`}
+              style={{ width: `${currentSnapshot.goalAchievementPct}%` }}
+            />
+          </div>
+          {currentSnapshot.goalDimensions && currentSnapshot.goalDimensions.filter(d => d.priority === 'high').length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {currentSnapshot.goalDimensions.filter(d => d.priority === 'high').slice(0, 3).map(d => (
+                <div key={d.dimension} className="flex items-center justify-between text-[7px]">
+                  <span className="text-red-400 truncate max-w-[60%]">{d.label}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">{d.achievementPct}%</span>
+                    <span className={d.trend === 'improving' ? 'text-green-500' : d.trend === 'worsening' ? 'text-red-500' : 'text-gray-600'}>
+                      {d.trend === 'improving' ? '↑' : d.trend === 'worsening' ? '↓' : '→'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -96,7 +96,7 @@ interface ExerciseEngineTabProps {
   sessionPrescription?: PrescriptionContext | null;
   sessionPrescriptionNum?: number | null;
   triggerGenerate?: number;
-  onGenerateStatusChange?: (loading: boolean) => void;
+  onGenerateComplete?: (success: boolean) => void;
 }
 
 const GROUP_ICONS: Record<string, typeof Dumbbell> = {
@@ -530,7 +530,7 @@ function CustomExerciseCard({ exercise, index, dosageScalingData }: { exercise: 
   );
 }
 
-export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, triggerGenerate, onGenerateStatusChange }: ExerciseEngineTabProps) {
+export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, triggerGenerate, onGenerateComplete }: ExerciseEngineTabProps) {
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -676,24 +676,22 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
       setPlan(sorted);
       const allIds = new Set(sorted.exerciseGroups.map(g => g.groupId));
       setExpandedGroups(allIds);
+      onGenerateComplete?.(true);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setError(msg);
+      onGenerateComplete?.(false);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [buildPayload]);
+  }, [buildPayload, onGenerateComplete]);
 
   useEffect(() => {
     if (triggerGenerate && triggerGenerate > 0) {
       generatePlan();
     }
   }, [triggerGenerate]);
-
-  useEffect(() => {
-    onGenerateStatusChange?.(loading);
-  }, [loading, onGenerateStatusChange]);
 
   const designCustomExercises = useCallback(async () => {
     if (customAbortRef.current) customAbortRef.current.abort();

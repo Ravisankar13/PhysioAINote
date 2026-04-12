@@ -3639,18 +3639,18 @@ ${ddxList}`;
     setMtGeneratingSession(sessionNumber);
   }, []);
 
-  const handleExerciseGenerateStatusChange = useCallback((loading: boolean) => {
-    if (!loading && exerciseGeneratingSession !== null) {
+  const handleExerciseGenerateComplete = useCallback((success: boolean) => {
+    if (success && exerciseGeneratingSession !== null) {
       setExerciseGeneratedSessions(prev => new Set(prev).add(exerciseGeneratingSession));
-      setExerciseGeneratingSession(null);
     }
+    setExerciseGeneratingSession(null);
   }, [exerciseGeneratingSession]);
 
-  const handleMTGenerateStatusChange = useCallback((loading: boolean) => {
-    if (!loading && mtGeneratingSession !== null) {
+  const handleMTGenerateComplete = useCallback((success: boolean) => {
+    if (success && mtGeneratingSession !== null) {
       setMtGeneratedSessions(prev => new Set(prev).add(mtGeneratingSession));
-      setMtGeneratingSession(null);
     }
+    setMtGeneratingSession(null);
   }, [mtGeneratingSession]);
 
   const exerciseMtActivePhaseIndex = useMemo(() => {
@@ -8606,7 +8606,7 @@ ${ddxList}`;
                       sessionPrescription={sessionPrescriptionCtx}
                       sessionPrescriptionNum={sessionPrescriptionNum}
                       triggerGenerate={triggerExerciseGenerate}
-                      onGenerateStatusChange={handleExerciseGenerateStatusChange}
+                      onGenerateComplete={handleExerciseGenerateComplete}
                     />
                   )}
                   {mechanismActiveTab === 'manualRx' && (
@@ -8638,7 +8638,7 @@ ${ddxList}`;
                       sessionPrescription={sessionPrescriptionCtx}
                       sessionPrescriptionNum={sessionPrescriptionNum}
                       triggerGenerate={triggerMTGenerate}
-                      onGenerateStatusChange={handleMTGenerateStatusChange}
+                      onGenerateComplete={handleMTGenerateComplete}
                     />
                   )}
                   {mechanismActiveTab === 'electroRx' && (

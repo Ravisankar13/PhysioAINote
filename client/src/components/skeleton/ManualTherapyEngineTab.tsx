@@ -108,7 +108,7 @@ interface ManualTherapyEngineTabProps {
   sessionPrescription?: PrescriptionContext | null;
   sessionPrescriptionNum?: number | null;
   triggerGenerate?: number;
-  onGenerateStatusChange?: (loading: boolean) => void;
+  onGenerateComplete?: (success: boolean) => void;
 }
 
 const TISSUE_NAME_TO_MUSCLE_GROUP: Record<string, string[]> = {
@@ -503,7 +503,7 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
   );
 }
 
-export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, triggerGenerate, onGenerateStatusChange }: ManualTherapyEngineTabProps) {
+export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, triggerGenerate, onGenerateComplete }: ManualTherapyEngineTabProps) {
   const [plan, setPlan] = useState<ManualTherapyPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -691,24 +691,22 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       setPlan(sorted);
       const allIds = new Set(sorted.techniqueGroups.map(g => g.groupId));
       setExpandedGroups(allIds);
+      onGenerateComplete?.(true);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setError(msg);
+      onGenerateComplete?.(false);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [buildPayload]);
+  }, [buildPayload, onGenerateComplete]);
 
   useEffect(() => {
     if (triggerGenerate && triggerGenerate > 0) {
       generatePlan();
     }
   }, [triggerGenerate]);
-
-  useEffect(() => {
-    onGenerateStatusChange?.(loading);
-  }, [loading, onGenerateStatusChange]);
 
   const designCustomTechniques = useCallback(async () => {
     if (customAbortRef.current) customAbortRef.current.abort();

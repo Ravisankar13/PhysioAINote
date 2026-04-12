@@ -80,7 +80,7 @@ import type { TreatmentPlanResult } from "./PlanTab";
 import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
 import type { CustomExercise } from "./ExerciseEngineTab";
 import type { CustomTechnique } from "./ManualTherapyEngineTab";
-import { generateGoalProfile, computeGoalGap, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput } from "@/lib/goalStateEngine";
+import { computeGoalGap, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput } from "@/lib/goalStateEngine";
 
 interface GoalOverlayData {
   enabled: boolean;
@@ -2153,6 +2153,7 @@ function SessionTimelineView({
   clinicalState,
   aiGoalProfileOverride,
   aiGoalLoading: aiGoalLoadingProp,
+  aiGoalError: aiGoalErrorProp,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -2166,6 +2167,7 @@ function SessionTimelineView({
   clinicalState?: ClinicalStateInput | null;
   aiGoalProfileOverride?: RecoveryGoalProfile | null;
   aiGoalLoading?: boolean;
+  aiGoalError?: string | null;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2255,18 +2257,7 @@ function SessionTimelineView({
     Math.abs(m.sessionNumber - selectedSession) <= 2 && m.sessionNumber !== selectedSession
   );
 
-  const hardcodedGoalProfileLocal = useMemo<RecoveryGoalProfile | null>(() => {
-    if (!activeCondition) return null;
-    const romJointIds = sessionTimeline.baseline?.romBaselines?.map(r => r.jointId) ?? [];
-    return generateGoalProfile(
-      activeCondition,
-      modifiers ?? undefined,
-      romJointIds.length > 0 ? romJointIds : undefined,
-      clinicalState ?? undefined,
-    );
-  }, [activeCondition, modifiers, sessionTimeline.baseline, clinicalState]);
-
-  const goalProfile = aiGoalProfileOverride ?? hardcodedGoalProfileLocal;
+  const goalProfile = aiGoalProfileOverride ?? null;
 
   const currentGoalGap = useMemo<GoalGapAnalysis | null>(() => {
     if (!goalProfile || !currentSnapshot) return null;
@@ -2463,6 +2454,11 @@ function SessionTimelineView({
         <div className="rounded-lg border border-green-500/20 bg-gray-900/40 p-4 text-center">
           <RefreshCw className="h-5 w-5 text-green-400 animate-spin mx-auto mb-2" />
           <span className="text-[10px] text-gray-400">Generating AI recovery goals...</span>
+        </div>
+      )}
+      {!goalProfile && !aiGoalLoadingProp && aiGoalErrorProp && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-950/20 p-3 text-center">
+          <span className="text-[10px] text-amber-400">{aiGoalErrorProp}</span>
         </div>
       )}
 
@@ -3873,18 +3869,9 @@ export default function SimulationTimelinePanel({
     return adjustProfileForPatient(activeCondition, modifiers);
   }, [activeCondition, modifiers]);
 
-  const hardcodedGoalProfile = useMemo<RecoveryGoalProfile | null>(() => {
-    if (!activeCondition) return null;
-    return generateGoalProfile(
-      activeCondition,
-      modifiers ?? undefined,
-      undefined,
-      clinicalStateForGoals ?? undefined,
-    );
-  }, [activeCondition, modifiers, clinicalStateForGoals]);
-
   const [aiGoalProfile, setAiGoalProfile] = useState<RecoveryGoalProfile | null>(null);
   const [aiGoalLoading, setAiGoalLoading] = useState(false);
+  const [aiGoalError, setAiGoalError] = useState<string | null>(null);
   const aiGoalAbortRef = useRef<AbortController | null>(null);
   const aiGoalCacheRef = useRef<{ key: string; profile: RecoveryGoalProfile } | null>(null);
   const aiGoalDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3901,6 +3888,7 @@ export default function SimulationTimelinePanel({
     if (!conditionNameForAi) {
       setAiGoalProfile(null);
       setAiGoalLoading(false);
+      setAiGoalError(null);
       return;
     }
 
@@ -3934,6 +3922,7 @@ export default function SimulationTimelinePanel({
       const controller = new AbortController();
       aiGoalAbortRef.current = controller;
       setAiGoalLoading(true);
+      setAiGoalError(null);
 
       const hypotheses = structuredReasoning?.hypotheses?.map(h => ({
         condition: h.condition,
@@ -3977,13 +3966,15 @@ export default function SimulationTimelinePanel({
         .then(profile => {
           if (!controller.signal.aborted) {
             setAiGoalProfile(profile);
+            setAiGoalError(null);
             aiGoalCacheRef.current = { key: cacheKey, profile };
             setAiGoalLoading(false);
           }
         })
         .catch(err => {
           if (err.name !== 'AbortError' && !controller.signal.aborted) {
-            console.error('AI goal generation failed, using hardcoded fallback:', err);
+            console.error('AI goal generation failed:', err);
+            setAiGoalError('Could not generate recovery goals');
             setAiGoalLoading(false);
           }
         });
@@ -3999,7 +3990,7 @@ export default function SimulationTimelinePanel({
     };
   }, [conditionNameForAi, patientFactors, clinicalStateForGoals, structuredReasoning, extractionResult]);
 
-  const parentGoalProfile = aiGoalProfile ?? hardcodedGoalProfile;
+  const parentGoalProfile = aiGoalProfile;
 
   const hasCustomTreatments = (customExercises && customExercises.length > 0) || (customTechniques && customTechniques.length > 0);
 
@@ -4175,6 +4166,7 @@ export default function SimulationTimelinePanel({
             clinicalState={clinicalStateForGoals}
             aiGoalProfileOverride={aiGoalProfile}
             aiGoalLoading={aiGoalLoading}
+            aiGoalError={aiGoalError}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (
@@ -4205,6 +4197,11 @@ export default function SimulationTimelinePanel({
             <span className="text-[10px] text-gray-400">Generating AI recovery goals...</span>
           </div>
         )}
+        {!parentGoalProfile && !aiGoalLoading && aiGoalError && (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-950/20 p-3 text-center">
+            <span className="text-[10px] text-amber-400">{aiGoalError}</span>
+          </div>
+        )}
         <WeekTimelineView
           timeline={weekTimeline}
           onApplyWeekToSkeleton={onApplyWeekToSkeleton}
@@ -4226,6 +4223,11 @@ export default function SimulationTimelinePanel({
         <div className="rounded-lg border border-green-500/20 bg-gray-900/40 p-4 text-center">
           <RefreshCw className="h-5 w-5 text-green-400 animate-spin mx-auto mb-2" />
           <span className="text-[10px] text-gray-400">Generating AI recovery goals...</span>
+        </div>
+      )}
+      {!parentGoalProfile && !aiGoalLoading && aiGoalError && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-950/20 p-3 text-center">
+          <span className="text-[10px] text-amber-400">{aiGoalError}</span>
         </div>
       )}
       <div className="text-gray-500 text-[10px] mb-2">No simulation data available</div>

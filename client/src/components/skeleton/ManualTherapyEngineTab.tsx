@@ -1126,14 +1126,14 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
           </div>
         </div>
       )}
-      {prescriptionCtx && showRecoveryContext && (
+      {effectiveCtx && showRecoveryContext && (
         <div className="border border-rose-500/30 rounded-lg bg-gradient-to-br from-rose-950/30 to-gray-900/60 p-2 space-y-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <Target className="h-3 w-3 text-rose-400" />
               <span className="text-[10px] font-semibold text-rose-300">MT Goal Context</span>
               <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                {Math.round(prescriptionCtx.goalAchievementPct)}% achieved
+                {Math.round(effectiveCtx.goalAchievementPct)}% achieved
               </span>
             </div>
             <button onClick={() => setShowRecoveryContext(false)} className="text-gray-500 hover:text-gray-300">
@@ -1143,24 +1143,24 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
           <div className="grid grid-cols-3 gap-1.5">
             <div className="bg-gray-800/50 rounded p-1.5 text-center">
               <div className="text-[8px] text-gray-400">Phase</div>
-              <div className="text-[9px] font-medium text-gray-200 truncate">{prescriptionCtx.phaseLabel.replace('Phase ', 'P').split(' — ')[0]}</div>
+              <div className="text-[9px] font-medium text-gray-200 truncate">{effectiveCtx.phaseLabel.replace('Phase ', 'P').split(' — ')[0]}</div>
             </div>
             <div className="bg-gray-800/50 rounded p-1.5 text-center">
               <div className="text-[8px] text-gray-400">Pain</div>
-              <div className="text-[9px] font-medium text-gray-200">{Math.round(prescriptionCtx.currentPain)} → {prescriptionCtx.painTarget}</div>
+              <div className="text-[9px] font-medium text-gray-200">{Math.round(effectiveCtx.currentPain)} → {effectiveCtx.painTarget}</div>
             </div>
             <div className="bg-gray-800/50 rounded p-1.5 text-center">
               <div className="text-[8px] text-gray-400">MT Grade</div>
-              <div className="text-[9px] font-medium text-gray-200">{prescriptionCtx.mtGradeGuidance.minGrade}–{prescriptionCtx.mtGradeGuidance.maxGrade}</div>
+              <div className="text-[9px] font-medium text-gray-200">{effectiveCtx.mtGradeGuidance.minGrade}–{effectiveCtx.mtGradeGuidance.maxGrade}</div>
             </div>
           </div>
           <div className="bg-gray-800/40 rounded p-1.5">
-            <div className="text-[8px] text-gray-400 italic">{prescriptionCtx.mtGradeGuidance.rationale}</div>
+            <div className="text-[8px] text-gray-400 italic">{effectiveCtx.mtGradeGuidance.rationale}</div>
           </div>
-          {prescriptionCtx.goalGaps.length > 0 && (
+          {effectiveCtx.goalGaps.length > 0 && (
             <div className="space-y-0.5">
               <div className="text-[8px] text-gray-400 uppercase tracking-wider">Priority Gaps</div>
-              {prescriptionCtx.goalGaps.slice(0, 3).map(gap => (
+              {effectiveCtx.goalGaps.slice(0, 3).map(gap => (
                 <div key={gap.dimension} className="flex items-center gap-1.5 text-[9px]">
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${gap.priority === 'high' ? 'bg-red-400' : gap.priority === 'medium' ? 'bg-amber-400' : 'bg-gray-400'}`} />
                   <span className="text-gray-300 truncate flex-1">{gap.label}</span>
@@ -1170,20 +1170,20 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
               ))}
             </div>
           )}
-          {prescriptionCtx.contraindications.length > 0 && (
+          {effectiveCtx.contraindications.length > 0 && (
             <div className="flex items-start gap-1 bg-red-950/30 rounded p-1.5 border border-red-500/20">
               <AlertTriangle className="h-2.5 w-2.5 text-red-400 shrink-0 mt-0.5" />
               <div className="text-[8px] text-red-300/80 leading-relaxed">
-                {prescriptionCtx.contraindications.join(' · ')}
+                {effectiveCtx.contraindications.join(' · ')}
               </div>
             </div>
           )}
         </div>
       )}
-      {prescriptionCtx && !showRecoveryContext && (
+      {effectiveCtx && !showRecoveryContext && (
         <button onClick={() => setShowRecoveryContext(true)} className="flex items-center gap-1 text-[9px] text-rose-400/60 hover:text-rose-400 transition-colors">
           <Target className="h-2.5 w-2.5" />
-          Show MT Goal Context ({Math.round(prescriptionCtx.goalAchievementPct)}%)
+          Show MT Goal Context ({Math.round(effectiveCtx.goalAchievementPct)}%)
         </button>
       )}
       <div className="flex items-center justify-between">

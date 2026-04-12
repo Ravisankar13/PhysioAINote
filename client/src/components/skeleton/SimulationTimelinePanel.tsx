@@ -36,6 +36,7 @@ import {
   Trophy,
   Layers,
   ClipboardCheck,
+  ListOrdered,
 } from "lucide-react";
 import {
   buildSimulationTimeline,
@@ -3279,6 +3280,52 @@ function SessionTimelineView({
                   </div>
                 )}
               </div>
+
+              {timelinePrescriptions.sessionChanges.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-[8px] text-gray-400 font-medium flex items-center gap-1">
+                    <ListOrdered className="h-3 w-3 text-violet-400" /> Per-Session Changes
+                  </div>
+                  <div className="space-y-0.5">
+                    {timelinePrescriptions.sessionChanges.map(sc => {
+                      const hasChanges = sc.newExercises.length > 0 || sc.progressedExercises.length > 0 || sc.discontinuedExercises.length > 0 || sc.dosageChange || sc.gradeChange;
+                      if (!hasChanges) return null;
+                      return (
+                        <div
+                          key={sc.sessionNumber}
+                          className={`flex items-start gap-1.5 text-[7px] bg-gray-800/40 rounded px-1.5 py-0.5 cursor-pointer ${rxDrivingSession === sc.sessionNumber ? 'ring-1 ring-violet-500/60' : 'hover:bg-gray-800/60'}`}
+                          onClick={() => selectSession(sc.sessionNumber)}
+                        >
+                          <span className="text-gray-400 font-medium shrink-0 w-4">S{sc.sessionNumber}</span>
+                          <div className="flex flex-wrap gap-1 items-center">
+                            {sc.newExercises.length > 0 && (
+                              <Badge variant="outline" className="text-[6px] px-1 py-0 border-green-500/40 text-green-400">
+                                +{sc.newExercises.length} New
+                              </Badge>
+                            )}
+                            {sc.progressedExercises.length > 0 && (
+                              <Badge variant="outline" className="text-[6px] px-1 py-0 border-amber-500/40 text-amber-400">
+                                ↑{sc.progressedExercises.length} Progressed
+                              </Badge>
+                            )}
+                            {sc.discontinuedExercises.length > 0 && (
+                              <Badge variant="outline" className="text-[6px] px-1 py-0 border-red-500/40 text-red-400">
+                                −{sc.discontinuedExercises.length} Disc.
+                              </Badge>
+                            )}
+                            {sc.dosageChange && (
+                              <span className="text-cyan-400/70">dose: {sc.dosageChange}</span>
+                            )}
+                            {sc.gradeChange && (
+                              <span className="text-pink-400/70">grade: {sc.gradeChange}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="border-t border-gray-700/30 pt-1.5">
                 <div className="text-[7px] text-gray-600 mb-1">Dosage Legend</div>

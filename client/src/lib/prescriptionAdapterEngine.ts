@@ -457,10 +457,20 @@ const RECOVERY_PHASE_TO_INDEX: Record<string, number> = {
   'Return to Activity': 3,
 };
 
+export interface SessionChangeSummary {
+  sessionNumber: number;
+  newExercises: string[];
+  progressedExercises: string[];
+  discontinuedExercises: string[];
+  dosageChange: string | null;
+  gradeChange: string | null;
+}
+
 export interface TimelinePrescriptionSummary {
   sessionPrescriptions: PrescriptionContext[];
   exerciseProgression: ExerciseProgressionEntry[];
   manualProgression: ManualProgressionEntry[];
+  sessionChanges: SessionChangeSummary[];
 }
 
 export interface ExerciseProgressionEntry {
@@ -511,6 +521,10 @@ export function computeTimelinePrescriptions(
         boneName: p.markerLabel ?? 'unknown',
         intensity: p.predictedSeverity,
       })),
+      currentRom: session.romPredictions.map(r => ({
+        jointId: r.jointId,
+        currentDegrees: r.predictedDegrees,
+      })),
       posturalDeviations: [],
       activePhaseIndex: phaseIndex,
     };
@@ -531,7 +545,9 @@ export function computeTimelinePrescriptions(
             trend: d.trend as 'improving' | 'stalled' | 'worsening' | 'unknown',
           })),
           priorityDimensions: [],
-          romAchievementPct: 0,
+          romAchievementPct: session.romPredictions.length > 0
+            ? session.romPredictions.reduce((s, r) => s + (r.targetDegrees > 0 ? Math.min(100, (r.predictedDegrees / r.targetDegrees) * 100) : 50), 0) / session.romPredictions.length
+            : 0,
           painAchievementPct: maxPain <= goalProfile.painTarget ? 100 : Math.max(0, (1 - (maxPain - goalProfile.painTarget) / 100) * 100),
           slingAchievementPct: 0,
           compensationAchievementPct: 0,
@@ -549,8 +565,9 @@ export function computeTimelinePrescriptions(
 
   const exerciseProgression = buildExerciseProgression(sessionPrescriptions);
   const manualProgression = buildManualProgression(sessionPrescriptions);
+  const sessionChanges = buildSessionChanges(sessionPrescriptions);
 
-  return { sessionPrescriptions, exerciseProgression, manualProgression };
+  return { sessionPrescriptions, exerciseProgression, manualProgression, sessionChanges };
 }
 
 function buildExerciseProgression(prescriptions: PrescriptionContext[]): ExerciseProgressionEntry[] {
@@ -657,4 +674,58 @@ function buildManualProgression(prescriptions: PrescriptionContext[]): ManualPro
 
   result.sort((a, b) => a.firstSession - b.firstSession);
   return result;
+}
+
+function buildSessionChanges(prescriptions: PrescriptionContext[]): SessionChangeSummary[] {
+  const changes: SessionChangeSummary[] = [];
+  let prevExerciseIds = new Set<string>();
+  let prevDosage: string | null = null;
+  let prevGrade: string | null = null;
+
+  for (let i = 0; i < prescriptions.length; i++) {
+    const ctx = prescriptions[i];
+    const currExerciseIds = new Set(ctx.recommendedExerciseIds);
+    const sessionNum = ctx.sessionNumber ?? (i + 1);
+
+    const newExercises: string[] = [];
+    const progressedExercises: string[] = [];
+    const discontinuedExercises: string[] = [];
+
+    for (const exId of currExerciseIds) {
+      if (!prevExerciseIds.has(exId)) {
+        const cat = EXERCISE_CATALOG.find(e => e.id === exId);
+        newExercises.push(cat?.name ?? exId);
+      }
+    }
+
+    for (const exId of prevExerciseIds) {
+      if (!currExerciseIds.has(exId)) {
+        const cat = EXERCISE_CATALOG.find(e => e.id === exId);
+        discontinuedExercises.push(cat?.name ?? exId);
+      }
+    }
+
+    const currDosage = ctx.dosageScaling.intensityLabel;
+    const currGrade = `${ctx.mtGradeGuidance.minGrade}-${ctx.mtGradeGuidance.maxGrade}`;
+
+    if (i > 0 && prevDosage && prevDosage !== currDosage) {
+      for (const exId of currExerciseIds) {
+        if (prevExerciseIds.has(exId)) {
+          const cat = EXERCISE_CATALOG.find(e => e.id === exId);
+          progressedExercises.push(cat?.name ?? exId);
+        }
+      }
+    }
+
+    const dosageChange = (i > 0 && prevDosage !== currDosage) ? `${prevDosage} → ${currDosage}` : null;
+    const gradeChange = (i > 0 && prevGrade !== currGrade) ? `${prevGrade} → ${currGrade}` : null;
+
+    changes.push({ sessionNumber: sessionNum, newExercises, progressedExercises, discontinuedExercises, dosageChange, gradeChange });
+
+    prevExerciseIds = currExerciseIds;
+    prevDosage = currDosage;
+    prevGrade = currGrade;
+  }
+
+  return changes;
 }

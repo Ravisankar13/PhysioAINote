@@ -3628,12 +3628,14 @@ ${ddxList}`;
   }, []);
 
   const handleTriggerExerciseGenerate = useCallback((sessionNumber: number) => {
+    setShowInjuryMechanism(true);
     setMechanismActiveTab('exercise');
     setPendingExerciseGenerate(true);
     setExerciseGeneratingSession(sessionNumber);
   }, []);
 
   const handleTriggerMTGenerate = useCallback((sessionNumber: number) => {
+    setShowInjuryMechanism(true);
     setMechanismActiveTab('manualRx');
     setPendingMTGenerate(true);
     setMtGeneratingSession(sessionNumber);

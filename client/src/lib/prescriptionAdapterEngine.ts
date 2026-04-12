@@ -1,6 +1,6 @@
 import type { RecoveryGoalProfile, GoalGapAnalysis, DimensionGap, ClinicalStateInput } from './goalStateEngine';
 import type { SessionSnapshot } from './simulationTimelineEngine';
-import { EXERCISE_CATALOG, type CatalogExercise } from '../../shared/exerciseCatalog';
+import { EXERCISE_CATALOG, type CatalogExercise } from '@shared/exerciseCatalog';
 
 export interface GoalGapPriority {
   dimension: string;

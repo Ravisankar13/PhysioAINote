@@ -1429,6 +1429,25 @@ function SessionCard({
                   </div>
                 )}
               </div>
+              {session.treatments.length > 0 && (
+                <div className="mt-1 pt-1 border-t border-violet-700/15 space-y-0.5">
+                  <div className="text-[6px] text-gray-600 uppercase tracking-wider">Session Rx Preview</div>
+                  {session.treatments.filter(t => t.type === 'exercise').slice(0, 3).map((t, i) => (
+                    <div key={`ex-${i}`} className="flex items-center gap-1 text-[7px]">
+                      <Dumbbell className="h-2 w-2 text-violet-400 shrink-0" />
+                      <span className="text-gray-300 truncate flex-1">{t.name}</span>
+                      <span className="text-gray-500 shrink-0">{t.dosageLabel}</span>
+                    </div>
+                  ))}
+                  {session.treatments.filter(t => t.type === 'manual_therapy').slice(0, 2).map((t, i) => (
+                    <div key={`mt-${i}`} className="flex items-center gap-1 text-[7px]">
+                      <Hand className="h-2 w-2 text-rose-400 shrink-0" />
+                      <span className="text-gray-300 truncate flex-1">{t.name}</span>
+                      <span className="text-gray-500 shrink-0">{t.dosageLabel}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {onRecordOutcome && (
@@ -2337,11 +2356,6 @@ function SessionTimelineView({
     if (stalled.length === 0) return null;
     return stalled;
   }, [currentSnapshot]);
-
-  useEffect(() => {
-    if (!onGoalProfileChange) return;
-    onGoalProfileChange(aiGoalProfile ?? goalProfile ?? null, currentGoalGap ?? finalGoalGap ?? null);
-  }, [aiGoalProfile, goalProfile, currentGoalGap, finalGoalGap, onGoalProfileChange]);
 
   useEffect(() => {
     if (!onGoalOverlayChange) return;
@@ -4125,6 +4139,20 @@ export default function SimulationTimelinePanel({
   const [sessionTimelineLoading, setSessionTimelineLoading] = useState(false);
   const [phaseProgress, setPhaseProgress] = useState<PhaseProgressEvent | null>(null);
   const [enableReQuery, setEnableReQuery] = useState(true);
+
+  const lastSessionGap = useMemo<GoalGapAnalysis | null>(() => {
+    if (!aiGoalProfile || !sessionTimeline || sessionTimeline.sessions.length === 0) return null;
+    const last = sessionTimeline.sessions[sessionTimeline.sessions.length - 1];
+    const prevLast = sessionTimeline.sessions.length > 1
+      ? sessionTimeline.sessions[sessionTimeline.sessions.length - 2]
+      : null;
+    return computeGoalGap(aiGoalProfile, last, prevLast);
+  }, [aiGoalProfile, sessionTimeline]);
+
+  useEffect(() => {
+    if (!onGoalProfileChange) return;
+    onGoalProfileChange(aiGoalProfile, lastSessionGap);
+  }, [aiGoalProfile, lastSessionGap, onGoalProfileChange]);
 
   useEffect(() => {
     if (!hasCustomTreatments) {

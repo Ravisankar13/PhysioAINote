@@ -988,9 +988,36 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
             </button>
             {isExpanded && (
               <div className="p-2 space-y-1.5">
-                {group.exercises.map((ex, i) => (
-                  <ExerciseCard key={`${group.groupId}-${i}`} exercise={ex} index={i} />
-                ))}
+                {group.exercises.map((ex, i) => {
+                  const isContraindicated = prescriptionCtx && prescriptionCtx.contraindications.length > 0 &&
+                    prescriptionCtx.contraindications.some(c =>
+                      ex.name.toLowerCase().includes(c.toLowerCase()) ||
+                      (ex.contraindications && ex.contraindications.toLowerCase().includes(c.toLowerCase()))
+                    );
+                  const matchingGap = prescriptionCtx?.goalGaps.find(g =>
+                    ex.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
+                    ex.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
+                  );
+                  return (
+                    <div key={`${group.groupId}-${i}`} className={isContraindicated ? 'opacity-50 relative' : ''}>
+                      {isContraindicated && (
+                        <div className="absolute top-1 right-1 z-10 px-1 py-0.5 bg-red-900/80 border border-red-500/40 rounded text-[7px] text-red-300 flex items-center gap-0.5">
+                          <AlertTriangle className="h-2 w-2" />
+                          Contraindicated
+                        </div>
+                      )}
+                      {matchingGap && !isContraindicated && (
+                        <div className="flex items-center gap-1 mb-0.5 px-2 pt-1">
+                          <Target className="h-2 w-2 text-emerald-400" />
+                          <span className="text-[7px] text-emerald-400">
+                            Goal: {matchingGap.label} ({matchingGap.current.toFixed(0)}→{matchingGap.target.toFixed(0)})
+                          </span>
+                        </div>
+                      )}
+                      <ExerciseCard exercise={ex} index={i} />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

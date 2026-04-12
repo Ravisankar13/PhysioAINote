@@ -3614,14 +3614,27 @@ ${ddxList}`;
     setActiveGoalGap(gap);
   }, []);
 
+  const exerciseMtActivePhaseIndex = useMemo(() => {
+    if (!treatmentPlanData || !treatmentPlanData.phases || treatmentPlanData.phases.length === 0) return 0;
+    const planCreated = treatmentPlanData.timestamp ? new Date(treatmentPlanData.timestamp).getTime() : Date.now();
+    const daysSinceStart = Math.max(0, Math.floor((Date.now() - planCreated) / (1000 * 60 * 60 * 24)));
+    let cumDays = 0;
+    for (let i = 0; i < treatmentPlanData.phases.length; i++) {
+      const weeks = parseFloat(treatmentPlanData.phases[i].durationWeeks) || 2;
+      cumDays += weeks * 7;
+      if (daysSinceStart < cumDays) return i;
+    }
+    return treatmentPlanData.phases.length - 1;
+  }, [treatmentPlanData]);
+
   const exerciseMtClinicalState = useMemo<import("@/lib/goalStateEngine").ClinicalStateInput>(() => ({
     painMarkers: painMarkers.map(pm => ({
       boneName: pm.nearestBone || pm.anatomicalLabel || 'unknown',
       intensity: typeof (pm as Record<string, unknown>).severity === 'number' ? (pm as Record<string, unknown>).severity as number : 50,
     })),
     posturalDeviations: [],
-    activePhaseIndex: 0,
-  }), [painMarkers]);
+    activePhaseIndex: exerciseMtActivePhaseIndex,
+  }), [painMarkers, exerciseMtActivePhaseIndex]);
 
   const handleApplySimTimelineWeek = useCallback((payload: import('@/lib/simulationTimelineEngine').SessionApplyPayload) => {
     const newModelConfig = JSON.parse(JSON.stringify(modelConfig));

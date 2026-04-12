@@ -1705,6 +1705,8 @@ interface PureThreeGLBViewerProps {
     enabled: boolean;
     painTargets?: Array<{ boneName: string; targetIntensity: number; currentIntensity: number }>;
     muscleTargets?: Array<{ groupId: string; targetTension: number; currentTension: number }>;
+    postureTargets?: Array<{ boneName: string; targetAngle: number; currentAngle: number; axis: 'x' | 'y' | 'z' }>;
+    romTargets?: Array<{ boneName: string; targetDegrees: number; currentDegrees: number; label: string }>;
     overallPct?: number;
   } | null;
 }
@@ -7268,6 +7270,64 @@ export default function PureThreeGLBViewer({
             }
           }
         });
+      }
+    }
+
+    if (goalStateOverlay.postureTargets) {
+      for (const pt of goalStateOverlay.postureTargets) {
+        const bone = bones[pt.boneName];
+        if (!bone) continue;
+        const angleDiff = Math.abs(pt.currentAngle - pt.targetAngle);
+        if (angleDiff < 2) continue;
+        const arrowLen = 0.4 + angleDiff * 0.01;
+        const arrowDir = new THREE.Vector3(
+          pt.axis === 'x' ? 1 : 0,
+          pt.axis === 'y' ? 1 : 0,
+          pt.axis === 'z' ? 1 : 0,
+        );
+        const arrowColor = angleDiff > 15 ? 0xff4444 : angleDiff > 8 ? 0xffaa00 : 0x44ff44;
+        const arrow = new THREE.ArrowHelper(arrowDir, new THREE.Vector3(0, 0, 0), arrowLen, arrowColor, 0.12, 0.08);
+        arrow.renderOrder = 997;
+        bone.add(arrow);
+        goalOverlayObjectsRef.current.push(arrow);
+      }
+    }
+
+    if (goalStateOverlay.romTargets) {
+      for (const rt of goalStateOverlay.romTargets) {
+        const bone = bones[rt.boneName];
+        if (!bone) continue;
+        const pct = rt.targetDegrees > 0 ? Math.min(rt.currentDegrees / rt.targetDegrees, 1) : 1;
+        if (pct >= 0.95) continue;
+        const arcAngle = (Math.PI * 2) * pct;
+        const arcGeo = new THREE.RingGeometry(0.4, 0.5, 24, 1, 0, arcAngle);
+        const arcColor = pct >= 0.8 ? 0x22c55e : pct >= 0.6 ? 0xeab308 : 0xef4444;
+        const arcMat = new THREE.MeshBasicMaterial({
+          color: arcColor,
+          transparent: true,
+          opacity: 0.3,
+          side: THREE.DoubleSide,
+          depthTest: false,
+        });
+        const arc = new THREE.Mesh(arcGeo, arcMat);
+        arc.renderOrder = 996;
+        arc.rotation.x = -Math.PI / 2;
+        bone.add(arc);
+        goalOverlayObjectsRef.current.push(arc);
+
+        const fullGeo = new THREE.RingGeometry(0.4, 0.5, 24, 1, 0, Math.PI * 2);
+        const fullMat = new THREE.MeshBasicMaterial({
+          color: 0x22c55e,
+          transparent: true,
+          opacity: 0.1,
+          side: THREE.DoubleSide,
+          depthTest: false,
+        });
+        const full = new THREE.Mesh(fullGeo, fullMat);
+        full.renderOrder = 995;
+        full.rotation.x = -Math.PI / 2;
+        bone.add(full);
+        goalOverlayObjectsRef.current.push(full);
       }
     }
   }, [goalStateOverlay]);

@@ -86,7 +86,37 @@ interface GoalOverlayData {
   enabled: boolean;
   painTargets?: Array<{ boneName: string; targetIntensity: number; currentIntensity: number }>;
   muscleTargets?: Array<{ groupId: string; targetTension: number; currentTension: number }>;
+  postureTargets?: Array<{ boneName: string; targetAngle: number; currentAngle: number; axis: 'x' | 'y' | 'z' }>;
+  romTargets?: Array<{ boneName: string; targetDegrees: number; currentDegrees: number; label: string }>;
   overallPct?: number;
+}
+
+const LABEL_TO_BONE_MAP: Record<string, string> = {
+  shoulder: 'UpperArm_L', 'l shoulder': 'UpperArm_L', 'r shoulder': 'UpperArm_R',
+  'left shoulder': 'UpperArm_L', 'right shoulder': 'UpperArm_R',
+  knee: 'LowerLeg_L', 'l knee': 'LowerLeg_L', 'r knee': 'LowerLeg_R',
+  'left knee': 'LowerLeg_L', 'right knee': 'LowerLeg_R',
+  hip: 'UpperLeg_L', 'l hip': 'UpperLeg_L', 'r hip': 'UpperLeg_R',
+  'left hip': 'UpperLeg_L', 'right hip': 'UpperLeg_R',
+  ankle: 'Foot_L', 'l ankle': 'Foot_L', 'r ankle': 'Foot_R',
+  'left ankle': 'Foot_L', 'right ankle': 'Foot_R',
+  elbow: 'LowerArm_L', 'l elbow': 'LowerArm_L', 'r elbow': 'LowerArm_R',
+  'left elbow': 'LowerArm_L', 'right elbow': 'LowerArm_R',
+  wrist: 'Hand_L', 'l wrist': 'Hand_L', 'r wrist': 'Hand_R',
+  neck: 'Neck_M', cervical: 'Neck_M',
+  'lower back': 'Spine1_M', lumbar: 'Spine1_M',
+  'upper back': 'Spine2_M', thoracic: 'Spine2_M',
+  back: 'Spine1_M', spine: 'Spine1_M',
+  head: 'Head_M', jaw: 'Head_M',
+};
+
+function mapLabelToBone(label: string): string {
+  const lower = label.toLowerCase().trim();
+  if (LABEL_TO_BONE_MAP[lower]) return LABEL_TO_BONE_MAP[lower];
+  for (const [key, bone] of Object.entries(LABEL_TO_BONE_MAP)) {
+    if (lower.includes(key)) return bone;
+  }
+  return 'Spine1_M';
 }
 
 interface SimulationTimelinePanelProps {
@@ -398,6 +428,35 @@ function SessionRecoveryCurve({
               x2={padding.left + chartW}
               y2={padding.top + (1 - avgSlingTarget / 100) * chartH}
               stroke="#8b5cf6"
+              strokeWidth={0.6}
+              strokeDasharray="4,4"
+              opacity={0.4}
+            />
+          );
+        })()}
+        {goalProfile && enabledTracks.has('rom') && (
+          <line
+            x1={padding.left}
+            y1={padding.top + (1 - goalProfile.overallRomRecoveryPercent / 100) * chartH}
+            x2={padding.left + chartW}
+            y2={padding.top + (1 - goalProfile.overallRomRecoveryPercent / 100) * chartH}
+            stroke="#06b6d4"
+            strokeWidth={0.6}
+            strokeDasharray="4,4"
+            opacity={0.4}
+          />
+        )}
+        {goalProfile && enabledTracks.has('muscle') && goalProfile.muscleTensionTargets.length > 0 && (() => {
+          const avgMusTarget = goalProfile.muscleTensionTargets.reduce(
+            (s, t) => s + (t.targetTensionMin + t.targetTensionMax) / 2, 0
+          ) / goalProfile.muscleTensionTargets.length;
+          return (
+            <line
+              x1={padding.left}
+              y1={padding.top + (1 - avgMusTarget / 100) * chartH}
+              x2={padding.left + chartW}
+              y2={padding.top + (1 - avgMusTarget / 100) * chartH}
+              stroke="#10b981"
               strokeWidth={0.6}
               strokeDasharray="4,4"
               opacity={0.4}
@@ -1138,6 +1197,15 @@ function SessionCard({
         <div className={`text-[9px] font-medium ${session.riskScore > 60 ? 'text-red-400' : session.riskScore > 30 ? 'text-amber-400' : 'text-emerald-400'}`}>
           Risk {session.riskScore}
         </div>
+        {session.goalAchievementPct !== undefined && session.goalAchievementPct > 0 && (
+          <span className={`text-[8px] font-medium ${
+            session.goalAchievementPct >= 90 ? 'text-green-400' :
+            session.goalAchievementPct >= 70 ? 'text-emerald-400' :
+            session.goalAchievementPct >= 50 ? 'text-yellow-400' : 'text-red-400'
+          }`}>
+            {session.goalAchievementPct}%
+          </span>
+        )}
         {isExpanded ? <ChevronUp className="h-2.5 w-2.5 text-gray-500" /> : <ChevronDown className="h-2.5 w-2.5 text-gray-500" />}
       </button>
       {isExpanded && (
@@ -1262,6 +1330,47 @@ function SessionCard({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {session.goalAchievementPct !== undefined && session.goalAchievementPct > 0 && (
+            <div className="border-t border-green-700/20 pt-1 mt-1">
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[7px] text-gray-600 uppercase">Goal Achievement</span>
+                <span className={`text-[8px] font-medium ${
+                  session.goalAchievementPct >= 90 ? 'text-green-400' :
+                  session.goalAchievementPct >= 70 ? 'text-emerald-400' :
+                  session.goalAchievementPct >= 50 ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  {session.goalAchievementPct}%
+                </span>
+              </div>
+              {session.goalDimensions && session.goalDimensions.length > 0 && (
+                <div className="space-y-0.5">
+                  {session.goalDimensions.filter(d => !d.dimension.startsWith('muscle_')).slice(0, 6).map(d => (
+                    <div key={d.dimension} className="flex items-center gap-1 text-[7px]">
+                      <span className="text-gray-500 truncate max-w-[40%]">{d.label}</span>
+                      <div className="flex-1 bg-gray-800 rounded-full h-[3px] overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            d.achievementPct >= 90 ? 'bg-green-500' :
+                            d.achievementPct >= 70 ? 'bg-emerald-500' :
+                            d.achievementPct >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${Math.min(d.achievementPct, 100)}%` }}
+                        />
+                      </div>
+                      <span className={`text-[6px] min-w-[24px] text-right ${
+                        d.achievementPct >= 90 ? 'text-green-400' :
+                        d.achievementPct >= 70 ? 'text-emerald-400' :
+                        d.achievementPct >= 50 ? 'text-yellow-400' : 'text-red-400'
+                      }`}>
+                        {d.achievementPct}%
+                        {d.trend === 'improving' ? '↑' : d.trend === 'worsening' ? '↓' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {session.recoveryPhaseLabel && (
@@ -2022,10 +2131,36 @@ function SessionTimelineView({
         currentTension: sessionPred?.predictedTension ?? midTarget,
       };
     });
+    const ROM_JOINT_BONE_MAP: Record<string, string> = {
+      shoulder_flexion: 'UpperArm_L', shoulder_abduction: 'UpperArm_L',
+      shoulder_er: 'UpperArm_L', shoulder_ir: 'UpperArm_L',
+      elbow_flexion: 'LowerArm_L',
+      hip_flexion: 'UpperLeg_L', hip_abduction: 'UpperLeg_L',
+      hip_er: 'UpperLeg_L', hip_ir: 'UpperLeg_L',
+      knee_flexion: 'LowerLeg_L', knee_extension: 'LowerLeg_L',
+      ankle_dorsiflexion: 'Foot_L', ankle_plantarflexion: 'Foot_L',
+      cervical_flexion: 'Neck_M', cervical_rotation: 'Neck_M',
+      lumbar_flexion: 'Spine1_M', lumbar_extension: 'Spine1_M',
+      thoracic_rotation: 'Spine2_M',
+    };
+
+    const romTargets = currentSnapshot && goalProfile.romTargets.length > 0
+      ? goalProfile.romTargets.map(rt => {
+          const pred = currentSnapshot.romPredictions.find(r => r.jointId === rt.jointId);
+          return {
+            boneName: ROM_JOINT_BONE_MAP[rt.jointId] ?? 'Spine1_M',
+            targetDegrees: rt.targetDegrees,
+            currentDegrees: pred?.predictedDegrees ?? 0,
+            label: rt.label,
+          };
+        }).filter(rt => rt.currentDegrees < rt.targetDegrees * 0.95)
+      : undefined;
+
     onGoalOverlayChange({
       enabled: true,
       painTargets,
       muscleTargets,
+      romTargets,
       overallPct: currentGoalGap.overallAchievementPct,
     });
   }, [goalOverlayEnabled, currentGoalGap, goalProfile, currentSnapshot, onGoalOverlayChange, clinicalState]);
@@ -3450,7 +3585,7 @@ export default function SimulationTimelinePanel({
     const state: ClinicalStateInput = {};
     if (painMarkers && painMarkers.length > 0) {
       state.painMarkers = painMarkers.map(pm => ({
-        boneName: pm.label || 'Spine1_M',
+        boneName: mapLabelToBone(pm.label),
         intensity: (pm.severity ?? 5) * 10,
       }));
     }

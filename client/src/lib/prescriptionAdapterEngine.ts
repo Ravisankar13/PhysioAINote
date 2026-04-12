@@ -457,6 +457,35 @@ const RECOVERY_PHASE_TO_INDEX: Record<string, number> = {
   'Return to Activity': 3,
 };
 
+const PHASE_KEYWORD_INDEX: Array<{ keywords: string[]; index: number }> = [
+  { keywords: ['acute', 'protective', 'initial', 'rest', 'immobili', 'offload'], index: 0 },
+  { keywords: ['proliferat', 'load management', 'education', 'gentle', 'early', 'controlled'], index: 1 },
+  { keywords: ['remodel', 'progressive', 'strengthen', 'loading', 'resistance', 'active'], index: 2 },
+  { keywords: ['function', 'return', 'sport', 'advanced', 'integration', 'performance'], index: 3 },
+];
+
+function resolvePhaseIndex(phaseLabel: string, sessionNumber: number, totalSessions: number): number {
+  const exactMatch = RECOVERY_PHASE_TO_INDEX[phaseLabel];
+  if (exactMatch !== undefined) return exactMatch;
+
+  const lower = phaseLabel.toLowerCase();
+  for (const entry of PHASE_KEYWORD_INDEX) {
+    if (entry.keywords.some(kw => lower.includes(kw))) {
+      return entry.index;
+    }
+  }
+
+  if (totalSessions > 1) {
+    const frac = (sessionNumber - 1) / (totalSessions - 1);
+    if (frac < 0.2) return 0;
+    if (frac < 0.45) return 1;
+    if (frac < 0.75) return 2;
+    return 3;
+  }
+
+  return 1;
+}
+
 export interface SessionChangeSummary {
   sessionNumber: number;
   newExercises: string[];
@@ -510,7 +539,7 @@ export function computeTimelinePrescriptions(
   const sessionPrescriptions: PrescriptionContext[] = [];
 
   for (const session of sessions) {
-    const phaseIndex = RECOVERY_PHASE_TO_INDEX[session.recoveryPhaseLabel] ?? 0;
+    const phaseIndex = resolvePhaseIndex(session.recoveryPhaseLabel, session.sessionNumber, sessions.length);
 
     const maxPain = session.painMarkerPredictions.length > 0
       ? Math.max(...session.painMarkerPredictions.map(p => p.predictedSeverity))

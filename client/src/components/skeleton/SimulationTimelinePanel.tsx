@@ -80,7 +80,7 @@ import type { TreatmentPlanResult } from "./PlanTab";
 import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
 import type { CustomExercise } from "./ExerciseEngineTab";
 import type { CustomTechnique } from "./ManualTherapyEngineTab";
-import { computeGoalGap, generateGoalProfile, generateGenericGoalProfile, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput, type ScarSummaryEntry, type ChainTensionEntry, type PostureMeasurements } from "@/lib/goalStateEngine";
+import { computeGoalGap, generateGoalProfile, generateGenericGoalProfile, detectPathologyOverride, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput, type ScarSummaryEntry, type ChainTensionEntry, type PostureMeasurements } from "@/lib/goalStateEngine";
 
 interface GoalOverlayData {
   enabled: boolean;
@@ -3922,6 +3922,27 @@ export default function SimulationTimelinePanel({
     return null;
   }, [structuredReasoning]);
 
+  const goalEffectKey = useMemo(() => {
+    const quantize = (v: number, step: number) => Math.round(v / step) * step;
+    return JSON.stringify({
+      cn: conditionNameForAi ?? '',
+      pf: patientFactors,
+      pm: clinicalStateForGoals ? {
+        p: clinicalStateForGoals.painMarkers?.map(m => `${m.boneName}:${quantize(m.intensity, 5)}`).sort() ?? [],
+        m: clinicalStateForGoals.muscleStates?.map(s => `${s.muscleId}:${quantize(s.tension, 5)}`).sort() ?? [],
+        c: [...(clinicalStateForGoals.compensationPatterns ?? [])].sort(),
+        d: [...(clinicalStateForGoals.posturalDeviations ?? [])].sort(),
+      } : null,
+      sr: structuredReasoning?.hypotheses?.map(h => `${h.condition}:${h.likelihood}`).sort() ?? [],
+      er: extractionResult ? [
+        extractionResult.bodyRegions?.join(',') ?? '',
+        extractionResult.symptoms?.join(',') ?? '',
+        extractionResult.duration ?? '',
+        extractionResult.mechanism ?? '',
+      ].join('|') : '',
+    });
+  }, [conditionNameForAi, patientFactors, clinicalStateForGoals, structuredReasoning, extractionResult]);
+
   useEffect(() => {
     if (!conditionNameForAi) {
       setAiGoalProfile(null);
@@ -3929,12 +3950,13 @@ export default function SimulationTimelinePanel({
       return;
     }
 
+    const quantize = (v: number, step: number) => Math.round(v / step) * step;
     const cacheKey = JSON.stringify({
       cn: conditionNameForAi,
       pf: patientFactors,
       pm: clinicalStateForGoals ? {
-        p: clinicalStateForGoals.painMarkers?.map(m => `${m.boneName}:${m.intensity}`).sort() ?? [],
-        m: clinicalStateForGoals.muscleStates?.map(s => `${s.muscleId}:${s.tension}`).sort() ?? [],
+        p: clinicalStateForGoals.painMarkers?.map(m => `${m.boneName}:${quantize(m.intensity, 5)}`).sort() ?? [],
+        m: clinicalStateForGoals.muscleStates?.map(s => `${s.muscleId}:${quantize(s.tension, 5)}`).sort() ?? [],
         c: [...(clinicalStateForGoals.compensationPatterns ?? [])].sort(),
         d: [...(clinicalStateForGoals.posturalDeviations ?? [])].sort(),
         sc: clinicalStateForGoals.scarSummary?.map(s => `${s.region}:${s.severity}:${s.mobility}:${s.nearestBone}`).sort() ?? [],
@@ -3956,6 +3978,13 @@ export default function SimulationTimelinePanel({
       ? generateGoalProfile(localConditionProfile, modifiers, undefined, clinicalStateForGoals, conditionNameForAi)
       : generateGenericGoalProfile(conditionNameForAi, clinicalStateForGoals, modifiers);
     setAiGoalProfile(localGoals);
+
+    const hasPathologyOverride = !!detectPathologyOverride(conditionNameForAi);
+    if (localConditionProfile && hasPathologyOverride) {
+      aiGoalCacheRef.current = { key: cacheKey, profile: localGoals };
+      setAiGoalLoading(false);
+      return;
+    }
 
     if (aiGoalDebounceRef.current) {
       clearTimeout(aiGoalDebounceRef.current);
@@ -4021,7 +4050,7 @@ export default function SimulationTimelinePanel({
             setAiGoalLoading(false);
           }
         });
-    }, 300);
+    }, 1500);
 
     return () => {
       if (aiGoalDebounceRef.current) {
@@ -4031,7 +4060,7 @@ export default function SimulationTimelinePanel({
         aiGoalAbortRef.current.abort();
       }
     };
-  }, [conditionNameForAi, patientFactors, clinicalStateForGoals, structuredReasoning, extractionResult, modifiers]);
+  }, [goalEffectKey, modifiers]);
 
   const parentGoalProfile = aiGoalProfile;
 

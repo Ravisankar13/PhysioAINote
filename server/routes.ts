@@ -8189,14 +8189,15 @@ You are now REFINING previously designed techniques based on user feedback. Rule
 
       const data = parsed.data;
 
+      const quantize = (v: number, step: number) => Math.round(v / step) * step;
       const cacheKeySource = JSON.stringify({
         cn: data.conditionName,
-        h: data.hypotheses.map(h => `${h.condition}:${h.likelihood ?? ''}:${h.reasoning ?? ''}`).sort(),
-        pm: data.painMarkers.map(p => `${p.boneName}:${p.intensity}`).sort(),
-        ms: data.muscleStates.map(m => `${m.muscleId}:${m.tension}`).sort(),
+        h: data.hypotheses.map(h => `${h.condition}:${h.likelihood ?? ''}`).sort(),
+        pm: data.painMarkers.map(p => `${p.boneName}:${quantize(p.intensity, 5)}`).sort(),
+        ms: data.muscleStates.map(m => `${m.muscleId}:${quantize(m.tension, 5)}`).sort(),
         cp: [...data.compensationPatterns].sort(),
         pd: [...data.posturalDeviations].sort(),
-        sa: data.slingAnalysis.map(s => `${s.slingName}:${s.integrity}`).sort(),
+        sa: data.slingAnalysis.map(s => `${s.slingName}:${quantize(s.integrity, 10)}`).sort(),
         pf: data.patientFactors ?? null,
         es: data.extractionSummary || '',
       });
@@ -8252,14 +8253,9 @@ You are now REFINING previously designed techniques based on user feedback. Rule
           ].filter(Boolean).join(', ')
         : '';
 
-      const systemPrompt = `You are an expert physiotherapy clinical scientist. Generate evidence-based, condition-specific recovery goal targets.
-
-RULES:
-- Targets must be specific to the exact condition, not generic. Adjust for patient factors (age, chronicity, irritability, comorbidities). Be conservative for chronic/high-irritability cases.
-- Scales: pain 0-100 (target typically 5-15), muscle tension 0-100 (50=normal), sling integrity 0-100%, strength 0-100% of normal, riskScore 10-25 (lower=better), jointStress 15-30 (lower=better), compensationResolution 80-95%, overallRomRecovery 85-100%.
-- ROM joint IDs: shoulder_flexion, shoulder_abduction, shoulder_er, shoulder_ir, elbow_flexion, hip_flexion, hip_abduction, hip_er, hip_ir, knee_flexion, knee_extension, ankle_dorsiflexion, ankle_plantarflexion, cervical_flexion, cervical_rotation, lumbar_flexion, lumbar_extension, thoracic_rotation. Only include joints relevant to the condition.
-
-Return JSON: { "conditionId": "ai_generated_<snake_case>", "conditionName": string, "romTargets": [{ "jointId": string, "label": string, "targetDegrees": number, "normalDegrees": number, "recoveryPercent": number }], "painTarget": number, "muscleTensionTargets": [{ "muscleId": string, "targetTensionMin": number, "targetTensionMax": number }], "slingTargets": [{ "slingName": string, "targetIntegrity": number }], "postureTargets": [{ "deviationType": string, "boneName": string, "targetAngle": number, "axis": "x"|"y"|"z" }], "compensationResolutionTarget": number, "functionalGoals": [{ "label": string, "metric": string, "targetValue": number, "unit": string }], "riskScoreTarget": number, "strengthTarget": number, "jointStressTarget": number, "overallRomRecoveryPercent": number }`;
+      const systemPrompt = `Physiotherapy recovery goal generator. Return condition-specific, evidence-based targets adjusted for patient factors. Be conservative for chronic/high-irritability cases.
+Scales: pain 0-100 (target 5-15), tension 0-100 (50=normal), sling 0-100%, strength 0-100%, riskScore 10-25, jointStress 15-30, compensationResolution 80-95%, romRecovery 85-100%. Only include condition-relevant joints.
+Return JSON: {"conditionId":"ai_generated_<snake_case>","conditionName":string,"romTargets":[{"jointId":string,"label":string,"targetDegrees":number,"normalDegrees":number,"recoveryPercent":number}],"painTarget":number,"muscleTensionTargets":[{"muscleId":string,"targetTensionMin":number,"targetTensionMax":number}],"slingTargets":[{"slingName":string,"targetIntegrity":number}],"postureTargets":[{"deviationType":string,"boneName":string,"targetAngle":number,"axis":"x"|"y"|"z"}],"compensationResolutionTarget":number,"functionalGoals":[{"label":string,"metric":string,"targetValue":number,"unit":string}],"riskScoreTarget":number,"strengthTarget":number,"jointStressTarget":number,"overallRomRecoveryPercent":number}`;
 
       const clinicalContext = [
         `Condition: ${data.conditionName}`,
@@ -8287,7 +8283,7 @@ Return JSON: { "conditionId": "ai_generated_<snake_case>", "conditionName": stri
           { role: "user", content: clinicalPrompt },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 1500,
+        max_tokens: 900,
         temperature: 0.3,
       });
 

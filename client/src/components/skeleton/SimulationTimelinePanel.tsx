@@ -2157,12 +2157,19 @@ function SessionTimelineView({
       : undefined;
 
     const postureTargets = goalProfile.postureTargets.length > 0
-      ? goalProfile.postureTargets.map(pt => ({
-          boneName: pt.boneName,
-          targetAngle: pt.targetAngle,
-          currentAngle: pt.targetAngle + 10,
-          axis: pt.axis,
-        }))
+      ? goalProfile.postureTargets.map(pt => {
+          const sessionNum = currentSnapshot?.sessionNumber ?? 1;
+          const totalSessions = sessionTimeline.sessions.length || 12;
+          const progressRatio = Math.min(sessionNum / totalSessions, 1);
+          const initialDeviation = 15;
+          const currentAngle = pt.targetAngle + initialDeviation * (1 - progressRatio * 0.7);
+          return {
+            boneName: pt.boneName,
+            targetAngle: pt.targetAngle,
+            currentAngle: Math.round(currentAngle * 10) / 10,
+            axis: pt.axis,
+          };
+        })
       : undefined;
 
     onGoalOverlayChange({
@@ -2740,10 +2747,28 @@ function SessionTimelineView({
                     <span className="text-emerald-400 font-medium">≤ {goalProfile.riskScoreTarget}</span>
                   </div>
                 )}
+                {goalProfile.strengthTarget !== undefined && (
+                  <div className="flex items-center justify-between text-[8px]">
+                    <span className="text-gray-400">Strength</span>
+                    <span className="text-cyan-400 font-medium">≥ {goalProfile.strengthTarget}%</span>
+                  </div>
+                )}
+                {goalProfile.jointStressTarget !== undefined && (
+                  <div className="flex items-center justify-between text-[8px]">
+                    <span className="text-gray-400">Joint Stress</span>
+                    <span className="text-amber-400 font-medium">≤ {goalProfile.jointStressTarget}</span>
+                  </div>
+                )}
                 {goalProfile.compensationResolutionTarget !== undefined && (
                   <div className="flex items-center justify-between text-[8px]">
                     <span className="text-gray-400">Compensation Resolved</span>
                     <span className="text-emerald-400 font-medium">≥ {goalProfile.compensationResolutionTarget}%</span>
+                  </div>
+                )}
+                {goalProfile.postureTargets && goalProfile.postureTargets.length > 0 && (
+                  <div className="flex items-center justify-between text-[8px]">
+                    <span className="text-gray-400">Posture Corrections</span>
+                    <span className="text-pink-400 font-medium">{goalProfile.postureTargets.length} targets</span>
                   </div>
                 )}
                 {goalProfile.functionalGoals && goalProfile.functionalGoals.length > 0 && (
@@ -3666,6 +3691,7 @@ export default function SimulationTimelinePanel({
         (event) => { if (!abortController.signal.aborted) setPhaseProgress(event); },
         abortController.signal,
         (partial) => { if (!abortController.signal.aborted) setSessionTimeline(partial); },
+        clinicalStateForGoals,
       ).then(result => {
         if (!abortController.signal.aborted) {
           setSessionTimeline(result);
@@ -3680,6 +3706,7 @@ export default function SimulationTimelinePanel({
               customExercises ?? [], customTechniques ?? [], baseModelConfig, baseOverrides,
               painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile,
               actualOutcomes.length > 0 ? actualOutcomes : undefined,
+              clinicalStateForGoals,
             );
             setSessionTimeline(fallback);
           } catch (e2) {
@@ -3698,6 +3725,7 @@ export default function SimulationTimelinePanel({
           customExercises ?? [], customTechniques ?? [], baseModelConfig, baseOverrides,
           painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile,
           actualOutcomes.length > 0 ? actualOutcomes : undefined,
+          clinicalStateForGoals,
         );
         setSessionTimeline(result);
       } catch (e) {
@@ -3707,7 +3735,7 @@ export default function SimulationTimelinePanel({
     }
 
     return () => { abortController.abort(); };
-  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile, actualOutcomes, enableReQuery]);
+  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile, actualOutcomes, enableReQuery, clinicalStateForGoals]);
 
   const weekTimeline = useMemo(() => {
     if (hasCustomTreatments) return null;

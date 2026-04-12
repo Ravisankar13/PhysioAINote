@@ -12,7 +12,7 @@ import type { TreatmentPlanResult, PlanPhase, PlanExercise } from '../components
 import type { CustomExercise } from '../components/skeleton/ExerciseEngineTab';
 import type { CustomTechnique } from '../components/skeleton/ManualTherapyEngineTab';
 import type { PatientModifierProfile, ConditionRecoveryProfile } from './patientFactorsEngine';
-import { generateGoalProfile, computeGoalGap, formatGoalContextForPrompt, type RecoveryGoalProfile, type GoalGapAnalysis } from './goalStateEngine';
+import { generateGoalProfile, computeGoalGap, formatGoalContextForPrompt, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput } from './goalStateEngine';
 
 export interface SimulationPhase {
   id: string;
@@ -1569,9 +1569,11 @@ export function buildSessionTimeline(
   patientModifiers?: PatientModifierProfile | null,
   conditionProfile?: ConditionRecoveryProfile | null,
   actualOutcomes?: ActualSessionOutcome[],
+  clinicalState?: ClinicalStateInput | null,
 ): SessionTimelineResult {
   const pm = patientModifiers ?? null;
   const cp = conditionProfile ?? null;
+  const cs = clinicalState ?? null;
   const allFrequencies: number[] = [];
   for (const ex of customExercises) {
     allFrequencies.push(parseFrequencyToDaysInterval(ex.dosage.frequency));
@@ -2447,7 +2449,7 @@ export function buildSessionTimeline(
 
   let goalAchievementTimeline: SessionTimelineResult['goalAchievementTimeline'] | undefined;
   if (cp) {
-    const goalProf = generateGoalProfile(cp, pm, sessions[0]?.romPredictions.map(r => r.jointId));
+    const goalProf = generateGoalProfile(cp, pm, sessions[0]?.romPredictions.map(r => r.jointId), cs);
     const timeline: NonNullable<SessionTimelineResult['goalAchievementTimeline']> = [];
     for (let i = 0; i < sessions.length; i++) {
       const prev = i > 0 ? sessions[i - 1] : null;
@@ -2669,12 +2671,13 @@ export async function buildSessionTimelineAsync(
   onPhaseProgress?: (event: PhaseProgressEvent) => void,
   signal?: AbortSignal,
   onPartialResult?: (partial: SessionTimelineResult) => void,
+  clinicalState?: ClinicalStateInput | null,
 ): Promise<SessionTimelineResult> {
   onPhaseProgress?.({ phaseIndex: 0, phaseLabel: 'Initial', status: 'building', message: 'Building initial timeline with current treatments...' });
 
   const initialResult = buildSessionTimeline(
     customExercises, customTechniques, baseModelConfig, baseOverrides,
-    painMarkers, bodyWeightKg, biomechanicsOutput, patientModifiers, conditionProfile, actualOutcomes,
+    painMarkers, bodyWeightKg, biomechanicsOutput, patientModifiers, conditionProfile, actualOutcomes, clinicalState,
   );
 
   const transitions = detectPhaseTransitions(initialResult.sessions);
@@ -2755,7 +2758,7 @@ export async function buildSessionTimelineAsync(
       })),
     ];
 
-    const goalProf = conditionProfile ? generateGoalProfile(conditionProfile, patientModifiers) : null;
+    const goalProf = conditionProfile ? generateGoalProfile(conditionProfile, patientModifiers, undefined, clinicalState) : null;
     const prevSnap = transition.sessionIndex > 0 ? accumulatedResult.sessions[transition.sessionIndex - 1] : null;
     const { exercisePayload, techniquePayload } = synthesizeReQueryPayload(
       transitionSnap,

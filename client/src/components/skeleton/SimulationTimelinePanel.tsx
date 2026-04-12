@@ -82,7 +82,7 @@ import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
 import type { CustomExercise } from "./ExerciseEngineTab";
 import type { CustomTechnique } from "./ManualTherapyEngineTab";
 import { computeGoalGap, generateGoalProfile, generateGenericGoalProfile, detectPathologyOverride, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput, type ScarSummaryEntry, type ChainTensionEntry, type PostureMeasurements } from "@/lib/goalStateEngine";
-import { computeTimelinePrescriptions, getExerciseById, type TimelinePrescriptionSummary, type PrescriptionContext } from "@/lib/prescriptionAdapterEngine";
+import { computeTimelinePrescriptions, type TimelinePrescriptionSummary, type PrescriptionContext } from "@/lib/prescriptionAdapterEngine";
 
 interface GoalOverlayData {
   enabled: boolean;
@@ -4388,6 +4388,10 @@ export default function SimulationTimelinePanel({
       return null;
     }
   }, [sessionTimeline, aiGoalProfile, currentStateGap]);
+
+  useEffect(() => {
+    onSessionPrescriptionSelect?.(null, null);
+  }, [sessionTimeline]);
 
   const handleSessionPrescriptionSelect = useCallback((sessionNumber: number | null) => {
     if (!onSessionPrescriptionSelect) return;

@@ -1,10 +1,12 @@
-import { useState, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import { Dumbbell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Sparkles, Zap, ArrowRight, Clock, Activity, ShieldAlert, Crosshair, Image, BarChart3 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 
 const ExerciseBodyDiagram = lazy(() => import('./ExerciseBodyDiagram'));
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
+import type { RecoveryGoalProfile, GoalGapAnalysis, ClinicalStateInput } from '@/lib/goalStateEngine';
+import { buildPrescriptionContext, type PrescriptionContext } from '@/lib/prescriptionAdapterEngine';
 
 interface ExerciseItem {
   name: string;
@@ -88,6 +90,9 @@ interface ExerciseEngineTabProps {
   slingAnalysis: SlingAnalysisResult | null;
   painMarkers: PainMarkerInput[];
   onCustomExerciseResult?: (result: CustomExerciseResult | null) => void;
+  goalProfile?: RecoveryGoalProfile | null;
+  clinicalState?: ClinicalStateInput | null;
+  goalGap?: GoalGapAnalysis | null;
 }
 
 const GROUP_ICONS: Record<string, typeof Dumbbell> = {
@@ -511,7 +516,7 @@ function CustomExerciseCard({ exercise, index }: { exercise: CustomExercise; ind
   );
 }
 
-export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult }: ExerciseEngineTabProps) {
+export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap }: ExerciseEngineTabProps) {
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -526,6 +531,12 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
   const [showCustomDesigner, setShowCustomDesigner] = useState(false);
   const [showDesignRationale, setShowDesignRationale] = useState(false);
   const customAbortRef = useRef<AbortController | null>(null);
+  const [showRecoveryContext, setShowRecoveryContext] = useState(true);
+
+  const prescriptionCtx = useMemo<PrescriptionContext | null>(() => {
+    if (!goalProfile || !clinicalState) return null;
+    return buildPrescriptionContext(goalProfile, clinicalState, goalGap ?? null, null);
+  }, [goalProfile, clinicalState, goalGap]);
 
   const toggleGroup = useCallback((groupId: string) => {
     setExpandedGroups(prev => {
@@ -604,8 +615,28 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
       };
     }
 
+    if (prescriptionCtx) {
+      payload.recoveryGoalContext = {
+        condition: prescriptionCtx.conditionName,
+        phaseLabel: prescriptionCtx.phaseLabel,
+        goalAchievementPct: Math.round(prescriptionCtx.goalAchievementPct),
+        painCurrent: Math.round(prescriptionCtx.currentPain),
+        painTarget: prescriptionCtx.painTarget,
+        dosageIntensity: prescriptionCtx.dosageScaling.intensityLabel,
+        painCeiling: prescriptionCtx.dosageScaling.painCeiling,
+        priorityBodyParts: prescriptionCtx.priorityBodyParts,
+        contraindications: prescriptionCtx.contraindications,
+        topGaps: prescriptionCtx.goalGaps.slice(0, 5).map(g => ({
+          label: g.label,
+          gapPercent: Math.round(g.gapPercent),
+          priority: g.priority,
+          categories: g.recommendedCategories,
+        })),
+      };
+    }
+
     return payload;
-  }, [mechanismAnalysis, slingAnalysis, painMarkers]);
+  }, [mechanismAnalysis, slingAnalysis, painMarkers, prescriptionCtx]);
 
   const generatePlan = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
@@ -859,6 +890,63 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
 
   return (
     <div className="space-y-2">
+      {prescriptionCtx && showRecoveryContext && (
+        <div className="border border-emerald-500/30 rounded-lg bg-gradient-to-br from-emerald-950/30 to-gray-900/60 p-2 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Target className="h-3 w-3 text-emerald-400" />
+              <span className="text-[10px] font-semibold text-emerald-300">Recovery Goal Context</span>
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                {Math.round(prescriptionCtx.goalAchievementPct)}% achieved
+              </span>
+            </div>
+            <button onClick={() => setShowRecoveryContext(false)} className="text-gray-500 hover:text-gray-300">
+              <ChevronUp className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            <div className="bg-gray-800/50 rounded p-1.5 text-center">
+              <div className="text-[8px] text-gray-400">Phase</div>
+              <div className="text-[9px] font-medium text-gray-200 truncate">{prescriptionCtx.phaseLabel.replace('Phase ', 'P').split(' — ')[0]}</div>
+            </div>
+            <div className="bg-gray-800/50 rounded p-1.5 text-center">
+              <div className="text-[8px] text-gray-400">Pain</div>
+              <div className="text-[9px] font-medium text-gray-200">{Math.round(prescriptionCtx.currentPain)} → {prescriptionCtx.painTarget}</div>
+            </div>
+            <div className="bg-gray-800/50 rounded p-1.5 text-center">
+              <div className="text-[8px] text-gray-400">Dosage</div>
+              <div className="text-[9px] font-medium text-gray-200 capitalize">{prescriptionCtx.dosageScaling.intensityLabel}</div>
+            </div>
+          </div>
+          {prescriptionCtx.goalGaps.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="text-[8px] text-gray-400 uppercase tracking-wider">Priority Gaps</div>
+              {prescriptionCtx.goalGaps.slice(0, 3).map(gap => (
+                <div key={gap.dimension} className="flex items-center gap-1.5 text-[9px]">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${gap.priority === 'high' ? 'bg-red-400' : gap.priority === 'medium' ? 'bg-amber-400' : 'bg-gray-400'}`} />
+                  <span className="text-gray-300 truncate flex-1">{gap.label}</span>
+                  <span className="text-gray-500">{Math.round(gap.gapPercent)}%</span>
+                  <span className="text-[7px] text-gray-500">{gap.trend === 'improving' ? '↑' : gap.trend === 'worsening' ? '↓' : '→'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {prescriptionCtx.contraindications.length > 0 && (
+            <div className="flex items-start gap-1 bg-red-950/30 rounded p-1.5 border border-red-500/20">
+              <AlertTriangle className="h-2.5 w-2.5 text-red-400 shrink-0 mt-0.5" />
+              <div className="text-[8px] text-red-300/80 leading-relaxed">
+                {prescriptionCtx.contraindications.join(' · ')}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {prescriptionCtx && !showRecoveryContext && (
+        <button onClick={() => setShowRecoveryContext(true)} className="flex items-center gap-1 text-[9px] text-emerald-400/60 hover:text-emerald-400 transition-colors">
+          <Target className="h-2.5 w-2.5" />
+          Show Recovery Context ({Math.round(prescriptionCtx.goalAchievementPct)}%)
+        </button>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Dumbbell className="h-3.5 w-3.5 text-violet-400" />

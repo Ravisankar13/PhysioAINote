@@ -694,6 +694,8 @@ export default function PhysioGPT() {
   const [treatmentPlanLoading, setTreatmentPlanLoading] = useState(false);
   const [customExerciseResult, setCustomExerciseResult] = useState<import("@/components/skeleton/ExerciseEngineTab").CustomExerciseResult | null>(null);
   const [customManualTherapyResult, setCustomManualTherapyResult] = useState<import("@/components/skeleton/ManualTherapyEngineTab").CustomManualTherapyResult | null>(null);
+  const [activeGoalProfile, setActiveGoalProfile] = useState<import("@/lib/goalStateEngine").RecoveryGoalProfile | null>(null);
+  const [activeGoalGap, setActiveGoalGap] = useState<import("@/lib/goalStateEngine").GoalGapAnalysis | null>(null);
   const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
   const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
@@ -3606,6 +3608,20 @@ ${ddxList}`;
   const handleGoalOverlayChange = useCallback((overlay: typeof goalOverlayData) => {
     setGoalOverlayData(overlay);
   }, []);
+
+  const handleGoalProfileChange = useCallback((profile: import("@/lib/goalStateEngine").RecoveryGoalProfile | null, gap: import("@/lib/goalStateEngine").GoalGapAnalysis | null) => {
+    setActiveGoalProfile(profile);
+    setActiveGoalGap(gap);
+  }, []);
+
+  const exerciseMtClinicalState = useMemo<import("@/lib/goalStateEngine").ClinicalStateInput>(() => ({
+    painMarkers: painMarkers.map(pm => ({
+      boneName: pm.nearestBone || pm.anatomicalLabel || 'unknown',
+      intensity: typeof (pm as Record<string, unknown>).severity === 'number' ? (pm as Record<string, unknown>).severity as number : 50,
+    })),
+    posturalDeviations: [],
+    activePhaseIndex: 0,
+  }), [painMarkers]);
 
   const handleApplySimTimelineWeek = useCallback((payload: import('@/lib/simulationTimelineEngine').SessionApplyPayload) => {
     const newModelConfig = JSON.parse(JSON.stringify(modelConfig));
@@ -8532,6 +8548,9 @@ ${ddxList}`;
                         type: pm.type,
                       }))}
                       onCustomExerciseResult={setCustomExerciseResult}
+                      goalProfile={activeGoalProfile}
+                      clinicalState={exerciseMtClinicalState}
+                      goalGap={activeGoalGap}
                     />
                   )}
                   {mechanismActiveTab === 'manualRx' && (
@@ -8557,6 +8576,9 @@ ${ddxList}`;
                       onSetMuscleHighlightColors={setMuscleHighlightColors}
                       onSetManualTherapyAnnotations={setManualTherapyAnnotations}
                       onCustomManualTherapyResult={setCustomManualTherapyResult}
+                      goalProfile={activeGoalProfile}
+                      clinicalState={exerciseMtClinicalState}
+                      goalGap={activeGoalGap}
                     />
                   )}
                   {mechanismActiveTab === 'electroRx' && (
@@ -8621,6 +8643,7 @@ ${ddxList}`;
                       extractionResult={extractionResult}
                       structuredReasoning={structuredReasoningData}
                       onGoalOverlayChange={handleGoalOverlayChange}
+                      onGoalProfileChange={handleGoalProfileChange}
                       scarSummary={scarSummaryForGoals}
                       chainTensionAverages={chainEffects.length > 0 ? chainEffects : undefined}
                       postureMeasurements={postureMeasurementsForGoals}

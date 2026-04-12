@@ -139,6 +139,7 @@ interface SimulationTimelinePanelProps {
   extractionResult?: ClinicalExtractionResult | null;
   structuredReasoning?: StructuredReasoningResult | null;
   onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
+  onGoalProfileChange?: (profile: RecoveryGoalProfile | null, gap: GoalGapAnalysis | null) => void;
   scarSummary?: ScarSummaryEntry[];
   chainTensionAverages?: ChainTensionEntry[];
   postureMeasurements?: PostureMeasurements;
@@ -1382,6 +1383,54 @@ function SessionCard({
               Phase: <span className="text-gray-300">{session.recoveryPhaseLabel}</span>
             </div>
           )}
+          {session.goalDimensions && session.goalDimensions.length > 0 && session.treatments.length > 0 && (
+            <div className="border-t border-violet-700/20 pt-1 mt-1">
+              <div className="text-[7px] text-gray-600 uppercase mb-0.5 flex items-center gap-1">
+                <Sparkles className="h-2 w-2 text-violet-400" />
+                Rx Adaptation
+              </div>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[7px]">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Dosage</span>
+                  <span className="text-cyan-400">{(session.doseResponseFraction * 100).toFixed(0)}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Intensity</span>
+                  <span className={session.painPrediction > 40 ? 'text-amber-400' : 'text-emerald-400'}>
+                    {session.painPrediction > 50 ? 'Conservative' : session.painPrediction > 25 ? 'Moderate' : 'Progressive'}
+                  </span>
+                </div>
+                {(() => {
+                  const topGap = session.goalDimensions
+                    ?.filter(d => d.achievementPct < 80 && !d.dimension.startsWith('muscle_'))
+                    .sort((a, b) => a.achievementPct - b.achievementPct)[0];
+                  return topGap ? (
+                    <div className="col-span-2 flex justify-between">
+                      <span className="text-gray-500">Priority</span>
+                      <span className="text-violet-400 truncate max-w-[70%]">{topGap.label} ({topGap.achievementPct}%)</span>
+                    </div>
+                  ) : null;
+                })()}
+                {exerciseCount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Ex focus</span>
+                    <span className="text-violet-300">
+                      {session.treatments.filter(t => t.type === 'exercise').some(t => t.interventionType === 'strengthen') ? 'Strength' :
+                       session.treatments.filter(t => t.type === 'exercise').some(t => t.interventionType === 'stretch') ? 'Mobility' : 'Function'}
+                    </span>
+                  </div>
+                )}
+                {manualCount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">MT focus</span>
+                    <span className="text-rose-300">
+                      {session.painPrediction > 40 ? 'Grade I-II' : session.painPrediction > 20 ? 'Grade III-IV' : 'Grade IV-V'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {onRecordOutcome && (
             <ActualOutcomeInput
               session={session}
@@ -2288,6 +2337,11 @@ function SessionTimelineView({
     if (stalled.length === 0) return null;
     return stalled;
   }, [currentSnapshot]);
+
+  useEffect(() => {
+    if (!onGoalProfileChange) return;
+    onGoalProfileChange(aiGoalProfile ?? goalProfile ?? null, currentGoalGap ?? finalGoalGap ?? null);
+  }, [aiGoalProfile, goalProfile, currentGoalGap, finalGoalGap, onGoalProfileChange]);
 
   useEffect(() => {
     if (!onGoalOverlayChange) return;
@@ -3774,6 +3828,7 @@ export default function SimulationTimelinePanel({
   extractionResult,
   structuredReasoning,
   onGoalOverlayChange,
+  onGoalProfileChange,
   scarSummary,
   chainTensionAverages,
   postureMeasurements,

@@ -80,7 +80,7 @@ import type { TreatmentPlanResult } from "./PlanTab";
 import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
 import type { CustomExercise } from "./ExerciseEngineTab";
 import type { CustomTechnique } from "./ManualTherapyEngineTab";
-import { computeGoalGap, generateGoalProfile, generateGenericGoalProfile, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput } from "@/lib/goalStateEngine";
+import { computeGoalGap, generateGoalProfile, generateGenericGoalProfile, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput, type ScarSummaryEntry, type ChainTensionEntry, type PostureMeasurements } from "@/lib/goalStateEngine";
 
 interface GoalOverlayData {
   enabled: boolean;
@@ -139,6 +139,10 @@ interface SimulationTimelinePanelProps {
   extractionResult?: ClinicalExtractionResult | null;
   structuredReasoning?: StructuredReasoningResult | null;
   onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
+  scarSummary?: ScarSummaryEntry[];
+  chainTensionAverages?: ChainTensionEntry[];
+  postureMeasurements?: PostureMeasurements;
+  currentRom?: Array<{ jointId: string; currentDegrees: number }>;
 }
 
 const PHASE_COLORS = [
@@ -3770,6 +3774,10 @@ export default function SimulationTimelinePanel({
   extractionResult,
   structuredReasoning,
   onGoalOverlayChange,
+  scarSummary,
+  chainTensionAverages,
+  postureMeasurements,
+  currentRom,
 }: SimulationTimelinePanelProps) {
   const [patientFactors, setPatientFactors] = useState<PatientFactors>(DEFAULT_PATIENT_FACTORS);
   const [hasAutoPopulated, setHasAutoPopulated] = useState(false);
@@ -3854,9 +3862,23 @@ export default function SimulationTimelinePanel({
         state.posturalDeviations = modLabels;
       }
     }
-    const hasData = state.painMarkers || state.muscleStates || state.compensationPatterns || state.posturalDeviations;
+    if (scarSummary && scarSummary.length > 0) {
+      state.scarSummary = scarSummary;
+    }
+    if (chainTensionAverages && chainTensionAverages.length > 0) {
+      state.chainTensionAverages = chainTensionAverages;
+    }
+    if (postureMeasurements) {
+      state.postureMeasurements = postureMeasurements;
+    }
+    if (currentRom && currentRom.length > 0) {
+      state.currentRom = currentRom;
+    }
+    const hasData = state.painMarkers || state.muscleStates || state.compensationPatterns
+      || state.posturalDeviations || state.scarSummary || state.chainTensionAverages
+      || state.postureMeasurements || state.currentRom;
     return hasData ? state : null;
-  }, [painMarkers, baseOverrides, extractionResult, structuredReasoning]);
+  }, [painMarkers, baseOverrides, extractionResult, structuredReasoning, scarSummary, chainTensionAverages, postureMeasurements, currentRom]);
 
   const modifiers = useMemo(() => computePatientModifiers(patientFactors, activeCondition), [patientFactors, activeCondition]);
 

@@ -1,12 +1,248 @@
 import type { ConditionRecoveryProfile, PatientModifierProfile } from './patientFactorsEngine';
 import type { SessionSnapshot, RomPrediction } from './simulationTimelineEngine';
 
+export interface PostureMeasurements {
+  kyphosisAngle?: number;
+  lordosisAngle?: number;
+  forwardHeadAngle?: number;
+  pelvicTiltAngle?: number;
+  lateralShift?: number;
+  scoliosisAngle?: number;
+}
+
+export interface CurrentRomEntry {
+  jointId: string;
+  currentDegrees: number;
+}
+
+export interface ScarSummaryEntry {
+  region: string;
+  severity: number;
+  mobility: 'mobile' | 'tethered' | 'fixed';
+  nearestBone: string;
+  affectedLayers: string[];
+}
+
+export interface ChainTensionEntry {
+  chainId: string;
+  avgTension: number;
+}
+
 export interface ClinicalStateInput {
   painMarkers?: Array<{ boneName: string; intensity: number }>;
   muscleStates?: Array<{ muscleId: string; tension: number }>;
   compensationPatterns?: string[];
   posturalDeviations?: string[];
   slingAnalysis?: Array<{ slingName: string; integrity: number }>;
+  postureMeasurements?: PostureMeasurements;
+  currentRom?: CurrentRomEntry[];
+  scarSummary?: ScarSummaryEntry[];
+  chainTensionAverages?: ChainTensionEntry[];
+}
+
+export interface PathologyGoalOverride {
+  conditionKeywords: string[];
+  romCaps?: Record<string, number>;
+  romSkip?: string[];
+  postureTolerances?: Record<string, { boneName: string; acceptableAngle: number; axis: 'x' | 'y' | 'z' }>;
+  functionalGoalOverrides?: FunctionalGoal[];
+  strengthCap?: number;
+  romCeilingOverride?: number;
+  painTargetOverride?: number;
+  contraindications?: string[];
+}
+
+const PATHOLOGY_GOAL_OVERRIDES: PathologyGoalOverride[] = [
+  {
+    conditionKeywords: ['spinal stenosis', 'lumbar stenosis', 'central stenosis', 'foraminal stenosis'],
+    romCaps: { lumbar_extension: 10 },
+    romSkip: [],
+    postureTolerances: {
+      kyphosis: { boneName: 'Spine2_M', acceptableAngle: 15, axis: 'x' },
+      lordosis: { boneName: 'Spine1_M', acceptableAngle: 10, axis: 'x' },
+    },
+    functionalGoalOverrides: [
+      { label: 'Walking tolerance (flexion bias)', metric: 'walking_tolerance', targetValue: 30, unit: 'minutes' },
+      { label: 'Sit-to-stand pain-free', metric: 'sit_stand_pain', targetValue: 1, unit: '/10' },
+      { label: 'Standing tolerance', metric: 'standing_tolerance', targetValue: 15, unit: 'minutes' },
+    ],
+    romCeilingOverride: 70,
+    painTargetOverride: 20,
+    contraindications: ['sustained lumbar extension', 'prone lying', 'extension-based exercise'],
+  },
+  {
+    conditionKeywords: ['knee osteoarthritis', 'knee oa', 'knee arthritis', 'severe knee oa', 'degenerative knee'],
+    romCaps: { knee_flexion: 110, knee_extension: 5 },
+    functionalGoalOverrides: [
+      { label: 'Pain-free walking', metric: 'walking_pain', targetValue: 2, unit: '/10' },
+      { label: 'Stair management', metric: 'stair_pain', targetValue: 3, unit: '/10' },
+      { label: 'Chair rise independence', metric: 'chair_rise', targetValue: 5, unit: 'reps' },
+    ],
+    strengthCap: 70,
+    romCeilingOverride: 75,
+    painTargetOverride: 20,
+  },
+  {
+    conditionKeywords: ['hip osteoarthritis', 'hip oa', 'hip arthritis', 'severe hip', 'degenerative hip'],
+    romCaps: { hip_flexion: 100, hip_abduction: 30, hip_er: 25, hip_ir: 15 },
+    functionalGoalOverrides: [
+      { label: 'Pain-free walking', metric: 'walking_pain', targetValue: 2, unit: '/10' },
+      { label: 'Shoe/sock independence', metric: 'adl_independence', targetValue: 1, unit: 'yes/no' },
+      { label: 'Stair climbing', metric: 'stair_pain', targetValue: 3, unit: '/10' },
+    ],
+    strengthCap: 70,
+    romCeilingOverride: 75,
+    painTargetOverride: 20,
+  },
+  {
+    conditionKeywords: ['frozen shoulder', 'adhesive capsulitis'],
+    romCaps: { shoulder_er: 45, shoulder_ir: 35, shoulder_abduction: 120 },
+    functionalGoalOverrides: [
+      { label: 'Hand behind back', metric: 'hand_behind_back', targetValue: 1, unit: 'functional' },
+      { label: 'Reaching overhead shelf', metric: 'overhead_reach', targetValue: 140, unit: 'degrees' },
+      { label: 'Sleep without pain', metric: 'night_pain', targetValue: 1, unit: '/10' },
+    ],
+    romCeilingOverride: 80,
+    painTargetOverride: 15,
+  },
+  {
+    conditionKeywords: ['rotator cuff repair', 'post rotator cuff', 'rc repair', 'cuff repair', 'post-rcr'],
+    romCaps: { shoulder_er: 40, shoulder_flexion: 140, shoulder_abduction: 120 },
+    functionalGoalOverrides: [
+      { label: 'Active elevation pain-free', metric: 'active_elevation', targetValue: 140, unit: 'degrees' },
+      { label: 'Light lifting tolerance', metric: 'lifting_tolerance', targetValue: 5, unit: 'kg' },
+    ],
+    strengthCap: 60,
+    romCeilingOverride: 80,
+    painTargetOverride: 10,
+    contraindications: ['heavy resistance early', 'passive ER beyond 40° first 6 weeks'],
+  },
+  {
+    conditionKeywords: ['acl reconstruction', 'acl recon', 'post-acl', 'aclr'],
+    romCaps: { knee_flexion: 120 },
+    functionalGoalOverrides: [
+      { label: 'Full extension symmetry', metric: 'extension_deficit', targetValue: 0, unit: 'degrees' },
+      { label: 'Single leg squat', metric: 'sls_quality', targetValue: 80, unit: '%' },
+      { label: 'Hop test symmetry', metric: 'hop_symmetry', targetValue: 90, unit: '%' },
+    ],
+    strengthCap: 75,
+    romCeilingOverride: 95,
+    painTargetOverride: 5,
+    contraindications: ['open chain knee extension 0-45° first 12 weeks', 'pivoting sports before 9 months'],
+  },
+  {
+    conditionKeywords: ['spondylolisthesis', 'spondylolysis', 'pars defect'],
+    romCaps: { lumbar_extension: 10, lumbar_flexion: 40 },
+    postureTolerances: {
+      lordosis: { boneName: 'Spine1_M', acceptableAngle: 10, axis: 'x' },
+    },
+    functionalGoalOverrides: [
+      { label: 'Core stability hold', metric: 'plank_hold', targetValue: 60, unit: 'seconds' },
+      { label: 'Walking tolerance', metric: 'walking_tolerance', targetValue: 30, unit: 'minutes' },
+      { label: 'Pain-free ADLs', metric: 'adl_pain', targetValue: 2, unit: '/10' },
+    ],
+    romCeilingOverride: 70,
+    painTargetOverride: 15,
+    contraindications: ['lumbar hyperextension', 'heavy axial loading', 'gymnastics-type movements'],
+  },
+  {
+    conditionKeywords: ['cervical myelopathy', 'spinal cord compression', 'cervical stenosis'],
+    romCaps: { cervical_flexion: 30, cervical_rotation: 50 },
+    postureTolerances: {
+      'forward head': { boneName: 'Neck_M', acceptableAngle: 10, axis: 'x' },
+    },
+    functionalGoalOverrides: [
+      { label: 'Fine motor function', metric: 'hand_dexterity', targetValue: 80, unit: '%' },
+      { label: 'Balance confidence', metric: 'balance_score', targetValue: 70, unit: '%' },
+      { label: 'Walking stability', metric: 'gait_stability', targetValue: 80, unit: '%' },
+    ],
+    strengthCap: 65,
+    romCeilingOverride: 60,
+    painTargetOverride: 20,
+    contraindications: ['cervical manipulation', 'extreme cervical ROM', 'high-velocity techniques'],
+  },
+  {
+    conditionKeywords: ['total knee replacement', 'tkr', 'total knee arthroplasty', 'tka'],
+    romCaps: { knee_flexion: 120, knee_extension: 0 },
+    functionalGoalOverrides: [
+      { label: 'Stair climbing alternating', metric: 'stair_alternating', targetValue: 1, unit: 'yes/no' },
+      { label: 'Walking 30 minutes', metric: 'walking_tolerance', targetValue: 30, unit: 'minutes' },
+      { label: 'Chair rise independence', metric: 'chair_rise', targetValue: 10, unit: 'reps' },
+    ],
+    strengthCap: 75,
+    romCeilingOverride: 85,
+    painTargetOverride: 10,
+  },
+  {
+    conditionKeywords: ['total hip replacement', 'thr', 'total hip arthroplasty', 'tha'],
+    romCaps: { hip_flexion: 100, hip_ir: 15, hip_abduction: 30 },
+    functionalGoalOverrides: [
+      { label: 'Walking without aid', metric: 'walking_unaided', targetValue: 1, unit: 'yes/no' },
+      { label: 'Stair climbing', metric: 'stair_pain', targetValue: 2, unit: '/10' },
+      { label: 'Shoe/sock independence', metric: 'adl_independence', targetValue: 1, unit: 'yes/no' },
+    ],
+    strengthCap: 75,
+    romCeilingOverride: 85,
+    painTargetOverride: 10,
+    contraindications: ['hip flexion beyond 90° first 6 weeks', 'adduction past midline', 'internal rotation'],
+  },
+];
+
+export function detectPathologyOverride(conditionName: string): PathologyGoalOverride | null {
+  if (!conditionName) return null;
+  const lower = conditionName.toLowerCase();
+  for (const override of PATHOLOGY_GOAL_OVERRIDES) {
+    if (override.conditionKeywords.some(kw => lower.includes(kw))) {
+      return override;
+    }
+  }
+  return null;
+}
+
+function computeScarRomReduction(
+  jointId: string,
+  scarSummary?: ScarSummaryEntry[],
+): number {
+  if (!scarSummary || scarSummary.length === 0) return 0;
+
+  const JOINT_BONE_REGIONS: Record<string, string[]> = {
+    shoulder_flexion: ['shoulder', 'scapula', 'humerus', 'clavicle'],
+    shoulder_abduction: ['shoulder', 'scapula', 'humerus', 'clavicle'],
+    shoulder_er: ['shoulder', 'humerus'],
+    shoulder_ir: ['shoulder', 'humerus'],
+    elbow_flexion: ['elbow', 'humerus', 'forearm', 'ulna', 'radius'],
+    hip_flexion: ['hip', 'pelvis', 'femur', 'iliac'],
+    hip_abduction: ['hip', 'pelvis', 'femur'],
+    hip_er: ['hip', 'femur'],
+    hip_ir: ['hip', 'femur'],
+    knee_flexion: ['knee', 'femur', 'tibia', 'patella'],
+    knee_extension: ['knee', 'femur', 'tibia', 'patella'],
+    ankle_dorsiflexion: ['ankle', 'tibia', 'talus', 'foot'],
+    ankle_plantarflexion: ['ankle', 'calcaneus', 'foot'],
+    cervical_flexion: ['cervical', 'neck', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'],
+    cervical_rotation: ['cervical', 'neck'],
+    lumbar_flexion: ['lumbar', 'spine', 'l1', 'l2', 'l3', 'l4', 'l5'],
+    lumbar_extension: ['lumbar', 'spine'],
+    thoracic_rotation: ['thoracic', 'spine', 't1', 't12'],
+  };
+
+  const regions = JOINT_BONE_REGIONS[jointId] ?? [];
+  if (regions.length === 0) return 0;
+
+  let maxReduction = 0;
+  for (const scar of scarSummary) {
+    const boneL = scar.nearestBone.toLowerCase();
+    const regionL = scar.region.toLowerCase();
+    const matches = regions.some(r => boneL.includes(r) || regionL.includes(r));
+    if (!matches) continue;
+
+    const mobilityFactor = scar.mobility === 'fixed' ? 1.0 : scar.mobility === 'tethered' ? 0.6 : 0.2;
+    const layerFactor = scar.affectedLayers.some(l => l === 'muscular' || l === 'fascial' || l === 'periosteal') ? 1.0 : 0.4;
+    const reduction = (scar.severity / 5) * mobilityFactor * layerFactor * 25;
+    maxReduction = Math.max(maxReduction, reduction);
+  }
+
+  return Math.min(maxReduction, 40);
 }
 
 export interface RomGoalTarget {
@@ -135,38 +371,61 @@ export function generateGoalProfile(
   existingRomJointIds?: string[],
   clinicalState?: ClinicalStateInput | null,
 ): RecoveryGoalProfile {
-  const romCeilingPct = conditionProfile.expectedRomRecoveryPercent ?? 95;
+  const pathOverride = detectPathologyOverride(conditionProfile.conditionName);
+
+  const baseRomCeiling = conditionProfile.expectedRomRecoveryPercent ?? 95;
+  const overriddenCeiling = pathOverride?.romCeilingOverride
+    ? Math.min(baseRomCeiling, pathOverride.romCeilingOverride)
+    : baseRomCeiling;
   const modifiedCeiling = patientModifiers
-    ? clamp(romCeilingPct * (patientModifiers.romCeilingAdjustment ?? 1), 50, 100)
-    : romCeilingPct;
+    ? clamp(overriddenCeiling * (patientModifiers.romCeilingAdjustment ?? 1), 50, 100)
+    : overriddenCeiling;
 
   const relevantJoints = CONDITION_JOINT_RELEVANCE[conditionProfile.category] ?? [];
   const jointSet = existingRomJointIds && existingRomJointIds.length > 0
     ? existingRomJointIds
     : relevantJoints;
 
-  const romTargets: RomGoalTarget[] = jointSet.map(jointId => {
-    const norm = JOINT_ROM_NORMS[jointId];
-    if (!norm) {
+  const romSkipSet = new Set(pathOverride?.romSkip ?? []);
+
+  const romTargets: RomGoalTarget[] = jointSet
+    .filter(jid => !romSkipSet.has(jid))
+    .map(jointId => {
+      const norm = JOINT_ROM_NORMS[jointId];
+      if (!norm) {
+        return { jointId, label: jointId.replace(/_/g, ' '), targetDegrees: 0, normalDegrees: 0, recoveryPercent: modifiedCeiling };
+      }
+
+      let targetDeg = Math.round(norm.normalDegrees * (modifiedCeiling / 100));
+
+      if (pathOverride?.romCaps?.[jointId] !== undefined) {
+        targetDeg = Math.min(targetDeg, pathOverride.romCaps[jointId]);
+      }
+
+      const currentRomEntry = clinicalState?.currentRom?.find(r => r.jointId === jointId);
+      if (currentRomEntry && currentRomEntry.currentDegrees > 0 && targetDeg > currentRomEntry.currentDegrees) {
+        const improvementRange = targetDeg - currentRomEntry.currentDegrees;
+        targetDeg = Math.round(currentRomEntry.currentDegrees + improvementRange * 0.85);
+      }
+
+      const scarReduction = computeScarRomReduction(jointId, clinicalState?.scarSummary);
+      if (scarReduction > 0) {
+        targetDeg = Math.round(targetDeg * (1 - scarReduction / 100));
+      }
+
+      targetDeg = Math.max(targetDeg, 5);
+
       return {
         jointId,
-        label: jointId.replace(/_/g, ' '),
-        targetDegrees: 0,
-        normalDegrees: 0,
+        label: norm.label,
+        targetDegrees: targetDeg,
+        normalDegrees: norm.normalDegrees,
         recoveryPercent: modifiedCeiling,
       };
-    }
-    const targetDeg = Math.round(norm.normalDegrees * (modifiedCeiling / 100));
-    return {
-      jointId,
-      label: norm.label,
-      targetDegrees: targetDeg,
-      normalDegrees: norm.normalDegrees,
-      recoveryPercent: modifiedCeiling,
-    };
-  }).filter(r => r.normalDegrees > 0);
+    }).filter(r => r.normalDegrees > 0);
 
-  const painTarget = conditionProfile.recurrenceRiskPercent > 30 ? 10 : 5;
+  const basePainTarget = conditionProfile.recurrenceRiskPercent > 30 ? 10 : 5;
+  const painTarget = pathOverride?.painTargetOverride ?? basePainTarget;
 
   const slingTargets: SlingGoalTarget[] = DEFAULT_SLING_NAMES.map(name => ({
     slingName: name,
@@ -179,17 +438,22 @@ export function generateGoalProfile(
     conditionProfile, clinicalState
   );
 
-  const functionalGoals: FunctionalGoal[] = buildFunctionalGoals(conditionProfile);
+  const functionalGoals: FunctionalGoal[] = pathOverride?.functionalGoalOverrides
+    ? [...pathOverride.functionalGoalOverrides]
+    : buildFunctionalGoals(conditionProfile);
 
   const riskTarget = 15;
 
   const compTarget = clinicalState?.compensationPatterns && clinicalState.compensationPatterns.length > 3
     ? 85 : 90;
 
-  const postureTargets: PostureGoalTarget[] = buildPostureTargets(clinicalState);
+  const postureTargets: PostureGoalTarget[] = buildPostureTargets(clinicalState, pathOverride);
 
-  const strengthTarget = conditionProfile.category === 'knee' || conditionProfile.category === 'hip'
+  const baseStrength = conditionProfile.category === 'knee' || conditionProfile.category === 'hip'
     ? 80 : conditionProfile.category === 'shoulder' ? 75 : 70;
+  const strengthTarget = pathOverride?.strengthCap
+    ? Math.min(baseStrength, pathOverride.strengthCap)
+    : baseStrength;
 
   const jointStressTarget = conditionProfile.recurrenceRiskPercent > 30 ? 25 : 20;
 
@@ -215,9 +479,15 @@ export function generateGenericGoalProfile(
   clinicalState?: ClinicalStateInput | null,
   patientModifiers?: PatientModifierProfile | null,
 ): RecoveryGoalProfile {
+  const pathOverride = detectPathologyOverride(conditionName);
+
+  const baseRomCeiling = 90;
+  const overriddenCeiling = pathOverride?.romCeilingOverride
+    ? Math.min(baseRomCeiling, pathOverride.romCeilingOverride)
+    : baseRomCeiling;
   const romCeilingPct = patientModifiers
-    ? clamp(90 * (patientModifiers.romCeilingAdjustment ?? 1), 50, 100)
-    : 90;
+    ? clamp(overriddenCeiling * (patientModifiers.romCeilingAdjustment ?? 1), 50, 100)
+    : overriddenCeiling;
 
   const jointIds: string[] = [];
   const painBones = clinicalState?.painMarkers?.map(m => m.boneName.toLowerCase()) ?? [];
@@ -229,7 +499,7 @@ export function generateGenericGoalProfile(
     hip: ['hip', 'gluteal', 'trochant', 'labral', 'piriformis', 'groin', 'adductor'],
     ankle: ['ankle', 'achilles', 'plantar', 'calcaneal', 'tibial', 'peroneal', 'foot'],
     spine: ['lumbar', 'disc', 'spine', 'back', 'spondyl', 'stenosis', 'facet'],
-    cervical: ['cervical', 'neck', 'whiplash', 'wad'],
+    cervical: ['cervical', 'neck', 'whiplash', 'wad', 'myelopathy'],
     elbow: ['elbow', 'epicondyl', 'tennis', 'golfer'],
   };
 
@@ -242,8 +512,9 @@ export function generateGenericGoalProfile(
   }
 
   const relevantJoints = CONDITION_JOINT_RELEVANCE[detectedCategory] ?? [];
+  const romSkipSet = new Set(pathOverride?.romSkip ?? []);
   for (const jid of relevantJoints) {
-    if (!jointIds.includes(jid)) jointIds.push(jid);
+    if (!jointIds.includes(jid) && !romSkipSet.has(jid)) jointIds.push(jid);
   }
   if (jointIds.length === 0) {
     jointIds.push('shoulder_flexion', 'hip_flexion', 'knee_flexion');
@@ -252,10 +523,30 @@ export function generateGenericGoalProfile(
   const romTargets: RomGoalTarget[] = jointIds.map(jointId => {
     const norm = JOINT_ROM_NORMS[jointId];
     if (!norm) return null;
+
+    let targetDeg = Math.round(norm.normalDegrees * (romCeilingPct / 100));
+
+    if (pathOverride?.romCaps?.[jointId] !== undefined) {
+      targetDeg = Math.min(targetDeg, pathOverride.romCaps[jointId]);
+    }
+
+    const currentRomEntry = clinicalState?.currentRom?.find(r => r.jointId === jointId);
+    if (currentRomEntry && currentRomEntry.currentDegrees > 0 && targetDeg > currentRomEntry.currentDegrees) {
+      const improvementRange = targetDeg - currentRomEntry.currentDegrees;
+      targetDeg = Math.round(currentRomEntry.currentDegrees + improvementRange * 0.85);
+    }
+
+    const scarReduction = computeScarRomReduction(jointId, clinicalState?.scarSummary);
+    if (scarReduction > 0) {
+      targetDeg = Math.round(targetDeg * (1 - scarReduction / 100));
+    }
+
+    targetDeg = Math.max(targetDeg, 5);
+
     return {
       jointId,
       label: norm.label,
-      targetDegrees: Math.round(norm.normalDegrees * (romCeilingPct / 100)),
+      targetDegrees: targetDeg,
       normalDegrees: norm.normalDegrees,
       recoveryPercent: romCeilingPct,
     };
@@ -264,7 +555,8 @@ export function generateGenericGoalProfile(
   const avgPain = clinicalState?.painMarkers?.length
     ? clinicalState.painMarkers.reduce((s, m) => s + m.intensity, 0) / clinicalState.painMarkers.length
     : 40;
-  const painTarget = avgPain > 60 ? 15 : 10;
+  const basePainTarget = avgPain > 60 ? 15 : 10;
+  const painTarget = pathOverride?.painTargetOverride ?? basePainTarget;
 
   const clinicalSlings = clinicalState?.slingAnalysis ?? [];
   const slingTargets: SlingGoalTarget[] = DEFAULT_SLING_NAMES.map(name => {
@@ -280,6 +572,7 @@ export function generateGenericGoalProfile(
   const keyMuscles = CONDITION_KEY_MUSCLES[detectedCategory] ?? [];
   const clinicalMuscleIds = clinicalState?.muscleStates?.map(m => m.muscleId) ?? [];
   const allMuscleIds = Array.from(new Set([...keyMuscles, ...clinicalMuscleIds]));
+
   for (const muscleId of allMuscleIds) {
     const entry = clinicalState?.muscleStates?.find(m => m.muscleId === muscleId);
     let targetMin = 35;
@@ -288,16 +581,37 @@ export function generateGenericGoalProfile(
       if (entry.tension > 70) { targetMin = 30; targetMax = 50; }
       else if (entry.tension < 30) { targetMin = 40; targetMax = 60; }
     }
+
+    if (clinicalState?.chainTensionAverages && clinicalState.chainTensionAverages.length > 0) {
+      const muscleLower = muscleId.toLowerCase();
+      for (const ct of clinicalState.chainTensionAverages) {
+        if (ct.avgTension > 70) {
+          if (muscleLower.includes('erector') || muscleLower.includes('hamstring') || muscleLower.includes('gastrocnemius')) {
+            targetMin = Math.min(targetMin, 30);
+            targetMax = Math.min(targetMax, 48);
+          }
+        }
+        if (ct.avgTension < 35) {
+          if (muscleLower.includes('glut') || muscleLower.includes('abdomin') || muscleLower.includes('quadriceps')) {
+            targetMin = Math.max(targetMin, 42);
+            targetMax = Math.max(targetMax, 60);
+          }
+        }
+      }
+    }
+
     muscleTensionTargets.push({ muscleId, targetTensionMin: targetMin, targetTensionMax: targetMax });
   }
 
-  const postureTargets = buildPostureTargets(clinicalState);
+  const postureTargets = buildPostureTargets(clinicalState, pathOverride);
 
   const compTarget = clinicalState?.compensationPatterns && clinicalState.compensationPatterns.length > 3
     ? 85 : 90;
 
-  const functionalGoals: FunctionalGoal[] = [];
-  if (detectedCategory === 'shoulder') {
+  let functionalGoals: FunctionalGoal[] = [];
+  if (pathOverride?.functionalGoalOverrides) {
+    functionalGoals = [...pathOverride.functionalGoalOverrides];
+  } else if (detectedCategory === 'shoulder') {
     functionalGoals.push({ label: 'Overhead reach', metric: 'shoulder_flexion_rom', targetValue: 170, unit: 'degrees' });
     functionalGoals.push({ label: 'Pain-free lifting', metric: 'pain_with_load', targetValue: 0, unit: '/10' });
   } else if (detectedCategory === 'knee') {
@@ -323,8 +637,11 @@ export function generateGenericGoalProfile(
     functionalGoals.push({ label: 'Return to activity', metric: 'activity_level', targetValue: 80, unit: '%' });
   }
 
-  const strengthTarget = detectedCategory === 'knee' || detectedCategory === 'hip' ? 80
+  const baseStrength = detectedCategory === 'knee' || detectedCategory === 'hip' ? 80
     : detectedCategory === 'shoulder' ? 75 : 70;
+  const strengthTarget = pathOverride?.strengthCap
+    ? Math.min(baseStrength, pathOverride.strengthCap)
+    : baseStrength;
 
   return {
     conditionId: `generic_${lower.replace(/[^a-z0-9]+/g, '_').replace(/_+$/, '')}`,
@@ -379,6 +696,24 @@ function buildMuscleTensionTargets(
       }
     }
 
+    if (clinicalState?.chainTensionAverages && clinicalState.chainTensionAverages.length > 0) {
+      const muscleLower = muscleId.toLowerCase();
+      for (const ct of clinicalState.chainTensionAverages) {
+        if (ct.avgTension > 70) {
+          if (muscleLower.includes('erector') || muscleLower.includes('hamstring') || muscleLower.includes('gastrocnemius')) {
+            targetMin = Math.min(targetMin, 30);
+            targetMax = Math.min(targetMax, 48);
+          }
+        }
+        if (ct.avgTension < 35) {
+          if (muscleLower.includes('glut') || muscleLower.includes('abdomin') || muscleLower.includes('quadriceps')) {
+            targetMin = Math.max(targetMin, 42);
+            targetMax = Math.max(targetMax, 60);
+          }
+        }
+      }
+    }
+
     targets.push({ muscleId, targetTensionMin: targetMin, targetTensionMax: targetMax });
   }
 
@@ -403,18 +738,51 @@ const POSTURE_DEVIATION_MAP: Record<string, { boneName: string; targetAngle: num
   'trunk rotation': { boneName: 'Spine1_M', targetAngle: 0, axis: 'y' },
 };
 
-function buildPostureTargets(clinicalState?: ClinicalStateInput | null): PostureGoalTarget[] {
+function buildPostureTargets(
+  clinicalState?: ClinicalStateInput | null,
+  pathOverride?: PathologyGoalOverride | null,
+): PostureGoalTarget[] {
   if (!clinicalState?.posturalDeviations || clinicalState.posturalDeviations.length === 0) return [];
   const targets: PostureGoalTarget[] = [];
+  const postureMeasurements = clinicalState.postureMeasurements;
+
   for (const dev of clinicalState.posturalDeviations) {
     const lower = dev.toLowerCase();
     for (const [key, mapping] of Object.entries(POSTURE_DEVIATION_MAP)) {
       if (lower.includes(key)) {
+        let targetAngle = mapping.targetAngle;
+
+        const tolerance = pathOverride?.postureTolerances?.[key];
+        if (tolerance) {
+          targetAngle = tolerance.acceptableAngle;
+        }
+
+        if (postureMeasurements && targetAngle === 0) {
+          let currentAngle = 0;
+          if (key === 'kyphosis' && postureMeasurements.kyphosisAngle !== undefined) {
+            currentAngle = postureMeasurements.kyphosisAngle;
+          } else if (key === 'lordosis' && postureMeasurements.lordosisAngle !== undefined) {
+            currentAngle = postureMeasurements.lordosisAngle;
+          } else if (key.includes('forward head') || key.includes('head forward')) {
+            if (postureMeasurements.forwardHeadAngle !== undefined) {
+              currentAngle = postureMeasurements.forwardHeadAngle;
+            }
+          } else if (key.includes('pelvic tilt') && postureMeasurements.pelvicTiltAngle !== undefined) {
+            currentAngle = Math.abs(postureMeasurements.pelvicTiltAngle);
+          } else if (key === 'scoliosis' && postureMeasurements.scoliosisAngle !== undefined) {
+            currentAngle = postureMeasurements.scoliosisAngle;
+          }
+
+          if (currentAngle > 5) {
+            targetAngle = Math.round(currentAngle * 0.3);
+          }
+        }
+
         targets.push({
           deviationType: dev,
-          boneName: mapping.boneName,
-          targetAngle: mapping.targetAngle,
-          axis: mapping.axis,
+          boneName: tolerance?.boneName ?? mapping.boneName,
+          targetAngle,
+          axis: tolerance?.axis ?? mapping.axis,
         });
         break;
       }

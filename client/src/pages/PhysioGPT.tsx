@@ -3386,6 +3386,34 @@ ${ddxList}`;
     return chainPropagation;
   }, [showUnifiedChainPanel, showPropagation, chainPropagation]);
 
+  const scarSummaryForGoals = useMemo(() => {
+    if (scarMarkers.length === 0) return undefined;
+    return scarMarkers.map(scar => ({
+      region: scar.anatomicalLabel || scar.nearestBone,
+      severity: scar.severity,
+      mobility: scar.mobility,
+      nearestBone: scar.nearestBone,
+      affectedLayers: scar.affectedLayers,
+    }));
+  }, [scarMarkers]);
+
+  const postureMeasurementsForGoals = useMemo(() => {
+    const mc = effectiveModelConfig;
+    if (!mc) return undefined;
+    const spine = mc['spine'];
+    const neck = mc['neck'];
+    const pelvis = mc['pelvis'];
+    if (!spine && !neck && !pelvis) return undefined;
+    return {
+      kyphosisAngle: (spine?.['thoracicKyphosis'] ?? 0) as number,
+      lordosisAngle: (spine?.['lumbarLordosis'] ?? 0) as number,
+      forwardHeadAngle: (spine?.['forwardHead'] ?? neck?.['forwardHead'] ?? 0) as number,
+      pelvicTiltAngle: (pelvis?.['tilt'] ?? 0) as number,
+      lateralShift: (spine?.['lateralShift'] ?? 0) as number,
+      scoliosisAngle: (spine?.['scoliosis'] ?? 0) as number,
+    };
+  }, [effectiveModelConfig]);
+
   const propagationDeltas = useMemo(() => {
     if (!propagatedEffects) return {};
     const deltas: Record<string, number> = {};
@@ -8581,6 +8609,9 @@ ${ddxList}`;
                       extractionResult={extractionResult}
                       structuredReasoning={structuredReasoningData}
                       onGoalOverlayChange={handleGoalOverlayChange}
+                      scarSummary={scarSummaryForGoals}
+                      chainTensionAverages={chainEffects.length > 0 ? chainEffects : undefined}
+                      postureMeasurements={postureMeasurementsForGoals}
                     />
                   </Suspense>
                 </div>

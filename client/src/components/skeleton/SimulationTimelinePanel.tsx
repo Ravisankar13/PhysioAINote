@@ -2270,9 +2270,15 @@ function SessionTimelineView({
     return sessionTimeline.sessions.find(s => s.sessionNumber === selectedSession) ?? sessionTimeline.sessions[0] ?? null;
   }, [sessionTimeline, selectedSession]);
 
+  const selectSession = useCallback((sessionNum: number) => {
+    setSelectedSession(sessionNum);
+    setRxDrivingSession(sessionNum);
+    onSessionPrescriptionSelect?.(sessionNum);
+  }, [onSessionPrescriptionSelect]);
+
   const handleSessionChange = useCallback((value: number[]) => {
-    setSelectedSession(value[0]);
-  }, []);
+    selectSession(value[0]);
+  }, [selectSession]);
 
   const buildApplyPayload = useCallback((snap: SessionSnapshot): SessionApplyPayload => ({
     modelConfig: snap.modelConfig,
@@ -2318,12 +2324,12 @@ function SessionTimelineView({
         setIsPlaying(false);
         return;
       }
-      setSelectedSession(sess);
+      selectSession(sess);
     }, 600);
     playIntervalRef.current = interval;
-  }, [isPlaying, selectedSession, sessionTimeline.totalSessions, currentSnapshot, onApplyToSkeleton, buildApplyPayload]);
+  }, [isPlaying, selectedSession, sessionTimeline.totalSessions, currentSnapshot, onApplyToSkeleton, buildApplyPayload, selectSession]);
 
-  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals') => {
+  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals' | 'rxplan') => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
@@ -2549,12 +2555,12 @@ function SessionTimelineView({
           sessions={sessionTimeline.sessions}
           selectedSession={selectedSession}
           totalSessions={sessionTimeline.totalSessions}
-          onSessionClick={setSelectedSession}
+          onSessionClick={selectSession}
         />
 
         <div className="mt-2 flex items-center gap-2">
           <button
-            onClick={() => setSelectedSession(Math.max(1, selectedSession - 1))}
+            onClick={() => selectSession(Math.max(1, selectedSession - 1))}
             className="p-0.5 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200"
             disabled={selectedSession <= 1}
           >
@@ -2577,7 +2583,7 @@ function SessionTimelineView({
             />
           </div>
           <button
-            onClick={() => setSelectedSession(Math.min(sessionTimeline.totalSessions, selectedSession + 1))}
+            onClick={() => selectSession(Math.min(sessionTimeline.totalSessions, selectedSession + 1))}
             className="p-0.5 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200"
             disabled={selectedSession >= sessionTimeline.totalSessions}
           >
@@ -2736,7 +2742,7 @@ function SessionTimelineView({
               totalSessions={sessionTimeline.totalSessions}
               milestones={sessionTimeline.milestones}
               modifications={sessionTimeline.modifications}
-              onSessionClick={setSelectedSession}
+              onSessionClick={selectSession}
               goalProfile={goalProfile}
             />
           </div>
@@ -2780,7 +2786,7 @@ function SessionTimelineView({
               <FunctionalMilestonesSection
                 milestones={currentSnapshot.functionalMilestones}
                 selectedSession={selectedSession}
-                onSessionClick={setSelectedSession}
+                onSessionClick={selectSession}
               />
             </div>
           )}
@@ -2907,7 +2913,7 @@ function SessionTimelineView({
                   <div
                     key={i}
                     className={`px-1.5 py-1 rounded cursor-pointer hover:bg-gray-800/40 ${isPast ? 'opacity-100' : 'opacity-50'}`}
-                    onClick={() => setSelectedSession(mod.sessionNumber)}
+                    onClick={() => selectSession(mod.sessionNumber)}
                   >
                     <div className="flex items-center gap-1.5 text-[9px]">
                       {mod.type === 'regress' ? (
@@ -4323,7 +4329,13 @@ export default function SimulationTimelinePanel({
   const timelinePrescriptions = useMemo<TimelinePrescriptionSummary | null>(() => {
     if (!sessionTimeline || !aiGoalProfile || sessionTimeline.sessions.length === 0) return null;
     try {
-      return computeTimelinePrescriptions(sessionTimeline.sessions, aiGoalProfile, currentStateGap);
+      const result = computeTimelinePrescriptions(sessionTimeline.sessions, aiGoalProfile, currentStateGap);
+      for (let i = 0; i < sessionTimeline.sessions.length; i++) {
+        if (i < result.sessionPrescriptions.length) {
+          sessionTimeline.sessions[i].prescriptionContext = result.sessionPrescriptions[i];
+        }
+      }
+      return result;
     } catch (e) {
       console.warn('[SimTimeline] Prescription computation failed:', e);
       return null;

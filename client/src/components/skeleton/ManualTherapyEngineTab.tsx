@@ -519,10 +519,14 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
   const customAbortRef = useRef<AbortController | null>(null);
   const [showRecoveryContext, setShowRecoveryContext] = useState(true);
 
+  const activePrescriptionMt = sessionPrescription ?? null;
+
   const prescriptionCtx = useMemo<PrescriptionContext | null>(() => {
     if (!goalProfile || !clinicalState) return null;
     return buildPrescriptionContext(goalProfile, clinicalState, goalGap ?? null, null);
   }, [goalProfile, clinicalState, goalGap]);
+
+  const effectiveCtx = activePrescriptionMt ?? prescriptionCtx;
 
   const [refinementInput, setRefinementInput] = useState('');
   const [conversationHistory, setConversationHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
@@ -640,20 +644,21 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       };
     }
 
-    if (prescriptionCtx) {
+    const ctx = effectiveCtx;
+    if (ctx) {
       payload.recoveryGoalContext = {
-        condition: prescriptionCtx.conditionName,
-        phaseLabel: prescriptionCtx.phaseLabel,
-        goalAchievementPct: Math.round(prescriptionCtx.goalAchievementPct),
-        painCurrent: Math.round(prescriptionCtx.currentPain),
-        painTarget: prescriptionCtx.painTarget,
-        dosageIntensity: prescriptionCtx.dosageScaling.intensityLabel,
-        mtGradeRange: `${prescriptionCtx.mtGradeGuidance.minGrade}–${prescriptionCtx.mtGradeGuidance.maxGrade}`,
-        mtGradeRationale: prescriptionCtx.mtGradeGuidance.rationale,
-        preferSustained: prescriptionCtx.mtGradeGuidance.preferSustained,
-        priorityBodyParts: prescriptionCtx.priorityBodyParts,
-        contraindications: prescriptionCtx.contraindications,
-        topGaps: prescriptionCtx.goalGaps.slice(0, 5).map(g => ({
+        condition: ctx.conditionName,
+        phaseLabel: ctx.phaseLabel,
+        goalAchievementPct: Math.round(ctx.goalAchievementPct),
+        painCurrent: Math.round(ctx.currentPain),
+        painTarget: ctx.painTarget,
+        dosageIntensity: ctx.dosageScaling.intensityLabel,
+        mtGradeRange: `${ctx.mtGradeGuidance.minGrade}–${ctx.mtGradeGuidance.maxGrade}`,
+        mtGradeRationale: ctx.mtGradeGuidance.rationale,
+        preferSustained: ctx.mtGradeGuidance.preferSustained,
+        priorityBodyParts: ctx.priorityBodyParts,
+        contraindications: ctx.contraindications,
+        topGaps: ctx.goalGaps.slice(0, 5).map(g => ({
           label: g.label,
           gapPercent: Math.round(g.gapPercent),
           priority: g.priority,
@@ -663,7 +668,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
     }
 
     return payload;
-  }, [mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, prescriptionCtx]);
+  }, [mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, effectiveCtx]);
 
   const generatePlan = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
@@ -1100,12 +1105,10 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
   }
 
   const totalTechniques = plan.techniqueGroups.reduce((sum, g) => sum + g.techniques.length, 0);
-  const activePrescription = sessionPrescription ?? null;
-  const effectiveCtx = activePrescription ?? prescriptionCtx;
 
   return (
     <div className="space-y-2">
-      {activePrescription && sessionPrescriptionNum !== null && sessionPrescriptionNum !== undefined && (
+      {activePrescriptionMt && sessionPrescriptionNum !== null && sessionPrescriptionNum !== undefined && (
         <div className="border border-violet-500/40 rounded bg-violet-950/30 px-2.5 py-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <Zap className="h-3 w-3 text-violet-400" />
@@ -1113,13 +1116,13 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
               Driven by Session {sessionPrescriptionNum}
             </span>
             <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-              {activePrescription.phaseLabel}
+              {activePrescriptionMt.phaseLabel}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[8px] text-violet-400">{activePrescription.mtGradeGuidance.minGrade}–{activePrescription.mtGradeGuidance.maxGrade}</span>
+            <span className="text-[8px] text-violet-400">{activePrescriptionMt.mtGradeGuidance.minGrade}–{activePrescriptionMt.mtGradeGuidance.maxGrade}</span>
             <span className="text-[8px] text-gray-500">|</span>
-            <span className="text-[8px] text-violet-400">{Math.round(activePrescription.goalAchievementPct)}% achieved</span>
+            <span className="text-[8px] text-violet-400">{Math.round(activePrescriptionMt.goalAchievementPct)}% achieved</span>
           </div>
         </div>
       )}
@@ -1232,11 +1235,12 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
                 const m = s.match(/([IV]+)/i);
                 return m ? (GRADE_TO_NUM[m[1].toUpperCase()] ?? 0) : 0;
               };
-              const maxGradeNum = prescriptionCtx ? parseGradeNum(prescriptionCtx.mtGradeGuidance.maxGrade) : 99;
+              const ctxForMt = effectiveCtx;
+              const maxGradeNum = ctxForMt ? parseGradeNum(ctxForMt.mtGradeGuidance.maxGrade) : 99;
 
-              const filtered = prescriptionCtx && prescriptionCtx.contraindications.length > 0
+              const filtered = ctxForMt && ctxForMt.contraindications.length > 0
                 ? group.techniques.filter(tech =>
-                    !prescriptionCtx.contraindications.some(c =>
+                    !ctxForMt.contraindications.some(c =>
                       tech.technique.toLowerCase().includes(c.toLowerCase()) ||
                       (tech.contraindications && tech.contraindications.toLowerCase().includes(c.toLowerCase()))
                     ))
@@ -1251,14 +1255,14 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
                     </div>
                   )}
                   {filtered.map((tech, i) => {
-                    const matchingGap = prescriptionCtx?.goalGaps.find(g =>
+                    const matchingGap = ctxForMt?.goalGaps.find(g =>
                       tech.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
                       tech.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
                     );
-                    const gradeWarning = prescriptionCtx && tech.dosage ? (() => {
+                    const gradeWarning = ctxForMt && tech.dosage ? (() => {
                       const techGrade = parseGradeNum(tech.dosage);
                       if (techGrade > 0 && techGrade > maxGradeNum) {
-                        return `Exceeds recommended max Grade ${prescriptionCtx.mtGradeGuidance.maxGrade}`;
+                        return `Exceeds recommended max Grade ${ctxForMt.mtGradeGuidance.maxGrade}`;
                       }
                       return null;
                     })() : null;

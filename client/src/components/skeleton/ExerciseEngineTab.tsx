@@ -552,6 +552,8 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
     return buildPrescriptionContext(goalProfile, clinicalState, goalGap ?? null, null);
   }, [goalProfile, clinicalState, goalGap]);
 
+  const effectiveCtx = activePrescription ?? prescriptionCtx;
+
   const toggleGroup = useCallback((groupId: string) => {
     setExpandedGroups(prev => {
       const next = new Set(prev);
@@ -629,18 +631,19 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
       };
     }
 
-    if (prescriptionCtx) {
+    const ctx = effectiveCtx;
+    if (ctx) {
       payload.recoveryGoalContext = {
-        condition: prescriptionCtx.conditionName,
-        phaseLabel: prescriptionCtx.phaseLabel,
-        goalAchievementPct: Math.round(prescriptionCtx.goalAchievementPct),
-        painCurrent: Math.round(prescriptionCtx.currentPain),
-        painTarget: prescriptionCtx.painTarget,
-        dosageIntensity: prescriptionCtx.dosageScaling.intensityLabel,
-        painCeiling: prescriptionCtx.dosageScaling.painCeiling,
-        priorityBodyParts: prescriptionCtx.priorityBodyParts,
-        contraindications: prescriptionCtx.contraindications,
-        topGaps: prescriptionCtx.goalGaps.slice(0, 5).map(g => ({
+        condition: ctx.conditionName,
+        phaseLabel: ctx.phaseLabel,
+        goalAchievementPct: Math.round(ctx.goalAchievementPct),
+        painCurrent: Math.round(ctx.currentPain),
+        painTarget: ctx.painTarget,
+        dosageIntensity: ctx.dosageScaling.intensityLabel,
+        painCeiling: ctx.dosageScaling.painCeiling,
+        priorityBodyParts: ctx.priorityBodyParts,
+        contraindications: ctx.contraindications,
+        topGaps: ctx.goalGaps.slice(0, 5).map(g => ({
           label: g.label,
           gapPercent: Math.round(g.gapPercent),
           priority: g.priority,
@@ -650,7 +653,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
     }
 
     return payload;
-  }, [mechanismAnalysis, slingAnalysis, painMarkers, prescriptionCtx]);
+  }, [mechanismAnalysis, slingAnalysis, painMarkers, effectiveCtx]);
 
   const generatePlan = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
@@ -901,8 +904,6 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
   }
 
   const totalExercises = plan.exerciseGroups.reduce((sum, g) => sum + g.exercises.length, 0);
-
-  const effectiveCtx = activePrescription ?? prescriptionCtx;
 
   return (
     <div className="space-y-2">

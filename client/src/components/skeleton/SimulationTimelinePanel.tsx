@@ -3902,10 +3902,10 @@ export default function SimulationTimelinePanel({
       cn: conditionNameForAi,
       pf: patientFactors,
       pm: clinicalStateForGoals ? {
-        p: clinicalStateForGoals.painMarkers?.map(m => `${m.boneId || m.boneName}:${m.intensity}:${m.type}`).sort() ?? [],
-        m: clinicalStateForGoals.muscleStates?.map(s => `${s.muscleName}:${s.tension}`).sort() ?? [],
-        c: clinicalStateForGoals.compensationPatterns?.map(c => `${c.pattern}:${c.severity}`).sort() ?? [],
-        d: clinicalStateForGoals.posturalDeviations?.map(d => `${d.type}:${d.severity}`).sort() ?? [],
+        p: clinicalStateForGoals.painMarkers?.map(m => `${m.boneName}:${m.intensity}`).sort() ?? [],
+        m: clinicalStateForGoals.muscleStates?.map(s => `${s.muscleId}:${s.tension}`).sort() ?? [],
+        c: [...(clinicalStateForGoals.compensationPatterns ?? [])].sort(),
+        d: [...(clinicalStateForGoals.posturalDeviations ?? [])].sort(),
       } : null,
     });
 

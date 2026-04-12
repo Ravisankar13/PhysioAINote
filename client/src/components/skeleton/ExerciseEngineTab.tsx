@@ -986,40 +986,45 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
               </div>
               {isExpanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0" />}
             </button>
-            {isExpanded && (
-              <div className="p-2 space-y-1.5">
-                {group.exercises.map((ex, i) => {
-                  const isContraindicated = prescriptionCtx && prescriptionCtx.contraindications.length > 0 &&
-                    prescriptionCtx.contraindications.some(c =>
+            {isExpanded && (() => {
+              const filtered = prescriptionCtx && prescriptionCtx.contraindications.length > 0
+                ? group.exercises.filter(ex =>
+                    !prescriptionCtx.contraindications.some(c =>
                       ex.name.toLowerCase().includes(c.toLowerCase()) ||
                       (ex.contraindications && ex.contraindications.toLowerCase().includes(c.toLowerCase()))
-                    );
-                  const matchingGap = prescriptionCtx?.goalGaps.find(g =>
-                    ex.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
-                    ex.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
-                  );
-                  return (
-                    <div key={`${group.groupId}-${i}`} className={isContraindicated ? 'opacity-50 relative' : ''}>
-                      {isContraindicated && (
-                        <div className="absolute top-1 right-1 z-10 px-1 py-0.5 bg-red-900/80 border border-red-500/40 rounded text-[7px] text-red-300 flex items-center gap-0.5">
-                          <AlertTriangle className="h-2 w-2" />
-                          Contraindicated
-                        </div>
-                      )}
-                      {matchingGap && !isContraindicated && (
-                        <div className="flex items-center gap-1 mb-0.5 px-2 pt-1">
-                          <Target className="h-2 w-2 text-emerald-400" />
-                          <span className="text-[7px] text-emerald-400">
-                            Goal: {matchingGap.label} ({matchingGap.current.toFixed(0)}→{matchingGap.target.toFixed(0)})
-                          </span>
-                        </div>
-                      )}
-                      <ExerciseCard exercise={ex} index={i} />
+                    ))
+                : group.exercises;
+              const excluded = group.exercises.length - filtered.length;
+              return (
+                <div className="p-2 space-y-1.5">
+                  {excluded > 0 && (
+                    <div className="flex items-center gap-1 px-1 py-0.5 bg-red-900/20 border border-red-500/20 rounded text-[7px] text-red-400">
+                      <AlertTriangle className="h-2 w-2 shrink-0" />
+                      {excluded} exercise{excluded > 1 ? 's' : ''} excluded (contraindicated)
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  )}
+                  {filtered.map((ex, i) => {
+                    const matchingGap = prescriptionCtx?.goalGaps.find(g =>
+                      ex.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
+                      ex.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
+                    );
+                    return (
+                      <div key={`${group.groupId}-${i}`}>
+                        {matchingGap && (
+                          <div className="flex items-center gap-1 mb-0.5 px-2 pt-1">
+                            <Target className="h-2 w-2 text-emerald-400" />
+                            <span className="text-[7px] text-emerald-400">
+                              Goal: {matchingGap.label} ({matchingGap.current.toFixed(0)}→{matchingGap.target.toFixed(0)})
+                            </span>
+                          </div>
+                        )}
+                        <ExerciseCard exercise={ex} index={i} />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         );
       })}

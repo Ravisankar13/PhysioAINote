@@ -1200,55 +1200,65 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
               </div>
               {isExpanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0" />}
             </button>
-            {isExpanded && (
-              <div className="p-2 space-y-1.5">
-                {group.techniques.map((tech, i) => {
-                  const isContraindicated = prescriptionCtx && prescriptionCtx.contraindications.length > 0 &&
-                    prescriptionCtx.contraindications.some(c =>
+            {isExpanded && (() => {
+              const GRADE_TO_NUM: Record<string, number> = { 'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5 };
+              const parseGradeNum = (s: string): number => {
+                const m = s.match(/([IV]+)/i);
+                return m ? (GRADE_TO_NUM[m[1].toUpperCase()] ?? 0) : 0;
+              };
+              const maxGradeNum = prescriptionCtx ? parseGradeNum(prescriptionCtx.mtGradeGuidance.maxGrade) : 99;
+
+              const filtered = prescriptionCtx && prescriptionCtx.contraindications.length > 0
+                ? group.techniques.filter(tech =>
+                    !prescriptionCtx.contraindications.some(c =>
                       tech.technique.toLowerCase().includes(c.toLowerCase()) ||
                       (tech.contraindications && tech.contraindications.toLowerCase().includes(c.toLowerCase()))
-                    );
-                  const matchingGap = prescriptionCtx?.goalGaps.find(g =>
-                    tech.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
-                    tech.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
-                  );
-                  const gradeWarning = prescriptionCtx && tech.dosage && (() => {
-                    const dMatch = tech.dosage.match(/grade\s*([IV]+)/i);
-                    if (!dMatch) return null;
-                    const gradeNum = { 'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5 }[dMatch[1].toUpperCase()] ?? 0;
-                    if (gradeNum > prescriptionCtx.mtGradeGuidance.maxGrade) {
-                      return `Exceeds recommended max Grade ${prescriptionCtx.mtGradeGuidance.maxGrade}`;
-                    }
-                    return null;
-                  })();
-                  return (
-                    <div key={`${group.groupId}-${i}`} className={isContraindicated ? 'opacity-50 relative' : ''}>
-                      {isContraindicated && (
-                        <div className="absolute top-1 right-1 z-10 px-1 py-0.5 bg-red-900/80 border border-red-500/40 rounded text-[7px] text-red-300 flex items-center gap-0.5">
-                          <AlertTriangle className="h-2 w-2" />
-                          Contraindicated
-                        </div>
-                      )}
-                      {matchingGap && !isContraindicated && (
-                        <div className="flex items-center gap-1 mb-0.5 px-2 pt-1">
-                          <Target className="h-2 w-2 text-emerald-400" />
-                          <span className="text-[7px] text-emerald-400">
-                            Goal: {matchingGap.label} ({matchingGap.current.toFixed(0)}→{matchingGap.target.toFixed(0)})
-                          </span>
-                        </div>
-                      )}
-                      {gradeWarning && !isContraindicated && (
-                        <div className="flex items-center gap-1 mb-0.5 px-2 pt-1">
-                          <AlertTriangle className="h-2 w-2 text-amber-400" />
-                          <span className="text-[7px] text-amber-400">{gradeWarning}</span>
-                        </div>
-                      )}
-                      <TechniqueCard technique={tech} index={i} />
+                    ))
+                : group.techniques;
+              const excluded = group.techniques.length - filtered.length;
+              return (
+                <div className="p-2 space-y-1.5">
+                  {excluded > 0 && (
+                    <div className="flex items-center gap-1 px-1 py-0.5 bg-red-900/20 border border-red-500/20 rounded text-[7px] text-red-400">
+                      <AlertTriangle className="h-2 w-2 shrink-0" />
+                      {excluded} technique{excluded > 1 ? 's' : ''} excluded (contraindicated)
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  )}
+                  {filtered.map((tech, i) => {
+                    const matchingGap = prescriptionCtx?.goalGaps.find(g =>
+                      tech.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
+                      tech.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
+                    );
+                    const gradeWarning = prescriptionCtx && tech.dosage ? (() => {
+                      const techGrade = parseGradeNum(tech.dosage);
+                      if (techGrade > 0 && techGrade > maxGradeNum) {
+                        return `Exceeds recommended max Grade ${prescriptionCtx.mtGradeGuidance.maxGrade}`;
+                      }
+                      return null;
+                    })() : null;
+                    return (
+                      <div key={`${group.groupId}-${i}`}>
+                        {matchingGap && (
+                          <div className="flex items-center gap-1 mb-0.5 px-2 pt-1">
+                            <Target className="h-2 w-2 text-emerald-400" />
+                            <span className="text-[7px] text-emerald-400">
+                              Goal: {matchingGap.label} ({matchingGap.current.toFixed(0)}→{matchingGap.target.toFixed(0)})
+                            </span>
+                          </div>
+                        )}
+                        {gradeWarning && (
+                          <div className="flex items-center gap-1 mb-0.5 px-2 pt-1">
+                            <AlertTriangle className="h-2 w-2 text-amber-400" />
+                            <span className="text-[7px] text-amber-400">{gradeWarning}</span>
+                          </div>
+                        )}
+                        <TechniqueCard technique={tech} index={i} />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         );
       })}

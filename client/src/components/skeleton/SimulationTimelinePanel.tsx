@@ -4140,19 +4140,16 @@ export default function SimulationTimelinePanel({
   const [phaseProgress, setPhaseProgress] = useState<PhaseProgressEvent | null>(null);
   const [enableReQuery, setEnableReQuery] = useState(true);
 
-  const lastSessionGap = useMemo<GoalGapAnalysis | null>(() => {
+  const currentStateGap = useMemo<GoalGapAnalysis | null>(() => {
     if (!aiGoalProfile || !sessionTimeline || sessionTimeline.sessions.length === 0) return null;
-    const last = sessionTimeline.sessions[sessionTimeline.sessions.length - 1];
-    const prevLast = sessionTimeline.sessions.length > 1
-      ? sessionTimeline.sessions[sessionTimeline.sessions.length - 2]
-      : null;
-    return computeGoalGap(aiGoalProfile, last, prevLast);
+    const baseline = sessionTimeline.sessions[0];
+    return computeGoalGap(aiGoalProfile, baseline, null);
   }, [aiGoalProfile, sessionTimeline]);
 
   useEffect(() => {
     if (!onGoalProfileChange) return;
-    onGoalProfileChange(aiGoalProfile, lastSessionGap);
-  }, [aiGoalProfile, lastSessionGap, onGoalProfileChange]);
+    onGoalProfileChange(aiGoalProfile, currentStateGap);
+  }, [aiGoalProfile, currentStateGap, onGoalProfileChange]);
 
   useEffect(() => {
     if (!hasCustomTreatments) {

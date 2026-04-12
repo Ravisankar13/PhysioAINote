@@ -3874,11 +3874,15 @@ export default function SimulationTimelinePanel({
     if (currentRom && currentRom.length > 0) {
       state.currentRom = currentRom;
     }
+    if (activeCondition && activeCondition.phases.length > 0) {
+      state.activePhaseIndex = 0;
+    }
+
     const hasData = state.painMarkers || state.muscleStates || state.compensationPatterns
       || state.posturalDeviations || state.scarSummary || state.chainTensionAverages
       || state.postureMeasurements || state.currentRom;
     return hasData ? state : null;
-  }, [painMarkers, baseOverrides, extractionResult, structuredReasoning, scarSummary, chainTensionAverages, postureMeasurements, currentRom]);
+  }, [painMarkers, baseOverrides, extractionResult, structuredReasoning, scarSummary, chainTensionAverages, postureMeasurements, currentRom, activeCondition]);
 
   const modifiers = useMemo(() => computePatientModifiers(patientFactors, activeCondition), [patientFactors, activeCondition]);
 
@@ -3926,7 +3930,7 @@ export default function SimulationTimelinePanel({
 
     const localConditionProfile = findConditionProfile(conditionNameForAi);
     const localGoals = localConditionProfile
-      ? generateGoalProfile(localConditionProfile, modifiers, undefined, clinicalStateForGoals)
+      ? generateGoalProfile(localConditionProfile, modifiers, undefined, clinicalStateForGoals, conditionNameForAi)
       : generateGenericGoalProfile(conditionNameForAi, clinicalStateForGoals, modifiers);
     setAiGoalProfile(localGoals);
 

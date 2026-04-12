@@ -419,8 +419,10 @@ export function generateGoalProfile(
   patientModifiers?: PatientModifierProfile | null,
   existingRomJointIds?: string[],
   clinicalState?: ClinicalStateInput | null,
+  originalConditionName?: string | null,
 ): RecoveryGoalProfile {
-  const pathOverride = detectPathologyOverride(conditionProfile.conditionName);
+  const nameForOverride = originalConditionName || conditionProfile.conditionName;
+  const pathOverride = detectPathologyOverride(nameForOverride);
   const phaseGating = pathOverride ? resolvePhaseGating(pathOverride, clinicalState?.activePhaseIndex) : null;
 
   const baseRomCeiling = conditionProfile.expectedRomRecoveryPercent ?? 95;
@@ -453,14 +455,19 @@ export function generateGoalProfile(
 
       let targetDeg = Math.round(norm.normalDegrees * (modifiedCeiling / 100));
 
-      if (effectiveRomCaps[jointId] !== undefined) {
+      const hasCap = effectiveRomCaps[jointId] !== undefined;
+      if (hasCap) {
         targetDeg = Math.min(targetDeg, effectiveRomCaps[jointId]);
       }
 
       const currentRomEntry = clinicalState?.currentRom?.find(r => r.jointId === jointId);
-      if (currentRomEntry && currentRomEntry.currentDegrees > 0 && targetDeg > currentRomEntry.currentDegrees) {
-        const improvementRange = targetDeg - currentRomEntry.currentDegrees;
-        targetDeg = Math.round(currentRomEntry.currentDegrees + improvementRange * 0.85);
+      if (currentRomEntry && currentRomEntry.currentDegrees > 0) {
+        if (hasCap) {
+          targetDeg = effectiveRomCaps[jointId];
+        } else if (targetDeg > currentRomEntry.currentDegrees) {
+          const improvementRange = targetDeg - currentRomEntry.currentDegrees;
+          targetDeg = Math.round(currentRomEntry.currentDegrees + improvementRange * 0.85);
+        }
       }
 
       const scarReduction = computeScarRomReduction(jointId, clinicalState?.scarSummary);
@@ -588,14 +595,19 @@ export function generateGenericGoalProfile(
 
     let targetDeg = Math.round(norm.normalDegrees * (romCeilingPct / 100));
 
-    if (genericEffectiveRomCaps[jointId] !== undefined) {
+    const hasGenericCap = genericEffectiveRomCaps[jointId] !== undefined;
+    if (hasGenericCap) {
       targetDeg = Math.min(targetDeg, genericEffectiveRomCaps[jointId]);
     }
 
     const currentRomEntry = clinicalState?.currentRom?.find(r => r.jointId === jointId);
-    if (currentRomEntry && currentRomEntry.currentDegrees > 0 && targetDeg > currentRomEntry.currentDegrees) {
-      const improvementRange = targetDeg - currentRomEntry.currentDegrees;
-      targetDeg = Math.round(currentRomEntry.currentDegrees + improvementRange * 0.85);
+    if (currentRomEntry && currentRomEntry.currentDegrees > 0) {
+      if (hasGenericCap) {
+        targetDeg = genericEffectiveRomCaps[jointId];
+      } else if (targetDeg > currentRomEntry.currentDegrees) {
+        const improvementRange = targetDeg - currentRomEntry.currentDegrees;
+        targetDeg = Math.round(currentRomEntry.currentDegrees + improvementRange * 0.85);
+      }
     }
 
     const scarReduction = computeScarRomReduction(jointId, clinicalState?.scarSummary);
@@ -801,56 +813,93 @@ const POSTURE_DEVIATION_MAP: Record<string, { boneName: string; targetAngle: num
   'trunk rotation': { boneName: 'Spine1_M', targetAngle: 0, axis: 'y' },
 };
 
+function derivePostureAngle(
+  key: string,
+  postureMeasurements: NonNullable<ClinicalStateInput['postureMeasurements']>,
+): number {
+  if (key === 'kyphosis' && postureMeasurements.kyphosisAngle !== undefined) {
+    return postureMeasurements.kyphosisAngle;
+  } else if (key === 'lordosis' && postureMeasurements.lordosisAngle !== undefined) {
+    return postureMeasurements.lordosisAngle;
+  } else if ((key.includes('forward head') || key.includes('head forward')) && postureMeasurements.forwardHeadAngle !== undefined) {
+    return postureMeasurements.forwardHeadAngle;
+  } else if (key.includes('pelvic tilt') && postureMeasurements.pelvicTiltAngle !== undefined) {
+    return Math.abs(postureMeasurements.pelvicTiltAngle);
+  } else if (key === 'scoliosis' && postureMeasurements.scoliosisAngle !== undefined) {
+    return postureMeasurements.scoliosisAngle;
+  }
+  return 0;
+}
+
 function buildPostureTargets(
   clinicalState?: ClinicalStateInput | null,
   pathOverride?: PathologyGoalOverride | null,
 ): PostureGoalTarget[] {
-  if (!clinicalState?.posturalDeviations || clinicalState.posturalDeviations.length === 0) return [];
   const targets: PostureGoalTarget[] = [];
-  const postureMeasurements = clinicalState.postureMeasurements;
+  const postureMeasurements = clinicalState?.postureMeasurements;
+  const hasDeviations = clinicalState?.posturalDeviations && clinicalState.posturalDeviations.length > 0;
 
-  for (const dev of clinicalState.posturalDeviations) {
-    const lower = dev.toLowerCase();
-    for (const [key, mapping] of Object.entries(POSTURE_DEVIATION_MAP)) {
-      if (lower.includes(key)) {
-        let targetAngle = mapping.targetAngle;
+  if (hasDeviations) {
+    for (const dev of clinicalState!.posturalDeviations!) {
+      const lower = dev.toLowerCase();
+      for (const [key, mapping] of Object.entries(POSTURE_DEVIATION_MAP)) {
+        if (lower.includes(key)) {
+          let targetAngle = mapping.targetAngle;
 
-        const tolerance = pathOverride?.postureTolerances?.[key];
-        if (tolerance) {
-          targetAngle = tolerance.acceptableAngle;
-        }
+          const tolerance = pathOverride?.postureTolerances?.[key];
+          if (tolerance) {
+            targetAngle = tolerance.acceptableAngle;
+          }
 
-        if (postureMeasurements && targetAngle === 0) {
-          let currentAngle = 0;
-          if (key === 'kyphosis' && postureMeasurements.kyphosisAngle !== undefined) {
-            currentAngle = postureMeasurements.kyphosisAngle;
-          } else if (key === 'lordosis' && postureMeasurements.lordosisAngle !== undefined) {
-            currentAngle = postureMeasurements.lordosisAngle;
-          } else if (key.includes('forward head') || key.includes('head forward')) {
-            if (postureMeasurements.forwardHeadAngle !== undefined) {
-              currentAngle = postureMeasurements.forwardHeadAngle;
+          if (postureMeasurements && targetAngle === 0) {
+            const currentAngle = derivePostureAngle(key, postureMeasurements);
+            if (currentAngle > 5) {
+              targetAngle = Math.round(currentAngle * 0.3);
             }
-          } else if (key.includes('pelvic tilt') && postureMeasurements.pelvicTiltAngle !== undefined) {
-            currentAngle = Math.abs(postureMeasurements.pelvicTiltAngle);
-          } else if (key === 'scoliosis' && postureMeasurements.scoliosisAngle !== undefined) {
-            currentAngle = postureMeasurements.scoliosisAngle;
           }
 
-          if (currentAngle > 5) {
-            targetAngle = Math.round(currentAngle * 0.3);
-          }
+          targets.push({
+            deviationType: dev,
+            boneName: tolerance?.boneName ?? mapping.boneName,
+            targetAngle,
+            axis: tolerance?.axis ?? mapping.axis,
+          });
+          break;
         }
-
-        targets.push({
-          deviationType: dev,
-          boneName: tolerance?.boneName ?? mapping.boneName,
-          targetAngle,
-          axis: tolerance?.axis ?? mapping.axis,
-        });
-        break;
       }
     }
   }
+
+  if (postureMeasurements) {
+    const addedKeys = new Set(targets.map(t => t.deviationType.toLowerCase()));
+    const measurementEntries: Array<{ key: string; label: string; angle: number }> = [
+      { key: 'kyphosis', label: 'Kyphosis', angle: postureMeasurements.kyphosisAngle ?? 0 },
+      { key: 'lordosis', label: 'Lordosis', angle: postureMeasurements.lordosisAngle ?? 0 },
+      { key: 'forward head', label: 'Forward Head Posture', angle: postureMeasurements.forwardHeadAngle ?? 0 },
+      { key: 'pelvic tilt', label: 'Pelvic Tilt', angle: Math.abs(postureMeasurements.pelvicTiltAngle ?? 0) },
+      { key: 'scoliosis', label: 'Scoliosis', angle: postureMeasurements.scoliosisAngle ?? 0 },
+    ];
+
+    for (const entry of measurementEntries) {
+      if (entry.angle <= 5) continue;
+      const alreadyPresent = Array.from(addedKeys).some(k => k.includes(entry.key));
+      if (alreadyPresent) continue;
+
+      const mapping = POSTURE_DEVIATION_MAP[entry.key];
+      if (!mapping) continue;
+
+      const tolerance = pathOverride?.postureTolerances?.[entry.key];
+      const targetAngle = tolerance?.acceptableAngle ?? Math.round(entry.angle * 0.3);
+
+      targets.push({
+        deviationType: entry.label,
+        boneName: tolerance?.boneName ?? mapping.boneName,
+        targetAngle,
+        axis: tolerance?.axis ?? mapping.axis,
+      });
+    }
+  }
+
   return targets;
 }
 

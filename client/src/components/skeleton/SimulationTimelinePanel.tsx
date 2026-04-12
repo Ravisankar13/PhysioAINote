@@ -1984,6 +1984,9 @@ function RecoveryGoalHeroCard({ goalProfile, totalWeeks, totalSessions, finalGoa
           <div className="flex items-center gap-1.5">
             <Target className="h-4 w-4 text-green-400" />
             <span className="text-[11px] font-bold text-green-300">Final Recovery Goal</span>
+            {isLoading && (
+              <span className="text-[9px] text-green-400/60 animate-pulse ml-1">AI refining...</span>
+            )}
           </div>
           {finalGoalGap && (
             <div className={`text-sm font-bold ${
@@ -2153,7 +2156,6 @@ function SessionTimelineView({
   clinicalState,
   aiGoalProfileOverride,
   aiGoalLoading: aiGoalLoadingProp,
-  aiGoalError: aiGoalErrorProp,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -2167,7 +2169,6 @@ function SessionTimelineView({
   clinicalState?: ClinicalStateInput | null;
   aiGoalProfileOverride: RecoveryGoalProfile | null;
   aiGoalLoading?: boolean;
-  aiGoalError?: string | null;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -3866,7 +3867,6 @@ export default function SimulationTimelinePanel({
 
   const [aiGoalProfile, setAiGoalProfile] = useState<RecoveryGoalProfile | null>(null);
   const [aiGoalLoading, setAiGoalLoading] = useState(false);
-  const [aiGoalError, setAiGoalError] = useState<string | null>(null);
   const aiGoalAbortRef = useRef<AbortController | null>(null);
   const aiGoalCacheRef = useRef<{ key: string; profile: RecoveryGoalProfile } | null>(null);
   const aiGoalDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3882,7 +3882,6 @@ export default function SimulationTimelinePanel({
     if (!conditionNameForAi) {
       setAiGoalProfile(null);
       setAiGoalLoading(false);
-      setAiGoalError(null);
       return;
     }
 
@@ -3908,7 +3907,6 @@ export default function SimulationTimelinePanel({
       ? generateGoalProfile(localConditionProfile, modifiers, undefined, clinicalStateForGoals)
       : generateGenericGoalProfile(conditionNameForAi, clinicalStateForGoals, modifiers);
     setAiGoalProfile(localGoals);
-    setAiGoalError(null);
 
     if (aiGoalDebounceRef.current) {
       clearTimeout(aiGoalDebounceRef.current);
@@ -4162,7 +4160,6 @@ export default function SimulationTimelinePanel({
             clinicalState={clinicalStateForGoals}
             aiGoalProfileOverride={aiGoalProfile}
             aiGoalLoading={aiGoalLoading}
-            aiGoalError={aiGoalError}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (

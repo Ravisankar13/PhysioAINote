@@ -266,10 +266,15 @@ export function generateGenericGoalProfile(
     : 40;
   const painTarget = avgPain > 60 ? 15 : 10;
 
-  const slingTargets: SlingGoalTarget[] = DEFAULT_SLING_NAMES.map(name => ({
-    slingName: name,
-    targetIntegrity: 75,
-  }));
+  const clinicalSlings = clinicalState?.slingAnalysis ?? [];
+  const slingTargets: SlingGoalTarget[] = DEFAULT_SLING_NAMES.map(name => {
+    const clinical = clinicalSlings.find(s => s.slingName === name);
+    let target = 75;
+    if (clinical) {
+      target = clinical.integrity < 50 ? 80 : clinical.integrity < 70 ? 85 : 75;
+    }
+    return { slingName: name, targetIntegrity: target };
+  });
 
   const muscleTensionTargets: MuscleGoalTarget[] = [];
   const keyMuscles = CONDITION_KEY_MUSCLES[detectedCategory] ?? [];

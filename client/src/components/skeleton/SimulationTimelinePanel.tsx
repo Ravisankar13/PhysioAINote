@@ -2156,11 +2156,21 @@ function SessionTimelineView({
         }).filter(rt => rt.currentDegrees < rt.targetDegrees * 0.95)
       : undefined;
 
+    const postureTargets = goalProfile.postureTargets.length > 0
+      ? goalProfile.postureTargets.map(pt => ({
+          boneName: pt.boneName,
+          targetAngle: pt.targetAngle,
+          currentAngle: pt.targetAngle + 10,
+          axis: pt.axis,
+        }))
+      : undefined;
+
     onGoalOverlayChange({
       enabled: true,
       painTargets,
       muscleTargets,
       romTargets,
+      postureTargets,
       overallPct: currentGoalGap.overallAchievementPct,
     });
   }, [goalOverlayEnabled, currentGoalGap, goalProfile, currentSnapshot, onGoalOverlayChange, clinicalState]);

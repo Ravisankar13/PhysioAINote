@@ -35,6 +35,13 @@ export interface FunctionalGoal {
   unit: string;
 }
 
+export interface PostureGoalTarget {
+  deviationType: string;
+  boneName: string;
+  targetAngle: number;
+  axis: 'x' | 'y' | 'z';
+}
+
 export interface RecoveryGoalProfile {
   conditionId: string;
   conditionName: string;
@@ -42,9 +49,12 @@ export interface RecoveryGoalProfile {
   painTarget: number;
   muscleTensionTargets: MuscleGoalTarget[];
   slingTargets: SlingGoalTarget[];
+  postureTargets: PostureGoalTarget[];
   compensationResolutionTarget: number;
   functionalGoals: FunctionalGoal[];
   riskScoreTarget: number;
+  strengthTarget: number;
+  jointStressTarget: number;
   overallRomRecoveryPercent: number;
 }
 
@@ -176,6 +186,13 @@ export function generateGoalProfile(
   const compTarget = clinicalState?.compensationPatterns && clinicalState.compensationPatterns.length > 3
     ? 85 : 90;
 
+  const postureTargets: PostureGoalTarget[] = buildPostureTargets(clinicalState);
+
+  const strengthTarget = conditionProfile.category === 'knee' || conditionProfile.category === 'hip'
+    ? 80 : conditionProfile.category === 'shoulder' ? 75 : 70;
+
+  const jointStressTarget = conditionProfile.recurrenceRiskPercent > 30 ? 25 : 20;
+
   return {
     conditionId: conditionProfile.conditionId,
     conditionName: conditionProfile.conditionName,
@@ -183,9 +200,12 @@ export function generateGoalProfile(
     painTarget,
     muscleTensionTargets,
     slingTargets,
+    postureTargets,
     compensationResolutionTarget: compTarget,
     functionalGoals,
     riskScoreTarget: riskTarget,
+    strengthTarget,
+    jointStressTarget,
     overallRomRecoveryPercent: modifiedCeiling,
   };
 }
@@ -229,6 +249,44 @@ function buildMuscleTensionTargets(
     targets.push({ muscleId, targetTensionMin: targetMin, targetTensionMax: targetMax });
   }
 
+  return targets;
+}
+
+const POSTURE_DEVIATION_MAP: Record<string, { boneName: string; targetAngle: number; axis: 'x' | 'y' | 'z' }> = {
+  kyphosis: { boneName: 'Spine2_M', targetAngle: 0, axis: 'x' },
+  lordosis: { boneName: 'Spine1_M', targetAngle: 0, axis: 'x' },
+  scoliosis: { boneName: 'Spine2_M', targetAngle: 0, axis: 'z' },
+  'forward head': { boneName: 'Neck_M', targetAngle: 0, axis: 'x' },
+  'head forward': { boneName: 'Neck_M', targetAngle: 0, axis: 'x' },
+  'anterior pelvic tilt': { boneName: 'Hip_L', targetAngle: 0, axis: 'x' },
+  'posterior pelvic tilt': { boneName: 'Hip_L', targetAngle: 0, axis: 'x' },
+  'lateral pelvic tilt': { boneName: 'Hip_L', targetAngle: 0, axis: 'z' },
+  'rounded shoulders': { boneName: 'Shoulder_L', targetAngle: 0, axis: 'z' },
+  'shoulder elevation': { boneName: 'Shoulder_L', targetAngle: 0, axis: 'y' },
+  'knee valgus': { boneName: 'LowerLeg_L', targetAngle: 0, axis: 'z' },
+  'knee varus': { boneName: 'LowerLeg_L', targetAngle: 0, axis: 'z' },
+  'flat feet': { boneName: 'Foot_L', targetAngle: 0, axis: 'x' },
+  'pes planus': { boneName: 'Foot_L', targetAngle: 0, axis: 'x' },
+  'trunk rotation': { boneName: 'Spine1_M', targetAngle: 0, axis: 'y' },
+};
+
+function buildPostureTargets(clinicalState?: ClinicalStateInput | null): PostureGoalTarget[] {
+  if (!clinicalState?.posturalDeviations || clinicalState.posturalDeviations.length === 0) return [];
+  const targets: PostureGoalTarget[] = [];
+  for (const dev of clinicalState.posturalDeviations) {
+    const lower = dev.toLowerCase();
+    for (const [key, mapping] of Object.entries(POSTURE_DEVIATION_MAP)) {
+      if (lower.includes(key)) {
+        targets.push({
+          deviationType: dev,
+          boneName: mapping.boneName,
+          targetAngle: mapping.targetAngle,
+          axis: mapping.axis,
+        });
+        break;
+      }
+    }
+  }
   return targets;
 }
 
@@ -456,14 +514,52 @@ export function computeGoalGap(
       : 'stalled',
   });
 
-  const weights = { rom: 0.25, pain: 0.25, sling: 0.15, comp: 0.15, muscle: 0.1, risk: 0.1 };
+  const strengthTarget = goalProfile.strengthTarget;
+  const strengthCurrent = snapshot.muscleStatePredictions.length > 0
+    ? snapshot.muscleStatePredictions.reduce((s, m) => s + clamp(m.predictedTension * 1.2, 0, 100), 0) / snapshot.muscleStatePredictions.length
+    : strengthTarget;
+  const strengthAchievement = strengthTarget > 0
+    ? clamp((strengthCurrent / strengthTarget) * 100, 0, 100)
+    : 100;
+
+  dimensions.push({
+    dimension: 'strength',
+    label: 'Functional Strength',
+    current: Math.round(strengthCurrent),
+    target: strengthTarget,
+    achievementPct: Math.round(strengthAchievement),
+    gap: Math.round(strengthTarget - strengthCurrent),
+    priority: strengthAchievement < 50 ? 'high' : strengthAchievement < 75 ? 'medium' : 'low',
+    trend: 'unknown',
+  });
+
+  const jointStressTarget = goalProfile.jointStressTarget;
+  const jointStressCurrent = snapshot.riskScore * 0.6;
+  const jointStressAchievement = jointStressCurrent <= jointStressTarget
+    ? 100
+    : clamp(((100 - jointStressCurrent) / (100 - jointStressTarget)) * 100, 0, 100);
+
+  dimensions.push({
+    dimension: 'joint_stress',
+    label: 'Joint Stress',
+    current: Math.round(jointStressCurrent),
+    target: jointStressTarget,
+    achievementPct: Math.round(jointStressAchievement),
+    gap: Math.round(jointStressCurrent - jointStressTarget),
+    priority: jointStressAchievement < 50 ? 'high' : jointStressAchievement < 75 ? 'medium' : 'low',
+    trend: 'unknown',
+  });
+
+  const weights = { rom: 0.22, pain: 0.22, sling: 0.13, comp: 0.13, muscle: 0.1, risk: 0.08, strength: 0.07, jointStress: 0.05 };
   const overallAchievementPct = Math.round(
     romAchievement * weights.rom +
     painAchievement * weights.pain +
     slingAchievement * weights.sling +
     compensationAchievement * weights.comp +
     muscleTensionAchievement * weights.muscle +
-    riskAchievement * weights.risk
+    riskAchievement * weights.risk +
+    strengthAchievement * weights.strength +
+    jointStressAchievement * weights.jointStress
   );
 
   const priorityDimensions = dimensions
@@ -539,7 +635,16 @@ export function formatGoalContextForPrompt(
 
   lines.push(`\nPain Target: ≤${goalProfile.painTarget}/100 (0=no pain, 100=worst pain)`);
   lines.push(`Risk Score Target: <${goalProfile.riskScoreTarget}/100`);
+  lines.push(`Strength Target: >${goalProfile.strengthTarget}% of contralateral`);
+  lines.push(`Joint Stress Target: <${goalProfile.jointStressTarget}/100`);
   lines.push(`Compensation Resolution Target: >${goalProfile.compensationResolutionTarget}%`);
+
+  if (goalProfile.postureTargets.length > 0) {
+    lines.push(`\nPosture Correction Targets:`);
+    for (const pt of goalProfile.postureTargets) {
+      lines.push(`  - ${pt.deviationType}: correct ${pt.axis}-axis at ${pt.boneName} toward ${pt.targetAngle}°`);
+    }
+  }
 
   if (goalProfile.slingTargets.length > 0) {
     lines.push(`\nSling Integrity Targets:`);

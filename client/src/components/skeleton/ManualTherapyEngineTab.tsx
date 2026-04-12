@@ -105,6 +105,8 @@ interface ManualTherapyEngineTabProps {
   goalProfile?: RecoveryGoalProfile | null;
   clinicalState?: ClinicalStateInput | null;
   goalGap?: GoalGapAnalysis | null;
+  sessionPrescription?: PrescriptionContext | null;
+  sessionPrescriptionNum?: number | null;
 }
 
 const TISSUE_NAME_TO_MUSCLE_GROUP: Record<string, string[]> = {
@@ -499,7 +501,7 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
   );
 }
 
-export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap }: ManualTherapyEngineTabProps) {
+export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum }: ManualTherapyEngineTabProps) {
   const [plan, setPlan] = useState<ManualTherapyPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1098,9 +1100,29 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
   }
 
   const totalTechniques = plan.techniqueGroups.reduce((sum, g) => sum + g.techniques.length, 0);
+  const activePrescription = sessionPrescription ?? null;
+  const effectiveCtx = activePrescription ?? prescriptionCtx;
 
   return (
     <div className="space-y-2">
+      {activePrescription && sessionPrescriptionNum !== null && sessionPrescriptionNum !== undefined && (
+        <div className="border border-violet-500/40 rounded bg-violet-950/30 px-2.5 py-1.5 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Zap className="h-3 w-3 text-violet-400" />
+            <span className="text-[9px] font-medium text-violet-300">
+              Driven by Session {sessionPrescriptionNum}
+            </span>
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+              {activePrescription.phaseLabel}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[8px] text-violet-400">{activePrescription.mtGradeGuidance.minGrade}–{activePrescription.mtGradeGuidance.maxGrade}</span>
+            <span className="text-[8px] text-gray-500">|</span>
+            <span className="text-[8px] text-violet-400">{Math.round(activePrescription.goalAchievementPct)}% achieved</span>
+          </div>
+        </div>
+      )}
       {prescriptionCtx && showRecoveryContext && (
         <div className="border border-rose-500/30 rounded-lg bg-gradient-to-br from-rose-950/30 to-gray-900/60 p-2 space-y-1.5">
           <div className="flex items-center justify-between">

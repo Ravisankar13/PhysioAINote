@@ -93,6 +93,8 @@ interface ExerciseEngineTabProps {
   goalProfile?: RecoveryGoalProfile | null;
   clinicalState?: ClinicalStateInput | null;
   goalGap?: GoalGapAnalysis | null;
+  sessionPrescription?: PrescriptionContext | null;
+  sessionPrescriptionNum?: number | null;
 }
 
 const GROUP_ICONS: Record<string, typeof Dumbbell> = {
@@ -526,7 +528,7 @@ function CustomExerciseCard({ exercise, index, dosageScalingData }: { exercise: 
   );
 }
 
-export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap }: ExerciseEngineTabProps) {
+export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum }: ExerciseEngineTabProps) {
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -542,6 +544,8 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
   const [showDesignRationale, setShowDesignRationale] = useState(false);
   const customAbortRef = useRef<AbortController | null>(null);
   const [showRecoveryContext, setShowRecoveryContext] = useState(true);
+
+  const activePrescription = sessionPrescription ?? null;
 
   const prescriptionCtx = useMemo<PrescriptionContext | null>(() => {
     if (!goalProfile || !clinicalState) return null;
@@ -839,7 +843,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
               </div>
 
               {customResult.customExercises.map((ex, i) => (
-                <CustomExerciseCard key={i} exercise={ex} index={i} dosageScalingData={prescriptionCtx?.dosageScaling} />
+                <CustomExerciseCard key={i} exercise={ex} index={i} dosageScalingData={effectiveCtx?.dosageScaling} />
               ))}
 
               {(customResult.designRationale || customResult.safetyNotes) && (
@@ -898,8 +902,28 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
 
   const totalExercises = plan.exerciseGroups.reduce((sum, g) => sum + g.exercises.length, 0);
 
+  const effectiveCtx = activePrescription ?? prescriptionCtx;
+
   return (
     <div className="space-y-2">
+      {activePrescription && sessionPrescriptionNum !== null && sessionPrescriptionNum !== undefined && (
+        <div className="border border-violet-500/40 rounded bg-violet-950/30 px-2.5 py-1.5 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Zap className="h-3 w-3 text-violet-400" />
+            <span className="text-[9px] font-medium text-violet-300">
+              Driven by Session {sessionPrescriptionNum}
+            </span>
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+              {activePrescription.phaseLabel}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[8px] text-violet-400">{activePrescription.dosageScaling.intensityLabel}</span>
+            <span className="text-[8px] text-gray-500">|</span>
+            <span className="text-[8px] text-violet-400">{Math.round(activePrescription.goalAchievementPct)}% achieved</span>
+          </div>
+        </div>
+      )}
       {prescriptionCtx && showRecoveryContext && (
         <div className="border border-emerald-500/30 rounded-lg bg-gradient-to-br from-emerald-950/30 to-gray-900/60 p-2 space-y-1.5">
           <div className="flex items-center justify-between">
@@ -997,9 +1021,10 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
               {isExpanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0" />}
             </button>
             {isExpanded && (() => {
-              const filtered = prescriptionCtx && prescriptionCtx.contraindications.length > 0
+              const ctxForFilter = effectiveCtx;
+              const filtered = ctxForFilter && ctxForFilter.contraindications.length > 0
                 ? group.exercises.filter(ex =>
-                    !prescriptionCtx.contraindications.some(c =>
+                    !ctxForFilter.contraindications.some(c =>
                       ex.name.toLowerCase().includes(c.toLowerCase()) ||
                       (ex.contraindications && ex.contraindications.toLowerCase().includes(c.toLowerCase()))
                     ))
@@ -1014,7 +1039,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
                     </div>
                   )}
                   {filtered.map((ex, i) => {
-                    const matchingGap = prescriptionCtx?.goalGaps.find(g =>
+                    const matchingGap = ctxForFilter?.goalGaps.find(g =>
                       ex.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
                       ex.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
                     );
@@ -1028,7 +1053,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
                             </span>
                           </div>
                         )}
-                        <ExerciseCard exercise={ex} index={i} dosageScalingData={prescriptionCtx?.dosageScaling} />
+                        <ExerciseCard exercise={ex} index={i} dosageScalingData={effectiveCtx?.dosageScaling} />
                       </div>
                     );
                   })}

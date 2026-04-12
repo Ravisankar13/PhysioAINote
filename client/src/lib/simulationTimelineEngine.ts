@@ -738,6 +738,7 @@ export interface SessionSnapshot {
   isSetbackSession: boolean;
   goalAchievementPct?: number;
   goalDimensions?: Array<{ dimension: string; label: string; achievementPct: number; gap: number; current: number; target: number; priority: string; trend: string }>;
+  prescriptionContext?: import('./prescriptionAdapterEngine').PrescriptionContext;
 }
 
 export interface SessionApplyPayload {

@@ -81,6 +81,7 @@ import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
 import type { CustomExercise } from "./ExerciseEngineTab";
 import type { CustomTechnique } from "./ManualTherapyEngineTab";
 import { computeGoalGap, generateGoalProfile, generateGenericGoalProfile, detectPathologyOverride, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput, type ScarSummaryEntry, type ChainTensionEntry, type PostureMeasurements } from "@/lib/goalStateEngine";
+import { computeTimelinePrescriptions, getExerciseById, type TimelinePrescriptionSummary, type PrescriptionContext } from "@/lib/prescriptionAdapterEngine";
 
 interface GoalOverlayData {
   enabled: boolean;
@@ -140,6 +141,7 @@ interface SimulationTimelinePanelProps {
   structuredReasoning?: StructuredReasoningResult | null;
   onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
   onGoalProfileChange?: (profile: RecoveryGoalProfile | null, gap: GoalGapAnalysis | null) => void;
+  onSessionPrescriptionSelect?: (ctx: PrescriptionContext | null, sessionNumber: number | null) => void;
   scarSummary?: ScarSummaryEntry[];
   chainTensionAverages?: ChainTensionEntry[];
   postureMeasurements?: PostureMeasurements;
@@ -2228,6 +2230,8 @@ function SessionTimelineView({
   clinicalState,
   aiGoalProfileOverride,
   aiGoalLoading: aiGoalLoadingProp,
+  timelinePrescriptions,
+  onSessionPrescriptionSelect,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -2241,13 +2245,16 @@ function SessionTimelineView({
   clinicalState?: ClinicalStateInput | null;
   aiGoalProfileOverride: RecoveryGoalProfile | null;
   aiGoalLoading?: boolean;
+  timelinePrescriptions?: TimelinePrescriptionSummary | null;
+  onSessionPrescriptionSelect?: (sessionNumber: number | null) => void;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals' | null>('curve');
+  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals' | 'rxplan' | null>('curve');
   const [expandedSessionCard, setExpandedSessionCard] = useState<number | null>(null);
   const [appliedSession, setAppliedSession] = useState<number | null>(null);
   const [goalOverlayEnabled, setGoalOverlayEnabled] = useState(false);
+  const [rxDrivingSession, setRxDrivingSession] = useState<number | null>(null);
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -3127,6 +3134,167 @@ function SessionTimelineView({
         </div>
       )}
 
+      {timelinePrescriptions && (
+        <div className="bg-gray-800/30 rounded border border-gray-700/30 overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between p-2 text-[9px] font-medium text-gray-300 hover:bg-gray-700/20"
+            onClick={() => setExpandedSection(expandedSection === 'rxplan' ? null : 'rxplan')}
+          >
+            <span className="flex items-center gap-1.5">
+              <ClipboardCheck className="h-3 w-3 text-violet-400" />
+              Rx Evolution
+              <Badge variant="outline" className="text-[7px] px-1 py-0 border-violet-500/40 text-violet-400 ml-1">
+                {timelinePrescriptions.exerciseProgression.length} Ex + {timelinePrescriptions.manualProgression.length} MT
+              </Badge>
+            </span>
+            {expandedSection === 'rxplan' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {expandedSection === 'rxplan' && (
+            <div className="p-2 bg-gray-900/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-gray-500 uppercase tracking-wider">Treatment Progression</span>
+                {rxDrivingSession !== null ? (
+                  <button
+                    onClick={() => { setRxDrivingSession(null); onSessionPrescriptionSelect?.(null); }}
+                    className="text-[7px] px-1.5 py-0.5 rounded border bg-violet-500/20 border-violet-500/50 text-violet-400"
+                  >
+                    Driving S{rxDrivingSession} — Clear
+                  </button>
+                ) : (
+                  <span className="text-[7px] text-gray-600">Click session to drive Exercise/MT tabs</span>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-[8px] text-gray-400 font-medium flex items-center gap-1">
+                  <Dumbbell className="h-3 w-3 text-cyan-400" /> Exercise Progression
+                </div>
+                {timelinePrescriptions.exerciseProgression.length === 0 ? (
+                  <div className="text-[8px] text-gray-600 italic">No exercises prescribed</div>
+                ) : (
+                  <div className="space-y-1">
+                    {timelinePrescriptions.exerciseProgression.map(ep => (
+                      <div key={ep.exerciseId} className="bg-gray-800/50 rounded border border-gray-700/30 p-1.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[8px] text-gray-200 font-medium truncate max-w-[60%]">{ep.exerciseName}</span>
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline" className={`text-[6px] px-1 py-0 ${
+                              ep.status === 'active' ? 'border-green-500/40 text-green-400' : 'border-gray-600/40 text-gray-500'
+                            }`}>
+                              {ep.status === 'active' ? 'Active' : 'Discontinued'}
+                            </Badge>
+                            <span className="text-[7px] text-gray-500">S{ep.firstSession}–S{ep.lastSession}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-0.5 items-center">
+                          {sessionTimeline.sessions.map(s => {
+                            const range = ep.sessionRanges.find(r => s.sessionNumber >= r.startSession && s.sessionNumber <= r.endSession);
+                            if (!range) return (
+                              <div key={s.sessionNumber} className="h-2 flex-1 rounded-sm bg-gray-800/80" title={`S${s.sessionNumber}: not prescribed`} />
+                            );
+                            const isNew = range.startSession === s.sessionNumber && s.sessionNumber === ep.firstSession;
+                            const isProgressed = range.startSession === s.sessionNumber && s.sessionNumber > ep.firstSession;
+                            return (
+                              <div
+                                key={s.sessionNumber}
+                                className={`h-2 flex-1 rounded-sm cursor-pointer transition-all ${
+                                  range.dosageLabel === 'light' ? 'bg-blue-400/60' :
+                                  range.dosageLabel === 'light-moderate' ? 'bg-cyan-400/60' :
+                                  range.dosageLabel === 'moderate' ? 'bg-green-400/60' :
+                                  range.dosageLabel === 'progressive' ? 'bg-amber-400/60' : 'bg-violet-400/60'
+                                } ${rxDrivingSession === s.sessionNumber ? 'ring-1 ring-violet-400 scale-y-150' : 'hover:scale-y-125'}`}
+                                title={`S${s.sessionNumber}: ${range.dosageLabel}${isNew ? ' (New)' : isProgressed ? ' (Progressed)' : ''}`}
+                                onClick={() => { setRxDrivingSession(s.sessionNumber); onSessionPrescriptionSelect?.(s.sessionNumber); }}
+                              />
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-[6px] text-gray-600">{ep.category}</span>
+                          <span className="text-[6px] text-gray-700">|</span>
+                          <span className="text-[6px] text-gray-600">{ep.bodyParts.join(', ')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-[8px] text-gray-400 font-medium flex items-center gap-1">
+                  <Hand className="h-3 w-3 text-pink-400" /> Manual Therapy Progression
+                </div>
+                {timelinePrescriptions.manualProgression.length === 0 ? (
+                  <div className="text-[8px] text-gray-600 italic">No manual therapy prescribed</div>
+                ) : (
+                  <div className="space-y-1">
+                    {timelinePrescriptions.manualProgression.map(mp => (
+                      <div key={mp.exerciseId} className="bg-gray-800/50 rounded border border-gray-700/30 p-1.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[8px] text-gray-200 font-medium truncate max-w-[60%]">{mp.techniqueName}</span>
+                          <span className="text-[7px] text-gray-500">S{mp.firstSession}–S{mp.lastSession}</span>
+                        </div>
+                        <div className="flex gap-0.5 items-center">
+                          {sessionTimeline.sessions.map(s => {
+                            const isInRange = s.sessionNumber >= mp.firstSession && s.sessionNumber <= mp.lastSession;
+                            const gradeEntry = mp.gradeProgression.find((g, i) => {
+                              const next = mp.gradeProgression[i + 1];
+                              return s.sessionNumber >= g.session && (!next || s.sessionNumber < next.session);
+                            });
+                            if (!isInRange || !gradeEntry) return (
+                              <div key={s.sessionNumber} className="h-2 flex-1 rounded-sm bg-gray-800/80" title={`S${s.sessionNumber}: not prescribed`} />
+                            );
+                            const gradeNum = gradeEntry.maxGrade.replace('Grade ', '');
+                            return (
+                              <div
+                                key={s.sessionNumber}
+                                className={`h-2 flex-1 rounded-sm cursor-pointer transition-all ${
+                                  gradeNum.includes('I') && !gradeNum.includes('II') ? 'bg-blue-400/60' :
+                                  gradeNum === 'II' ? 'bg-cyan-400/60' :
+                                  gradeNum.includes('III') ? 'bg-amber-400/60' : 'bg-red-400/60'
+                                } ${rxDrivingSession === s.sessionNumber ? 'ring-1 ring-violet-400 scale-y-150' : 'hover:scale-y-125'}`}
+                                title={`S${s.sessionNumber}: ${gradeEntry.minGrade}–${gradeEntry.maxGrade}`}
+                                onClick={() => { setRxDrivingSession(s.sessionNumber); onSessionPrescriptionSelect?.(s.sessionNumber); }}
+                              />
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {mp.gradeProgression.map((g, i) => (
+                            <Badge key={i} variant="outline" className={`text-[6px] px-1 py-0 ${
+                              i === mp.gradeProgression.length - 1 ? 'border-emerald-500/40 text-emerald-400' : 'border-gray-600/40 text-gray-500'
+                            }`}>
+                              S{g.session}: {g.minGrade}–{g.maxGrade}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-700/30 pt-1.5">
+                <div className="text-[7px] text-gray-600 mb-1">Dosage Legend</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: 'Light', color: 'bg-blue-400/60' },
+                    { label: 'Light-Mod', color: 'bg-cyan-400/60' },
+                    { label: 'Moderate', color: 'bg-green-400/60' },
+                    { label: 'Progressive', color: 'bg-amber-400/60' },
+                  ].map(l => (
+                    <div key={l.label} className="flex items-center gap-0.5">
+                      <div className={`w-2 h-2 rounded-sm ${l.color}`} />
+                      <span className="text-[6px] text-gray-500">{l.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="bg-gray-800/30 rounded border border-gray-700/30 p-2">
         <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">Before / After — Multi-Dimensional</div>
         <div className="grid grid-cols-2 gap-2">
@@ -3843,6 +4011,7 @@ export default function SimulationTimelinePanel({
   structuredReasoning,
   onGoalOverlayChange,
   onGoalProfileChange,
+  onSessionPrescriptionSelect,
   scarSummary,
   chainTensionAverages,
   postureMeasurements,
@@ -4151,6 +4320,26 @@ export default function SimulationTimelinePanel({
     onGoalProfileChange(aiGoalProfile, currentStateGap);
   }, [aiGoalProfile, currentStateGap, onGoalProfileChange]);
 
+  const timelinePrescriptions = useMemo<TimelinePrescriptionSummary | null>(() => {
+    if (!sessionTimeline || !aiGoalProfile || sessionTimeline.sessions.length === 0) return null;
+    try {
+      return computeTimelinePrescriptions(sessionTimeline.sessions, aiGoalProfile, currentStateGap);
+    } catch (e) {
+      console.warn('[SimTimeline] Prescription computation failed:', e);
+      return null;
+    }
+  }, [sessionTimeline, aiGoalProfile, currentStateGap]);
+
+  const handleSessionPrescriptionSelect = useCallback((sessionNumber: number | null) => {
+    if (!onSessionPrescriptionSelect) return;
+    if (sessionNumber === null || !timelinePrescriptions) {
+      onSessionPrescriptionSelect(null, null);
+      return;
+    }
+    const ctx = timelinePrescriptions.sessionPrescriptions.find(p => p.sessionNumber === sessionNumber) ?? null;
+    onSessionPrescriptionSelect(ctx, sessionNumber);
+  }, [onSessionPrescriptionSelect, timelinePrescriptions]);
+
   useEffect(() => {
     if (!hasCustomTreatments) {
       setSessionTimeline(null);
@@ -4318,6 +4507,8 @@ export default function SimulationTimelinePanel({
             clinicalState={clinicalStateForGoals}
             aiGoalProfileOverride={aiGoalProfile}
             aiGoalLoading={aiGoalLoading}
+            timelinePrescriptions={timelinePrescriptions}
+            onSessionPrescriptionSelect={handleSessionPrescriptionSelect}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (

@@ -448,3 +448,213 @@ export function formatPrescriptionSummary(ctx: PrescriptionContext): string {
 
   return lines.join('\n');
 }
+
+const RECOVERY_PHASE_TO_INDEX: Record<string, number> = {
+  'Acute/Protective': 0,
+  'Proliferative': 1,
+  'Remodeling': 2,
+  'Functional': 3,
+  'Return to Activity': 3,
+};
+
+export interface TimelinePrescriptionSummary {
+  sessionPrescriptions: PrescriptionContext[];
+  exerciseProgression: ExerciseProgressionEntry[];
+  manualProgression: ManualProgressionEntry[];
+}
+
+export interface ExerciseProgressionEntry {
+  exerciseId: string;
+  exerciseName: string;
+  category: string;
+  bodyParts: string[];
+  sessionRanges: Array<{
+    startSession: number;
+    endSession: number;
+    dosageLabel: string;
+    setsMultiplier: number;
+  }>;
+  firstSession: number;
+  lastSession: number;
+  status: 'active' | 'discontinued';
+}
+
+export interface ManualProgressionEntry {
+  exerciseId: string;
+  techniqueName: string;
+  bodyParts: string[];
+  gradeProgression: Array<{
+    session: number;
+    minGrade: string;
+    maxGrade: string;
+  }>;
+  firstSession: number;
+  lastSession: number;
+}
+
+export function computeTimelinePrescriptions(
+  sessions: SessionSnapshot[],
+  goalProfile: RecoveryGoalProfile,
+  baseGoalGap: GoalGapAnalysis | null,
+): TimelinePrescriptionSummary {
+  const sessionPrescriptions: PrescriptionContext[] = [];
+
+  for (const session of sessions) {
+    const phaseIndex = RECOVERY_PHASE_TO_INDEX[session.recoveryPhaseLabel] ?? 0;
+
+    const maxPain = session.painMarkerPredictions.length > 0
+      ? Math.max(...session.painMarkerPredictions.map(p => p.predictedSeverity))
+      : session.painPrediction;
+
+    const clinicalState: ClinicalStateInput = {
+      painMarkers: session.painMarkerPredictions.map(p => ({
+        boneName: p.markerLabel ?? 'unknown',
+        intensity: p.predictedSeverity,
+      })),
+      posturalDeviations: [],
+      activePhaseIndex: phaseIndex,
+    };
+
+    const sessionGap: GoalGapAnalysis | null = session.goalDimensions && session.goalAchievementPct !== undefined
+      ? {
+          timestamp: Date.now(),
+          sessionNumber: session.sessionNumber,
+          overallAchievementPct: session.goalAchievementPct,
+          dimensions: session.goalDimensions.map(d => ({
+            dimension: d.dimension,
+            label: d.label,
+            current: d.current,
+            target: d.target,
+            achievementPct: d.achievementPct,
+            gap: d.gap,
+            priority: d.priority as 'high' | 'medium' | 'low',
+            trend: d.trend as 'improving' | 'stalled' | 'worsening' | 'unknown',
+          })),
+          priorityDimensions: [],
+          romAchievementPct: 0,
+          painAchievementPct: maxPain <= goalProfile.painTarget ? 100 : Math.max(0, (1 - (maxPain - goalProfile.painTarget) / 100) * 100),
+          slingAchievementPct: 0,
+          compensationAchievementPct: 0,
+          muscleTensionAchievementPct: 0,
+          riskAchievementPct: 0,
+          goalsMet: session.goalAchievementPct >= 95,
+          estimatedSessionsRemaining: null,
+          narrative: '',
+        }
+      : baseGoalGap;
+
+    const ctx = buildPrescriptionContext(goalProfile, clinicalState, sessionGap, session);
+    sessionPrescriptions.push(ctx);
+  }
+
+  const exerciseProgression = buildExerciseProgression(sessionPrescriptions);
+  const manualProgression = buildManualProgression(sessionPrescriptions);
+
+  return { sessionPrescriptions, exerciseProgression, manualProgression };
+}
+
+function buildExerciseProgression(prescriptions: PrescriptionContext[]): ExerciseProgressionEntry[] {
+  const exerciseSessionMap = new Map<string, { sessions: number[]; dosageLabels: Map<number, string>; setsMultipliers: Map<number, number> }>();
+
+  for (const ctx of prescriptions) {
+    const sessionNum = ctx.sessionNumber ?? 0;
+    for (const exId of ctx.recommendedExerciseIds) {
+      let entry = exerciseSessionMap.get(exId);
+      if (!entry) {
+        entry = { sessions: [], dosageLabels: new Map(), setsMultipliers: new Map() };
+        exerciseSessionMap.set(exId, entry);
+      }
+      entry.sessions.push(sessionNum);
+      entry.dosageLabels.set(sessionNum, ctx.dosageScaling.intensityLabel);
+      entry.setsMultipliers.set(sessionNum, ctx.dosageScaling.setsMultiplier);
+    }
+  }
+
+  const result: ExerciseProgressionEntry[] = [];
+  for (const [exId, data] of exerciseSessionMap) {
+    const catalogEntry = EXERCISE_CATALOG.find(e => e.id === exId);
+    if (!catalogEntry) continue;
+
+    const sortedSessions = [...data.sessions].sort((a, b) => a - b);
+    const lastPrescriptionSession = prescriptions.length > 0 ? (prescriptions[prescriptions.length - 1].sessionNumber ?? prescriptions.length) : 0;
+
+    const ranges: ExerciseProgressionEntry['sessionRanges'] = [];
+    let rangeStart = sortedSessions[0];
+    let currentDosage = data.dosageLabels.get(rangeStart) ?? 'moderate';
+    let currentMult = data.setsMultipliers.get(rangeStart) ?? 1;
+
+    for (let i = 1; i < sortedSessions.length; i++) {
+      const s = sortedSessions[i];
+      const dosage = data.dosageLabels.get(s) ?? 'moderate';
+      if (dosage !== currentDosage || s - sortedSessions[i - 1] > 1) {
+        ranges.push({ startSession: rangeStart, endSession: sortedSessions[i - 1], dosageLabel: currentDosage, setsMultiplier: currentMult });
+        rangeStart = s;
+        currentDosage = dosage;
+        currentMult = data.setsMultipliers.get(s) ?? 1;
+      }
+    }
+    ranges.push({ startSession: rangeStart, endSession: sortedSessions[sortedSessions.length - 1], dosageLabel: currentDosage, setsMultiplier: currentMult });
+
+    result.push({
+      exerciseId: exId,
+      exerciseName: catalogEntry.name,
+      category: catalogEntry.category,
+      bodyParts: catalogEntry.bodyParts,
+      sessionRanges: ranges,
+      firstSession: sortedSessions[0],
+      lastSession: sortedSessions[sortedSessions.length - 1],
+      status: sortedSessions[sortedSessions.length - 1] >= lastPrescriptionSession ? 'active' : 'discontinued',
+    });
+  }
+
+  result.sort((a, b) => a.firstSession - b.firstSession);
+  return result;
+}
+
+function buildManualProgression(prescriptions: PrescriptionContext[]): ManualProgressionEntry[] {
+  const mtSessionMap = new Map<string, { sessions: number[]; grades: Map<number, { min: string; max: string }> }>();
+
+  for (const ctx of prescriptions) {
+    const sessionNum = ctx.sessionNumber ?? 0;
+    for (const mtId of ctx.recommendedManualIds) {
+      let entry = mtSessionMap.get(mtId);
+      if (!entry) {
+        entry = { sessions: [], grades: new Map() };
+        mtSessionMap.set(mtId, entry);
+      }
+      entry.sessions.push(sessionNum);
+      entry.grades.set(sessionNum, { min: ctx.mtGradeGuidance.minGrade, max: ctx.mtGradeGuidance.maxGrade });
+    }
+  }
+
+  const result: ManualProgressionEntry[] = [];
+  for (const [mtId, data] of mtSessionMap) {
+    const catalogEntry = EXERCISE_CATALOG.find(e => e.id === mtId);
+    if (!catalogEntry) continue;
+
+    const sortedSessions = [...data.sessions].sort((a, b) => a - b);
+    const gradeProgression: ManualProgressionEntry['gradeProgression'] = [];
+    let lastGrade = '';
+    for (const s of sortedSessions) {
+      const g = data.grades.get(s);
+      if (!g) continue;
+      const gradeKey = `${g.min}-${g.max}`;
+      if (gradeKey !== lastGrade) {
+        gradeProgression.push({ session: s, minGrade: g.min, maxGrade: g.max });
+        lastGrade = gradeKey;
+      }
+    }
+
+    result.push({
+      exerciseId: mtId,
+      techniqueName: catalogEntry.name,
+      bodyParts: catalogEntry.bodyParts,
+      gradeProgression,
+      firstSession: sortedSessions[0],
+      lastSession: sortedSessions[sortedSessions.length - 1],
+    });
+  }
+
+  result.sort((a, b) => a.firstSession - b.firstSession);
+  return result;
+}

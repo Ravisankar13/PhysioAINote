@@ -696,6 +696,8 @@ export default function PhysioGPT() {
   const [customManualTherapyResult, setCustomManualTherapyResult] = useState<import("@/components/skeleton/ManualTherapyEngineTab").CustomManualTherapyResult | null>(null);
   const [activeGoalProfile, setActiveGoalProfile] = useState<import("@/lib/goalStateEngine").RecoveryGoalProfile | null>(null);
   const [activeGoalGap, setActiveGoalGap] = useState<import("@/lib/goalStateEngine").GoalGapAnalysis | null>(null);
+  const [sessionPrescriptionCtx, setSessionPrescriptionCtx] = useState<import("@/lib/prescriptionAdapterEngine").PrescriptionContext | null>(null);
+  const [sessionPrescriptionNum, setSessionPrescriptionNum] = useState<number | null>(null);
   const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
   const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
@@ -3612,6 +3614,11 @@ ${ddxList}`;
   const handleGoalProfileChange = useCallback((profile: import("@/lib/goalStateEngine").RecoveryGoalProfile | null, gap: import("@/lib/goalStateEngine").GoalGapAnalysis | null) => {
     setActiveGoalProfile(profile);
     setActiveGoalGap(gap);
+  }, []);
+
+  const handleSessionPrescriptionSelect = useCallback((ctx: import("@/lib/prescriptionAdapterEngine").PrescriptionContext | null, sessionNumber: number | null) => {
+    setSessionPrescriptionCtx(ctx);
+    setSessionPrescriptionNum(sessionNumber);
   }, []);
 
   const exerciseMtActivePhaseIndex = useMemo(() => {
@@ -8564,6 +8571,8 @@ ${ddxList}`;
                       goalProfile={activeGoalProfile}
                       clinicalState={exerciseMtClinicalState}
                       goalGap={activeGoalGap}
+                      sessionPrescription={sessionPrescriptionCtx}
+                      sessionPrescriptionNum={sessionPrescriptionNum}
                     />
                   )}
                   {mechanismActiveTab === 'manualRx' && (
@@ -8592,6 +8601,8 @@ ${ddxList}`;
                       goalProfile={activeGoalProfile}
                       clinicalState={exerciseMtClinicalState}
                       goalGap={activeGoalGap}
+                      sessionPrescription={sessionPrescriptionCtx}
+                      sessionPrescriptionNum={sessionPrescriptionNum}
                     />
                   )}
                   {mechanismActiveTab === 'electroRx' && (
@@ -8657,6 +8668,7 @@ ${ddxList}`;
                       structuredReasoning={structuredReasoningData}
                       onGoalOverlayChange={handleGoalOverlayChange}
                       onGoalProfileChange={handleGoalProfileChange}
+                      onSessionPrescriptionSelect={handleSessionPrescriptionSelect}
                       scarSummary={scarSummaryForGoals}
                       chainTensionAverages={chainEffects.length > 0 ? chainEffects : undefined}
                       postureMeasurements={postureMeasurementsForGoals}

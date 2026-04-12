@@ -2782,15 +2782,26 @@ function SessionTimelineView({
                   </div>
                 )}
                 {goalProfile.muscleTensionTargets && goalProfile.muscleTensionTargets.length > 0 && (
-                  <div className="flex items-center justify-between text-[8px]">
-                    <span className="text-gray-400">Muscle Targets</span>
-                    <span className="text-emerald-400 font-medium">{goalProfile.muscleTensionTargets.length} groups</span>
+                  <div className="space-y-0.5">
+                    {goalProfile.muscleTensionTargets.slice(0, 4).map((mt, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-[8px]">
+                        <span className="text-gray-400 truncate max-w-[55%]">{mt.muscleId.replace(/_/g, ' ')}</span>
+                        <span className="text-emerald-400 font-medium">{mt.targetTensionMin}-{mt.targetTensionMax}%</span>
+                      </div>
+                    ))}
+                    {goalProfile.muscleTensionTargets.length > 4 && (
+                      <div className="text-[7px] text-gray-600">+{goalProfile.muscleTensionTargets.length - 4} more</div>
+                    )}
                   </div>
                 )}
                 {goalProfile.slingTargets && goalProfile.slingTargets.length > 0 && (
-                  <div className="flex items-center justify-between text-[8px]">
-                    <span className="text-gray-400">Sling Integrity</span>
-                    <span className="text-violet-400 font-medium">≥ {goalProfile.slingTargets[0].targetIntegrity}%</span>
+                  <div className="space-y-0.5">
+                    {goalProfile.slingTargets.map((st, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-[8px]">
+                        <span className="text-gray-400 truncate max-w-[55%]">{st.slingName}</span>
+                        <span className="text-violet-400 font-medium">≥ {st.targetIntegrity}%</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

@@ -107,6 +107,8 @@ interface ManualTherapyEngineTabProps {
   goalGap?: GoalGapAnalysis | null;
   sessionPrescription?: PrescriptionContext | null;
   sessionPrescriptionNum?: number | null;
+  triggerGenerate?: number;
+  onGenerateStatusChange?: (loading: boolean) => void;
 }
 
 const TISSUE_NAME_TO_MUSCLE_GROUP: Record<string, string[]> = {
@@ -501,7 +503,7 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
   );
 }
 
-export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum }: ManualTherapyEngineTabProps) {
+export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, triggerGenerate, onGenerateStatusChange }: ManualTherapyEngineTabProps) {
   const [plan, setPlan] = useState<ManualTherapyPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -697,6 +699,16 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       if (!controller.signal.aborted) setLoading(false);
     }
   }, [buildPayload]);
+
+  useEffect(() => {
+    if (triggerGenerate && triggerGenerate > 0) {
+      generatePlan();
+    }
+  }, [triggerGenerate]);
+
+  useEffect(() => {
+    onGenerateStatusChange?.(loading);
+  }, [loading, onGenerateStatusChange]);
 
   const designCustomTechniques = useCallback(async () => {
     if (customAbortRef.current) customAbortRef.current.abort();

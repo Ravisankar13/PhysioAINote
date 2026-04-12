@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
 import { Dumbbell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Sparkles, Zap, ArrowRight, Clock, Activity, ShieldAlert, Crosshair, Image, BarChart3 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -95,6 +95,8 @@ interface ExerciseEngineTabProps {
   goalGap?: GoalGapAnalysis | null;
   sessionPrescription?: PrescriptionContext | null;
   sessionPrescriptionNum?: number | null;
+  triggerGenerate?: number;
+  onGenerateStatusChange?: (loading: boolean) => void;
 }
 
 const GROUP_ICONS: Record<string, typeof Dumbbell> = {
@@ -528,7 +530,7 @@ function CustomExerciseCard({ exercise, index, dosageScalingData }: { exercise: 
   );
 }
 
-export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum }: ExerciseEngineTabProps) {
+export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, triggerGenerate, onGenerateStatusChange }: ExerciseEngineTabProps) {
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -682,6 +684,16 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
       if (!controller.signal.aborted) setLoading(false);
     }
   }, [buildPayload]);
+
+  useEffect(() => {
+    if (triggerGenerate && triggerGenerate > 0) {
+      generatePlan();
+    }
+  }, [triggerGenerate]);
+
+  useEffect(() => {
+    onGenerateStatusChange?.(loading);
+  }, [loading, onGenerateStatusChange]);
 
   const designCustomExercises = useCallback(async () => {
     if (customAbortRef.current) customAbortRef.current.abort();

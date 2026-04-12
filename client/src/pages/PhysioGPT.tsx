@@ -698,6 +698,12 @@ export default function PhysioGPT() {
   const [activeGoalGap, setActiveGoalGap] = useState<import("@/lib/goalStateEngine").GoalGapAnalysis | null>(null);
   const [sessionPrescriptionCtx, setSessionPrescriptionCtx] = useState<import("@/lib/prescriptionAdapterEngine").PrescriptionContext | null>(null);
   const [sessionPrescriptionNum, setSessionPrescriptionNum] = useState<number | null>(null);
+  const [triggerExerciseGenerate, setTriggerExerciseGenerate] = useState(0);
+  const [triggerMTGenerate, setTriggerMTGenerate] = useState(0);
+  const [exerciseGeneratingSession, setExerciseGeneratingSession] = useState<number | null>(null);
+  const [mtGeneratingSession, setMtGeneratingSession] = useState<number | null>(null);
+  const [exerciseGeneratedSessions, setExerciseGeneratedSessions] = useState<Set<number>>(new Set());
+  const [mtGeneratedSessions, setMtGeneratedSessions] = useState<Set<number>>(new Set());
   const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
   const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
@@ -3620,6 +3626,32 @@ ${ddxList}`;
     setSessionPrescriptionCtx(ctx);
     setSessionPrescriptionNum(sessionNumber);
   }, []);
+
+  const handleTriggerExerciseGenerate = useCallback((sessionNumber: number) => {
+    setMechanismActiveTab('exercise');
+    setTriggerExerciseGenerate(prev => prev + 1);
+    setExerciseGeneratingSession(sessionNumber);
+  }, []);
+
+  const handleTriggerMTGenerate = useCallback((sessionNumber: number) => {
+    setMechanismActiveTab('manualRx');
+    setTriggerMTGenerate(prev => prev + 1);
+    setMtGeneratingSession(sessionNumber);
+  }, []);
+
+  const handleExerciseGenerateStatusChange = useCallback((loading: boolean) => {
+    if (!loading && exerciseGeneratingSession !== null) {
+      setExerciseGeneratedSessions(prev => new Set(prev).add(exerciseGeneratingSession));
+      setExerciseGeneratingSession(null);
+    }
+  }, [exerciseGeneratingSession]);
+
+  const handleMTGenerateStatusChange = useCallback((loading: boolean) => {
+    if (!loading && mtGeneratingSession !== null) {
+      setMtGeneratedSessions(prev => new Set(prev).add(mtGeneratingSession));
+      setMtGeneratingSession(null);
+    }
+  }, [mtGeneratingSession]);
 
   const exerciseMtActivePhaseIndex = useMemo(() => {
     if (!treatmentPlanData || !treatmentPlanData.phases || treatmentPlanData.phases.length === 0) return 0;
@@ -8573,6 +8605,8 @@ ${ddxList}`;
                       goalGap={activeGoalGap}
                       sessionPrescription={sessionPrescriptionCtx}
                       sessionPrescriptionNum={sessionPrescriptionNum}
+                      triggerGenerate={triggerExerciseGenerate}
+                      onGenerateStatusChange={handleExerciseGenerateStatusChange}
                     />
                   )}
                   {mechanismActiveTab === 'manualRx' && (
@@ -8603,6 +8637,8 @@ ${ddxList}`;
                       goalGap={activeGoalGap}
                       sessionPrescription={sessionPrescriptionCtx}
                       sessionPrescriptionNum={sessionPrescriptionNum}
+                      triggerGenerate={triggerMTGenerate}
+                      onGenerateStatusChange={handleMTGenerateStatusChange}
                     />
                   )}
                   {mechanismActiveTab === 'electroRx' && (
@@ -8669,6 +8705,12 @@ ${ddxList}`;
                       onGoalOverlayChange={handleGoalOverlayChange}
                       onGoalProfileChange={handleGoalProfileChange}
                       onSessionPrescriptionSelect={handleSessionPrescriptionSelect}
+                      onTriggerExerciseGenerate={handleTriggerExerciseGenerate}
+                      onTriggerMTGenerate={handleTriggerMTGenerate}
+                      exerciseGeneratingSession={exerciseGeneratingSession}
+                      mtGeneratingSession={mtGeneratingSession}
+                      exerciseGeneratedSessions={exerciseGeneratedSessions}
+                      mtGeneratedSessions={mtGeneratedSessions}
                       scarSummary={scarSummaryForGoals}
                       chainTensionAverages={chainEffects.length > 0 ? chainEffects : undefined}
                       postureMeasurements={postureMeasurementsForGoals}

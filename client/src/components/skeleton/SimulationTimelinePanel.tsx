@@ -37,6 +37,8 @@ import {
   Layers,
   ClipboardCheck,
   ListOrdered,
+  Loader2,
+  CheckCircle,
 } from "lucide-react";
 import {
   buildSimulationTimeline,
@@ -143,6 +145,12 @@ interface SimulationTimelinePanelProps {
   onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
   onGoalProfileChange?: (profile: RecoveryGoalProfile | null, gap: GoalGapAnalysis | null) => void;
   onSessionPrescriptionSelect?: (ctx: PrescriptionContext | null, sessionNumber: number | null) => void;
+  onTriggerExerciseGenerate?: (sessionNumber: number) => void;
+  onTriggerMTGenerate?: (sessionNumber: number) => void;
+  exerciseGeneratingSession?: number | null;
+  mtGeneratingSession?: number | null;
+  exerciseGeneratedSessions?: Set<number>;
+  mtGeneratedSessions?: Set<number>;
   scarSummary?: ScarSummaryEntry[];
   chainTensionAverages?: ChainTensionEntry[];
   postureMeasurements?: PostureMeasurements;
@@ -1154,12 +1162,24 @@ function SessionCard({
   onToggle,
   actualOutcome,
   onRecordOutcome,
+  onGenerateExercises,
+  onGenerateMT,
+  exerciseGenerating,
+  mtGenerating,
+  exerciseGenerated,
+  mtGenerated,
 }: {
   session: SessionSnapshot;
   isExpanded: boolean;
   onToggle: () => void;
   actualOutcome?: ActualSessionOutcome;
   onRecordOutcome?: (outcome: ActualSessionOutcome) => void;
+  onGenerateExercises?: (sessionNum: number) => void;
+  onGenerateMT?: (sessionNum: number) => void;
+  exerciseGenerating?: boolean;
+  mtGenerating?: boolean;
+  exerciseGenerated?: boolean;
+  mtGenerated?: boolean;
 }) {
   const exerciseCount = session.treatments.filter(t => t.type === 'exercise').length;
   const manualCount = session.treatments.filter(t => t.type === 'manual_therapy').length;
@@ -1450,6 +1470,54 @@ function SessionCard({
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+          {(onGenerateExercises || onGenerateMT) && (
+            <div className="border-t border-gray-700/20 pt-1.5 mt-1.5 flex items-center gap-1.5">
+              {onGenerateExercises && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onGenerateExercises(session.sessionNumber); }}
+                  disabled={exerciseGenerating}
+                  className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[8px] font-medium transition-colors ${
+                    exerciseGenerating
+                      ? 'bg-violet-500/20 text-violet-300 border border-violet-500/40 cursor-wait'
+                      : exerciseGenerated
+                        ? 'bg-violet-500/10 text-violet-400 border border-violet-500/30 hover:bg-violet-500/20'
+                        : 'bg-gray-700/40 text-gray-300 border border-gray-600/30 hover:bg-violet-500/20 hover:text-violet-300 hover:border-violet-500/40'
+                  }`}
+                >
+                  {exerciseGenerating ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  ) : exerciseGenerated ? (
+                    <CheckCircle className="h-2.5 w-2.5 text-emerald-400" />
+                  ) : (
+                    <Dumbbell className="h-2.5 w-2.5" />
+                  )}
+                  {exerciseGenerating ? 'Generating...' : exerciseGenerated ? 'Exercises ✓' : 'Generate Exercises'}
+                </button>
+              )}
+              {onGenerateMT && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onGenerateMT(session.sessionNumber); }}
+                  disabled={mtGenerating}
+                  className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[8px] font-medium transition-colors ${
+                    mtGenerating
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 cursor-wait'
+                      : mtGenerated
+                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20'
+                        : 'bg-gray-700/40 text-gray-300 border border-gray-600/30 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40'
+                  }`}
+                >
+                  {mtGenerating ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  ) : mtGenerated ? (
+                    <CheckCircle className="h-2.5 w-2.5 text-emerald-400" />
+                  ) : (
+                    <Hand className="h-2.5 w-2.5" />
+                  )}
+                  {mtGenerating ? 'Generating...' : mtGenerated ? 'MT ✓' : 'Generate MT'}
+                </button>
               )}
             </div>
           )}
@@ -2233,6 +2301,12 @@ function SessionTimelineView({
   aiGoalLoading: aiGoalLoadingProp,
   timelinePrescriptions,
   onSessionPrescriptionSelect,
+  onTriggerExerciseGenerate,
+  onTriggerMTGenerate,
+  exerciseGeneratingSession,
+  mtGeneratingSession,
+  exerciseGeneratedSessions,
+  mtGeneratedSessions,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -2248,6 +2322,12 @@ function SessionTimelineView({
   aiGoalLoading?: boolean;
   timelinePrescriptions?: TimelinePrescriptionSummary | null;
   onSessionPrescriptionSelect?: (sessionNumber: number | null) => void;
+  onTriggerExerciseGenerate?: (sessionNumber: number) => void;
+  onTriggerMTGenerate?: (sessionNumber: number) => void;
+  exerciseGeneratingSession?: number | null;
+  mtGeneratingSession?: number | null;
+  exerciseGeneratedSessions?: Set<number>;
+  mtGeneratedSessions?: Set<number>;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2857,6 +2937,12 @@ function SessionTimelineView({
                       onToggle={() => setExpandedSessionCard(expandedSessionCard === el.session!.sessionNumber ? null : el.session!.sessionNumber)}
                       actualOutcome={actualOutcomes.find(o => o.sessionNumber === el.session!.sessionNumber)}
                       onRecordOutcome={el.session.sessionNumber <= selectedSession ? onRecordOutcome : undefined}
+                      onGenerateExercises={onTriggerExerciseGenerate ? (sn) => { selectSession(sn); onTriggerExerciseGenerate(sn); } : undefined}
+                      onGenerateMT={onTriggerMTGenerate ? (sn) => { selectSession(sn); onTriggerMTGenerate(sn); } : undefined}
+                      exerciseGenerating={exerciseGeneratingSession === el.session.sessionNumber}
+                      mtGenerating={mtGeneratingSession === el.session.sessionNumber}
+                      exerciseGenerated={exerciseGeneratedSessions?.has(el.session.sessionNumber)}
+                      mtGenerated={mtGeneratedSessions?.has(el.session.sessionNumber)}
                     />
                   );
                 }
@@ -4576,6 +4662,12 @@ export default function SimulationTimelinePanel({
             aiGoalLoading={aiGoalLoading}
             timelinePrescriptions={timelinePrescriptions}
             onSessionPrescriptionSelect={handleSessionPrescriptionSelect}
+            onTriggerExerciseGenerate={onTriggerExerciseGenerate}
+            onTriggerMTGenerate={onTriggerMTGenerate}
+            exerciseGeneratingSession={exerciseGeneratingSession}
+            mtGeneratingSession={mtGeneratingSession}
+            exerciseGeneratedSessions={exerciseGeneratedSessions}
+            mtGeneratedSessions={mtGeneratedSessions}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (

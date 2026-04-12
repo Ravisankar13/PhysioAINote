@@ -210,6 +210,134 @@ export function generateGoalProfile(
   };
 }
 
+export function generateGenericGoalProfile(
+  conditionName: string,
+  clinicalState?: ClinicalStateInput | null,
+  patientModifiers?: PatientModifierProfile | null,
+): RecoveryGoalProfile {
+  const romCeilingPct = patientModifiers
+    ? clamp(90 * (patientModifiers.romCeilingAdjustment ?? 1), 50, 100)
+    : 90;
+
+  const jointIds: string[] = [];
+  const painBones = clinicalState?.painMarkers?.map(m => m.boneName.toLowerCase()) ?? [];
+  const lower = conditionName.toLowerCase();
+
+  const regionKeywords: Record<string, string[]> = {
+    shoulder: ['shoulder', 'rotator', 'supraspinatus', 'infraspinatus', 'deltoid', 'scapula', 'glenohumeral', 'subacromial'],
+    knee: ['knee', 'patella', 'acl', 'mcl', 'meniscus', 'patellar', 'quadriceps'],
+    hip: ['hip', 'gluteal', 'trochant', 'labral', 'piriformis', 'groin', 'adductor'],
+    ankle: ['ankle', 'achilles', 'plantar', 'calcaneal', 'tibial', 'peroneal', 'foot'],
+    spine: ['lumbar', 'disc', 'spine', 'back', 'spondyl', 'stenosis', 'facet'],
+    cervical: ['cervical', 'neck', 'whiplash', 'wad'],
+    elbow: ['elbow', 'epicondyl', 'tennis', 'golfer'],
+  };
+
+  let detectedCategory = 'general';
+  for (const [cat, keywords] of Object.entries(regionKeywords)) {
+    if (keywords.some(kw => lower.includes(kw)) || painBones.some(b => keywords.some(kw => b.includes(kw)))) {
+      detectedCategory = cat;
+      break;
+    }
+  }
+
+  const relevantJoints = CONDITION_JOINT_RELEVANCE[detectedCategory] ?? [];
+  for (const jid of relevantJoints) {
+    if (!jointIds.includes(jid)) jointIds.push(jid);
+  }
+  if (jointIds.length === 0) {
+    jointIds.push('shoulder_flexion', 'hip_flexion', 'knee_flexion');
+  }
+
+  const romTargets: RomGoalTarget[] = jointIds.map(jointId => {
+    const norm = JOINT_ROM_NORMS[jointId];
+    if (!norm) return null;
+    return {
+      jointId,
+      label: norm.label,
+      targetDegrees: Math.round(norm.normalDegrees * (romCeilingPct / 100)),
+      normalDegrees: norm.normalDegrees,
+      recoveryPercent: romCeilingPct,
+    };
+  }).filter((r): r is RomGoalTarget => r !== null && r.normalDegrees > 0);
+
+  const avgPain = clinicalState?.painMarkers?.length
+    ? clinicalState.painMarkers.reduce((s, m) => s + m.intensity, 0) / clinicalState.painMarkers.length
+    : 40;
+  const painTarget = avgPain > 60 ? 15 : 10;
+
+  const slingTargets: SlingGoalTarget[] = DEFAULT_SLING_NAMES.map(name => ({
+    slingName: name,
+    targetIntegrity: 75,
+  }));
+
+  const muscleTensionTargets: MuscleGoalTarget[] = [];
+  const keyMuscles = CONDITION_KEY_MUSCLES[detectedCategory] ?? [];
+  const clinicalMuscleIds = clinicalState?.muscleStates?.map(m => m.muscleId) ?? [];
+  const allMuscleIds = Array.from(new Set([...keyMuscles, ...clinicalMuscleIds]));
+  for (const muscleId of allMuscleIds) {
+    const entry = clinicalState?.muscleStates?.find(m => m.muscleId === muscleId);
+    let targetMin = 35;
+    let targetMax = 55;
+    if (entry) {
+      if (entry.tension > 70) { targetMin = 30; targetMax = 50; }
+      else if (entry.tension < 30) { targetMin = 40; targetMax = 60; }
+    }
+    muscleTensionTargets.push({ muscleId, targetTensionMin: targetMin, targetTensionMax: targetMax });
+  }
+
+  const postureTargets = buildPostureTargets(clinicalState);
+
+  const compTarget = clinicalState?.compensationPatterns && clinicalState.compensationPatterns.length > 3
+    ? 85 : 90;
+
+  const functionalGoals: FunctionalGoal[] = [];
+  if (detectedCategory === 'shoulder') {
+    functionalGoals.push({ label: 'Overhead reach', metric: 'shoulder_flexion_rom', targetValue: 170, unit: 'degrees' });
+    functionalGoals.push({ label: 'Pain-free lifting', metric: 'pain_with_load', targetValue: 0, unit: '/10' });
+  } else if (detectedCategory === 'knee') {
+    functionalGoals.push({ label: 'Full squat depth', metric: 'knee_flexion_rom', targetValue: 120, unit: 'degrees' });
+    functionalGoals.push({ label: 'Single leg balance', metric: 'balance_time', targetValue: 30, unit: 'seconds' });
+  } else if (detectedCategory === 'spine') {
+    functionalGoals.push({ label: 'Sit tolerance', metric: 'sitting_tolerance', targetValue: 60, unit: 'minutes' });
+    functionalGoals.push({ label: 'Pain-free bending', metric: 'pain_with_flexion', targetValue: 0, unit: '/10' });
+  } else if (detectedCategory === 'hip') {
+    functionalGoals.push({ label: 'Walking tolerance', metric: 'walking_distance', targetValue: 30, unit: 'minutes' });
+    functionalGoals.push({ label: 'Stair climbing', metric: 'stair_pain', targetValue: 0, unit: '/10' });
+  } else if (detectedCategory === 'ankle') {
+    functionalGoals.push({ label: 'Single leg hop', metric: 'hop_symmetry', targetValue: 90, unit: '%' });
+    functionalGoals.push({ label: 'Walking without limp', metric: 'gait_symmetry', targetValue: 95, unit: '%' });
+  } else if (detectedCategory === 'cervical') {
+    functionalGoals.push({ label: 'Screen tolerance', metric: 'screen_tolerance', targetValue: 45, unit: 'minutes' });
+    functionalGoals.push({ label: 'Driving comfort', metric: 'driving_pain', targetValue: 0, unit: '/10' });
+  } else if (detectedCategory === 'elbow') {
+    functionalGoals.push({ label: 'Grip strength', metric: 'grip_symmetry', targetValue: 90, unit: '%' });
+    functionalGoals.push({ label: 'Pain-free gripping', metric: 'grip_pain', targetValue: 0, unit: '/10' });
+  } else {
+    functionalGoals.push({ label: 'Pain-free ADLs', metric: 'adl_pain', targetValue: 0, unit: '/10' });
+    functionalGoals.push({ label: 'Return to activity', metric: 'activity_level', targetValue: 80, unit: '%' });
+  }
+
+  const strengthTarget = detectedCategory === 'knee' || detectedCategory === 'hip' ? 80
+    : detectedCategory === 'shoulder' ? 75 : 70;
+
+  return {
+    conditionId: `generic_${lower.replace(/[^a-z0-9]+/g, '_').replace(/_+$/, '')}`,
+    conditionName: conditionName,
+    romTargets,
+    painTarget,
+    muscleTensionTargets,
+    slingTargets,
+    postureTargets,
+    compensationResolutionTarget: compTarget,
+    functionalGoals,
+    riskScoreTarget: 15,
+    strengthTarget,
+    jointStressTarget: 20,
+    overallRomRecoveryPercent: romCeilingPct,
+  };
+}
+
 const CONDITION_KEY_MUSCLES: Record<string, string[]> = {
   shoulder: ['deltoid', 'rotator_cuff', 'trapezius', 'pec_major', 'lat_dorsi', 'serratus_anterior'],
   knee: ['quadriceps', 'hamstrings', 'gluteus_maximus', 'gastrocnemius', 'hip_flexors'],

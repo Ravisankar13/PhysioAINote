@@ -3977,7 +3977,7 @@ export default function SimulationTimelinePanel({
             setAiGoalLoading(false);
           }
         });
-    }, 500);
+    }, 300);
 
     return () => {
       if (aiGoalDebounceRef.current) {

@@ -1964,11 +1964,13 @@ function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
   );
 }
 
-function RecoveryGoalHeroCard({ goalProfile, totalWeeks, totalSessions, finalGoalGap }: {
+function RecoveryGoalHeroCard({ goalProfile, totalWeeks, totalSessions, finalGoalGap, isLoading, isAiGenerated }: {
   goalProfile: RecoveryGoalProfile;
   totalWeeks?: number;
   totalSessions?: number;
   finalGoalGap?: GoalGapAnalysis | null;
+  isLoading?: boolean;
+  isAiGenerated?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-green-500/40 bg-gradient-to-b from-green-950/40 via-gray-900/60 to-gray-900/40 p-3 relative overflow-hidden">
@@ -1976,8 +1978,15 @@ function RecoveryGoalHeroCard({ goalProfile, totalWeeks, totalSessions, finalGoa
       <div className="relative">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
-            <Target className="h-4 w-4 text-green-400" />
+            {isLoading ? (
+              <RefreshCw className="h-4 w-4 text-green-400 animate-spin" />
+            ) : (
+              <Target className="h-4 w-4 text-green-400" />
+            )}
             <span className="text-[11px] font-bold text-green-300">Final Recovery Goal</span>
+            {isAiGenerated && !isLoading && (
+              <Badge variant="outline" className="text-[7px] py-0 px-1 border-cyan-500/30 text-cyan-400">AI</Badge>
+            )}
           </div>
           {finalGoalGap && (
             <div className={`text-sm font-bold ${
@@ -2145,6 +2154,7 @@ function SessionTimelineView({
   onRecordOutcome,
   onGoalOverlayChange,
   clinicalState,
+  aiGoalProfileOverride,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -2156,6 +2166,7 @@ function SessionTimelineView({
   onRecordOutcome: (outcome: ActualSessionOutcome) => void;
   onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
   clinicalState?: ClinicalStateInput | null;
+  aiGoalProfileOverride?: RecoveryGoalProfile | null;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2245,7 +2256,7 @@ function SessionTimelineView({
     Math.abs(m.sessionNumber - selectedSession) <= 2 && m.sessionNumber !== selectedSession
   );
 
-  const goalProfile = useMemo<RecoveryGoalProfile | null>(() => {
+  const hardcodedGoalProfileLocal = useMemo<RecoveryGoalProfile | null>(() => {
     if (!activeCondition) return null;
     const romJointIds = sessionTimeline.baseline?.romBaselines?.map(r => r.jointId) ?? [];
     return generateGoalProfile(
@@ -2255,6 +2266,8 @@ function SessionTimelineView({
       clinicalState ?? undefined,
     );
   }, [activeCondition, modifiers, sessionTimeline.baseline, clinicalState]);
+
+  const goalProfile = aiGoalProfileOverride ?? hardcodedGoalProfileLocal;
 
   const currentGoalGap = useMemo<GoalGapAnalysis | null>(() => {
     if (!goalProfile || !currentSnapshot) return null;
@@ -2444,6 +2457,7 @@ function SessionTimelineView({
           totalWeeks={Math.round(sessionTimeline.totalDays / 7)}
           totalSessions={sessionTimeline.totalSessions}
           finalGoalGap={finalGoalGap}
+          isAiGenerated={!!aiGoalProfileOverride}
         />
       )}
 
@@ -3854,7 +3868,7 @@ export default function SimulationTimelinePanel({
     return adjustProfileForPatient(activeCondition, modifiers);
   }, [activeCondition, modifiers]);
 
-  const parentGoalProfile = useMemo<RecoveryGoalProfile | null>(() => {
+  const hardcodedGoalProfile = useMemo<RecoveryGoalProfile | null>(() => {
     if (!activeCondition) return null;
     return generateGoalProfile(
       activeCondition,
@@ -3863,6 +3877,122 @@ export default function SimulationTimelinePanel({
       clinicalStateForGoals ?? undefined,
     );
   }, [activeCondition, modifiers, clinicalStateForGoals]);
+
+  const [aiGoalProfile, setAiGoalProfile] = useState<RecoveryGoalProfile | null>(null);
+  const [aiGoalLoading, setAiGoalLoading] = useState(false);
+  const aiGoalAbortRef = useRef<AbortController | null>(null);
+  const aiGoalCacheRef = useRef<{ key: string; profile: RecoveryGoalProfile } | null>(null);
+  const aiGoalDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const conditionNameForAi = useMemo(() => {
+    if (structuredReasoning && structuredReasoning.hypotheses.length > 0) {
+      return structuredReasoning.hypotheses[0].condition;
+    }
+    if (activeCondition) return activeCondition.conditionName;
+    return null;
+  }, [structuredReasoning, activeCondition]);
+
+  useEffect(() => {
+    if (!conditionNameForAi) {
+      setAiGoalProfile(null);
+      setAiGoalLoading(false);
+      return;
+    }
+
+    const cacheKey = JSON.stringify({
+      cn: conditionNameForAi,
+      pf: patientFactors,
+      pm: clinicalStateForGoals ? {
+        p: clinicalStateForGoals.painMarkers?.length ?? 0,
+        m: clinicalStateForGoals.muscleStates?.length ?? 0,
+        c: clinicalStateForGoals.compensationPatterns?.length ?? 0,
+        d: clinicalStateForGoals.posturalDeviations?.length ?? 0,
+      } : null,
+    });
+
+    if (aiGoalCacheRef.current && aiGoalCacheRef.current.key === cacheKey) {
+      setAiGoalProfile(aiGoalCacheRef.current.profile);
+      setAiGoalLoading(false);
+      return;
+    }
+
+    if (aiGoalDebounceRef.current) {
+      clearTimeout(aiGoalDebounceRef.current);
+    }
+
+    aiGoalDebounceRef.current = setTimeout(() => {
+      if (aiGoalAbortRef.current) {
+        aiGoalAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      aiGoalAbortRef.current = controller;
+      setAiGoalLoading(true);
+
+      const hypotheses = structuredReasoning?.hypotheses?.map(h => ({
+        condition: h.condition,
+        likelihood: h.likelihood,
+        reasoning: h.reasoning,
+      })) ?? [];
+
+      const extractionSummary = extractionResult
+        ? [
+            extractionResult.bodyRegions?.length ? `Regions: ${extractionResult.bodyRegions.join(', ')}` : '',
+            extractionResult.symptoms?.length ? `Symptoms: ${extractionResult.symptoms.join(', ')}` : '',
+            extractionResult.duration ? `Duration: ${extractionResult.duration}` : '',
+            extractionResult.mechanism ? `Mechanism: ${extractionResult.mechanism}` : '',
+            extractionResult.aggravatingFactors?.length ? `Aggravating: ${extractionResult.aggravatingFactors.join(', ')}` : '',
+            extractionResult.easingFactors?.length ? `Easing: ${extractionResult.easingFactors.join(', ')}` : '',
+            extractionResult.functionalLimitations?.length ? `Functional limitations: ${extractionResult.functionalLimitations.map(f => f.limitation).join(', ')}` : '',
+          ].filter(Boolean).join('. ')
+        : '';
+
+      fetch('/api/recovery-goals/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        signal: controller.signal,
+        body: JSON.stringify({
+          conditionName: conditionNameForAi,
+          hypotheses,
+          painMarkers: clinicalStateForGoals?.painMarkers ?? [],
+          muscleStates: clinicalStateForGoals?.muscleStates ?? [],
+          compensationPatterns: clinicalStateForGoals?.compensationPatterns ?? [],
+          posturalDeviations: clinicalStateForGoals?.posturalDeviations ?? [],
+          slingAnalysis: clinicalStateForGoals?.slingAnalysis ?? [],
+          patientFactors,
+          extractionSummary,
+        }),
+      })
+        .then(r => {
+          if (!r.ok) throw new Error(`${r.status}`);
+          return r.json();
+        })
+        .then(profile => {
+          if (!controller.signal.aborted) {
+            setAiGoalProfile(profile);
+            aiGoalCacheRef.current = { key: cacheKey, profile };
+            setAiGoalLoading(false);
+          }
+        })
+        .catch(err => {
+          if (err.name !== 'AbortError' && !controller.signal.aborted) {
+            console.error('AI goal generation failed, using hardcoded fallback:', err);
+            setAiGoalLoading(false);
+          }
+        });
+    }, 500);
+
+    return () => {
+      if (aiGoalDebounceRef.current) {
+        clearTimeout(aiGoalDebounceRef.current);
+      }
+      if (aiGoalAbortRef.current) {
+        aiGoalAbortRef.current.abort();
+      }
+    };
+  }, [conditionNameForAi, patientFactors, clinicalStateForGoals, structuredReasoning, extractionResult]);
+
+  const parentGoalProfile = aiGoalProfile ?? hardcodedGoalProfile;
 
   const hasCustomTreatments = (customExercises && customExercises.length > 0) || (customTechniques && customTechniques.length > 0);
 
@@ -4036,6 +4166,7 @@ export default function SimulationTimelinePanel({
             onRecordOutcome={handleRecordOutcome}
             onGoalOverlayChange={onGoalOverlayChange}
             clinicalState={clinicalStateForGoals}
+            aiGoalProfileOverride={aiGoalProfile}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (
@@ -4057,7 +4188,15 @@ export default function SimulationTimelinePanel({
             goalProfile={parentGoalProfile}
             totalWeeks={Math.round(weekTimeline.totalDays / 7)}
             totalSessions={weekTimeline.totalSessions}
+            isLoading={aiGoalLoading}
+            isAiGenerated={!!aiGoalProfile}
           />
+        )}
+        {!parentGoalProfile && aiGoalLoading && (
+          <div className="rounded-lg border border-green-500/20 bg-gray-900/40 p-4 text-center">
+            <RefreshCw className="h-5 w-5 text-green-400 animate-spin mx-auto mb-2" />
+            <span className="text-[10px] text-gray-400">Generating AI recovery goals...</span>
+          </div>
         )}
         <WeekTimelineView
           timeline={weekTimeline}
@@ -4071,7 +4210,17 @@ export default function SimulationTimelinePanel({
     <div className="p-3 text-center space-y-3">
       {patientFactorsPanel}
       {parentGoalProfile && (
-        <RecoveryGoalHeroCard goalProfile={parentGoalProfile} />
+        <RecoveryGoalHeroCard
+          goalProfile={parentGoalProfile}
+          isLoading={aiGoalLoading}
+          isAiGenerated={!!aiGoalProfile}
+        />
+      )}
+      {!parentGoalProfile && aiGoalLoading && (
+        <div className="rounded-lg border border-green-500/20 bg-gray-900/40 p-4 text-center">
+          <RefreshCw className="h-5 w-5 text-green-400 animate-spin mx-auto mb-2" />
+          <span className="text-[10px] text-gray-400">Generating AI recovery goals...</span>
+        </div>
       )}
       <div className="text-gray-500 text-[10px] mb-2">No simulation data available</div>
       <div className="bg-gray-800/40 rounded border border-gray-700/30 p-3 space-y-2">

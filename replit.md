@@ -1,76 +1,47 @@
 # PhysioGPT Platform
 
 ## Overview
-
-PhysioGPT is an AI-powered physiotherapy platform providing clinical decision support for practitioners and students. It offers tools for SOAP note generation, virtual patient analysis, evidence-based exercise prescription, and extensive research integration. The platform aims to enhance efficiency, accuracy, and educational capabilities in physiotherapy, improving patient outcomes and practitioner workflow. The vision is to become a leading AI solution in physiotherapy, with significant market potential for improving diagnostic precision and treatment efficacy.
+PhysioGPT is an AI-powered physiotherapy platform designed to provide clinical decision support for practitioners and students. Its primary purpose is to enhance efficiency, accuracy, and educational capabilities in physiotherapy, ultimately improving patient outcomes and practitioner workflow. Key capabilities include SOAP note generation, virtual patient analysis, evidence-based exercise prescription, and extensive research integration. The project aims to become a leading AI solution in physiotherapy, with significant market potential for improving diagnostic precision and treatment efficacy.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Frontend
-- **Framework**: React 18 (TypeScript)
-- **UI Components**: Shadcn/ui, Radix UI
-- **Styling**: Tailwind CSS
-- **State Management**: React hooks and context
-- **Build Tool**: Vite
-- **Code Splitting**: All routes lazy-loaded via React.lazy() with Suspense fallbacks; heavy sub-components in PhysioGPT lazy-loaded (21 panels/tabs); Vite manual chunks for three.js, tensorflow, recharts, pdf/docx vendors
-- **Performance**: PhysioGPT shows branded loading screen with progress bar during 138MB GLB model download; PDF generation dynamically imported on demand
+### Core Architecture
+The platform is built with a React 18 (TypeScript) frontend using Shadcn/ui and Radix UI for components, styled with Tailwind CSS, and managed with React hooks. The backend utilizes Node.js 20 (Express.js) with TypeScript, employing Passport.js for authentication and a RESTful API design. Data is stored in a PostgreSQL database (Neon serverless) managed with Drizzle ORM.
 
-### Backend
-- **Runtime**: Node.js 20 (Express.js)
-- **Language**: TypeScript (ES modules)
-- **Authentication**: Passport.js
-- **API Design**: RESTful
-
-### Database
-- **Primary Database**: PostgreSQL (Neon serverless)
-- **ORM**: Drizzle ORM
-- **Migrations**: Drizzle Kit
-
-### Core Features & Design Patterns
-- **AI Integration**: Leverages OpenAI GPT-4o for clinical analysis, content generation, virtual patient analysis, research gap analysis, exercise generation, real-time movement analysis, and privacy-preserving SOAP-to-Virtual-Patient conversion.
-- **Biomechanical Systems**: Includes a bidirectional muscle-joint system, 3D force visualization, and a biomechanical clinical assessment system for patient digital twins and injury risk scoring, featuring an "Influence Ripple System."
-- **Motion Capture & Virtual Patient System**: WebRTC camera integration for real-time pose detection, skeleton overlay, AI-powered virtual patient generation, and detailed movement analysis. This includes a Focused Clinical Camera System with GPT-4o Vision AI for detecting clinical signs, real-time joint angle computation, and automated postural analysis (kyphosis, lordosis, scoliosis, etc.). A WebSocket-based phone-to-desktop camera link is also supported.
-- **Virtual Patient Management**: CRUD interface for managing patient 3D models with procedural generation or Mixamo integration, customizable pathologies, and animation playback.
-- **Enhanced Anatomical Visualization**: Medical-grade anatomical visualization using a high-fidelity 138MB muscled skeleton GLB model with 94 bones and 25+ individually named muscle meshes (Deltoid, Trapezius, Pec Major/Minor, Lat Dorsi, Gluteus Maximus/Medius/Minimus, Piriformis, Rectus Abdominus, Obliques, etc.). Includes Multi-View Skeleton Visualization and an Enhanced Body Scanner X-Ray Alternative with detailed structures and clinical measurements. A Tissue-Specific Pathology Layer provides unified "Tissue View" modes (Muscle, Tendon, Joint, Nerve, Fascia) with specialized clinical insights and visualizations. Muscle mesh classification uses both name-based (for 25+ named anatomical meshes) and bone-weight-based approaches.
+### Key Features & Design Patterns
+- **AI Integration**: Leverages OpenAI GPT-4o for a wide range of clinical analyses, content generation, and decision support, including virtual patient analysis, exercise generation, and real-time movement analysis.
+- **Biomechanical Systems**: Incorporates a bidirectional muscle-joint system, 3D force visualization, and a biomechanical clinical assessment system for patient digital twins and injury risk scoring, featuring an "Influence Ripple System."
+- **Motion Capture & Virtual Patient System**: Integrates WebRTC for real-time pose detection and skeleton overlay, AI-powered virtual patient generation, and detailed movement analysis. This includes a Focused Clinical Camera System with GPT-4o Vision AI for detecting clinical signs, joint angle computation, and automated postural analysis. A WebSocket-based phone-to-desktop camera link is supported.
+- **Virtual Patient Management**: Provides CRUD operations for managing 3D patient models, with procedural generation or Mixamo integration, customizable pathologies, and animation playback.
+- **Enhanced Anatomical Visualization**: Features a high-fidelity 138MB muscled skeleton GLB model with 94 bones and 25+ named muscle meshes, offering Multi-View Skeleton Visualization and an Enhanced Body Scanner X-Ray Alternative. A Tissue-Specific Pathology Layer provides unified "Tissue View" modes with specialized clinical insights.
 - **Advanced Clinical Analysis**:
     - **Running Gait Analysis**: Professional-grade biomechanical analysis with 25+ real-time metrics.
-    - **Clinical Bubble**: An AI-powered floating clinical info panel for differential diagnoses, assessments, treatments, and follow-up questions.
-    - **Kinetic Chain Connection System**: Analyzes connected regions for pain markers with a "Test the Chain" mode.
-    - **Shoulder Assessment System**: Deep clinical shoulder assessment with AI-powered differential diagnosis, including special tests and ROM norms.
-    - **Pain & Symptom Intelligence Layer**: Transforms pain markers into diagnostic tools by classifying mechanisms (nociceptive/neuropathic/myofascial/central sensitization) and providing nerve root analysis, trigger point referral patterns, and AI-generated symptom behavior analysis.
-    - **Injury Mechanism Engine**: Synthesizes data to explain injury causation, producing causal chain flowcharts, load redistribution analysis, and compensation pattern cards.
-    - **What-If Clinical Simulation**: Allows practitioners to simulate clinical interventions and see predicted changes in risk scores, joint forces, and compensation patterns.
-    - **Treatment Simulation Timeline Engine**: Projects recovery forward through time by mapping prescribed treatments (from Exercise Engine and Manual Therapy tabs) to biomechanical effects using existing intervention tables. Features a visual multi-phase timeline with week scrubber that updates the 3D skeleton, phase transition markers, recovery curve chart (risk/pain/sling integrity), milestone tracking, and before/after summary. Includes a **Treatment Progression Re-query Engine** that automatically detects recovery phase transitions (Acute→Proliferative→Remodeling→Functional→Return to Activity) and re-queries the AI Exercise and Manual Therapy engines with the predicted patient state, previous progression stages, and correction factor trends to generate phase-appropriate treatments. Features progressive loading UI with phase progress indicators, phase transition cards showing predicted state metrics and AI rationale, and a collapsible Treatment Phases accordion. The re-query engine is opt-in via "Enable Re-Query Engine" button and falls back gracefully to sync mode on failure. Core engine: `client/src/lib/simulationTimelineEngine.ts` (types: `TreatmentPhaseBlock`, `PhaseProgressEvent`; functions: `synthesizeReQueryPayload`, `buildSessionTimelineAsync`), UI panel: `client/src/components/skeleton/SimulationTimelinePanel.tsx`. Accessible via the "Timeline" tab in the Injury Mechanism panel.
-    - **Goal-Driven Recovery Engine**: Defines measurable end-state targets per condition (pain, ROM, strength, function, compensation) and drives treatments toward closing the gap to full recovery. Core engine `client/src/lib/goalStateEngine.ts` provides `RecoveryGoalProfile` generation from condition profiles, `GoalGapAnalysis` computation per session, dimension-level tracking with priority/trend, and `formatGoalContextForPrompt()` for AI prompt injection. Goal targets are injected into both exercise and manual therapy AI engines (`server/routes.ts`). The simulation timeline engine computes per-session `goalAchievementPct` and `goalDimensions` on each `SessionSnapshot`, with a `goalAchievementTimeline` array on `SessionTimelineResult`. The `SimulationTimelinePanel` displays a "Goal%" track on the recovery curve SVG with a 100% target line, a progress bar with high-priority gap warnings, and track toggles. The `synthesizeReQueryPayload` function injects goal gap context into re-query payloads. The `PureThreeGLBViewer` supports a `goalStateOverlay` prop for rendering goal-gap ring indicators on bones and muscle tension ghost coloring.
-    - **Patient Factors & Condition Recovery Engine**: Personalized recovery prediction system that captures 17 patient-specific factors (age, BMI, diabetes, thyroid, smoking, steroid injection history, previous episodes, chronicity, irritability, compliance, psychological risk, sleep quality, activity level, side affected, medication use, comorbidities) and computes 7 recovery modifier multipliers (healing rate, pain sensitivity, compliance, recurrence risk, tissue quality, psychosocial, overall recovery). Includes a library of 15 evidence-based condition recovery profiles (Rotator Cuff Tendinopathy, Frozen Shoulder, ACL Reconstruction, Lumbar Disc Herniation, Lateral Epicondylalgia, Patellofemoral Pain, Achilles Tendinopathy, Lateral Ankle Sprain, Cervical Radiculopathy, Plantar Fasciitis, Subacromial Impingement, Hip OA, Gluteal Tendinopathy, Meniscal Injury, Whiplash) with phased recovery timelines and treatment responsiveness data. Auto-populates from the clinical pipeline (ClinicalExtractionResult + StructuredReasoningResult) and auto-detects condition profiles via keyword matching. Adjusts recovery timelines based on patient-specific modifiers. Core engine: `client/src/lib/patientFactorsEngine.ts`, UI integrated into `SimulationTimelinePanel.tsx`.
-    - **Sling Engine**: System-level force-transfer interpreter analyzing 5 functional slings (Posterior Oblique, Anterior Oblique, Lateral, Deep Longitudinal, Scapular/Shoulder). Detects weak links, force rerouting, cross-sling compensation patterns, and generates per-sling treatment targets. Includes 3D pathway visualization on the skeleton and feeds sling context into the Treatment Decision Engine. Core engine: `client/src/lib/slingEngine.ts`, UI panel: `client/src/components/skeleton/SlingAnalysisPanel.tsx`.
-- **Clinical Documentation**: AI-enhanced SOAP note generation, OpenAI Whisper for audio transcription, automated PII de-identification, and version control. An Interactive Skeleton-to-Text System allows the skeleton viewer to react to clinical conversations. A Clinical Text-to-Skeleton Auto-Visualization panel parses free-form patient descriptions to automatically place pain markers, set muscle states, adjust posture, and highlight affected regions.
+    - **Clinical Bubble**: An AI-powered floating panel for differential diagnoses and treatment guidance.
+    - **Kinetic Chain Connection System**: Analyzes connected regions for pain markers.
+    - **Shoulder Assessment System**: Deep clinical shoulder assessment with AI-powered differential diagnosis.
+    - **Pain & Symptom Intelligence Layer**: Classifies pain mechanisms and provides nerve root analysis and trigger point referral patterns.
+    - **Injury Mechanism Engine**: Explains injury causation through causal chain flowcharts and load redistribution analysis.
+    - **What-If Clinical Simulation**: Allows simulation of interventions and prediction of changes in risk scores.
+    - **Treatment Simulation Timeline Engine**: Projects recovery based on prescribed treatments, featuring a visual multi-phase timeline, recovery curve charts, milestone tracking, and a Treatment Progression Re-query Engine that dynamically adjusts treatment plans based on recovery phases.
+    - **Goal-Driven Recovery Engine**: Defines measurable recovery targets per condition and drives treatments to close the gap, integrating AI-generated recovery goals that adapt to patient factors.
+    - **Patient Factors & Condition Recovery Engine**: Personalizes recovery predictions using 17 patient-specific factors and 15 evidence-based condition recovery profiles, adjusting timelines based on patient-specific modifiers.
+    - **Sling Engine**: Analyzes 5 functional slings to detect weak links, force rerouting, and cross-sling compensation, generating per-sling treatment targets.
+- **Clinical Documentation**: AI-enhanced SOAP note generation, OpenAI Whisper for audio transcription, automated PII de-identification, and an Interactive Skeleton-to-Text System that visualizes clinical conversations on the skeleton.
 - **Treatment & Exercise Management**:
-    - **Exercise Prescription**: Comprehensive, body part-specific, difficulty-scaled, and evidence-based exercise database with AI-powered recommendations.
-    - **Treatment Priority Engine**: Auto-generates ranked treatment targets with clinical status, actions, techniques (including evidence grades and references), and contraindication system.
-    - **Evidence Engine**: Unified queryable evidence catalog (`server/services/evidenceEngine.ts`) that consolidates the core CANDIDATE_LIBRARY, SHARED_TECHNIQUE_DB, and 6 expert libraries (Bisset Elbow, Grimaldi Hip, Jo Gibson Shoulder, Clinical Edge, Physio Network, Sports Map) into a single catalog. Provides `POST /api/evidence-engine/query` and `GET /api/evidence-engine/stats` endpoints with Zod validation. Scores treatment options by relevance (problem class, mechanism, evidence grade, region, diagnosis keyword matching) and surfaces stage/irritability risk flags. Consumed by the Treatment Decision Engine and displayed in the "Evidence" tab in the PhysioGPT right panel with category/grade filters, expandable cards, mechanism-of-action details, and literature references.
-    - **Treatment Decision Engine**: An 8-module pipeline that bridges clinical reasoning to actionable treatment direction, producing three-tier intervention lists with evidence grades, dosage, rationale, and risk flags. Now integrates Evidence Engine context (total options, grade distribution, expert approaches) into its output.
-    - **Treatment Plan Generator**: An 8-module pipeline that transforms Decision Engine output into adaptive, phased rehabilitation plans with exercises, manual therapy, patient education, and progression criteria.
-    - **Intake & Extraction Engine**: Unified clinical data capture pipeline consolidating manual form inputs, free-text clinical notes, voice transcription, and pain marker data into a structured `ClinicalExtractionResult` with 12+ clinical fields (body regions, symptoms, duration, onset, mechanism, aggravating/easing factors, red flags, irritability, functional limitations) plus missing-field prompts and source-attribution badges. Uses pattern-matching for structured inputs and focused GPT-4o for unstructured text.
-- **Dynamic 3D Interactions**:
-    - **Zoom Tool with Anatomical Landmark System**: Deep zoom into specific anatomical structures with identification of over 147 virtual points.
-    - **Direct Bone Manipulation (Pose Mode)**: Enables click-and-drag skeleton posing.
-    - **Extended Pain Marker Types**: Supports Point, Area, Referred, Line, and Paint (free-draw) markers.
-    - **15 Symptom Types System**: Beyond pain, supports various symptoms with unique visual distinctions on the 3D skeleton.
-    - **Postural-Pain Correlation System**: Auto-triggers biomechanical analysis when posture sliders change.
-    - **Real-Time Postural Force Analysis**: Calculates joint loading based on skeleton pose.
-    - **Fascial Chain 3D Visualization (Body Tension)**: Renders myofascial chains as colored 3D lines.
-    - **Scar Tissue & Adhesion Mapping**: Click-to-place system for documenting scars and adhesion bands.
-    - **Pathology Compensation Engine**: Computes compensation patterns, ROM restrictions, and postural deviations when a muscle has pathology, feeding into movement animations.
-- **Research Integration**: AI-analyzed research database with bias assessment and clinical application insights. PubMed/PEDro-equivalent evidence is wired into all AI clinical reasoning pipelines, providing citations with PMIDs and evidence grades.
-- **Security**: Encrypted session secrets, robust CORS configuration, Zod schema validation, and secure file upload handling.
+    - **Exercise Prescription**: AI-powered, evidence-based recommendations from a comprehensive exercise database.
+    - **Treatment Priority Engine**: Auto-generates ranked treatment targets with clinical status and techniques.
+    - **Evidence Engine**: A unified queryable catalog consolidating core and expert libraries, scoring treatment options by relevance.
+    - **Treatment Decision Engine**: An 8-module pipeline transforming clinical reasoning into actionable, evidence-graded treatment plans.
+    - **Treatment Plan Generator**: Creates adaptive, phased rehabilitation plans from Decision Engine output.
+    - **Intake & Extraction Engine**: Consolidates clinical data from various inputs into a structured `ClinicalExtractionResult`.
+- **Dynamic 3D Interactions**: Includes a Zoom Tool with Anatomical Landmark System, Direct Bone Manipulation (Pose Mode), Extended Pain Marker Types, 15 Symptom Types, Postural-Pain Correlation System, Real-Time Postural Force Analysis, Fascial Chain 3D Visualization, Scar Tissue & Adhesion Mapping, and a Pathology Compensation Engine.
+- **Research Integration**: AI-analyzed research database with bias assessment and clinical application insights, providing PubMed/PEDro-equivalent evidence and citations within AI clinical reasoning.
+- **Security**: Implements encrypted session secrets, robust CORS configuration, Zod schema validation, and secure file upload handling.
 
 ## External Dependencies
-
 - **AI Services**: OpenAI API (GPT-4o, Whisper), Leonardo AI, Runway ML.
 - **Cloud Storage**: AWS S3.
 - **Payment Processing**: PayPal SDK, Stripe.

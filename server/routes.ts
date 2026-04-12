@@ -8113,6 +8113,235 @@ You are now REFINING previously designed techniques based on user feedback. Rule
     }
   });
 
+  app.post("/api/recovery-goals/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+
+      const recoveryGoalInputSchema = z.object({
+        conditionName: z.string().min(1),
+        hypotheses: z.array(z.object({
+          condition: z.string(),
+          likelihood: z.number().optional(),
+          reasoning: z.string().optional(),
+        })).optional().default([]),
+        painMarkers: z.array(z.object({
+          boneName: z.string(),
+          intensity: z.number(),
+        })).optional().default([]),
+        muscleStates: z.array(z.object({
+          muscleId: z.string(),
+          tension: z.number(),
+        })).optional().default([]),
+        compensationPatterns: z.array(z.string()).optional().default([]),
+        posturalDeviations: z.array(z.string()).optional().default([]),
+        slingAnalysis: z.array(z.object({
+          slingName: z.string(),
+          integrity: z.number(),
+        })).optional().default([]),
+        patientFactors: z.object({
+          age: z.number().nullable().optional(),
+          bmi: z.string().optional(),
+          diabetes: z.string().optional(),
+          thyroid: z.string().optional(),
+          smoking: z.string().optional(),
+          steroidInjectionHistory: z.boolean().optional(),
+          steroidInjectionCount: z.number().optional(),
+          previousEpisodes: z.number().optional(),
+          chronicity: z.string().optional(),
+          irritability: z.string().optional(),
+          compliance: z.number().optional(),
+          psychologicalRisk: z.string().optional(),
+          sleepQuality: z.string().optional(),
+          activityLevel: z.string().optional(),
+          sideAffected: z.string().optional(),
+          medicationUse: z.array(z.string()).optional(),
+          comorbiditiesNotes: z.string().optional(),
+        }).optional(),
+        extractionSummary: z.string().optional().default(""),
+      });
+
+      const parsed = recoveryGoalInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const painSummary = data.painMarkers.length > 0
+        ? `Pain markers: ${data.painMarkers.map(p => `${p.boneName} (intensity ${p.intensity}/100)`).join(', ')}`
+        : 'No specific pain markers placed';
+
+      const muscleSummary = data.muscleStates.length > 0
+        ? `Muscle states: ${data.muscleStates.map(m => `${m.muscleId.replace(/_/g, ' ')} (tension ${m.tension}%)`).join(', ')}`
+        : '';
+
+      const compSummary = data.compensationPatterns.length > 0
+        ? `Compensation patterns: ${data.compensationPatterns.join(', ')}`
+        : '';
+
+      const postureSummary = data.posturalDeviations.length > 0
+        ? `Postural deviations: ${data.posturalDeviations.join(', ')}`
+        : '';
+
+      const slingSummary = data.slingAnalysis.length > 0
+        ? `Sling analysis: ${data.slingAnalysis.map(s => `${s.slingName} (${s.integrity}% integrity)`).join(', ')}`
+        : '';
+
+      const hypothesesSummary = data.hypotheses.length > 0
+        ? `Differential diagnoses:\n${data.hypotheses.map((h, i) => `${i + 1}. ${h.condition}${h.likelihood ? ` (${h.likelihood}% likely)` : ''}${h.reasoning ? ` — ${h.reasoning}` : ''}`).join('\n')}`
+        : '';
+
+      const pf = data.patientFactors;
+      const patientSummary = pf
+        ? [
+            pf.age !== null && pf.age !== undefined ? `Age: ${pf.age}` : null,
+            pf.bmi && pf.bmi !== 'normal' ? `BMI: ${pf.bmi}` : null,
+            pf.diabetes && pf.diabetes !== 'none' ? `Diabetes: ${pf.diabetes}` : null,
+            pf.smoking && pf.smoking !== 'never' ? `Smoking: ${pf.smoking}` : null,
+            pf.chronicity && pf.chronicity !== 'unknown' ? `Chronicity: ${pf.chronicity}` : null,
+            pf.irritability ? `Irritability: ${pf.irritability}` : null,
+            pf.compliance !== undefined ? `Compliance: ${pf.compliance}%` : null,
+            pf.psychologicalRisk && pf.psychologicalRisk !== 'low' ? `Psychological risk: ${pf.psychologicalRisk}` : null,
+            pf.sleepQuality && pf.sleepQuality !== 'good' ? `Sleep: ${pf.sleepQuality}` : null,
+            pf.activityLevel ? `Activity level: ${pf.activityLevel}` : null,
+            pf.previousEpisodes && pf.previousEpisodes > 0 ? `Previous episodes: ${pf.previousEpisodes}` : null,
+            pf.steroidInjectionHistory ? `Steroid injections: ${pf.steroidInjectionCount || 'yes'}` : null,
+            pf.comorbiditiesNotes ? `Comorbidities: ${pf.comorbiditiesNotes}` : null,
+          ].filter(Boolean).join(', ')
+        : '';
+
+      const systemPrompt = `You are an expert physiotherapy clinical scientist. Generate evidence-based, CONDITION-SPECIFIC recovery goal targets for a patient.
+
+CRITICAL RULES:
+1. Targets MUST be specific to the exact condition — do NOT use generic templates.
+2. Consider the patient's clinical presentation (pain, muscle tension, posture, compensations) when setting targets.
+3. Adjust targets based on patient factors (age, comorbidities, chronicity, irritability).
+4. Pain scale is 0-100. Set painTarget as the realistic end-of-recovery pain level (typically 5-15).
+5. ROM targets should use standard anatomical joint movements relevant to this specific condition.
+6. Muscle tension targets use 0-100 scale where 50 is normal resting tone.
+7. Sling integrity targets use 0-100% scale.
+8. Be conservative for chronic/high-irritability presentations.
+9. strengthTarget is percentage of normal (0-100).
+10. riskScoreTarget is injury risk score (lower is better, typically 10-25).
+11. jointStressTarget is joint loading stress (lower is better, typically 15-30).
+12. compensationResolutionTarget is percentage of compensations to resolve (typically 80-95).
+13. overallRomRecoveryPercent is the expected ROM ceiling as percentage of normal (typically 85-100).
+14. For romTargets, use standard joint IDs like: shoulder_flexion, shoulder_abduction, shoulder_er, shoulder_ir, elbow_flexion, hip_flexion, hip_abduction, hip_er, hip_ir, knee_flexion, knee_extension, ankle_dorsiflexion, ankle_plantarflexion, cervical_flexion, cervical_rotation, lumbar_flexion, lumbar_extension, thoracic_rotation.
+15. Only include ROM targets for joints RELEVANT to this specific condition.
+16. For functionalGoals, choose condition-specific functional milestones with measurable targets.
+
+Return a JSON object with this exact structure:
+{
+  "conditionId": "ai_generated_<snake_case_condition>",
+  "conditionName": "<Full Condition Name>",
+  "romTargets": [{ "jointId": string, "label": string, "targetDegrees": number, "normalDegrees": number, "recoveryPercent": number }],
+  "painTarget": number,
+  "muscleTensionTargets": [{ "muscleId": string, "targetTensionMin": number, "targetTensionMax": number }],
+  "slingTargets": [{ "slingName": string, "targetIntegrity": number }],
+  "postureTargets": [{ "deviationType": string, "boneName": string, "targetAngle": number, "axis": "x"|"y"|"z" }],
+  "compensationResolutionTarget": number,
+  "functionalGoals": [{ "label": string, "metric": string, "targetValue": number, "unit": string }],
+  "riskScoreTarget": number,
+  "strengthTarget": number,
+  "jointStressTarget": number,
+  "overallRomRecoveryPercent": number
+}`;
+
+      const clinicalPrompt = `Generate recovery goal targets for: **${data.conditionName}**
+
+${hypothesesSummary}
+
+CLINICAL STATE FROM 3D SKELETON:
+${painSummary}
+${muscleSummary}
+${compSummary}
+${postureSummary}
+${slingSummary}
+
+${data.extractionSummary ? `CLINICAL EXTRACTION:\n${data.extractionSummary}` : ''}
+
+${patientSummary ? `PATIENT FACTORS:\n${patientSummary}` : ''}
+
+Generate precise, evidence-based recovery targets specific to ${data.conditionName}. Consider the patient's current presentation and factors when setting target values.`;
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: clinicalPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 3000,
+        temperature: 0.3,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const goalResponseSchema = z.object({
+        conditionId: z.string(),
+        conditionName: z.string(),
+        romTargets: z.array(z.object({
+          jointId: z.string(),
+          label: z.string(),
+          targetDegrees: z.number(),
+          normalDegrees: z.number(),
+          recoveryPercent: z.number(),
+        })).default([]),
+        painTarget: z.number().min(0).max(100).default(10),
+        muscleTensionTargets: z.array(z.object({
+          muscleId: z.string(),
+          targetTensionMin: z.number(),
+          targetTensionMax: z.number(),
+        })).default([]),
+        slingTargets: z.array(z.object({
+          slingName: z.string(),
+          targetIntegrity: z.number(),
+        })).default([]),
+        postureTargets: z.array(z.object({
+          deviationType: z.string(),
+          boneName: z.string(),
+          targetAngle: z.number(),
+          axis: z.enum(["x", "y", "z"]),
+        })).default([]),
+        compensationResolutionTarget: z.number().default(90),
+        functionalGoals: z.array(z.object({
+          label: z.string(),
+          metric: z.string(),
+          targetValue: z.number(),
+          unit: z.string(),
+        })).default([]),
+        riskScoreTarget: z.number().default(15),
+        strengthTarget: z.number().default(75),
+        jointStressTarget: z.number().default(20),
+        overallRomRecoveryPercent: z.number().default(90),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = goalResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Recovery goal AI response validation failed:", validated.error.format());
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          raw,
+        });
+      }
+
+      res.json(validated.data);
+    } catch (error: unknown) {
+      console.error("Recovery goals generation error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate recovery goals", details: message });
+    }
+  });
+
   app.post("/api/electrophysical-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const electroInputSchema = z.object({

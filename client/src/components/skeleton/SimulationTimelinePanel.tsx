@@ -3208,7 +3208,7 @@ function SessionTimelineView({
                                   range.dosageLabel === 'light' ? 'bg-blue-400/60' :
                                   range.dosageLabel === 'light-moderate' ? 'bg-cyan-400/60' :
                                   range.dosageLabel === 'moderate' ? 'bg-green-400/60' :
-                                  range.dosageLabel === 'progressive' ? 'bg-amber-400/60' : 'bg-violet-400/60'
+                                  range.dosageLabel === 'moderate-heavy' ? 'bg-amber-400/60' : 'bg-red-400/60'
                                 } ${rxDrivingSession === s.sessionNumber ? 'ring-1 ring-violet-400 scale-y-150' : 'hover:scale-y-125'}`}
                                 title={`S${s.sessionNumber}: ${range.dosageLabel}${isNew ? ' (New)' : isProgressed ? ' (Progressed)' : ''}`}
                                 onClick={() => { setRxDrivingSession(s.sessionNumber); onSessionPrescriptionSelect?.(s.sessionNumber); }}
@@ -3334,7 +3334,8 @@ function SessionTimelineView({
                     { label: 'Light', color: 'bg-blue-400/60' },
                     { label: 'Light-Mod', color: 'bg-cyan-400/60' },
                     { label: 'Moderate', color: 'bg-green-400/60' },
-                    { label: 'Progressive', color: 'bg-amber-400/60' },
+                    { label: 'Mod-Heavy', color: 'bg-amber-400/60' },
+                    { label: 'Heavy', color: 'bg-red-400/60' },
                   ].map(l => (
                     <div key={l.label} className="flex items-center gap-0.5">
                       <div className={`w-2 h-2 rounded-sm ${l.color}`} />
@@ -4379,7 +4380,10 @@ export default function SimulationTimelinePanel({
       const result = computeTimelinePrescriptions(sessionTimeline.sessions, aiGoalProfile, currentStateGap);
       for (let i = 0; i < sessionTimeline.sessions.length; i++) {
         if (i < result.sessionPrescriptions.length) {
-          sessionTimeline.sessions[i].prescriptionContext = result.sessionPrescriptions[i];
+          const snap = sessionTimeline.sessions[i];
+          if (snap.prescriptionContext !== result.sessionPrescriptions[i]) {
+            snap.prescriptionContext = result.sessionPrescriptions[i];
+          }
         }
       }
       return result;

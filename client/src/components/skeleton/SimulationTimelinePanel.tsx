@@ -2165,7 +2165,7 @@ function SessionTimelineView({
   onRecordOutcome: (outcome: ActualSessionOutcome) => void;
   onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
   clinicalState?: ClinicalStateInput | null;
-  aiGoalProfileOverride?: RecoveryGoalProfile | null;
+  aiGoalProfileOverride: RecoveryGoalProfile | null;
   aiGoalLoading?: boolean;
   aiGoalError?: string | null;
 }) {
@@ -3880,9 +3880,8 @@ export default function SimulationTimelinePanel({
     if (structuredReasoning && structuredReasoning.hypotheses.length > 0) {
       return structuredReasoning.hypotheses[0].condition;
     }
-    if (activeCondition) return activeCondition.conditionName;
     return null;
-  }, [structuredReasoning, activeCondition]);
+  }, [structuredReasoning]);
 
   useEffect(() => {
     if (!conditionNameForAi) {

@@ -8033,6 +8033,7 @@ ${ddxList}`;
                   setWhatIfScenarios([]);
                   setWhatIfComparisonBScenarios([]);
                   setShowInjuryMechanism(false);
+                  setShowSimTimeline(false);
                   setMechanismActiveTab('mechanism');
                   setMechanismBoneIds([]);
 

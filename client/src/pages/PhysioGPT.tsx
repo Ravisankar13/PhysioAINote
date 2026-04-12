@@ -3397,6 +3397,18 @@ ${ddxList}`;
     }));
   }, [scarMarkers]);
 
+  const currentRomForGoals = useMemo(() => {
+    if (romMeasurements.length === 0) return undefined;
+    const romMap: Record<string, number> = {};
+    for (const m of romMeasurements) {
+      const key = m.movementId;
+      if (!romMap[key] || m.measuredValue > romMap[key]) {
+        romMap[key] = m.measuredValue;
+      }
+    }
+    return Object.entries(romMap).map(([jointId, currentDegrees]) => ({ jointId, currentDegrees }));
+  }, [romMeasurements]);
+
   const postureMeasurementsForGoals = useMemo(() => {
     const mc = effectiveModelConfig;
     if (!mc) return undefined;
@@ -8612,6 +8624,7 @@ ${ddxList}`;
                       scarSummary={scarSummaryForGoals}
                       chainTensionAverages={chainEffects.length > 0 ? chainEffects : undefined}
                       postureMeasurements={postureMeasurementsForGoals}
+                      currentRom={currentRomForGoals}
                     />
                   </Suspense>
                 </div>

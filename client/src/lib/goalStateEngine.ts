@@ -38,6 +38,13 @@ export interface ClinicalStateInput {
   currentRom?: CurrentRomEntry[];
   scarSummary?: ScarSummaryEntry[];
   chainTensionAverages?: ChainTensionEntry[];
+  activePhaseIndex?: number;
+}
+
+export interface PhaseGatedCeiling {
+  romCeilingPercent: number;
+  strengthCap?: number;
+  romCaps?: Record<string, number>;
 }
 
 export interface PathologyGoalOverride {
@@ -50,6 +57,7 @@ export interface PathologyGoalOverride {
   romCeilingOverride?: number;
   painTargetOverride?: number;
   contraindications?: string[];
+  phaseGatedCeilings?: PhaseGatedCeiling[];
 }
 
 const PATHOLOGY_GOAL_OVERRIDES: PathologyGoalOverride[] = [
@@ -116,6 +124,12 @@ const PATHOLOGY_GOAL_OVERRIDES: PathologyGoalOverride[] = [
     romCeilingOverride: 80,
     painTargetOverride: 10,
     contraindications: ['heavy resistance early', 'passive ER beyond 40° first 6 weeks'],
+    phaseGatedCeilings: [
+      { romCeilingPercent: 40, strengthCap: 0, romCaps: { shoulder_er: 20, shoulder_flexion: 90, shoulder_abduction: 60 } },
+      { romCeilingPercent: 60, strengthCap: 30, romCaps: { shoulder_er: 30, shoulder_flexion: 120, shoulder_abduction: 90 } },
+      { romCeilingPercent: 80, strengthCap: 50, romCaps: { shoulder_er: 40, shoulder_flexion: 140, shoulder_abduction: 120 } },
+      { romCeilingPercent: 95, strengthCap: 70 },
+    ],
   },
   {
     conditionKeywords: ['acl reconstruction', 'acl recon', 'post-acl', 'aclr'],
@@ -129,6 +143,12 @@ const PATHOLOGY_GOAL_OVERRIDES: PathologyGoalOverride[] = [
     romCeilingOverride: 95,
     painTargetOverride: 5,
     contraindications: ['open chain knee extension 0-45° first 12 weeks', 'pivoting sports before 9 months'],
+    phaseGatedCeilings: [
+      { romCeilingPercent: 50, strengthCap: 20, romCaps: { knee_flexion: 90, knee_extension: 0 } },
+      { romCeilingPercent: 70, strengthCap: 40, romCaps: { knee_flexion: 110 } },
+      { romCeilingPercent: 85, strengthCap: 60, romCaps: { knee_flexion: 120 } },
+      { romCeilingPercent: 95, strengthCap: 80 },
+    ],
   },
   {
     conditionKeywords: ['spondylolisthesis', 'spondylolysis', 'pars defect'],
@@ -172,6 +192,12 @@ const PATHOLOGY_GOAL_OVERRIDES: PathologyGoalOverride[] = [
     strengthCap: 75,
     romCeilingOverride: 85,
     painTargetOverride: 10,
+    phaseGatedCeilings: [
+      { romCeilingPercent: 50, strengthCap: 20, romCaps: { knee_flexion: 90, knee_extension: 5 } },
+      { romCeilingPercent: 70, strengthCap: 45, romCaps: { knee_flexion: 110, knee_extension: 0 } },
+      { romCeilingPercent: 85, strengthCap: 65, romCaps: { knee_flexion: 120, knee_extension: 0 } },
+      { romCeilingPercent: 95, strengthCap: 80 },
+    ],
   },
   {
     conditionKeywords: ['total hip replacement', 'thr', 'total hip arthroplasty', 'tha'],
@@ -185,8 +211,31 @@ const PATHOLOGY_GOAL_OVERRIDES: PathologyGoalOverride[] = [
     romCeilingOverride: 85,
     painTargetOverride: 10,
     contraindications: ['hip flexion beyond 90° first 6 weeks', 'adduction past midline', 'internal rotation'],
+    phaseGatedCeilings: [
+      { romCeilingPercent: 45, strengthCap: 15, romCaps: { hip_flexion: 70, hip_ir: 0, hip_abduction: 15 } },
+      { romCeilingPercent: 65, strengthCap: 40, romCaps: { hip_flexion: 90, hip_ir: 10, hip_abduction: 25 } },
+      { romCeilingPercent: 85, strengthCap: 65, romCaps: { hip_flexion: 100, hip_ir: 15, hip_abduction: 30 } },
+      { romCeilingPercent: 95, strengthCap: 80 },
+    ],
   },
 ];
+
+function resolvePhaseGating(
+  pathOverride: PathologyGoalOverride,
+  activePhaseIndex?: number,
+): { romCeilingPercent?: number; strengthCap?: number; romCaps?: Record<string, number> } {
+  if (!pathOverride.phaseGatedCeilings || pathOverride.phaseGatedCeilings.length === 0) {
+    return {};
+  }
+  const idx = activePhaseIndex ?? 0;
+  const clamped = Math.min(idx, pathOverride.phaseGatedCeilings.length - 1);
+  const phaseCeiling = pathOverride.phaseGatedCeilings[clamped];
+  return {
+    romCeilingPercent: phaseCeiling.romCeilingPercent,
+    strengthCap: phaseCeiling.strengthCap,
+    romCaps: phaseCeiling.romCaps,
+  };
+}
 
 export function detectPathologyOverride(conditionName: string): PathologyGoalOverride | null {
   if (!conditionName) return null;
@@ -372,11 +421,15 @@ export function generateGoalProfile(
   clinicalState?: ClinicalStateInput | null,
 ): RecoveryGoalProfile {
   const pathOverride = detectPathologyOverride(conditionProfile.conditionName);
+  const phaseGating = pathOverride ? resolvePhaseGating(pathOverride, clinicalState?.activePhaseIndex) : null;
 
   const baseRomCeiling = conditionProfile.expectedRomRecoveryPercent ?? 95;
-  const overriddenCeiling = pathOverride?.romCeilingOverride
-    ? Math.min(baseRomCeiling, pathOverride.romCeilingOverride)
-    : baseRomCeiling;
+  let overriddenCeiling = baseRomCeiling;
+  if (phaseGating?.romCeilingPercent !== undefined) {
+    overriddenCeiling = Math.min(overriddenCeiling, phaseGating.romCeilingPercent);
+  } else if (pathOverride?.romCeilingOverride) {
+    overriddenCeiling = Math.min(overriddenCeiling, pathOverride.romCeilingOverride);
+  }
   const modifiedCeiling = patientModifiers
     ? clamp(overriddenCeiling * (patientModifiers.romCeilingAdjustment ?? 1), 50, 100)
     : overriddenCeiling;
@@ -388,6 +441,8 @@ export function generateGoalProfile(
 
   const romSkipSet = new Set(pathOverride?.romSkip ?? []);
 
+  const effectiveRomCaps = { ...(pathOverride?.romCaps ?? {}), ...(phaseGating?.romCaps ?? {}) };
+
   const romTargets: RomGoalTarget[] = jointSet
     .filter(jid => !romSkipSet.has(jid))
     .map(jointId => {
@@ -398,8 +453,8 @@ export function generateGoalProfile(
 
       let targetDeg = Math.round(norm.normalDegrees * (modifiedCeiling / 100));
 
-      if (pathOverride?.romCaps?.[jointId] !== undefined) {
-        targetDeg = Math.min(targetDeg, pathOverride.romCaps[jointId]);
+      if (effectiveRomCaps[jointId] !== undefined) {
+        targetDeg = Math.min(targetDeg, effectiveRomCaps[jointId]);
       }
 
       const currentRomEntry = clinicalState?.currentRom?.find(r => r.jointId === jointId);
@@ -451,8 +506,9 @@ export function generateGoalProfile(
 
   const baseStrength = conditionProfile.category === 'knee' || conditionProfile.category === 'hip'
     ? 80 : conditionProfile.category === 'shoulder' ? 75 : 70;
-  const strengthTarget = pathOverride?.strengthCap
-    ? Math.min(baseStrength, pathOverride.strengthCap)
+  const effectiveStrengthCap = phaseGating?.strengthCap ?? pathOverride?.strengthCap;
+  const strengthTarget = effectiveStrengthCap !== undefined
+    ? Math.min(baseStrength, effectiveStrengthCap)
     : baseStrength;
 
   const jointStressTarget = conditionProfile.recurrenceRiskPercent > 30 ? 25 : 20;
@@ -480,11 +536,15 @@ export function generateGenericGoalProfile(
   patientModifiers?: PatientModifierProfile | null,
 ): RecoveryGoalProfile {
   const pathOverride = detectPathologyOverride(conditionName);
+  const phaseGating = pathOverride ? resolvePhaseGating(pathOverride, clinicalState?.activePhaseIndex) : null;
 
   const baseRomCeiling = 90;
-  const overriddenCeiling = pathOverride?.romCeilingOverride
-    ? Math.min(baseRomCeiling, pathOverride.romCeilingOverride)
-    : baseRomCeiling;
+  let overriddenCeiling = baseRomCeiling;
+  if (phaseGating?.romCeilingPercent !== undefined) {
+    overriddenCeiling = Math.min(overriddenCeiling, phaseGating.romCeilingPercent);
+  } else if (pathOverride?.romCeilingOverride) {
+    overriddenCeiling = Math.min(overriddenCeiling, pathOverride.romCeilingOverride);
+  }
   const romCeilingPct = patientModifiers
     ? clamp(overriddenCeiling * (patientModifiers.romCeilingAdjustment ?? 1), 50, 100)
     : overriddenCeiling;
@@ -520,14 +580,16 @@ export function generateGenericGoalProfile(
     jointIds.push('shoulder_flexion', 'hip_flexion', 'knee_flexion');
   }
 
+  const genericEffectiveRomCaps = { ...(pathOverride?.romCaps ?? {}), ...(phaseGating?.romCaps ?? {}) };
+
   const romTargets: RomGoalTarget[] = jointIds.map(jointId => {
     const norm = JOINT_ROM_NORMS[jointId];
     if (!norm) return null;
 
     let targetDeg = Math.round(norm.normalDegrees * (romCeilingPct / 100));
 
-    if (pathOverride?.romCaps?.[jointId] !== undefined) {
-      targetDeg = Math.min(targetDeg, pathOverride.romCaps[jointId]);
+    if (genericEffectiveRomCaps[jointId] !== undefined) {
+      targetDeg = Math.min(targetDeg, genericEffectiveRomCaps[jointId]);
     }
 
     const currentRomEntry = clinicalState?.currentRom?.find(r => r.jointId === jointId);
@@ -639,8 +701,9 @@ export function generateGenericGoalProfile(
 
   const baseStrength = detectedCategory === 'knee' || detectedCategory === 'hip' ? 80
     : detectedCategory === 'shoulder' ? 75 : 70;
-  const strengthTarget = pathOverride?.strengthCap
-    ? Math.min(baseStrength, pathOverride.strengthCap)
+  const genericEffectiveStrengthCap = phaseGating?.strengthCap ?? pathOverride?.strengthCap;
+  const strengthTarget = genericEffectiveStrengthCap !== undefined
+    ? Math.min(baseStrength, genericEffectiveStrengthCap)
     : baseStrength;
 
   return {

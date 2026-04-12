@@ -1095,7 +1095,7 @@ export function findConditionProfile(conditionName: string): ConditionRecoveryPr
     "whiplash": "whiplash",
     "wad": "whiplash",
     "cervical strain": "whiplash",
-    "knee osteoarthritis": "hip_oa",
+    "knee osteoarthritis": "patellofemoral_pain",
     "knee oa": "patellofemoral_pain",
     "degenerative knee": "patellofemoral_pain",
     "spinal stenosis": "lumbar_disc_herniation",

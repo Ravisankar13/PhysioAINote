@@ -3553,6 +3553,17 @@ ${ddxList}`;
     setMechanismActiveTab('mechanism');
   }, [whatIfSimulatedConfig, modelConfig, effectiveModelConfig]);
 
+  const [goalOverlayData, setGoalOverlayData] = useState<{
+    enabled: boolean;
+    painTargets?: Array<{ boneName: string; targetIntensity: number; currentIntensity: number }>;
+    muscleTargets?: Array<{ groupId: string; targetTension: number; currentTension: number }>;
+    overallPct?: number;
+  } | null>(null);
+
+  const handleGoalOverlayChange = useCallback((overlay: typeof goalOverlayData) => {
+    setGoalOverlayData(overlay);
+  }, []);
+
   const handleApplySimTimelineWeek = useCallback((payload: import('@/lib/simulationTimelineEngine').SessionApplyPayload) => {
     const newModelConfig = JSON.parse(JSON.stringify(modelConfig));
     for (const [joint, params] of Object.entries(payload.modelConfig)) {
@@ -5063,6 +5074,7 @@ ${ddxList}`;
                 }
               } : undefined}
               enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle' || (!!tissueViewMode && tissueViewMode !== 'muscle')}
+              goalStateOverlay={goalOverlayData}
               onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
                 if (scarPlacementMode) {
                   const newScar: ScarMarker = {
@@ -8544,6 +8556,7 @@ ${ddxList}`;
                       customTechniques={customManualTherapyResult?.customTechniques ?? null}
                       extractionResult={extractionResult}
                       structuredReasoning={structuredReasoningData}
+                      onGoalOverlayChange={handleGoalOverlayChange}
                     />
                     </Suspense>
                   )}

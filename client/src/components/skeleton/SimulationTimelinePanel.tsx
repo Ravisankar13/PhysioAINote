@@ -80,6 +80,14 @@ import type { TreatmentPlanResult } from "./PlanTab";
 import type { MuscleOverride } from "@/lib/muscleBiomechanicsEngine";
 import type { CustomExercise } from "./ExerciseEngineTab";
 import type { CustomTechnique } from "./ManualTherapyEngineTab";
+import { generateGoalProfile, computeGoalGap, type RecoveryGoalProfile, type GoalGapAnalysis } from "@/lib/goalStateEngine";
+
+interface GoalOverlayData {
+  enabled: boolean;
+  painTargets?: Array<{ boneName: string; targetIntensity: number; currentIntensity: number }>;
+  muscleTargets?: Array<{ groupId: string; targetTension: number; currentTension: number }>;
+  overallPct?: number;
+}
 
 interface SimulationTimelinePanelProps {
   treatmentPlan: TreatmentPlanResult | null;
@@ -100,6 +108,7 @@ interface SimulationTimelinePanelProps {
   customTechniques?: CustomTechnique[] | null;
   extractionResult?: ClinicalExtractionResult | null;
   structuredReasoning?: StructuredReasoningResult | null;
+  onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
 }
 
 const PHASE_COLORS = [
@@ -1802,6 +1811,7 @@ function SessionTimelineView({
   modifiers,
   actualOutcomes,
   onRecordOutcome,
+  onGoalOverlayChange,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -1811,12 +1821,14 @@ function SessionTimelineView({
   modifiers?: PatientModifierProfile | null;
   actualOutcomes: ActualSessionOutcome[];
   onRecordOutcome: (outcome: ActualSessionOutcome) => void;
+  onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | null>('curve');
+  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals' | null>('curve');
   const [expandedSessionCard, setExpandedSessionCard] = useState<number | null>(null);
   const [appliedSession, setAppliedSession] = useState<number | null>(null);
+  const [goalOverlayEnabled, setGoalOverlayEnabled] = useState(false);
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -1885,7 +1897,7 @@ function SessionTimelineView({
     playIntervalRef.current = interval;
   }, [isPlaying, selectedSession, sessionTimeline.totalSessions, currentSnapshot, onApplyToSkeleton, buildApplyPayload]);
 
-  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases') => {
+  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals') => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
@@ -1898,6 +1910,51 @@ function SessionTimelineView({
   const nearbyMods = sessionTimeline.modifications.filter(m =>
     Math.abs(m.sessionNumber - selectedSession) <= 2 && m.sessionNumber !== selectedSession
   );
+
+  const goalProfile = useMemo<RecoveryGoalProfile | null>(() => {
+    if (!activeCondition) return null;
+    const romJointIds = sessionTimeline.baseline?.romBaselines?.map(r => r.jointId) ?? [];
+    return generateGoalProfile(activeCondition, modifiers ?? undefined, romJointIds.length > 0 ? romJointIds : undefined);
+  }, [activeCondition, modifiers, sessionTimeline.baseline]);
+
+  const currentGoalGap = useMemo<GoalGapAnalysis | null>(() => {
+    if (!goalProfile || !currentSnapshot) return null;
+    const prevSnap = selectedSession > 1
+      ? sessionTimeline.sessions.find(s => s.sessionNumber === selectedSession - 1) ?? null
+      : null;
+    return computeGoalGap(goalProfile, currentSnapshot, prevSnap);
+  }, [goalProfile, currentSnapshot, selectedSession, sessionTimeline.sessions]);
+
+  const goalPlateauWarning = useMemo(() => {
+    if (!currentSnapshot || !currentSnapshot.goalDimensions) return null;
+    const stalled = currentSnapshot.goalDimensions.filter(
+      d => d.trend === 'stalled' && d.achievementPct < 80 && d.priority === 'high'
+    );
+    if (stalled.length === 0) return null;
+    return stalled;
+  }, [currentSnapshot]);
+
+  useEffect(() => {
+    if (!onGoalOverlayChange) return;
+    if (!goalOverlayEnabled || !currentGoalGap || !goalProfile) {
+      onGoalOverlayChange(null);
+      return;
+    }
+    const painTargets = goalProfile.painTarget !== undefined && currentSnapshot
+      ? [{ boneName: 'Spine1_M', targetIntensity: goalProfile.painTarget, currentIntensity: currentSnapshot.painPrediction }]
+      : undefined;
+    const muscleTargets = goalProfile.muscleTensionTargets?.map(mt => ({
+      groupId: mt.muscleId,
+      targetTension: (mt.targetTensionMin + mt.targetTensionMax) / 2,
+      currentTension: ((mt.targetTensionMin + mt.targetTensionMax) / 2) + (100 - currentGoalGap.overallAchievementPct) * 0.3,
+    }));
+    onGoalOverlayChange({
+      enabled: true,
+      painTargets,
+      muscleTargets,
+      overallPct: currentGoalGap.overallAchievementPct,
+    });
+  }, [goalOverlayEnabled, currentGoalGap, goalProfile, currentSnapshot, onGoalOverlayChange]);
 
   return (
     <div className="flex flex-col gap-2 text-[10px] max-h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar">
@@ -2402,6 +2459,148 @@ function SessionTimelineView({
         </div>
       )}
 
+      {goalProfile && (
+        <div className="border border-green-700/30 rounded overflow-hidden">
+          <button
+            onClick={() => toggleSection('goals')}
+            className="w-full flex items-center justify-between px-2 py-1.5 bg-green-950/20 hover:bg-green-950/30 text-gray-300"
+          >
+            <span className="text-[9px] font-medium flex items-center gap-1">
+              <Target className="h-3 w-3 text-green-400" />
+              Recovery Goals
+              {currentGoalGap && (
+                <Badge variant="outline" className={`text-[7px] px-1 py-0 ml-1 ${
+                  currentGoalGap.overallAchievementPct >= 90 ? 'border-green-500 text-green-400' :
+                  currentGoalGap.overallAchievementPct >= 70 ? 'border-emerald-500 text-emerald-400' :
+                  currentGoalGap.overallAchievementPct >= 50 ? 'border-yellow-500 text-yellow-400' : 'border-red-500 text-red-400'
+                }`}>
+                  {currentGoalGap.overallAchievementPct}%
+                </Badge>
+              )}
+            </span>
+            {expandedSection === 'goals' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {expandedSection === 'goals' && (
+            <div className="p-2 bg-gray-900/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-gray-500 uppercase tracking-wider">End-State Targets</span>
+                <button
+                  onClick={() => setGoalOverlayEnabled(!goalOverlayEnabled)}
+                  className={`text-[8px] px-1.5 py-0.5 rounded border transition-colors ${
+                    goalOverlayEnabled
+                      ? 'bg-green-500/20 border-green-500/50 text-green-400'
+                      : 'bg-gray-800/50 border-gray-700/50 text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {goalOverlayEnabled ? '3D On' : '3D Off'}
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[8px]">
+                  <span className="text-gray-400">Pain Target</span>
+                  <span className="text-green-400 font-medium">≤ {goalProfile.painTarget}/100</span>
+                </div>
+                {goalProfile.romTargets && goalProfile.romTargets.length > 0 && (
+                  <div className="space-y-0.5">
+                    {goalProfile.romTargets.slice(0, 4).map(rt => (
+                      <div key={rt.jointId} className="flex items-center justify-between text-[8px]">
+                        <span className="text-gray-400 truncate max-w-[55%]">{rt.jointId} ROM</span>
+                        <span className="text-cyan-400 font-medium">≥ {rt.targetDegrees}°</span>
+                      </div>
+                    ))}
+                    {goalProfile.romTargets.length > 4 && (
+                      <div className="text-[7px] text-gray-600">+{goalProfile.romTargets.length - 4} more</div>
+                    )}
+                  </div>
+                )}
+                {goalProfile.riskScoreTarget !== undefined && (
+                  <div className="flex items-center justify-between text-[8px]">
+                    <span className="text-gray-400">Risk Score</span>
+                    <span className="text-emerald-400 font-medium">≤ {goalProfile.riskScoreTarget}</span>
+                  </div>
+                )}
+                {goalProfile.compensationResolutionTarget !== undefined && (
+                  <div className="flex items-center justify-between text-[8px]">
+                    <span className="text-gray-400">Compensation Resolved</span>
+                    <span className="text-emerald-400 font-medium">≥ {goalProfile.compensationResolutionTarget}%</span>
+                  </div>
+                )}
+                {goalProfile.functionalGoals && goalProfile.functionalGoals.length > 0 && (
+                  <div className="space-y-0.5">
+                    {goalProfile.functionalGoals.slice(0, 3).map((fg, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-[8px]">
+                        <span className="text-gray-400 truncate max-w-[55%]">{fg.label}</span>
+                        <span className="text-emerald-400 font-medium">≥ {fg.targetValue} {fg.unit}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {goalProfile.muscleTensionTargets && goalProfile.muscleTensionTargets.length > 0 && (
+                  <div className="flex items-center justify-between text-[8px]">
+                    <span className="text-gray-400">Muscle Targets</span>
+                    <span className="text-emerald-400 font-medium">{goalProfile.muscleTensionTargets.length} groups</span>
+                  </div>
+                )}
+                {goalProfile.slingTargets && goalProfile.slingTargets.length > 0 && (
+                  <div className="flex items-center justify-between text-[8px]">
+                    <span className="text-gray-400">Sling Integrity</span>
+                    <span className="text-violet-400 font-medium">≥ {goalProfile.slingTargets[0].targetIntegrity}%</span>
+                  </div>
+                )}
+              </div>
+
+              {currentGoalGap && (
+                <div className="border-t border-gray-700/30 pt-1.5 space-y-1">
+                  <div className="text-[8px] text-gray-500 uppercase tracking-wider">Gap Analysis (S{selectedSession})</div>
+                  {currentGoalGap.dimensions.map(d => (
+                    <div key={d.dimension} className="flex items-center justify-between text-[8px]">
+                      <span className={`truncate max-w-[50%] ${
+                        d.priority === 'high' ? 'text-red-400' :
+                        d.priority === 'medium' ? 'text-amber-400' : 'text-gray-400'
+                      }`}>{d.label}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-12 h-1 bg-gray-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              d.achievementPct >= 90 ? 'bg-green-500' :
+                              d.achievementPct >= 70 ? 'bg-emerald-500' :
+                              d.achievementPct >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${d.achievementPct}%` }}
+                          />
+                        </div>
+                        <span className="text-gray-500 w-6 text-right">{d.achievementPct}%</span>
+                        <span className={`text-[7px] ${
+                          d.trend === 'improving' ? 'text-green-500' :
+                          d.trend === 'worsening' ? 'text-red-500' : 'text-gray-600'
+                        }`}>
+                          {d.trend === 'improving' ? '↑' : d.trend === 'worsening' ? '↓' : '→'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {goalPlateauWarning && goalPlateauWarning.length > 0 && (
+                <div className="bg-amber-900/20 border border-amber-700/30 rounded p-1.5">
+                  <div className="flex items-center gap-1 text-[8px] text-amber-400 font-medium mb-0.5">
+                    <AlertTriangle className="h-3 w-3" />
+                    Plateau Warning
+                  </div>
+                  {goalPlateauWarning.map(d => (
+                    <div key={d.dimension} className="text-[7px] text-amber-300/80">
+                      {d.label}: stalled at {d.achievementPct}% — consider treatment adjustment
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="bg-gray-800/30 rounded border border-gray-700/30 p-2">
         <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">Before / After — Multi-Dimensional</div>
         <div className="grid grid-cols-2 gap-2">
@@ -2519,6 +2718,38 @@ function SessionTimelineView({
                 </span>
               </div>
             </div>
+          </div>
+        )}
+        {lastSession && lastSession.goalAchievementPct !== undefined && lastSession.goalAchievementPct > 0 && (
+          <div className="mt-1 pt-1 border-t border-green-700/20">
+            <div className="text-[7px] text-gray-600 uppercase mb-0.5">Goal Achievement (Final)</div>
+            <div className="flex items-center justify-between text-[8px]">
+              <span className="text-gray-400">Overall Goal</span>
+              <span className={`font-medium ${
+                lastSession.goalAchievementPct >= 90 ? 'text-green-400' :
+                lastSession.goalAchievementPct >= 70 ? 'text-emerald-400' :
+                lastSession.goalAchievementPct >= 50 ? 'text-yellow-400' : 'text-red-400'
+              }`}>
+                {lastSession.goalAchievementPct}%
+              </span>
+            </div>
+            {lastSession.goalDimensions && lastSession.goalDimensions.length > 0 && (
+              <div className="space-y-0.5 mt-0.5">
+                {lastSession.goalDimensions.map(d => (
+                  <div key={d.dimension} className="flex items-center justify-between text-[7px]">
+                    <span className="text-gray-500 truncate max-w-[55%]">{d.label}</span>
+                    <span className={
+                      d.achievementPct >= 90 ? 'text-green-400' :
+                      d.achievementPct >= 70 ? 'text-emerald-400' :
+                      d.achievementPct >= 50 ? 'text-yellow-400' : 'text-red-400'
+                    }>
+                      {d.achievementPct}%
+                      {d.trend === 'improving' ? ' ↑' : d.trend === 'worsening' ? ' ↓' : d.trend === 'stalled' ? ' →' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         <div className="mt-1.5 pt-1.5 border-t border-gray-700/30 flex items-center gap-1 text-[9px]">
@@ -3084,6 +3315,7 @@ export default function SimulationTimelinePanel({
   customTechniques,
   extractionResult,
   structuredReasoning,
+  onGoalOverlayChange,
 }: SimulationTimelinePanelProps) {
   const [patientFactors, setPatientFactors] = useState<PatientFactors>(DEFAULT_PATIENT_FACTORS);
   const [hasAutoPopulated, setHasAutoPopulated] = useState(false);
@@ -3313,6 +3545,7 @@ export default function SimulationTimelinePanel({
             modifiers={modifiers}
             actualOutcomes={actualOutcomes}
             onRecordOutcome={handleRecordOutcome}
+            onGoalOverlayChange={onGoalOverlayChange}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (

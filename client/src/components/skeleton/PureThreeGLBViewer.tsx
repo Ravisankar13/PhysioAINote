@@ -7196,6 +7196,7 @@ export default function PureThreeGLBViewer({
   }, [tissueViewOverlay]);
 
   const goalOverlayObjectsRef = useRef<THREE.Object3D[]>([]);
+  const goalSavedEmissivesRef = useRef<Map<string, THREE.Color>>(new Map());
   useEffect(() => {
     for (const obj of goalOverlayObjectsRef.current) {
       obj.parent?.remove(obj);
@@ -7206,6 +7207,20 @@ export default function PureThreeGLBViewer({
       }
     }
     goalOverlayObjectsRef.current = [];
+
+    const savedEmissives = goalSavedEmissivesRef.current;
+    const groups = splitMuscleGroupsRef.current;
+    for (const [meshKey, originalColor] of savedEmissives) {
+      const [groupId, meshIdx] = meshKey.split('|');
+      const group = groups.get(groupId);
+      if (!group) continue;
+      const mesh = group.meshes[parseInt(meshIdx)];
+      if (mesh instanceof THREE.Mesh && mesh.material) {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat.emissive) mat.emissive.copy(originalColor);
+      }
+    }
+    savedEmissives.clear();
 
     if (!goalStateOverlay?.enabled || !sceneRef.current) return;
 
@@ -7234,7 +7249,6 @@ export default function PureThreeGLBViewer({
     }
 
     if (goalStateOverlay.muscleTargets) {
-      const groups = splitMuscleGroupsRef.current;
       for (const mt of goalStateOverlay.muscleTargets) {
         const group = groups.get(mt.groupId);
         if (!group) continue;
@@ -7242,14 +7256,18 @@ export default function PureThreeGLBViewer({
         if (gap < 5) continue;
         const hue = mt.currentTension > mt.targetTension ? 0 : 0.6;
         const ghostColor = new THREE.Color().setHSL(hue, 0.4, 0.6);
-        for (const mesh of group.meshes) {
+        group.meshes.forEach((mesh, meshIdx) => {
           if (mesh instanceof THREE.Mesh && mesh.material) {
-            const mat = (mesh.material as THREE.MeshStandardMaterial);
+            const mat = mesh.material as THREE.MeshStandardMaterial;
             if (mat.emissive) {
+              const key = `${mt.groupId}|${meshIdx}`;
+              if (!savedEmissives.has(key)) {
+                savedEmissives.set(key, mat.emissive.clone());
+              }
               mat.emissive.lerp(ghostColor, Math.min(gap / 100, 0.4));
             }
           }
-        }
+        });
       }
     }
   }, [goalStateOverlay]);

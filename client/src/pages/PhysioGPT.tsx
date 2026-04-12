@@ -3557,6 +3557,8 @@ ${ddxList}`;
     enabled: boolean;
     painTargets?: Array<{ boneName: string; targetIntensity: number; currentIntensity: number }>;
     muscleTargets?: Array<{ groupId: string; targetTension: number; currentTension: number }>;
+    postureTargets?: Array<{ boneName: string; targetAngle: number; currentAngle: number; axis: 'x' | 'y' | 'z' }>;
+    romTargets?: Array<{ boneName: string; targetDegrees: number; currentDegrees: number; label: string }>;
     overallPct?: number;
   } | null>(null);
 

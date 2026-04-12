@@ -1203,6 +1203,10 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
             {isExpanded && (() => {
               const GRADE_TO_NUM: Record<string, number> = { 'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5 };
               const parseGradeNum = (s: string): number => {
+                const rangeM = s.match(/([IV]+)\s*[-–]\s*([IV]+)/i);
+                if (rangeM) {
+                  return GRADE_TO_NUM[rangeM[2].toUpperCase()] ?? 0;
+                }
                 const m = s.match(/([IV]+)/i);
                 return m ? (GRADE_TO_NUM[m[1].toUpperCase()] ?? 0) : 0;
               };

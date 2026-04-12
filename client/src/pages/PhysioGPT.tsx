@@ -3630,7 +3630,7 @@ ${ddxList}`;
   const exerciseMtClinicalState = useMemo<import("@/lib/goalStateEngine").ClinicalStateInput>(() => ({
     painMarkers: painMarkers.map(pm => ({
       boneName: pm.nearestBone || pm.anatomicalLabel || 'unknown',
-      intensity: typeof (pm as Record<string, unknown>).severity === 'number' ? (pm as Record<string, unknown>).severity as number : 50,
+      intensity: typeof pm.severity === 'number' ? pm.severity : 50,
     })),
     posturalDeviations: [],
     activePhaseIndex: exerciseMtActivePhaseIndex,

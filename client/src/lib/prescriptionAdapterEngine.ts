@@ -19,7 +19,7 @@ export type ExerciseCategory = 'strengthening' | 'stretching' | 'mobility' | 'ne
 export interface DosageScaling {
   setsMultiplier: number;
   repMultiplier: number;
-  intensityLabel: 'light' | 'moderate' | 'moderate-heavy' | 'heavy';
+  intensityLabel: 'light' | 'light-moderate' | 'moderate' | 'moderate-heavy' | 'heavy';
   painCeiling: number;
   rationale: string;
 }
@@ -290,11 +290,20 @@ function selectRecommendedManualTherapy(
 }
 
 function parseGradeNumber(grade: string): number {
-  if (grade.includes('IV') || grade.includes('4')) return 4;
-  if (grade.includes('V') || grade.includes('5')) return 5;
-  if (grade.includes('III') || grade.includes('3')) return 3;
-  if (grade.includes('II') || grade.includes('2')) return 2;
-  if (grade.includes('I') || grade.includes('1')) return 1;
+  const rangeMatch = grade.match(/([IV]+)\s*[-–]\s*([IV]+)/);
+  if (rangeMatch) {
+    const high = romanToNum(rangeMatch[2]);
+    return high;
+  }
+  return romanToNum(grade);
+}
+
+function romanToNum(s: string): number {
+  if (s.includes('IV') || s.includes('4')) return 4;
+  if (s.includes('V') || s.includes('5')) return 5;
+  if (s.includes('III') || s.includes('3')) return 3;
+  if (s.includes('II') || s.includes('2')) return 2;
+  if (s.includes('I') || s.includes('1')) return 1;
   return 3;
 }
 

@@ -95,7 +95,8 @@ interface ExerciseEngineTabProps {
   goalGap?: GoalGapAnalysis | null;
   sessionPrescription?: PrescriptionContext | null;
   sessionPrescriptionNum?: number | null;
-  triggerGenerate?: number;
+  pendingGenerate?: boolean;
+  onGenerateStarted?: () => void;
   onGenerateComplete?: (success: boolean) => void;
 }
 
@@ -530,7 +531,7 @@ function CustomExerciseCard({ exercise, index, dosageScalingData }: { exercise: 
   );
 }
 
-export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, triggerGenerate, onGenerateComplete }: ExerciseEngineTabProps) {
+export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete }: ExerciseEngineTabProps) {
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -687,14 +688,12 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
     }
   }, [buildPayload, onGenerateComplete]);
 
-  const prevTriggerRef = useRef(triggerGenerate ?? 0);
   useEffect(() => {
-    const current = triggerGenerate ?? 0;
-    if (current > prevTriggerRef.current) {
+    if (pendingGenerate) {
+      onGenerateStarted?.();
       generatePlan();
     }
-    prevTriggerRef.current = current;
-  }, [triggerGenerate, generatePlan]);
+  }, [pendingGenerate, generatePlan, onGenerateStarted]);
 
   const designCustomExercises = useCallback(async () => {
     if (customAbortRef.current) customAbortRef.current.abort();

@@ -698,8 +698,8 @@ export default function PhysioGPT() {
   const [activeGoalGap, setActiveGoalGap] = useState<import("@/lib/goalStateEngine").GoalGapAnalysis | null>(null);
   const [sessionPrescriptionCtx, setSessionPrescriptionCtx] = useState<import("@/lib/prescriptionAdapterEngine").PrescriptionContext | null>(null);
   const [sessionPrescriptionNum, setSessionPrescriptionNum] = useState<number | null>(null);
-  const [triggerExerciseGenerate, setTriggerExerciseGenerate] = useState(0);
-  const [triggerMTGenerate, setTriggerMTGenerate] = useState(0);
+  const [pendingExerciseGenerate, setPendingExerciseGenerate] = useState(false);
+  const [pendingMTGenerate, setPendingMTGenerate] = useState(false);
   const [exerciseGeneratingSession, setExerciseGeneratingSession] = useState<number | null>(null);
   const [mtGeneratingSession, setMtGeneratingSession] = useState<number | null>(null);
   const [exerciseGeneratedSessions, setExerciseGeneratedSessions] = useState<Set<number>>(new Set());
@@ -3629,14 +3629,22 @@ ${ddxList}`;
 
   const handleTriggerExerciseGenerate = useCallback((sessionNumber: number) => {
     setMechanismActiveTab('exercise');
-    setTriggerExerciseGenerate(prev => prev + 1);
+    setPendingExerciseGenerate(true);
     setExerciseGeneratingSession(sessionNumber);
   }, []);
 
   const handleTriggerMTGenerate = useCallback((sessionNumber: number) => {
     setMechanismActiveTab('manualRx');
-    setTriggerMTGenerate(prev => prev + 1);
+    setPendingMTGenerate(true);
     setMtGeneratingSession(sessionNumber);
+  }, []);
+
+  const handleExerciseGenerateStarted = useCallback(() => {
+    setPendingExerciseGenerate(false);
+  }, []);
+
+  const handleMTGenerateStarted = useCallback(() => {
+    setPendingMTGenerate(false);
   }, []);
 
   const handleExerciseGenerateComplete = useCallback((success: boolean) => {
@@ -8605,7 +8613,8 @@ ${ddxList}`;
                       goalGap={activeGoalGap}
                       sessionPrescription={sessionPrescriptionCtx}
                       sessionPrescriptionNum={sessionPrescriptionNum}
-                      triggerGenerate={triggerExerciseGenerate}
+                      pendingGenerate={pendingExerciseGenerate}
+                      onGenerateStarted={handleExerciseGenerateStarted}
                       onGenerateComplete={handleExerciseGenerateComplete}
                     />
                   )}
@@ -8637,7 +8646,8 @@ ${ddxList}`;
                       goalGap={activeGoalGap}
                       sessionPrescription={sessionPrescriptionCtx}
                       sessionPrescriptionNum={sessionPrescriptionNum}
-                      triggerGenerate={triggerMTGenerate}
+                      pendingGenerate={pendingMTGenerate}
+                      onGenerateStarted={handleMTGenerateStarted}
                       onGenerateComplete={handleMTGenerateComplete}
                     />
                   )}

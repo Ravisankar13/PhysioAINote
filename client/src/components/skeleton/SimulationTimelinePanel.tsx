@@ -1964,29 +1964,26 @@ function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
   );
 }
 
-function RecoveryGoalHeroCard({ goalProfile, totalWeeks, totalSessions, finalGoalGap, isLoading, isAiGenerated }: {
+function RecoveryGoalHeroCard({ goalProfile, totalWeeks, totalSessions, finalGoalGap, isLoading }: {
   goalProfile: RecoveryGoalProfile;
   totalWeeks?: number;
   totalSessions?: number;
   finalGoalGap?: GoalGapAnalysis | null;
   isLoading?: boolean;
-  isAiGenerated?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-green-500/40 bg-gradient-to-b from-green-950/40 via-gray-900/60 to-gray-900/40 p-3 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-cyan-500/5 pointer-events-none" />
+      {isLoading && (
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-green-500/20 overflow-hidden">
+          <div className="h-full w-1/3 bg-green-400/60 animate-pulse rounded-full" />
+        </div>
+      )}
       <div className="relative">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
-            {isLoading ? (
-              <RefreshCw className="h-4 w-4 text-green-400 animate-spin" />
-            ) : (
-              <Target className="h-4 w-4 text-green-400" />
-            )}
+            <Target className="h-4 w-4 text-green-400" />
             <span className="text-[11px] font-bold text-green-300">Final Recovery Goal</span>
-            {isAiGenerated && !isLoading && (
-              <Badge variant="outline" className="text-[7px] py-0 px-1 border-cyan-500/30 text-cyan-400">AI</Badge>
-            )}
           </div>
           {finalGoalGap && (
             <div className={`text-sm font-bold ${
@@ -2155,6 +2152,7 @@ function SessionTimelineView({
   onGoalOverlayChange,
   clinicalState,
   aiGoalProfileOverride,
+  aiGoalLoading: aiGoalLoadingProp,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -2167,6 +2165,7 @@ function SessionTimelineView({
   onGoalOverlayChange?: (overlay: GoalOverlayData | null) => void;
   clinicalState?: ClinicalStateInput | null;
   aiGoalProfileOverride?: RecoveryGoalProfile | null;
+  aiGoalLoading?: boolean;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2457,7 +2456,7 @@ function SessionTimelineView({
           totalWeeks={Math.round(sessionTimeline.totalDays / 7)}
           totalSessions={sessionTimeline.totalSessions}
           finalGoalGap={finalGoalGap}
-          isAiGenerated={!!aiGoalProfileOverride}
+          isLoading={aiGoalLoadingProp}
         />
       )}
 
@@ -3903,10 +3902,10 @@ export default function SimulationTimelinePanel({
       cn: conditionNameForAi,
       pf: patientFactors,
       pm: clinicalStateForGoals ? {
-        p: clinicalStateForGoals.painMarkers?.length ?? 0,
-        m: clinicalStateForGoals.muscleStates?.length ?? 0,
-        c: clinicalStateForGoals.compensationPatterns?.length ?? 0,
-        d: clinicalStateForGoals.posturalDeviations?.length ?? 0,
+        p: clinicalStateForGoals.painMarkers?.map(m => `${m.boneId || m.boneName}:${m.intensity}:${m.type}`).sort() ?? [],
+        m: clinicalStateForGoals.muscleStates?.map(s => `${s.muscleName}:${s.tension}`).sort() ?? [],
+        c: clinicalStateForGoals.compensationPatterns?.map(c => `${c.pattern}:${c.severity}`).sort() ?? [],
+        d: clinicalStateForGoals.posturalDeviations?.map(d => `${d.type}:${d.severity}`).sort() ?? [],
       } : null,
     });
 
@@ -3915,6 +3914,8 @@ export default function SimulationTimelinePanel({
       setAiGoalLoading(false);
       return;
     }
+
+    setAiGoalProfile(null);
 
     if (aiGoalDebounceRef.current) {
       clearTimeout(aiGoalDebounceRef.current);
@@ -4167,6 +4168,7 @@ export default function SimulationTimelinePanel({
             onGoalOverlayChange={onGoalOverlayChange}
             clinicalState={clinicalStateForGoals}
             aiGoalProfileOverride={aiGoalProfile}
+            aiGoalLoading={aiGoalLoading}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (
@@ -4189,7 +4191,6 @@ export default function SimulationTimelinePanel({
             totalWeeks={Math.round(weekTimeline.totalDays / 7)}
             totalSessions={weekTimeline.totalSessions}
             isLoading={aiGoalLoading}
-            isAiGenerated={!!aiGoalProfile}
           />
         )}
         {!parentGoalProfile && aiGoalLoading && (
@@ -4213,7 +4214,6 @@ export default function SimulationTimelinePanel({
         <RecoveryGoalHeroCard
           goalProfile={parentGoalProfile}
           isLoading={aiGoalLoading}
-          isAiGenerated={!!aiGoalProfile}
         />
       )}
       {!parentGoalProfile && aiGoalLoading && (

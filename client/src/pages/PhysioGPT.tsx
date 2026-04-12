@@ -8546,7 +8546,7 @@ ${ddxList}`;
             )}
 
             {showSimTimeline && (
-              <div className="absolute top-2 right-2 z-30 w-[280px] max-h-[calc(100%-50px)] overflow-y-auto animate-in slide-in-from-right-2 duration-200">
+              <div className="absolute top-2 right-2 z-30 w-[460px] max-h-[calc(100%-16px)] overflow-y-auto animate-in slide-in-from-right-2 duration-200">
                 <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">

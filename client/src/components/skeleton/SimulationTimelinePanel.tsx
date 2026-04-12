@@ -2459,6 +2459,12 @@ function SessionTimelineView({
           isLoading={aiGoalLoadingProp}
         />
       )}
+      {!goalProfile && aiGoalLoadingProp && (
+        <div className="rounded-lg border border-green-500/20 bg-gray-900/40 p-4 text-center">
+          <RefreshCw className="h-5 w-5 text-green-400 animate-spin mx-auto mb-2" />
+          <span className="text-[10px] text-gray-400">Generating AI recovery goals...</span>
+        </div>
+      )}
 
       <div className="bg-gray-800/50 rounded border border-gray-700/50 p-2">
         <div className="flex items-center justify-between mb-1.5">

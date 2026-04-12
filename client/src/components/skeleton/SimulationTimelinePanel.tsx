@@ -1964,6 +1964,176 @@ function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
   );
 }
 
+function RecoveryGoalHeroCard({ goalProfile, totalWeeks, totalSessions, finalGoalGap }: {
+  goalProfile: RecoveryGoalProfile;
+  totalWeeks?: number;
+  totalSessions?: number;
+  finalGoalGap?: GoalGapAnalysis | null;
+}) {
+  return (
+    <div className="rounded-lg border border-green-500/40 bg-gradient-to-b from-green-950/40 via-gray-900/60 to-gray-900/40 p-3 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-cyan-500/5 pointer-events-none" />
+      <div className="relative">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <Target className="h-4 w-4 text-green-400" />
+            <span className="text-[11px] font-bold text-green-300">Final Recovery Goal</span>
+          </div>
+          {finalGoalGap && (
+            <div className={`text-sm font-bold ${
+              finalGoalGap.overallAchievementPct >= 85 ? 'text-green-400' :
+              finalGoalGap.overallAchievementPct >= 65 ? 'text-emerald-400' :
+              finalGoalGap.overallAchievementPct >= 45 ? 'text-yellow-400' : 'text-red-400'
+            }`}>
+              {finalGoalGap.overallAchievementPct}%
+            </div>
+          )}
+        </div>
+
+        <div className="text-center mb-2.5">
+          <div className="text-lg font-bold text-white">
+            {finalGoalGap
+              ? `${finalGoalGap.overallAchievementPct}% Recovery`
+              : totalWeeks
+                ? `${totalWeeks}-Week Plan`
+                : `AI Recovery Targets`}
+          </div>
+          <div className="text-[10px] text-gray-400">
+            {totalWeeks
+              ? `Predicted in ~${totalWeeks} weeks${totalSessions ? ` (${totalSessions} sessions)` : ''}`
+              : `Realistic targets for ${goalProfile.conditionName}`}
+          </div>
+        </div>
+
+        {finalGoalGap && (
+          <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden mb-3">
+            <div
+              className={`h-full rounded-full transition-all ${
+                finalGoalGap.overallAchievementPct >= 85 ? 'bg-gradient-to-r from-green-500 to-emerald-400' :
+                finalGoalGap.overallAchievementPct >= 65 ? 'bg-gradient-to-r from-emerald-500 to-yellow-400' :
+                finalGoalGap.overallAchievementPct >= 45 ? 'bg-gradient-to-r from-yellow-500 to-amber-400' : 'bg-gradient-to-r from-red-500 to-orange-400'
+              }`}
+              style={{ width: `${finalGoalGap.overallAchievementPct}%` }}
+            />
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] text-gray-500">Pain</span>
+            <span className="text-[10px] font-semibold text-green-400">≤ {goalProfile.painTarget}/100</span>
+          </div>
+          {goalProfile.riskScoreTarget !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] text-gray-500">Risk</span>
+              <span className="text-[10px] font-semibold text-emerald-400">≤ {goalProfile.riskScoreTarget}</span>
+            </div>
+          )}
+          {goalProfile.strengthTarget !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] text-gray-500">Strength</span>
+              <span className="text-[10px] font-semibold text-cyan-400">≥ {goalProfile.strengthTarget}%</span>
+            </div>
+          )}
+          {goalProfile.compensationResolutionTarget !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] text-gray-500">Comp. Resolved</span>
+              <span className="text-[10px] font-semibold text-emerald-400">≥ {goalProfile.compensationResolutionTarget}%</span>
+            </div>
+          )}
+        </div>
+
+        {goalProfile.romTargets && goalProfile.romTargets.length > 0 && (
+          <div className="border-t border-gray-700/40 pt-1.5 mb-1.5">
+            <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">ROM Targets</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+              {goalProfile.romTargets.slice(0, 6).map(rt => (
+                <div key={rt.jointId} className="flex items-center justify-between text-[9px]">
+                  <span className="text-gray-400 truncate max-w-[60%]">{rt.label || rt.jointId}</span>
+                  <span className="text-cyan-400 font-medium">≥ {rt.targetDegrees}°</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {((goalProfile.slingTargets && goalProfile.slingTargets.length > 0) || (goalProfile.muscleTensionTargets && goalProfile.muscleTensionTargets.length > 0)) && (
+          <div className="border-t border-gray-700/40 pt-1.5">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+              {goalProfile.slingTargets && goalProfile.slingTargets.length > 0 && (
+                <div>
+                  <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-0.5">Slings</div>
+                  {goalProfile.slingTargets.map((st, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[9px]">
+                      <span className="text-gray-400 truncate max-w-[60%]">{st.slingName}</span>
+                      <span className="text-violet-400 font-medium">≥ {st.targetIntegrity}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {goalProfile.muscleTensionTargets && goalProfile.muscleTensionTargets.length > 0 && (
+                <div>
+                  <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-0.5">Muscles</div>
+                  {goalProfile.muscleTensionTargets.slice(0, 4).map((mt, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[9px]">
+                      <span className="text-gray-400 truncate max-w-[55%]">{mt.muscleId.replace(/_/g, ' ')}</span>
+                      <span className="text-emerald-400 font-medium">{mt.targetTensionMin}-{mt.targetTensionMax}%</span>
+                    </div>
+                  ))}
+                  {goalProfile.muscleTensionTargets.length > 4 && (
+                    <div className="text-[7px] text-gray-600">+{goalProfile.muscleTensionTargets.length - 4} more</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {goalProfile.functionalGoals && goalProfile.functionalGoals.length > 0 && (
+          <div className="border-t border-gray-700/40 pt-1.5 mt-1">
+            <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">Functional Goals</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+              {goalProfile.functionalGoals.map((fg, idx) => (
+                <div key={idx} className="flex items-center justify-between text-[9px]">
+                  <span className="text-gray-400 truncate max-w-[60%]">{fg.label}</span>
+                  <span className="text-emerald-400 font-medium">≥ {fg.targetValue} {fg.unit}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {finalGoalGap && finalGoalGap.dimensions.length > 0 && (
+          <div className="border-t border-gray-700/40 pt-1.5 mt-1.5">
+            <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">Predicted Final State</div>
+            <div className="space-y-1">
+              {finalGoalGap.dimensions.map(d => (
+                <div key={d.dimension} className="flex items-center gap-2 text-[9px]">
+                  <span className={`w-[35%] truncate ${
+                    d.priority === 'high' ? 'text-red-400' :
+                    d.priority === 'medium' ? 'text-amber-400' : 'text-gray-400'
+                  }`}>{d.label}</span>
+                  <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        d.achievementPct >= 90 ? 'bg-green-500' :
+                        d.achievementPct >= 70 ? 'bg-emerald-500' :
+                        d.achievementPct >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${Math.min(d.achievementPct, 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-gray-500 w-8 text-right">{d.achievementPct}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SessionTimelineView({
   sessionTimeline,
   baseModelConfig,
@@ -2269,148 +2439,12 @@ function SessionTimelineView({
       )}
 
       {goalProfile && (
-        <div className="rounded-lg border border-green-500/40 bg-gradient-to-b from-green-950/40 via-gray-900/60 to-gray-900/40 p-3 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-cyan-500/5 pointer-events-none" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <Target className="h-4 w-4 text-green-400" />
-                <span className="text-[11px] font-bold text-green-300">Final Recovery Goal</span>
-              </div>
-              {finalGoalGap && (
-                <div className={`text-sm font-bold ${
-                  finalGoalGap.overallAchievementPct >= 85 ? 'text-green-400' :
-                  finalGoalGap.overallAchievementPct >= 65 ? 'text-emerald-400' :
-                  finalGoalGap.overallAchievementPct >= 45 ? 'text-yellow-400' : 'text-red-400'
-                }`}>
-                  {finalGoalGap.overallAchievementPct}%
-                </div>
-              )}
-            </div>
-
-            <div className="text-center mb-2.5">
-              <div className="text-lg font-bold text-white">
-                {finalGoalGap
-                  ? `${finalGoalGap.overallAchievementPct}% Recovery`
-                  : `${Math.round(sessionTimeline.totalDays / 7)}-Week Plan`}
-              </div>
-              <div className="text-[10px] text-gray-400">
-                Predicted in ~{Math.round(sessionTimeline.totalDays / 7)} weeks ({sessionTimeline.totalSessions} sessions)
-              </div>
-            </div>
-
-            {finalGoalGap && (
-              <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden mb-3">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    finalGoalGap.overallAchievementPct >= 85 ? 'bg-gradient-to-r from-green-500 to-emerald-400' :
-                    finalGoalGap.overallAchievementPct >= 65 ? 'bg-gradient-to-r from-emerald-500 to-yellow-400' :
-                    finalGoalGap.overallAchievementPct >= 45 ? 'bg-gradient-to-r from-yellow-500 to-amber-400' : 'bg-gradient-to-r from-red-500 to-orange-400'
-                  }`}
-                  style={{ width: `${finalGoalGap.overallAchievementPct}%` }}
-                />
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] text-gray-500">Pain</span>
-                <span className="text-[10px] font-semibold text-green-400">≤ {goalProfile.painTarget}/100</span>
-              </div>
-              {goalProfile.riskScoreTarget !== undefined && (
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] text-gray-500">Risk</span>
-                  <span className="text-[10px] font-semibold text-emerald-400">≤ {goalProfile.riskScoreTarget}</span>
-                </div>
-              )}
-              {goalProfile.strengthTarget !== undefined && (
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] text-gray-500">Strength</span>
-                  <span className="text-[10px] font-semibold text-cyan-400">≥ {goalProfile.strengthTarget}%</span>
-                </div>
-              )}
-              {goalProfile.compensationResolutionTarget !== undefined && (
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] text-gray-500">Comp. Resolved</span>
-                  <span className="text-[10px] font-semibold text-emerald-400">≥ {goalProfile.compensationResolutionTarget}%</span>
-                </div>
-              )}
-            </div>
-
-            {goalProfile.romTargets && goalProfile.romTargets.length > 0 && (
-              <div className="border-t border-gray-700/40 pt-1.5 mb-1.5">
-                <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">ROM Targets</div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                  {goalProfile.romTargets.slice(0, 6).map(rt => (
-                    <div key={rt.jointId} className="flex items-center justify-between text-[9px]">
-                      <span className="text-gray-400 truncate max-w-[60%]">{rt.label || rt.jointId}</span>
-                      <span className="text-cyan-400 font-medium">≥ {rt.targetDegrees}°</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {((goalProfile.slingTargets && goalProfile.slingTargets.length > 0) || (goalProfile.muscleTensionTargets && goalProfile.muscleTensionTargets.length > 0)) && (
-              <div className="border-t border-gray-700/40 pt-1.5">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                  {goalProfile.slingTargets && goalProfile.slingTargets.length > 0 && (
-                    <div>
-                      <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-0.5">Slings</div>
-                      {goalProfile.slingTargets.map((st, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-[9px]">
-                          <span className="text-gray-400 truncate max-w-[60%]">{st.slingName}</span>
-                          <span className="text-violet-400 font-medium">≥ {st.targetIntegrity}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {goalProfile.muscleTensionTargets && goalProfile.muscleTensionTargets.length > 0 && (
-                    <div>
-                      <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-0.5">Muscles</div>
-                      {goalProfile.muscleTensionTargets.slice(0, 4).map((mt, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-[9px]">
-                          <span className="text-gray-400 truncate max-w-[55%]">{mt.muscleId.replace(/_/g, ' ')}</span>
-                          <span className="text-emerald-400 font-medium">{mt.targetTensionMin}-{mt.targetTensionMax}%</span>
-                        </div>
-                      ))}
-                      {goalProfile.muscleTensionTargets.length > 4 && (
-                        <div className="text-[7px] text-gray-600">+{goalProfile.muscleTensionTargets.length - 4} more</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {finalGoalGap && finalGoalGap.dimensions.length > 0 && (
-              <div className="border-t border-gray-700/40 pt-1.5 mt-1.5">
-                <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-1">Predicted Final State</div>
-                <div className="space-y-1">
-                  {finalGoalGap.dimensions.map(d => (
-                    <div key={d.dimension} className="flex items-center gap-2 text-[9px]">
-                      <span className={`w-[35%] truncate ${
-                        d.priority === 'high' ? 'text-red-400' :
-                        d.priority === 'medium' ? 'text-amber-400' : 'text-gray-400'
-                      }`}>{d.label}</span>
-                      <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            d.achievementPct >= 90 ? 'bg-green-500' :
-                            d.achievementPct >= 70 ? 'bg-emerald-500' :
-                            d.achievementPct >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                          }`}
-                          style={{ width: `${Math.min(d.achievementPct, 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-gray-500 w-8 text-right">{d.achievementPct}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <RecoveryGoalHeroCard
+          goalProfile={goalProfile}
+          totalWeeks={Math.round(sessionTimeline.totalDays / 7)}
+          totalSessions={sessionTimeline.totalSessions}
+          finalGoalGap={finalGoalGap}
+        />
       )}
 
       <div className="bg-gray-800/50 rounded border border-gray-700/50 p-2">
@@ -3820,6 +3854,16 @@ export default function SimulationTimelinePanel({
     return adjustProfileForPatient(activeCondition, modifiers);
   }, [activeCondition, modifiers]);
 
+  const parentGoalProfile = useMemo<RecoveryGoalProfile | null>(() => {
+    if (!activeCondition) return null;
+    return generateGoalProfile(
+      activeCondition,
+      modifiers ?? undefined,
+      undefined,
+      clinicalStateForGoals ?? undefined,
+    );
+  }, [activeCondition, modifiers, clinicalStateForGoals]);
+
   const hasCustomTreatments = (customExercises && customExercises.length > 0) || (customTechniques && customTechniques.length > 0);
 
   const [sessionTimeline, setSessionTimeline] = useState<SessionTimelineResult | null>(null);
@@ -4008,6 +4052,13 @@ export default function SimulationTimelinePanel({
     return (
       <div className="flex flex-col gap-2">
         {patientFactorsPanel}
+        {parentGoalProfile && (
+          <RecoveryGoalHeroCard
+            goalProfile={parentGoalProfile}
+            totalWeeks={Math.round(weekTimeline.totalDays / 7)}
+            totalSessions={weekTimeline.totalSessions}
+          />
+        )}
         <WeekTimelineView
           timeline={weekTimeline}
           onApplyWeekToSkeleton={onApplyWeekToSkeleton}
@@ -4019,6 +4070,9 @@ export default function SimulationTimelinePanel({
   return (
     <div className="p-3 text-center space-y-3">
       {patientFactorsPanel}
+      {parentGoalProfile && (
+        <RecoveryGoalHeroCard goalProfile={parentGoalProfile} />
+      )}
       <div className="text-gray-500 text-[10px] mb-2">No simulation data available</div>
       <div className="bg-gray-800/40 rounded border border-gray-700/30 p-3 space-y-2">
         <div className="flex items-center gap-1.5 text-[10px] text-gray-300">

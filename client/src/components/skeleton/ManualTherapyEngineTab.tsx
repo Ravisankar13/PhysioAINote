@@ -702,11 +702,14 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
     }
   }, [buildPayload, onGenerateComplete]);
 
+  const prevTriggerRef = useRef(triggerGenerate ?? 0);
   useEffect(() => {
-    if (triggerGenerate && triggerGenerate > 0) {
+    const current = triggerGenerate ?? 0;
+    if (current > prevTriggerRef.current) {
       generatePlan();
     }
-  }, [triggerGenerate]);
+    prevTriggerRef.current = current;
+  }, [triggerGenerate, generatePlan]);
 
   const designCustomTechniques = useCallback(async () => {
     if (customAbortRef.current) customAbortRef.current.abort();

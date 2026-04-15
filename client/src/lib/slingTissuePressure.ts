@@ -291,16 +291,21 @@ export function computeSlingTissueRisks(analysis: SlingAnalysisResult | null): S
 
   allRisks.push(...computeCrossCompensationRisks(analysis.crossSlingCompensations, analysis.slings));
 
-  const merged = new Map<string, SlingTissueRisk>();
+  const grouped = new Map<string, SlingTissueRisk[]>();
   for (const risk of allRisks) {
     const key = `${risk.tissue_type}:${risk.tissue_id}`;
-    const existing = merged.get(key);
-    if (!existing || risk.severity > existing.severity) {
-      merged.set(key, risk);
-    }
+    const arr = grouped.get(key) ?? [];
+    arr.push(risk);
+    grouped.set(key, arr);
   }
 
-  const result = Array.from(merged.values());
+  const result: SlingTissueRisk[] = [];
+  for (const [, risks] of grouped) {
+    risks.sort((a, b) => b.severity - a.severity);
+    const kept = risks.slice(0, 3);
+    result.push(...kept);
+  }
+
   result.sort((a, b) => b.severity - a.severity);
   return result;
 }

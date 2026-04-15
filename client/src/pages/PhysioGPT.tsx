@@ -644,6 +644,10 @@ export default function PhysioGPT() {
   const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
   const [slingOverlayVisible, setSlingOverlayVisible] = useState(true);
   const [expandedSlingDetailId, setExpandedSlingDetailId] = useState<string | null>(null);
+  const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
+  useEffect(() => {
+    if (!slingOverlayActive) setExpandedSlingDetailId(null);
+  }, [slingOverlayActive]);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
   const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
@@ -5343,7 +5347,7 @@ ${ddxList}`;
                         <div>
                           <div className="text-xs font-semibold text-gray-300 mb-2">Treatment Targets</div>
                           <div className="space-y-1.5">
-                            {slingData.treatmentTargets.sort((a, b) => a.priority - b.priority).map((t, i) => (
+                            {[...slingData.treatmentTargets].sort((a, b) => a.priority - b.priority).map((t, i) => (
                               <div key={i} className="bg-slate-800 rounded-lg p-2.5 flex items-start gap-2">
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium mt-0.5 ${t.intervention === 'strengthen' ? 'bg-emerald-900/50 text-emerald-300' : t.intervention === 'release' ? 'bg-blue-900/50 text-blue-300' : t.intervention === 'activate' ? 'bg-purple-900/50 text-purple-300' : 'bg-slate-700 text-gray-300'}`}>{t.intervention}</span>
                                 <div className="flex-1 min-w-0">

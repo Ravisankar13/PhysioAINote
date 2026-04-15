@@ -37,6 +37,8 @@ export interface WeakLink {
 export interface SlingCompensation {
   compensatingSling: SlingId;
   compensatingSlingLabel: string;
+  compensatedSling: SlingId;
+  compensatedSlingLabel: string;
   mechanism: string;
   severity: Severity;
   additionalLoadPct: number;
@@ -469,6 +471,8 @@ function detectCrossSlingCompensations(
         compensations.push({
           compensatingSling: strong.def.id,
           compensatingSlingLabel: strong.def.label,
+          compensatedSling: weak.def.id,
+          compensatedSlingLabel: weak.def.label,
           mechanism: hasFunctionalOverlap
             ? `${strong.def.label} compensates for ${weak.def.label} dysfunction via shared muscles (${sharedMuscles.join(', ')})`
             : `${strong.def.label} takes on additional frontal/sagittal load due to ${weak.def.label} underperformance`,

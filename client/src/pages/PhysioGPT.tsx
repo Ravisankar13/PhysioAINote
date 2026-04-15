@@ -5201,6 +5201,8 @@ ${ddxList}`;
                 crossSlingCompensations: slingAnalysis.crossSlingCompensations.map(c => ({
                   compensatingSling: c.compensatingSling,
                   compensatingSlingLabel: c.compensatingSlingLabel,
+                  compensatedSling: c.compensatedSling,
+                  compensatedSlingLabel: c.compensatedSlingLabel,
                   severity: c.severity,
                   additionalLoadPct: c.additionalLoadPct,
                   mechanism: c.mechanism,

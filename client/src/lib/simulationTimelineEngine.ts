@@ -2810,19 +2810,6 @@ export async function buildSessionTimelineAsync(
     const goalProf = conditionProfile ? generateGoalProfile(conditionProfile, patientModifiers, undefined, clinicalState) : null;
     const prevSnap = transition.sessionIndex > 0 ? accumulatedResult.sessions[transition.sessionIndex - 1] : null;
 
-    const phaseSkeletonGoals = computeSkeletonGoalsForPhase(transition.toPhase, ti + 1, transitions.length, clinicalPlan, treatmentPhases);
-
-    const { exercisePayload, techniquePayload } = synthesizeReQueryPayload(
-      transitionSnap,
-      transition.toPhase,
-      currentExercises,
-      currentTechniques,
-      accumulatedResult.correctionFactors,
-      goalProf,
-      prevSnap,
-      phaseSkeletonGoals,
-    );
-
     const avgRomPct = transitionSnap.romPredictions.length > 0
       ? transitionSnap.romPredictions.reduce((s, r) => s + (r.targetDegrees > 0 ? (r.predictedDegrees / r.targetDegrees) * 100 : 50), 0) / transitionSnap.romPredictions.length
       : 50;
@@ -2835,6 +2822,26 @@ export async function buildSessionTimelineAsync(
     const avgCompRes = transitionSnap.compensationPredictions.length > 0
       ? transitionSnap.compensationPredictions.reduce((s, c) => s + c.resolutionPercent, 0) / transitionSnap.compensationPredictions.length
       : 0;
+
+    const currentTransState: TransitionState = {
+      avgPain: Math.round(avgPain * 10) / 10,
+      avgRomPercent: Math.round(avgRomPct),
+      avgSlingIntegrity: Math.round(avgSling),
+      avgCompensationResolution: Math.round(avgCompRes),
+    };
+
+    const phaseSkeletonGoals = computeSkeletonGoalsForPhase(transition.toPhase, ti + 1, transitions.length, clinicalPlan, treatmentPhases, currentTransState);
+
+    const { exercisePayload, techniquePayload } = synthesizeReQueryPayload(
+      transitionSnap,
+      transition.toPhase,
+      currentExercises,
+      currentTechniques,
+      accumulatedResult.correctionFactors,
+      goalProf,
+      prevSnap,
+      phaseSkeletonGoals,
+    );
 
     const previousPhaseExercises = currentExercises;
     const previousPhaseTechniques = currentTechniques;
@@ -3107,6 +3114,7 @@ function computeSkeletonGoalsForPhase(
   totalTransitions: number,
   clinicalPlan: { phases: Array<{ phase: string; goals: Array<{ id: string; target: string; rationale: string; source: string; priority: number; metric?: string }> }> } | null | undefined,
   previousPhases: TreatmentPhaseBlock[],
+  currentTransitionState?: TransitionState | null,
 ): SkeletonGoalWithCarryForward[] {
   if (!clinicalPlan || !clinicalPlan.phases || clinicalPlan.phases.length === 0) return [];
 
@@ -3135,11 +3143,10 @@ function computeSkeletonGoalsForPhase(
   if (previousPhases.length > 0) {
     const prevPhase = previousPhases[previousPhases.length - 1];
     const prevGoals = prevPhase.skeletonGoals ?? [];
-    const prevState = prevPhase.predictedStateAtTransition;
     for (const pg of prevGoals) {
       if (matchedGoals.some(g => g.id === pg.id)) continue;
 
-      const resolved = prevState ? isGoalResolved(pg.source, prevState) : false;
+      const resolved = currentTransitionState ? isGoalResolved(pg.source, currentTransitionState) : false;
       if (!resolved) {
         matchedGoals.push({
           ...pg,
@@ -3207,12 +3214,12 @@ export function enrichPhasesWithClinicalPlan(
     if (idx > 0) {
       const prevEnriched = enriched[idx - 1];
       const prevGoals = prevEnriched.skeletonGoals ?? [];
-      const prevState = prevEnriched.predictedStateAtTransition;
+      const currentTransitionState = block.predictedStateAtTransition;
 
       for (const pg of prevGoals) {
         if (matchedGoals.some(g => g.id === pg.id)) continue;
 
-        const resolved = prevState ? isGoalResolved(pg.source, prevState) : false;
+        const resolved = currentTransitionState ? isGoalResolved(pg.source, currentTransitionState) : false;
         if (!resolved) {
           matchedGoals.push({
             ...pg,

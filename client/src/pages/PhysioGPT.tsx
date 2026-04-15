@@ -5175,10 +5175,12 @@ ${ddxList}`;
                 activeSlingId: selectedSlingId,
                 slings: slingAnalysis.slings.map(s => ({
                   id: s.slingId,
+                  label: s.label,
                   color: s.color,
                   bonePathway: getSlingBonePathway(s.slingId),
                   status: s.status,
                   activationScore: s.activationScore,
+                  forceTransferQuality: s.forceTransferQuality,
                   weakLinkBoneIndices: s.weakLinks.flatMap(wl => wl.boneSegmentIndices),
                   overloadedBoneIndices: s.overloadedBoneIndices,
                   compensatingBoneIndices: s.compensatingBoneIndices,

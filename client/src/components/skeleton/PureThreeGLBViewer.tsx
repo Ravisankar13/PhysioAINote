@@ -1689,10 +1689,12 @@ interface PureThreeGLBViewerProps {
     activeSlingId: string | null;
     slings: Array<{
       id: string;
+      label: string;
       color: string;
       bonePathway: string[];
       status: string;
       activationScore: number;
+      forceTransferQuality: string;
       weakLinkBoneIndices: number[];
       overloadedBoneIndices: number[];
       compensatingBoneIndices: number[];
@@ -3266,6 +3268,110 @@ export default function PureThreeGLBViewer({
           group.add(ring);
         }
       }
+
+      const midIdx = Math.floor(positions.length / 2);
+      const anchorPos = positions[midIdx].clone();
+
+      const slingLabel = sling.label || sling.id.replace(/_/g, ' ');
+      const scoreText = `${Math.round(sling.activationScore)}%`;
+      const statusText = sling.status.charAt(0).toUpperCase() + sling.status.slice(1);
+      const ftqText = sling.forceTransferQuality === 'good' ? 'Good' : sling.forceTransferQuality === 'reduced' ? 'Reduced' : 'Poor';
+      const hasWeakLinks = (sling.weakLinkBoneIndices?.length ?? 0) > 0;
+      const needsAttention = sling.status === 'underperforming' || sling.status === 'overloaded' || hasWeakLinks;
+
+      const labelCanvas = document.createElement('canvas');
+      const cw = 400;
+      const ch = 140;
+      labelCanvas.width = cw;
+      labelCanvas.height = ch;
+      const lctx = labelCanvas.getContext('2d');
+      if (lctx) {
+        const statusBorderColor = sling.status === 'underperforming' ? '#ef4444'
+          : sling.status === 'overloaded' ? '#f59e0b'
+          : sling.status === 'compensating' ? '#eab308'
+          : sling.color;
+
+        lctx.fillStyle = 'rgba(15, 15, 30, 0.92)';
+        lctx.beginPath();
+        lctx.roundRect(4, 4, cw - 8, ch - 8, 12);
+        lctx.fill();
+        lctx.strokeStyle = statusBorderColor;
+        lctx.lineWidth = needsAttention ? 4 : 2;
+        lctx.beginPath();
+        lctx.roundRect(4, 4, cw - 8, ch - 8, 12);
+        lctx.stroke();
+
+        lctx.font = 'bold 28px sans-serif';
+        lctx.fillStyle = sling.color;
+        lctx.textAlign = 'left';
+        lctx.textBaseline = 'top';
+        lctx.fillText(slingLabel, 16, 14);
+
+        lctx.font = 'bold 36px sans-serif';
+        const scoreColor = sling.activationScore >= 70 ? '#34d399'
+          : sling.activationScore >= 45 ? '#fbbf24'
+          : '#ef4444';
+        lctx.fillStyle = scoreColor;
+        lctx.textAlign = 'right';
+        lctx.fillText(scoreText, cw - 16, 10);
+
+        lctx.font = '22px sans-serif';
+        lctx.textAlign = 'left';
+        lctx.fillStyle = statusBorderColor;
+        lctx.fillText(statusText, 16, 52);
+
+        const ftqColor = sling.forceTransferQuality === 'good' ? '#34d399'
+          : sling.forceTransferQuality === 'reduced' ? '#fbbf24' : '#ef4444';
+        lctx.fillStyle = '#9ca3af';
+        lctx.fillText('Transfer: ', 16, 82);
+        const transferPrefixW = lctx.measureText('Transfer: ').width;
+        lctx.fillStyle = ftqColor;
+        lctx.fillText(ftqText, 16 + transferPrefixW, 82);
+
+        if (needsAttention) {
+          lctx.font = 'bold 22px sans-serif';
+          lctx.fillStyle = '#ef4444';
+          lctx.textAlign = 'right';
+          lctx.fillText('\u26A0 Needs Attention', cw - 16, 108);
+        }
+
+        if (hasWeakLinks) {
+          lctx.font = '20px sans-serif';
+          lctx.fillStyle = '#f87171';
+          lctx.textAlign = 'left';
+          lctx.fillText(`${sling.weakLinkBoneIndices.length} weak link${sling.weakLinkBoneIndices.length > 1 ? 's' : ''}`, 16, 108);
+        }
+      }
+
+      const labelTexture = new THREE.CanvasTexture(labelCanvas);
+      labelTexture.needsUpdate = true;
+      const labelMat = new THREE.SpriteMaterial({
+        map: labelTexture,
+        transparent: true,
+        depthTest: false,
+        opacity: isDimmed ? 0.15 : isActive ? 1.0 : 0.85,
+      });
+      const labelSprite = new THREE.Sprite(labelMat);
+
+      const labelOffsetX = sling.id === 'lateral' || sling.id === 'anterior_oblique' ? -0.18 : 0.18;
+      const labelOffsetY = sling.id === 'scapular_shoulder' ? 0.08 : sling.id === 'deep_longitudinal' ? -0.04 : 0.03;
+      const labelPos = anchorPos.clone().add(new THREE.Vector3(labelOffsetX, labelOffsetY, 0.06));
+
+      labelSprite.position.copy(labelPos);
+      labelSprite.scale.set(0.2, 0.07, 1);
+      labelSprite.renderOrder = 1000;
+      group.add(labelSprite);
+
+      const leaderGeom = new THREE.BufferGeometry().setFromPoints([anchorPos, labelPos]);
+      const leaderMat = new THREE.LineBasicMaterial({
+        color: colorHex,
+        opacity: isDimmed ? 0.1 : 0.4,
+        transparent: true,
+        depthTest: false,
+      });
+      const leaderLine = new THREE.Line(leaderGeom, leaderMat);
+      leaderLine.renderOrder = 999;
+      group.add(leaderLine);
     }
 
     scene.add(group);

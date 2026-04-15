@@ -87,6 +87,13 @@ interface PostureState {
   [group: string]: { [param: string]: number };
 }
 
+interface CompromisedTissueInput {
+  tissue_type: 'tendon' | 'nerve' | 'joint' | 'fascia';
+  tissue_id: string;
+  severity: number;
+  rationale: string;
+}
+
 export interface ClinicalPlanSynthesizerInput {
   painMarkers?: PainMarkerInput[];
   biomechanics?: BiomechanicsInput;
@@ -94,6 +101,7 @@ export interface ClinicalPlanSynthesizerInput {
   slingTissueRisks?: SlingTissueRisk[];
   muscleOverrides?: Record<string, Partial<MuscleOverride>>;
   postureState?: PostureState;
+  compromisedTissues?: CompromisedTissueInput[];
 }
 
 const SEVERITY_THRESHOLD = 3;
@@ -427,6 +435,74 @@ function synthesizePostureGoals(posture: PostureState): SkeletonClinicalGoal[] {
   return goals;
 }
 
+const TISSUE_PHASE_MAP: Record<string, ClinicalPhaseCategory> = {
+  tendon: 'tissue_release',
+  nerve: 'pain_inflammation',
+  joint: 'mobility',
+  fascia: 'tissue_release',
+};
+
+function synthesizeCompromisedTissueGoals(tissues: CompromisedTissueInput[]): SkeletonClinicalGoal[] {
+  const goals: SkeletonClinicalGoal[] = [];
+  let idx = 0;
+  const sorted = [...tissues].sort((a, b) => b.severity - a.severity).slice(0, 10);
+
+  for (const t of sorted) {
+    const label = t.tissue_id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const typeLabel = t.tissue_type.charAt(0).toUpperCase() + t.tissue_type.slice(1);
+    const phase = TISSUE_PHASE_MAP[t.tissue_type] ?? 'tissue_release';
+    const priority = Math.min(80, Math.round(t.severity * 10));
+
+    if (t.tissue_type === 'tendon') {
+      goals.push({
+        id: `ctissue_${idx++}`,
+        target: `Protect and rehabilitate ${label} ${typeLabel} (severity ${t.severity}/10)`,
+        rationale: t.rationale || `${typeLabel} compromise identified requiring progressive loading`,
+        phase: t.severity >= 7 ? 'pain_inflammation' : phase,
+        priority,
+        source: 'tissue',
+        region: t.tissue_id,
+        metric: `severity ${t.severity}/10 → <3/10`,
+      });
+    } else if (t.tissue_type === 'nerve') {
+      goals.push({
+        id: `ctissue_${idx++}`,
+        target: `Decompress and mobilize ${label} nerve pathway`,
+        rationale: t.rationale || `Neural tissue compromise requiring decompression`,
+        phase: 'pain_inflammation',
+        priority: Math.min(85, priority + 5),
+        source: 'tissue',
+        region: t.tissue_id,
+        metric: `severity ${t.severity}/10 → <2/10`,
+      });
+    } else if (t.tissue_type === 'joint') {
+      goals.push({
+        id: `ctissue_${idx++}`,
+        target: `Restore ${label} joint mobility and reduce degeneration impact`,
+        rationale: t.rationale || `Joint surface compromise limiting function`,
+        phase: t.severity >= 7 ? 'pain_inflammation' : 'mobility',
+        priority,
+        source: 'tissue',
+        region: t.tissue_id,
+        metric: `severity ${t.severity}/10 → <3/10`,
+      });
+    } else {
+      goals.push({
+        id: `ctissue_${idx++}`,
+        target: `Release ${label} fascial restriction`,
+        rationale: t.rationale || `Fascial tissue compromise affecting chain continuity`,
+        phase,
+        priority,
+        source: 'tissue',
+        region: t.tissue_id,
+        metric: `severity ${t.severity}/10 → <3/10`,
+      });
+    }
+  }
+
+  return goals;
+}
+
 export function synthesizeClinicalPlan(input: ClinicalPlanSynthesizerInput): ClinicalPlanResult {
   const allGoals: SkeletonClinicalGoal[] = [];
 
@@ -444,6 +520,10 @@ export function synthesizeClinicalPlan(input: ClinicalPlanSynthesizerInput): Cli
 
   if (input.slingTissueRisks && input.slingTissueRisks.length > 0) {
     allGoals.push(...synthesizeTissueRiskGoals(input.slingTissueRisks));
+  }
+
+  if (input.compromisedTissues && input.compromisedTissues.length > 0) {
+    allGoals.push(...synthesizeCompromisedTissueGoals(input.compromisedTissues));
   }
 
   if (input.muscleOverrides && Object.keys(input.muscleOverrides).length > 0) {

@@ -2676,6 +2676,7 @@ export async function buildSessionTimelineAsync(
   signal?: AbortSignal,
   onPartialResult?: (partial: SessionTimelineResult) => void,
   clinicalState?: ClinicalStateInput | null,
+  clinicalPlan?: { phases: Array<{ phase: string; goals: Array<{ id: string; target: string; rationale: string; source: string; priority: number; metric?: string }> }> } | null,
 ): Promise<SessionTimelineResult> {
   onPhaseProgress?.({ phaseIndex: 0, phaseLabel: 'Initial', status: 'building', message: 'Building initial timeline with current treatments...' });
 
@@ -2700,7 +2701,8 @@ export async function buildSessionTimelineAsync(
       phaseGoals: PHASE_TREATMENT_GOALS[initialResult.sessions[0]?.recoveryPhaseLabel ?? 'Remodeling'] ?? '',
       previousProgressionStages: [],
     };
-    const singleResult = { ...initialResult, treatmentPhases: [singlePhase] };
+    const enrichedSinglePhases = enrichPhasesWithClinicalPlan([singlePhase], clinicalPlan);
+    const singleResult = { ...initialResult, treatmentPhases: enrichedSinglePhases };
     onPhaseProgress?.({ phaseIndex: 0, phaseLabel: singlePhase.phaseLabel, status: 'complete', message: 'Timeline complete — single phase' });
     onPartialResult?.(singleResult);
     return singleResult;
@@ -3030,7 +3032,8 @@ export async function buildSessionTimelineAsync(
     });
   }
 
-  return { ...accumulatedResult, treatmentPhases };
+  const enrichedPhases = enrichPhasesWithClinicalPlan(treatmentPhases, clinicalPlan);
+  return { ...accumulatedResult, treatmentPhases: enrichedPhases };
 }
 
 const CLINICAL_PHASE_TO_TREATMENT_PHASE: Record<string, string[]> = {

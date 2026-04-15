@@ -3911,8 +3911,14 @@ ${ddxList}`;
       slingTissueRisks,
       muscleOverrides: muscleOverrides as Record<string, Partial<{ tensionOffset: number; pathology: string }>>,
       postureState: modelConfig,
+      compromisedTissues: compromisedTissues.length > 0 ? compromisedTissues.map(ct => ({
+        tissue_type: ct.tissue_type,
+        tissue_id: ct.tissue_id,
+        severity: ct.severity,
+        rationale: ct.rationale,
+      })) : undefined,
     });
-  }, [painMarkers, unifiedBiomechanicsOutput, cachedBiomechanicsOutput, slingAnalysis, slingTissueRisks, muscleOverrides, modelConfig]);
+  }, [painMarkers, unifiedBiomechanicsOutput, cachedBiomechanicsOutput, slingAnalysis, slingTissueRisks, muscleOverrides, modelConfig, compromisedTissues]);
 
   const mergedCompromisedTissues = useMemo(() => {
     const clinicalMap = new Map<string, CompromisedTissue>();

@@ -64,7 +64,6 @@ import {
   type CorrectionFactors,
   type TreatmentPhaseBlock,
   type PhaseProgressEvent,
-  enrichPhasesWithClinicalPlan,
 } from "@/lib/simulationTimelineEngine";
 import {
   type PatientFactors,
@@ -2487,15 +2486,9 @@ function SessionTimelineView({
     };
   }, []);
 
-  const enrichedTimeline = useMemo(() => {
-    if (!clinicalPlan || !sessionTimeline.treatmentPhases || sessionTimeline.treatmentPhases.length === 0) return sessionTimeline;
-    const enrichedPhases = enrichPhasesWithClinicalPlan(sessionTimeline.treatmentPhases, clinicalPlan);
-    return { ...sessionTimeline, treatmentPhases: enrichedPhases };
-  }, [sessionTimeline, clinicalPlan]);
-
   const currentSnapshot = useMemo(() => {
-    return enrichedTimeline.sessions.find(s => s.sessionNumber === selectedSession) ?? enrichedTimeline.sessions[0] ?? null;
-  }, [enrichedTimeline, selectedSession]);
+    return sessionTimeline.sessions.find(s => s.sessionNumber === selectedSession) ?? sessionTimeline.sessions[0] ?? null;
+  }, [sessionTimeline, selectedSession]);
 
   const selectSession = useCallback((sessionNum: number) => {
     setSelectedSession(sessionNum);
@@ -3059,7 +3052,7 @@ function SessionTimelineView({
             {(() => {
               const visibleSessions = sessionTimeline.sessions
                 .filter(s => s.sessionNumber >= Math.max(0, selectedSession - 2) && s.sessionNumber <= selectedSession + 3);
-              const phases = enrichedTimeline.treatmentPhases ?? [];
+              const phases = sessionTimeline.treatmentPhases ?? [];
               const elements: Array<{ type: 'session' | 'phase'; key: string; session?: SessionSnapshot; phase?: TreatmentPhaseBlock }> = [];
 
               for (const s of visibleSessions) {
@@ -3112,7 +3105,7 @@ function SessionTimelineView({
         />
       )}
 
-      {enrichedTimeline.treatmentPhases && enrichedTimeline.treatmentPhases.length > 1 && (
+      {sessionTimeline.treatmentPhases && sessionTimeline.treatmentPhases.length > 1 && (
         <div className="border border-cyan-700/30 rounded overflow-hidden">
           <button
             onClick={() => toggleSection('phases')}
@@ -3120,13 +3113,13 @@ function SessionTimelineView({
           >
             <span className="text-[9px] font-medium flex items-center gap-1">
               <Sparkles className="h-3 w-3 text-cyan-400" />
-              Treatment Phases ({enrichedTimeline.treatmentPhases.length})
+              Treatment Phases ({sessionTimeline.treatmentPhases.length})
             </span>
             {expandedSection === 'phases' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
           {expandedSection === 'phases' && (
             <div className="p-2 bg-gray-900/30 space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
-              {enrichedTimeline.treatmentPhases.map(phase => (
+              {sessionTimeline.treatmentPhases.map(phase => (
                 <PhaseTransitionCard key={phase.phaseIndex} phase={phase} />
               ))}
             </div>
@@ -4683,6 +4676,7 @@ export default function SimulationTimelinePanel({
         abortController.signal,
         (partial) => { if (!abortController.signal.aborted) setSessionTimeline(partial); },
         clinicalStateForGoals,
+        clinicalPlan,
       ).then(result => {
         if (!abortController.signal.aborted) {
           setSessionTimeline(result);

@@ -1,4 +1,4 @@
-import type { SlingAnalysisResult, SlingResult, SlingId, WeakLink, ForceReroute, SlingCompensation } from './slingEngine';
+import type { SlingAnalysisResult, SlingResult, SlingId, SlingCompensation } from './slingEngine';
 import type { CompromisedTissue } from '@/components/skeleton/ClinicalTextInput';
 
 export interface SlingTissueRisk extends CompromisedTissue {
@@ -20,134 +20,123 @@ const MUSCLE_TISSUE_MAP: Record<string, MuscleTissueMapping> = {
     tendons: ['biceps_long_head_l', 'biceps_long_head_r'],
     joints: ['glenohumeral_l', 'glenohumeral_r'],
     nerves: [],
-    fascia: ['superficial_back_line', 'back_functional_line'],
+    fascia: ['sbl'],
   },
   thoracolumbar_fascia: {
     tendons: [],
     joints: ['facet_lumbar', 'si_l', 'si_r'],
     nerves: [],
-    fascia: ['superficial_back_line', 'deep_front_line'],
+    fascia: ['sbl', 'dfl'],
   },
   gluteus_maximus: {
     tendons: ['gluteus_medius_l', 'gluteus_medius_r'],
     joints: ['hip_l', 'hip_r', 'si_l', 'si_r'],
     nerves: ['sciatic_l', 'sciatic_r'],
-    fascia: ['superficial_back_line', 'back_functional_line'],
+    fascia: ['sbl'],
   },
   contralateral_gluteus_maximus: {
     tendons: ['gluteus_medius_r', 'gluteus_medius_l'],
     joints: ['hip_r', 'hip_l', 'si_r', 'si_l'],
     nerves: ['sciatic_r', 'sciatic_l'],
-    fascia: ['superficial_back_line'],
+    fascia: ['sbl'],
   },
   external_oblique: {
     tendons: [],
     joints: ['facet_lumbar'],
     nerves: [],
-    fascia: ['lateral_line', 'spiral_line'],
+    fascia: ['lateral_l', 'lateral_r', 'spiral'],
   },
   anterior_abdominal_fascia: {
     tendons: [],
     joints: ['facet_lumbar'],
     nerves: ['femoral_l', 'femoral_r'],
-    fascia: ['superficial_front_line', 'deep_front_line'],
+    fascia: ['sfl', 'dfl'],
   },
   internal_oblique: {
     tendons: [],
     joints: ['facet_lumbar', 'si_l', 'si_r'],
     nerves: [],
-    fascia: ['lateral_line'],
+    fascia: ['lateral_l', 'lateral_r'],
   },
   adductors: {
     tendons: ['gluteus_medius_l', 'gluteus_medius_r'],
     joints: ['hip_l', 'hip_r'],
     nerves: ['femoral_l', 'femoral_r'],
-    fascia: ['deep_front_line'],
+    fascia: ['dfl'],
   },
   gluteus_medius: {
     tendons: ['gluteus_medius_l', 'gluteus_medius_r'],
     joints: ['hip_l', 'hip_r', 'tibiofemoral_l', 'tibiofemoral_r'],
     nerves: [],
-    fascia: ['lateral_line'],
+    fascia: ['lateral_l', 'lateral_r'],
   },
   gluteus_minimus: {
     tendons: ['gluteus_medius_l', 'gluteus_medius_r'],
     joints: ['hip_l', 'hip_r'],
     nerves: [],
-    fascia: ['lateral_line'],
+    fascia: ['lateral_l', 'lateral_r'],
   },
   tensor_fasciae_latae: {
     tendons: ['patellar_l', 'patellar_r'],
     joints: ['hip_l', 'hip_r', 'tibiofemoral_l', 'tibiofemoral_r'],
     nerves: [],
-    fascia: ['lateral_line'],
+    fascia: ['lateral_l', 'lateral_r'],
   },
   quadratus_lumborum: {
     tendons: [],
     joints: ['facet_lumbar', 'si_l', 'si_r'],
     nerves: [],
-    fascia: ['lateral_line', 'deep_front_line'],
+    fascia: ['lateral_l', 'lateral_r', 'dfl'],
   },
   peroneus_longus: {
     tendons: ['achilles_l', 'achilles_r', 'plantar_fascia_l', 'plantar_fascia_r'],
     joints: ['talocrural_l', 'talocrural_r'],
     nerves: ['peroneal_l', 'peroneal_r'],
-    fascia: ['lateral_line'],
+    fascia: ['lateral_l', 'lateral_r'],
   },
   biceps_femoris: {
     tendons: ['patellar_l', 'patellar_r'],
     joints: ['tibiofemoral_l', 'tibiofemoral_r', 'hip_l', 'hip_r'],
     nerves: ['sciatic_l', 'sciatic_r'],
-    fascia: ['superficial_back_line'],
+    fascia: ['sbl'],
   },
   sacrotuberous_ligament: {
     tendons: [],
     joints: ['si_l', 'si_r'],
     nerves: ['sciatic_l', 'sciatic_r'],
-    fascia: ['superficial_back_line', 'deep_front_line'],
+    fascia: ['sbl', 'dfl'],
   },
   erector_spinae: {
     tendons: [],
     joints: ['facet_lumbar', 'facet_cervical'],
     nerves: [],
-    fascia: ['superficial_back_line'],
+    fascia: ['sbl'],
   },
   serratus_anterior: {
     tendons: ['supraspinatus_l', 'supraspinatus_r'],
     joints: ['glenohumeral_l', 'glenohumeral_r'],
     nerves: [],
-    fascia: ['arm_lines'],
+    fascia: ['front_arm_l', 'front_arm_r'],
   },
   lower_trapezius: {
     tendons: ['supraspinatus_l', 'supraspinatus_r'],
     joints: ['glenohumeral_l', 'glenohumeral_r'],
     nerves: [],
-    fascia: ['superficial_back_line', 'back_functional_line'],
+    fascia: ['sbl'],
   },
   rhomboids: {
     tendons: [],
     joints: ['glenohumeral_l', 'glenohumeral_r'],
     nerves: [],
-    fascia: ['superficial_back_line'],
+    fascia: ['sbl'],
   },
   rotator_cuff: {
     tendons: ['supraspinatus_l', 'supraspinatus_r', 'biceps_long_head_l', 'biceps_long_head_r'],
     joints: ['glenohumeral_l', 'glenohumeral_r'],
     nerves: [],
-    fascia: ['arm_lines'],
+    fascia: ['front_arm_l', 'front_arm_r'],
   },
 };
-
-const TISSUE_TYPE_MAP: Record<string, CompromisedTissue['tissue_type']> = {};
-function initTissueTypeMap() {
-  if (Object.keys(TISSUE_TYPE_MAP).length > 0) return;
-  for (const mapping of Object.values(MUSCLE_TISSUE_MAP)) {
-    for (const id of mapping.tendons) TISSUE_TYPE_MAP[id] = 'tendon';
-    for (const id of mapping.joints) TISSUE_TYPE_MAP[id] = 'joint';
-    for (const id of mapping.nerves) TISSUE_TYPE_MAP[id] = 'nerve';
-    for (const id of mapping.fascia) TISSUE_TYPE_MAP[id] = 'fascia';
-  }
-}
 
 function getTissuesForMuscle(muscle: string): Array<{ tissueId: string; tissueType: CompromisedTissue['tissue_type'] }> {
   const mapping = MUSCLE_TISSUE_MAP[muscle];
@@ -290,7 +279,6 @@ function getMusclesForSling(slingId: SlingId): string[] {
 
 export function computeSlingTissueRisks(analysis: SlingAnalysisResult | null): SlingTissueRisk[] {
   if (!analysis) return [];
-  initTissueTypeMap();
 
   const allRisks: SlingTissueRisk[] = [];
 

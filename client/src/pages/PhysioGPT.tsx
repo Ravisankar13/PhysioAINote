@@ -644,10 +644,6 @@ export default function PhysioGPT() {
   const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
   const [slingOverlayVisible, setSlingOverlayVisible] = useState(true);
   const [expandedSlingDetailId, setExpandedSlingDetailId] = useState<string | null>(null);
-  const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
-  useEffect(() => {
-    if (!slingOverlayActive) setExpandedSlingDetailId(null);
-  }, [slingOverlayActive]);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
   const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
@@ -3870,6 +3866,11 @@ ${ddxList}`;
     return result;
   }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computeStage]);
 
+  const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
+  useEffect(() => {
+    if (!slingOverlayActive) setExpandedSlingDetailId(null);
+  }, [slingOverlayActive]);
+
   const biomechanicsFaultHighlights = useMemo(() => {
     const FAULT_JOINT_TO_BONE: Record<string, string> = {
       left_hip: 'Hip_L', right_hip: 'Hip_R',
@@ -5361,7 +5362,7 @@ ${ddxList}`;
                       )}
                     </div>
                   </div>
-                  <div className="absolute inset-0 -z-10" onClick={() => setExpandedSlingDetailId(null)} />
+                  <div className="absolute inset-0 -z-10 pointer-events-auto" onClick={() => setExpandedSlingDetailId(null)} />
                 </div>
               );
             })()}

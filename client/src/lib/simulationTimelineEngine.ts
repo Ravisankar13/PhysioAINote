@@ -3086,6 +3086,21 @@ export async function buildSessionTimelineAsync(
 
 type SkeletonGoalWithCarryForward = { id: string; target: string; rationale: string; source: string; priority: number; metric?: string; isCarryForward?: boolean };
 
+type TransitionState = {
+  avgPain: number;
+  avgRomPercent: number;
+  avgSlingIntegrity: number;
+  avgCompensationResolution: number;
+};
+
+function isGoalResolved(source: string, state: TransitionState): boolean {
+  if (source === 'pain' && state.avgPain <= 2) return true;
+  if (source === 'sling' && state.avgSlingIntegrity >= 75) return true;
+  if (source === 'biomechanics' && state.avgRomPercent >= 85) return true;
+  if ((source === 'muscle' || source === 'tissue') && state.avgCompensationResolution >= 80) return true;
+  return false;
+}
+
 function computeSkeletonGoalsForPhase(
   phaseLabel: string,
   phaseIndex: number,
@@ -3124,14 +3139,8 @@ function computeSkeletonGoalsForPhase(
     for (const pg of prevGoals) {
       if (matchedGoals.some(g => g.id === pg.id)) continue;
 
-      let unresolved = true;
-      if (prevState) {
-        if (pg.source === 'pain' && prevState.avgPain <= 2) unresolved = false;
-        else if (pg.source === 'sling' && prevState.avgSlingIntegrity >= 75) unresolved = false;
-        else if (pg.source === 'biomechanics' && prevState.avgRomPercent >= 85) unresolved = false;
-      }
-
-      if (unresolved) {
+      const resolved = prevState ? isGoalResolved(pg.source, prevState) : false;
+      if (!resolved) {
         matchedGoals.push({
           ...pg,
           priority: Math.max(pg.priority - 5, 50),
@@ -3203,15 +3212,8 @@ export function enrichPhasesWithClinicalPlan(
       for (const pg of prevGoals) {
         if (matchedGoals.some(g => g.id === pg.id)) continue;
 
-        let unresolved = true;
-        if (prevState) {
-          if (pg.source === 'pain' && prevState.avgPain <= 2) unresolved = false;
-          else if (pg.source === 'sling' && prevState.avgSlingIntegrity >= 75) unresolved = false;
-          else if (pg.source === 'biomechanics' && prevState.avgRomPercent >= 85) unresolved = false;
-          else if ((pg.source === 'muscle' || pg.source === 'tissue') && prevState.avgCompensationResolution >= 80) unresolved = false;
-        }
-
-        if (unresolved) {
+        const resolved = prevState ? isGoalResolved(pg.source, prevState) : false;
+        if (!resolved) {
           matchedGoals.push({
             ...pg,
             priority: Math.max(pg.priority - 5, 50),

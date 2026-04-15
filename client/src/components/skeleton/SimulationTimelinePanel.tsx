@@ -64,6 +64,7 @@ import {
   type CorrectionFactors,
   type TreatmentPhaseBlock,
   type PhaseProgressEvent,
+  enrichPhasesWithClinicalPlan,
 } from "@/lib/simulationTimelineEngine";
 import {
   type PatientFactors,
@@ -2016,9 +2017,42 @@ function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
             </div>
           )}
 
-          {phase.phaseGoals && (
+          {phase.phaseGoals && !phase.skeletonGoals?.length && (
             <div className="text-[8px] text-gray-400 bg-gray-800/30 rounded px-1.5 py-1">
               <span className="text-cyan-400 font-medium">Goals: </span>{phase.phaseGoals}
+            </div>
+          )}
+
+          {phase.skeletonGoals && phase.skeletonGoals.length > 0 && (
+            <div className="bg-gray-800/30 rounded px-1.5 py-1 space-y-1">
+              <span className="text-[8px] text-cyan-400 font-medium">Skeleton-Derived Goals:</span>
+              <div className="space-y-0.5">
+                {phase.skeletonGoals.map(goal => (
+                  <div key={goal.id} className="flex items-start gap-1 text-[7px]">
+                    <Target className="h-2 w-2 mt-0.5 text-cyan-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-gray-200">{goal.target}</span>
+                      {goal.metric && <span className="text-gray-500 ml-1">({goal.metric})</span>}
+                    </div>
+                    <span className={`text-[6px] px-1 py-0 rounded shrink-0 ${
+                      goal.source === 'pain' ? 'bg-red-500/20 text-red-300' :
+                      goal.source === 'biomechanics' ? 'bg-blue-500/20 text-blue-300' :
+                      goal.source === 'sling' ? 'bg-orange-500/20 text-orange-300' :
+                      goal.source === 'tissue' ? 'bg-pink-500/20 text-pink-300' :
+                      goal.source === 'muscle' ? 'bg-purple-500/20 text-purple-300' :
+                      'bg-emerald-500/20 text-emerald-300'
+                    }`}>{goal.source}</span>
+                  </div>
+                ))}
+              </div>
+              {phase.phaseGoals && (() => {
+                const baseGoals = phase.phaseGoals.split('\n\nSkeleton-derived targets:')[0];
+                return baseGoals ? (
+                  <div className="text-[7px] text-gray-500 mt-0.5 pt-0.5 border-t border-white/5">
+                    <span className="text-gray-400 font-medium">Phase basis: </span>{baseGoals}
+                  </div>
+                ) : null;
+              })()}
             </div>
           )}
 
@@ -2453,9 +2487,15 @@ function SessionTimelineView({
     };
   }, []);
 
+  const enrichedTimeline = useMemo(() => {
+    if (!clinicalPlan || !sessionTimeline.treatmentPhases || sessionTimeline.treatmentPhases.length === 0) return sessionTimeline;
+    const enrichedPhases = enrichPhasesWithClinicalPlan(sessionTimeline.treatmentPhases, clinicalPlan);
+    return { ...sessionTimeline, treatmentPhases: enrichedPhases };
+  }, [sessionTimeline, clinicalPlan]);
+
   const currentSnapshot = useMemo(() => {
-    return sessionTimeline.sessions.find(s => s.sessionNumber === selectedSession) ?? sessionTimeline.sessions[0] ?? null;
-  }, [sessionTimeline, selectedSession]);
+    return enrichedTimeline.sessions.find(s => s.sessionNumber === selectedSession) ?? enrichedTimeline.sessions[0] ?? null;
+  }, [enrichedTimeline, selectedSession]);
 
   const selectSession = useCallback((sessionNum: number) => {
     setSelectedSession(sessionNum);
@@ -3019,7 +3059,7 @@ function SessionTimelineView({
             {(() => {
               const visibleSessions = sessionTimeline.sessions
                 .filter(s => s.sessionNumber >= Math.max(0, selectedSession - 2) && s.sessionNumber <= selectedSession + 3);
-              const phases = sessionTimeline.treatmentPhases ?? [];
+              const phases = enrichedTimeline.treatmentPhases ?? [];
               const elements: Array<{ type: 'session' | 'phase'; key: string; session?: SessionSnapshot; phase?: TreatmentPhaseBlock }> = [];
 
               for (const s of visibleSessions) {
@@ -3072,7 +3112,7 @@ function SessionTimelineView({
         />
       )}
 
-      {sessionTimeline.treatmentPhases && sessionTimeline.treatmentPhases.length > 1 && (
+      {enrichedTimeline.treatmentPhases && enrichedTimeline.treatmentPhases.length > 1 && (
         <div className="border border-cyan-700/30 rounded overflow-hidden">
           <button
             onClick={() => toggleSection('phases')}
@@ -3080,13 +3120,13 @@ function SessionTimelineView({
           >
             <span className="text-[9px] font-medium flex items-center gap-1">
               <Sparkles className="h-3 w-3 text-cyan-400" />
-              Treatment Phases ({sessionTimeline.treatmentPhases.length})
+              Treatment Phases ({enrichedTimeline.treatmentPhases.length})
             </span>
             {expandedSection === 'phases' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
           {expandedSection === 'phases' && (
             <div className="p-2 bg-gray-900/30 space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
-              {sessionTimeline.treatmentPhases.map(phase => (
+              {enrichedTimeline.treatmentPhases.map(phase => (
                 <PhaseTransitionCard key={phase.phaseIndex} phase={phase} />
               ))}
             </div>

@@ -930,6 +930,7 @@ export interface TreatmentPhaseBlock {
     correctionTrend?: 'faster' | 'slower' | 'as_expected';
   } | null;
   phaseGoals: string;
+  skeletonGoals?: Array<{ id: string; target: string; rationale: string; source: string; priority: number; metric?: string }>;
   previousProgressionStages: Array<{ exerciseName: string; stages: Array<{ stage: number; name: string; description: string }> }>;
 }
 
@@ -3030,4 +3031,68 @@ export async function buildSessionTimelineAsync(
   }
 
   return { ...accumulatedResult, treatmentPhases };
+}
+
+const CLINICAL_PHASE_TO_TREATMENT_PHASE: Record<string, string[]> = {
+  pain_inflammation: ['Acute/Protective'],
+  tissue_release: ['Acute/Protective', 'Proliferative'],
+  mobility: ['Proliferative', 'Remodeling'],
+  motor_control: ['Proliferative', 'Remodeling'],
+  strengthening: ['Remodeling', 'Functional'],
+  functional: ['Functional', 'Return to Activity'],
+};
+
+export function enrichPhasesWithClinicalPlan(
+  phases: TreatmentPhaseBlock[],
+  clinicalPlan: { phases: Array<{ phase: string; goals: Array<{ id: string; target: string; rationale: string; source: string; priority: number; metric?: string }> }> } | null | undefined,
+): TreatmentPhaseBlock[] {
+  if (!clinicalPlan || !clinicalPlan.phases || clinicalPlan.phases.length === 0) return phases;
+  if (phases.length === 0) return phases;
+
+  return phases.map((block, idx) => {
+    const matchedGoals: TreatmentPhaseBlock['skeletonGoals'] = [];
+
+    for (const clinPhase of clinicalPlan.phases) {
+      const mappedLabels = CLINICAL_PHASE_TO_TREATMENT_PHASE[clinPhase.phase];
+      if (!mappedLabels) continue;
+
+      const normalizedPhaseLabel = block.phaseLabel.trim();
+      const isMatch = mappedLabels.some(l => normalizedPhaseLabel.includes(l) || l.includes(normalizedPhaseLabel));
+      const isFirstPhase = idx === 0;
+      const isLastPhase = idx === phases.length - 1;
+      const isFunctionalClinical = clinPhase.phase === 'functional' || clinPhase.phase === 'strengthening';
+      const isEarlyClinical = clinPhase.phase === 'pain_inflammation' || clinPhase.phase === 'tissue_release';
+
+      if (isMatch || (isFirstPhase && isEarlyClinical) || (isLastPhase && isFunctionalClinical)) {
+        for (const goal of clinPhase.goals) {
+          if (!matchedGoals.some(g => g.id === goal.id)) {
+            matchedGoals.push({
+              id: goal.id,
+              target: goal.target,
+              rationale: goal.rationale,
+              source: goal.source,
+              priority: goal.priority,
+              metric: goal.metric,
+            });
+          }
+        }
+      }
+    }
+
+    matchedGoals.sort((a, b) => b.priority - a.priority);
+    const cappedGoals = matchedGoals.slice(0, 8);
+
+    if (cappedGoals.length === 0) return block;
+
+    const skeletonGoalText = cappedGoals.map(g => g.target).join('; ');
+    const enrichedPhaseGoals = block.phaseGoals
+      ? `${block.phaseGoals}\n\nSkeleton-derived targets: ${skeletonGoalText}`
+      : `Skeleton-derived targets: ${skeletonGoalText}`;
+
+    return {
+      ...block,
+      phaseGoals: enrichedPhaseGoals,
+      skeletonGoals: cappedGoals,
+    };
+  });
 }

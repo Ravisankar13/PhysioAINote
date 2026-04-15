@@ -128,6 +128,7 @@ import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparis
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
+import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
 
 const MovementPlayer = lazy(() => import("@/components/skeleton/MovementPlayer"));
 const FocusedCameraCapture = lazy(() => import("@/components/skeleton/FocusedCameraCapture"));
@@ -3868,6 +3869,50 @@ ${ddxList}`;
   }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computeStage]);
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
+
+  const clinicalPlan = useMemo<ClinicalPlanResult | null>(() => {
+    const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
+    const hasPain = painMarkers.length > 0;
+    const hasBio = !!bioSrc;
+    const hasSling = !!slingAnalysis;
+    const hasMuscle = Object.keys(muscleOverrides).length > 0;
+    const hasPosture = Object.keys(modelConfig).some(g => {
+      const vals = modelConfig[g];
+      return vals && Object.values(vals).some(v => Math.abs(v) > 3);
+    });
+    if (!hasPain && !hasBio && !hasSling && !hasMuscle && !hasPosture) return null;
+
+    return synthesizeClinicalPlan({
+      painMarkers: painMarkers.map(pm => ({
+        id: pm.id,
+        label: pm.anatomicalLabel || pm.nearestBone,
+        severity: (pm as Record<string, unknown>).severity as number | undefined,
+        type: pm.type,
+        description: pm.description,
+      })),
+      biomechanics: bioSrc ? {
+        faults: bioSrc.faults.faults.map(f => ({
+          label: f.label,
+          severity: f.severity,
+          category: f.category,
+          clinical: f.clinical,
+          corrective: f.corrective,
+        })),
+        deviations: bioSrc.posture.deviations.map(d => ({
+          pattern: d.pattern,
+          region: d.region,
+          severity: d.severity,
+          angleDeg: d.angleDeg,
+        })),
+        qualityScore: bioSrc.qualityScore,
+        clinicalSummary: bioSrc.clinicalSummary,
+      } : undefined,
+      slingAnalysis: slingAnalysis ?? undefined,
+      slingTissueRisks,
+      muscleOverrides: muscleOverrides as Record<string, Partial<{ tensionOffset: number; pathology: string }>>,
+      postureState: modelConfig,
+    });
+  }, [painMarkers, unifiedBiomechanicsOutput, cachedBiomechanicsOutput, slingAnalysis, slingTissueRisks, muscleOverrides, modelConfig]);
 
   const mergedCompromisedTissues = useMemo(() => {
     const clinicalMap = new Map<string, CompromisedTissue>();
@@ -8896,6 +8941,7 @@ ${ddxList}`;
                       chainTensionAverages={chainEffects.length > 0 ? chainEffects : undefined}
                       postureMeasurements={postureMeasurementsForGoals}
                       currentRom={currentRomForGoals}
+                      clinicalPlan={clinicalPlan}
                     />
                   </Suspense>
                 </div>

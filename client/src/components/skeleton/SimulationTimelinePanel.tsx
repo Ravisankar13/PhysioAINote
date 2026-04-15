@@ -85,6 +85,7 @@ import type { CustomExercise } from "./ExerciseEngineTab";
 import type { CustomTechnique } from "./ManualTherapyEngineTab";
 import { computeGoalGap, generateGoalProfile, generateGenericGoalProfile, detectPathologyOverride, type RecoveryGoalProfile, type GoalGapAnalysis, type ClinicalStateInput, type ScarSummaryEntry, type ChainTensionEntry, type PostureMeasurements } from "@/lib/goalStateEngine";
 import { computeTimelinePrescriptions, type TimelinePrescriptionSummary, type PrescriptionContext } from "@/lib/prescriptionAdapterEngine";
+import type { ClinicalPlanResult, ClinicalPhaseCategory, SkeletonClinicalGoal } from "@/lib/clinicalPlanSynthesizer";
 
 interface GoalOverlayData {
   enabled: boolean;
@@ -155,6 +156,7 @@ interface SimulationTimelinePanelProps {
   chainTensionAverages?: ChainTensionEntry[];
   postureMeasurements?: PostureMeasurements;
   currentRom?: Array<{ jointId: string; currentDegrees: number }>;
+  clinicalPlan?: ClinicalPlanResult | null;
 }
 
 const PHASE_COLORS = [
@@ -2286,6 +2288,108 @@ function RecoveryGoalHeroCard({ goalProfile, totalWeeks, totalSessions, finalGoa
   );
 }
 
+const CLINICAL_PHASE_ICONS: Record<ClinicalPhaseCategory, typeof Target> = {
+  pain_inflammation: Flame,
+  tissue_release: Hand,
+  mobility: Activity,
+  motor_control: Brain,
+  strengthening: Dumbbell,
+  functional: Trophy,
+};
+
+const CLINICAL_PHASE_COLORS: Record<ClinicalPhaseCategory, { border: string; bg: string; text: string; icon: string }> = {
+  pain_inflammation: { border: 'border-red-600/40', bg: 'bg-red-950/20', text: 'text-red-300', icon: 'text-red-400' },
+  tissue_release: { border: 'border-rose-600/40', bg: 'bg-rose-950/20', text: 'text-rose-300', icon: 'text-rose-400' },
+  mobility: { border: 'border-cyan-600/40', bg: 'bg-cyan-950/20', text: 'text-cyan-300', icon: 'text-cyan-400' },
+  motor_control: { border: 'border-violet-600/40', bg: 'bg-violet-950/20', text: 'text-violet-300', icon: 'text-violet-400' },
+  strengthening: { border: 'border-emerald-600/40', bg: 'bg-emerald-950/20', text: 'text-emerald-300', icon: 'text-emerald-400' },
+  functional: { border: 'border-amber-600/40', bg: 'bg-amber-950/20', text: 'text-amber-300', icon: 'text-amber-400' },
+};
+
+const SOURCE_BADGES: Record<string, { label: string; color: string }> = {
+  pain: { label: 'Pain', color: 'border-red-500/40 text-red-400' },
+  biomechanics: { label: 'Biomech', color: 'border-cyan-500/40 text-cyan-400' },
+  sling: { label: 'Sling', color: 'border-violet-500/40 text-violet-400' },
+  tissue: { label: 'Tissue', color: 'border-rose-500/40 text-rose-400' },
+  muscle: { label: 'Muscle', color: 'border-emerald-500/40 text-emerald-400' },
+  posture: { label: 'Posture', color: 'border-amber-500/40 text-amber-400' },
+};
+
+function ClinicalPlanRoadmap({ plan, expanded, onToggle }: { plan: ClinicalPlanResult; expanded: boolean; onToggle: () => void }) {
+  return (
+    <div className="border border-orange-700/30 rounded overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-2 py-1.5 bg-orange-950/20 hover:bg-orange-950/30 text-gray-300"
+      >
+        <span className="text-[9px] font-medium flex items-center gap-1">
+          <ListOrdered className="h-3 w-3 text-orange-400" />
+          Clinical Plan ({plan.totalGoals} goals, {plan.phases.length} phases)
+        </span>
+        {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+      {expanded && (
+        <div className="p-2 bg-gray-900/30 space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+          <p className="text-[8px] text-gray-500 italic">{plan.summary}</p>
+          {plan.phases.map((phaseGroup, pi) => {
+            const colors = CLINICAL_PHASE_COLORS[phaseGroup.phase];
+            const PhaseIcon = CLINICAL_PHASE_ICONS[phaseGroup.phase];
+            return (
+              <div key={phaseGroup.phase} className={`border ${colors.border} rounded overflow-hidden`}>
+                <div className={`flex items-center gap-1.5 px-2 py-1 ${colors.bg}`}>
+                  <span className={`text-[9px] font-bold ${colors.text}`}>{pi + 1}.</span>
+                  <PhaseIcon className={`h-3 w-3 ${colors.icon}`} />
+                  <span className={`text-[9px] font-medium ${colors.text}`}>{phaseGroup.label}</span>
+                  <Badge variant="outline" className={`text-[7px] px-1 py-0 ml-auto ${colors.border} ${colors.text}`}>
+                    {phaseGroup.goals.length}
+                  </Badge>
+                </div>
+                <div className="px-2 py-1.5 space-y-1.5">
+                  {phaseGroup.goals.map((goal, gi) => {
+                    const srcBadge = SOURCE_BADGES[goal.source];
+                    return (
+                      <div key={goal.id} className="group">
+                        <div className="flex items-start gap-1.5">
+                          <span className="text-[8px] text-gray-600 mt-0.5 w-3 shrink-0">{pi + 1}.{gi + 1}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="text-[9px] text-gray-200 font-medium">{goal.target}</span>
+                              {srcBadge && (
+                                <Badge variant="outline" className={`text-[6px] px-0.5 py-0 ${srcBadge.color}`}>
+                                  {srcBadge.label}
+                                </Badge>
+                              )}
+                              {goal.metric && (
+                                <span className="text-[7px] text-gray-500">{goal.metric}</span>
+                              )}
+                            </div>
+                            <p className="text-[7px] text-gray-500 mt-0.5 leading-tight">{goal.rationale}</p>
+                          </div>
+                          <div className="w-4 shrink-0 mt-0.5">
+                            <div className="h-1 rounded-full bg-gray-800 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  goal.priority >= 75 ? 'bg-red-500' :
+                                  goal.priority >= 50 ? 'bg-amber-500' : 'bg-cyan-500'
+                                }`}
+                                style={{ width: `${Math.min(goal.priority, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SessionTimelineView({
   sessionTimeline,
   baseModelConfig,
@@ -2307,6 +2411,7 @@ function SessionTimelineView({
   mtGeneratingSession,
   exerciseGeneratedSessions,
   mtGeneratedSessions,
+  clinicalPlan,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -2328,10 +2433,11 @@ function SessionTimelineView({
   mtGeneratingSession?: number | null;
   exerciseGeneratedSessions?: Set<number>;
   mtGeneratedSessions?: Set<number>;
+  clinicalPlan?: ClinicalPlanResult | null;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals' | 'rxplan' | null>('curve');
+  const [expandedSection, setExpandedSection] = useState<'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals' | 'rxplan' | 'clinicalplan' | null>('curve');
   const [expandedSessionCard, setExpandedSessionCard] = useState<number | null>(null);
   const [appliedSession, setAppliedSession] = useState<number | null>(null);
   const [goalOverlayEnabled, setGoalOverlayEnabled] = useState(false);
@@ -2410,7 +2516,7 @@ function SessionTimelineView({
     playIntervalRef.current = interval;
   }, [isPlaying, selectedSession, sessionTimeline.totalSessions, currentSnapshot, onApplyToSkeleton, buildApplyPayload, selectSession]);
 
-  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals' | 'rxplan') => {
+  const toggleSection = (section: 'curve' | 'sessions' | 'modifications' | 'summary' | 'multidim' | 'funcmilestones' | 'healing' | 'phases' | 'goals' | 'rxplan' | 'clinicalplan') => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
@@ -2957,6 +3063,14 @@ function SessionTimelineView({
           </div>
         )}
       </div>
+
+      {clinicalPlan && clinicalPlan.totalGoals > 0 && (
+        <ClinicalPlanRoadmap
+          plan={clinicalPlan}
+          expanded={expandedSection === 'clinicalplan'}
+          onToggle={() => toggleSection('clinicalplan')}
+        />
+      )}
 
       {sessionTimeline.treatmentPhases && sessionTimeline.treatmentPhases.length > 1 && (
         <div className="border border-cyan-700/30 rounded overflow-hidden">
@@ -4162,6 +4276,7 @@ export default function SimulationTimelinePanel({
   chainTensionAverages,
   postureMeasurements,
   currentRom,
+  clinicalPlan,
 }: SimulationTimelinePanelProps) {
   const [patientFactors, setPatientFactors] = useState<PatientFactors>(DEFAULT_PATIENT_FACTORS);
   const [hasAutoPopulated, setHasAutoPopulated] = useState(false);
@@ -4674,6 +4789,7 @@ export default function SimulationTimelinePanel({
             mtGeneratingSession={mtGeneratingSession}
             exerciseGeneratedSessions={exerciseGeneratedSessions}
             mtGeneratedSessions={mtGeneratedSessions}
+            clinicalPlan={clinicalPlan}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (

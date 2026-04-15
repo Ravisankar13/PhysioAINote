@@ -3105,6 +3105,7 @@ function isGoalResolved(source: string, state: TransitionState): boolean {
   if (source === 'sling' && state.avgSlingIntegrity >= 75) return true;
   if (source === 'biomechanics' && state.avgRomPercent >= 85) return true;
   if ((source === 'muscle' || source === 'tissue') && state.avgCompensationResolution >= 80) return true;
+  if (source === 'posture' && state.avgRomPercent >= 90 && state.avgCompensationResolution >= 75) return true;
   return false;
 }
 

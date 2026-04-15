@@ -643,6 +643,7 @@ export default function PhysioGPT() {
   const [reasoningActiveTab, setReasoningActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
   const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
   const [slingOverlayVisible, setSlingOverlayVisible] = useState(true);
+  const [expandedSlingDetailId, setExpandedSlingDetailId] = useState<string | null>(null);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
   const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
@@ -5184,8 +5185,17 @@ ${ddxList}`;
                   weakLinkBoneIndices: s.weakLinks.flatMap(wl => wl.boneSegmentIndices),
                   overloadedBoneIndices: s.overloadedBoneIndices,
                   compensatingBoneIndices: s.compensatingBoneIndices,
+                  narrative: s.narrative,
+                  downstreamRiskArea: s.downstreamRiskArea,
+                  weakLinks: s.weakLinks.map(wl => ({ muscle: wl.muscle, activationPct: wl.activationPct, reason: wl.reason, impactOnSling: wl.impactOnSling })),
+                  compensations: s.compensations.map(c => ({ compensatingSlingLabel: c.compensatingSlingLabel, mechanism: c.mechanism, severity: c.severity, clinical: c.clinical })),
+                  treatmentTargets: s.treatmentTargets.map(t => ({ muscle: t.muscle, intervention: t.intervention, priority: t.priority, rationale: t.rationale })),
                 })),
               } : null}
+              onSlingLabelClick={(slingId: string) => {
+                setExpandedSlingDetailId(prevId => prevId === slingId ? null : slingId);
+                setSelectedSlingId(slingId as SlingId);
+              }}
               onTissueBoneClick={tissueViewMode && tissueViewMode !== 'muscle' ? (boneName: string) => {
                 const matches = getAllEntriesForBone(tissueViewMode, boneName);
                 if (matches.length === 0) return;
@@ -5239,6 +5249,118 @@ ${ddxList}`;
                 }
               }}
             />
+
+            {expandedSlingDetailId && slingAnalysis && (() => {
+              const slingData = slingAnalysis.slings.find(s => s.slingId === expandedSlingDetailId);
+              if (!slingData) return null;
+              const ftqColor = slingData.forceTransferQuality === 'good' ? 'text-emerald-400' : slingData.forceTransferQuality === 'reduced' ? 'text-amber-400' : 'text-red-400';
+              const statusColor = slingData.status === 'underperforming' ? 'border-red-500' : slingData.status === 'overloaded' ? 'border-amber-500' : slingData.status === 'compensating' ? 'border-yellow-500' : 'border-slate-600';
+              const scoreColor = slingData.activationScore >= 70 ? 'text-emerald-400' : slingData.activationScore >= 45 ? 'text-amber-400' : 'text-red-400';
+              return (
+                <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+                  <div
+                    className="pointer-events-auto bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl max-w-md w-full max-h-[80%] overflow-y-auto border-2 border-l-4"
+                    style={{ borderColor: slingData.color }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="sticky top-0 bg-slate-900/98 backdrop-blur z-10 px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: slingData.color }} />
+                        <h3 className="text-white font-bold text-base">{slingData.label}</h3>
+                      </div>
+                      <button
+                        onClick={() => setExpandedSlingDetailId(null)}
+                        className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-slate-700"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-slate-800 rounded-lg p-2.5 text-center">
+                          <div className={`text-xl font-bold ${scoreColor}`}>{Math.round(slingData.activationScore)}%</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">Activation</div>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-2.5 text-center">
+                          <div className={`text-sm font-semibold capitalize ${statusColor.replace('border-', 'text-')}`}>{slingData.status}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">Status</div>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-2.5 text-center">
+                          <div className={`text-sm font-semibold capitalize ${ftqColor}`}>{slingData.forceTransferQuality}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">Transfer</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-800/60 rounded-lg p-3">
+                        <div className="text-xs font-semibold text-gray-300 mb-1.5">Clinical Narrative</div>
+                        <p className="text-xs text-gray-400 leading-relaxed">{slingData.narrative}</p>
+                      </div>
+
+                      {slingData.downstreamRiskArea && (
+                        <div className="bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+                          <div className="text-xs font-semibold text-red-400 mb-1">Downstream Risk Area</div>
+                          <p className="text-xs text-red-300/80">{slingData.downstreamRiskArea}</p>
+                        </div>
+                      )}
+
+                      {slingData.weakLinks.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-300 mb-2">Weak Links ({slingData.weakLinks.length})</div>
+                          <div className="space-y-2">
+                            {slingData.weakLinks.map((wl, i) => (
+                              <div key={i} className="bg-red-950/30 border border-red-900/40 rounded-lg p-2.5">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-medium text-red-300 capitalize">{wl.muscle.replace(/_/g, ' ')}</span>
+                                  <span className="text-xs text-red-400 font-mono">{wl.activationPct}%</span>
+                                </div>
+                                <p className="text-[10px] text-gray-400">{wl.reason}</p>
+                                <p className="text-[10px] text-red-400/70 mt-1">{wl.impactOnSling}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {slingData.compensations.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-300 mb-2">Compensation Patterns</div>
+                          <div className="space-y-2">
+                            {slingData.compensations.map((comp, i) => (
+                              <div key={i} className="bg-amber-950/30 border border-amber-900/40 rounded-lg p-2.5">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-medium text-amber-300">{comp.compensatingSlingLabel}</span>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${comp.severity === 'severe' ? 'bg-red-900/50 text-red-300' : comp.severity === 'moderate' ? 'bg-amber-900/50 text-amber-300' : 'bg-slate-700 text-gray-300'}`}>{comp.severity}</span>
+                                </div>
+                                <p className="text-[10px] text-gray-400">{comp.mechanism}</p>
+                                <p className="text-[10px] text-amber-400/70 mt-1">{comp.clinical}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {slingData.treatmentTargets.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-300 mb-2">Treatment Targets</div>
+                          <div className="space-y-1.5">
+                            {slingData.treatmentTargets.sort((a, b) => a.priority - b.priority).map((t, i) => (
+                              <div key={i} className="bg-slate-800 rounded-lg p-2.5 flex items-start gap-2">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium mt-0.5 ${t.intervention === 'strengthen' ? 'bg-emerald-900/50 text-emerald-300' : t.intervention === 'release' ? 'bg-blue-900/50 text-blue-300' : t.intervention === 'activate' ? 'bg-purple-900/50 text-purple-300' : 'bg-slate-700 text-gray-300'}`}>{t.intervention}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs text-gray-200 capitalize">{t.muscle.replace(/_/g, ' ')}</div>
+                                  <p className="text-[10px] text-gray-400 mt-0.5">{t.rationale}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="absolute inset-0 -z-10" onClick={() => setExpandedSlingDetailId(null)} />
+                </div>
+              );
+            })()}
 
             <MovementPlayer
               animationState={animationState}

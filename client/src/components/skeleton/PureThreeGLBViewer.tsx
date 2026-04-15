@@ -1698,8 +1698,14 @@ interface PureThreeGLBViewerProps {
       weakLinkBoneIndices: number[];
       overloadedBoneIndices: number[];
       compensatingBoneIndices: number[];
+      narrative: string;
+      downstreamRiskArea: string;
+      weakLinks: Array<{ muscle: string; activationPct: number; reason: string; impactOnSling: string }>;
+      compensations: Array<{ compensatingSlingLabel: string; mechanism: string; severity: string; clinical: string }>;
+      treatmentTargets: Array<{ muscle: string; intervention: string; priority: number; rationale: string }>;
     }>;
   } | null;
+  onSlingLabelClick?: (slingId: string) => void;
   onModelLoadProgress?: (progress: number) => void;
   onModelReady?: () => void;
   onModelLoadError?: (error: string) => void;
@@ -2180,6 +2186,7 @@ export default function PureThreeGLBViewer({
   onTissueBoneClick,
   biomechanicsFaultHighlights,
   slingPathwayVisualization,
+  onSlingLabelClick,
   onModelLoadProgress,
   onModelReady,
   onModelLoadError,
@@ -2219,6 +2226,9 @@ export default function PureThreeGLBViewer({
   const chainHighlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const fascialChainGroupRef = useRef<THREE.Group | null>(null);
   const slingPathwayGroupRef = useRef<THREE.Group | null>(null);
+  const slingLabelSpritesRef = useRef<THREE.Sprite[]>([]);
+  const onSlingLabelClickRef = useRef(onSlingLabelClick);
+  onSlingLabelClickRef.current = onSlingLabelClick;
   const scarMarkerGroupRef = useRef<THREE.Group | null>(null);
   const onScarMarkerClickRef = useRef(onScarMarkerClick);
   onScarMarkerClickRef.current = onScarMarkerClick;
@@ -3131,6 +3141,7 @@ export default function PureThreeGLBViewer({
       });
       scene.remove(slingPathwayGroupRef.current);
       slingPathwayGroupRef.current = null;
+      slingLabelSpritesRef.current = [];
     }
 
     if (!slingPathwayVisualization?.enabled || !model) return;
@@ -3144,6 +3155,7 @@ export default function PureThreeGLBViewer({
 
     const group = new THREE.Group();
     group.userData.isSlingGroup = true;
+    const labelSprites: THREE.Sprite[] = [];
 
     for (const sling of slingPathwayVisualization.slings) {
       const isActive = slingPathwayVisualization.activeSlingId === sling.id;
@@ -3285,8 +3297,8 @@ export default function PureThreeGLBViewer({
       const needsAttention = sling.status === 'underperforming' || sling.status === 'overloaded' || hasWeakLinks;
 
       const labelCanvas = document.createElement('canvas');
-      const cw = 400;
-      const ch = 140;
+      const cw = 640;
+      const ch = 240;
       labelCanvas.width = cw;
       labelCanvas.height = ch;
       const lctx = labelCanvas.getContext('2d');
@@ -3296,56 +3308,68 @@ export default function PureThreeGLBViewer({
           : sling.status === 'compensating' ? '#eab308'
           : sling.color;
 
-        lctx.fillStyle = 'rgba(15, 15, 30, 0.92)';
+        lctx.fillStyle = 'rgba(10, 10, 28, 0.94)';
         lctx.beginPath();
-        lctx.roundRect(4, 4, cw - 8, ch - 8, 12);
+        lctx.roundRect(4, 4, cw - 8, ch - 8, 14);
         lctx.fill();
+
         lctx.strokeStyle = statusBorderColor;
-        lctx.lineWidth = needsAttention ? 4 : 2;
+        lctx.lineWidth = needsAttention ? 5 : 3;
         lctx.beginPath();
-        lctx.roundRect(4, 4, cw - 8, ch - 8, 12);
+        lctx.roundRect(4, 4, cw - 8, ch - 8, 14);
         lctx.stroke();
 
-        lctx.font = 'bold 28px sans-serif';
+        const accentBarH = 6;
         lctx.fillStyle = sling.color;
+        lctx.fillRect(14, 10, cw - 28, accentBarH);
+
+        lctx.font = 'bold 38px sans-serif';
+        lctx.fillStyle = '#ffffff';
         lctx.textAlign = 'left';
         lctx.textBaseline = 'top';
-        lctx.fillText(slingLabel, 16, 14);
+        lctx.fillText(slingLabel, 20, 26);
 
-        lctx.font = 'bold 36px sans-serif';
+        lctx.font = 'bold 52px sans-serif';
         const scoreColor = sling.activationScore >= 70 ? '#34d399'
           : sling.activationScore >= 45 ? '#fbbf24'
           : '#ef4444';
         lctx.fillStyle = scoreColor;
         lctx.textAlign = 'right';
-        lctx.fillText(scoreText, cw - 16, 10);
+        lctx.fillText(scoreText, cw - 20, 20);
 
-        lctx.font = '22px sans-serif';
+        lctx.font = '30px sans-serif';
         lctx.textAlign = 'left';
         lctx.fillStyle = statusBorderColor;
-        lctx.fillText(statusText, 16, 52);
+        lctx.fillText(statusText, 20, 76);
 
         const ftqColor = sling.forceTransferQuality === 'good' ? '#34d399'
           : sling.forceTransferQuality === 'reduced' ? '#fbbf24' : '#ef4444';
+        lctx.font = '28px sans-serif';
         lctx.fillStyle = '#9ca3af';
-        lctx.fillText('Transfer: ', 16, 82);
-        const transferPrefixW = lctx.measureText('Transfer: ').width;
+        lctx.fillText('Force Transfer: ', 20, 118);
+        const transferPrefixW = lctx.measureText('Force Transfer: ').width;
         lctx.fillStyle = ftqColor;
-        lctx.fillText(ftqText, 16 + transferPrefixW, 82);
-
-        if (needsAttention) {
-          lctx.font = 'bold 22px sans-serif';
-          lctx.fillStyle = '#ef4444';
-          lctx.textAlign = 'right';
-          lctx.fillText('\u26A0 Needs Attention', cw - 16, 108);
-        }
+        lctx.font = 'bold 28px sans-serif';
+        lctx.fillText(ftqText, 20 + transferPrefixW, 118);
 
         if (hasWeakLinks) {
-          lctx.font = '20px sans-serif';
+          lctx.font = '26px sans-serif';
           lctx.fillStyle = '#f87171';
           lctx.textAlign = 'left';
-          lctx.fillText(`${sling.weakLinkBoneIndices.length} weak link${sling.weakLinkBoneIndices.length > 1 ? 's' : ''}`, 16, 108);
+          lctx.fillText(`\u26A0 ${sling.weakLinkBoneIndices.length} weak link${sling.weakLinkBoneIndices.length > 1 ? 's' : ''}`, 20, 158);
         }
+
+        if (needsAttention) {
+          lctx.font = 'bold 26px sans-serif';
+          lctx.fillStyle = '#ef4444';
+          lctx.textAlign = 'right';
+          lctx.fillText('\u26A0 Needs Attention', cw - 20, 158);
+        }
+
+        lctx.font = '22px sans-serif';
+        lctx.fillStyle = 'rgba(148, 163, 184, 0.7)';
+        lctx.textAlign = 'center';
+        lctx.fillText('Click for details', cw / 2, 200);
       }
 
       const labelTexture = new THREE.CanvasTexture(labelCanvas);
@@ -3357,31 +3381,85 @@ export default function PureThreeGLBViewer({
         opacity: isDimmed ? 0.15 : isActive ? 1.0 : 0.85,
       });
       const labelSprite = new THREE.Sprite(labelMat);
+      labelSprite.userData.slingId = sling.id;
+      labelSprite.userData.isSlingLabel = true;
 
-      const labelOffsetX = sling.id === 'lateral' || sling.id === 'anterior_oblique' ? -0.18 : 0.18;
-      const labelOffsetY = sling.id === 'scapular_shoulder' ? 0.08 : sling.id === 'deep_longitudinal' ? -0.04 : 0.03;
-      const labelPos = anchorPos.clone().add(new THREE.Vector3(labelOffsetX, labelOffsetY, 0.06));
+      const labelOffsetX = sling.id === 'lateral' ? -0.38
+        : sling.id === 'anterior_oblique' ? -0.35
+        : sling.id === 'scapular_shoulder' ? 0.35
+        : sling.id === 'deep_longitudinal' ? 0.35
+        : 0.35;
+      const labelOffsetY = sling.id === 'scapular_shoulder' ? 0.14
+        : sling.id === 'deep_longitudinal' ? -0.08
+        : sling.id === 'lateral' ? -0.02
+        : sling.id === 'anterior_oblique' ? 0.06
+        : 0.06;
+      const labelPos = anchorPos.clone().add(new THREE.Vector3(labelOffsetX, labelOffsetY, 0.12));
 
       labelSprite.position.copy(labelPos);
-      labelSprite.scale.set(0.2, 0.07, 1);
+      labelSprite.scale.set(0.36, 0.135, 1);
       labelSprite.renderOrder = 1000;
       group.add(labelSprite);
+      labelSprites.push(labelSprite);
 
-      const leaderGeom = new THREE.BufferGeometry().setFromPoints([anchorPos, labelPos]);
+      const leaderMidpoint = anchorPos.clone().lerp(labelPos, 0.5).add(new THREE.Vector3(0, 0.02, 0.03));
+      const leaderCurve = new THREE.QuadraticBezierCurve3(anchorPos, leaderMidpoint, labelPos);
+      const leaderPts = leaderCurve.getPoints(12);
+      const leaderGeom = new THREE.BufferGeometry().setFromPoints(leaderPts);
       const leaderMat = new THREE.LineBasicMaterial({
         color: colorHex,
-        opacity: isDimmed ? 0.1 : 0.4,
+        opacity: isDimmed ? 0.1 : 0.6,
         transparent: true,
         depthTest: false,
       });
       const leaderLine = new THREE.Line(leaderGeom, leaderMat);
       leaderLine.renderOrder = 999;
       group.add(leaderLine);
+
+      const anchorDotGeom = new THREE.SphereGeometry(0.006, 8, 8);
+      const anchorDotMat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        opacity: isDimmed ? 0.15 : 0.7,
+        transparent: true,
+        depthTest: false,
+      });
+      const anchorDot = new THREE.Mesh(anchorDotGeom, anchorDotMat);
+      anchorDot.position.copy(anchorPos);
+      anchorDot.renderOrder = 999;
+      group.add(anchorDot);
     }
 
+    slingLabelSpritesRef.current = labelSprites;
     scene.add(group);
     slingPathwayGroupRef.current = group;
   }, [slingPathwayVisualization]);
+
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { renderer, camera } = sceneRef.current;
+    if (!renderer) return;
+    const domElement = renderer.domElement;
+
+    const onClickSlingLabel = (e: MouseEvent) => {
+      if (slingLabelSpritesRef.current.length === 0) return;
+      const rect = domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const hits = raycasterRef.current.intersectObjects(slingLabelSpritesRef.current, false);
+      if (hits.length > 0 && hits[0].object.userData.isSlingLabel) {
+        const slingId = hits[0].object.userData.slingId;
+        if (slingId) {
+          onSlingLabelClickRef.current?.(slingId);
+        }
+      }
+    };
+
+    domElement.addEventListener('click', onClickSlingLabel);
+    return () => { domElement.removeEventListener('click', onClickSlingLabel); };
+  }, [slingPathwayVisualization?.enabled]);
 
   useEffect(() => {
     if (!sceneRef.current) return;

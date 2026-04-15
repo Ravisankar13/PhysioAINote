@@ -76,6 +76,7 @@ export interface SlingResult {
   assessmentTests: string[];
   overloadedBoneIndices: number[];
   compensatingBoneIndices: number[];
+  muscleScores: Array<{ muscle: string; activation: number; found: boolean }>;
 }
 
 export interface SlingAnalysisResult {
@@ -680,6 +681,7 @@ export function computeSlingAnalysis(
         assessmentTests: def.assessmentTests,
         overloadedBoneIndices: [],
         compensatingBoneIndices: [],
+        muscleScores: def.muscles.map(m => ({ muscle: m, activation: 50, found: false })),
       })),
       systemSummary: 'No biomechanical data available. Adjust the skeleton posture to generate sling analysis.',
       overallForceTransferScore: 50,
@@ -752,6 +754,7 @@ export function computeSlingAnalysis(
       assessmentTests: ir.def.assessmentTests,
       overloadedBoneIndices,
       compensatingBoneIndices,
+      muscleScores: ir.muscleScores.map(ms => ({ muscle: ms.muscle, activation: ms.activation, found: ms.found })),
     };
   });
 

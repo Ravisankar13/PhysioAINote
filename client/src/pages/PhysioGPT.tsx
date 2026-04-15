@@ -5195,6 +5195,15 @@ ${ddxList}`;
                   weakLinks: s.weakLinks.map(wl => ({ muscle: wl.muscle, activationPct: wl.activationPct, reason: wl.reason, impactOnSling: wl.impactOnSling })),
                   compensations: s.compensations.map(c => ({ compensatingSlingLabel: c.compensatingSlingLabel, mechanism: c.mechanism, severity: c.severity, clinical: c.clinical })),
                   treatmentTargets: s.treatmentTargets.map(t => ({ muscle: t.muscle, intervention: t.intervention, priority: t.priority, rationale: t.rationale })),
+                  muscleScores: s.muscleScores.map(ms => ({ muscle: ms.muscle, activation: ms.activation, found: ms.found })),
+                  forceReroutes: s.forceReroutes.map(fr => ({ fromMuscle: fr.fromMuscle, toMuscle: fr.toMuscle, reroutePct: fr.reroutePct })),
+                })),
+                crossSlingCompensations: slingAnalysis.crossSlingCompensations.map(c => ({
+                  compensatingSling: c.compensatingSling,
+                  compensatingSlingLabel: c.compensatingSlingLabel,
+                  severity: c.severity,
+                  additionalLoadPct: c.additionalLoadPct,
+                  mechanism: c.mechanism,
                 })),
               } : null}
               onSlingLabelClick={(slingId: string) => {

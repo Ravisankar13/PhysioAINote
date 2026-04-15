@@ -1703,7 +1703,10 @@ interface PureThreeGLBViewerProps {
       weakLinks: Array<{ muscle: string; activationPct: number; reason: string; impactOnSling: string }>;
       compensations: Array<{ compensatingSlingLabel: string; mechanism: string; severity: string; clinical: string }>;
       treatmentTargets: Array<{ muscle: string; intervention: string; priority: number; rationale: string }>;
+      muscleScores: Array<{ muscle: string; activation: number; found: boolean }>;
+      forceReroutes: Array<{ fromMuscle: string; toMuscle: string; reroutePct: number }>;
     }>;
+    crossSlingCompensations: Array<{ compensatingSling: string; compensatingSlingLabel: string; severity: string; additionalLoadPct: number; mechanism: string }>;
   } | null;
   onSlingLabelClick?: (slingId: string) => void;
   onModelLoadProgress?: (progress: number) => void;
@@ -3179,13 +3182,35 @@ export default function PureThreeGLBViewer({
       const overloadSet = new Set(sling.overloadedBoneIndices ?? []);
       const compSet = new Set(sling.compensatingBoneIndices ?? []);
 
+      const muscleScores = sling.muscleScores ?? [];
+      const totalBones = sling.bonePathway.length;
+
+      const getSegmentActivation = (segIdx: number): number => {
+        if (muscleScores.length === 0) return 50;
+        const muscleIdx = Math.min(Math.floor((segIdx / totalBones) * muscleScores.length), muscleScores.length - 1);
+        return muscleScores[muscleIdx]?.activation ?? 50;
+      };
+
+      const activationToColor = (activation: number): THREE.Color => {
+        const t = Math.max(0, Math.min(1, activation / 100));
+        const lowColor = new THREE.Color(0xff2222);
+        const midColor = new THREE.Color(0xffbb00);
+        const highColor = new THREE.Color(0x22dd66);
+        if (t < 0.5) {
+          return lowColor.clone().lerp(midColor, t * 2);
+        }
+        return midColor.clone().lerp(highColor, (t - 0.5) * 2);
+      };
+
       for (let seg = 0; seg < positions.length - 1; seg++) {
         const segStart = positions[seg];
         const segEnd = positions[seg + 1];
         const isWeakSeg = weakSet.has(seg) || weakSet.has(seg + 1);
-        const isCompSeg = compSet.has(seg) || compSet.has(seg + 1);
 
         const segCurve = new THREE.CatmullRomCurve3([segStart, segEnd], false, 'catmullrom', 0.5);
+
+        const act0 = getSegmentActivation(seg);
+        const act1 = getSegmentActivation(seg + 1);
 
         if (isWeakSeg && !isDimmed) {
           const dashCount = 6;
@@ -3195,8 +3220,10 @@ export default function PureThreeGLBViewer({
             const t1 = (d * 2 + 1) / (dashCount * 2);
             const dashPts = [segCurve.getPoint(t0), segCurve.getPoint(t1)];
             const dashGeom = new THREE.BufferGeometry().setFromPoints(dashPts);
+            const segT = (t0 + t1) / 2;
+            const interpAct = act0 + (act1 - act0) * segT;
             const dashMat = new THREE.LineBasicMaterial({
-              color: 0xff4444,
+              color: activationToColor(interpAct),
               opacity: weakOpacity,
               transparent: true,
               depthTest: false,
@@ -3205,31 +3232,116 @@ export default function PureThreeGLBViewer({
             dashLine.renderOrder = 997;
             group.add(dashLine);
           }
-        } else if (isCompSeg && !isDimmed) {
-          const segPts = segCurve.getPoints(8);
-          const segGeom = new THREE.BufferGeometry().setFromPoints(segPts);
-          const compOpacity = isActive ? 0.85 : 0.45;
-          const segMat = new THREE.LineBasicMaterial({
-            color: 0xffcc00,
-            opacity: compOpacity,
-            transparent: true,
-            depthTest: false,
-          });
-          const segLine = new THREE.Line(segGeom, segMat);
-          segLine.renderOrder = 997;
-          group.add(segLine);
         } else {
-          const segPts = segCurve.getPoints(8);
-          const segGeom = new THREE.BufferGeometry().setFromPoints(segPts);
-          const segMat = new THREE.LineBasicMaterial({
-            color: colorHex,
-            opacity,
+          const subSegCount = 6;
+          for (let ss = 0; ss < subSegCount; ss++) {
+            const t0 = ss / subSegCount;
+            const t1 = (ss + 1) / subSegCount;
+            const p0 = segCurve.getPoint(t0);
+            const p1 = segCurve.getPoint(t1);
+            const ssGeom = new THREE.BufferGeometry().setFromPoints([p0, p1]);
+            const segT = (t0 + t1) / 2;
+            const interpAct = act0 + (act1 - act0) * segT;
+            const ssMat = new THREE.LineBasicMaterial({
+              color: activationToColor(interpAct),
+              opacity: isDimmed ? 0.15 : isActive ? 0.9 : 0.5,
+              transparent: true,
+              depthTest: false,
+            });
+            const ssLine = new THREE.Line(ssGeom, ssMat);
+            ssLine.renderOrder = 997;
+            group.add(ssLine);
+          }
+        }
+      }
+
+      const forceReroutes = sling.forceReroutes ?? [];
+      if (forceReroutes.length > 0 && !isDimmed) {
+        for (const reroute of forceReroutes) {
+          const fromIdx = muscleScores.findIndex(ms => ms.muscle === reroute.fromMuscle);
+          const toIdx = muscleScores.findIndex(ms => ms.muscle === reroute.toMuscle);
+          if (fromIdx < 0 || toIdx < 0) continue;
+
+          const fromBoneIdx = Math.min(Math.floor((fromIdx / muscleScores.length) * totalBones), totalBones - 1);
+          const toBoneIdx = Math.min(Math.floor((toIdx / muscleScores.length) * totalBones), totalBones - 1);
+          if (fromBoneIdx >= positions.length || toBoneIdx >= positions.length) continue;
+
+          const fromPos = positions[fromBoneIdx];
+          const toPos = positions[toBoneIdx];
+          if (fromPos.distanceTo(toPos) < 0.005) continue;
+
+          const midPt = fromPos.clone().lerp(toPos, 0.5);
+          const offsetDir = new THREE.Vector3().crossVectors(
+            new THREE.Vector3(0, 1, 0),
+            toPos.clone().sub(fromPos).normalize()
+          ).normalize();
+          midPt.add(offsetDir.multiplyScalar(0.04));
+          midPt.z += 0.03;
+
+          const arrowCurve = new THREE.QuadraticBezierCurve3(fromPos, midPt, toPos);
+          const arrowPts = arrowCurve.getPoints(16);
+          const arrowGeom = new THREE.BufferGeometry().setFromPoints(arrowPts);
+          const arrowMat = new THREE.LineBasicMaterial({
+            color: 0xff8800,
+            opacity: isActive ? 0.85 : 0.5,
             transparent: true,
             depthTest: false,
           });
-          const segLine = new THREE.Line(segGeom, segMat);
-          segLine.renderOrder = 997;
-          group.add(segLine);
+          const arrowLine = new THREE.Line(arrowGeom, arrowMat);
+          arrowLine.renderOrder = 998;
+          group.add(arrowLine);
+
+          const lastPt = arrowPts[arrowPts.length - 1];
+          const prevPt = arrowPts[arrowPts.length - 3];
+          const arrowDir = lastPt.clone().sub(prevPt).normalize();
+          const coneGeom = new THREE.ConeGeometry(0.008, 0.025, 6);
+          const coneMat = new THREE.MeshBasicMaterial({
+            color: 0xff8800,
+            opacity: isActive ? 0.9 : 0.5,
+            transparent: true,
+            depthTest: false,
+          });
+          const cone = new THREE.Mesh(coneGeom, coneMat);
+          cone.position.copy(lastPt);
+          const upVec = new THREE.Vector3(0, 1, 0);
+          const quat = new THREE.Quaternion().setFromUnitVectors(upVec, arrowDir);
+          cone.quaternion.copy(quat);
+          cone.renderOrder = 998;
+          group.add(cone);
+
+          const rerouteLabelCanvas = document.createElement('canvas');
+          rerouteLabelCanvas.width = 128;
+          rerouteLabelCanvas.height = 48;
+          const rlCtx = rerouteLabelCanvas.getContext('2d');
+          if (rlCtx) {
+            rlCtx.fillStyle = 'rgba(10, 10, 28, 0.9)';
+            rlCtx.beginPath();
+            rlCtx.roundRect(2, 2, 124, 44, 8);
+            rlCtx.fill();
+            rlCtx.strokeStyle = '#ff8800';
+            rlCtx.lineWidth = 2;
+            rlCtx.beginPath();
+            rlCtx.roundRect(2, 2, 124, 44, 8);
+            rlCtx.stroke();
+            rlCtx.font = 'bold 22px sans-serif';
+            rlCtx.fillStyle = '#ff8800';
+            rlCtx.textAlign = 'center';
+            rlCtx.textBaseline = 'middle';
+            rlCtx.fillText(`+${reroute.reroutePct}%`, 64, 24);
+          }
+          const rerouteTexture = new THREE.CanvasTexture(rerouteLabelCanvas);
+          rerouteTexture.needsUpdate = true;
+          const rerouteMat = new THREE.SpriteMaterial({
+            map: rerouteTexture,
+            transparent: true,
+            depthTest: false,
+            opacity: isActive ? 0.95 : 0.5,
+          });
+          const rerouteSprite = new THREE.Sprite(rerouteMat);
+          rerouteSprite.position.copy(midPt);
+          rerouteSprite.scale.set(0.08, 0.03, 1);
+          rerouteSprite.renderOrder = 999;
+          group.add(rerouteSprite);
         }
       }
 
@@ -3427,6 +3539,119 @@ export default function PureThreeGLBViewer({
       anchorDot.position.copy(anchorPos);
       anchorDot.renderOrder = 999;
       group.add(anchorDot);
+    }
+
+    const crossComps = slingPathwayVisualization.crossSlingCompensations ?? [];
+    if (crossComps.length > 0) {
+      const slingMidpoints = new Map<string, THREE.Vector3>();
+      for (const sl of slingPathwayVisualization.slings) {
+        const slPositions: THREE.Vector3[] = [];
+        for (const bn of sl.bonePathway) {
+          const bone = boneMap.get(bn);
+          if (bone) {
+            const wp = new THREE.Vector3();
+            bone.getWorldPosition(wp);
+            slPositions.push(wp);
+          }
+        }
+        if (slPositions.length > 0) {
+          const mid = slPositions[Math.floor(slPositions.length / 2)].clone();
+          slingMidpoints.set(sl.id, mid);
+        }
+      }
+
+      for (const comp of crossComps) {
+        const toId = comp.compensatingSling;
+
+        let fromId: string | null = null;
+        for (const sl of slingPathwayVisualization.slings) {
+          if (sl.id === toId) continue;
+          const hasComp = sl.compensations.some(c => c.compensatingSlingLabel === comp.compensatingSlingLabel);
+          if (hasComp) { fromId = sl.id; break; }
+        }
+        if (!fromId) {
+          for (const sl of slingPathwayVisualization.slings) {
+            if (sl.id !== toId) { fromId = sl.id; break; }
+          }
+        }
+
+        if (!fromId) continue;
+        const fromMid = slingMidpoints.get(fromId);
+        const toMid = slingMidpoints.get(toId);
+        if (!fromMid || !toMid) continue;
+        if (fromMid.distanceTo(toMid) < 0.01) continue;
+
+        const bridgeSeverityColor = comp.severity === 'severe' ? 0xff3333
+          : comp.severity === 'moderate' ? 0xffaa00 : 0x4488ff;
+
+        const bridgeMidPt = fromMid.clone().lerp(toMid, 0.5);
+        const bridgeDir = toMid.clone().sub(fromMid).normalize();
+        const bridgePerp = new THREE.Vector3().crossVectors(bridgeDir, new THREE.Vector3(0, 0, 1)).normalize();
+        bridgeMidPt.add(bridgePerp.multiplyScalar(0.06));
+        bridgeMidPt.z += 0.05;
+
+        const bridgeCurve = new THREE.QuadraticBezierCurve3(fromMid, bridgeMidPt, toMid);
+        const dashSegments = 12;
+        for (let d = 0; d < dashSegments; d++) {
+          const dt0 = (d * 2) / (dashSegments * 2);
+          const dt1 = (d * 2 + 1) / (dashSegments * 2);
+          const dp0 = bridgeCurve.getPoint(dt0);
+          const dp1 = bridgeCurve.getPoint(dt1);
+          const bdGeom = new THREE.BufferGeometry().setFromPoints([dp0, dp1]);
+          const bdMat = new THREE.LineBasicMaterial({
+            color: bridgeSeverityColor,
+            opacity: 0.7,
+            transparent: true,
+            depthTest: false,
+          });
+          const bdLine = new THREE.Line(bdGeom, bdMat);
+          bdLine.renderOrder = 996;
+          group.add(bdLine);
+        }
+
+        const bridgeLabelCanvas = document.createElement('canvas');
+        bridgeLabelCanvas.width = 256;
+        bridgeLabelCanvas.height = 80;
+        const blCtx = bridgeLabelCanvas.getContext('2d');
+        if (blCtx) {
+          blCtx.fillStyle = 'rgba(10, 10, 28, 0.92)';
+          blCtx.beginPath();
+          blCtx.roundRect(2, 2, 252, 76, 10);
+          blCtx.fill();
+          const borderHex = comp.severity === 'severe' ? '#ff3333'
+            : comp.severity === 'moderate' ? '#ffaa00' : '#4488ff';
+          blCtx.strokeStyle = borderHex;
+          blCtx.lineWidth = 2;
+          blCtx.beginPath();
+          blCtx.roundRect(2, 2, 252, 76, 10);
+          blCtx.stroke();
+          blCtx.font = 'bold 18px sans-serif';
+          blCtx.fillStyle = borderHex;
+          blCtx.textAlign = 'center';
+          blCtx.textBaseline = 'top';
+          blCtx.fillText(comp.compensatingSlingLabel, 128, 10);
+          blCtx.font = '16px sans-serif';
+          blCtx.fillStyle = '#cccccc';
+          const loadText = `+${comp.additionalLoadPct}% load`;
+          blCtx.fillText(loadText, 128, 36);
+          blCtx.font = '14px sans-serif';
+          blCtx.fillStyle = borderHex;
+          blCtx.fillText(comp.severity.toUpperCase(), 128, 58);
+        }
+        const bridgeTexture = new THREE.CanvasTexture(bridgeLabelCanvas);
+        bridgeTexture.needsUpdate = true;
+        const bridgeSpriteMat = new THREE.SpriteMaterial({
+          map: bridgeTexture,
+          transparent: true,
+          depthTest: false,
+          opacity: 0.9,
+        });
+        const bridgeSprite = new THREE.Sprite(bridgeSpriteMat);
+        bridgeSprite.position.copy(bridgeMidPt);
+        bridgeSprite.scale.set(0.14, 0.044, 1);
+        bridgeSprite.renderOrder = 999;
+        group.add(bridgeSprite);
+      }
     }
 
     slingLabelSpritesRef.current = labelSprites;

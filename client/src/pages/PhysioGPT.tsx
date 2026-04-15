@@ -127,6 +127,7 @@ import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
+import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 
 const MovementPlayer = lazy(() => import("@/components/skeleton/MovementPlayer"));
 const FocusedCameraCapture = lazy(() => import("@/components/skeleton/FocusedCameraCapture"));
@@ -3866,6 +3867,33 @@ ${ddxList}`;
     return result;
   }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computeStage]);
 
+  const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
+
+  const mergedCompromisedTissues = useMemo(() => {
+    const clinicalMap = new Map<string, CompromisedTissue>();
+    for (const ct of compromisedTissues) {
+      const key = `${ct.tissue_type}:${ct.tissue_id}`;
+      const existing = clinicalMap.get(key);
+      if (!existing || ct.severity > existing.severity) {
+        clinicalMap.set(key, ct);
+      }
+    }
+    for (const sr of slingTissueRisks) {
+      const key = `${sr.tissue_type}:${sr.tissue_id}`;
+      const existing = clinicalMap.get(key);
+      if (!existing || sr.severity > existing.severity) {
+        clinicalMap.set(key, {
+          tissue_type: sr.tissue_type,
+          tissue_id: sr.tissue_id,
+          severity: sr.severity,
+          rationale: sr.rationale,
+          confidence: sr.confidence,
+        });
+      }
+    }
+    return Array.from(clinicalMap.values()).sort((a, b) => b.severity - a.severity);
+  }, [compromisedTissues, slingTissueRisks]);
+
   const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
   useEffect(() => {
     if (!slingOverlayActive) setExpandedSlingDetailId(null);
@@ -4377,7 +4405,7 @@ ${ddxList}`;
       }
     }
 
-    const relevantCompromised = compromisedTissues.filter(ct => ct.tissue_type === tissueViewMode);
+    const relevantCompromised = mergedCompromisedTissues.filter(ct => ct.tissue_type === tissueViewMode);
     const compromisedIds = new Set(relevantCompromised.map(ct => ct.tissue_id));
     const hasCompromised = relevantCompromised.length > 0;
 
@@ -4475,7 +4503,7 @@ ${ddxList}`;
     }
 
     return result;
-  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis, compensatedOverrides, painMarkers, hudChainIntegrity, compromisedTissues, liteMode, computeStage]);
+  }, [tissueViewMode, selectedTissueEntry, hudForceAnalysis, compensatedOverrides, painMarkers, hudChainIntegrity, mergedCompromisedTissues, liteMode, computeStage]);
 
   const clinicallyAffectedNerves = useMemo(() => {
     const affected = new Set<string>();
@@ -8559,7 +8587,8 @@ ${ddxList}`;
                   <TissueViewSelector
                     activeMode={tissueViewMode}
                     onModeChange={(mode) => { setTissueViewMode(mode); if (mode) tissueViewManualRef.current = true; }}
-                    compromisedTissues={compromisedTissues}
+                    compromisedTissues={mergedCompromisedTissues}
+                    slingTissueRisks={slingTissueRisks}
                     selectedEntryId={selectedTissueEntry}
                     onEntrySelect={(id) => { setSelectedTissueEntry(id); setTissueDisambiguationEntries([]); }}
                     chainIntegrityScores={hudChainIntegrity}

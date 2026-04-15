@@ -30,6 +30,7 @@ import {
   KELLGREN_LAWRENCE,
   getTissueEntriesForMode,
 } from '@/lib/tissueViewData';
+import { type SlingTissueRisk, getSlingRisksForTissue } from '@/lib/slingTissuePressure';
 
 interface MuscleOverrideData {
   tension?: number;
@@ -47,6 +48,7 @@ interface TissueViewSelectorProps {
   musclePathologyData?: Record<string, MuscleOverrideData>;
   clinicallyAffectedNerves?: Set<string>;
   compromisedTissues?: CompromisedTissue[];
+  slingTissueRisks?: SlingTissueRisk[];
 }
 
 const MODE_ICONS: Record<Exclude<TissueViewMode, null>, typeof Dumbbell> = {
@@ -317,14 +319,67 @@ function JointForceIndicator({ entry, forceData }: { entry: JointSurfaceEntry; f
   );
 }
 
-function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData, musclePathologyData, clinicallyAffectedNerves }: {
+function SlingPressureRiskCard({ risks }: { risks: SlingTissueRisk[] }) {
+  if (risks.length === 0) return null;
+  const MECHANISM_LABELS: Record<string, string> = {
+    weak_link: 'Weak Link',
+    force_reroute: 'Force Reroute',
+    cross_compensation: 'Cross-Sling Compensation',
+    reduced_transfer: 'Reduced Force Transfer',
+  };
+  return (
+    <>
+      <Separator />
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium">
+          <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+          <span>Sling Pressure Risk</span>
+        </div>
+        {risks.map((risk, idx) => {
+          const riskColor = risk.riskPercent >= 60 ? 'border-red-500/40 bg-red-900/20' :
+            risk.riskPercent >= 30 ? 'border-amber-500/40 bg-amber-900/20' :
+            'border-yellow-500/40 bg-yellow-900/20';
+          const riskTextColor = risk.riskPercent >= 60 ? 'text-red-400' :
+            risk.riskPercent >= 30 ? 'text-amber-400' : 'text-yellow-400';
+          return (
+            <div key={idx} className={`rounded border p-2 space-y-1 ${riskColor}`}>
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center gap-1.5">
+                  <Badge variant="outline" className={`text-[9px] px-1 py-0 h-3.5 ${riskTextColor} border-current`}>
+                    {MECHANISM_LABELS[risk.mechanism] ?? risk.mechanism}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground">{risk.slingLabel}</span>
+                </div>
+                <span className={`text-xs font-mono font-bold ${riskTextColor}`}>{risk.riskPercent}%</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-tight">{risk.rationale}</p>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${risk.riskPercent}%`,
+                    backgroundColor: risk.riskPercent >= 60 ? '#ef4444' : risk.riskPercent >= 30 ? '#f59e0b' : '#eab308',
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData, musclePathologyData, clinicallyAffectedNerves, slingTissueRisks }: {
   entry: TissueOverlayEntry;
   mode: TissueViewMode;
   chainIntegrityScores?: Map<string, { score: number; issues: string[]; problematicLinks: string[] }>;
   jointForceData?: Array<{ boneName: string; totalForce: number; status: string; label: string }>;
   musclePathologyData?: Record<string, MuscleOverrideData>;
   clinicallyAffectedNerves?: Set<string>;
+  slingTissueRisks?: SlingTissueRisk[];
 }) {
+  const tissueRisks = slingTissueRisks ? getSlingRisksForTissue(entry.id, slingTissueRisks) : [];
   return (
     <div
       className="rounded-lg border bg-background/95 backdrop-blur-sm shadow-lg p-3 space-y-2"
@@ -351,6 +406,8 @@ function TissueInfoCard({ entry, mode, chainIntegrityScores, jointForceData, mus
       )}
       {mode === 'nerve' && <NerveInfoCard entry={entry as NervePathwayEntry} isClinicallyAffected={clinicallyAffectedNerves?.has((entry as NervePathwayEntry).id)} />}
       {mode === 'fascia' && <FasciaInfoCard entry={entry as FascialLayerEntry} chainIntegrityScores={chainIntegrityScores} />}
+
+      <SlingPressureRiskCard risks={tissueRisks} />
     </div>
   );
 }
@@ -365,6 +422,7 @@ export default function TissueViewSelector({
   musclePathologyData,
   clinicallyAffectedNerves,
   compromisedTissues,
+  slingTissueRisks,
 }: TissueViewSelectorProps) {
   const [showList, setShowList] = useState(false);
   const [compromisedExpanded, setCompromisedExpanded] = useState(true);
@@ -518,6 +576,7 @@ export default function TissueViewSelector({
           jointForceData={jointForceData}
           musclePathologyData={musclePathologyData}
           clinicallyAffectedNerves={clinicallyAffectedNerves}
+          slingTissueRisks={slingTissueRisks}
         />
       )}
     </div>

@@ -930,7 +930,7 @@ export interface TreatmentPhaseBlock {
     correctionTrend?: 'faster' | 'slower' | 'as_expected';
   } | null;
   phaseGoals: string;
-  skeletonGoals?: Array<{ id: string; target: string; rationale: string; source: string; priority: number; metric?: string }>;
+  skeletonGoals?: Array<{ id: string; target: string; rationale: string; source: string; priority: number; metric?: string; isCarryForward?: boolean }>;
   previousProgressionStages: Array<{ exerciseName: string; stages: Array<{ stage: number; name: string; description: string }> }>;
 }
 
@@ -2524,6 +2524,7 @@ function synthesizeReQueryPayload(
   correctionFactors?: CorrectionFactors,
   goalProfile?: RecoveryGoalProfile | null,
   previousSnapshot?: SessionSnapshot | null,
+  skeletonGoals?: Array<{ id: string; target: string; rationale: string; source: string; priority: number; metric?: string; isCarryForward?: boolean }>,
 ): {
   exercisePayload: Record<string, unknown>;
   techniquePayload: Record<string, unknown>;
@@ -2601,7 +2602,30 @@ function synthesizeReQueryPayload(
       clinical: m.clinicalNote,
     }));
 
-  const targetFocusBase = `PHASE TRANSITION TO: ${phaseLabel}\n\nPHASE-SPECIFIC TREATMENT GOALS:\n${phaseGoals}\n\nPREDICTED PATIENT STATE AT THIS POINT:\n- Pain: ${avgPain.toFixed(1)}/10\n- ROM recovery: ${avgRomPct.toFixed(0)}%\n- Sling integrity: ${avgSling.toFixed(0)}%\n- Compensation resolution: ${avgCompRes.toFixed(0)}%\n- Risk score: ${snapshot.riskScore}\n- Achieved milestones: ${achievedMilestones.length > 0 ? achievedMilestones.join(', ') : 'None yet'}${correctionContext}`;
+  let skeletonPriorityText = '';
+  if (skeletonGoals && skeletonGoals.length > 0) {
+    const primary = skeletonGoals.filter(g => g.priority >= 60);
+    const secondary = skeletonGoals.filter(g => g.priority < 60);
+    const carryForward = skeletonGoals.filter(g => g.isCarryForward);
+    const lines: string[] = [];
+    lines.push('\nSKELETON-DERIVED CLINICAL PRIORITIES (ordered by importance):');
+    if (primary.length > 0) {
+      lines.push('PRIMARY TARGETS:');
+      primary.forEach((g, i) => lines.push(`  ${i + 1}. [${g.source.toUpperCase()}] ${g.target}${g.metric ? ` (${g.metric})` : ''} — ${g.rationale}`));
+    }
+    if (secondary.length > 0) {
+      lines.push('SECONDARY TARGETS:');
+      secondary.forEach((g, i) => lines.push(`  ${i + 1}. [${g.source.toUpperCase()}] ${g.target}${g.metric ? ` (${g.metric})` : ''}`));
+    }
+    if (carryForward.length > 0) {
+      lines.push('CARRY-FORWARD (unresolved from previous phase — must continue addressing):');
+      carryForward.forEach(g => lines.push(`  ⚠ ${g.target}`));
+    }
+    lines.push('Design treatments that DIRECTLY address the primary targets above. Secondary targets should be addressed where possible without compromising primary goal progression.');
+    skeletonPriorityText = lines.join('\n');
+  }
+
+  const targetFocusBase = `PHASE TRANSITION TO: ${phaseLabel}\n\nPHASE-SPECIFIC TREATMENT GOALS:\n${phaseGoals}\n\nPREDICTED PATIENT STATE AT THIS POINT:\n- Pain: ${avgPain.toFixed(1)}/10\n- ROM recovery: ${avgRomPct.toFixed(0)}%\n- Sling integrity: ${avgSling.toFixed(0)}%\n- Compensation resolution: ${avgCompRes.toFixed(0)}%\n- Risk score: ${snapshot.riskScore}\n- Achieved milestones: ${achievedMilestones.length > 0 ? achievedMilestones.join(', ') : 'None yet'}${correctionContext}${skeletonPriorityText}`;
 
   const exerciseTargetFocus = `${targetFocusBase}\n\nPREVIOUS EXERCISE PROGRAM (being retired):\n${prevProgressionContext || 'None'}\n\nDesign NEW exercises appropriate for the ${phaseLabel} phase. These should BUILD on the gains from the previous phase while progressing toward the phase goals listed above. Consider where each previous exercise left off (see progression stages) and design the next level of challenge.`;
 
@@ -2766,6 +2790,9 @@ export async function buildSessionTimelineAsync(
 
     const goalProf = conditionProfile ? generateGoalProfile(conditionProfile, patientModifiers, undefined, clinicalState) : null;
     const prevSnap = transition.sessionIndex > 0 ? accumulatedResult.sessions[transition.sessionIndex - 1] : null;
+
+    const phaseSkeletonGoals = computeSkeletonGoalsForPhase(transition.toPhase, ti + 1, transitions.length, clinicalPlan, treatmentPhases);
+
     const { exercisePayload, techniquePayload } = synthesizeReQueryPayload(
       transitionSnap,
       transition.toPhase,
@@ -2774,6 +2801,7 @@ export async function buildSessionTimelineAsync(
       accumulatedResult.correctionFactors,
       goalProf,
       prevSnap,
+      phaseSkeletonGoals,
     );
 
     const avgRomPct = transitionSnap.romPredictions.length > 0
@@ -2845,6 +2873,7 @@ export async function buildSessionTimelineAsync(
         correctionTrend: accumulatedResult.correctionFactors?.overall.trend,
       },
       phaseGoals: PHASE_TREATMENT_GOALS[transition.toPhase] ?? '',
+      skeletonGoals: phaseSkeletonGoals.length > 0 ? phaseSkeletonGoals : undefined,
       previousProgressionStages: prevProgressionStages,
     });
 
@@ -3036,6 +3065,68 @@ export async function buildSessionTimelineAsync(
   return { ...accumulatedResult, treatmentPhases: enrichedPhases };
 }
 
+type SkeletonGoalWithCarryForward = { id: string; target: string; rationale: string; source: string; priority: number; metric?: string; isCarryForward?: boolean };
+
+function computeSkeletonGoalsForPhase(
+  phaseLabel: string,
+  phaseIndex: number,
+  totalTransitions: number,
+  clinicalPlan: { phases: Array<{ phase: string; goals: Array<{ id: string; target: string; rationale: string; source: string; priority: number; metric?: string }> }> } | null | undefined,
+  previousPhases: TreatmentPhaseBlock[],
+): SkeletonGoalWithCarryForward[] {
+  if (!clinicalPlan || !clinicalPlan.phases || clinicalPlan.phases.length === 0) return [];
+
+  const matchedGoals: SkeletonGoalWithCarryForward[] = [];
+  const isFirst = phaseIndex === 1;
+  const isLast = phaseIndex === totalTransitions;
+
+  for (const clinPhase of clinicalPlan.phases) {
+    const mappedLabels = CLINICAL_PHASE_TO_TREATMENT_PHASE[clinPhase.phase];
+    if (!mappedLabels) continue;
+
+    const normalizedLabel = phaseLabel.trim();
+    const isMatch = mappedLabels.some(l => normalizedLabel.includes(l) || l.includes(normalizedLabel));
+    const isFunctionalClinical = clinPhase.phase === 'functional' || clinPhase.phase === 'strengthening';
+    const isEarlyClinical = clinPhase.phase === 'pain_inflammation' || clinPhase.phase === 'tissue_release';
+
+    if (isMatch || (isFirst && isEarlyClinical) || (isLast && isFunctionalClinical)) {
+      for (const goal of clinPhase.goals) {
+        if (!matchedGoals.some(g => g.id === goal.id)) {
+          matchedGoals.push({ ...goal, isCarryForward: false });
+        }
+      }
+    }
+  }
+
+  if (previousPhases.length > 0) {
+    const prevPhase = previousPhases[previousPhases.length - 1];
+    const prevGoals = prevPhase.skeletonGoals ?? [];
+    const prevState = prevPhase.predictedStateAtTransition;
+    for (const pg of prevGoals) {
+      if (pg.priority < 50) continue;
+      if (matchedGoals.some(g => g.id === pg.id)) continue;
+
+      let unresolved = true;
+      if (prevState) {
+        if (pg.source === 'pain' && prevState.avgPain <= 2) unresolved = false;
+        else if (pg.source === 'sling' && prevState.avgSlingIntegrity >= 75) unresolved = false;
+        else if (pg.source === 'biomechanics' && prevState.avgRomPercent >= 85) unresolved = false;
+      }
+
+      if (unresolved) {
+        matchedGoals.push({
+          ...pg,
+          priority: Math.max(pg.priority - 10, 30),
+          isCarryForward: true,
+        });
+      }
+    }
+  }
+
+  matchedGoals.sort((a, b) => b.priority - a.priority);
+  return matchedGoals.slice(0, 10);
+}
+
 const CLINICAL_PHASE_TO_TREATMENT_PHASE: Record<string, string[]> = {
   pain_inflammation: ['Acute/Protective'],
   tissue_release: ['Acute/Protective', 'Proliferative'],
@@ -3052,8 +3143,11 @@ export function enrichPhasesWithClinicalPlan(
   if (!clinicalPlan || !clinicalPlan.phases || clinicalPlan.phases.length === 0) return phases;
   if (phases.length === 0) return phases;
 
-  return phases.map((block, idx) => {
-    const matchedGoals: TreatmentPhaseBlock['skeletonGoals'] = [];
+  const enriched: TreatmentPhaseBlock[] = [];
+
+  for (let idx = 0; idx < phases.length; idx++) {
+    const block = phases[idx];
+    const matchedGoals: NonNullable<TreatmentPhaseBlock['skeletonGoals']> = [];
 
     for (const clinPhase of clinicalPlan.phases) {
       const mappedLabels = CLINICAL_PHASE_TO_TREATMENT_PHASE[clinPhase.phase];
@@ -3076,26 +3170,62 @@ export function enrichPhasesWithClinicalPlan(
               source: goal.source,
               priority: goal.priority,
               metric: goal.metric,
+              isCarryForward: false,
             });
           }
         }
       }
     }
 
+    if (idx > 0) {
+      const prevEnriched = enriched[idx - 1];
+      const prevGoals = prevEnriched.skeletonGoals ?? [];
+      const prevState = prevEnriched.predictedStateAtTransition;
+
+      for (const pg of prevGoals) {
+        if (pg.priority < 50) continue;
+        if (matchedGoals.some(g => g.id === pg.id)) continue;
+
+        let unresolved = true;
+        if (prevState) {
+          if (pg.source === 'pain' && prevState.avgPain <= 2) unresolved = false;
+          else if (pg.source === 'sling' && prevState.avgSlingIntegrity >= 75) unresolved = false;
+          else if (pg.source === 'biomechanics' && prevState.avgRomPercent >= 85) unresolved = false;
+          else if ((pg.source === 'muscle' || pg.source === 'tissue') && prevState.avgCompensationResolution >= 80) unresolved = false;
+        }
+
+        if (unresolved) {
+          matchedGoals.push({
+            ...pg,
+            priority: Math.max(pg.priority - 10, 30),
+            isCarryForward: true,
+          });
+        }
+      }
+    }
+
     matchedGoals.sort((a, b) => b.priority - a.priority);
-    const cappedGoals = matchedGoals.slice(0, 8);
+    const cappedGoals = matchedGoals.slice(0, 10);
 
-    if (cappedGoals.length === 0) return block;
+    if (cappedGoals.length === 0) {
+      enriched.push(block);
+      continue;
+    }
 
-    const skeletonGoalText = cappedGoals.map(g => g.target).join('; ');
-    const enrichedPhaseGoals = block.phaseGoals
-      ? `${block.phaseGoals}\n\nSkeleton-derived targets: ${skeletonGoalText}`
-      : `Skeleton-derived targets: ${skeletonGoalText}`;
+    const primaryGoals = cappedGoals.filter(g => g.priority >= 60);
+    const secondaryGoals = cappedGoals.filter(g => g.priority < 60);
+    const parts: string[] = [];
+    if (block.phaseGoals) parts.push(block.phaseGoals.split('\n\nSkeleton-derived targets:')[0]);
+    if (primaryGoals.length > 0) parts.push(`Primary targets: ${primaryGoals.map(g => g.target).join('; ')}`);
+    if (secondaryGoals.length > 0) parts.push(`Secondary targets: ${secondaryGoals.map(g => g.target).join('; ')}`);
+    const enrichedPhaseGoals = parts.filter(Boolean).join('\n\n');
 
-    return {
+    enriched.push({
       ...block,
       phaseGoals: enrichedPhaseGoals,
       skeletonGoals: cappedGoals,
-    };
-  });
+    });
+  }
+
+  return enriched;
 }

@@ -1953,9 +1953,23 @@ function MultiDimensionalPredictions({ snapshot }: { snapshot: SessionSnapshot }
   );
 }
 
-function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
+const GOAL_SOURCE_STYLE: Record<string, string> = {
+  pain: 'bg-red-500/20 text-red-300',
+  biomechanics: 'bg-blue-500/20 text-blue-300',
+  sling: 'bg-orange-500/20 text-orange-300',
+  tissue: 'bg-pink-500/20 text-pink-300',
+  muscle: 'bg-purple-500/20 text-purple-300',
+  posture: 'bg-emerald-500/20 text-emerald-300',
+};
+
+function PhaseTransitionCard({ phase, nextPhase }: { phase: TreatmentPhaseBlock; nextPhase?: TreatmentPhaseBlock | null }) {
   const [expanded, setExpanded] = useState(false);
   const st = phase.predictedStateAtTransition;
+
+  const primaryGoals = (phase.skeletonGoals ?? []).filter(g => g.priority >= 60);
+  const secondaryGoals = (phase.skeletonGoals ?? []).filter(g => g.priority < 60);
+  const carryForwardGoals = (phase.skeletonGoals ?? []).filter(g => g.isCarryForward);
+  const hasGoals = (phase.skeletonGoals ?? []).length > 0;
 
   return (
     <div className="border border-cyan-600/40 rounded bg-gradient-to-r from-cyan-950/30 to-gray-900/40 overflow-hidden">
@@ -1979,9 +1993,28 @@ function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
               {phase.techniques.length} techniques
             </Badge>
           )}
+          {carryForwardGoals.length > 0 && (
+            <Badge variant="outline" className="text-[7px] px-1 py-0 border-amber-600/40 text-amber-400">
+              {carryForwardGoals.length} carry-forward
+            </Badge>
+          )}
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-gray-400" /> : <ChevronDown className="h-3 w-3 text-gray-400" />}
       </button>
+
+      {hasGoals && !expanded && (
+        <div className="px-2 pb-1.5 flex flex-wrap gap-1">
+          {primaryGoals.slice(0, 3).map(g => (
+            <div key={g.id} className="flex items-center gap-0.5 text-[7px] text-gray-300">
+              <Target className="h-2 w-2 text-cyan-400 shrink-0" />
+              <span className="truncate max-w-[140px]">{g.target}</span>
+              <span className={`text-[6px] px-0.5 rounded shrink-0 ${GOAL_SOURCE_STYLE[g.source] ?? 'bg-gray-500/20 text-gray-300'}`}>{g.source}</span>
+              {g.isCarryForward && <span className="text-[6px] text-amber-400">↩</span>}
+            </div>
+          ))}
+          {primaryGoals.length > 3 && <span className="text-[7px] text-gray-500">+{primaryGoals.length - 3} more</span>}
+        </div>
+      )}
 
       {expanded && (
         <div className="px-2 pb-2 space-y-1.5">
@@ -2017,42 +2050,69 @@ function PhaseTransitionCard({ phase }: { phase: TreatmentPhaseBlock }) {
             </div>
           )}
 
-          {phase.phaseGoals && !phase.skeletonGoals?.length && (
+          {phase.phaseGoals && !hasGoals && (
             <div className="text-[8px] text-gray-400 bg-gray-800/30 rounded px-1.5 py-1">
-              <span className="text-cyan-400 font-medium">Goals: </span>{phase.phaseGoals}
+              <span className="text-cyan-400 font-medium">Goals: </span>{phase.phaseGoals.split('\n\n')[0]}
             </div>
           )}
 
-          {phase.skeletonGoals && phase.skeletonGoals.length > 0 && (
+          {primaryGoals.length > 0 && (
             <div className="bg-gray-800/30 rounded px-1.5 py-1 space-y-1">
-              <span className="text-[8px] text-cyan-400 font-medium">Skeleton-Derived Goals:</span>
+              <div className="flex items-center gap-1">
+                <Target className="h-2.5 w-2.5 text-cyan-400" />
+                <span className="text-[8px] text-cyan-400 font-semibold">Primary Targets</span>
+              </div>
               <div className="space-y-0.5">
-                {phase.skeletonGoals.map(goal => (
+                {primaryGoals.map(goal => (
                   <div key={goal.id} className="flex items-start gap-1 text-[7px]">
-                    <Target className="h-2 w-2 mt-0.5 text-cyan-400 shrink-0" />
+                    <div className={`w-1 h-1 mt-1 rounded-full shrink-0 ${goal.isCarryForward ? 'bg-amber-400' : 'bg-cyan-400'}`} />
                     <div className="flex-1 min-w-0">
                       <span className="text-gray-200">{goal.target}</span>
                       {goal.metric && <span className="text-gray-500 ml-1">({goal.metric})</span>}
+                      {goal.isCarryForward && <span className="text-amber-400 ml-1 text-[6px]">↩ carry-forward</span>}
                     </div>
-                    <span className={`text-[6px] px-1 py-0 rounded shrink-0 ${
-                      goal.source === 'pain' ? 'bg-red-500/20 text-red-300' :
-                      goal.source === 'biomechanics' ? 'bg-blue-500/20 text-blue-300' :
-                      goal.source === 'sling' ? 'bg-orange-500/20 text-orange-300' :
-                      goal.source === 'tissue' ? 'bg-pink-500/20 text-pink-300' :
-                      goal.source === 'muscle' ? 'bg-purple-500/20 text-purple-300' :
-                      'bg-emerald-500/20 text-emerald-300'
-                    }`}>{goal.source}</span>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <span className={`text-[6px] px-1 py-0 rounded ${GOAL_SOURCE_STYLE[goal.source] ?? 'bg-gray-500/20 text-gray-300'}`}>{goal.source}</span>
+                      <div className="w-6 h-1 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${Math.min(goal.priority, 100)}%` }} />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
               {phase.phaseGoals && (() => {
-                const baseGoals = phase.phaseGoals.split('\n\nSkeleton-derived targets:')[0];
+                const baseGoals = phase.phaseGoals.split('\n\nPrimary targets:')[0].split('\n\nSecondary targets:')[0];
                 return baseGoals ? (
                   <div className="text-[7px] text-gray-500 mt-0.5 pt-0.5 border-t border-white/5">
                     <span className="text-gray-400 font-medium">Phase basis: </span>{baseGoals}
                   </div>
                 ) : null;
               })()}
+            </div>
+          )}
+
+          {secondaryGoals.length > 0 && (
+            <div className="bg-gray-800/20 rounded px-1.5 py-1 space-y-0.5">
+              <span className="text-[7px] text-gray-500 font-medium">Secondary Targets</span>
+              {secondaryGoals.map(goal => (
+                <div key={goal.id} className="flex items-start gap-1 text-[7px]">
+                  <div className="w-1 h-1 mt-1 rounded-full shrink-0 bg-gray-500" />
+                  <span className="text-gray-400 flex-1 min-w-0">{goal.target}</span>
+                  <span className={`text-[6px] px-1 py-0 rounded shrink-0 ${GOAL_SOURCE_STYLE[goal.source] ?? 'bg-gray-500/20 text-gray-300'}`}>{goal.source}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {nextPhase && (nextPhase.skeletonGoals ?? []).length > 0 && (
+            <div className="bg-gray-800/20 rounded px-1.5 py-1 border-l-2 border-gray-600/40">
+              <div className="flex items-center gap-1 mb-0.5">
+                <ArrowRight className="h-2 w-2 text-gray-500" />
+                <span className="text-[7px] text-gray-500 font-medium">Coming Next: {nextPhase.phaseLabel}</span>
+              </div>
+              {(nextPhase.skeletonGoals ?? []).slice(0, 2).map(g => (
+                <div key={g.id} className="text-[7px] text-gray-600 ml-3">{g.target}</div>
+              ))}
             </div>
           )}
 
@@ -2566,6 +2626,12 @@ function SessionTimelineView({
 
   const goalProfile = aiGoalProfileOverride ?? null;
 
+  const activePhaseForSession = useMemo(() => {
+    return sessionTimeline.treatmentPhases.find(
+      p => selectedSession >= p.startSession && selectedSession <= p.endSession
+    ) ?? sessionTimeline.treatmentPhases[0] ?? null;
+  }, [sessionTimeline.treatmentPhases, selectedSession]);
+
   const currentGoalGap = useMemo<GoalGapAnalysis | null>(() => {
     if (!goalProfile || !currentSnapshot) return null;
     const prevSnap = selectedSession > 1
@@ -2704,6 +2770,33 @@ function SessionTimelineView({
 
       {sessionTimeline.correctionFactors && (
         <CorrectionTrendBadge factors={sessionTimeline.correctionFactors} />
+      )}
+
+      {activePhaseForSession && (activePhaseForSession.skeletonGoals ?? []).length > 0 && (
+        <div className="bg-gradient-to-r from-cyan-950/40 to-indigo-950/30 rounded border border-cyan-600/30 p-1.5">
+          <div className="flex items-center gap-1 mb-1">
+            <Target className="h-3 w-3 text-cyan-400" />
+            <span className="text-[9px] font-semibold text-cyan-300">Current Focus — {activePhaseForSession.phaseLabel}</span>
+            <Badge variant="outline" className="text-[7px] px-1 py-0 border-cyan-600/30 text-cyan-400 ml-auto">
+              S{selectedSession}
+            </Badge>
+          </div>
+          <div className="space-y-0.5">
+            {(activePhaseForSession.skeletonGoals ?? []).filter(g => g.priority >= 60).slice(0, 3).map(g => (
+              <div key={g.id} className="flex items-center gap-1 text-[8px]">
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${g.isCarryForward ? 'bg-amber-400' : 'bg-cyan-400'}`} />
+                <span className="text-gray-200 flex-1">{g.target}</span>
+                <span className={`text-[6px] px-1 rounded ${GOAL_SOURCE_STYLE[g.source] ?? 'bg-gray-500/20 text-gray-300'}`}>{g.source}</span>
+              </div>
+            ))}
+            {(activePhaseForSession.skeletonGoals ?? []).filter(g => g.isCarryForward).length > 0 && (
+              <div className="text-[7px] text-amber-400/70 mt-0.5 flex items-center gap-0.5">
+                <span>↩</span>
+                <span>{(activePhaseForSession.skeletonGoals ?? []).filter(g => g.isCarryForward).length} goal(s) carried from previous phase</span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {(activeCondition || modifiers) && (
@@ -3064,9 +3157,10 @@ function SessionTimelineView({
                 elements.push({ type: 'session', key: `session-${s.sessionNumber}`, session: s });
               }
 
-              return elements.map(el => {
+              return elements.map((el, elIdx) => {
                 if (el.type === 'phase' && el.phase) {
-                  return <PhaseTransitionCard key={el.key} phase={el.phase} />;
+                  const nextPhaseEl = elements.slice(elIdx + 1).find(e => e.type === 'phase' && e.phase);
+                  return <PhaseTransitionCard key={el.key} phase={el.phase} nextPhase={nextPhaseEl?.phase ?? null} />;
                 }
                 if (el.type === 'session' && el.session) {
                   return (
@@ -3120,8 +3214,8 @@ function SessionTimelineView({
           </button>
           {expandedSection === 'phases' && (
             <div className="p-2 bg-gray-900/30 space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
-              {sessionTimeline.treatmentPhases.map(phase => (
-                <PhaseTransitionCard key={phase.phaseIndex} phase={phase} />
+              {sessionTimeline.treatmentPhases.map((phase, pIdx) => (
+                <PhaseTransitionCard key={phase.phaseIndex} phase={phase} nextPhase={sessionTimeline.treatmentPhases[pIdx + 1] ?? null} />
               ))}
             </div>
           )}

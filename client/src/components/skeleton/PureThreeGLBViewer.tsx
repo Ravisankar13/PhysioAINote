@@ -3123,6 +3123,11 @@ export default function PureThreeGLBViewer({
           child.geometry.dispose();
           if (child.material instanceof THREE.Material) child.material.dispose();
         }
+        if (child instanceof THREE.Sprite) {
+          const mat = child.material as THREE.SpriteMaterial;
+          if (mat.map) mat.map.dispose();
+          mat.dispose();
+        }
       });
       scene.remove(slingPathwayGroupRef.current);
       slingPathwayGroupRef.current = null;

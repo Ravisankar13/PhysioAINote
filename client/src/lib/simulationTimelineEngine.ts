@@ -2637,6 +2637,25 @@ function synthesizeReQueryPayload(
     goalTargetsText = formatGoalContextForPrompt(goalProfile, gapAnalysis);
   }
 
+  if (skeletonGoals && skeletonGoals.length > 0) {
+    const skeletonGoalLines: string[] = ['\n\nSKELETON-DERIVED GOAL TARGETS (authoritative sequencing):'];
+    const primary = skeletonGoals.filter(g => g.priority >= 60);
+    const secondary = skeletonGoals.filter(g => g.priority < 60);
+    if (primary.length > 0) {
+      skeletonGoalLines.push('PRIMARY (address first):');
+      primary.forEach((g, i) => {
+        skeletonGoalLines.push(`  ${i + 1}. [${g.source.toUpperCase()}, P${g.priority}${g.isCarryForward ? ', CARRY-FORWARD' : ''}] ${g.target}${g.metric ? ` — Metric: ${g.metric}` : ''} — Rationale: ${g.rationale}`);
+      });
+    }
+    if (secondary.length > 0) {
+      skeletonGoalLines.push('SECONDARY (address where possible):');
+      secondary.forEach((g, i) => {
+        skeletonGoalLines.push(`  ${i + 1}. [${g.source.toUpperCase()}, P${g.priority}${g.isCarryForward ? ', CARRY-FORWARD' : ''}] ${g.target}${g.metric ? ` — ${g.metric}` : ''}`);
+      });
+    }
+    goalTargetsText = goalTargetsText + skeletonGoalLines.join('\n');
+  }
+
   const exercisePayload = {
     targetFocus: exerciseTargetFocus,
     mechanismSummary: `Predicted state at session ${snapshot.sessionNumber}, transitioning to ${phaseLabel} phase`,
@@ -3103,7 +3122,6 @@ function computeSkeletonGoalsForPhase(
     const prevGoals = prevPhase.skeletonGoals ?? [];
     const prevState = prevPhase.predictedStateAtTransition;
     for (const pg of prevGoals) {
-      if (pg.priority < 50) continue;
       if (matchedGoals.some(g => g.id === pg.id)) continue;
 
       let unresolved = true;
@@ -3116,7 +3134,7 @@ function computeSkeletonGoalsForPhase(
       if (unresolved) {
         matchedGoals.push({
           ...pg,
-          priority: Math.max(pg.priority - 10, 30),
+          priority: Math.max(pg.priority - 5, 50),
           isCarryForward: true,
         });
       }
@@ -3183,7 +3201,6 @@ export function enrichPhasesWithClinicalPlan(
       const prevState = prevEnriched.predictedStateAtTransition;
 
       for (const pg of prevGoals) {
-        if (pg.priority < 50) continue;
         if (matchedGoals.some(g => g.id === pg.id)) continue;
 
         let unresolved = true;
@@ -3197,7 +3214,7 @@ export function enrichPhasesWithClinicalPlan(
         if (unresolved) {
           matchedGoals.push({
             ...pg,
-            priority: Math.max(pg.priority - 10, 30),
+            priority: Math.max(pg.priority - 5, 50),
             isCarryForward: true,
           });
         }

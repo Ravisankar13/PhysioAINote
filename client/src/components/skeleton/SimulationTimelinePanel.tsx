@@ -64,6 +64,7 @@ import {
   type CorrectionFactors,
   type TreatmentPhaseBlock,
   type PhaseProgressEvent,
+  enrichPhasesWithClinicalPlan,
 } from "@/lib/simulationTimelineEngine";
 import {
   type PatientFactors,
@@ -4602,6 +4603,7 @@ export default function SimulationTimelinePanel({
   const [sessionTimelineLoading, setSessionTimelineLoading] = useState(false);
   const [phaseProgress, setPhaseProgress] = useState<PhaseProgressEvent | null>(null);
   const [enableReQuery, setEnableReQuery] = useState(true);
+  const [clinicalPlanExpanded, setClinicalPlanExpanded] = useState(false);
 
   const currentStateGap = useMemo<GoalGapAnalysis | null>(() => {
     if (!aiGoalProfile || !sessionTimeline || sessionTimeline.sessions.length === 0) return null;
@@ -4687,12 +4689,14 @@ export default function SimulationTimelinePanel({
         if (!abortController.signal.aborted) {
           console.warn('[SimTimeline] Async session build failed:', err);
           try {
-            const fallback = buildSessionTimeline(
+            const fallbackRaw = buildSessionTimeline(
               customExercises ?? [], customTechniques ?? [], baseModelConfig, baseOverrides,
               painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile,
               actualOutcomes.length > 0 ? actualOutcomes : undefined,
               clinicalStateForGoals,
             );
+            const fallbackPhases = enrichPhasesWithClinicalPlan(fallbackRaw.treatmentPhases ?? [], clinicalPlan);
+            const fallback = { ...fallbackRaw, treatmentPhases: fallbackPhases };
             setSessionTimeline(fallback);
           } catch (e2) {
             console.warn('[SimTimeline] Fallback also failed:', e2);
@@ -4706,12 +4710,14 @@ export default function SimulationTimelinePanel({
       setSessionTimelineLoading(false);
       setPhaseProgress(null);
       try {
-        const result = buildSessionTimeline(
+        const syncRaw = buildSessionTimeline(
           customExercises ?? [], customTechniques ?? [], baseModelConfig, baseOverrides,
           painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile,
           actualOutcomes.length > 0 ? actualOutcomes : undefined,
           clinicalStateForGoals,
         );
+        const syncPhases = enrichPhasesWithClinicalPlan(syncRaw.treatmentPhases ?? [], clinicalPlan);
+        const result = { ...syncRaw, treatmentPhases: syncPhases };
         setSessionTimeline(result);
       } catch (e) {
         console.warn('[SimTimeline] Session build failed:', e);
@@ -4720,7 +4726,7 @@ export default function SimulationTimelinePanel({
     }
 
     return () => { abortController.abort(); };
-  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile, actualOutcomes, enableReQuery, clinicalStateForGoals]);
+  }, [hasCustomTreatments, customExercises, customTechniques, baseModelConfig, baseOverrides, painMarkers, bodyWeightKg, biomechanicsOutput, modifiers, adjustedProfile, actualOutcomes, enableReQuery, clinicalStateForGoals, clinicalPlan]);
 
   const weekTimeline = useMemo(() => {
     if (hasCustomTreatments) return null;
@@ -4757,10 +4763,19 @@ export default function SimulationTimelinePanel({
     />
   );
 
+  const clinicalPlanSection = clinicalPlan && clinicalPlan.totalGoals > 0 ? (
+    <ClinicalPlanRoadmap
+      plan={clinicalPlan}
+      expanded={clinicalPlanExpanded}
+      onToggle={() => setClinicalPlanExpanded(prev => !prev)}
+    />
+  ) : null;
+
   if (hasCustomTreatments && (sessionTimeline || sessionTimelineLoading)) {
     return (
       <div className="flex flex-col gap-2">
         {patientFactorsPanel}
+        {clinicalPlanSection}
         {!sessionTimelineLoading && (
           <div className="border border-cyan-700/30 rounded bg-cyan-950/20 px-3 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -4840,6 +4855,7 @@ export default function SimulationTimelinePanel({
     return (
       <div className="flex flex-col gap-2">
         {patientFactorsPanel}
+        {clinicalPlanSection}
         {parentGoalProfile && (
           <RecoveryGoalHeroCard
             goalProfile={parentGoalProfile}
@@ -4859,6 +4875,7 @@ export default function SimulationTimelinePanel({
   return (
     <div className="p-3 text-center space-y-3">
       {patientFactorsPanel}
+      {clinicalPlanSection}
       {parentGoalProfile && (
         <RecoveryGoalHeroCard
           goalProfile={parentGoalProfile}

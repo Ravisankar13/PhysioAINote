@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Badge } from "@/components/ui/badge";
 import {
   Play,
   Pause,
@@ -203,12 +202,6 @@ function CompactRecoveryCurve({
           return pt ? <circle cx={pt.x} cy={pt.y} r={2.5} fill="#ef4444" stroke="#1f2937" strokeWidth={0.5} /> : null;
         })()}
 
-        <defs>
-          <linearGradient id="bbRiskGrad" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#ef4444" stopOpacity={0.2} />
-            <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
-          </linearGradient>
-        </defs>
       </svg>
     </div>
   );
@@ -345,7 +338,7 @@ export default function TimelineBottomBar({
       <div className="flex flex-col justify-center shrink-0">
         <Button
           onClick={() => playbackRef.current?.applyToSkeleton()}
-          disabled={!currentSnap}
+          disabled={!currentSnap || !playbackRef.current?.applyToSkeleton}
           size="sm"
           className="h-7 text-[9px] px-3 bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30"
           variant="outline"

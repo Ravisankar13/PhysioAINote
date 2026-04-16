@@ -158,6 +158,8 @@ interface SimulationTimelinePanelProps {
   postureMeasurements?: PostureMeasurements;
   currentRom?: Array<{ jointId: string; currentDegrees: number }>;
   clinicalPlan?: ClinicalPlanResult | null;
+  playbackRef?: React.MutableRefObject<import("./TimelineBottomBar").TimelinePlaybackRef | null>;
+  onPlaybackStateChange?: (state: import("./TimelineBottomBar").PlaybackSyncState | null) => void;
 }
 
 const PHASE_COLORS = [
@@ -2528,6 +2530,8 @@ function SessionTimelineView({
   exerciseGeneratedSessions?: Set<number>;
   mtGeneratedSessions?: Set<number>;
   clinicalPlan?: ClinicalPlanResult | null;
+  playbackRef?: React.MutableRefObject<import("./TimelineBottomBar").TimelinePlaybackRef | null>;
+  onPlaybackStateChange?: (state: import("./TimelineBottomBar").PlaybackSyncState | null) => void;
 }) {
   const [selectedSession, setSelectedSession] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2631,6 +2635,44 @@ function SessionTimelineView({
       p => selectedSession >= p.startSession && selectedSession <= p.endSession
     ) ?? sessionTimeline.treatmentPhases[0] ?? null;
   }, [sessionTimeline.treatmentPhases, selectedSession]);
+
+  useEffect(() => {
+    if (playbackRef) {
+      playbackRef.current = {
+        selectSession: (n: number) => selectSession(n),
+        togglePlay: () => handlePlay(),
+        applyToSkeleton: () => handleApply(),
+      };
+    }
+  });
+
+  const bottomBarSessions = useMemo(() => sessionTimeline.sessions.map(s => ({
+    sessionNumber: s.sessionNumber,
+    dayOffset: s.dayOffset,
+    riskScore: s.riskScore,
+    painPrediction: s.painPrediction,
+    slingIntegrity: s.slingIntegrity,
+    goalAchievementPct: s.goalAchievementPct,
+    recoveryPhaseLabel: s.recoveryPhaseLabel,
+    romPredictions: s.romPredictions.map(r => ({ jointId: r.jointId, predictedDegrees: r.predictedDegrees, targetDegrees: r.targetDegrees })),
+    compensationResolution: s.compensationResolution,
+    muscleStatePredictions: s.muscleStatePredictions.map(m => ({ muscleId: m.muscleId, predictedTension: m.predictedTension })),
+  })), [sessionTimeline.sessions]);
+
+  useEffect(() => {
+    if (!onPlaybackStateChange) return;
+    onPlaybackStateChange({
+      sessions: bottomBarSessions,
+      totalSessions: sessionTimeline.totalSessions,
+      totalDays: sessionTimeline.totalDays,
+      selectedSession,
+      isPlaying,
+      appliedSession,
+      activePhaseLabel: activePhaseForSession?.phaseLabel ?? '',
+      activePhaseGoals: activePhaseForSession?.skeletonGoals ?? [],
+      goalProfile,
+    });
+  }, [selectedSession, isPlaying, appliedSession, bottomBarSessions, sessionTimeline.totalSessions, sessionTimeline.totalDays, activePhaseForSession, goalProfile, onPlaybackStateChange]);
 
   const currentGoalGap = useMemo<GoalGapAnalysis | null>(() => {
     if (!goalProfile || !currentSnapshot) return null;
@@ -2857,52 +2899,15 @@ function SessionTimelineView({
         </div>
       )}
 
-      <div className="bg-gray-800/50 rounded border border-gray-700/50 p-2">
-        <div className="flex items-center justify-between mb-1.5">
+      <div className="bg-gray-800/50 rounded border border-gray-700/50 p-1.5">
+        <div className="flex items-center justify-between">
           <span className="text-gray-400 text-[9px]">
             Session {selectedSession} of {sessionTimeline.totalSessions}
             {currentSnapshot && <span className="text-gray-600"> (Day {currentSnapshot.dayOffset})</span>}
           </span>
-        </div>
-
-        <SessionTreatmentBar
-          sessions={sessionTimeline.sessions}
-          selectedSession={selectedSession}
-          totalSessions={sessionTimeline.totalSessions}
-          onSessionClick={selectSession}
-        />
-
-        <div className="mt-2 flex items-center gap-2">
-          <button
-            onClick={() => selectSession(Math.max(1, selectedSession - 1))}
-            className="p-0.5 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200"
-            disabled={selectedSession <= 1}
-          >
-            <SkipBack className="h-3 w-3" />
-          </button>
-          <button
-            onClick={handlePlay}
-            className="p-0.5 rounded hover:bg-gray-700/50 text-cyan-400 hover:text-cyan-300"
-          >
-            {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-          </button>
-          <div className="flex-1">
-            <Slider
-              value={[selectedSession]}
-              onValueChange={handleSessionChange}
-              min={1}
-              max={sessionTimeline.totalSessions}
-              step={1}
-              className="w-full"
-            />
-          </div>
-          <button
-            onClick={() => selectSession(Math.min(sessionTimeline.totalSessions, selectedSession + 1))}
-            className="p-0.5 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200"
-            disabled={selectedSession >= sessionTimeline.totalSessions}
-          >
-            <SkipForward className="h-3 w-3" />
-          </button>
+          {appliedSession === selectedSession && (
+            <Badge variant="outline" className="text-[7px] py-0 px-1 border-cyan-500/30 text-cyan-400">Applied</Badge>
+          )}
         </div>
       </div>
 
@@ -3013,29 +3018,6 @@ function SessionTimelineView({
           ))}
         </div>
       )}
-
-      <div>
-        <Button
-          onClick={handleApply}
-          disabled={!currentSnapshot || !onApplyToSkeleton}
-          size="sm"
-          className="w-full h-7 text-[10px] bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30"
-          variant="outline"
-        >
-          <Zap className="h-3 w-3 mr-1" />
-          {appliedSession === selectedSession ? `Applied Session ${selectedSession}` : `Apply Session ${selectedSession} to Skeleton`}
-        </Button>
-        {currentSnapshot && (
-          <div className="flex gap-1 mt-0.5 flex-wrap justify-center">
-            <span className="text-[7px] text-gray-600">Applies:</span>
-            <span className="text-[7px] text-gray-500">posture</span>
-            <span className="text-[7px] text-gray-500">muscle tension</span>
-            {currentSnapshot.romPredictions.length > 0 && <span className="text-[7px] text-gray-500">ROM ({currentSnapshot.romPredictions.length})</span>}
-            {currentSnapshot.painMarkerPredictions.length > 0 && <span className="text-[7px] text-gray-500">pain ({currentSnapshot.painMarkerPredictions.length})</span>}
-            {currentSnapshot.compensationPredictions.length > 0 && <span className="text-[7px] text-gray-500">comp ({currentSnapshot.compensationPredictions.length})</span>}
-          </div>
-        )}
-      </div>
 
       <div className="border border-gray-700/40 rounded overflow-hidden">
         <button
@@ -4405,6 +4387,8 @@ export default function SimulationTimelinePanel({
   postureMeasurements,
   currentRom,
   clinicalPlan,
+  playbackRef,
+  onPlaybackStateChange,
 }: SimulationTimelinePanelProps) {
   const [patientFactors, setPatientFactors] = useState<PatientFactors>(DEFAULT_PATIENT_FACTORS);
   const [hasAutoPopulated, setHasAutoPopulated] = useState(false);
@@ -4933,6 +4917,8 @@ export default function SimulationTimelinePanel({
             exerciseGeneratedSessions={exerciseGeneratedSessions}
             mtGeneratedSessions={mtGeneratedSessions}
             clinicalPlan={clinicalPlan}
+            playbackRef={playbackRef}
+            onPlaybackStateChange={onPlaybackStateChange}
           />
         )}
         {sessionTimelineLoading && !sessionTimeline && (

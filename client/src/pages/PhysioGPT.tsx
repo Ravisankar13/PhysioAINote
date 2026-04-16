@@ -150,6 +150,8 @@ const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/Patie
 const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/UnifiedBiomechanicsPanel"));
 const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
+const TimelineBottomBar = lazy(() => import("@/components/skeleton/TimelineBottomBar"));
+import type { PlaybackSyncState, TimelinePlaybackRef } from "@/components/skeleton/TimelineBottomBar";
 const MechanismTreatmentTab = lazy(() => import("@/components/skeleton/MechanismTreatmentTab"));
 const SlingAnalysisPanel = lazy(() => import("@/components/skeleton/SlingAnalysisPanel"));
 const ClinicalTextInput = lazy(() => import("@/components/skeleton/ClinicalTextInput"));
@@ -606,6 +608,8 @@ export default function PhysioGPT() {
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showSimTimeline, setShowSimTimeline] = useState(false);
+  const [timelinePlaybackState, setTimelinePlaybackState] = useState<PlaybackSyncState | null>(null);
+  const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
   const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd'>('mechanism');
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
@@ -4918,7 +4922,8 @@ ${ddxList}`;
 
   return (
     <Suspense fallback={<LazyPanelFallback />}>
-    <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 relative overflow-hidden">
+    <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 flex flex-col overflow-hidden">
+    <div className="flex-1 relative overflow-hidden min-h-0">
       {!modelReady && (
         <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
           <div className="flex flex-col items-center gap-6 max-w-md w-full px-8">
@@ -8948,6 +8953,8 @@ ${ddxList}`;
                       postureMeasurements={postureMeasurementsForGoals}
                       currentRom={currentRomForGoals}
                       clinicalPlan={clinicalPlan}
+                      playbackRef={timelinePlaybackRef}
+                      onPlaybackStateChange={setTimelinePlaybackState}
                     />
                   </Suspense>
                 </div>
@@ -10402,6 +10409,16 @@ ${ddxList}`;
           ) || [],
         }}
       />
+    </div>
+
+    {showSimTimeline && timelinePlaybackState && (
+      <Suspense fallback={null}>
+        <TimelineBottomBar
+          playbackState={timelinePlaybackState}
+          playbackRef={timelinePlaybackRef}
+        />
+      </Suspense>
+    )}
     </div>
     </Suspense>
   );

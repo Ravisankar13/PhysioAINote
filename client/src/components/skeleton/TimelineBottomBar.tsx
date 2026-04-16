@@ -172,8 +172,9 @@ export default function TimelineBottomBar({
   }, [hasPlayback, playbackState, selectedSession]);
 
   const totalWeeks = useMemo(() => {
-    if (hasPlayback && playbackState.totalDays > 0) {
-      return Math.max(1, Math.ceil(playbackState.totalDays / 7));
+    if (hasPlayback && playbackState.sessions.length > 0) {
+      const lastSession = playbackState.sessions[playbackState.sessions.length - 1];
+      return Math.max(1, Math.ceil(lastSession.dayOffset / 7));
     }
     if (conditionDerived) return Math.max(1, Math.round(conditionDerived.totalWeeks));
     return 1;

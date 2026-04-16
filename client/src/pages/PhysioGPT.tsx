@@ -8231,7 +8231,13 @@ ${ddxList}`;
                 variant="secondary"
                 size="sm"
                 className={`h-7 text-xs shadow-sm ${showSimTimeline ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => setShowSimTimeline(!showSimTimeline)}
+                onClick={() => {
+                  if (showSimTimeline) {
+                    setTimelinePlaybackState(null);
+                    setConditionPhases(null);
+                  }
+                  setShowSimTimeline(!showSimTimeline);
+                }}
               >
                 <Clock className="h-3 w-3 mr-1" />
                 Timeline

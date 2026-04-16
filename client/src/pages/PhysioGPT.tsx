@@ -151,7 +151,7 @@ const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/Unifie
 const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
 const TimelineBottomBar = lazy(() => import("@/components/skeleton/TimelineBottomBar"));
-import type { PlaybackSyncState, TimelinePlaybackRef } from "@/components/skeleton/TimelineBottomBar";
+import type { PlaybackSyncState, TimelinePlaybackRef, ConditionPhaseInfo } from "@/components/skeleton/TimelineBottomBar";
 const MechanismTreatmentTab = lazy(() => import("@/components/skeleton/MechanismTreatmentTab"));
 const SlingAnalysisPanel = lazy(() => import("@/components/skeleton/SlingAnalysisPanel"));
 const ClinicalTextInput = lazy(() => import("@/components/skeleton/ClinicalTextInput"));
@@ -609,6 +609,7 @@ export default function PhysioGPT() {
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showSimTimeline, setShowSimTimeline] = useState(false);
   const [timelinePlaybackState, setTimelinePlaybackState] = useState<PlaybackSyncState | null>(null);
+  const [conditionPhases, setConditionPhases] = useState<ConditionPhaseInfo[] | null>(null);
   const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
   const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd'>('mechanism');
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
@@ -8955,6 +8956,7 @@ ${ddxList}`;
                       clinicalPlan={clinicalPlan}
                       playbackRef={timelinePlaybackRef}
                       onPlaybackStateChange={setTimelinePlaybackState}
+                      onConditionPhasesChange={setConditionPhases}
                     />
                   </Suspense>
                 </div>
@@ -10411,11 +10413,12 @@ ${ddxList}`;
       />
     </div>
 
-    {showSimTimeline && timelinePlaybackState && (
+    {showSimTimeline && (
       <Suspense fallback={null}>
         <TimelineBottomBar
           playbackState={timelinePlaybackState}
           playbackRef={timelinePlaybackRef}
+          conditionPhases={conditionPhases}
         />
       </Suspense>
     )}

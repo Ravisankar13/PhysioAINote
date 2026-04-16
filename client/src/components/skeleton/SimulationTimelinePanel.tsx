@@ -2508,6 +2508,8 @@ function SessionTimelineView({
   exerciseGeneratedSessions,
   mtGeneratedSessions,
   clinicalPlan,
+  playbackRef,
+  onPlaybackStateChange,
 }: {
   sessionTimeline: SessionTimelineResult;
   baseModelConfig: Record<string, Record<string, number>>;
@@ -2548,6 +2550,8 @@ function SessionTimelineView({
         clearInterval(playIntervalRef.current);
         playIntervalRef.current = null;
       }
+      if (playbackRef) playbackRef.current = null;
+      onPlaybackStateChange?.(null);
     };
   }, []);
 
@@ -2898,18 +2902,6 @@ function SessionTimelineView({
           <span className="text-[10px] text-gray-400">Generating recovery goals...</span>
         </div>
       )}
-
-      <div className="bg-gray-800/50 rounded border border-gray-700/50 p-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-gray-400 text-[9px]">
-            Session {selectedSession} of {sessionTimeline.totalSessions}
-            {currentSnapshot && <span className="text-gray-600"> (Day {currentSnapshot.dayOffset})</span>}
-          </span>
-          {appliedSession === selectedSession && (
-            <Badge variant="outline" className="text-[7px] py-0 px-1 border-cyan-500/30 text-cyan-400">Applied</Badge>
-          )}
-        </div>
-      </div>
 
       {currentSnapshot && (
         <div className="grid grid-cols-3 gap-1.5">

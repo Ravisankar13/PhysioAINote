@@ -3812,12 +3812,15 @@ ${ddxList}`;
         painMarkers: pm.map(m => ({ id: m.id, severity: typeof m.severity === 'number' ? m.severity : 5 })),
         compromisedTissues: ct.map(t => ({ key: `${t.tissue_type}:${t.tissue_id}`, severity: t.severity })),
         scarMarkers: sm.map(s => ({ id: s.id, severity: s.severity, painOnPalpation: s.painOnPalpation })),
-        muscleOverrides: Object.entries(mo).map(([key, ov]) => ({
-          key,
-          tensionOffset: ov.tensionOffset ?? 0,
-          activationOffset: ov.activationOffset ?? 0,
-          inhibition: ov.inhibition ?? 0,
-        })),
+        muscleOverrides: Object.entries(mo)
+          // Only scale pathology-driven overrides; leave clinician-intent manual neutral overrides untouched
+          .filter(([, ov]) => ov && ov.pathology && ov.pathology !== 'none')
+          .map(([key, ov]) => ({
+            key,
+            tensionOffset: ov.tensionOffset ?? 0,
+            activationOffset: ov.activationOffset ?? 0,
+            inhibition: ov.inhibition ?? 0,
+          })),
         modelConfigDeviations,
       };
     }

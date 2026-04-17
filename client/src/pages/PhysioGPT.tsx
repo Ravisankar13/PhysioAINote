@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -614,6 +615,11 @@ export default function PhysioGPT() {
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showSimTimeline, setShowSimTimeline] = useState(false);
   const [showRecoverySim, setShowRecoverySim] = useState(false);
+  /** When the Recovery Sim dashboard is mounted with its Skeleton View tab,
+   *  it gives us a DOM container into which we portal the SAME live
+   *  PureThreeGLBViewer instance — so the user is never looking at a
+   *  duplicated viewer; the existing one is reparented into the dashboard. */
+  const [recoverySimSlot, setRecoverySimSlot] = useState<HTMLDivElement | null>(null);
   const [timelinePlaybackState, setTimelinePlaybackState] = useState<PlaybackSyncState | null>(null);
   const [conditionPhases, setConditionPhases] = useState<ConditionPhaseInfo[] | null>(null);
   const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
@@ -5624,6 +5630,7 @@ ${ddxList}`;
               </div>
             )}
             <div ref={skeletonContainerRef} className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
+            {(() => { const __viewer = (
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
               modelConfig={finalModelConfig as any}
@@ -5803,6 +5810,7 @@ ${ddxList}`;
                 }
               }}
             />
+            ); return showRecoverySim && recoverySimSlot ? createPortal(__viewer, recoverySimSlot) : __viewer; })()}
 
             {expandedSlingDetailId && slingAnalysis && (() => {
               const slingData = slingAnalysis.slings.find(s => s.slingId === expandedSlingDetailId);
@@ -9446,16 +9454,7 @@ ${ddxList}`;
                   hasClinicalInput={recoverySimHasClinicalInput}
                   customExercises={customExerciseResult?.customExercises ?? null}
                   customTechniques={customManualTherapyResult?.customTechniques ?? null}
-                  renderSkeleton={() => (
-                    <PureThreeGLBViewer
-                      modelPath="/models/skeleton_character.glb"
-                      modelConfig={finalModelConfig as any}
-                      className="w-full h-full"
-                      enablePainMarkers={false}
-                      painMarkers={painMarkers}
-                      bodyWeightKg={bodyWeightKg}
-                    />
-                  )}
+                  onSkeletonSlotMount={setRecoverySimSlot}
                   initialInput={{
                     conditionSeverity: painMarkers.length > 0
                       ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)

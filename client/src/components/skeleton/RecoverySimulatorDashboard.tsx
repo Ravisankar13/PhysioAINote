@@ -61,11 +61,12 @@ interface Props {
   customExercises?: CustomExerciseInput[] | null;
   customTechniques?: CustomManualTechniqueInput[] | null;
   conditionContext?: ConditionContext | null;
-  /** Render-prop returning the live 3D skeleton viewer JSX. When provided
-   *  and the user activates the Skeleton View tab, the dashboard mounts
-   *  it inside the central pane so scrubbing the timeline updates the
-   *  same viewer that's driving the underlying clinical scene. */
-  renderSkeleton?: () => React.ReactNode;
+  /** Callback invoked when the central Skeleton View slot DOM element
+   *  mounts/unmounts. Parents should React.createPortal the existing
+   *  PureThreeGLBViewer into this element so the SAME viewer instance
+   *  (with all clinical state + overlays) is reused inside the
+   *  dashboard rather than duplicated. */
+  onSkeletonSlotMount?: (el: HTMLDivElement | null) => void;
 }
 
 const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
@@ -202,7 +203,7 @@ export default function RecoverySimulatorDashboard({
   customExercises,
   customTechniques,
   conditionContext,
-  renderSkeleton,
+  onSkeletonSlotMount,
 }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
@@ -211,7 +212,8 @@ export default function RecoverySimulatorDashboard({
   const [activeTab, setActiveTab] = useState<'timeline' | 'skeleton'>('timeline');
   const [animate, setAnimate] = useState(false);
   const [autoSyncSkeleton, setAutoSyncSkeleton] = useState(true);
-  const [activeBaseline] = useState<BaselineMode>('usual_care');
+  // Comparison baseline is selected dynamically below as the closest passive
+  // baseline to the active projection's trajectory.
   const [goalMode] = useState<GoalMode>('fastest_function');
   const [showInterventionEditor, setShowInterventionEditor] = useState(false);
   const [showRemoveTreatment, setShowRemoveTreatment] = useState(false);
@@ -248,7 +250,29 @@ export default function RecoverySimulatorDashboard({
   const activeBranch = useMemo(() => branches.find(b => b.id === activeBranchId) ?? branches[0], [branches, activeBranchId]);
   const activeProjection = useMemo(() => projections.find(p => p.branchId === activeBranchId) ?? projections[0], [projections, activeBranchId]);
   const baselines = useMemo(() => simulateNaturalHistoryBaselines(input, ctxForSim), [input, ctxForSim]);
-  const baselineProj = baselines[activeBaseline];
+  /** Pick the passive baseline closest to the active projection's trajectory
+   *  (sum-of-squared-differences across pain, function, capacity & risk
+   *  timelines) so the Compare panel always shows the most informative
+   *  contrast for the user's current plan. */
+  const baselineProj = useMemo(() => {
+    const modes = Object.keys(baselines) as BaselineMode[];
+    let best = baselines[modes[0]];
+    let bestDist = Infinity;
+    for (const m of modes) {
+      const b = baselines[m];
+      const len = Math.min(activeProjection.timelines.symptoms.pain.length, b.timelines.symptoms.pain.length);
+      let d = 0;
+      for (let i = 0; i < len; i++) {
+        const dp = activeProjection.timelines.symptoms.pain[i] - b.timelines.symptoms.pain[i];
+        const df = activeProjection.timelines.function.walking[i] - b.timelines.function.walking[i];
+        const dc = activeProjection.timelines.capacity[i] - b.timelines.capacity[i];
+        const dr = activeProjection.timelines.risk.reinjury[i] - b.timelines.risk.reinjury[i];
+        d += dp * dp + df * df + dc * dc + dr * dr;
+      }
+      if (d < bestDist) { bestDist = d; best = b; }
+    }
+    return best;
+  }, [baselines, activeProjection]);
 
   const optimizer = useMemo(
     () => optimizeSequence(input, activeProjection, goalMode, customProfiles, ctxForSim),
@@ -279,7 +303,7 @@ export default function RecoverySimulatorDashboard({
         if (next > input.totalWeeks) { setAnimate(false); return prev; }
         return next;
       });
-    }, 800);
+    }, 1000);
     return () => { if (animateRef.current) { clearInterval(animateRef.current); animateRef.current = null; } };
   }, [animate, input.totalWeeks]);
 
@@ -628,22 +652,21 @@ export default function RecoverySimulatorDashboard({
                   ))}
                 </div>
               </>
-            ) : renderSkeleton ? (
-              <div className="flex-1 min-h-[240px] rounded overflow-hidden border border-gray-800/60 bg-black relative" data-testid="dashboard-skeleton-slot">
-                {renderSkeleton()}
-                <div className="absolute top-1.5 left-1.5 bg-gray-900/70 border border-cyan-700/40 rounded px-1.5 py-0.5 text-[9px] text-cyan-200 pointer-events-none">
-                  Live · markers ×{painFactor.toFixed(2)} · wk {scrubWeek}
-                </div>
-              </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center bg-gray-950/40 rounded border border-dashed border-gray-700/50 min-h-[180px]">
-                <div className="text-center text-[11px] text-gray-400 max-w-xs px-4">
-                  <Activity className="h-8 w-8 mx-auto text-cyan-400/70 mb-2" />
-                  <div className="text-gray-200 font-semibold mb-1">Skeleton View Active</div>
-                  <div>Pain markers on the underlying 3D skeleton are scaling with the scrubbed week (markers ×{painFactor.toFixed(2)}). Close this dashboard or switch back to Recovery Timeline to interact with the chart.</div>
-                  <Button size="sm" variant="outline" className="mt-3 h-7 text-[10px]" onClick={onClose}>
-                    <ChevronRight className="h-3 w-3 mr-1" />View 3D Skeleton
-                  </Button>
+              <div className="flex-1 min-h-[240px] rounded overflow-hidden border border-gray-800/60 bg-black relative" data-testid="dashboard-skeleton-slot">
+                {/* Parent portals the SAME live PureThreeGLBViewer instance into this slot */}
+                <div ref={onSkeletonSlotMount} className="absolute inset-0" data-testid="skeleton-portal-target" />
+                {!onSkeletonSlotMount && (
+                  <div className="absolute inset-0 flex items-center justify-center text-center text-[11px] text-gray-400 px-4">
+                    <div>
+                      <Activity className="h-8 w-8 mx-auto text-cyan-400/70 mb-2" />
+                      <div className="text-gray-200 font-semibold mb-1">Skeleton View Active</div>
+                      <div>Markers ×{painFactor.toFixed(2)} on the underlying 3D skeleton. Close this dashboard to interact.</div>
+                    </div>
+                  </div>
+                )}
+                <div className="absolute top-1.5 left-1.5 bg-gray-900/70 border border-cyan-700/40 rounded px-1.5 py-0.5 text-[9px] text-cyan-200 pointer-events-none z-10">
+                  Live · markers ×{painFactor.toFixed(2)} · wk {scrubWeek}
                 </div>
               </div>
             )}

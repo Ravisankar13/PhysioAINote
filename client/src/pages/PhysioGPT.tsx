@@ -3901,113 +3901,6 @@ ${ddxList}`;
     collectModelConfigDeviations(modelConfig).length > 0
   ), [painMarkers, compromisedTissues, scarMarkers, muscleOverrides, modelConfig, collectModelConfigDeviations]);
 
-  const recoverySimConditionContext = useMemo<ConditionContext | null>(() => {
-    if (!recoverySimHasClinicalInput && !extractionResult?.mainComplaint && !structuredReasoningData) return null;
-
-    const compromisedTissueInputs = compromisedTissues.map(ct => ({
-      type: ct.tissue_type as string,
-      severity: ct.severity,
-    }));
-
-    const mechCounts: Record<string, number> = {};
-    let nerveRootHit = false;
-    for (const pm of painMarkers as Array<{ painMechanism?: string; anatomicalLabel?: string; description?: string }>) {
-      const m = (pm.painMechanism ?? '').toString().toLowerCase();
-      if (m) mechCounts[m] = (mechCounts[m] ?? 0) + 1;
-      const lbl = `${pm.anatomicalLabel ?? ''} ${pm.description ?? ''}`.toLowerCase();
-      if (/nerve root|radicul|sciatic|c[3-8]|l[3-5]|s1/.test(lbl)) nerveRootHit = true;
-    }
-    let dominantMech = Object.entries(mechCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-    if (!dominantMech && structuredReasoningData?.dominantMechanism?.mechanism) {
-      dominantMech = structuredReasoningData.dominantMechanism.mechanism.toLowerCase();
-    }
-    const reasoningText = structuredReasoningData
-      ? `${structuredReasoningData.dominantMechanism?.label ?? ''} ${structuredReasoningData.problemClass?.label ?? ''} ${structuredReasoningData.dominantSymptomDriver?.driver ?? ''}`.toLowerCase()
-      : '';
-    if (!nerveRootHit && /radicul|nerve root|sciatic|c[3-8]|l[3-5]|s1/.test(reasoningText)) {
-      nerveRootHit = true;
-    }
-
-    // ROM as true percent of normal upper bound (deficit-aware)
-    let romPct: number | null = null;
-    if (romMeasurements.length > 0) {
-      const ratios: number[] = [];
-      for (const m of romMeasurements) {
-        const upper = m.normalRange[1];
-        if (upper > 0) {
-          ratios.push(Math.max(0, Math.min(120, (m.measuredValue / upper) * 100)));
-        }
-      }
-      if (ratios.length > 0) {
-        romPct = ratios.reduce((s, v) => s + v, 0) / ratios.length;
-      }
-    }
-
-    const sa = slingAnalysis;
-    let slingSeverity = 0;
-    if (sa) {
-      const totalWeak = sa.slings.reduce((sum, s) => sum + s.weakLinks.length, 0);
-      const dysCount = sa.slings.filter(s => s.status === 'underperforming' || s.status === 'compensating').length;
-      slingSeverity = Math.min(100, totalWeak * 12 + dysCount * 10);
-    }
-
-    // Joint deviation magnitude from the host posture model (skeleton-aware).
-    // Each radian-ish deviation contributes to motor-control loss / capacity drag.
-    const deviations = collectModelConfigDeviations(modelConfig);
-    let deviationMag = 0;
-    for (const d of deviations) deviationMag += Math.abs(d.value);
-    const deviationLoad = Math.min(40, deviationMag * 8); // 0–40 scale
-    // If we don't have ROM measurements, fold the deviation magnitude into ROM% as a fallback.
-    if (romPct === null && deviations.length > 0) {
-      romPct = Math.max(40, 100 - deviationLoad * 1.5);
-    }
-
-    const baselineCap = compromisedTissueInputs.length > 0
-      ? Math.max(20, 60 - compromisedTissueInputs.reduce((s, t) => s + t.severity, 0) * 0.3 - deviationLoad * 0.4)
-      : Math.max(25, 50 - deviationLoad * 0.4);
-    const baselineMotor = Math.max(25, (slingSeverity > 0 ? 70 - slingSeverity * 0.4 : 60) - deviationLoad * 0.5);
-
-    // Pathology label: combine main complaint with top hypothesis + problem class label
-    // so classifyCondition can match decision-engine pathology output, not just complaint text.
-    const pathologyParts: string[] = [];
-    if (extractionResult?.mainComplaint) pathologyParts.push(extractionResult.mainComplaint);
-    const topHypothesis = structuredReasoningData?.hypotheses?.[0]?.condition;
-    if (topHypothesis) pathologyParts.push(topHypothesis);
-    if (structuredReasoningData?.problemClass?.label) pathologyParts.push(structuredReasoningData.problemClass.label);
-    if (structuredReasoningData?.reasoningLayers?.tissueFamilySuspicion) {
-      pathologyParts.push(structuredReasoningData.reasoningLayers.tissueFamilySuspicion);
-    }
-    const pathologyText = pathologyParts.length > 0 ? pathologyParts.join(' | ') : null;
-
-    // Patient factor modifiers from pipeline (no UI for raw factors yet — derive from intake + reasoning).
-    const factors = autoPopulateFromPipeline(
-      extractionResult ?? null,
-      structuredReasoningData ?? null,
-      DEFAULT_PATIENT_FACTORS,
-    );
-    const mods = computePatientModifiers(factors, null);
-
-    return buildConditionContext({
-      mainComplaint: pathologyText,
-      compromisedTissues: compromisedTissueInputs,
-      scarSeverityList: scarMarkers.map(s => s.severity ?? 0),
-      adhesionCount: adhesionBands.length,
-      painMechanism: dominantMech,
-      hasNerveRoot: nerveRootHit,
-      currentRomPercent: romPct,
-      baselineMotorControl: baselineMotor,
-      baselineCapacity: baselineCap,
-      slingWeakLinkSeverity: slingSeverity,
-      ageYears: extractionResult?.patientAge ?? factors.age ?? null,
-      patientHealingMult: mods.healingRateMultiplier,
-      patientPainMult: mods.painSensitivityMultiplier,
-      patientRecurrenceMult: mods.recurrenceRiskMultiplier,
-      patientTissueQualityMult: mods.tissueQualityMultiplier,
-      patientPhaseTimingMult: mods.phaseTimingMultiplier,
-      patientRomCeiling: mods.romCeilingAdjustment,
-    });
-  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, collectModelConfigDeviations]);
-
   const chainIntegrityScores = useMemo(() => {
     if (!showUnifiedChainPanel || (liteMode && computeStage < 3)) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     const baseAnalysis = computeFullMuscleAnalysis(effectiveModelConfig);
@@ -4129,6 +4022,105 @@ ${ddxList}`;
   }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computeStage]);
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
+
+  const recoverySimConditionContext = useMemo<ConditionContext | null>(() => {
+    if (!recoverySimHasClinicalInput && !extractionResult?.mainComplaint && !structuredReasoningData) return null;
+
+    const compromisedTissueInputs = compromisedTissues.map(ct => ({
+      type: ct.tissue_type as string,
+      severity: ct.severity,
+    }));
+
+    const mechCounts: Record<string, number> = {};
+    let nerveRootHit = false;
+    for (const pm of painMarkers as Array<{ painMechanism?: string; anatomicalLabel?: string; description?: string }>) {
+      const m = (pm.painMechanism ?? '').toString().toLowerCase();
+      if (m) mechCounts[m] = (mechCounts[m] ?? 0) + 1;
+      const lbl = `${pm.anatomicalLabel ?? ''} ${pm.description ?? ''}`.toLowerCase();
+      if (/nerve root|radicul|sciatic|c[3-8]|l[3-5]|s1/.test(lbl)) nerveRootHit = true;
+    }
+    let dominantMech = Object.entries(mechCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    if (!dominantMech && structuredReasoningData?.dominantMechanism?.mechanism) {
+      dominantMech = structuredReasoningData.dominantMechanism.mechanism.toLowerCase();
+    }
+    const reasoningText = structuredReasoningData
+      ? `${structuredReasoningData.dominantMechanism?.label ?? ''} ${structuredReasoningData.problemClass?.label ?? ''} ${structuredReasoningData.dominantSymptomDriver?.driver ?? ''}`.toLowerCase()
+      : '';
+    if (!nerveRootHit && /radicul|nerve root|sciatic|c[3-8]|l[3-5]|s1/.test(reasoningText)) {
+      nerveRootHit = true;
+    }
+
+    let romPct: number | null = null;
+    if (romMeasurements.length > 0) {
+      const ratios: number[] = [];
+      for (const m of romMeasurements) {
+        const upper = m.normalRange[1];
+        if (upper > 0) {
+          ratios.push(Math.max(0, Math.min(120, (m.measuredValue / upper) * 100)));
+        }
+      }
+      if (ratios.length > 0) {
+        romPct = ratios.reduce((s, v) => s + v, 0) / ratios.length;
+      }
+    }
+
+    let slingSeverity = 0;
+    if (slingAnalysis) {
+      const totalWeak = slingAnalysis.slings.reduce((sum, s) => sum + s.weakLinks.length, 0);
+      const dysCount = slingAnalysis.slings.filter(s => s.status === 'underperforming' || s.status === 'compensating').length;
+      slingSeverity = Math.min(100, totalWeak * 12 + dysCount * 10);
+    }
+
+    const deviations = collectModelConfigDeviations(modelConfig);
+    let deviationMag = 0;
+    for (const d of deviations) deviationMag += Math.abs(d.value);
+    const deviationLoad = Math.min(40, deviationMag * 8);
+    if (romPct === null && deviations.length > 0) {
+      romPct = Math.max(40, 100 - deviationLoad * 1.5);
+    }
+
+    const baselineCap = compromisedTissueInputs.length > 0
+      ? Math.max(20, 60 - compromisedTissueInputs.reduce((s, t) => s + t.severity, 0) * 0.3 - deviationLoad * 0.4)
+      : Math.max(25, 50 - deviationLoad * 0.4);
+    const baselineMotor = Math.max(25, (slingSeverity > 0 ? 70 - slingSeverity * 0.4 : 60) - deviationLoad * 0.5);
+
+    const pathologyParts: string[] = [];
+    if (extractionResult?.mainComplaint) pathologyParts.push(extractionResult.mainComplaint);
+    const topHypothesis = structuredReasoningData?.hypotheses?.[0]?.condition;
+    if (topHypothesis) pathologyParts.push(topHypothesis);
+    if (structuredReasoningData?.problemClass?.label) pathologyParts.push(structuredReasoningData.problemClass.label);
+    if (structuredReasoningData?.reasoningLayers?.tissueFamilySuspicion) {
+      pathologyParts.push(structuredReasoningData.reasoningLayers.tissueFamilySuspicion);
+    }
+    const pathologyText = pathologyParts.length > 0 ? pathologyParts.join(' | ') : null;
+
+    const factors = autoPopulateFromPipeline(
+      extractionResult ?? null,
+      structuredReasoningData ?? null,
+      DEFAULT_PATIENT_FACTORS,
+    );
+    const mods = computePatientModifiers(factors, null);
+
+    return buildConditionContext({
+      mainComplaint: pathologyText,
+      compromisedTissues: compromisedTissueInputs,
+      scarSeverityList: scarMarkers.map(s => s.severity ?? 0),
+      adhesionCount: adhesionBands.length,
+      painMechanism: dominantMech,
+      hasNerveRoot: nerveRootHit,
+      currentRomPercent: romPct,
+      baselineMotorControl: baselineMotor,
+      baselineCapacity: baselineCap,
+      slingWeakLinkSeverity: slingSeverity,
+      ageYears: extractionResult?.patientAge ?? factors.age ?? null,
+      patientHealingMult: mods.healingRateMultiplier,
+      patientPainMult: mods.painSensitivityMultiplier,
+      patientRecurrenceMult: mods.recurrenceRiskMultiplier,
+      patientTissueQualityMult: mods.tissueQualityMultiplier,
+      patientPhaseTimingMult: mods.phaseTimingMultiplier,
+      patientRomCeiling: mods.romCeilingAdjustment,
+    });
+  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, collectModelConfigDeviations]);
 
   const clinicalPlan = useMemo<ClinicalPlanResult | null>(() => {
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;

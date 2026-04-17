@@ -1261,14 +1261,20 @@ export function simulateNaturalHistoryBaselines(input: SimulationInput, conditio
 export function reversePlan(
   projection: SimulationProjection,
   goal: { name: string; weekTarget: number; minCapacity: number; minFunction: number; maxFlareRisk: number },
+  conditionContext?: ConditionContext,
 ): ReversePlanResult {
   const { weekTarget, minCapacity, minFunction, maxFlareRisk } = goal;
+  const profile = conditionContext ? tissueProfileForContext(conditionContext) : null;
+  const phaseScale = profile ? profile.phaseDurationMult * (conditionContext?.patientPhaseTimingMult ?? 1) : 1;
+  const ceilingScale = profile ? profile.romCeiling * (conditionContext?.patientRomCeiling ?? 1) : 1;
+  const scaleWeek = (frac: number, min: number) => Math.max(min, Math.floor(weekTarget * frac * phaseScale));
+  const scaleCap = (cap: number) => Math.max(10, Math.min(100, Math.round(cap * ceilingScale)));
   const requiredMilestones: ReversePlanResult['required'] = [
-    { milestone: 'Pain at rest < 3/10', deadlineWeek: Math.max(1, Math.floor(weekTarget * 0.25)), capacityNeeded: 30 },
-    { milestone: 'Normal walking', deadlineWeek: Math.max(2, Math.floor(weekTarget * 0.4)), capacityNeeded: 50 },
-    { milestone: 'Functional ROM', deadlineWeek: Math.max(2, Math.floor(weekTarget * 0.5)), capacityNeeded: 60 },
-    { milestone: 'Jogging tolerance', deadlineWeek: Math.max(3, Math.floor(weekTarget * 0.7)), capacityNeeded: 70 },
-    { milestone: 'Sport drills', deadlineWeek: Math.max(4, Math.floor(weekTarget * 0.85)), capacityNeeded: 80 },
+    { milestone: 'Pain at rest < 3/10', deadlineWeek: scaleWeek(0.25, 1), capacityNeeded: scaleCap(30) },
+    { milestone: 'Normal walking', deadlineWeek: scaleWeek(0.4, 2), capacityNeeded: scaleCap(50) },
+    { milestone: 'Functional ROM', deadlineWeek: scaleWeek(0.5, 2), capacityNeeded: scaleCap(60) },
+    { milestone: 'Jogging tolerance', deadlineWeek: scaleWeek(0.7, 3), capacityNeeded: scaleCap(70) },
+    { milestone: 'Sport drills', deadlineWeek: scaleWeek(0.85, 4), capacityNeeded: scaleCap(80) },
     { milestone: goal.name, deadlineWeek: weekTarget, capacityNeeded: minCapacity },
   ];
 

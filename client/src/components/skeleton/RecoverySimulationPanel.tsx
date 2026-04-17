@@ -260,8 +260,8 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
     [input, activeProjection, goalMode, customProfiles, ctxForSim],
   );
   const reverse: ReversePlanResult = useMemo(
-    () => reversePlan(activeProjection, reverseGoal),
-    [activeProjection, reverseGoal],
+    () => reversePlan(activeProjection, reverseGoal, conditionContext),
+    [activeProjection, reverseGoal, conditionContext],
   );
   const narrative = useMemo(() => generateNarrative(activeProjection, baselineProj), [activeProjection, baselineProj]);
 
@@ -393,6 +393,10 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
           {conditionContext.tissueLoad > 0 && <span><span className="text-purple-300 font-semibold">Tissue load:</span> {conditionContext.tissueLoad.toFixed(0)}</span>}
           {conditionContext.slingWeakLinkSeverity > 0 && <span><span className="text-purple-300 font-semibold">Sling:</span> {conditionContext.slingWeakLinkSeverity.toFixed(0)}</span>}
           {conditionContext.ageYears !== null && <span><span className="text-purple-300 font-semibold">Age:</span> {conditionContext.ageYears}</span>}
+          {conditionContext.patientHealingMult !== 1 && <span title="Patient-factor healing multiplier"><span className="text-purple-300 font-semibold">Heal×:</span> {conditionContext.patientHealingMult.toFixed(2)}</span>}
+          {conditionContext.patientPainMult !== 1 && <span title="Patient-factor pain sensitivity multiplier"><span className="text-purple-300 font-semibold">Pain×:</span> {conditionContext.patientPainMult.toFixed(2)}</span>}
+          {conditionContext.patientRecurrenceMult !== 1 && <span title="Patient-factor recurrence multiplier"><span className="text-purple-300 font-semibold">Recur×:</span> {conditionContext.patientRecurrenceMult.toFixed(2)}</span>}
+          {conditionContext.patientTissueQualityMult !== 1 && <span title="Patient-factor tissue quality"><span className="text-purple-300 font-semibold">Tissue×:</span> {conditionContext.patientTissueQualityMult.toFixed(2)}</span>}
         </div>
       )}
 

@@ -492,10 +492,11 @@ export default function RecoverySimulatorDashboard({
       });
     }
 
-    // Pick the dominant compromised dimension based on the case's primary
-    // tissue. Used both for the tissue status line and the goal target.
+    // Pick the dominant compromised dimension. Prefer the Goal-Driven
+    // Recovery Engine's largest current-vs-target gap when a goal profile
+    // is available; otherwise fall back to a tissue heuristic.
     type Dim = 'pain' | 'rom' | 'capacity' | 'loadTolerance' | 'function';
-    const dominantDim: Dim = (() => {
+    const tissueDefault: Dim = (() => {
       switch (tissue) {
         case 'nerve':
         case 'disc':
@@ -512,6 +513,20 @@ export default function RecoverySimulatorDashboard({
         default:
           return 'function';
       }
+    })();
+    const dominantDim: Dim = (() => {
+      if (!goalProfile || activeProjection.states.length === 0) return tissueDefault;
+      const s0 = activeProjection.states[0];
+      const candidates: { d: Dim; gap: number }[] = [
+        { d: 'pain',     gap: Math.max(0, (tl.symptoms.pain[0] / 10) - (goalProfile.painTarget / 10)) / 10 },
+        { d: 'rom',      gap: Math.max(0, goalProfile.overallRomRecoveryPercent - s0.romPercent) / 100 },
+        { d: 'capacity', gap: Math.max(0, goalProfile.strengthTarget - tl.capacity[0]) / 100 },
+        { d: 'function', gap: goalProfile.functionalGoals[0]
+            ? Math.max(0, goalProfile.functionalGoals[0].targetValue - tl.function.walking[0]) / 100
+            : 0 },
+      ];
+      const winner = candidates.reduce((b, c) => c.gap > b.gap ? c : b, candidates[0]);
+      return winner.gap > 0.05 ? winner.d : tissueDefault;
     })();
     const dimLabel: Record<Dim, string> = {
       pain: 'Pain', rom: 'ROM', capacity: 'Capacity', loadTolerance: 'Load tolerance', function: 'Function',
@@ -541,7 +556,10 @@ export default function RecoverySimulatorDashboard({
       const startVal = readDim(0, d);
       let terminal: number | null = null;
       switch (d) {
-        case 'pain': terminal = goalProfile.painTarget; break;
+        // goalProfile.painTarget is on a 0-100 scale (5/10/15/20 typical),
+        // while the simulation timeline + the card display use 0-10. Scale
+        // here so the rendered text never reads "≤20/10".
+        case 'pain': terminal = goalProfile.painTarget / 10; break;
         case 'rom': terminal = goalProfile.overallRomRecoveryPercent; break;
         case 'capacity': terminal = goalProfile.strengthTarget; break;
         case 'loadTolerance': terminal = goalProfile.strengthTarget; break;

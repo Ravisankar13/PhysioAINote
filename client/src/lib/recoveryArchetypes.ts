@@ -218,7 +218,17 @@ const CONDITION_ARCHETYPE_MAP: Record<string, RecoveryArchetypeId> = {
   lumbar_disc_herniation:    'disc_centralisation',
   spondylolisthesis:         'disc_centralisation',
 
+  // Bone stress / fracture
+  bone_stress:               'bone_stress',
+
+  // Chronic / nociplastic
+  chronic_pain:              'chronic_nociplastic',
+
+  // Instability / hypermobility
+  joint_instability:         'instability_hypermobility',
+
   // Acute tissue healing — tears, sprains, post-surgical, joint replacement, meniscal
+  rotator_cuff_tear:         'acute_tissue_healing',
   muscle_strain:             'acute_tissue_healing',
   ankle_sprain_lateral:      'acute_tissue_healing',
   acl_reconstruction:        'acute_tissue_healing',
@@ -226,6 +236,7 @@ const CONDITION_ARCHETYPE_MAP: Record<string, RecoveryArchetypeId> = {
   post_surgical:             'acute_tissue_healing',
   joint_replacement:         'acute_tissue_healing',
   whiplash:                  'acute_tissue_healing',
+  generic:                   'acute_tissue_healing',
 };
 
 /** Natural-language fallback rules used when a conditionId is unknown
@@ -235,7 +246,7 @@ const NL_ARCHETYPE_FALLBACKS: { match: RegExp; archetype: RecoveryArchetypeId }[
   { match: /(frozen shoulder|adhesive capsulitis)/i,                                           archetype: 'frozen_shoulder' },
   { match: /(tendinopath|tendinos|tendinitis|tendonitis)/i,                                    archetype: 'tendinopathy_load_capacity' },
   { match: /(impinge|fai|patellofemoral|pfps)/i,                                               archetype: 'mechanical_impingement' },
-  { match: /(osteoarthr|degenerat|^oa\b|joint arthritis|hip arthritis|knee arthritis)/i,       archetype: 'degenerative_oa' },
+  { match: /(osteoarthr|degenerat|^oa\b|joint arthritis|hip arthritis|knee arthritis|spondylos|facet (arthropath|joint|syndrome)|baastrup|kissing spine|chondromal|chondral)/i, archetype: 'degenerative_oa' },
   { match: /(radicul|sciatica|nerve root|stenosis|myelopath|nerve entrap|carpal tunnel)/i,     archetype: 'radicular_neuropathic' },
   { match: /(disc|prolaps|herniat|spondylolisthe)/i,                                           archetype: 'disc_centralisation' },
   { match: /(stress fracture|stress reaction|bone stress|fracture)/i,                          archetype: 'bone_stress' },

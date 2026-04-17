@@ -755,6 +755,9 @@ const CONDITION_OVERRIDES: { match: RegExp; id: string; override: ConditionOverr
   { match: /(subacromial impinge|subacromial pain|shoulder impinge)/i, id: 'subacromial_impingement', override: { primaryTissue: 'joint', healingRateMult: 0.85, painDecayMult: 0.95, flareRiskBase: 5 } },
   { match: /(patellofemoral|pfps|runner'?s knee)/i, id: 'patellofemoral_pain', override: { primaryTissue: 'joint', healingRateMult: 0.85, romCeiling: 95, painDecayMult: 0.95 } },
   { match: /(femoroacetabular|^fai\b|hip impinge)/i, id: 'subacromial_impingement', override: { primaryTissue: 'joint', healingRateMult: 0.80, romCeiling: 90, capacityRampMult: 0.85 } },
+  // Rotator cuff TEAR — must precede rotator_cuff_tendinopathy so tears stay
+  // on the acute 4-phase model (legacy parity requirement).
+  { match: /(rotator cuff tear|cuff tear|full[- ]thickness tear|partial[- ]thickness tear|supraspinatus tear)/i, id: 'rotator_cuff_tear', override: { primaryTissue: 'tendon', healingRateMult: 0.65, romCeiling: 90, capacityCeiling: 85, initialRomAdd: -15, capacityRampMult: 0.80, initialIrritabilityAdd: 8 } },
   // Tendinopathies
   { match: /(rotator cuff tendin|supraspinatus tendin|rotator cuff)/i, id: 'rotator_cuff_tendinopathy', override: { primaryTissue: 'tendon', romCeiling: 95, flareRiskBase: 8 } },
   { match: /(achilles)/i, id: 'achilles_tendinopathy', override: { primaryTissue: 'tendon', healingRateMult: 0.55, romCeiling: 90, flareRiskBase: 10, capacityRampMult: 0.75 } },

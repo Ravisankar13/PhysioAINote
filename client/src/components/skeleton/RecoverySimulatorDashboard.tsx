@@ -51,6 +51,8 @@ import { findConditionProfile } from "@/lib/patientFactorsEngine";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
 import {
   getArchetypeForCondition,
+  RECOVERY_ARCHETYPES,
+  type RecoveryArchetypeId,
   stageIndexForHealingPhase,
   stageFitForTreatment,
   type RecoveryStage,
@@ -393,10 +395,15 @@ export default function RecoverySimulatorDashboard({
   // mechanical-impingement criterion stages, frozen-shoulder freezing/
   // frozen/thawing, etc.) instead of the same four-phase healing model
   // for every condition.
-  const archetype = useMemo(
-    () => getArchetypeForCondition(conditionContext?.archetypeId ?? conditionContext?.conditionId, conditionContext?.conditionLabel),
-    [conditionContext?.archetypeId, conditionContext?.conditionId, conditionContext?.conditionLabel],
-  );
+  const archetype = useMemo(() => {
+    // Trust the archetypeId precomputed by the classifier when available; only
+    // fall back to label-based resolution for legacy contexts that lack it.
+    const precomputed = conditionContext?.archetypeId as RecoveryArchetypeId | undefined;
+    if (precomputed && RECOVERY_ARCHETYPES[precomputed]) {
+      return RECOVERY_ARCHETYPES[precomputed];
+    }
+    return getArchetypeForCondition(conditionContext?.conditionId, conditionContext?.conditionLabel);
+  }, [conditionContext?.archetypeId, conditionContext?.conditionId, conditionContext?.conditionLabel]);
   const scrubbedStageIdx = useMemo(
     () => stageIndexForHealingPhase(archetype, stateAtScrub.healingPhase),
     [archetype, stateAtScrub.healingPhase],

@@ -3756,6 +3756,132 @@ ${ddxList}`;
     }
   }, [modelConfig, effectiveModelConfig]);
 
+  const recoverySimBaselineRef = useRef<{
+    painMarkers: Array<{ id: string; severity: number }>;
+    compromisedTissues: Array<{ key: string; severity: number }>;
+    scarMarkers: Array<{ id: string; severity: number; painOnPalpation: number }>;
+    muscleOverrides: Array<{ key: string; tensionOffset: number; activationOffset: number; inhibition: number }>;
+    modelConfigDeviations: Array<{ joint: string; param: string; value: number }>;
+  } | null>(null);
+  const recoverySimCompromisedTissuesRef = useRef(compromisedTissues);
+  const recoverySimScarMarkersRef = useRef(scarMarkers);
+  const recoverySimMuscleOverridesRef = useRef(muscleOverrides);
+  const recoverySimModelConfigRef = useRef(modelConfig);
+  useEffect(() => { recoverySimCompromisedTissuesRef.current = compromisedTissues; }, [compromisedTissues]);
+  useEffect(() => { recoverySimScarMarkersRef.current = scarMarkers; }, [scarMarkers]);
+  useEffect(() => { recoverySimMuscleOverridesRef.current = muscleOverrides; }, [muscleOverrides]);
+  useEffect(() => { recoverySimModelConfigRef.current = modelConfig; }, [modelConfig]);
+  useEffect(() => { if (!showRecoverySim) recoverySimBaselineRef.current = null; }, [showRecoverySim]);
+
+  const handleApplyRecoverySimState = useCallback((info: { week: number; state: import('@/lib/recoverySimulationEngine').RecoveryState; baselineState: import('@/lib/recoverySimulationEngine').RecoveryState; branchName: string }) => {
+    const { state, baselineState } = info;
+    if (!recoverySimBaselineRef.current) {
+      const pm = painMarkersRef.current;
+      const ct = recoverySimCompromisedTissuesRef.current;
+      const sm = recoverySimScarMarkersRef.current;
+      const mo = recoverySimMuscleOverridesRef.current;
+      const mc = recoverySimModelConfigRef.current as unknown as Record<string, Record<string, unknown> | unknown>;
+      const modelConfigDeviations: Array<{ joint: string; param: string; value: number }> = [];
+      for (const [joint, params] of Object.entries(mc)) {
+        if (params && typeof params === 'object') {
+          for (const [param, val] of Object.entries(params as Record<string, unknown>)) {
+            if (typeof val === 'number' && Math.abs(val) > 0.001) {
+              modelConfigDeviations.push({ joint, param, value: val });
+            }
+          }
+        }
+      }
+      recoverySimBaselineRef.current = {
+        painMarkers: pm.map(m => ({ id: m.id, severity: typeof m.severity === 'number' ? m.severity : 5 })),
+        compromisedTissues: ct.map(t => ({ key: `${t.tissue_type}:${t.tissue_id}`, severity: t.severity })),
+        scarMarkers: sm.map(s => ({ id: s.id, severity: s.severity, painOnPalpation: s.painOnPalpation })),
+        muscleOverrides: Object.entries(mo).map(([key, ov]) => ({
+          key,
+          tensionOffset: ov.tensionOffset ?? 0,
+          activationOffset: ov.activationOffset ?? 0,
+          inhibition: ov.inhibition ?? 0,
+        })),
+        modelConfigDeviations,
+      };
+    }
+    const baseline = recoverySimBaselineRef.current;
+
+    const painFactor = baselineState.pain > 0.001
+      ? Math.max(0, Math.min(2, state.pain / baselineState.pain))
+      : (state.pain > 0.001 ? 1 : 0);
+    const healingFactor = Math.max(0, Math.min(1.2, 1 - Math.max(0, state.healingProgress - baselineState.healingProgress) / 100));
+    const romGap = Math.max(1, 100 - baselineState.romPercent);
+    const romFactor = Math.max(0, Math.min(1.2, (100 - state.romPercent) / romGap));
+    const motorGap = Math.max(1, 100 - baselineState.motorControl);
+    const motorFactor = Math.max(0, Math.min(1.2, (100 - state.motorControl) / motorGap));
+
+    if (baseline.painMarkers.length > 0) {
+      const map = new Map(baseline.painMarkers.map(b => [b.id, b.severity]));
+      setPainMarkers(prev => prev.map(m => {
+        const base = map.get(m.id);
+        if (base === undefined) return m;
+        return { ...m, severity: Math.max(0, Math.min(10, base * painFactor)) };
+      }));
+    }
+
+    if (baseline.compromisedTissues.length > 0) {
+      const map = new Map(baseline.compromisedTissues.map(b => [b.key, b.severity]));
+      setCompromisedTissues(prev => prev.map(t => {
+        const base = map.get(`${t.tissue_type}:${t.tissue_id}`);
+        if (base === undefined) return t;
+        return { ...t, severity: Math.max(0, Math.min(10, base * healingFactor)) };
+      }));
+    }
+
+    if (baseline.scarMarkers.length > 0) {
+      const map = new Map(baseline.scarMarkers.map(b => [b.id, b]));
+      setScarMarkers(prev => prev.map(s => {
+        const base = map.get(s.id);
+        if (!base) return s;
+        return {
+          ...s,
+          severity: Math.max(1, Math.min(5, Math.round(base.severity * healingFactor))) as 1 | 2 | 3 | 4 | 5,
+          painOnPalpation: Math.max(0, Math.min(10, Math.round(base.painOnPalpation * painFactor))),
+        };
+      }));
+    }
+
+    if (baseline.muscleOverrides.length > 0) {
+      setMuscleOverrides(prev => {
+        const next = { ...prev };
+        for (const b of baseline.muscleOverrides) {
+          const existing = next[b.key];
+          if (!existing) continue;
+          next[b.key] = {
+            ...existing,
+            tensionOffset: Math.round(b.tensionOffset * motorFactor),
+            activationOffset: Math.round(b.activationOffset * motorFactor),
+            inhibition: Math.round(b.inhibition * motorFactor),
+          };
+        }
+        return next;
+      });
+    }
+
+    if (baseline.modelConfigDeviations.length > 0) {
+      setModelConfig(prev => {
+        const next = JSON.parse(JSON.stringify(prev)) as Record<string, Record<string, number>>;
+        for (const d of baseline.modelConfigDeviations) {
+          if (!next[d.joint] || typeof next[d.joint] !== 'object') next[d.joint] = {} as Record<string, number>;
+          next[d.joint][d.param] = d.value * romFactor;
+        }
+        return next as unknown as typeof prev;
+      });
+    }
+  }, []);
+
+  const recoverySimHasClinicalInput = useMemo(() => (
+    painMarkers.length > 0 ||
+    compromisedTissues.length > 0 ||
+    scarMarkers.length > 0 ||
+    Object.keys(muscleOverrides).length > 0
+  ), [painMarkers, compromisedTissues, scarMarkers, muscleOverrides]);
+
   const chainIntegrityScores = useMemo(() => {
     if (!showUnifiedChainPanel || (liteMode && computeStage < 3)) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     const baseAnalysis = computeFullMuscleAnalysis(effectiveModelConfig);
@@ -9203,19 +9329,8 @@ ${ddxList}`;
                   <Suspense fallback={<LazyPanelFallback />}>
                     <RecoverySimulationPanel
                       conditionLabel={extractionResult?.mainComplaint || undefined}
-                      onApplyState={({ state }) => {
-                        const painScale = state.pain / 50;
-                        handleApplySimTimelineWeek({
-                          modelConfig: {},
-                          overrides: {},
-                          painMarkerUpdates: painMarkers.map(m => {
-                            const baseSeverity = ((m as unknown as Record<string, unknown>).severity as number) ?? 5;
-                            return { markerId: m.id, predictedSeverity: Math.max(0, Math.min(10, baseSeverity * painScale)) };
-                          }),
-                          posturalUpdates: [],
-                          compensationUpdates: [],
-                        });
-                      }}
+                      onApplyState={handleApplyRecoverySimState}
+                      hasClinicalInput={recoverySimHasClinicalInput}
                       initialInput={{
                         conditionSeverity: painMarkers.length > 0
                           ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)

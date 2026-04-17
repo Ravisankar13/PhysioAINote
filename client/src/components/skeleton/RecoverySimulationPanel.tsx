@@ -49,7 +49,8 @@ import {
 interface Props {
   initialInput?: Partial<SimulationInput>;
   conditionLabel?: string;
-  onApplyState?: (info: { week: number; state: import("@/lib/recoverySimulationEngine").RecoveryState; branchName: string }) => void;
+  onApplyState?: (info: { week: number; state: import("@/lib/recoverySimulationEngine").RecoveryState; baselineState: import("@/lib/recoverySimulationEngine").RecoveryState; branchName: string }) => void;
+  hasClinicalInput?: boolean;
 }
 
 type TimelineKey = 'symptoms' | 'tissue' | 'function' | 'biomechanics' | 'risk';
@@ -191,7 +192,7 @@ function MultiLineChart({
   );
 }
 
-export default function RecoverySimulationPanel({ initialInput, conditionLabel, onApplyState }: Props) {
+export default function RecoverySimulationPanel({ initialInput, conditionLabel, onApplyState, hasClinicalInput }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
   const [activeBranchId, setActiveBranchId] = useState<string>('plan_active');
@@ -213,7 +214,7 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
     if (initialInput) setInput(prev => ({ ...prev, ...initialInput }));
   }, [initialInput]);
 
-  const [autoSyncSkeleton, setAutoSyncSkeleton] = useState(false);
+  const [autoSyncSkeleton, setAutoSyncSkeleton] = useState(true);
 
   const activeBranch = useMemo(() => branches.find(b => b.id === activeBranchId) ?? branches[0], [branches, activeBranchId]);
 
@@ -233,12 +234,13 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
   const narrative = useMemo(() => generateNarrative(activeProjection, baselineProj), [activeProjection, baselineProj]);
 
   const stateAtScrub = activeProjection.states[Math.min(scrubWeek, activeProjection.states.length - 1)];
+  const baselineState = activeProjection.states[0];
 
   useEffect(() => {
-    if (autoSyncSkeleton && onApplyState) {
-      onApplyState({ week: scrubWeek, state: stateAtScrub, branchName: activeProjection.branchName });
+    if (autoSyncSkeleton && onApplyState && stateAtScrub && baselineState) {
+      onApplyState({ week: scrubWeek, state: stateAtScrub, baselineState, branchName: activeProjection.branchName });
     }
-  }, [autoSyncSkeleton, scrubWeek, stateAtScrub, onApplyState, activeProjection.branchName]);
+  }, [autoSyncSkeleton, scrubWeek, stateAtScrub, baselineState, onApplyState, activeProjection.branchName]);
 
   const symptomSeries = useMemo(() => [
     { label: 'Pain', color: '#ef4444', values: activeProjection.timelines.symptoms.pain },
@@ -473,6 +475,12 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
         </div>
       )}
 
+      {onApplyState && hasClinicalInput === false && (
+        <div className="bg-amber-900/20 border border-amber-700/40 rounded p-1.5 text-[9px] text-amber-200">
+          Add pain markers, compromised tissues, scars, or muscle states to the 3D model first — the recovery scrubber will then animate those clinical findings over the simulated weeks.
+        </div>
+      )}
+
       <div className="bg-gray-900/40 border border-gray-700/40 rounded p-1.5">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[9px] text-gray-300 font-semibold flex items-center gap-1"><Calendar className="h-3 w-3" />Week {scrubWeek} of {input.totalWeeks} — {activeProjection.branchName}</span>
@@ -483,7 +491,7 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
                   <input type="checkbox" checked={autoSyncSkeleton} onChange={e => setAutoSyncSkeleton(e.target.checked)} className="h-2.5 w-2.5" />Sync
                 </label>
                 <button
-                  onClick={() => onApplyState({ week: scrubWeek, state: stateAtScrub, branchName: activeProjection.branchName })}
+                  onClick={() => onApplyState({ week: scrubWeek, state: stateAtScrub, baselineState, branchName: activeProjection.branchName })}
                   className="text-[9px] text-emerald-400 hover:text-emerald-200 flex items-center gap-0.5 border border-emerald-700/40 bg-emerald-900/20 rounded px-1 py-0.5"
                   title="Update the 3D model to reflect this week's predicted state"
                 >

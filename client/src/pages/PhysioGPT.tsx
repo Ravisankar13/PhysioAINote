@@ -3980,6 +3980,23 @@ ${ddxList}`;
         description: pm.description,
       }));
 
+      const scarTissueIds: string[] = [];
+      for (const scar of scarMarkers) {
+        try {
+          const impact = getScarImpact(scar);
+          for (const ac of impact.affectedChains) {
+            const cid = (ac.chain as { id?: string }).id;
+            if (cid) scarTissueIds.push(cid.toLowerCase());
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      for (const ad of adhesionBands) {
+        if (ad.depth === 'deep') scarTissueIds.push('dfl');
+        scarTissueIds.push('sfl');
+      }
+
       const results = aggregateTissueIntelligence({
         aiCompromisedTissues: compromisedTissues,
         slingTissueRisks,
@@ -3987,6 +4004,7 @@ ${ddxList}`;
         muscleOverrides: compensatedOverrides as unknown as Record<string, { pathology?: string; inhibition?: number; isManual?: boolean }>,
         painMarkers: painMarkersInput,
         chainIntegrityScores: chainScores,
+        scarTissueIds: scarTissueIds.length > 0 ? Array.from(new Set(scarTissueIds)) : undefined,
         postureDeviations,
       });
       for (const r of results) {
@@ -3996,7 +4014,30 @@ ${ddxList}`;
       console.warn('[TissueIntelligence] aggregation failed', err);
     }
     return map;
-  }, [compromisedTissues, slingTissueRisks, hudForceAnalysis, chainIntegrityScores, modelConfig, painMarkers, compensatedOverrides]);
+  }, [compromisedTissues, slingTissueRisks, hudForceAnalysis, chainIntegrityScores, modelConfig, painMarkers, compensatedOverrides, scarMarkers, adhesionBands]);
+
+  const tissueOverloadHighlights = useMemo(() => {
+    const out: Array<{ boneName: string; color: number; intensity: number; glowSize?: number }> = [];
+    const seen = new Set<string>();
+    for (const intel of Array.from(tissueIntelligenceMap.values())) {
+      const overload = intel.capacityDemand?.overloadRatio ?? 0;
+      const sev = intel.severity ?? 0;
+      if (overload < 0.6 && sev < 0.45) continue;
+      const stress = Math.max(overload, sev);
+      let color = 0x84cc16;
+      if (stress >= 1.0) color = 0xef4444;
+      else if (stress >= 0.8) color = 0xf97316;
+      else if (stress >= 0.6) color = 0xeab308;
+      const intensity = 0.35 + Math.min(0.55, stress * 0.55);
+      const glowSize = 1.05 + Math.min(0.6, stress * 0.5);
+      for (const bone of intel.bones || []) {
+        if (seen.has(bone)) continue;
+        seen.add(bone);
+        out.push({ boneName: bone, color, intensity, glowSize });
+      }
+    }
+    return out;
+  }, [tissueIntelligenceMap]);
 
   const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
   useEffect(() => {
@@ -5238,12 +5279,13 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 ? [
+              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || tissueOverloadHighlights.length > 0 ? [
                 ...(chainHighlightBones || []),
                 ...muscleOverrideHighlights,
                 ...influenceHighlights,
                 ...visualizationBoneHighlights,
                 ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
+                ...tissueOverloadHighlights,
               ] : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}

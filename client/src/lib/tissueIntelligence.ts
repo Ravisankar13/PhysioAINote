@@ -518,14 +518,23 @@ export function aggregateTissueIntelligence(input: AggregatorInput): TissueIntel
         const e = getOrCreate(acc, k);
         e.severityContributions.push(sev);
         if (inhibition > 0) e.inhibitionContributions.push(inhibition);
-        e.evidence.push({
-          source: 'muscle_pathology',
-          weight: 0.7,
-          contribution: sev,
-          note: pathology
-            ? `Driving muscle has ${pathology.replace(/_/g, ' ')}`
-            : `Driving muscle inhibited ${inhibition}%`,
-        });
+        if (pathology) {
+          e.evidence.push({
+            source: 'muscle_pathology',
+            weight: 0.7,
+            contribution: sev,
+            note: `Driving muscle has ${pathology.replace(/_/g, ' ')}`,
+          });
+        }
+        if (inhibition >= 25) {
+          const neuralWeight = clamp(0.55 + (inhibition - 25) / 200, 0.55, 0.85);
+          e.evidence.push({
+            source: 'neural_inhibition',
+            weight: neuralWeight,
+            contribution: clamp(inhibition / 100, 0, 0.85),
+            note: `Driving muscle neurally inhibited ${inhibition}% — reduced motor drive, capacity drop`,
+          });
+        }
       }
     }
   }

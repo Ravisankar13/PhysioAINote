@@ -3951,6 +3951,51 @@ export default function PureThreeGLBViewer({
     if (!sceneRef.current) return;
     const { scene } = sceneRef.current;
 
+    const applyPainMarkerSeverity = (
+      meshes: { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] },
+      marker: PainMarker,
+      markerType: string,
+    ) => {
+      const sevRaw = typeof marker.severity === 'number' ? marker.severity : 5;
+      const sev = Math.max(0, Math.min(10, sevRaw));
+      const ghost = sev < 0.5;
+      const s = ghost ? 0.4 : 0.4 + (sev / 10) * 0.8;
+      const o = ghost ? 0.07 : 0.5 + (sev / 10) * 0.5;
+
+      meshes.inner.scale.setScalar(s);
+      const innerMat = meshes.inner.material as THREE.MeshBasicMaterial;
+      const innerBase = (innerMat.userData.baseOpacity as number | undefined) ?? 0.7;
+      innerMat.opacity = innerBase * o;
+      innerMat.transparent = true;
+
+      if (markerType === 'area' && marker.radius) {
+        meshes.outer.scale.setScalar((marker.radius / 0.1) * s);
+      } else {
+        meshes.outer.scale.setScalar(s);
+      }
+      const outerMat = meshes.outer.material as THREE.MeshBasicMaterial;
+      const outerBase = (outerMat.userData.baseOpacity as number | undefined) ?? (markerType === 'area' ? 0.25 : 0.2);
+      outerMat.opacity = outerBase * o;
+      outerMat.transparent = true;
+
+      if (meshes.extra) {
+        for (const obj of meshes.extra) {
+          if (obj instanceof THREE.Mesh) {
+            obj.scale.setScalar(s);
+            const m = obj.material as THREE.MeshBasicMaterial;
+            const base = (m.userData.baseOpacity as number | undefined) ?? m.opacity;
+            m.opacity = base * o;
+            m.transparent = true;
+          } else if (obj instanceof THREE.Line) {
+            const m = obj.material as THREE.LineBasicMaterial;
+            const base = (m.userData.baseOpacity as number | undefined) ?? m.opacity;
+            m.opacity = base * o;
+            m.transparent = true;
+          }
+        }
+      }
+    };
+
     const existingIds = new Set(painMarkers.map(m => m.id));
     painMarkerMeshesRef.current.forEach((meshes, id) => {
       if (!existingIds.has(id)) {
@@ -4002,11 +4047,6 @@ export default function PureThreeGLBViewer({
         const meshes = painMarkerMeshesRef.current.get(marker.id)!;
         meshes.inner.position.copy(pos);
         meshes.outer.position.copy(pos);
-
-        if (markerType === 'area' && marker.radius) {
-          const r = marker.radius;
-          meshes.outer.scale.set(r / 0.1, r / 0.1, r / 0.1);
-        }
 
         if (markerType === 'referred' && marker.referralTarget && meshes.extra && meshes.extra.length >= 3) {
           const tp = new THREE.Vector3(marker.referralTarget.x, marker.referralTarget.y, marker.referralTarget.z);
@@ -4063,6 +4103,7 @@ export default function PureThreeGLBViewer({
               const pp = marker.paintPoints[i * 2];
               const dotGeo = new THREE.SphereGeometry(0.025, 6, 4);
               const dotMat = new THREE.MeshBasicMaterial({ color: clr, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+              dotMat.userData.baseOpacity = 0.4;
               const dotMesh = new THREE.Mesh(dotGeo, dotMat);
               dotMesh.position.set(pp.x, pp.y, pp.z);
               dotMesh.renderOrder = 1000;
@@ -4073,6 +4114,8 @@ export default function PureThreeGLBViewer({
             }
           }
         }
+
+        applyPainMarkerSeverity(meshes, marker, markerType);
         continue;
       }
 
@@ -4086,47 +4129,46 @@ export default function PureThreeGLBViewer({
       const symptomColor = marker.symptomType ? SYMPTOM_TYPES[marker.symptomType]?.color : null;
       const color = symptomColor || MARKER_TYPE_COLORS[markerType] || MARKER_TYPE_COLORS.point;
 
-      const sevRaw = typeof marker.severity === 'number' ? marker.severity : 5;
-      const sevClamped = Math.max(0, Math.min(10, sevRaw));
-      const isGhost = sevClamped < 0.5;
-      const sevScale = isGhost ? 0.4 : 0.4 + (sevClamped / 10) * 0.8;
-      const opacityMult = isGhost ? 0.07 : 0.5 + (sevClamped / 10) * 0.5;
-
-      const innerGeo = new THREE.SphereGeometry(0.06 * sevScale, 16, 12);
+      const innerGeo = new THREE.SphereGeometry(0.06, 16, 12);
       const innerMat = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: 0.7 * opacityMult,
+        opacity: 0.7,
         depthWrite: false,
         depthTest: true,
         side: THREE.DoubleSide,
       });
+      innerMat.userData.baseOpacity = 0.7;
       const innerMesh = new THREE.Mesh(innerGeo, innerMat);
       innerMesh.position.copy(pos);
       innerMesh.renderOrder = 1001;
       innerMesh.userData.isPainMarker = true;
       innerMesh.userData.markerId = marker.id;
+      innerMesh.userData.role = 'inner';
 
       let outerGeo: THREE.BufferGeometry;
       if (markerType === 'area') {
-        const r = (marker.radius || 0.15) * sevScale;
+        const r = marker.radius || 0.15;
         outerGeo = new THREE.SphereGeometry(r, 20, 14);
       } else {
-        outerGeo = new THREE.SphereGeometry(0.1 * sevScale, 12, 8);
+        outerGeo = new THREE.SphereGeometry(0.1, 12, 8);
       }
       const outerMat = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: (markerType === 'area' ? 0.25 : 0.2) * opacityMult,
+        opacity: markerType === 'area' ? 0.25 : 0.2,
         depthWrite: false,
         depthTest: true,
         side: THREE.DoubleSide,
       });
+      outerMat.userData.baseOpacity = markerType === 'area' ? 0.25 : 0.2;
       const outerMesh = new THREE.Mesh(outerGeo, outerMat);
       outerMesh.position.copy(pos);
       outerMesh.renderOrder = 1000;
       outerMesh.userData.isPainMarker = true;
       outerMesh.userData.markerId = marker.id;
+      outerMesh.userData.role = 'outer';
+      outerMesh.userData.markerKind = markerType;
 
       scene.add(innerMesh);
       scene.add(outerMesh);
@@ -4136,16 +4178,18 @@ export default function PureThreeGLBViewer({
       if (markerType === 'referred' && marker.referralTarget) {
         const tp = new THREE.Vector3(marker.referralTarget.x, marker.referralTarget.y, marker.referralTarget.z);
 
-        const tInnerGeo = new THREE.SphereGeometry(0.05 * sevScale, 12, 8);
-        const tInnerMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff, transparent: true, opacity: 0.6 * opacityMult, depthWrite: false, side: THREE.DoubleSide });
+        const tInnerGeo = new THREE.SphereGeometry(0.05, 12, 8);
+        const tInnerMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
+        tInnerMat.userData.baseOpacity = 0.6;
         const tInnerMesh = new THREE.Mesh(tInnerGeo, tInnerMat);
         tInnerMesh.position.copy(tp);
         tInnerMesh.renderOrder = 1001;
         tInnerMesh.userData.isPainMarker = true;
         tInnerMesh.userData.markerId = marker.id;
 
-        const tOuterGeo = new THREE.SphereGeometry(0.08 * sevScale, 10, 6);
-        const tOuterMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff, transparent: true, opacity: 0.15 * opacityMult, depthWrite: false, side: THREE.DoubleSide });
+        const tOuterGeo = new THREE.SphereGeometry(0.08, 10, 6);
+        const tOuterMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff, transparent: true, opacity: 0.15, depthWrite: false, side: THREE.DoubleSide });
+        tOuterMat.userData.baseOpacity = 0.15;
         const tOuterMesh = new THREE.Mesh(tOuterGeo, tOuterMat);
         tOuterMesh.position.copy(tp);
         tOuterMesh.renderOrder = 1000;
@@ -4153,7 +4197,8 @@ export default function PureThreeGLBViewer({
         tOuterMesh.userData.markerId = marker.id;
 
         const lineGeo = new THREE.BufferGeometry().setFromPoints([pos, tp]);
-        const lineMat = new THREE.LineDashedMaterial({ color: 0xcc66ff, dashSize: 0.04, gapSize: 0.02, transparent: true, opacity: 0.7 * opacityMult, depthTest: true, depthWrite: false });
+        const lineMat = new THREE.LineDashedMaterial({ color: 0xcc66ff, dashSize: 0.04, gapSize: 0.02, transparent: true, opacity: 0.7, depthTest: true, depthWrite: false });
+        lineMat.userData.baseOpacity = 0.7;
         const line = new THREE.Line(lineGeo, lineMat);
         line.computeLineDistances();
         line.renderOrder = 999;
@@ -4167,15 +4212,17 @@ export default function PureThreeGLBViewer({
       if (markerType === 'line' && marker.linePoints && marker.linePoints.length > 0) {
         const pts = [pos, ...marker.linePoints.map(p => new THREE.Vector3(p.x, p.y, p.z))];
         const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-        const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 * opacityMult, depthTest: true, depthWrite: false, linewidth: 2 });
+        const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8, depthTest: true, depthWrite: false, linewidth: 2 });
+        lineMat.userData.baseOpacity = 0.8;
         const line = new THREE.Line(lineGeo, lineMat);
         line.renderOrder = 999;
         scene.add(line);
         extraObjects.push(line);
 
         for (const lp of marker.linePoints) {
-          const dotGeo = new THREE.SphereGeometry(0.03 * sevScale, 8, 6);
-          const dotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5 * opacityMult, depthWrite: false, side: THREE.DoubleSide });
+          const dotGeo = new THREE.SphereGeometry(0.03, 8, 6);
+          const dotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+          dotMat.userData.baseOpacity = 0.5;
           const dotMesh = new THREE.Mesh(dotGeo, dotMat);
           dotMesh.position.set(lp.x, lp.y, lp.z);
           dotMesh.renderOrder = 1001;
@@ -4189,7 +4236,8 @@ export default function PureThreeGLBViewer({
       if (markerType === 'paint' && marker.paintPoints && marker.paintPoints.length > 0) {
         const pts = [pos, ...marker.paintPoints.map(p => new THREE.Vector3(p.x, p.y, p.z))];
         const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-        const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 * opacityMult, depthTest: true, depthWrite: false, linewidth: 3 });
+        const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false, linewidth: 3 });
+        lineMat.userData.baseOpacity = 0.85;
         const line = new THREE.Line(lineGeo, lineMat);
         line.renderOrder = 999;
         scene.add(line);
@@ -4197,8 +4245,9 @@ export default function PureThreeGLBViewer({
 
         const tubePts = pts.filter((_, i) => i % 2 === 0 || i === pts.length - 1);
         for (const tp of tubePts) {
-          const dotGeo = new THREE.SphereGeometry(0.025 * sevScale, 6, 4);
-          const dotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4 * opacityMult, depthWrite: false, side: THREE.DoubleSide });
+          const dotGeo = new THREE.SphereGeometry(0.025, 6, 4);
+          const dotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+          dotMat.userData.baseOpacity = 0.4;
           const dotMesh = new THREE.Mesh(dotGeo, dotMat);
           dotMesh.position.copy(tp);
           dotMesh.renderOrder = 1000;
@@ -4209,7 +4258,9 @@ export default function PureThreeGLBViewer({
         }
       }
 
-      painMarkerMeshesRef.current.set(marker.id, { inner: innerMesh, outer: outerMesh, extra: extraObjects.length > 0 ? extraObjects : undefined });
+      const newMeshes = { inner: innerMesh, outer: outerMesh, extra: extraObjects.length > 0 ? extraObjects : undefined };
+      painMarkerMeshesRef.current.set(marker.id, newMeshes);
+      applyPainMarkerSeverity(newMeshes, marker, markerType);
     }
   }, [painMarkers]);
 

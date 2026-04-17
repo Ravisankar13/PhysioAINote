@@ -661,7 +661,12 @@ export default function RecoverySimulatorDashboard({
       r.end = i;
       r.reached = true;
     });
-    const currentStageIdx = stageIndexForHealingPhase(archetype, stateAtScrub.healingPhase);
+    // The "NOW" indicator on each phase card must follow the same
+    // progression-mode-aware rule as the chart's current-stage marker
+    // (criterion-gated: highest stage whose entry criteria are met;
+    // hybrid: min of phase and criterion indices; time-gated: phase).
+    // Using scrubbedStageIdx keeps both UIs in lockstep.
+    const currentStageIdx = scrubbedStageIdx;
     const attribIndex = new Map(activeProjection.attribution.map(a => [a.treatmentId, a.contributionPercent]));
 
     const fmtDim = (v: number, d: Dim) => `${Math.round(v * 10) / 10}${dimUnit[d]}`;
@@ -781,7 +786,7 @@ export default function RecoverySimulatorDashboard({
       r.treatmentSource = 'stage_recommended';
     });
     return ranges;
-  }, [archetype, activeProjection, activeBranch.interventions, activeBranch.flareEvents, activeBranch.loadAdjustments, treatmentLookup, conditionContext, tissueProfile, conditionProfile, goalProfile, input.totalWeeks, stateAtScrub]);
+  }, [archetype, activeProjection, activeBranch.interventions, activeBranch.flareEvents, activeBranch.loadAdjustments, treatmentLookup, conditionContext, tissueProfile, conditionProfile, goalProfile, input.totalWeeks, stateAtScrub, scrubbedStageIdx]);
 
   // Compute scenario A vs B comparison summary lines from end-of-period deltas
   const scenarioComparison = useMemo(() => {
@@ -1041,7 +1046,7 @@ export default function RecoverySimulatorDashboard({
                   </div>
                 )}
                 <div className="absolute top-1.5 left-1.5 bg-gray-900/70 border border-cyan-700/40 rounded px-1.5 py-0.5 text-[9px] text-cyan-200 pointer-events-none z-10">
-                  Live · markers ×{painFactor.toFixed(2)} · wk {scrubWeek}
+                  Live · markers ×{painFactor.toFixed(2)} · {unitLabelTitle.toLowerCase()} {scrubWeek}
                 </div>
               </div>
             )}
@@ -1261,17 +1266,29 @@ export default function RecoverySimulatorDashboard({
                       <button
                         onClick={() => {
                           // Pick the most useful starting week for the
-                          // intervention editor: the simulation's actual
-                          // start of this stage if reached; otherwise the
-                          // projected entry week (criterion / hybrid) so
-                          // the editor opens at the moment the patient
-                          // is predicted to unlock the stage; otherwise
-                          // the expected window from the condition profile.
-                          const target = r.reached
-                            ? r.start
-                            : (usesCriteriaCard && r.projectedEntryWeek !== null
-                                ? r.projectedEntryWeek
-                                : r.expectedStart);
+                          // intervention editor.
+                          //
+                          // For criterion-gated and hybrid stages, the
+                          // earliest moment the patient actually unlocks
+                          // the stage (`projectedEntryWeek`) is more
+                          // meaningful than the engine's biological-phase
+                          // mapping — `r.start` here can reflect when the
+                          // healing-phase index advanced even though the
+                          // milestone gates aren't yet met. Prefer the
+                          // criterion-met week, then the simulation start
+                          // (if reached), then the soft expected window.
+                          //
+                          // Time-gated stages keep the legacy behavior:
+                          // open at the simulation start once reached,
+                          // otherwise at the expected start week.
+                          let target: number;
+                          if (usesCriteriaCard) {
+                            target = r.projectedEntryWeek !== null
+                              ? r.projectedEntryWeek
+                              : (r.reached ? r.start : r.expectedStart);
+                          } else {
+                            target = r.reached ? r.start : r.expectedStart;
+                          }
                           setScrubWeek(Math.max(0, target));
                           setShowInterventionEditor(true);
                         }}

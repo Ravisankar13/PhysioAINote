@@ -3980,13 +3980,27 @@ ${ddxList}`;
         description: pm.description,
       }));
 
+      const mapChainToFasciaIds = (chainId: string): string[] => {
+        const c = chainId.toLowerCase();
+        if (c.startsWith('superficial_back')) return ['sbl'];
+        if (c.startsWith('superficial_front')) return ['sfl'];
+        if (c.startsWith('deep_front')) return ['dfl'];
+        if (c.startsWith('lateral_line_l')) return ['lateral_l'];
+        if (c.startsWith('lateral_line_r')) return ['lateral_r'];
+        if (c.startsWith('lateral_line')) return ['lateral_l', 'lateral_r'];
+        if (c.startsWith('spiral')) return ['spiral'];
+        if (c.startsWith('arm_line_l')) return ['front_arm_l'];
+        if (c.startsWith('arm_line_r')) return ['front_arm_r'];
+        if (c.startsWith('arm_line')) return ['front_arm_l', 'front_arm_r'];
+        return [];
+      };
       const scarTissueIds: string[] = [];
       for (const scar of scarMarkers) {
         try {
           const impact = getScarImpact(scar);
           for (const ac of impact.affectedChains) {
             const cid = (ac.chain as { id?: string }).id;
-            if (cid) scarTissueIds.push(cid.toLowerCase());
+            if (cid) scarTissueIds.push(...mapChainToFasciaIds(cid));
           }
         } catch {
           /* ignore */

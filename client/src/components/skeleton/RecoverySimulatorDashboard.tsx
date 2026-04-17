@@ -55,8 +55,12 @@ import {
   type RecoveryArchetypeId,
   stageIndexForHealingPhase,
   stageFitForTreatment,
+  evaluateStageCriteria,
+  earliestStageEntryWeek,
+  highestStageMetByCriteria,
   type RecoveryStage,
   type StageGoalDimension,
+  type StageCriteriaEvaluation,
 } from "@/lib/recoveryArchetypes";
 
 interface Props {
@@ -134,6 +138,7 @@ function MiniChart({
   height = 220,
   showGrid = true,
   showWeekLabel = true,
+  axisUnit = 'WEEK',
 }: {
   series: { label: string; color: string; values: number[]; dash?: string }[];
   scrubWeek?: number;
@@ -142,6 +147,10 @@ function MiniChart({
   height?: number;
   showGrid?: boolean;
   showWeekLabel?: boolean;
+  /** Label unit shown on x-axis ticks and the scrub cursor. Set to
+   *  'CHECKPOINT' for purely criterion-gated archetypes; default 'WEEK'
+   *  preserves the legacy display for time-gated and hybrid archetypes. */
+  axisUnit?: 'WEEK' | 'CHECKPOINT';
 }) {
   const width = 720;
   const padding = { top: 14, right: 16, bottom: 26, left: 36 };
@@ -184,7 +193,7 @@ function MiniChart({
         );
       })}
       {showGrid && weekTicks.map((w, i) => (
-        <text key={i} x={xFor(w)} y={height - 8} textAnchor="middle" fill="#6b7280" fontSize={9}>WEEK {w}</text>
+        <text key={i} x={xFor(w)} y={height - 8} textAnchor="middle" fill="#6b7280" fontSize={9}>{axisUnit} {w}</text>
       ))}
 
       {series.map((s, i) => (
@@ -197,7 +206,7 @@ function MiniChart({
           {showWeekLabel && (
             <g transform={`translate(${xFor(scrubWeek) - 30}, ${padding.top - 12})`}>
               <rect width={60} height={16} rx={3} fill="#a855f7" />
-              <text x={30} y={11} textAnchor="middle" fill="white" fontSize={9} fontWeight="bold">WEEK {scrubWeek}</text>
+              <text x={30} y={11} textAnchor="middle" fill="white" fontSize={9} fontWeight="bold">{axisUnit} {scrubWeek}</text>
             </g>
           )}
         </g>
@@ -404,10 +413,30 @@ export default function RecoverySimulatorDashboard({
     }
     return getArchetypeForCondition(conditionContext?.conditionId, conditionContext?.conditionLabel);
   }, [conditionContext?.archetypeId, conditionContext?.conditionId, conditionContext?.conditionLabel]);
-  const scrubbedStageIdx = useMemo(
-    () => stageIndexForHealingPhase(archetype, stateAtScrub.healingPhase),
-    [archetype, stateAtScrub.healingPhase],
+  /** Current-stage detection. Time-gated archetypes use the engine's
+   *  HealingPhase mapping (legacy behaviour). Criterion-gated archetypes
+   *  use the highest stage whose entry criteria are all met at scrub.
+   *  Hybrid archetypes take the *minimum* of those two so a patient who
+   *  has had enough biological time but hasn't earned the gates is still
+   *  shown on the earlier stage (and vice-versa). */
+  const scrubbedStageIdx = useMemo(() => {
+    const phaseIdx = stageIndexForHealingPhase(archetype, stateAtScrub.healingPhase);
+    if (archetype.progressionMode === 'time-gated') return phaseIdx;
+    const critIdx = highestStageMetByCriteria(archetype, stateAtScrub);
+    if (archetype.progressionMode === 'criterion-gated') return critIdx;
+    return Math.min(phaseIdx, critIdx);
+  }, [archetype, stateAtScrub]);
+
+  /** Display unit shown on chart axis and current-week badges. Purely
+   *  criterion-gated archetypes show "Checkpoint" — the underlying
+   *  index is still the engine's week count, but the unit communicates
+   *  that progression is gated on milestones, not the calendar. Hybrid
+   *  and time-gated archetypes keep the legacy "Week" copy. */
+  const axisUnit: 'WEEK' | 'CHECKPOINT' = useMemo(
+    () => (archetype.progressionMode === 'criterion-gated' ? 'CHECKPOINT' : 'WEEK'),
+    [archetype.progressionMode],
   );
+  const unitLabelTitle = axisUnit === 'CHECKPOINT' ? 'Checkpoint' : 'Week';
 
   // Tissue Stress (inverse of loadTolerance — high stress when tolerance is low)
   const tissueStress = useMemo(() => {
@@ -471,6 +500,15 @@ export default function RecoverySimulatorDashboard({
     patientFactor: string | null;                      // phase-specific badge
     treatments: string[];
     treatmentSource: 'scheduled' | 'attribution' | 'stage_recommended';
+    /** Entry-criterion evaluation at the scrub position. Populated for
+     *  criterion-gated and hybrid archetypes only; null for time-gated
+     *  archetypes (which keep the legacy week-range header). */
+    criteriaAtScrub: StageCriteriaEvaluation | null;
+    /** Earliest projection week at which this stage's entry criteria are
+     *  fully met. null when the projection never satisfies them. Used
+     *  for the "Modify Phase" entry-week hint and the projected-entry
+     *  copy on locked cards. */
+    projectedEntryWeek: number | null;
   };
   const phaseRanges = useMemo<PhaseInfo[]>(() => {
     const stages = archetype.stages;
@@ -589,6 +627,7 @@ export default function RecoverySimulatorDashboard({
       return { value: milestone, text: `${compare}${r}${dimUnit[d]}` };
     };
 
+    const usesCriteria = archetype.progressionMode !== 'time-gated';
     const ranges: PhaseInfo[] = stages.map((stage, i) => {
       const stageDim = stageDimFor(stage);
       return {
@@ -608,6 +647,8 @@ export default function RecoverySimulatorDashboard({
         flareNotes: [], loadNotes: [],
         patientFactor: null,
         treatments: [], treatmentSource: 'stage_recommended',
+        criteriaAtScrub: usesCriteria ? evaluateStageCriteria(stage, stateAtScrub) : null,
+        projectedEntryWeek: usesCriteria ? earliestStageEntryWeek(stage, states) : null,
       };
     });
 
@@ -740,7 +781,7 @@ export default function RecoverySimulatorDashboard({
       r.treatmentSource = 'stage_recommended';
     });
     return ranges;
-  }, [archetype, activeProjection, activeBranch.interventions, activeBranch.flareEvents, activeBranch.loadAdjustments, treatmentLookup, conditionContext, tissueProfile, conditionProfile, goalProfile, input.totalWeeks, stateAtScrub.healingPhase]);
+  }, [archetype, activeProjection, activeBranch.interventions, activeBranch.flareEvents, activeBranch.loadAdjustments, treatmentLookup, conditionContext, tissueProfile, conditionProfile, goalProfile, input.totalWeeks, stateAtScrub]);
 
   // Compute scenario A vs B comparison summary lines from end-of-period deltas
   const scenarioComparison = useMemo(() => {
@@ -892,7 +933,7 @@ export default function RecoverySimulatorDashboard({
           <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Current State</span>
-              <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[9px]">Today · Week {scrubWeek}</Badge>
+              <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[9px]">Today · {unitLabelTitle} {scrubWeek}</Badge>
             </div>
             <div className={`rounded p-2 border ${alertCard.color} flex items-start gap-2`}>
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
@@ -976,7 +1017,7 @@ export default function RecoverySimulatorDashboard({
                 <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1">Recovery Progression</div>
                 <div className="text-[9px] text-gray-500 mb-1">Drag timeline or modify treatments to see changes</div>
                 <div className="flex-1 min-h-[180px]">
-                  <MiniChart series={mainSeries} scrubWeek={scrubWeek} totalWeeks={input.totalWeeks} onScrub={setScrubWeek} height={240} />
+                  <MiniChart series={mainSeries} scrubWeek={scrubWeek} totalWeeks={input.totalWeeks} onScrub={setScrubWeek} height={240} axisUnit={axisUnit} />
                 </div>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {mainSeries.map(s => (
@@ -1029,7 +1070,7 @@ export default function RecoverySimulatorDashboard({
               <span className="font-semibold">TREATMENT TIMELINE</span>
               <span>· Click any card to edit or drag to reschedule</span>
               <span className="ml-auto flex items-center gap-1">
-                <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[9px]">Week {scrubWeek}</Badge>
+                <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[9px]">{unitLabelTitle} {scrubWeek}</Badge>
                 <button
                   onClick={() => setAnimate(!animate)}
                   className="h-5 w-5 rounded-full bg-violet-600 hover:bg-violet-500 flex items-center justify-center text-white"
@@ -1071,26 +1112,87 @@ export default function RecoverySimulatorDashboard({
                   const sourceLabel = r.treatmentSource === 'scheduled' ? 'Scheduled'
                     : r.treatmentSource === 'attribution' ? 'Top driver'
                     : 'Recommended';
+                  // Criterion-gated and hybrid archetypes drive their card
+                  // headers off entry-criteria evaluation rather than the
+                  // engine's week ranges. Time-gated archetypes keep the
+                  // legacy "Week X–Y" / "Expected wk X–Y" / "NOT YET"
+                  // header (acute, frozen shoulder, bone, post-op,
+                  // radicular, disc).
+                  const usesCriteriaCard = r.criteriaAtScrub !== null;
+                  const crit = r.criteriaAtScrub;
+                  const critUnlocked = crit ? crit.allMet : true;
+                  const isHybrid = archetype.progressionMode === 'hybrid';
+                  // For criterion / hybrid: locked = entry criteria not all
+                  // met yet at the scrub position. For time-gated: locked =
+                  // engine hasn't reached this stage. NOW remains the
+                  // current-stage indicator from scrubbedStageIdx.
+                  const locked = usesCriteriaCard ? !critUnlocked : !r.reached;
                   return (
                     <div
                       key={p.id}
-                      className={`rounded-lg p-2 border ${p.ring} ${p.bg} ${!r.reached ? 'opacity-80' : ''} flex flex-col gap-1`}
+                      className={`rounded-lg p-2 border ${p.ring} ${p.bg} ${locked ? 'opacity-80' : ''} flex flex-col gap-1`}
                       style={r.isCurrent ? { boxShadow: `0 0 0 2px ${p.color}88` } : undefined}
                       data-testid={`phase-card-${p.id}`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="text-[9px] font-semibold uppercase" style={{ color: p.color }}>
-                          {r.reached
-                            ? `Week ${r.start}–${r.end}`
-                            : `Expected wk ${r.expectedStart}–${r.expectedEnd}`}
+                          {usesCriteriaCard
+                            ? (crit && crit.totalCount > 0
+                                ? (critUnlocked
+                                    ? `Unlocked · ${crit.metCount}/${crit.totalCount} met`
+                                    : `Locked · ${crit.metCount}/${crit.totalCount} met`)
+                                : 'Starting stage')
+                            : (r.reached
+                                ? `Week ${r.start}–${r.end}`
+                                : `Expected wk ${r.expectedStart}–${r.expectedEnd}`)}
                         </div>
                         {r.isCurrent ? (
                           <Badge className="bg-gray-900/70 border-gray-700/60 text-[8px] py-0 px-1.5" style={{ color: p.color }}>NOW</Badge>
-                        ) : !r.reached ? (
-                          <Badge className="bg-gray-800/70 text-gray-400 border-gray-700/50 text-[8px] py-0 px-1.5">NOT YET</Badge>
+                        ) : locked ? (
+                          <Badge className="bg-gray-800/70 text-gray-400 border-gray-700/50 text-[8px] py-0 px-1.5">
+                            {usesCriteriaCard ? 'LOCKED' : 'NOT YET'}
+                          </Badge>
                         ) : null}
                       </div>
                       <div className="text-[12px] font-bold text-white leading-tight">{p.name}</div>
+
+                      {/* Hybrid archetypes show the soft week corridor as a
+                          subtitle so clinicians see "earliest by week N"
+                          alongside the milestone gates. */}
+                      {usesCriteriaCard && isHybrid && (
+                        <div className="text-[9px] text-gray-500" data-testid={`phase-corridor-${p.id}`}>
+                          Soft corridor wk {r.expectedStart}–{r.expectedEnd}
+                        </div>
+                      )}
+
+                      {/* Entry-criteria checklist with met/unmet ticks. Only
+                          rendered for criterion/hybrid stages that actually
+                          declare entry criteria (the first stage of each
+                          archetype has none and is reached by default). */}
+                      {usesCriteriaCard && crit && crit.totalCount > 0 && (
+                        <ul className="flex flex-col gap-0.5 mt-0.5" data-testid={`phase-criteria-${p.id}`}>
+                          {crit.results.map((res, i) => (
+                            <li
+                              key={i}
+                              className={`text-[10px] leading-snug flex items-start gap-1 ${res.met ? 'text-emerald-200' : 'text-gray-300'}`}
+                              data-testid={`phase-criterion-${p.id}-${i}`}
+                            >
+                              {res.met
+                                ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0 mt-0.5 text-emerald-400" />
+                                : <X className="h-2.5 w-2.5 shrink-0 mt-0.5 text-gray-500" />}
+                              <span className="truncate">{res.criterion.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {/* Projected entry hint when the stage is locked but
+                          the simulation predicts the gates will be met. */}
+                      {usesCriteriaCard && locked && r.projectedEntryWeek !== null && (
+                        <div className="text-[9px] text-violet-300" data-testid={`phase-projected-entry-${p.id}`}>
+                          Projected entry · {unitLabelTitle.toLowerCase()} {r.projectedEntryWeek}
+                        </div>
+                      )}
 
                       {/* Goal-Driven Recovery Engine target for this phase */}
                       <div className="text-[10px] leading-snug" data-testid={`phase-goal-${p.id}`}>
@@ -1157,7 +1259,22 @@ export default function RecoverySimulatorDashboard({
                       </div>
 
                       <button
-                        onClick={() => { setScrubWeek(Math.max(0, r.start === -1 ? r.expectedStart : r.start)); setShowInterventionEditor(true); }}
+                        onClick={() => {
+                          // Pick the most useful starting week for the
+                          // intervention editor: the simulation's actual
+                          // start of this stage if reached; otherwise the
+                          // projected entry week (criterion / hybrid) so
+                          // the editor opens at the moment the patient
+                          // is predicted to unlock the stage; otherwise
+                          // the expected window from the condition profile.
+                          const target = r.reached
+                            ? r.start
+                            : (usesCriteriaCard && r.projectedEntryWeek !== null
+                                ? r.projectedEntryWeek
+                                : r.expectedStart);
+                          setScrubWeek(Math.max(0, target));
+                          setShowInterventionEditor(true);
+                        }}
                         className="mt-auto w-full text-[10px] text-gray-300 hover:text-white border border-gray-700/60 hover:bg-gray-800/60 rounded py-0.5 flex items-center justify-center gap-1"
                         data-testid={`modify-phase-${p.id}`}
                       >

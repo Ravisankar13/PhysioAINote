@@ -4016,6 +4016,32 @@ ${ddxList}`;
     return map;
   }, [compromisedTissues, slingTissueRisks, hudForceAnalysis, chainIntegrityScores, modelConfig, painMarkers, compensatedOverrides, scarMarkers, adhesionBands]);
 
+  const hubCompromisedTissues = useMemo(() => {
+    const map = new Map<string, CompromisedTissue>();
+    for (const ct of mergedCompromisedTissues) {
+      map.set(`${ct.tissue_type}:${ct.tissue_id}`, ct);
+    }
+    for (const intel of Array.from(tissueIntelligenceMap.values())) {
+      const key = `${intel.tissueType}:${intel.tissueId}`;
+      const existing = map.get(key);
+      const sev = (intel.severity ?? 0) * 10;
+      const conf: 'confirmed' | 'predicted' = intel.confidence === 'high' ? 'confirmed' : 'predicted';
+      const rationale = intel.rationale || (intel.evidence[0]?.note ?? 'Multi-engine detection');
+      if (!existing) {
+        map.set(key, {
+          tissue_type: intel.tissueType as CompromisedTissue['tissue_type'],
+          tissue_id: intel.tissueId,
+          severity: sev,
+          rationale,
+          confidence: conf,
+        });
+      } else if (sev > existing.severity) {
+        map.set(key, { ...existing, severity: sev });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.severity - a.severity);
+  }, [mergedCompromisedTissues, tissueIntelligenceMap]);
+
   const [causalChainTissueId, setCausalChainTissueId] = useState<string | null>(null);
   const handleTissueCausalChainSelect = useCallback((tissueId: string) => {
     setCausalChainTissueId(prev => (prev === tissueId ? null : tissueId));
@@ -8805,7 +8831,7 @@ ${ddxList}`;
                   <TissueViewSelector
                     activeMode={tissueViewMode}
                     onModeChange={(mode) => { setTissueViewMode(mode); if (mode) tissueViewManualRef.current = true; }}
-                    compromisedTissues={mergedCompromisedTissues}
+                    compromisedTissues={hubCompromisedTissues}
                     slingTissueRisks={slingTissueRisks}
                     selectedEntryId={selectedTissueEntry}
                     onEntrySelect={(id) => { setSelectedTissueEntry(id); setTissueDisambiguationEntries([]); }}

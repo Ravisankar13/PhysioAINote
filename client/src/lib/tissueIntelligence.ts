@@ -510,8 +510,12 @@ export function aggregateTissueIntelligence(input: AggregatorInput): TissueIntel
       }
       for (const t of tendonCandidates) {
         const side = t.id.endsWith('_l') ? 'l' : t.id.endsWith('_r') ? 'r' : null;
-        if (side && !muscleId.toLowerCase().includes(side)) {
-          if (!muscleId.toLowerCase().includes(`_${side}`) && !muscleId.toLowerCase().startsWith(`${side}_`)) continue;
+        if (side) {
+          const mid = muscleId.toLowerCase();
+          const sideTokens = side === 'l'
+            ? [/(^|_)l(_|$)/, /(^|_)left(_|$)/]
+            : [/(^|_)r(_|$)/, /(^|_)right(_|$)/];
+          if (!sideTokens.some(rx => rx.test(mid))) continue;
         }
         const k = keyOf('tendon', t.id);
         typeOf.set(k, 'tendon');

@@ -648,6 +648,12 @@ export default function RecoverySimulatorDashboard({
         patientFactor: null,
         treatments: [], treatmentSource: 'stage_recommended',
         criteriaAtScrub: usesCriteria ? evaluateStageCriteria(stage, stateAtScrub) : null,
+        // For criterion-gated stages this is just the earliest week the
+        // entry criteria are all satisfied. For hybrid stages it must
+        // also respect the biological / time floor: a tendon won't be
+        // ready for HSR at week 1 even if symptom scores happen to be
+        // low. We patch in max(criteriaWeek, timeFloor) below once the
+        // engine's own r.start / r.expectedStart values are known.
         projectedEntryWeek: usesCriteria ? earliestStageEntryWeek(stage, states) : null,
       };
     });
@@ -667,6 +673,20 @@ export default function RecoverySimulatorDashboard({
     // hybrid: min of phase and criterion indices; time-gated: phase).
     // Using scrubbedStageIdx keeps both UIs in lockstep.
     const currentStageIdx = scrubbedStageIdx;
+
+    // Apply the hybrid time-floor to projected entry weeks. Criterion-met
+    // alone can land at week 0, but a hybrid stage can't open before its
+    // biological corridor begins — use the engine's actual r.start when
+    // the stage was reached, else fall back to the expected start week
+    // from the condition profile. Pure criterion-gated archetypes keep
+    // the criteria-only week.
+    if (archetype.progressionMode === 'hybrid') {
+      ranges.forEach(r => {
+        if (r.projectedEntryWeek === null) return;
+        const timeFloor = r.start !== -1 ? r.start : r.expectedStart;
+        r.projectedEntryWeek = Math.max(r.projectedEntryWeek, timeFloor);
+      });
+    }
     const attribIndex = new Map(activeProjection.attribution.map(a => [a.treatmentId, a.contributionPercent]));
 
     const fmtDim = (v: number, d: Dim) => `${Math.round(v * 10) / 10}${dimUnit[d]}`;
@@ -1127,11 +1147,21 @@ export default function RecoverySimulatorDashboard({
                   const crit = r.criteriaAtScrub;
                   const critUnlocked = crit ? crit.allMet : true;
                   const isHybrid = archetype.progressionMode === 'hybrid';
-                  // For criterion / hybrid: locked = entry criteria not all
-                  // met yet at the scrub position. For time-gated: locked =
-                  // engine hasn't reached this stage. NOW remains the
-                  // current-stage indicator from scrubbedStageIdx.
-                  const locked = usesCriteriaCard ? !critUnlocked : !r.reached;
+                  // Time-gate at the scrub position: the simulation has
+                  // actually reached this stage by the current week.
+                  // r.start is set to the first week the engine assigned
+                  // this stage; -1 means it hasn't been reached at all.
+                  const timeMetAtScrub = r.reached && r.start !== -1 && r.start <= scrubWeek;
+                  // Lock semantics:
+                  //   time-gated  → engine hasn't reached the stage yet
+                  //   criterion   → entry criteria not all met
+                  //   hybrid      → BOTH gates required (intersection),
+                  //                 so the stage opens only once the soft
+                  //                 biological corridor AND the milestone
+                  //                 gates are satisfied.
+                  const locked = isHybrid
+                    ? !(critUnlocked && timeMetAtScrub)
+                    : (usesCriteriaCard ? !critUnlocked : !r.reached);
                   return (
                     <div
                       key={p.id}

@@ -116,23 +116,42 @@ const TENDINOPATHY: RecoveryArchetype = {
   name: 'Tendinopathy — Load Capacity',
   progressionMode: 'hybrid',
   stages: [
-    { id: 'tend_pain',     name: 'Pain Dominance',         subtitle: 'Settle reactive tendon · isometric load below pain threshold', color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.18, goalDimension: 'pain',         treatmentTags: ['isometric', 'education', 'load management'] },
+    { id: 'tend_pain',     name: 'Pain Dominance',         subtitle: 'Settle reactive tendon · isometric load below pain threshold', color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.18, goalDimension: 'pain',         treatmentTags: ['isometric', 'education', 'load management'],
+      exitCriteria: [
+        { dimension: 'pain',         comparator: '<=', threshold: 5,  label: 'Pain ≤5/10 with daily load' },
+        { dimension: 'irritability', comparator: '<=', threshold: 50, label: 'Tendon settling (irritability ≤50)' },
+      ] },
     { id: 'tend_iso',      name: 'Isometric Loading',      subtitle: 'Build tolerance with sustained isometrics',                    color: '#06b6d4', ring: 'border-cyan-500/60',    bg: 'bg-cyan-950/40',    healingPhases: PHASE_4[1], defaultFraction: 0.27, goalDimension: 'capacity',     treatmentTags: ['isometric', 'isotonic'],
       entryCriteria: [
         { dimension: 'pain',         comparator: '<=', threshold: 5,  label: 'Pain ≤5/10 with daily load' },
         { dimension: 'irritability', comparator: '<=', threshold: 50, label: 'Tendon settling (irritability ≤50)' },
+      ],
+      exitCriteria: [
+        { dimension: 'pain',         comparator: '<=', threshold: 3,  label: 'Pain ≤3/10 on isometric load test' },
+        { dimension: 'capacity',     comparator: '>=', threshold: 50, label: 'Tendon capacity ≥50% of target' },
+        { dimension: 'irritability', comparator: '<=', threshold: 30, label: 'Low irritability (≤30)' },
       ] },
     { id: 'tend_hsr',      name: 'Heavy Slow Resistance',  subtitle: 'Slow heavy concentric/eccentric for tendon adaptation',        color: '#22c55e', ring: 'border-emerald-500/60', bg: 'bg-emerald-950/40', healingPhases: PHASE_4[2], defaultFraction: 0.32, goalDimension: 'capacity',     treatmentTags: ['heavy slow', 'eccentric', 'isotonic', 'resistance'],
       entryCriteria: [
         { dimension: 'pain',         comparator: '<=', threshold: 3,  label: 'Pain ≤3/10 on isometric load test' },
         { dimension: 'capacity',     comparator: '>=', threshold: 50, label: 'Tendon capacity ≥50% of target' },
         { dimension: 'irritability', comparator: '<=', threshold: 30, label: 'Low irritability (≤30)' },
+      ],
+      exitCriteria: [
+        { dimension: 'pain',         comparator: '<=', threshold: 2,  label: 'Pain ≤2/10 on heavy load' },
+        { dimension: 'capacity',     comparator: '>=', threshold: 70, label: 'Capacity ≥70% (HSR tolerated)' },
+        { dimension: 'reinjuryRisk', comparator: '<=', threshold: 30, label: 'Reinjury risk ≤30' },
       ] },
     { id: 'tend_storage',  name: 'Energy Storage / RTS',   subtitle: 'Plyometrics, sport drills, return to high-velocity tasks',     color: '#f59e0b', ring: 'border-amber-500/60',   bg: 'bg-amber-950/40',   healingPhases: PHASE_4[3], defaultFraction: 0.23, goalDimension: 'loadTolerance', treatmentTags: ['plyo', 'sport', 'agility', 'energy storage'],
       entryCriteria: [
         { dimension: 'pain',         comparator: '<=', threshold: 2,  label: 'Pain ≤2/10 on heavy load' },
         { dimension: 'capacity',     comparator: '>=', threshold: 70, label: 'Capacity ≥70% (HSR tolerated)' },
         { dimension: 'reinjuryRisk', comparator: '<=', threshold: 30, label: 'Reinjury risk ≤30' },
+      ],
+      exitCriteria: [
+        { dimension: 'capacity',     comparator: '>=', threshold: 90, label: 'Capacity ≥90% (sport-specific load)' },
+        { dimension: 'function',     comparator: '>=', threshold: 85, label: 'Function ≥85% on RTS battery' },
+        { dimension: 'reinjuryRisk', comparator: '<=', threshold: 20, label: 'Reinjury risk ≤20 (cleared for full RTS)' },
       ] },
   ],
 };
@@ -142,23 +161,41 @@ const DEGEN_OA: RecoveryArchetype = {
   name: 'Degenerative / OA',
   progressionMode: 'hybrid',
   stages: [
-    { id: 'oa_settle',   name: 'Symptom Settle',           subtitle: 'Education, pacing, low-impact movement, flare control',        color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.18, goalDimension: 'pain',     treatmentTags: ['education', 'aquatic', 'walking', 'gentle'] },
+    { id: 'oa_settle',   name: 'Symptom Settle',           subtitle: 'Education, pacing, low-impact movement, flare control',        color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.18, goalDimension: 'pain',     treatmentTags: ['education', 'aquatic', 'walking', 'gentle'],
+      exitCriteria: [
+        { dimension: 'pain',     comparator: '<=', threshold: 5,  label: 'Pain ≤5/10 with daily walking' },
+        { dimension: 'function', comparator: '>=', threshold: 40, label: 'Walking tolerance ≥40%' },
+      ] },
     { id: 'oa_capacity', name: 'Capacity Build',           subtitle: 'Progressive strengthening of supporting musculature',           color: '#06b6d4', ring: 'border-cyan-500/60',    bg: 'bg-cyan-950/40',    healingPhases: PHASE_4[1], defaultFraction: 0.30, goalDimension: 'capacity', treatmentTags: ['strengthening', 'resistance'],
       entryCriteria: [
         { dimension: 'pain',     comparator: '<=', threshold: 5,  label: 'Pain ≤5/10 with daily walking' },
         { dimension: 'function', comparator: '>=', threshold: 40, label: 'Walking tolerance ≥40%' },
+      ],
+      exitCriteria: [
+        { dimension: 'pain',     comparator: '<=', threshold: 4,  label: 'Pain ≤4/10 with strengthening' },
+        { dimension: 'capacity', comparator: '>=', threshold: 55, label: 'Supporting-muscle capacity ≥55%' },
+        { dimension: 'function', comparator: '>=', threshold: 60, label: 'Function ≥60% (stairs / sit-to-stand)' },
       ] },
     { id: 'oa_load',     name: 'Load Tolerance',           subtitle: 'Functional task-loading within joint envelope',                 color: '#22c55e', ring: 'border-emerald-500/60', bg: 'bg-emerald-950/40', healingPhases: PHASE_4[2], defaultFraction: 0.27, goalDimension: 'function', treatmentTags: ['functional', 'loading'],
       entryCriteria: [
         { dimension: 'pain',     comparator: '<=', threshold: 4,  label: 'Pain ≤4/10 with strengthening' },
         { dimension: 'capacity', comparator: '>=', threshold: 55, label: 'Supporting-muscle capacity ≥55%' },
         { dimension: 'function', comparator: '>=', threshold: 60, label: 'Function ≥60% (stairs / sit-to-stand)' },
+      ],
+      exitCriteria: [
+        { dimension: 'capacity',  comparator: '>=', threshold: 70, label: 'Capacity ≥70% of target' },
+        { dimension: 'function',  comparator: '>=', threshold: 75, label: 'Function ≥75% (full daily tasks)' },
+        { dimension: 'flareRisk', comparator: '<=', threshold: 30, label: 'Flare risk ≤30 over recent weeks' },
       ] },
     { id: 'oa_maintain', name: 'Flare-Resilient Maintenance', subtitle: 'Long-term self-management, pacing, flare-plan readiness',   color: '#f59e0b', ring: 'border-amber-500/60',   bg: 'bg-amber-950/40',   healingPhases: PHASE_4[3], defaultFraction: 0.25, goalDimension: 'function', treatmentTags: ['home exercise', 'pacing', 'maintenance'],
       entryCriteria: [
         { dimension: 'capacity',  comparator: '>=', threshold: 70, label: 'Capacity ≥70% of target' },
         { dimension: 'function',  comparator: '>=', threshold: 75, label: 'Function ≥75% (full daily tasks)' },
         { dimension: 'flareRisk', comparator: '<=', threshold: 30, label: 'Flare risk ≤30 over recent weeks' },
+      ],
+      exitCriteria: [
+        { dimension: 'function',  comparator: '>=', threshold: 85, label: 'Function ≥85% sustained ≥4 wk' },
+        { dimension: 'flareRisk', comparator: '<=', threshold: 20, label: 'Flare risk ≤20 (self-managing)' },
       ] },
   ],
 };
@@ -168,23 +205,41 @@ const IMPINGEMENT: RecoveryArchetype = {
   name: 'Mechanical Impingement',
   progressionMode: 'criterion-gated',
   stages: [
-    { id: 'imp_provocation', name: 'Provocation Control',     subtitle: 'Avoid pinch-positions, settle reactive tissue',              color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.20, goalDimension: 'pain',     treatmentTags: ['education', 'manual', 'positioning'] },
+    { id: 'imp_provocation', name: 'Provocation Control',     subtitle: 'Avoid pinch-positions, settle reactive tissue',              color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.20, goalDimension: 'pain',     treatmentTags: ['education', 'manual', 'positioning'],
+      exitCriteria: [
+        { dimension: 'pain',         comparator: '<=', threshold: 4,  label: 'Pain ≤4/10 in mid-range AROM' },
+        { dimension: 'irritability', comparator: '<=', threshold: 50, label: 'Irritability ≤50 (settled enough to load)' },
+      ] },
     { id: 'imp_motor',       name: 'Motor Control',            subtitle: 'Scapular / pelvic control to clear the impingement arc',     color: '#06b6d4', ring: 'border-cyan-500/60',    bg: 'bg-cyan-950/40',    healingPhases: PHASE_4[1], defaultFraction: 0.28, goalDimension: 'rom',      treatmentTags: ['scapular', 'motor control', 'stabilization'],
       entryCriteria: [
         { dimension: 'pain',         comparator: '<=', threshold: 4,  label: 'Pain ≤4/10 in mid-range AROM' },
         { dimension: 'irritability', comparator: '<=', threshold: 50, label: 'Irritability ≤50 (settled enough to load)' },
+      ],
+      exitCriteria: [
+        { dimension: 'pain',         comparator: '<=', threshold: 3,  label: 'Pain ≤3/10 through provocative arc' },
+        { dimension: 'rom',          comparator: '>=', threshold: 75, label: 'ROM ≥75% (impingement arc clearing)' },
+        { dimension: 'motorControl', comparator: '>=', threshold: 65, label: 'Scapular / pelvic control ≥65%' },
       ] },
     { id: 'imp_strength',    name: 'Strength Under Task',      subtitle: 'Loaded ROM with control through provocative range',          color: '#22c55e', ring: 'border-emerald-500/60', bg: 'bg-emerald-950/40', healingPhases: PHASE_4[2], defaultFraction: 0.28, goalDimension: 'capacity', treatmentTags: ['strengthening', 'loading'],
       entryCriteria: [
         { dimension: 'pain',         comparator: '<=', threshold: 3,  label: 'Pain ≤3/10 through provocative arc' },
         { dimension: 'rom',          comparator: '>=', threshold: 75, label: 'ROM ≥75% (impingement arc clearing)' },
         { dimension: 'motorControl', comparator: '>=', threshold: 65, label: 'Scapular / pelvic control ≥65%' },
+      ],
+      exitCriteria: [
+        { dimension: 'capacity',     comparator: '>=', threshold: 75, label: 'Capacity ≥75% under loaded ROM' },
+        { dimension: 'rom',          comparator: '>=', threshold: 90, label: 'Full ROM (≥90%) pain-free' },
+        { dimension: 'reinjuryRisk', comparator: '<=', threshold: 25, label: 'Reinjury risk ≤25' },
       ] },
     { id: 'imp_reexposure',  name: 'Sport / Work Re-Exposure', subtitle: 'Graded return to provocative end-range demands',             color: '#f59e0b', ring: 'border-amber-500/60',   bg: 'bg-amber-950/40',   healingPhases: PHASE_4[3], defaultFraction: 0.24, goalDimension: 'function', treatmentTags: ['sport specific', 'overhead', 'functional'],
       entryCriteria: [
         { dimension: 'capacity',     comparator: '>=', threshold: 75, label: 'Capacity ≥75% under loaded ROM' },
         { dimension: 'rom',          comparator: '>=', threshold: 90, label: 'Full ROM (≥90%) pain-free' },
         { dimension: 'reinjuryRisk', comparator: '<=', threshold: 25, label: 'Reinjury risk ≤25' },
+      ],
+      exitCriteria: [
+        { dimension: 'function',     comparator: '>=', threshold: 90, label: 'Function ≥90% on sport / work tasks' },
+        { dimension: 'reinjuryRisk', comparator: '<=', threshold: 15, label: 'Reinjury risk ≤15 (cleared for full return)' },
       ] },
   ],
 };
@@ -241,22 +296,39 @@ const CHRONIC: RecoveryArchetype = {
   name: 'Chronic / Nociplastic',
   progressionMode: 'criterion-gated',
   stages: [
-    { id: 'chronic_education', name: 'Education + Desensitisation', subtitle: 'Pain-neuroscience education, graded sensory desensitisation', color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.22, goalDimension: 'pain',     treatmentTags: ['education', 'pain neuroscience', 'desensitization'] },
+    { id: 'chronic_education', name: 'Education + Desensitisation', subtitle: 'Pain-neuroscience education, graded sensory desensitisation', color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.22, goalDimension: 'pain',     treatmentTags: ['education', 'pain neuroscience', 'desensitization'],
+      exitCriteria: [
+        { dimension: 'pain',         comparator: '<=', threshold: 6,  label: 'Pain ≤6/10 most days (reconceptualised)' },
+        { dimension: 'irritability', comparator: '<=', threshold: 50, label: 'System reactivity ≤50 (less hyper-vigilance)' },
+      ] },
     { id: 'chronic_pacing',    name: 'Pacing',                       subtitle: 'Establish baseline tolerances, structured activity pacing',   color: '#06b6d4', ring: 'border-cyan-500/60',    bg: 'bg-cyan-950/40',    healingPhases: PHASE_4[1], defaultFraction: 0.26, goalDimension: 'function', treatmentTags: ['pacing', 'activity scheduling'],
       entryCriteria: [
         { dimension: 'pain',         comparator: '<=', threshold: 6,  label: 'Pain ≤6/10 most days (reconceptualised)' },
         { dimension: 'irritability', comparator: '<=', threshold: 50, label: 'System reactivity ≤50 (less hyper-vigilance)' },
+      ],
+      exitCriteria: [
+        { dimension: 'function',     comparator: '>=', threshold: 50, label: 'Pacing baseline ≥50% function held for 1–2 wk' },
+        { dimension: 'irritability', comparator: '<=', threshold: 35, label: 'Irritability ≤35 (system can tolerate exposure)' },
       ] },
     { id: 'chronic_exposure',  name: 'Graded Exposure',              subtitle: 'Graded exposure to feared / avoided movements',               color: '#22c55e', ring: 'border-emerald-500/60', bg: 'bg-emerald-950/40', healingPhases: PHASE_4[2], defaultFraction: 0.28, goalDimension: 'function', treatmentTags: ['graded exposure', 'functional'],
       entryCriteria: [
         { dimension: 'function',     comparator: '>=', threshold: 50, label: 'Pacing baseline ≥50% function held for 1–2 wk' },
         { dimension: 'irritability', comparator: '<=', threshold: 35, label: 'Irritability ≤35 (system can tolerate exposure)' },
+      ],
+      exitCriteria: [
+        { dimension: 'function',  comparator: '>=', threshold: 70, label: 'Function ≥70% across feared activities' },
+        { dimension: 'pain',      comparator: '<=', threshold: 4,  label: 'Pain ≤4/10 with exposure tasks' },
+        { dimension: 'flareRisk', comparator: '<=', threshold: 30, label: 'Flare risk ≤30 (recovery between sessions)' },
       ] },
     { id: 'chronic_recon',     name: 'Reconceptualisation',          subtitle: 'Reconceptualise pain meaning, build long-term self-efficacy',  color: '#f59e0b', ring: 'border-amber-500/60',   bg: 'bg-amber-950/40',   healingPhases: PHASE_4[3], defaultFraction: 0.24, goalDimension: 'function', treatmentTags: ['self management', 'maintenance'],
       entryCriteria: [
         { dimension: 'function',  comparator: '>=', threshold: 70, label: 'Function ≥70% across feared activities' },
         { dimension: 'pain',      comparator: '<=', threshold: 4,  label: 'Pain ≤4/10 with exposure tasks' },
         { dimension: 'flareRisk', comparator: '<=', threshold: 30, label: 'Flare risk ≤30 (recovery between sessions)' },
+      ],
+      exitCriteria: [
+        { dimension: 'function',  comparator: '>=', threshold: 85, label: 'Function ≥85% sustained, self-managed' },
+        { dimension: 'flareRisk', comparator: '<=', threshold: 20, label: 'Flare risk ≤20 (independent management)' },
       ] },
   ],
 };
@@ -266,22 +338,39 @@ const INSTABILITY: RecoveryArchetype = {
   name: 'Instability / Hypermobility',
   progressionMode: 'criterion-gated',
   stages: [
-    { id: 'inst_proprio',  name: 'Proprioception',     subtitle: 'Joint position sense, low-load balance and awareness',            color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.22, goalDimension: 'rom',      treatmentTags: ['proprioception', 'balance'] },
+    { id: 'inst_proprio',  name: 'Proprioception',     subtitle: 'Joint position sense, low-load balance and awareness',            color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40',  healingPhases: PHASE_4[0], defaultFraction: 0.22, goalDimension: 'rom',      treatmentTags: ['proprioception', 'balance'],
+      exitCriteria: [
+        { dimension: 'pain',         comparator: '<=', threshold: 4,  label: 'Pain ≤4/10 with low-load balance work' },
+        { dimension: 'motorControl', comparator: '>=', threshold: 50, label: 'Joint position sense ≥50%' },
+      ] },
     { id: 'inst_cocontract', name: 'Co-Contraction',    subtitle: 'Stabiliser co-activation, controlled mid-range loading',          color: '#06b6d4', ring: 'border-cyan-500/60',    bg: 'bg-cyan-950/40',    healingPhases: PHASE_4[1], defaultFraction: 0.26, goalDimension: 'capacity', treatmentTags: ['stabilization', 'motor control'],
       entryCriteria: [
         { dimension: 'pain',         comparator: '<=', threshold: 4,  label: 'Pain ≤4/10 with low-load balance work' },
         { dimension: 'motorControl', comparator: '>=', threshold: 50, label: 'Joint position sense ≥50%' },
+      ],
+      exitCriteria: [
+        { dimension: 'capacity',     comparator: '>=', threshold: 50, label: 'Stabiliser capacity ≥50% (mid-range control)' },
+        { dimension: 'motorControl', comparator: '>=', threshold: 65, label: 'Co-contraction control ≥65%' },
       ] },
     { id: 'inst_strength', name: 'Strength',            subtitle: 'Build through-range strength to support lax joint capsule',       color: '#22c55e', ring: 'border-emerald-500/60', bg: 'bg-emerald-950/40', healingPhases: PHASE_4[2], defaultFraction: 0.28, goalDimension: 'capacity', treatmentTags: ['strengthening', 'resistance'],
       entryCriteria: [
         { dimension: 'capacity',     comparator: '>=', threshold: 50, label: 'Stabiliser capacity ≥50% (mid-range control)' },
         { dimension: 'motorControl', comparator: '>=', threshold: 65, label: 'Co-contraction control ≥65%' },
+      ],
+      exitCriteria: [
+        { dimension: 'capacity',     comparator: '>=', threshold: 70, label: 'Through-range strength ≥70%' },
+        { dimension: 'motorControl', comparator: '>=', threshold: 80, label: 'Motor control ≥80% under load' },
+        { dimension: 'reinjuryRisk', comparator: '<=', threshold: 30, label: 'Subluxation / reinjury risk ≤30' },
       ] },
     { id: 'inst_reactive', name: 'Reactive Stability',  subtitle: 'Reactive control under perturbation and sport-specific demands',  color: '#f59e0b', ring: 'border-amber-500/60',   bg: 'bg-amber-950/40',   healingPhases: PHASE_4[3], defaultFraction: 0.24, goalDimension: 'function', treatmentTags: ['reactive', 'agility', 'sport specific'],
       entryCriteria: [
         { dimension: 'capacity',     comparator: '>=', threshold: 70, label: 'Through-range strength ≥70%' },
         { dimension: 'motorControl', comparator: '>=', threshold: 80, label: 'Motor control ≥80% under load' },
         { dimension: 'reinjuryRisk', comparator: '<=', threshold: 30, label: 'Subluxation / reinjury risk ≤30' },
+      ],
+      exitCriteria: [
+        { dimension: 'function',     comparator: '>=', threshold: 90, label: 'Function ≥90% on perturbation / sport tests' },
+        { dimension: 'reinjuryRisk', comparator: '<=', threshold: 20, label: 'Subluxation / reinjury risk ≤20 (cleared for full sport)' },
       ] },
   ],
 };

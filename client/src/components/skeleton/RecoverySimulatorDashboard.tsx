@@ -193,7 +193,7 @@ function MiniChart({
         );
       })}
       {showGrid && weekTicks.map((w, i) => (
-        <text key={i} x={xFor(w)} y={height - 8} textAnchor="middle" fill="#6b7280" fontSize={9}>{axisUnit} {w}</text>
+        <text key={i} x={xFor(w)} y={height - 8} textAnchor="middle" fill="#6b7280" fontSize={9}>{axisUnit === 'CHECKPOINT' ? 'Checkpoint' : 'Week'} {w}</text>
       ))}
 
       {series.map((s, i) => (
@@ -206,7 +206,7 @@ function MiniChart({
           {showWeekLabel && (
             <g transform={`translate(${xFor(scrubWeek) - 30}, ${padding.top - 12})`}>
               <rect width={60} height={16} rx={3} fill="#a855f7" />
-              <text x={30} y={11} textAnchor="middle" fill="white" fontSize={9} fontWeight="bold">{axisUnit} {scrubWeek}</text>
+              <text x={30} y={11} textAnchor="middle" fill="white" fontSize={9} fontWeight="bold">{axisUnit === 'CHECKPOINT' ? 'Checkpoint' : 'Week'} {scrubWeek}</text>
             </g>
           )}
         </g>
@@ -1313,9 +1313,17 @@ export default function RecoverySimulatorDashboard({
                           // otherwise at the expected start week.
                           let target: number;
                           if (usesCriteriaCard) {
+                            // Criterion / hybrid: prefer the projected
+                            // criteria-met week. When the projection
+                            // never hits the gates, fall back to the
+                            // expected window from the condition profile
+                            // rather than the engine's phase-derived
+                            // r.start — using r.start would reintroduce
+                            // biological-phase bias that the criterion
+                            // model is meant to remove.
                             target = r.projectedEntryWeek !== null
                               ? r.projectedEntryWeek
-                              : (r.reached ? r.start : r.expectedStart);
+                              : r.expectedStart;
                           } else {
                             target = r.reached ? r.start : r.expectedStart;
                           }

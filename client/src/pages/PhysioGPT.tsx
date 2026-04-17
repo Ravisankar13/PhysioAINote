@@ -3763,34 +3763,51 @@ ${ddxList}`;
     muscleOverrides: Array<{ key: string; tensionOffset: number; activationOffset: number; inhibition: number }>;
     modelConfigDeviations: Array<{ joint: string; param: string; value: number }>;
   } | null>(null);
+  const recoverySimBranchRef = useRef<string | null>(null);
   const recoverySimCompromisedTissuesRef = useRef(compromisedTissues);
   const recoverySimScarMarkersRef = useRef(scarMarkers);
   const recoverySimMuscleOverridesRef = useRef(muscleOverrides);
   const recoverySimModelConfigRef = useRef(modelConfig);
+  const handleApplySimTimelineWeekRef = useRef(handleApplySimTimelineWeek);
   useEffect(() => { recoverySimCompromisedTissuesRef.current = compromisedTissues; }, [compromisedTissues]);
   useEffect(() => { recoverySimScarMarkersRef.current = scarMarkers; }, [scarMarkers]);
   useEffect(() => { recoverySimMuscleOverridesRef.current = muscleOverrides; }, [muscleOverrides]);
   useEffect(() => { recoverySimModelConfigRef.current = modelConfig; }, [modelConfig]);
-  useEffect(() => { if (!showRecoverySim) recoverySimBaselineRef.current = null; }, [showRecoverySim]);
+  useEffect(() => { handleApplySimTimelineWeekRef.current = handleApplySimTimelineWeek; }, [handleApplySimTimelineWeek]);
+  useEffect(() => {
+    if (!showRecoverySim) {
+      recoverySimBaselineRef.current = null;
+      recoverySimBranchRef.current = null;
+    }
+  }, [showRecoverySim]);
+
+  const collectModelConfigDeviations = useCallback((mc: unknown): Array<{ joint: string; param: string; value: number }> => {
+    const out: Array<{ joint: string; param: string; value: number }> = [];
+    if (!mc || typeof mc !== 'object') return out;
+    for (const [joint, params] of Object.entries(mc as Record<string, unknown>)) {
+      if (params && typeof params === 'object') {
+        for (const [param, val] of Object.entries(params as Record<string, unknown>)) {
+          if (typeof val === 'number' && Math.abs(val) > 0.001) {
+            out.push({ joint, param, value: val });
+          }
+        }
+      }
+    }
+    return out;
+  }, []);
 
   const handleApplyRecoverySimState = useCallback((info: { week: number; state: import('@/lib/recoverySimulationEngine').RecoveryState; baselineState: import('@/lib/recoverySimulationEngine').RecoveryState; branchName: string }) => {
-    const { state, baselineState } = info;
+    const { state, baselineState, branchName } = info;
+    if (recoverySimBranchRef.current !== branchName) {
+      recoverySimBaselineRef.current = null;
+      recoverySimBranchRef.current = branchName;
+    }
     if (!recoverySimBaselineRef.current) {
       const pm = painMarkersRef.current;
       const ct = recoverySimCompromisedTissuesRef.current;
       const sm = recoverySimScarMarkersRef.current;
       const mo = recoverySimMuscleOverridesRef.current;
-      const mc = recoverySimModelConfigRef.current as unknown as Record<string, Record<string, unknown> | unknown>;
-      const modelConfigDeviations: Array<{ joint: string; param: string; value: number }> = [];
-      for (const [joint, params] of Object.entries(mc)) {
-        if (params && typeof params === 'object') {
-          for (const [param, val] of Object.entries(params as Record<string, unknown>)) {
-            if (typeof val === 'number' && Math.abs(val) > 0.001) {
-              modelConfigDeviations.push({ joint, param, value: val });
-            }
-          }
-        }
-      }
+      const modelConfigDeviations = collectModelConfigDeviations(recoverySimModelConfigRef.current);
       recoverySimBaselineRef.current = {
         painMarkers: pm.map(m => ({ id: m.id, severity: typeof m.severity === 'number' ? m.severity : 5 })),
         compromisedTissues: ct.map(t => ({ key: `${t.tissue_type}:${t.tissue_id}`, severity: t.severity })),
@@ -3815,15 +3832,39 @@ ${ddxList}`;
     const motorGap = Math.max(1, 100 - baselineState.motorControl);
     const motorFactor = Math.max(0, Math.min(1.2, (100 - state.motorControl) / motorGap));
 
-    if (baseline.painMarkers.length > 0) {
-      const map = new Map(baseline.painMarkers.map(b => [b.id, b.severity]));
-      setPainMarkers(prev => prev.map(m => {
-        const base = map.get(m.id);
-        if (base === undefined) return m;
-        return { ...m, severity: Math.max(0, Math.min(10, base * painFactor)) };
-      }));
+    // Build SessionApplyPayload for fields the existing handler supports
+    const modelConfigPayload: Record<string, Record<string, number>> = {};
+    for (const d of baseline.modelConfigDeviations) {
+      if (!modelConfigPayload[d.joint]) modelConfigPayload[d.joint] = {};
+      modelConfigPayload[d.joint][d.param] = d.value * romFactor;
     }
 
+    const overridesPayload: Record<string, Partial<import('@/lib/muscleBiomechanicsEngine').MuscleOverride>> = {};
+    for (const b of baseline.muscleOverrides) {
+      overridesPayload[b.key] = {
+        tensionOffset: Math.round(b.tensionOffset * motorFactor),
+        activationOffset: Math.round(b.activationOffset * motorFactor),
+        inhibition: Math.round(b.inhibition * motorFactor),
+      };
+    }
+
+    const baselinePainMap = new Map(baseline.painMarkers.map(b => [b.id, b.severity]));
+    const painMarkerUpdates = painMarkersRef.current
+      .filter(m => baselinePainMap.has(m.id))
+      .map(m => ({
+        markerId: m.id,
+        predictedSeverity: Math.max(0, Math.min(10, (baselinePainMap.get(m.id) ?? 5) * painFactor)),
+      }));
+
+    handleApplySimTimelineWeekRef.current({
+      modelConfig: modelConfigPayload,
+      overrides: overridesPayload,
+      painMarkerUpdates,
+      posturalUpdates: [],
+      compensationUpdates: [],
+    });
+
+    // Compromised tissues + scar markers: not part of SessionApplyPayload shape; apply via setters
     if (baseline.compromisedTissues.length > 0) {
       const map = new Map(baseline.compromisedTissues.map(b => [b.key, b.severity]));
       setCompromisedTissues(prev => prev.map(t => {
@@ -3845,42 +3886,15 @@ ${ddxList}`;
         };
       }));
     }
-
-    if (baseline.muscleOverrides.length > 0) {
-      setMuscleOverrides(prev => {
-        const next = { ...prev };
-        for (const b of baseline.muscleOverrides) {
-          const existing = next[b.key];
-          if (!existing) continue;
-          next[b.key] = {
-            ...existing,
-            tensionOffset: Math.round(b.tensionOffset * motorFactor),
-            activationOffset: Math.round(b.activationOffset * motorFactor),
-            inhibition: Math.round(b.inhibition * motorFactor),
-          };
-        }
-        return next;
-      });
-    }
-
-    if (baseline.modelConfigDeviations.length > 0) {
-      setModelConfig(prev => {
-        const next = JSON.parse(JSON.stringify(prev)) as Record<string, Record<string, number>>;
-        for (const d of baseline.modelConfigDeviations) {
-          if (!next[d.joint] || typeof next[d.joint] !== 'object') next[d.joint] = {} as Record<string, number>;
-          next[d.joint][d.param] = d.value * romFactor;
-        }
-        return next as unknown as typeof prev;
-      });
-    }
-  }, []);
+  }, [collectModelConfigDeviations]);
 
   const recoverySimHasClinicalInput = useMemo(() => (
     painMarkers.length > 0 ||
     compromisedTissues.length > 0 ||
     scarMarkers.length > 0 ||
-    Object.keys(muscleOverrides).length > 0
-  ), [painMarkers, compromisedTissues, scarMarkers, muscleOverrides]);
+    Object.keys(muscleOverrides).length > 0 ||
+    collectModelConfigDeviations(modelConfig).length > 0
+  ), [painMarkers, compromisedTissues, scarMarkers, muscleOverrides, modelConfig, collectModelConfigDeviations]);
 
   const chainIntegrityScores = useMemo(() => {
     if (!showUnifiedChainPanel || (liteMode && computeStage < 3)) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();

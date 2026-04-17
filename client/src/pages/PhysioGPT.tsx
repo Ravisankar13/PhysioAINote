@@ -4024,7 +4024,7 @@ ${ddxList}`;
     for (const intel of Array.from(tissueIntelligenceMap.values())) {
       const key = `${intel.tissueType}:${intel.tissueId}`;
       const existing = map.get(key);
-      const sev = (intel.severity ?? 0) * 10;
+      const sev = Math.max(0, Math.min(1, intel.severity ?? 0));
       const conf: 'confirmed' | 'predicted' = intel.confidence === 'high' ? 'confirmed' : 'predicted';
       const rationale = intel.rationale || (intel.evidence[0]?.note ?? 'Multi-engine detection');
       if (!existing) {

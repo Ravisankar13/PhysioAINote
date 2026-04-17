@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Activity,
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   Brain,
   CheckCircle2,
@@ -506,6 +507,18 @@ export default function RecoverySimulatorDashboard({
       {/* TOP HEADER BAR */}
       <header className="flex items-center justify-between px-4 py-2 border-b border-gray-800/80 bg-gray-900/70 shrink-0">
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            className="h-7 px-2 text-xs border-violet-500/60 bg-violet-600/15 text-violet-100 hover:bg-violet-600/30 hover:text-white"
+            data-testid="dashboard-back-to-skeleton"
+            title="Back to Skeleton (Esc)"
+          >
+            <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+            Back to Skeleton
+          </Button>
+          <div className="h-5 w-px bg-gray-700/70" />
           <div className="flex items-center gap-1.5">
             <div className="h-7 w-7 rounded bg-gradient-to-br from-violet-600 to-cyan-500 flex items-center justify-center text-white font-bold text-[12px]">P</div>
             <span className="text-sm font-semibold text-gray-100">physioGPT</span>

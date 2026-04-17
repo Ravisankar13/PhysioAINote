@@ -3968,11 +3968,7 @@ export default function PureThreeGLBViewer({
       innerMat.opacity = innerBase * o;
       innerMat.transparent = true;
 
-      if (markerType === 'area' && marker.radius) {
-        meshes.outer.scale.setScalar((marker.radius / 0.1) * s);
-      } else {
-        meshes.outer.scale.setScalar(s);
-      }
+      meshes.outer.scale.setScalar(s);
       const outerMat = meshes.outer.material as THREE.MeshBasicMaterial;
       const outerBase = (outerMat.userData.baseOpacity as number | undefined) ?? (markerType === 'area' ? 0.25 : 0.2);
       outerMat.opacity = outerBase * o;

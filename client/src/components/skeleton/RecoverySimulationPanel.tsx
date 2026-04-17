@@ -545,7 +545,14 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
 
       <div className="bg-gray-900/40 border border-gray-700/40 rounded p-1.5">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] text-gray-300 font-semibold flex items-center gap-1"><Calendar className="h-3 w-3" />Week {scrubWeek} of {input.totalWeeks} — {activeProjection.branchName}</span>
+          <span className="text-[9px] text-gray-300 font-semibold flex items-center gap-1">
+            <Calendar className="h-3 w-3" />Week {scrubWeek} of {input.totalWeeks} — {activeProjection.branchName}
+            {autoSyncSkeleton && stateAtScrub && baselineState && (() => {
+              const pf = baselineState.pain > 0.001 ? Math.max(0, Math.min(2, stateAtScrub.pain / baselineState.pain)) : (stateAtScrub.pain > 0.001 ? 1 : 0);
+              const colorClass = pf < 0.95 ? 'text-emerald-300' : pf > 1.05 ? 'text-red-300' : 'text-gray-300';
+              return <span className={`ml-1 ${colorClass}`} title="Pain marker scaling factor on the 3D skeleton">• markers ×{pf.toFixed(2)}</span>;
+            })()}
+          </span>
           <div className="flex items-center gap-1">
             {onApplyState && (
               <>

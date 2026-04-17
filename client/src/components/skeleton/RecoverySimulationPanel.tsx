@@ -48,6 +48,8 @@ import {
   defaultBranch,
   defaultInput,
   buildCustomTreatmentProfiles,
+  buildCustomExerciseId,
+  buildCustomTechniqueId,
 } from "@/lib/recoverySimulationEngine";
 
 interface Props {
@@ -108,7 +110,7 @@ function MultiLineChart({
   onScrub?: (w: number) => void;
   totalWeeks: number;
   milestoneMarkers?: { week: number; label: string; achieved: boolean }[];
-  interventionMarkers?: { week: number; label: string; type: string }[];
+  interventionMarkers?: { week: number; label: string; type: string; treatmentId?: string }[];
   thresholdLines?: { value: number; color: string; label?: string }[];
 }) {
   const padding = { top: 8, right: 6, bottom: 16, left: 24 };
@@ -175,14 +177,22 @@ function MultiLineChart({
         <path key={i} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={1.4} strokeDasharray={s.dash} />
       ))}
 
-      {interventionMarkers.map((m, i) => (
-        <g key={`im-${i}`}>
-          <line x1={xFor(m.week)} y1={padding.top} x2={xFor(m.week)} y2={padding.top + ch} stroke="#a855f7" strokeWidth={0.5} strokeDasharray="1,2" opacity={0.6} />
-          <circle cx={xFor(m.week)} cy={padding.top + 4} r={2.5} fill={m.type === 'flare' ? '#ef4444' : m.type === 'reaggravate' ? '#f97316' : '#a855f7'}>
-            <title>{m.label}</title>
-          </circle>
-        </g>
-      ))}
+      {interventionMarkers.map((m, i) => {
+        const isCustom = m.treatmentId?.startsWith('custom_') ?? false;
+        const lineColor = isCustom ? '#22d3ee' : '#a855f7';
+        const dotColor = m.type === 'flare' ? '#ef4444' : m.type === 'reaggravate' ? '#f97316' : isCustom ? '#22d3ee' : '#a855f7';
+        return (
+          <g key={`im-${i}`}>
+            <line x1={xFor(m.week)} y1={padding.top} x2={xFor(m.week)} y2={padding.top + ch} stroke={lineColor} strokeWidth={isCustom ? 0.7 : 0.5} strokeDasharray="1,2" opacity={isCustom ? 0.8 : 0.6} />
+            <circle cx={xFor(m.week)} cy={padding.top + 4} r={isCustom ? 3 : 2.5} fill={dotColor} stroke={isCustom ? '#0e7490' : 'none'} strokeWidth={isCustom ? 0.6 : 0}>
+              <title>{m.label}</title>
+            </circle>
+            {isCustom && (
+              <text x={xFor(m.week)} y={padding.top + 1.5} textAnchor="middle" fontSize={4} fill="#0e7490" fontWeight="bold">✦</text>
+            )}
+          </g>
+        );
+      })}
       {milestoneMarkers.map((m, i) => (
         <g key={`mm-${i}`}>
           <circle cx={xFor(m.week)} cy={padding.top + ch - 4} r={2.5} fill={m.achieved ? '#22c55e' : '#6b7280'}>
@@ -313,7 +323,7 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
   const milestoneMarkers = useMemo(() => activeProjection.milestones
     .filter(m => m.achieved && m.weekAchieved !== null)
     .map(m => ({ week: m.weekAchieved!, label: m.label, achieved: m.achieved })), [activeProjection]);
-  const interventionMarkers = useMemo(() => activeProjection.interventionMarkers.map(m => ({ week: m.week, label: m.label, type: m.type })), [activeProjection]);
+  const interventionMarkers = useMemo(() => activeProjection.interventionMarkers.map(m => ({ week: m.week, label: m.label, type: m.type, treatmentId: m.treatmentId })), [activeProjection]);
 
   const addBranch = useCallback((mod: Partial<ScenarioBranch> & { name: string }) => {
     const base = activeBranch;
@@ -590,54 +600,81 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
         )}
       </div>
 
-      {customProfiles.length > 0 && (
-        <div className="bg-cyan-950/20 border border-cyan-700/40 rounded p-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[9px] text-cyan-200 font-semibold flex items-center gap-1">
-              <Sparkles className="h-3 w-3 text-cyan-400" />
-              AI-Designed Prescriptions ({customProfiles.length})
-            </span>
-            <span className="text-[8px] text-cyan-400/70">Add to plan @ wk {scrubWeek}</span>
-          </div>
-          <div className="text-[8px] text-cyan-300/70 mb-1.5 leading-tight">
-            Patient-specific exercises and manual techniques designed by the AI engines, modeled into the recovery curve with synthesized treatment effects.
-          </div>
-          <div className="space-y-0.5 max-h-[140px] overflow-y-auto">
-            {customProfiles.map(p => {
-              const isInPlan = activeBranch.interventions.some(i => i.treatmentId === p.id);
-              const kind = p.id.startsWith('custom_ex_') ? 'Exercise' : 'Manual';
-              const badgeColor = kind === 'Exercise' ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50' : 'bg-rose-900/40 text-rose-300 border-rose-700/50';
-              const topEffects = Object.entries(p.effects)
-                .sort((a, b) => Math.abs(b[1] as number) - Math.abs(a[1] as number))
-                .slice(0, 3)
-                .map(([k, v]) => `${k} ${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(1)}`)
-                .join(', ');
-              return (
-                <div key={p.id} className="flex items-center gap-1 text-[8px] bg-gray-900/60 rounded px-1 py-0.5 border border-gray-700/40">
-                  <span className={`px-1 py-px rounded border shrink-0 ${badgeColor}`} title={`AI-designed ${kind.toLowerCase()}`}>{kind}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-cyan-100 truncate" title={p.name}>{p.name}</div>
-                    <div className="text-gray-500 truncate" title={topEffects}>{topEffects}</div>
-                  </div>
-                  {isInPlan ? (
-                    <span className="text-emerald-400 px-1" title="Already in active plan">
-                      <CheckCircle2 className="h-2.5 w-2.5" />
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => addInterventionToActiveBranch(p.id, scrubWeek)}
-                      className="px-1.5 py-0.5 rounded bg-cyan-700/40 text-cyan-200 hover:bg-cyan-600/50 border border-cyan-700/50 flex items-center gap-0.5 shrink-0"
-                      title={`Add ${p.name} to active plan starting at week ${scrubWeek}`}
-                    >
-                      <Plus className="h-2 w-2" />Add
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+      <div className="bg-cyan-950/20 border border-cyan-700/40 rounded p-1.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[9px] text-cyan-200 font-semibold flex items-center gap-1">
+            <Sparkles className="h-3 w-3 text-cyan-400" />
+            AI-Designed Prescriptions ({customProfiles.length})
+          </span>
+          {customProfiles.length > 0 && <span className="text-[8px] text-cyan-400/70">Add to plan @ wk {scrubWeek}</span>}
         </div>
-      )}
+        {customProfiles.length === 0 ? (
+          <div className="text-[8px] text-cyan-300/70 leading-tight bg-cyan-950/30 border border-dashed border-cyan-700/40 rounded px-1.5 py-1.5">
+            No AI-designed exercises or manual techniques yet. Open the <span className="text-cyan-200 font-semibold">Exercise Engine</span> or <span className="text-cyan-200 font-semibold">Manual Therapy Engine</span> tabs to design patient-specific prescriptions — they will appear here and can be added directly to the recovery plan.
+          </div>
+        ) : (
+          <>
+            <div className="text-[8px] text-cyan-300/70 mb-1.5 leading-tight">
+              Patient-specific exercises and manual techniques designed by the AI engines, modeled into the recovery curve with synthesized treatment effects. Markers on the chart appear in cyan with a ✦ to distinguish from library treatments.
+            </div>
+            <div className="space-y-0.5 max-h-[180px] overflow-y-auto">
+              {customProfiles.map((p, profileIdx) => {
+                const isInPlan = activeBranch.interventions.some(i => i.treatmentId === p.id);
+                const kind = p.id.startsWith('custom_ex_') ? 'Exercise' : 'Manual';
+                const badgeColor = kind === 'Exercise' ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50' : 'bg-rose-900/40 text-rose-300 border-rose-700/50';
+                const topEffects = Object.entries(p.effects)
+                  .sort((a, b) => Math.abs(b[1] as number) - Math.abs(a[1] as number))
+                  .slice(0, 3)
+                  .map(([k, v]) => `${k} ${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(1)}`)
+                  .join(', ');
+                const sourceEx = customExercises?.[profileIdx];
+                const sourceMt = customTechniques?.[profileIdx - (customExercises?.length ?? 0)];
+                const targetTissue = kind === 'Exercise'
+                  ? (sourceEx?.targetSystem ?? sourceEx?.clinicalTarget ?? '—')
+                  : (sourceMt?.targetSystem ?? sourceMt?.clinicalTarget ?? '—');
+                const dosageText = kind === 'Exercise' && sourceEx?.dosage
+                  ? `${sourceEx.dosage.sets ?? '?'}×${sourceEx.dosage.reps ?? '?'}${sourceEx.dosage.frequency ? ` · ${sourceEx.dosage.frequency}` : ''}`
+                  : kind === 'Manual' && sourceMt?.dosage
+                    ? `${sourceMt.dosage.repetitions ?? sourceMt.dosage.sets ?? '?'}${sourceMt.dosage.duration ? ` × ${sourceMt.dosage.duration}` : ''}${sourceMt.dosage.frequency ? ` · ${sourceMt.dosage.frequency}` : ''}`
+                    : '—';
+                return (
+                  <div key={p.id} className="text-[8px] bg-gray-900/60 rounded px-1 py-0.5 border border-gray-700/40">
+                    <div className="flex items-center gap-1">
+                      <span className={`px-1 py-px rounded border shrink-0 ${badgeColor}`} title={`AI-designed ${kind.toLowerCase()}`}>{kind}</span>
+                      <div className="text-cyan-100 truncate flex-1 min-w-0" title={p.name}>{p.name}</div>
+                      {isInPlan ? (
+                        <span className="text-emerald-400 px-1 flex items-center gap-0.5 shrink-0" title="Already in active plan">
+                          <CheckCircle2 className="h-2.5 w-2.5" />In plan
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => addInterventionToActiveBranch(p.id, scrubWeek)}
+                          className="px-1.5 py-0.5 rounded bg-cyan-700/40 text-cyan-200 hover:bg-cyan-600/50 border border-cyan-700/50 flex items-center gap-0.5 shrink-0"
+                          title={`Add ${p.name} to active plan starting at week ${scrubWeek}`}
+                        >
+                          <Plus className="h-2 w-2" />Add @ wk{scrubWeek}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5 pl-1">
+                      <span className="text-gray-400 shrink-0">Target:</span>
+                      <span className="text-gray-200 truncate" title={targetTissue}>{targetTissue}</span>
+                    </div>
+                    <div className="flex items-center gap-1 pl-1">
+                      <span className="text-gray-400 shrink-0">Dose:</span>
+                      <span className="text-gray-200 truncate" title={dosageText}>{dosageText}</span>
+                    </div>
+                    <div className="flex items-center gap-1 pl-1">
+                      <span className="text-gray-400 shrink-0">Effects:</span>
+                      <span className="text-cyan-300/80 truncate" title={topEffects}>{topEffects}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
 
       <div className="bg-gray-900/40 border border-gray-700/40 rounded p-1.5">
         <div className="flex items-center gap-1 mb-1">

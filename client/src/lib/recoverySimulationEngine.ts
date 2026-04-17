@@ -374,8 +374,33 @@ const containsAny = (s: string | undefined, words: string[]): boolean => {
   return words.some(w => lower.includes(w));
 };
 
+const firstNumber = (s: string | undefined): number | null => {
+  if (!s) return null;
+  const m = s.match(/(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : null;
+};
+
+const parseFrequencyPerWeek = (s: string | undefined): number => {
+  if (!s) return 3;
+  const lower = s.toLowerCase();
+  const dailyMatch = /(\d+)\s*(?:x|times)?\s*\/?\s*(?:per\s*)?day|daily/.test(lower);
+  if (dailyMatch) return 7;
+  const m = lower.match(/(\d+)\s*(?:x|times)?\s*\/?\s*(?:per\s*)?(?:wk|week)/);
+  if (m) return parseInt(m[1]);
+  const n = firstNumber(s);
+  return n ?? 3;
+};
+
+export function buildCustomExerciseId(ex: CustomExerciseInput, idx: number): string {
+  return `custom_ex_${idx}_${slug(ex.name) || 'untitled'}`;
+}
+
+export function buildCustomTechniqueId(tech: CustomManualTechniqueInput, idx: number): string {
+  return `custom_mt_${idx}_${slug(tech.name) || 'untitled'}`;
+}
+
 export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: number): TreatmentEffectProfile {
-  const id = `custom_ex_${slug(ex.name) || idx}`;
+  const id = buildCustomExerciseId(ex, idx);
   const target = `${ex.targetSystem ?? ''} ${ex.clinicalTarget ?? ''}`;
   const roles = (ex.activationPattern ?? []).map(a => (a.role ?? '').toLowerCase());
   const hasStabilizer = roles.includes('stabilizer');
@@ -387,7 +412,10 @@ export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: nu
   const isMobility = containsAny(target, ['mobility', 'rom', 'range', 'flexibility', 'stretch']);
   const isMotorControl = containsAny(target, ['motor control', 'coordination', 'sling', 'stability', 'neuromuscular']);
   const stages = (ex.progressionStages ?? []).length || 3;
-  const setsNum = parseInt(ex.dosage?.sets ?? '3') || 3;
+  const setsNum = firstNumber(ex.dosage?.sets) ?? 3;
+  const repsNum = firstNumber(ex.dosage?.reps) ?? 10;
+  const freqPerWeek = parseFrequencyPerWeek(ex.dosage?.frequency);
+  const volumeFactor = Math.min(2.0, Math.max(0.4, (setsNum * repsNum * freqPerWeek) / 90));
 
   const effects: Partial<Record<keyof RecoveryState, number>> = {
     motorControl: 1.5,
@@ -427,16 +455,19 @@ export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: nu
     effects.running = (effects.running ?? 0) + 3;
     effects.capacity = (effects.capacity ?? 0) + 2;
   }
-  effects.strength = (effects.strength ?? 0) + Math.min(2, setsNum * 0.4);
+  effects.strength = (effects.strength ?? 0) + Math.min(2.5, setsNum * 0.4);
+  for (const k of Object.keys(effects) as (keyof RecoveryState)[]) {
+    if (effects[k] !== undefined) effects[k] = (effects[k] as number) * volumeFactor;
+  }
 
-  const peakWeeks = Math.max(2, Math.min(6, stages * 2));
+  const peakWeeks = Math.max(2, Math.min(8, stages * 2));
   return {
     id,
     name: ex.name,
     modality: 'exercise',
     onsetWeeks: isIsometric ? 0 : 1,
     peakWeeks,
-    durationWeeks: 8,
+    durationWeeks: Math.max(6, peakWeeks + 4),
     carryoverWeeks: 3,
     effects,
     healingStageMultiplier: isPlyo
@@ -454,12 +485,18 @@ export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: nu
 }
 
 export function synthesizeCustomManualTechniqueProfile(tech: CustomManualTechniqueInput, idx: number): TreatmentEffectProfile {
-  const id = `custom_mt_${slug(tech.name) || idx}`;
+  const id = buildCustomTechniqueId(tech, idx);
   const target = `${tech.targetSystem ?? ''} ${tech.clinicalTarget ?? ''}`;
   const goalTypes = (tech.tissueTargets ?? []).map(t => (t.goalType ?? '').toLowerCase());
   const isNeural = containsAny(target, ['neural', 'nerve', 'neurodynamic', 'sciatic', 'median', 'ulnar']);
   const isFascial = containsAny(target, ['fascia', 'fascial', 'myofascial', 'thoracolumbar']);
   const isJointMob = containsAny(target, ['joint', 'mobilization', 'mobilisation', 'arthrokinematic', 'capsule']);
+  const stages = (tech.progressionStages ?? []).length || 3;
+  const repsNum = firstNumber(tech.dosage?.repetitions) ?? firstNumber(tech.dosage?.sets) ?? 3;
+  const durationSec = firstNumber(tech.dosage?.duration) ?? 30;
+  const freqPerWeek = parseFrequencyPerWeek(tech.dosage?.frequency);
+  const doseLoad = (repsNum * Math.max(1, durationSec / 30) * freqPerWeek) / 30;
+  const intensityFactor = Math.min(1.8, Math.max(0.5, doseLoad));
 
   const effects: Partial<Record<keyof RecoveryState, number>> = {
     pain: -2,
@@ -494,14 +531,18 @@ export function synthesizeCustomManualTechniqueProfile(tech: CustomManualTechniq
     effects.stiffness = -3;
     effects.romPercent = 3;
   }
+  for (const k of Object.keys(effects) as (keyof RecoveryState)[]) {
+    if (effects[k] !== undefined) effects[k] = (effects[k] as number) * intensityFactor;
+  }
+  const peakWeeks = Math.max(1, Math.min(4, Math.ceil(stages * 0.8)));
 
   return {
     id,
     name: tech.name,
     modality: 'manual',
     onsetWeeks: 0,
-    peakWeeks: 2,
-    durationWeeks: 6,
+    peakWeeks,
+    durationWeeks: Math.max(4, peakWeeks + 3),
     carryoverWeeks: 1,
     effects,
     healingStageMultiplier: isNeural
@@ -692,7 +733,8 @@ function applyTreatmentEffects(
     }
 
     if (week === intv.startWeek) {
-      markers.push({ week, type: 'introduce', label: gateBlocked ? `${treatment.name} (gated)` : treatment.name, treatmentId: treatment.id });
+      const provenance = treatment.id.startsWith('custom_ex_') ? '✦ AI Exercise: ' : treatment.id.startsWith('custom_mt_') ? '✦ AI Manual: ' : '';
+      markers.push({ week, type: 'introduce', label: gateBlocked ? `${provenance}${treatment.name} (gated)` : `${provenance}${treatment.name}`, treatmentId: treatment.id });
     }
     if (intv.endWeek === week) {
       markers.push({ week, type: 'remove', label: `Stop ${treatment.name}`, treatmentId: treatment.id });

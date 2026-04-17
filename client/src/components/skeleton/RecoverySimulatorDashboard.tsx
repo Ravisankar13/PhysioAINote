@@ -417,58 +417,143 @@ export default function RecoverySimulatorDashboard({
     return TREATMENT_LIBRARY[0];
   }, [bestAction]);
 
-  // Phase week ranges for phase cards (find first/last week in each phase).
-  // Treatments per phase = top 3 by attribution contribution that were
-  // scheduled to start within the phase's week window on the active branch.
-  // Each phase also carries a condition-aware goal headline plus a snapshot
-  // of state at the phase midpoint (capacity / flare / pain / irritability)
-  // so the card reflects *this patient's* trajectory, not a generic textbook
-  // version.
+  // Per-phase view-model. Sources every field from existing engines /
+  // projection artifacts so the card reflects *this patient's* trajectory:
+  //   • bounds        : first/last sim week in each healing phase
+  //   • dominantGoal  : engine-derived "biggest moving dimension" in window
+  //                     (e.g. Pain 6→3, Capacity 45→72%) — the actual
+  //                     measurable goal the simulation projects for the
+  //                     patient *during* that phase
+  //   • strategy      : tissue + pain-mechanism aware narrative subtitle
+  //   • tissueStart/End, painStart/End, capStart/End, fnStart/End
+  //                   : current → end-of-phase status from the simulation
+  //   • flareEvents   : flareEvents on the active branch landing in window
+  //   • loadAdjusts   : loadAdjustments on the active branch landing in window
+  //   • patientFactor : "Extended ×N.NN" / "Slow healer" badge derived from
+  //                     conditionContext.patientHealingMult /
+  //                     tissueProfile.phaseDurationMult (when factors push
+  //                     phase timing outside the textbook range)
+  //   • treatments    : top 3 stage-fit interventions (scheduled →
+  //                     attribution → library fallback)
+  const tissueProfile = conditionContext ? tissueProfileForContext(conditionContext) : null;
   type PhaseInfo = {
     start: number;
     end: number;
+    reached: boolean;
+    isCurrent: boolean;
+    strategy: string;
+    dominantGoal: { label: string; from: number; to: number; unit: string; tone: string } | null;
+    painStart: number; painEnd: number;
+    capStart: number;  capEnd: number;
+    fnStart: number;   fnEnd: number;
+    tissueStart: number; tissueEnd: number;
+    flareRiskEnd: number;
+    flareEvents: number;
+    loadAdjusts: number;
+    patientFactor: string | null;
     treatments: string[];
     treatmentSource: 'scheduled' | 'attribution' | 'stage_recommended';
-    goal: string;
-    capacity: number;
-    flareRisk: number;
-    pain: number;
-    irritability: number;
-    isCurrent: boolean;
   };
   const phaseRanges = useMemo(() => {
     const tissue = conditionContext?.primaryTissue;
     const painMech = conditionContext?.painMechanism;
+
+    // Patient-factor flag — surfaced when the engine reports this patient's
+    // phases will run longer than the textbook window or healing is impaired
+    let patientFactorBadge: string | null = null;
+    if (tissueProfile) {
+      if (tissueProfile.phaseDurationMult > 1.05) {
+        patientFactorBadge = `Extended ×${tissueProfile.phaseDurationMult.toFixed(2)}`;
+      } else if (conditionContext && conditionContext.patientHealingMult < 0.9) {
+        patientFactorBadge = `Slow healer ×${conditionContext.patientHealingMult.toFixed(2)}`;
+      } else if (conditionContext && conditionContext.patientRecurrenceMult > 1.15) {
+        patientFactorBadge = `↑ Recurrence ×${conditionContext.patientRecurrenceMult.toFixed(2)}`;
+      }
+    }
+
+    const blank = (phaseId: HealingPhase): PhaseInfo => ({
+      start: -1, end: -1, reached: false, isCurrent: false,
+      strategy: phaseGoalForCondition(phaseId, tissue, painMech),
+      dominantGoal: null,
+      painStart: 0, painEnd: 0, capStart: 0, capEnd: 0, fnStart: 0, fnEnd: 0,
+      tissueStart: 0, tissueEnd: 0, flareRiskEnd: 0,
+      flareEvents: 0, loadAdjusts: 0,
+      patientFactor: patientFactorBadge,
+      treatments: [], treatmentSource: 'stage_recommended',
+    });
     const ranges: Record<HealingPhase, PhaseInfo> = {
-      inflammatory:  { start: -1, end: -1, treatments: [], treatmentSource: 'stage_recommended', goal: phaseGoalForCondition('inflammatory', tissue, painMech),  capacity: 0, flareRisk: 0, pain: 0, irritability: 0, isCurrent: false },
-      proliferative: { start: -1, end: -1, treatments: [], treatmentSource: 'stage_recommended', goal: phaseGoalForCondition('proliferative', tissue, painMech), capacity: 0, flareRisk: 0, pain: 0, irritability: 0, isCurrent: false },
-      remodeling:    { start: -1, end: -1, treatments: [], treatmentSource: 'stage_recommended', goal: phaseGoalForCondition('remodeling', tissue, painMech),    capacity: 0, flareRisk: 0, pain: 0, irritability: 0, isCurrent: false },
-      maturation:    { start: -1, end: -1, treatments: [], treatmentSource: 'stage_recommended', goal: phaseGoalForCondition('maturation', tissue, painMech),    capacity: 0, flareRisk: 0, pain: 0, irritability: 0, isCurrent: false },
+      inflammatory: blank('inflammatory'),
+      proliferative: blank('proliferative'),
+      remodeling: blank('remodeling'),
+      maturation: blank('maturation'),
     };
+
     activeProjection.states.forEach((s, i) => {
       const r = ranges[s.healingPhase];
       if (r.start === -1) r.start = i;
       r.end = i;
+      r.reached = true;
     });
     const currentPhaseId = stateAtScrub.healingPhase;
+    const tl = activeProjection.timelines;
     const attribIndex = new Map(activeProjection.attribution.map(a => [a.treatmentId, a.contributionPercent]));
+
     for (const phase of PHASE_DEFS) {
       const r = ranges[phase.id];
       r.isCurrent = phase.id === currentPhaseId;
-      if (r.start === -1) continue;
+      if (!r.reached) {
+        // Even when the simulation never enters this phase, populate the
+        // strategy + recommended treatments + stage-appropriate library so
+        // the card still tells the clinician what *would* happen.
+        r.treatments = TREATMENT_LIBRARY
+          .filter(t => (t.healingStageMultiplier?.[phase.id] ?? 1) >= 1.1)
+          .slice(0, 3)
+          .map(t => t.name);
+        r.treatmentSource = 'stage_recommended';
+        continue;
+      }
 
-      // Snapshot at phase midpoint
-      const mid = Math.min(activeProjection.states.length - 1, Math.round((r.start + r.end) / 2));
-      const midState = activeProjection.states[mid];
-      r.capacity = Math.round(midState.capacity);
-      r.flareRisk = Math.round(midState.flareRisk);
-      r.pain = Math.round(midState.pain / 10);
-      r.irritability = Math.round(midState.irritability);
+      const sIdx = r.start;
+      const eIdx = r.end;
+      r.painStart   = Math.round(tl.symptoms.pain[sIdx] / 10);
+      r.painEnd     = Math.round(tl.symptoms.pain[eIdx] / 10);
+      r.capStart    = Math.round(tl.capacity[sIdx]);
+      r.capEnd      = Math.round(tl.capacity[eIdx]);
+      r.fnStart     = Math.round(tl.function.walking[sIdx]);
+      r.fnEnd       = Math.round(tl.function.walking[eIdx]);
+      r.tissueStart = Math.round(tl.tissue.loadTolerance[sIdx]);
+      r.tissueEnd   = Math.round(tl.tissue.loadTolerance[eIdx]);
+      r.flareRiskEnd = Math.round(tl.risk.flare[eIdx]);
 
-      // 1) Prefer scheduled interventions that are *appropriate* for this
-      //    phase (healingStageMultiplier ≥ 0.9), ranked by attribution.
+      // Flare events / load adjustments scheduled in this window
+      r.flareEvents = activeBranch.flareEvents.filter(f => f.week >= sIdx && f.week <= eIdx).length;
+      r.loadAdjusts = activeBranch.loadAdjustments.filter(l => l.week >= sIdx && l.week <= eIdx).length;
+
+      // Dominant goal — engine-sourced. Compare normalized improvement
+      // across pain/capacity/function/risk/ROM in the phase window and
+      // surface the dimension with the largest meaningful change as the
+      // measurable target driving this phase.
+      const candidates: { label: string; from: number; to: number; delta: number; unit: string; tone: string }[] = [
+        { label: 'Pain',        from: tl.symptoms.pain[sIdx]/10, to: tl.symptoms.pain[eIdx]/10, delta: (tl.symptoms.pain[sIdx]-tl.symptoms.pain[eIdx])/10, unit: '/10', tone: 'text-red-200' },
+        { label: 'Capacity',    from: tl.capacity[sIdx],         to: tl.capacity[eIdx],         delta: tl.capacity[eIdx]-tl.capacity[sIdx],                unit: '%',   tone: 'text-cyan-200' },
+        { label: 'Function',    from: tl.function.walking[sIdx], to: tl.function.walking[eIdx], delta: tl.function.walking[eIdx]-tl.function.walking[sIdx], unit: '%',   tone: 'text-emerald-200' },
+        { label: 'Reinjury',    from: tl.risk.reinjury[sIdx],    to: tl.risk.reinjury[eIdx],    delta: tl.risk.reinjury[sIdx]-tl.risk.reinjury[eIdx],      unit: '',    tone: 'text-amber-200' },
+        { label: 'ROM',         from: activeProjection.states[sIdx].romPercent, to: activeProjection.states[eIdx].romPercent, delta: activeProjection.states[eIdx].romPercent - activeProjection.states[sIdx].romPercent, unit: '%', tone: 'text-violet-200' },
+      ];
+      const winner = candidates.reduce((best, c) => Math.abs(c.delta) > Math.abs(best.delta) ? c : best, candidates[0]);
+      if (Math.abs(winner.delta) >= 1) {
+        r.dominantGoal = {
+          label: winner.label,
+          from: Math.round(winner.from * 10) / 10,
+          to: Math.round(winner.to * 10) / 10,
+          unit: winner.unit,
+          tone: winner.tone,
+        };
+      }
+
+      // Top-3 stage-fit treatments
       const scheduled = activeBranch.interventions
-        .filter(i => i.startWeek >= r.start && i.startWeek <= r.end)
+        .filter(i => i.startWeek >= sIdx && i.startWeek <= eIdx)
         .map(i => {
           const t = treatmentLookup.get(i.treatmentId);
           const stageFit = t?.healingStageMultiplier?.[phase.id] ?? 1;
@@ -476,17 +561,13 @@ export default function RecoverySimulatorDashboard({
         })
         .filter(x => x.stageFit >= 0.9)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 2)
+        .slice(0, 3)
         .map(x => x.name);
       if (scheduled.length > 0) {
         r.treatments = scheduled;
         r.treatmentSource = 'scheduled';
         continue;
       }
-
-      // 2) Fall back to the engine's top-attribution treatments that *fit*
-      //    this stage — this still reflects what the simulation thinks is
-      //    moving the needle for this patient.
       const attributionFit = [...activeProjection.attribution]
         .map(a => {
           const t = treatmentLookup.get(a.treatmentId);
@@ -495,23 +576,21 @@ export default function RecoverySimulatorDashboard({
         })
         .filter(x => x.stageFit >= 0.9)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 2)
+        .slice(0, 3)
         .map(x => x.name);
       if (attributionFit.length > 0) {
         r.treatments = attributionFit;
         r.treatmentSource = 'attribution';
         continue;
       }
-
-      // 3) Final fallback: stage-recommended treatments from the library.
       r.treatments = TREATMENT_LIBRARY
         .filter(t => (t.healingStageMultiplier?.[phase.id] ?? 1) >= 1.1)
-        .slice(0, 2)
+        .slice(0, 3)
         .map(t => t.name);
       r.treatmentSource = 'stage_recommended';
     }
     return ranges;
-  }, [activeProjection, activeBranch.interventions, treatmentLookup, conditionContext, stateAtScrub.healingPhase]);
+  }, [activeProjection, activeBranch.interventions, activeBranch.flareEvents, activeBranch.loadAdjustments, treatmentLookup, conditionContext, tissueProfile, stateAtScrub.healingPhase]);
 
   // Compute scenario A vs B comparison summary lines from end-of-period deltas
   const scenarioComparison = useMemo(() => {
@@ -582,7 +661,6 @@ export default function RecoverySimulatorDashboard({
   const initials = (patientName ?? 'PT').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const conditionPill = conditionLabel ?? conditionContext?.conditionLabel ?? '';
   const conditionTag = conditionContext?.conditionId ? conditionContext.conditionId.replace(/_/g, ' ').toUpperCase() : (conditionLabel ?? '').toUpperCase().slice(0, 18);
-  const tissueProfile = conditionContext ? tissueProfileForContext(conditionContext) : null;
 
   // Alert: dominant clinical risk
   const alertCard = useMemo(() => {
@@ -818,80 +896,130 @@ export default function RecoverySimulatorDashboard({
             </div>
           </div>
 
-          {/* PHASE CARDS ROW — condition-aware brief per healing phase. Lives
-              below the chart (shrink-0) so it never overlaps. Each card shows
-              the goal we're driving toward in that phase for *this tissue*,
-              the patient's projected state at the phase midpoint, and the
-              top stage-appropriate treatments (scheduled or recommended). */}
-          <div className="grid grid-cols-4 gap-2 shrink-0" data-testid="phase-cards-row">
-            {PHASE_DEFS.map((p) => {
+          {/* PHASE CARDS ROW — strip lives BELOW the chart (shrink-0), and
+              the column widths are proportional to each phase's actual week
+              span on the active projection so the cards visually align with
+              the timeline above. Unreached phases collapse to a small fixed
+              column but still render the strategy and recommended treatments
+              behind a NOT YET tag. */}
+          {(() => {
+            const total = Math.max(1, input.totalWeeks);
+            const cols = PHASE_DEFS.map(p => {
               const r = phaseRanges[p.id];
-              const enabled = r.start !== -1;
-              const flareTone = r.flareRisk > 60 ? 'text-red-300 border-red-700/40 bg-red-950/30'
-                : r.flareRisk > 35 ? 'text-amber-300 border-amber-700/40 bg-amber-950/30'
-                : 'text-emerald-300 border-emerald-700/40 bg-emerald-950/30';
-              const capTone = r.capacity > 70 ? 'text-emerald-300' : r.capacity > 40 ? 'text-amber-300' : 'text-red-300';
-              const sourceLabel = r.treatmentSource === 'scheduled' ? 'Scheduled'
-                : r.treatmentSource === 'attribution' ? 'Top driver'
-                : 'Recommended';
-              return (
-                <div
-                  key={p.id}
-                  className={`rounded-lg p-2 border ${p.ring} ${p.bg} ${r.isCurrent ? 'ring-2 ring-offset-0' : ''} flex flex-col gap-1`}
-                  style={r.isCurrent ? { boxShadow: `0 0 0 1px ${p.color}55` } : undefined}
-                  data-testid={`phase-card-${p.id}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="text-[9px] font-semibold uppercase" style={{ color: p.color }}>
-                      {enabled ? `Week ${r.start}–${r.end}` : 'Not reached'}
+              if (!r.reached) return 'minmax(120px, 0.6fr)';
+              const span = Math.max(1, r.end - r.start + 1);
+              return `minmax(150px, ${(span / total).toFixed(3)}fr)`;
+            }).join(' ');
+            return (
+              <div
+                className="grid gap-2 shrink-0"
+                style={{ gridTemplateColumns: cols }}
+                data-testid="phase-cards-row"
+              >
+                {PHASE_DEFS.map((p) => {
+                  const r = phaseRanges[p.id];
+                  const sourceLabel = r.treatmentSource === 'scheduled' ? 'Scheduled'
+                    : r.treatmentSource === 'attribution' ? 'Top driver'
+                    : 'Recommended';
+                  const flareTone = r.flareRiskEnd > 60 ? 'text-red-300 border-red-700/40 bg-red-950/30'
+                    : r.flareRiskEnd > 35 ? 'text-amber-300 border-amber-700/40 bg-amber-950/30'
+                    : 'text-emerald-300 border-emerald-700/40 bg-emerald-950/30';
+                  return (
+                    <div
+                      key={p.id}
+                      className={`rounded-lg p-2 border ${p.ring} ${p.bg} ${!r.reached ? 'opacity-70' : ''} flex flex-col gap-1`}
+                      style={r.isCurrent ? { boxShadow: `0 0 0 2px ${p.color}88` } : undefined}
+                      data-testid={`phase-card-${p.id}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-[9px] font-semibold uppercase" style={{ color: p.color }}>
+                          {r.reached ? `Week ${r.start}–${r.end}` : 'Expected later'}
+                        </div>
+                        {r.isCurrent ? (
+                          <Badge className="bg-gray-900/70 border-gray-700/60 text-[8px] py-0 px-1.5" style={{ color: p.color }}>NOW</Badge>
+                        ) : !r.reached ? (
+                          <Badge className="bg-gray-800/70 text-gray-400 border-gray-700/50 text-[8px] py-0 px-1.5">NOT YET</Badge>
+                        ) : null}
+                      </div>
+                      <div className="text-[12px] font-bold text-white leading-tight">{p.name}</div>
+
+                      {/* Engine-derived dominant goal for this phase */}
+                      {r.dominantGoal ? (
+                        <div className="text-[10px] leading-snug" data-testid={`phase-goal-${p.id}`}>
+                          <span className="text-gray-400">Target · </span>
+                          <span className={`font-semibold ${r.dominantGoal.tone}`}>
+                            {r.dominantGoal.label} {r.dominantGoal.from}{r.dominantGoal.unit} → {r.dominantGoal.to}{r.dominantGoal.unit}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-gray-400 leading-snug italic" data-testid={`phase-goal-${p.id}`}>
+                          {r.reached ? 'Maintain · no major dimension change projected' : 'Not yet projected'}
+                        </div>
+                      )}
+
+                      {/* Tissue-aware strategy line */}
+                      <div className="text-[10px] text-gray-300 leading-snug" data-testid={`phase-strategy-${p.id}`}>
+                        {r.strategy}
+                      </div>
+
+                      {/* Tissue status: current → projected end-of-phase */}
+                      {r.reached && (
+                        <div className="text-[10px] text-gray-300" data-testid={`phase-tissue-${p.id}`}>
+                          <span className="text-gray-500">Tissue tol. </span>
+                          {r.tissueStart}% → <span className={r.tissueEnd >= r.tissueStart ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{r.tissueEnd}%</span>
+                        </div>
+                      )}
+
+                      {/* Pills row — flare risk, scheduled flare/load events, patient-factor */}
+                      <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                        {r.reached && (
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded border ${flareTone}`} data-testid={`phase-flare-${p.id}`}>
+                            Flare risk {r.flareRiskEnd}
+                          </span>
+                        )}
+                        {r.flareEvents > 0 && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded border border-red-700/50 bg-red-950/40 text-red-200 flex items-center gap-0.5" data-testid={`phase-flare-events-${p.id}`}>
+                            <Flame className="h-2.5 w-2.5" />{r.flareEvents} flare
+                          </span>
+                        )}
+                        {r.loadAdjusts > 0 && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded border border-amber-700/50 bg-amber-950/40 text-amber-200" data-testid={`phase-load-events-${p.id}`}>
+                            {r.loadAdjusts} load adj.
+                          </span>
+                        )}
+                        {r.patientFactor && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded border border-violet-700/50 bg-violet-950/40 text-violet-200" data-testid={`phase-patient-factor-${p.id}`}>
+                            {r.patientFactor}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-0.5">
+                        <div className="text-[8px] uppercase tracking-wide text-gray-500 font-semibold mb-0.5">{sourceLabel} treatments</div>
+                        {r.treatments.length === 0 ? (
+                          <div className="text-[10px] text-gray-500 italic">No stage-appropriate treatment</div>
+                        ) : (
+                          <ul className="space-y-0.5">
+                            {r.treatments.map((t, i) => (
+                              <li key={i} className="text-[10px] text-gray-200 truncate">• {t}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => { setScrubWeek(Math.max(0, r.start === -1 ? 0 : r.start)); setShowInterventionEditor(true); }}
+                        className="mt-auto w-full text-[10px] text-gray-300 hover:text-white border border-gray-700/60 hover:bg-gray-800/60 rounded py-0.5 flex items-center justify-center gap-1"
+                        data-testid={`modify-phase-${p.id}`}
+                      >
+                        Modify <ChevronRight className="h-3 w-3" />
+                      </button>
                     </div>
-                    {r.isCurrent && (
-                      <Badge className="bg-gray-900/70 border-gray-700/60 text-[8px] py-0 px-1.5" style={{ color: p.color }}>NOW</Badge>
-                    )}
-                  </div>
-                  <div className="text-[12px] font-bold text-white leading-tight">{p.name}</div>
-                  <div className="text-[10px] text-gray-300 leading-snug" data-testid={`phase-goal-${p.id}`}>
-                    {enabled ? r.goal : <span className="italic text-gray-500">Reached after earlier phases progress</span>}
-                  </div>
-
-                  {enabled && (
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded border ${flareTone}`} data-testid={`phase-flare-${p.id}`}>
-                        Flare {r.flareRisk}
-                      </span>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded border border-gray-700/60 bg-gray-900/40 ${capTone}`} data-testid={`phase-cap-${p.id}`}>
-                        Cap {r.capacity}%
-                      </span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded border border-gray-700/60 bg-gray-900/40 text-gray-300">
-                        Pain {r.pain}/10
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="mt-0.5">
-                    <div className="text-[8px] uppercase tracking-wide text-gray-500 font-semibold mb-0.5">{sourceLabel} treatments</div>
-                    {r.treatments.length === 0 ? (
-                      <div className="text-[10px] text-gray-500 italic">No stage-appropriate treatment</div>
-                    ) : (
-                      <ul className="space-y-0.5">
-                        {r.treatments.map((t, i) => (
-                          <li key={i} className="text-[10px] text-gray-200 truncate">• {t}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => { setScrubWeek(Math.max(0, r.start === -1 ? 0 : r.start)); setShowInterventionEditor(true); }}
-                    className="mt-auto w-full text-[10px] text-gray-300 hover:text-white border border-gray-700/60 hover:bg-gray-800/60 rounded py-0.5 flex items-center justify-center gap-1"
-                    data-testid={`modify-phase-${p.id}`}
-                  >
-                    Modify <ChevronRight className="h-3 w-3" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </main>
 
         {/* RIGHT COLUMN — AI OPTIMIZER RECOMMENDATION */}

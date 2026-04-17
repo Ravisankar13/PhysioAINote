@@ -3968,7 +3968,12 @@ export default function PureThreeGLBViewer({
       innerMat.opacity = innerBase * o;
       innerMat.transparent = true;
 
-      meshes.outer.scale.setScalar(s);
+      const baseRadius = (meshes.outer.userData.baseRadius as number | undefined) ?? (markerType === 'area' ? (marker.radius || 0.15) : 0.1);
+      if (markerType === 'area' && marker.radius && baseRadius > 0) {
+        meshes.outer.scale.setScalar((marker.radius / baseRadius) * s);
+      } else {
+        meshes.outer.scale.setScalar(s);
+      }
       const outerMat = meshes.outer.material as THREE.MeshBasicMaterial;
       const outerBase = (outerMat.userData.baseOpacity as number | undefined) ?? (markerType === 'area' ? 0.25 : 0.2);
       outerMat.opacity = outerBase * o;
@@ -4085,6 +4090,7 @@ export default function PureThreeGLBViewer({
           } else if (sceneRef.current) {
             const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
             const lineMat = new THREE.LineBasicMaterial({ color: clr, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false, linewidth: 3 });
+            lineMat.userData.baseOpacity = 0.85;
             lineObj = new THREE.Line(lineGeo, lineMat);
             lineObj.renderOrder = 999;
             sceneRef.current.scene.add(lineObj);
@@ -4143,11 +4149,13 @@ export default function PureThreeGLBViewer({
       innerMesh.userData.role = 'inner';
 
       let outerGeo: THREE.BufferGeometry;
+      let baseOuterRadius: number;
       if (markerType === 'area') {
-        const r = marker.radius || 0.15;
-        outerGeo = new THREE.SphereGeometry(r, 20, 14);
+        baseOuterRadius = marker.radius || 0.15;
+        outerGeo = new THREE.SphereGeometry(baseOuterRadius, 20, 14);
       } else {
-        outerGeo = new THREE.SphereGeometry(0.1, 12, 8);
+        baseOuterRadius = 0.1;
+        outerGeo = new THREE.SphereGeometry(baseOuterRadius, 12, 8);
       }
       const outerMat = new THREE.MeshBasicMaterial({
         color,
@@ -4165,6 +4173,7 @@ export default function PureThreeGLBViewer({
       outerMesh.userData.markerId = marker.id;
       outerMesh.userData.role = 'outer';
       outerMesh.userData.markerKind = markerType;
+      outerMesh.userData.baseRadius = baseOuterRadius;
 
       scene.add(innerMesh);
       scene.add(outerMesh);

@@ -267,6 +267,23 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
+function mapMyofascialChainToFasciaIds(chainId: string): string[] {
+  const c = chainId.toLowerCase();
+  if (c.startsWith('superficial_back')) return ['sbl'];
+  if (c.startsWith('superficial_front')) return ['sfl'];
+  if (c.startsWith('deep_front')) return ['dfl'];
+  if (c.startsWith('lateral_line_l')) return ['lateral_l'];
+  if (c.startsWith('lateral_line_r')) return ['lateral_r'];
+  if (c.startsWith('lateral_line') || c.startsWith('lateral_sling')) return ['lateral_l', 'lateral_r'];
+  if (c.startsWith('spiral')) return ['spiral'];
+  if (c.startsWith('arm_line_l')) return ['front_arm_l'];
+  if (c.startsWith('arm_line_r')) return ['front_arm_r'];
+  if (c.startsWith('arm_line')) return ['front_arm_l', 'front_arm_r'];
+  if (c.includes('anterior_oblique')) return ['sfl', 'dfl'];
+  if (c.includes('posterior_oblique')) return ['sbl'];
+  return [];
+}
+
 interface JointForceData {
   boneName: string;
   totalForce: number;
@@ -590,9 +607,7 @@ export function aggregateTissueIntelligence(input: AggregatorInput): TissueIntel
     for (const ch of input.chainIntegrityScores) {
       if (ch.score >= 70) continue;
       const failure = (70 - ch.score) / 70;
-      const fasciaIds = FASCIAL_LAYER_DATA
-        .filter(f => f.id.includes(ch.chainId.toLowerCase().slice(0, 3)) || ch.chainId.toLowerCase().includes(f.id))
-        .map(f => f.id);
+      const fasciaIds = mapMyofascialChainToFasciaIds(ch.chainId);
       for (const id of fasciaIds) {
         const k = keyOf('fascia', id);
         typeOf.set(k, 'fascia');

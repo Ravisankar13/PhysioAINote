@@ -398,7 +398,7 @@ export default function RecoverySimulatorDashboard({
   const archetype = useMemo(() => {
     // Trust the archetypeId precomputed by the classifier when available; only
     // fall back to label-based resolution for legacy contexts that lack it.
-    const precomputed = conditionContext?.archetypeId as RecoveryArchetypeId | undefined;
+    const precomputed = conditionContext?.archetypeId;
     if (precomputed && RECOVERY_ARCHETYPES[precomputed]) {
       return RECOVERY_ARCHETYPES[precomputed];
     }

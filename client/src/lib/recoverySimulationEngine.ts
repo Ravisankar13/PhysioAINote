@@ -1,4 +1,4 @@
-import { resolveArchetypeId } from './recoveryArchetypes';
+import { resolveArchetypeId, type RecoveryArchetypeId } from './recoveryArchetypes';
 
 export type HealingPhase = 'inflammatory' | 'proliferative' | 'remodeling' | 'maturation';
 
@@ -684,7 +684,7 @@ export interface ConditionContext {
    *  load-capacity, OA, frozen shoulder, mechanical impingement, radicular,
    *  disc, bone stress, chronic, instability) instead of the default
    *  4-phase acute tissue healing layout. */
-  archetypeId: string;
+  archetypeId: RecoveryArchetypeId;
   primaryTissue: ConditionTissue;
   tissueLoad: number;
   scarLoad: number;

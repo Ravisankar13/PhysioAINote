@@ -152,6 +152,7 @@ const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/Unifie
 const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
 const RecoverySimulationPanel = lazy(() => import("@/components/skeleton/RecoverySimulationPanel"));
+const RecoverySimulatorDashboard = lazy(() => import("@/components/skeleton/RecoverySimulatorDashboard"));
 import { buildConditionContext, type ConditionContext } from "@/lib/recoverySimulationEngine";
 import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers } from "@/lib/patientFactorsEngine";
 const TimelineBottomBar = lazy(() => import("@/components/skeleton/TimelineBottomBar"));
@@ -9433,37 +9434,28 @@ ${ddxList}`;
             )}
 
             {showRecoverySim && (
-              <div className="absolute top-2 right-2 z-30 w-[480px] max-h-[calc(100%-16px)] overflow-y-auto animate-in slide-in-from-right-2 duration-200">
-                <div className="bg-black/90 backdrop-blur rounded-lg px-3 py-2.5">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Activity className="h-3.5 w-3.5 text-emerald-400" />
-                      <span className="text-xs font-semibold text-gray-200">Recovery Simulation Engine</span>
-                    </div>
-                    <button onClick={() => setShowRecoverySim(false)} className="text-gray-400 hover:text-white p-0.5">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <Suspense fallback={<LazyPanelFallback />}>
-                    <RecoverySimulationPanel
-                      conditionLabel={extractionResult?.mainComplaint || undefined}
-                      conditionContext={recoverySimConditionContext}
-                      onApplyState={handleApplyRecoverySimState}
-                      hasClinicalInput={recoverySimHasClinicalInput}
-                      customExercises={customExerciseResult?.customExercises ?? null}
-                      customTechniques={customManualTherapyResult?.customTechniques ?? null}
-                      initialInput={{
-                        conditionSeverity: painMarkers.length > 0
-                          ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)
-                          : 50,
-                        irritability: extractionResult?.irritability === 'high' ? 75 : extractionResult?.irritability === 'low' ? 25 : 50,
-                        acuity: extractionResult?.duration === 'acute' ? 'acute' : extractionResult?.duration === 'chronic' ? 'chronic' : 'subacute',
-                        patientAdherence: 0.8,
-                      }}
-                    />
-                  </Suspense>
-                </div>
-              </div>
+              <Suspense fallback={<LazyPanelFallback />}>
+                <RecoverySimulatorDashboard
+                  conditionLabel={extractionResult?.mainComplaint || undefined}
+                  conditionContext={recoverySimConditionContext}
+                  patientName={'Patient'}
+                  patientMeta={[extractionResult?.patientAge ? `Age ${extractionResult.patientAge}` : null, extractionResult?.duration].filter(Boolean).join(' · ') || undefined}
+                  goalLabel={extractionResult?.mainComplaint || 'Return to function'}
+                  onClose={() => setShowRecoverySim(false)}
+                  onApplyState={handleApplyRecoverySimState}
+                  hasClinicalInput={recoverySimHasClinicalInput}
+                  customExercises={customExerciseResult?.customExercises ?? null}
+                  customTechniques={customManualTherapyResult?.customTechniques ?? null}
+                  initialInput={{
+                    conditionSeverity: painMarkers.length > 0
+                      ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)
+                      : 50,
+                    irritability: extractionResult?.irritability === 'high' ? 75 : extractionResult?.irritability === 'low' ? 25 : 50,
+                    acuity: extractionResult?.duration === 'acute' ? 'acute' : extractionResult?.duration === 'chronic' ? 'chronic' : 'subacute',
+                    patientAdherence: 0.8,
+                  }}
+                />
+              </Suspense>
             )}
 
             {showShoulderAssessment && (

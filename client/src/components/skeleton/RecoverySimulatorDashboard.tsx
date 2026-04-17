@@ -1,0 +1,954 @@
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { Slider } from "@/components/ui/slider";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Brain,
+  CheckCircle2,
+  ChevronRight,
+  Flame,
+  GitBranch,
+  Pause,
+  Play,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Trash2,
+  X,
+  Zap,
+  Save,
+  Share2,
+  FilePlus,
+} from "lucide-react";
+import {
+  type SimulationInput,
+  type ScenarioBranch,
+  type GoalMode,
+  type BaselineMode,
+  type TreatmentEffectProfile,
+  type CustomExerciseInput,
+  type CustomManualTechniqueInput,
+  type ConditionContext,
+  type RecoveryState,
+  type HealingPhase,
+  TREATMENT_LIBRARY,
+  TREATMENT_BY_ID,
+  simulateBranch,
+  simulateNaturalHistoryBaselines,
+  optimizeSequence,
+  generateNarrative,
+  defaultBranch,
+  defaultInput,
+  buildCustomTreatmentProfiles,
+  tissueProfileForContext,
+} from "@/lib/recoverySimulationEngine";
+
+interface Props {
+  initialInput?: Partial<SimulationInput>;
+  conditionLabel?: string;
+  patientName?: string;
+  patientMeta?: string;
+  goalLabel?: string;
+  goalWeeks?: number;
+  onClose: () => void;
+  onApplyState?: (info: { week: number; state: RecoveryState; baselineState: RecoveryState; branchName: string }) => void;
+  hasClinicalInput?: boolean;
+  customExercises?: CustomExerciseInput[] | null;
+  customTechniques?: CustomManualTechniqueInput[] | null;
+  conditionContext?: ConditionContext | null;
+}
+
+const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
+
+const PHASE_DEFS: { id: HealingPhase; name: string; subtitle: string; color: string; ring: string; bg: string }[] = [
+  { id: 'inflammatory', name: 'Calm & Prepare',  subtitle: 'Reduce Irritability',     color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40' },
+  { id: 'proliferative', name: 'Build Capacity',  subtitle: 'Progressive Loading',     color: '#06b6d4', ring: 'border-cyan-500/60',    bg: 'bg-cyan-950/40' },
+  { id: 'remodeling',   name: 'Restore Power',    subtitle: 'Reintroduce Impact',      color: '#22c55e', ring: 'border-emerald-500/60', bg: 'bg-emerald-950/40' },
+  { id: 'maturation',   name: 'Return to Sport',  subtitle: 'Full Performance',        color: '#f59e0b', ring: 'border-amber-500/60',   bg: 'bg-amber-950/40' },
+];
+
+function phaseIndexFor(phase: HealingPhase): number {
+  return PHASE_DEFS.findIndex(p => p.id === phase);
+}
+
+function MiniChart({
+  series,
+  scrubWeek,
+  totalWeeks,
+  onScrub,
+  height = 220,
+  showGrid = true,
+  showWeekLabel = true,
+}: {
+  series: { label: string; color: string; values: number[]; dash?: string }[];
+  scrubWeek?: number;
+  totalWeeks: number;
+  onScrub?: (w: number) => void;
+  height?: number;
+  showGrid?: boolean;
+  showWeekLabel?: boolean;
+}) {
+  const width = 720;
+  const padding = { top: 14, right: 16, bottom: 26, left: 36 };
+  const cw = width - padding.left - padding.right;
+  const ch = height - padding.top - padding.bottom;
+  const yMin = 0;
+  const yMax = 100;
+
+  const xFor = (w: number) => padding.left + (totalWeeks > 0 ? (w / totalWeeks) * cw : 0);
+  const yFor = (v: number) => padding.top + (1 - (v - yMin) / (yMax - yMin)) * ch;
+  const path = (vals: number[]) => vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${xFor(i).toFixed(1)},${yFor(v).toFixed(1)}`).join(' ');
+
+  const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!onScrub) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relX = (e.clientX - rect.left) * (width / rect.width);
+    const wf = (relX - padding.left) / cw;
+    const wk = Math.round(Math.max(0, Math.min(totalWeeks, wf * totalWeeks)));
+    onScrub(wk);
+  };
+
+  const weekTicks = Array.from({ length: 5 }, (_, i) => Math.round((i / 4) * totalWeeks));
+
+  return (
+    <svg
+      width="100%"
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      onClick={handleClick}
+      className={onScrub ? 'cursor-crosshair' : ''}
+      preserveAspectRatio="none"
+    >
+      {showGrid && [0, 25, 50, 75, 100].map(v => {
+        const y = yFor(v);
+        return (
+          <g key={v}>
+            <line x1={padding.left} y1={y} x2={padding.left + cw} y2={y} stroke="#1f2937" strokeWidth={0.6} strokeDasharray="3,3" />
+            <text x={padding.left - 6} y={y + 3} textAnchor="end" fill="#6b7280" fontSize={9}>{v}%</text>
+          </g>
+        );
+      })}
+      {showGrid && weekTicks.map((w, i) => (
+        <text key={i} x={xFor(w)} y={height - 8} textAnchor="middle" fill="#6b7280" fontSize={9}>WEEK {w}</text>
+      ))}
+
+      {series.map((s, i) => (
+        <path key={i} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray={s.dash} />
+      ))}
+
+      {scrubWeek !== undefined && (
+        <g>
+          <line x1={xFor(scrubWeek)} y1={padding.top} x2={xFor(scrubWeek)} y2={padding.top + ch} stroke="#a855f7" strokeWidth={1.4} />
+          {showWeekLabel && (
+            <g transform={`translate(${xFor(scrubWeek) - 30}, ${padding.top - 12})`}>
+              <rect width={60} height={16} rx={3} fill="#a855f7" />
+              <text x={30} y={11} textAnchor="middle" fill="white" fontSize={9} fontWeight="bold">WEEK {scrubWeek}</text>
+            </g>
+          )}
+        </g>
+      )}
+    </svg>
+  );
+}
+
+function MetricBar({ label, value, max = 100, suffix, color, severity }: {
+  label: string;
+  value: number;
+  max?: number;
+  suffix?: string;
+  color: string;
+  severity?: 'good' | 'mod' | 'bad';
+}) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  const sevColor = severity === 'good' ? 'text-emerald-300' : severity === 'bad' ? 'text-red-300' : 'text-amber-300';
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[11px] mb-1">
+        <span className="text-gray-300">{label}</span>
+        <span className={`font-mono ${sevColor}`}>{typeof value === 'number' ? value.toFixed(value < 10 ? 1 : 0) : value}{suffix ?? ''}</span>
+      </div>
+      <div className="h-1.5 bg-gray-800/80 rounded">
+        <div className="h-1.5 rounded" style={{ width: `${pct}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
+
+function severityFor(value: number, inverse = false): 'good' | 'mod' | 'bad' {
+  if (inverse) return value < 30 ? 'good' : value > 60 ? 'bad' : 'mod';
+  return value > 70 ? 'good' : value < 30 ? 'bad' : 'mod';
+}
+
+export default function RecoverySimulatorDashboard({
+  initialInput,
+  conditionLabel,
+  patientName,
+  patientMeta,
+  goalLabel,
+  goalWeeks,
+  onClose,
+  onApplyState,
+  hasClinicalInput,
+  customExercises,
+  customTechniques,
+  conditionContext,
+}: Props) {
+  const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
+  const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
+  const [activeBranchId, setActiveBranchId] = useState<string>('plan_active');
+  const [scrubWeek, setScrubWeek] = useState(0);
+  const [activeTab, setActiveTab] = useState<'timeline' | 'skeleton'>('timeline');
+  const [animate, setAnimate] = useState(false);
+  const [autoSyncSkeleton, setAutoSyncSkeleton] = useState(true);
+  const [activeBaseline] = useState<BaselineMode>('usual_care');
+  const [goalMode] = useState<GoalMode>('fastest_function');
+  const [showInterventionEditor, setShowInterventionEditor] = useState(false);
+  const [showRemoveTreatment, setShowRemoveTreatment] = useState(false);
+
+  useEffect(() => {
+    if (initialInput) setInput(prev => ({ ...prev, ...initialInput }));
+  }, [initialInput]);
+
+  // Escape closes dashboard
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const customProfiles: TreatmentEffectProfile[] = useMemo(
+    () => buildCustomTreatmentProfiles(customExercises, customTechniques),
+    [customExercises, customTechniques],
+  );
+  const treatmentLookup = useMemo(() => {
+    if (customProfiles.length === 0) return TREATMENT_BY_ID;
+    const m = new Map(TREATMENT_BY_ID);
+    for (const p of customProfiles) m.set(p.id, p);
+    return m;
+  }, [customProfiles]);
+
+  const ctxForSim = conditionContext ?? undefined;
+  const projections = useMemo(
+    () => branches.map(b => simulateBranch(input, b, 'usual_care', undefined, customProfiles, ctxForSim)),
+    [branches, input, customProfiles, ctxForSim],
+  );
+  const activeBranch = useMemo(() => branches.find(b => b.id === activeBranchId) ?? branches[0], [branches, activeBranchId]);
+  const activeProjection = useMemo(() => projections.find(p => p.branchId === activeBranchId) ?? projections[0], [projections, activeBranchId]);
+  const baselines = useMemo(() => simulateNaturalHistoryBaselines(input, ctxForSim), [input, ctxForSim]);
+  const baselineProj = baselines[activeBaseline];
+
+  const optimizer = useMemo(
+    () => optimizeSequence(input, activeProjection, goalMode, customProfiles, ctxForSim),
+    [input, activeProjection, goalMode, customProfiles, ctxForSim],
+  );
+  const narrative = useMemo(() => generateNarrative(activeProjection, baselineProj), [activeProjection, baselineProj]);
+
+  const stateAtScrub = activeProjection.states[Math.min(scrubWeek, activeProjection.states.length - 1)];
+  const baselineState = activeProjection.states[0];
+
+  // Auto-sync to skeleton
+  useEffect(() => {
+    if (autoSyncSkeleton && onApplyState && stateAtScrub && baselineState) {
+      onApplyState({ week: scrubWeek, state: stateAtScrub, baselineState, branchName: activeProjection.branchName });
+    }
+  }, [autoSyncSkeleton, scrubWeek, stateAtScrub, baselineState, onApplyState, activeProjection.branchName]);
+
+  // Animate playback
+  const animateRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!animate) {
+      if (animateRef.current) { clearInterval(animateRef.current); animateRef.current = null; }
+      return;
+    }
+    animateRef.current = window.setInterval(() => {
+      setScrubWeek(prev => {
+        const next = prev + 1;
+        if (next > input.totalWeeks) { setAnimate(false); return prev; }
+        return next;
+      });
+    }, 800);
+    return () => { if (animateRef.current) { clearInterval(animateRef.current); animateRef.current = null; } };
+  }, [animate, input.totalWeeks]);
+
+  const addBranch = useCallback((mod: Partial<ScenarioBranch> & { name: string }) => {
+    const base = activeBranch;
+    const newBranch: ScenarioBranch = {
+      ...base,
+      ...mod,
+      id: `branch_${Date.now()}`,
+      baseBranchId: base.id,
+      color: PALETTE[branches.length % PALETTE.length],
+      interventions: [...base.interventions, ...(mod.interventions ?? [])],
+      flareEvents: [...base.flareEvents, ...(mod.flareEvents ?? [])],
+      reaggravationEvents: [...base.reaggravationEvents, ...(mod.reaggravationEvents ?? [])],
+      loadAdjustments: [...base.loadAdjustments, ...(mod.loadAdjustments ?? [])],
+      doseChanges: [...(base.doseChanges ?? []), ...(mod.doseChanges ?? [])],
+      progressionHoldUntilWeek: mod.progressionHoldUntilWeek ?? base.progressionHoldUntilWeek,
+    };
+    setBranches(prev => [...prev, newBranch]);
+    setActiveBranchId(newBranch.id);
+  }, [activeBranch, branches.length]);
+
+  const addInterventionToActiveBranch = useCallback((treatmentId: string, startWeek: number) => {
+    setBranches(prev => prev.map(b => b.id !== activeBranchId ? b : {
+      ...b,
+      interventions: [...b.interventions, { id: `i_${Date.now()}`, treatmentId, startWeek, doseMultiplier: 1, adherence: input.patientAdherence }],
+    }));
+  }, [activeBranchId, input.patientAdherence]);
+
+  const removeInterventionFromActive = useCallback((interventionId: string) => {
+    setBranches(prev => prev.map(b => b.id !== activeBranchId ? b : { ...b, interventions: b.interventions.filter(i => i.id !== interventionId) }));
+  }, [activeBranchId]);
+
+  const resetSimulation = useCallback(() => {
+    setBranches([defaultBranch(defaultInput())]);
+    setActiveBranchId('plan_active');
+    setScrubWeek(0);
+    setAnimate(false);
+  }, []);
+
+  // Phase mapping for the scrubbed week
+  const scrubbedPhaseIdx = useMemo(() => phaseIndexFor(stateAtScrub.healingPhase), [stateAtScrub.healingPhase]);
+
+  // Tissue Stress (inverse of loadTolerance — high stress when tolerance is low)
+  const tissueStress = useMemo(() => {
+    const tol = activeProjection.timelines.tissue.loadTolerance[Math.min(scrubWeek, activeProjection.timelines.tissue.loadTolerance.length - 1)] ?? 0;
+    return Math.max(0, Math.min(100, 100 - tol));
+  }, [activeProjection, scrubWeek]);
+
+  // Function aggregate
+  const functionScore = useMemo(() => (stateAtScrub.walking + stateAtScrub.stairs + stateAtScrub.squat) / 3, [stateAtScrub]);
+
+  // Pain marker scale factor for cue
+  const painFactor = useMemo(() => {
+    if (!stateAtScrub || !baselineState) return 1;
+    return baselineState.pain > 0.001 ? Math.max(0, Math.min(2, stateAtScrub.pain / baselineState.pain)) : (stateAtScrub.pain > 0.001 ? 1 : 0);
+  }, [stateAtScrub, baselineState]);
+
+  // Best Next Action from optimizer
+  const bestAction = optimizer.recommendedSequence[0];
+  const altAction = optimizer.recommendedSequence[1];
+  const bestActionTreatment = useMemo(() => {
+    if (!bestAction) return null;
+    // Try to match a treatment by name in the action string
+    for (const t of TREATMENT_LIBRARY) {
+      if (bestAction.action.toLowerCase().includes(t.name.toLowerCase().split(' ')[0])) return t;
+    }
+    return TREATMENT_LIBRARY[0];
+  }, [bestAction]);
+
+  // Phase week ranges for phase cards (find first/last week in each phase)
+  const phaseRanges = useMemo(() => {
+    const ranges: Record<HealingPhase, { start: number; end: number; treatments: string[] }> = {
+      inflammatory: { start: -1, end: -1, treatments: [] },
+      proliferative: { start: -1, end: -1, treatments: [] },
+      remodeling: { start: -1, end: -1, treatments: [] },
+      maturation: { start: -1, end: -1, treatments: [] },
+    };
+    activeProjection.states.forEach((s, i) => {
+      const r = ranges[s.healingPhase];
+      if (r.start === -1) r.start = i;
+      r.end = i;
+    });
+    // Top treatments per phase from attribution (simple split by phase index)
+    for (const phase of PHASE_DEFS) {
+      const r = ranges[phase.id];
+      if (r.start === -1) continue;
+      // Pick interventions that overlap this phase window
+      const inWindow = activeBranch.interventions
+        .filter(i => i.startWeek >= r.start && i.startWeek <= r.end)
+        .map(i => treatmentLookup.get(i.treatmentId)?.name ?? i.treatmentId)
+        .slice(0, 3);
+      if (inWindow.length > 0) {
+        r.treatments = inWindow;
+      } else {
+        // Fall back to phase-suitable library treatments
+        const fallback = TREATMENT_LIBRARY
+          .filter(t => (t.healingStageMultiplier?.[phase.id] ?? 1) >= 1)
+          .slice(0, 3)
+          .map(t => t.name);
+        r.treatments = fallback;
+      }
+    }
+    return ranges;
+  }, [activeProjection, activeBranch.interventions, treatmentLookup]);
+
+  // Comparison scenario B — closest baseline
+  const scenarioBSeries = useMemo(() => {
+    const proj = baselineProj;
+    return [
+      { label: 'Pain',     color: '#ef4444', values: proj.timelines.symptoms.pain },
+      { label: 'Function', color: '#06b6d4', values: proj.timelines.function.walking, dash: '3,2' },
+      { label: 'Capacity', color: '#a855f7', values: proj.timelines.capacity, dash: '4,2' },
+    ];
+  }, [baselineProj]);
+
+  const scenarioASeries = useMemo(() => [
+    { label: 'Pain',     color: '#ef4444', values: activeProjection.timelines.symptoms.pain },
+    { label: 'Function', color: '#06b6d4', values: activeProjection.timelines.function.walking, dash: '3,2' },
+    { label: 'Capacity', color: '#a855f7', values: activeProjection.timelines.capacity, dash: '4,2' },
+  ], [activeProjection]);
+
+  // Main timeline — Function / Capacity / Pain / Reinjury
+  const mainSeries = useMemo(() => [
+    { label: 'Function',       color: '#06b6d4', values: activeProjection.timelines.function.walking },
+    { label: 'Tendon Capacity', color: '#22c55e', values: activeProjection.timelines.capacity },
+    { label: 'Pain',           color: '#ef4444', values: activeProjection.timelines.symptoms.pain },
+    { label: 'Reinjury Risk',  color: '#f59e0b', values: activeProjection.timelines.risk.reinjury, dash: '3,2' },
+  ], [activeProjection]);
+
+  // Header info
+  const initials = (patientName ?? 'PT').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  const conditionPill = conditionLabel ?? conditionContext?.conditionLabel ?? '';
+  const conditionTag = conditionContext?.conditionId ? conditionContext.conditionId.replace(/_/g, ' ').toUpperCase() : (conditionLabel ?? '').toUpperCase().slice(0, 18);
+  const tissueProfile = conditionContext ? tissueProfileForContext(conditionContext) : null;
+
+  // Alert: dominant clinical risk
+  const alertCard = useMemo(() => {
+    const irr = stateAtScrub.irritability;
+    const flare = stateAtScrub.flareRisk;
+    const reinj = stateAtScrub.reinjuryRisk;
+    if (irr > 60) return { title: `${conditionContext?.primaryTissue ?? 'Tissue'} is Irritable`, body: 'High Risk if Load Increases Too Quickly', color: 'border-red-700/50 bg-red-950/30 text-red-200' };
+    if (flare > 50) return { title: 'Elevated Flare Risk', body: `Flare risk ${flare.toFixed(0)} — keep loading conservative`, color: 'border-amber-700/50 bg-amber-950/30 text-amber-200' };
+    if (reinj > 40) return { title: 'Watch Reinjury Risk', body: `Reinjury risk ${reinj.toFixed(0)} — gate progressions on capacity`, color: 'border-orange-700/50 bg-orange-950/30 text-orange-200' };
+    return { title: 'Stable Loading Window', body: 'Conditions favor progressive loading', color: 'border-emerald-700/50 bg-emerald-950/30 text-emerald-200' };
+  }, [stateAtScrub, conditionContext]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col bg-gray-950/97 backdrop-blur-md text-gray-100" data-testid="recovery-sim-dashboard">
+      {/* TOP HEADER BAR */}
+      <header className="flex items-center justify-between px-4 py-2 border-b border-gray-800/80 bg-gray-900/70 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <div className="h-7 w-7 rounded bg-gradient-to-br from-violet-600 to-cyan-500 flex items-center justify-center text-white font-bold text-[12px]">P</div>
+            <span className="text-sm font-semibold text-gray-100">physioGPT</span>
+            <span className="text-xs text-gray-400 ml-1">Recovery Simulator</span>
+          </div>
+          {conditionTag && (
+            <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[10px] uppercase tracking-wide">{conditionTag}</Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-gray-300 hover:text-white" data-testid="header-new-case"><FilePlus className="h-3 w-3 mr-1" />New Case</Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-gray-300 hover:text-white" data-testid="header-save"><Save className="h-3 w-3 mr-1" />Save</Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-gray-300 hover:text-white" data-testid="header-share"><Share2 className="h-3 w-3 mr-1" />Share</Button>
+          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold text-white">JD</div>
+          <button onClick={onClose} className="ml-2 h-7 w-7 rounded hover:bg-gray-800/80 flex items-center justify-center text-gray-400 hover:text-white" data-testid="dashboard-close" title="Close (Esc)">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* PATIENT BANNER */}
+      <div className="flex items-center gap-4 px-4 py-2 border-b border-gray-800/80 bg-gray-900/40 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-white text-xs">{initials}</div>
+          <div>
+            <div className="text-sm font-semibold text-gray-100">{patientName ?? 'Patient'}</div>
+            <div className="text-[10px] text-gray-400">{patientMeta ?? '—'}</div>
+          </div>
+        </div>
+        <div className="border-l border-gray-700/60 pl-4">
+          <div className="text-[10px] text-gray-500 uppercase tracking-wide">Condition</div>
+          <div className="text-xs text-gray-200 font-semibold">{conditionPill || 'Not set'}</div>
+          <div className="text-[10px] text-gray-400">{input.acuity} · {tissueProfile ? `${tissueProfile.healingRateMult.toFixed(2)}× healing rate` : ''}</div>
+        </div>
+        <div className="border-l border-gray-700/60 pl-4">
+          <div className="text-[10px] text-gray-500 uppercase tracking-wide">Goal</div>
+          <div className="text-xs text-gray-200 font-semibold">{goalLabel ?? 'Return to function'}</div>
+          <div className="text-[10px] text-gray-400">in {goalWeeks ?? input.totalWeeks} weeks</div>
+        </div>
+        <div className="border-l border-gray-700/60 pl-4">
+          <div className="text-[10px] text-gray-500 uppercase tracking-wide">Optimization Mode</div>
+          <div className="text-xs text-amber-300 font-semibold flex items-center gap-1"><Zap className="h-3 w-3" />FASTEST SAFE RETURN</div>
+        </div>
+      </div>
+
+      {/* BODY GRID */}
+      <div className="flex-1 grid gap-3 p-3 overflow-hidden xl:grid-cols-[260px_1fr_280px] grid-cols-1 min-h-0">
+        {/* LEFT COLUMN — CURRENT STATE */}
+        <aside className="overflow-y-auto space-y-3 pr-1">
+          <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Current State</span>
+              <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[9px]">Today · Week {scrubWeek}</Badge>
+            </div>
+            <div className={`rounded p-2 border ${alertCard.color} flex items-start gap-2`}>
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <div>
+                <div className="text-[11px] font-semibold">{alertCard.title}</div>
+                <div className="text-[10px] opacity-90">{alertCard.body}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3">
+            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-2">Key Metrics</div>
+            <div className="space-y-2.5">
+              <MetricBar label="Pain (0-10)" value={stateAtScrub.pain / 10} max={10} color="#ef4444" severity={severityFor(stateAtScrub.pain, true)} />
+              <MetricBar label="Irritability" value={stateAtScrub.irritability} suffix="" color="#f97316" severity={severityFor(stateAtScrub.irritability, true)} />
+              <MetricBar label="Tissue Capacity" value={stateAtScrub.capacity} suffix="%" color="#06b6d4" severity={severityFor(stateAtScrub.capacity)} />
+              <MetricBar label="Function" value={functionScore} suffix="%" color="#22c55e" severity={severityFor(functionScore)} />
+              <MetricBar label="Reinjury Risk" value={stateAtScrub.reinjuryRisk} color="#a855f7" severity={severityFor(stateAtScrub.reinjuryRisk, true)} />
+            </div>
+          </div>
+
+          <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3">
+            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-2">Tissue Snapshot</div>
+            <div className="flex gap-2">
+              <div className="h-14 w-14 rounded bg-gradient-to-br from-red-900/60 to-orange-700/40 border border-red-700/40 flex items-center justify-center">
+                <Activity className="h-5 w-5 text-red-300" />
+              </div>
+              <div className="flex-1">
+                <div className="text-[11px] text-gray-100 font-semibold">{conditionContext?.primaryTissue ? `${conditionContext.primaryTissue.charAt(0).toUpperCase() + conditionContext.primaryTissue.slice(1)} Tissue` : 'Tissue'}</div>
+                <ul className="text-[10px] text-gray-400 mt-1 space-y-0.5">
+                  {tissueProfile && <li>↓ Load Tolerance ({(tissueProfile.capacityCeiling).toFixed(0)} cap)</li>}
+                  {conditionContext && conditionContext.scarLoad > 0 && <li>Scar load: {conditionContext.scarLoad.toFixed(0)}</li>}
+                  {conditionContext && conditionContext.tissueLoad > 0 && <li>Tissue load: {conditionContext.tissueLoad.toFixed(0)}</li>}
+                  {!conditionContext && <li className="italic text-gray-500">Add clinical findings to populate</li>}
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {!hasClinicalInput && (
+            <div className="bg-amber-950/30 border border-amber-700/40 rounded p-2 text-[10px] text-amber-200">
+              Add pain markers, scars, or muscle states to the 3D model so the simulation can animate your specific findings.
+            </div>
+          )}
+        </aside>
+
+        {/* CENTER COLUMN — TIMELINE / SKELETON */}
+        <main className="flex flex-col gap-3 min-h-0 overflow-hidden">
+          <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3 flex-1 flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setActiveTab('timeline')}
+                  className={`px-3 py-1.5 rounded text-xs font-semibold ${activeTab === 'timeline' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                  data-testid="tab-timeline"
+                >Recovery Timeline</button>
+                <button
+                  onClick={() => setActiveTab('skeleton')}
+                  className={`px-3 py-1.5 rounded text-xs font-semibold ${activeTab === 'skeleton' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                  data-testid="tab-skeleton"
+                >Skeleton View</button>
+              </div>
+              <label className="flex items-center gap-1.5 text-[10px] text-gray-300 cursor-pointer">
+                Animate
+                <input
+                  type="checkbox"
+                  checked={animate}
+                  onChange={e => setAnimate(e.target.checked)}
+                  className="sr-only"
+                />
+                <span className={`relative h-4 w-7 rounded-full transition ${animate ? 'bg-cyan-500' : 'bg-gray-700'}`}>
+                  <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition ${animate ? 'left-3.5' : 'left-0.5'}`} />
+                </span>
+              </label>
+            </div>
+
+            {activeTab === 'timeline' ? (
+              <>
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1">Recovery Progression</div>
+                <div className="text-[9px] text-gray-500 mb-1">Drag timeline or modify treatments to see changes</div>
+                <div className="flex-1 min-h-[180px]">
+                  <MiniChart series={mainSeries} scrubWeek={scrubWeek} totalWeeks={input.totalWeeks} onScrub={setScrubWeek} height={240} />
+                </div>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {mainSeries.map(s => (
+                    <span key={s.label} className="flex items-center gap-1 text-[9px] text-gray-400">
+                      <span className="w-2.5 h-0.5" style={{ background: s.color }} />{s.label}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-gray-950/40 rounded border border-dashed border-gray-700/50 min-h-[180px]">
+                <div className="text-center text-[11px] text-gray-400 max-w-xs px-4">
+                  <Activity className="h-8 w-8 mx-auto text-cyan-400/70 mb-2" />
+                  <div className="text-gray-200 font-semibold mb-1">Skeleton View Active</div>
+                  <div>Pain markers on the underlying 3D skeleton are scaling with the scrubbed week (markers ×{painFactor.toFixed(2)}). Close this dashboard or switch back to Recovery Timeline to interact with the chart.</div>
+                  <Button size="sm" variant="outline" className="mt-3 h-7 text-[10px]" onClick={onClose}>
+                    <ChevronRight className="h-3 w-3 mr-1" />View 3D Skeleton
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Phase pills row + tissue stress */}
+            <div className="grid grid-cols-4 gap-1.5 mt-3">
+              {PHASE_DEFS.map((p, i) => {
+                const active = i === scrubbedPhaseIdx;
+                return (
+                  <div
+                    key={p.id}
+                    className={`rounded p-1.5 border text-center ${active ? `${p.bg} ${p.ring}` : 'bg-gray-800/40 border-gray-700/40'}`}
+                    data-testid={`phase-pill-${p.id}`}
+                  >
+                    <div className="text-[9px] font-semibold" style={{ color: active ? p.color : '#9ca3af' }}>Phase {i + 1}</div>
+                    <div className={`text-[10px] font-semibold ${active ? 'text-white' : 'text-gray-400'}`}>{p.name}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-400">
+              <span className="font-semibold">TREATMENT TIMELINE</span>
+              <span>· Click any card to edit or drag to reschedule</span>
+              <span className="ml-auto flex items-center gap-1">
+                <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[9px]">Week {scrubWeek}</Badge>
+                <button
+                  onClick={() => setAnimate(!animate)}
+                  className="h-5 w-5 rounded-full bg-violet-600 hover:bg-violet-500 flex items-center justify-center text-white"
+                  data-testid="play-pause"
+                  title={animate ? 'Pause' : 'Play'}
+                >
+                  {animate ? <Pause className="h-2.5 w-2.5" /> : <Play className="h-2.5 w-2.5" />}
+                </button>
+                <span className="ml-2 text-[9px]">TISSUE STRESS</span>
+                <span className="inline-flex h-1.5 w-20 rounded bg-gradient-to-r from-emerald-500 via-amber-500 to-red-500 relative">
+                  <span className="absolute -top-0.5 h-2.5 w-0.5 bg-white" style={{ left: `${tissueStress}%` }} />
+                </span>
+                <span className={`text-[9px] ${tissueStress > 60 ? 'text-red-300' : tissueStress > 35 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                  {tissueStress > 60 ? 'High' : tissueStress > 35 ? 'Mod' : 'Low'}
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {/* PHASE CARDS ROW */}
+          <div className="grid grid-cols-4 gap-2 shrink-0">
+            {PHASE_DEFS.map((p) => {
+              const r = phaseRanges[p.id];
+              const enabled = r.start !== -1;
+              return (
+                <div key={p.id} className={`rounded-lg p-2.5 border ${p.ring} ${p.bg}`} data-testid={`phase-card-${p.id}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-[9px] font-semibold uppercase" style={{ color: p.color }}>{enabled ? `Week ${r.start} - ${r.end}` : 'Not yet'}</div>
+                    <Badge className="bg-gray-900/60 text-gray-300 border-gray-700/50 text-[8px]">{p.id}</Badge>
+                  </div>
+                  <div className="text-[12px] font-bold text-white leading-tight">{p.name}</div>
+                  <div className="text-[10px] text-gray-300 mb-1.5">{p.subtitle}</div>
+                  <ul className="space-y-0.5 mb-2">
+                    {r.treatments.length === 0 ? (
+                      <li className="text-[10px] text-gray-500 italic">No treatments scheduled</li>
+                    ) : (
+                      r.treatments.map((t, i) => (
+                        <li key={i} className="text-[10px] text-gray-200 truncate">• {t}</li>
+                      ))
+                    )}
+                  </ul>
+                  <button
+                    onClick={() => { setScrubWeek(Math.max(0, r.start === -1 ? 0 : r.start)); setShowInterventionEditor(true); }}
+                    className="w-full text-[10px] text-gray-300 hover:text-white border border-gray-700/60 hover:bg-gray-800/60 rounded py-1 flex items-center justify-center gap-1"
+                    data-testid={`modify-phase-${p.id}`}
+                  >
+                    Modify Phase <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </main>
+
+        {/* RIGHT COLUMN — AI OPTIMIZER RECOMMENDATION */}
+        <aside className="overflow-y-auto space-y-3 pl-1">
+          <div className="bg-gradient-to-br from-violet-900/30 to-cyan-900/20 border border-violet-700/40 rounded-lg p-3">
+            <div className="flex items-center gap-1 text-[10px] text-violet-300 font-semibold uppercase tracking-wide mb-2">
+              <Sparkles className="h-3 w-3" />AI Optimizer Recommendation
+            </div>
+            <div className="bg-gray-900/60 border border-gray-800/60 rounded p-2.5 mb-2">
+              <div className="flex items-center gap-1 text-[10px] text-emerald-300 mb-1"><Brain className="h-3 w-3" />Best Next Action</div>
+              <div className="text-sm font-bold text-white leading-tight uppercase">{bestActionTreatment?.name ?? 'Build Capacity'}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{bestAction?.rationale ?? 'Continue current loading'}</div>
+              <Button
+                size="sm"
+                className="w-full mt-2 h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white"
+                onClick={() => bestActionTreatment && addInterventionToActiveBranch(bestActionTreatment.id, scrubWeek)}
+                data-testid="add-best-action"
+              >
+                <Plus className="h-3 w-3 mr-1" />Add to Timeline
+              </Button>
+            </div>
+
+            <div className="bg-gray-900/40 rounded p-2 mb-2">
+              <div className="text-[9px] text-gray-400 uppercase tracking-wide mb-1 font-semibold">Why This Works</div>
+              <ul className="space-y-0.5">
+                {(bestActionTreatment?.description ?? 'Improves load tolerance').split(/[.;]/).filter(s => s.trim().length > 4).slice(0, 3).map((line, i) => (
+                  <li key={i} className="text-[10px] text-gray-300 flex items-start gap-1">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>{line.trim()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {altAction && (
+              <div className="bg-gray-900/40 rounded p-2 mb-2">
+                <div className="text-[9px] text-gray-400 uppercase tracking-wide mb-1 font-semibold">Alternative Option</div>
+                <div className="text-[11px] text-gray-200 font-semibold">{altAction.action}</div>
+                <div className="text-[10px] text-gray-400">{altAction.rationale}</div>
+              </div>
+            )}
+
+            <div className="bg-gray-900/40 rounded p-2">
+              <div className="text-[9px] text-gray-400 uppercase tracking-wide mb-1 font-semibold">Optimization Insight</div>
+              <div className="text-[10px] text-gray-200 leading-snug">
+                {optimizer.narrative.split('.')[0]}. <span className="text-amber-300 font-semibold">Score Δ {(optimizer.expectedScore - optimizer.comparisonScore).toFixed(1)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* KEY MILESTONES */}
+          <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-2">
+              <Target className="h-3 w-3" />Key Milestones
+            </div>
+            <div className="space-y-1.5">
+              {activeProjection.milestones.slice(0, 6).map(m => (
+                <div key={m.id} className="flex items-start gap-2 text-[10px]">
+                  {m.achieved ? (
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3 text-gray-500 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-gray-200 font-semibold">Week {m.achieved ? m.weekAchieved : m.expectedWeek}</div>
+                    <div className="text-gray-400 truncate" title={m.description}>{m.label}</div>
+                  </div>
+                </div>
+              ))}
+              {activeProjection.milestones.length === 0 && (
+                <div className="text-[10px] text-gray-500 italic">No milestones yet</div>
+              )}
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      {/* COMPARE SCENARIOS ROW */}
+      <div className="px-3 pb-3 grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-3 shrink-0">
+        <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Compare Scenarios</div>
+              <div className="text-[9px] text-gray-500">See how different choices affect recovery</div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] border-violet-700/50 text-violet-200 hover:bg-violet-900/30"
+              onClick={() => addBranch({ name: `Scenario ${branches.length + 1}`, flareEvents: [], reaggravationEvents: [], loadAdjustments: [] })}
+              data-testid="add-scenario"
+            >
+              <Plus className="h-3 w-3 mr-1" />Add Scenario
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-gray-950/40 border border-gray-800 rounded p-2">
+              <div className="flex items-center gap-1 mb-1">
+                <Badge className="bg-emerald-700/40 text-emerald-200 border-emerald-600/40 text-[8px] uppercase">Recommended Plan</Badge>
+              </div>
+              <div className="text-[11px] font-bold text-white">Scenario A: {activeProjection.branchName}</div>
+              <div className="text-[9px] text-gray-400 mb-1">With Progressive Loading</div>
+              <MiniChart series={scenarioASeries} totalWeeks={input.totalWeeks} height={120} showWeekLabel={false} />
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                <span className="text-[9px] text-emerald-300">• Lower Risk</span>
+                <span className="text-[9px] text-cyan-300">• Faster &amp; Safer</span>
+                <span className="text-[9px] text-violet-300">• Better Long-Term</span>
+              </div>
+            </div>
+            <div className="bg-gray-950/40 border border-gray-800 rounded p-2">
+              <div className="flex items-center gap-1 mb-1">
+                <Badge className="bg-amber-700/40 text-amber-200 border-amber-600/40 text-[8px] uppercase">Alternative</Badge>
+              </div>
+              <div className="text-[11px] font-bold text-white">Scenario B: Passive Focused</div>
+              <div className="text-[9px] text-gray-400 mb-1">More Manual Therapy &amp; Less Loading</div>
+              <MiniChart series={scenarioBSeries} totalWeeks={input.totalWeeks} height={120} showWeekLabel={false} />
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                <span className="text-[9px] text-emerald-300">• Feels Better Sooner</span>
+                <span className="text-[9px] text-amber-300">• Higher Reinjury Risk</span>
+                <span className="text-[9px] text-red-300">• Slower Capacity</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3 flex flex-col">
+          <Button size="sm" className="bg-violet-600 hover:bg-violet-500 text-white h-8 text-[11px]" data-testid="download-plan">
+            <ArrowRight className="h-3 w-3 mr-1" />Download Plan
+          </Button>
+          <div className="mt-2 text-[10px] text-gray-400">
+            Branches: {branches.length} · Active: <span className="text-cyan-300">{activeProjection.branchName}</span>
+          </div>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {branches.map(b => (
+              <button
+                key={b.id}
+                onClick={() => setActiveBranchId(b.id)}
+                className={`text-[9px] px-1.5 py-0.5 rounded border ${b.id === activeBranchId ? 'bg-cyan-900/50 border-cyan-500/50 text-cyan-200' : 'bg-gray-800/40 border-gray-700/40 text-gray-300'}`}
+              >
+                <span className="inline-block h-1.5 w-1.5 rounded-full mr-1" style={{ background: b.color }} />{b.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* BOTTOM SIMULATION CONTROLS BAR */}
+      <div className="border-t border-gray-800/80 bg-gray-900/70 px-4 py-2 shrink-0">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 min-w-[220px]">
+            <span className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Simulation Controls</span>
+          </div>
+          <div className="flex items-center gap-2 min-w-[200px]">
+            <span className="text-[10px] text-gray-300">Adherence: <span className="text-cyan-300 font-mono">{Math.round(input.patientAdherence * 100)}%</span></span>
+            <div className="w-32">
+              <Slider
+                value={[Math.round(input.patientAdherence * 100)]}
+                min={0}
+                max={100}
+                step={5}
+                onValueChange={([v]) => setInput(p => ({ ...p, patientAdherence: v / 100 }))}
+              />
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[10px] border-amber-700/50 text-amber-200 hover:bg-amber-900/30"
+            onClick={() => addBranch({ name: `Flare wk${scrubWeek}`, flareEvents: [{ week: scrubWeek, severity: 25 }] })}
+            data-testid="add-flareup"
+          >
+            <Flame className="h-3 w-3 mr-1" />Add Flare-Up
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[10px] border-cyan-700/50 text-cyan-200 hover:bg-cyan-900/30"
+            onClick={() => addBranch({ name: `+Load wk${scrubWeek}`, loadAdjustments: [{ week: scrubWeek, deltaPercent: 20, label: 'Increase load' }] })}
+            data-testid="adjust-load"
+          >
+            <TrendingUp className="h-3 w-3 mr-1" />Adjust Load
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[10px] border-red-700/50 text-red-200 hover:bg-red-900/30"
+            onClick={() => setShowRemoveTreatment(s => !s)}
+            data-testid="remove-treatment-toggle"
+          >
+            <Trash2 className="h-3 w-3 mr-1" />Remove Treatment
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[10px] border-gray-600/50 text-gray-300 hover:bg-gray-800/60 ml-auto"
+            onClick={resetSimulation}
+            data-testid="reset-sim"
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />Reset Simulation
+          </Button>
+          <label className="flex items-center gap-1 text-[10px] text-emerald-300 cursor-pointer" title="Auto-sync 3D skeleton to scrubbed week">
+            <input type="checkbox" checked={autoSyncSkeleton} onChange={e => setAutoSyncSkeleton(e.target.checked)} className="h-3 w-3" />
+            Sync 3D · markers ×{painFactor.toFixed(2)}
+          </label>
+        </div>
+        {showRemoveTreatment && (
+          <div className="mt-2 bg-gray-950/60 border border-gray-800 rounded p-2">
+            <div className="text-[10px] text-gray-400 mb-1">Active Treatments — click to remove:</div>
+            <div className="flex flex-wrap gap-1">
+              {activeBranch.interventions.length === 0 && <div className="text-[10px] text-gray-500 italic">No active treatments</div>}
+              {activeBranch.interventions.map(i => {
+                const t = treatmentLookup.get(i.treatmentId);
+                return (
+                  <button
+                    key={i.id}
+                    onClick={() => removeInterventionFromActive(i.id)}
+                    className="text-[10px] px-2 py-0.5 rounded bg-red-900/30 text-red-200 border border-red-700/40 hover:bg-red-800/40 flex items-center gap-1"
+                  >
+                    <Trash2 className="h-2.5 w-2.5" />{t?.name ?? i.treatmentId} · w{i.startWeek}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <div className="mt-1.5 flex items-center gap-2 text-[10px] text-gray-400">
+          <Sparkles className="h-3 w-3 text-violet-300 shrink-0" />
+          <span className="text-violet-300 font-semibold uppercase tracking-wide">AI Insight:</span>
+          <span className="truncate">{narrative}</span>
+        </div>
+      </div>
+
+      {/* INTERVENTION EDITOR (lightweight inline) */}
+      {showInterventionEditor && (
+        <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center" onClick={() => setShowInterventionEditor(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-white">Modify Treatments @ week {scrubWeek}</div>
+              <button onClick={() => setShowInterventionEditor(false)} className="text-gray-400 hover:text-white"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="text-[10px] text-gray-400 mb-2">Add a treatment from the library:</div>
+            <div className="grid grid-cols-2 gap-1 mb-3">
+              {TREATMENT_LIBRARY.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { addInterventionToActiveBranch(t.id, scrubWeek); setShowInterventionEditor(false); }}
+                  className="text-left text-[10px] px-2 py-1 rounded bg-gray-800 hover:bg-cyan-900/40 text-gray-200 border border-gray-700/50"
+                  title={t.description}
+                >
+                  + {t.name}
+                </button>
+              ))}
+            </div>
+            {customProfiles.length > 0 && (
+              <>
+                <div className="text-[10px] text-cyan-300 mb-1 flex items-center gap-1"><Sparkles className="h-3 w-3" />AI-Designed:</div>
+                <div className="grid grid-cols-1 gap-1 mb-3">
+                  {customProfiles.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => { addInterventionToActiveBranch(p.id, scrubWeek); setShowInterventionEditor(false); }}
+                      className="text-left text-[10px] px-2 py-1 rounded bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-100 border border-cyan-700/40"
+                    >
+                      + {p.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="text-[10px] text-gray-400 mb-1">Active treatments on this branch:</div>
+            <div className="space-y-1">
+              {activeBranch.interventions.length === 0 && <div className="text-[10px] text-gray-500 italic">None</div>}
+              {activeBranch.interventions.map(i => {
+                const t = treatmentLookup.get(i.treatmentId);
+                return (
+                  <div key={i.id} className="flex items-center gap-2 bg-gray-800/60 rounded px-2 py-1 text-[10px]">
+                    <span className="flex-1 text-gray-200">{t?.name ?? i.treatmentId}</span>
+                    <span className="text-gray-500">w{i.startWeek}</span>
+                    <button onClick={() => removeInterventionFromActive(i.id)} className="text-red-400 hover:text-red-200"><Trash2 className="h-3 w-3" /></button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {branches.length > 1 && (
+        <div className="absolute top-16 left-3 z-30 flex items-center gap-1 bg-gray-900/80 border border-gray-700/40 rounded px-2 py-0.5">
+          <GitBranch className="h-3 w-3 text-cyan-400" />
+          <span className="text-[9px] text-gray-300">Active branch:</span>
+          <span className="text-[9px] text-cyan-300 font-semibold">{activeProjection.branchName}</span>
+        </div>
+      )}
+    </div>
+  );
+}

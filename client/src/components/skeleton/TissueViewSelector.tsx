@@ -18,6 +18,9 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import type { CompromisedTissue } from './ClinicalTextInput';
+import type { TissueIntelligence } from '@/lib/tissueIntelligence';
+import { getOverloadColor } from '@/lib/tissueIntelligence';
+import TissueIntelligencePanel from './TissueIntelligencePanel';
 import {
   type TissueViewMode,
   type TissueOverlayEntry,
@@ -49,6 +52,7 @@ interface TissueViewSelectorProps {
   clinicallyAffectedNerves?: Set<string>;
   compromisedTissues?: CompromisedTissue[];
   slingTissueRisks?: SlingTissueRisk[];
+  tissueIntelligenceMap?: Map<string, TissueIntelligence>;
 }
 
 const MODE_ICONS: Record<Exclude<TissueViewMode, null>, typeof Dumbbell> = {
@@ -423,11 +427,16 @@ export default function TissueViewSelector({
   clinicallyAffectedNerves,
   compromisedTissues,
   slingTissueRisks,
+  tissueIntelligenceMap,
 }: TissueViewSelectorProps) {
   const [showList, setShowList] = useState(false);
   const [compromisedExpanded, setCompromisedExpanded] = useState(true);
+  const [expandedIntelligenceId, setExpandedIntelligenceId] = useState<string | null>(null);
   const entries = activeMode ? getTissueEntriesForMode(activeMode) : [];
   const selectedEntry = selectedEntryId ? entries.find(e => e.id === selectedEntryId) : null;
+  const selectedIntelligence = selectedEntryId && activeMode && tissueIntelligenceMap
+    ? tissueIntelligenceMap.get(`${activeMode}:${selectedEntryId}`)
+    : null;
 
   const handleModeToggle = (mode: Exclude<TissueViewMode, null>) => {
     if (activeMode === mode) {
@@ -494,27 +503,62 @@ export default function TissueViewSelector({
                   ct.severity >= 0.4 ? 'text-orange-400 border-orange-500/40 bg-orange-900/30' :
                   'text-yellow-400 border-yellow-500/40 bg-yellow-900/30';
                 const severityLabel = ct.severity >= 0.7 ? 'High' : ct.severity >= 0.4 ? 'Moderate' : 'Low';
+                const intelKey = `${ct.tissue_type}:${ct.tissue_id}`;
+                const intel = tissueIntelligenceMap?.get(intelKey);
+                const isExpanded = expandedIntelligenceId === intelKey;
+                const overloadColor = intel ? getOverloadColor(intel.capacityDemand.overloadRatio) : null;
 
                 return (
-                  <button
-                    key={`${ct.tissue_type}_${ct.tissue_id}_${idx}`}
-                    className="w-full text-left rounded bg-black/20 border border-gray-700/40 p-1.5 hover:bg-black/30 transition-colors"
-                    onClick={() => {
-                      onModeChange(ct.tissue_type);
-                      if (matchedEntry) onEntrySelect(ct.tissue_id);
-                    }}
-                  >
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <TypeIcon className="w-3 h-3 flex-shrink-0" style={{ color: modeColor.css }} />
-                      <span className="text-[10px] font-medium text-gray-200 truncate flex-1">
-                        {matchedEntry ? matchedEntry.label : ct.tissue_id.replace(/_/g, ' ')}
-                      </span>
-                      <Badge variant="outline" className={`text-[8px] px-1 py-0 h-3.5 ${severityColor}`}>
-                        {severityLabel}
-                      </Badge>
-                    </div>
-                    <p className="text-[9px] text-gray-400 leading-tight">{ct.rationale}</p>
-                  </button>
+                  <div key={`${ct.tissue_type}_${ct.tissue_id}_${idx}`} className="space-y-1">
+                    <button
+                      className="w-full text-left rounded bg-black/20 border border-gray-700/40 p-1.5 hover:bg-black/30 transition-colors"
+                      onClick={() => {
+                        onModeChange(ct.tissue_type);
+                        if (matchedEntry) onEntrySelect(ct.tissue_id);
+                        if (intel) setExpandedIntelligenceId(isExpanded ? null : intelKey);
+                      }}
+                      data-testid={`button-compromised-tissue-${ct.tissue_id}`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <TypeIcon className="w-3 h-3 flex-shrink-0" style={{ color: modeColor.css }} />
+                        <span className="text-[10px] font-medium text-gray-200 truncate flex-1">
+                          {matchedEntry ? matchedEntry.label : ct.tissue_id.replace(/_/g, ' ')}
+                        </span>
+                        {intel && (
+                          <Badge
+                            variant="outline"
+                            className="text-[8px] px-1 py-0 h-3.5"
+                            style={overloadColor ? { borderColor: overloadColor + '80', color: overloadColor } : undefined}
+                          >
+                            {Math.round(intel.capacityDemand.overloadRatio * 100)}%
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className={`text-[8px] px-1 py-0 h-3.5 ${severityColor}`}>
+                          {severityLabel}
+                        </Badge>
+                      </div>
+                      {intel && (
+                        <div className="h-1 rounded-full bg-muted/40 overflow-hidden mb-0.5">
+                          <div
+                            className="h-full transition-all"
+                            style={{
+                              width: `${Math.min(100, intel.capacityDemand.overloadRatio * 100)}%`,
+                              backgroundColor: overloadColor ?? '#3b82f6',
+                            }}
+                          />
+                        </div>
+                      )}
+                      <p className="text-[9px] text-gray-400 leading-tight">{ct.rationale}</p>
+                      {intel && intel.evidence.length > 1 && (
+                        <div className="text-[8px] text-blue-400/80 mt-0.5">
+                          {intel.evidence.length} evidence sources · {intel.confidence} confidence · click for full reasoning
+                        </div>
+                      )}
+                    </button>
+                    {isExpanded && intel && (
+                      <TissueIntelligencePanel intelligence={intel} />
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -578,6 +622,10 @@ export default function TissueViewSelector({
           clinicallyAffectedNerves={clinicallyAffectedNerves}
           slingTissueRisks={slingTissueRisks}
         />
+      )}
+
+      {selectedIntelligence && (
+        <TissueIntelligencePanel intelligence={selectedIntelligence} />
       )}
     </div>
   );

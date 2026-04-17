@@ -126,6 +126,7 @@ import { generateMechanismTreatments } from "@/lib/mechanismTreatmentEngine";
 import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
+import { aggregateTissueIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
 import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
@@ -3949,6 +3950,53 @@ ${ddxList}`;
     }
     return Array.from(clinicalMap.values()).sort((a, b) => b.severity - a.severity);
   }, [compromisedTissues, slingTissueRisks]);
+
+  const tissueIntelligenceMap = useMemo(() => {
+    const map = new Map<string, TissueIntelligence>();
+    try {
+      const jointForceData = hudForceAnalysis?.joints?.map((f: JointSurfaceForce) => ({
+        boneName: f.boneName,
+        totalForce: f.totalForce,
+        status: f.status,
+        label: f.label,
+      })) ?? [];
+
+      const chainScores = Array.from(chainIntegrityScores.entries()).map(([chainId, val]) => ({
+        chainId,
+        score: val.score,
+        issues: val.issues,
+      }));
+
+      const postureDeviations: Record<string, number> = {};
+      if (modelConfig?.spine?.thoracicKyphosis !== undefined) postureDeviations['thoracicKyphosis'] = modelConfig.spine.thoracicKyphosis as number;
+      if (modelConfig?.spine?.forwardHead !== undefined) postureDeviations['forwardHead'] = modelConfig.spine.forwardHead as number;
+      if (modelConfig?.spine?.lumbarLordosis !== undefined) postureDeviations['lumbarLordosis'] = modelConfig.spine.lumbarLordosis as number;
+      if (modelConfig?.pelvis?.tilt !== undefined) postureDeviations['pelvicTilt'] = modelConfig.pelvis.tilt as number;
+
+      const painMarkersInput = painMarkers.map(pm => ({
+        label: pm.anatomicalLabel || pm.nearestBone,
+        severity: ((pm as unknown as Record<string, unknown>).severity as number | undefined) ?? 5,
+        type: pm.type,
+        description: pm.description,
+      }));
+
+      const results = aggregateTissueIntelligence({
+        aiCompromisedTissues: compromisedTissues,
+        slingTissueRisks,
+        jointForceData,
+        muscleOverrides: compensatedOverrides as unknown as Record<string, { pathology?: string; inhibition?: number; isManual?: boolean }>,
+        painMarkers: painMarkersInput,
+        chainIntegrityScores: chainScores,
+        postureDeviations,
+      });
+      for (const r of results) {
+        map.set(`${r.tissueType}:${r.tissueId}`, r);
+      }
+    } catch (err) {
+      console.warn('[TissueIntelligence] aggregation failed', err);
+    }
+    return map;
+  }, [compromisedTissues, slingTissueRisks, hudForceAnalysis, chainIntegrityScores, modelConfig, painMarkers, compensatedOverrides]);
 
   const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
   useEffect(() => {
@@ -8663,6 +8711,7 @@ ${ddxList}`;
                     }))}
                     musclePathologyData={compensatedOverrides}
                     clinicallyAffectedNerves={clinicallyAffectedNerves}
+                    tissueIntelligenceMap={tissueIntelligenceMap}
                   />
                   {tissueDisambiguationEntries.length > 1 && (
                     <div className="rounded-lg border bg-background/95 backdrop-blur-sm shadow-lg p-2 space-y-1">

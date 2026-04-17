@@ -260,8 +260,8 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
     [input, activeProjection, goalMode, customProfiles, ctxForSim],
   );
   const reverse: ReversePlanResult = useMemo(
-    () => reversePlan(activeProjection, reverseGoal, conditionContext),
-    [activeProjection, reverseGoal, conditionContext],
+    () => reversePlan(activeProjection, reverseGoal, ctxForSim),
+    [activeProjection, reverseGoal, ctxForSim],
   );
   const narrative = useMemo(() => generateNarrative(activeProjection, baselineProj), [activeProjection, baselineProj]);
 

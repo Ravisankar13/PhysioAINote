@@ -3943,7 +3943,7 @@ ${ddxList}`;
       }
     }
 
-    const sa = slingAnalysisRef.current;
+    const sa = slingAnalysis;
     let slingSeverity = 0;
     if (sa) {
       const totalWeak = sa.slings.reduce((sum, s) => sum + s.weakLinks.length, 0);
@@ -3951,10 +3951,21 @@ ${ddxList}`;
       slingSeverity = Math.min(100, totalWeak * 12 + dysCount * 10);
     }
 
+    // Joint deviation magnitude from the host posture model (skeleton-aware).
+    // Each radian-ish deviation contributes to motor-control loss / capacity drag.
+    const deviations = collectModelConfigDeviations(modelConfig);
+    let deviationMag = 0;
+    for (const d of deviations) deviationMag += Math.abs(d.value);
+    const deviationLoad = Math.min(40, deviationMag * 8); // 0–40 scale
+    // If we don't have ROM measurements, fold the deviation magnitude into ROM% as a fallback.
+    if (romPct === null && deviations.length > 0) {
+      romPct = Math.max(40, 100 - deviationLoad * 1.5);
+    }
+
     const baselineCap = compromisedTissueInputs.length > 0
-      ? Math.max(20, 60 - compromisedTissueInputs.reduce((s, t) => s + t.severity, 0) * 0.3)
-      : 50;
-    const baselineMotor = slingSeverity > 0 ? Math.max(30, 70 - slingSeverity * 0.4) : 60;
+      ? Math.max(20, 60 - compromisedTissueInputs.reduce((s, t) => s + t.severity, 0) * 0.3 - deviationLoad * 0.4)
+      : Math.max(25, 50 - deviationLoad * 0.4);
+    const baselineMotor = Math.max(25, (slingSeverity > 0 ? 70 - slingSeverity * 0.4 : 60) - deviationLoad * 0.5);
 
     // Pathology label: combine main complaint with top hypothesis + problem class label
     // so classifyCondition can match decision-engine pathology output, not just complaint text.
@@ -3995,7 +4006,7 @@ ${ddxList}`;
       patientPhaseTimingMult: mods.phaseTimingMultiplier,
       patientRomCeiling: mods.romCeilingAdjustment,
     });
-  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData]);
+  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, collectModelConfigDeviations]);
 
   const chainIntegrityScores = useMemo(() => {
     if (!showUnifiedChainPanel || (liteMode && computeStage < 3)) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();

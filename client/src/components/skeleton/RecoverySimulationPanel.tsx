@@ -48,8 +48,6 @@ import {
   defaultBranch,
   defaultInput,
   buildCustomTreatmentProfiles,
-  buildCustomExerciseId,
-  buildCustomTechniqueId,
 } from "@/lib/recoverySimulationEngine";
 
 interface Props {

@@ -53,6 +53,7 @@ interface TissueViewSelectorProps {
   compromisedTissues?: CompromisedTissue[];
   slingTissueRisks?: SlingTissueRisk[];
   tissueIntelligenceMap?: Map<string, TissueIntelligence>;
+  onSelectCausalChain?: (tissueId: string) => void;
 }
 
 const MODE_ICONS: Record<Exclude<TissueViewMode, null>, typeof Dumbbell> = {
@@ -428,6 +429,7 @@ export default function TissueViewSelector({
   compromisedTissues,
   slingTissueRisks,
   tissueIntelligenceMap,
+  onSelectCausalChain,
 }: TissueViewSelectorProps) {
   const [showList, setShowList] = useState(false);
   const [compromisedExpanded, setCompromisedExpanded] = useState(true);
@@ -556,7 +558,7 @@ export default function TissueViewSelector({
                       )}
                     </button>
                     {isExpanded && intel && (
-                      <TissueIntelligencePanel intelligence={intel} />
+                      <TissueIntelligencePanel intelligence={intel} onSelectCausalChain={onSelectCausalChain} />
                     )}
                   </div>
                 );
@@ -625,7 +627,7 @@ export default function TissueViewSelector({
       )}
 
       {selectedIntelligence && (
-        <TissueIntelligencePanel intelligence={selectedIntelligence} />
+        <TissueIntelligencePanel intelligence={selectedIntelligence} onSelectCausalChain={onSelectCausalChain} />
       )}
     </div>
   );

@@ -4016,6 +4016,70 @@ ${ddxList}`;
     return map;
   }, [compromisedTissues, slingTissueRisks, hudForceAnalysis, chainIntegrityScores, modelConfig, painMarkers, compensatedOverrides, scarMarkers, adhesionBands]);
 
+  const [causalChainTissueId, setCausalChainTissueId] = useState<string | null>(null);
+  const handleTissueCausalChainSelect = useCallback((tissueId: string) => {
+    setCausalChainTissueId(prev => (prev === tissueId ? null : tissueId));
+  }, []);
+
+  const causalChainHighlights = useMemo(() => {
+    if (!causalChainTissueId) return [];
+    let intel: import('@/lib/tissueIntelligence').TissueIntelligence | undefined;
+    for (const v of Array.from(tissueIntelligenceMap.values())) {
+      if (v.tissueId === causalChainTissueId) { intel = v; break; }
+    }
+    if (!intel) return [];
+    const REGION_TO_BONES: Record<string, string[]> = {
+      'lumbar spine': ['RootPart1_M', 'RootPart2_M', 'Spine1_M'],
+      'thoracic spine': ['Spine1_M', 'Chest_M'],
+      'cervical spine': ['NeckPart1_M', 'NeckPart2_M', 'Head_M'],
+      'thoracolumbar fascia': ['RootPart1_M', 'Spine1_M'],
+      'pelvis': ['Root_M', 'Hip_L', 'Hip_R'],
+      'hip': ['Hip_L', 'Hip_R'],
+      'knee': ['Knee_L', 'Knee_R'],
+      'ankle': ['Ankle_L', 'Ankle_R'],
+      'foot': ['Toes_L', 'Toes_R'],
+      'plantar fascia': ['Ankle_L', 'Ankle_R', 'Toes_L', 'Toes_R'],
+      'quadriceps': ['Hip_L', 'Hip_R', 'Knee_L', 'Knee_R'],
+      'hamstrings': ['Hip_L', 'Hip_R', 'Knee_L', 'Knee_R'],
+      'calf': ['Knee_L', 'Knee_R', 'Ankle_L', 'Ankle_R'],
+      'shoulder': ['Shoulder_L', 'Shoulder_R'],
+      'scapular stabilisers': ['Scapula_L', 'Scapula_R'],
+      'scapula': ['Scapula_L', 'Scapula_R'],
+      'elbow': ['Elbow_L', 'Elbow_R'],
+      'wrist': ['Wrist_L', 'Wrist_R'],
+    };
+    const lookupBones = (region: string): string[] => {
+      const r = region.toLowerCase().trim();
+      if (REGION_TO_BONES[r]) return REGION_TO_BONES[r];
+      for (const [k, v] of Object.entries(REGION_TO_BONES)) {
+        if (r.includes(k) || k.includes(r)) return v;
+      }
+      return [];
+    };
+    const out: Array<{ boneName: string; color: number; intensity: number; glowSize?: number }> = [];
+    const seen = new Set<string>();
+    for (const b of intel.bones || []) {
+      if (seen.has(b)) continue;
+      seen.add(b);
+      out.push({ boneName: b, color: 0xa855f7, intensity: 0.95, glowSize: 1.6 });
+    }
+    for (const up of intel.compensation.upstream) {
+      for (const b of lookupBones(up.region)) {
+        if (seen.has(b)) continue;
+        seen.add(b);
+        out.push({ boneName: b, color: 0x3b82f6, intensity: 0.7, glowSize: 1.3 });
+      }
+    }
+    for (const dn of intel.compensation.downstream) {
+      for (const b of lookupBones(dn.region)) {
+        if (seen.has(b)) continue;
+        seen.add(b);
+        out.push({ boneName: b, color: 0xfb923c, intensity: 0.7, glowSize: 1.3 });
+      }
+    }
+    return out;
+  }, [causalChainTissueId, tissueIntelligenceMap]);
+
   const tissueOverloadHighlights = useMemo(() => {
     const out: Array<{ boneName: string; color: number; intensity: number; glowSize?: number }> = [];
     const seen = new Set<string>();
@@ -5279,13 +5343,14 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || tissueOverloadHighlights.length > 0 ? [
+              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || tissueOverloadHighlights.length > 0 || causalChainHighlights.length > 0 ? [
                 ...(chainHighlightBones || []),
                 ...muscleOverrideHighlights,
                 ...influenceHighlights,
                 ...visualizationBoneHighlights,
                 ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
                 ...tissueOverloadHighlights,
+                ...causalChainHighlights,
               ] : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
@@ -8754,6 +8819,7 @@ ${ddxList}`;
                     musclePathologyData={compensatedOverrides}
                     clinicallyAffectedNerves={clinicallyAffectedNerves}
                     tissueIntelligenceMap={tissueIntelligenceMap}
+                    onSelectCausalChain={handleTissueCausalChainSelect}
                   />
                   {tissueDisambiguationEntries.length > 1 && (
                     <div className="rounded-lg border bg-background/95 backdrop-blur-sm shadow-lg p-2 space-y-1">

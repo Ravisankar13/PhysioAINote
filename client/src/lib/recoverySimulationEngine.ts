@@ -671,21 +671,207 @@ function buildLookup(custom?: TreatmentEffectProfile[] | null): Map<string, Trea
   return m;
 }
 
-function defaultInitialState(input: SimulationInput): RecoveryState {
+export type ConditionTissue = 'tendon' | 'ligament' | 'muscle' | 'nerve' | 'joint' | 'fascia' | 'disc' | 'bone' | 'generic';
+export type PainMechanismKind = 'nociceptive' | 'neuropathic' | 'central' | 'mixed' | 'unknown';
+
+export interface ConditionContext {
+  conditionId: string;
+  conditionLabel: string;
+  primaryTissue: ConditionTissue;
+  tissueLoad: number;
+  scarLoad: number;
+  painMechanism: PainMechanismKind;
+  hasNerveRoot: boolean;
+  baselineRomPercent: number;
+  baselineMotorControl: number;
+  baselineCapacity: number;
+  slingWeakLinkSeverity: number;
+  patientHealingMult: number;
+  patientPainMult: number;
+  patientRecurrenceMult: number;
+  patientTissueQualityMult: number;
+  patientPhaseTimingMult: number;
+  patientRomCeiling: number;
+  ageYears: number | null;
+}
+
+export interface TissueHealingProfile {
+  healingRateMult: number;
+  phaseDurationMult: number;
+  reinjurySensitivity: number;
+  painDecayMult: number;
+  romRecoveryMult: number;
+  capacityRampMult: number;
+  flareRiskBase: number;
+  romCeiling: number;
+}
+
+const TISSUE_HEALING: Record<ConditionTissue, TissueHealingProfile> = {
+  muscle:   { healingRateMult: 1.20, phaseDurationMult: 0.80, reinjurySensitivity: 0.9, painDecayMult: 1.10, romRecoveryMult: 1.10, capacityRampMult: 1.10, flareRiskBase: 0,  romCeiling: 100 },
+  ligament: { healingRateMult: 0.80, phaseDurationMult: 1.30, reinjurySensitivity: 1.2, painDecayMult: 0.90, romRecoveryMult: 0.90, capacityRampMult: 0.85, flareRiskBase: 4, romCeiling: 95 },
+  tendon:   { healingRateMult: 0.60, phaseDurationMult: 1.60, reinjurySensitivity: 1.4, painDecayMult: 0.85, romRecoveryMult: 0.90, capacityRampMult: 0.80, flareRiskBase: 8, romCeiling: 95 },
+  nerve:    { healingRateMult: 0.50, phaseDurationMult: 1.80, reinjurySensitivity: 1.3, painDecayMult: 0.70, romRecoveryMult: 0.80, capacityRampMult: 0.70, flareRiskBase: 10, romCeiling: 90 },
+  joint:    { healingRateMult: 0.70, phaseDurationMult: 1.40, reinjurySensitivity: 1.1, painDecayMult: 0.95, romRecoveryMult: 0.70, capacityRampMult: 0.85, flareRiskBase: 5, romCeiling: 90 },
+  fascia:   { healingRateMult: 1.00, phaseDurationMult: 1.00, reinjurySensitivity: 0.9, painDecayMult: 1.00, romRecoveryMult: 1.10, capacityRampMult: 0.95, flareRiskBase: 2, romCeiling: 95 },
+  disc:     { healingRateMult: 0.55, phaseDurationMult: 1.70, reinjurySensitivity: 1.4, painDecayMult: 0.80, romRecoveryMult: 0.85, capacityRampMult: 0.80, flareRiskBase: 8, romCeiling: 85 },
+  bone:     { healingRateMult: 0.70, phaseDurationMult: 1.50, reinjurySensitivity: 1.0, painDecayMult: 0.90, romRecoveryMult: 0.85, capacityRampMult: 0.80, flareRiskBase: 4, romCeiling: 92 },
+  generic:  { healingRateMult: 1.00, phaseDurationMult: 1.00, reinjurySensitivity: 1.0, painDecayMult: 1.00, romRecoveryMult: 1.00, capacityRampMult: 1.00, flareRiskBase: 0, romCeiling: 100 },
+};
+
+interface ConditionOverride {
+  primaryTissue: ConditionTissue;
+  healingRateMult?: number;
+  flareRiskBase?: number;
+  romCeiling?: number;
+  capacityRampMult?: number;
+  painDecayMult?: number;
+  initialPainAdd?: number;
+  initialRomAdd?: number;
+  initialCapacityAdd?: number;
+  chronicityRiskAdd?: number;
+}
+
+const CONDITION_OVERRIDES: { match: RegExp; id: string; override: ConditionOverride }[] = [
+  { match: /(rotator cuff|supraspinatus tendin|subacromial|shoulder impinge)/i, id: 'rotator_cuff_tendinopathy', override: { primaryTissue: 'tendon', romCeiling: 95, flareRiskBase: 8 } },
+  { match: /(frozen shoulder|adhesive capsulitis)/i, id: 'frozen_shoulder', override: { primaryTissue: 'joint', healingRateMult: 0.55, romCeiling: 70, painDecayMult: 0.70, initialRomAdd: -25, capacityRampMult: 0.70, chronicityRiskAdd: 15 } },
+  { match: /(achilles)/i, id: 'achilles_tendinopathy', override: { primaryTissue: 'tendon', healingRateMult: 0.55, romCeiling: 90, flareRiskBase: 10, capacityRampMult: 0.75 } },
+  { match: /(patellar tendin|jumper'?s knee)/i, id: 'patellar_tendinopathy', override: { primaryTissue: 'tendon', healingRateMult: 0.60, flareRiskBase: 9 } },
+  { match: /(stenosis)/i, id: 'lumbar_stenosis', override: { primaryTissue: 'nerve', healingRateMult: 0.45, romCeiling: 75, capacityRampMult: 0.65, chronicityRiskAdd: 15 } },
+  { match: /(radicul|sciatica|nerve root)/i, id: 'radiculopathy', override: { primaryTissue: 'nerve', healingRateMult: 0.55, painDecayMult: 0.70, flareRiskBase: 10, initialPainAdd: 10 } },
+  { match: /(myelopath)/i, id: 'cervical_myelopathy', override: { primaryTissue: 'nerve', healingRateMult: 0.40, romCeiling: 70, capacityRampMult: 0.60, chronicityRiskAdd: 20 } },
+  { match: /(disc herniat|prolaps|disc bulge)/i, id: 'disc_herniation', override: { primaryTissue: 'disc', healingRateMult: 0.60, painDecayMult: 0.85, initialPainAdd: 5 } },
+  { match: /(spondylolisthe)/i, id: 'spondylolisthesis', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, capacityRampMult: 0.70 } },
+  { match: /(osteoarthr|^oa\b|knee arthritis|hip arthritis)/i, id: 'osteoarthritis', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, painDecayMult: 0.85, capacityRampMult: 0.75, chronicityRiskAdd: 10 } },
+  { match: /(post[- ]?surg|post[- ]?op|reconstruction|repair surgery)/i, id: 'post_surgical', override: { primaryTissue: 'joint', healingRateMult: 0.70, romCeiling: 90, initialRomAdd: -20, initialCapacityAdd: -15, capacityRampMult: 0.80 } },
+  { match: /(replacement|arthroplasty|tkr|thr|tka)/i, id: 'joint_replacement', override: { primaryTissue: 'joint', healingRateMult: 0.65, romCeiling: 85, initialRomAdd: -25, initialCapacityAdd: -20, capacityRampMult: 0.75 } },
+  { match: /(hamstring strain|muscle strain|grade [12] tear)/i, id: 'muscle_strain', override: { primaryTissue: 'muscle', healingRateMult: 1.10, capacityRampMult: 1.10 } },
+  { match: /(plantar fasc)/i, id: 'plantar_fasciitis', override: { primaryTissue: 'fascia', healingRateMult: 0.85, painDecayMult: 0.90, flareRiskBase: 5 } },
+  { match: /(carpal tunnel|cubital tunnel|tarsal tunnel|nerve entrap)/i, id: 'nerve_entrapment', override: { primaryTissue: 'nerve', healingRateMult: 0.60, painDecayMult: 0.80, flareRiskBase: 8 } },
+];
+
+export function classifyCondition(mainComplaint?: string | null): { id: string; label: string; override: ConditionOverride } {
+  const text = (mainComplaint ?? '').trim();
+  for (const entry of CONDITION_OVERRIDES) {
+    if (entry.match.test(text)) {
+      return { id: entry.id, label: text || entry.id, override: entry.override };
+    }
+  }
+  return { id: 'generic', label: text || 'Generic musculoskeletal', override: { primaryTissue: 'generic' } };
+}
+
+export function buildConditionContext(args: {
+  mainComplaint?: string | null;
+  compromisedTissues?: { type: string; severity: number }[];
+  scarSeverityList?: number[];
+  adhesionCount?: number;
+  painMechanism?: string | null;
+  hasNerveRoot?: boolean;
+  currentRomPercent?: number | null;
+  baselineMotorControl?: number | null;
+  baselineCapacity?: number | null;
+  slingWeakLinkSeverity?: number | null;
+  patientHealingMult?: number;
+  patientPainMult?: number;
+  patientRecurrenceMult?: number;
+  patientTissueQualityMult?: number;
+  patientPhaseTimingMult?: number;
+  patientRomCeiling?: number;
+  ageYears?: number | null;
+}): ConditionContext {
+  const cls = classifyCondition(args.mainComplaint);
+  let tissueLoad = 0;
+  let pickedTissue: ConditionTissue = cls.override.primaryTissue;
+  let topSev = 0;
+  for (const t of args.compromisedTissues ?? []) {
+    tissueLoad += t.severity;
+    if (t.severity > topSev) {
+      topSev = t.severity;
+      const norm = t.type.toLowerCase();
+      if (['tendon','ligament','muscle','nerve','joint','fascia','disc','bone'].includes(norm) && cls.override.primaryTissue === 'generic') {
+        pickedTissue = norm as ConditionTissue;
+      }
+    }
+  }
+  tissueLoad = Math.min(100, tissueLoad);
+
+  const scarLoad = Math.min(100,
+    (args.scarSeverityList ?? []).reduce((s, v) => s + v * 12, 0) +
+    (args.adhesionCount ?? 0) * 8,
+  );
+
+  const pmRaw = (args.painMechanism ?? '').toString().toLowerCase();
+  const painMechanism: PainMechanismKind =
+    pmRaw.includes('neuro') ? 'neuropathic' :
+    pmRaw.includes('central') ? 'central' :
+    pmRaw.includes('myofas') || pmRaw.includes('nocicep') ? 'nociceptive' :
+    pmRaw.includes('mixed') ? 'mixed' : 'unknown';
+
+  return {
+    conditionId: cls.id,
+    conditionLabel: cls.label,
+    primaryTissue: pickedTissue,
+    tissueLoad,
+    scarLoad,
+    painMechanism,
+    hasNerveRoot: !!args.hasNerveRoot,
+    baselineRomPercent: args.currentRomPercent ?? 70,
+    baselineMotorControl: args.baselineMotorControl ?? 60,
+    baselineCapacity: args.baselineCapacity ?? 50,
+    slingWeakLinkSeverity: args.slingWeakLinkSeverity ?? 0,
+    patientHealingMult: args.patientHealingMult ?? 1,
+    patientPainMult: args.patientPainMult ?? 1,
+    patientRecurrenceMult: args.patientRecurrenceMult ?? 1,
+    patientTissueQualityMult: args.patientTissueQualityMult ?? 1,
+    patientPhaseTimingMult: args.patientPhaseTimingMult ?? 1,
+    patientRomCeiling: args.patientRomCeiling ?? 1,
+    ageYears: args.ageYears ?? null,
+  };
+}
+
+export function tissueProfileForContext(ctx: ConditionContext): TissueHealingProfile {
+  const base = TISSUE_HEALING[ctx.primaryTissue] ?? TISSUE_HEALING.generic;
+  const o = classifyCondition(ctx.conditionLabel || ctx.conditionId).override;
+  return {
+    healingRateMult: (o.healingRateMult ?? base.healingRateMult) * ctx.patientHealingMult,
+    phaseDurationMult: base.phaseDurationMult * ctx.patientPhaseTimingMult,
+    reinjurySensitivity: base.reinjurySensitivity * ctx.patientRecurrenceMult,
+    painDecayMult: (o.painDecayMult ?? base.painDecayMult) / Math.max(0.5, ctx.patientPainMult),
+    romRecoveryMult: base.romRecoveryMult,
+    capacityRampMult: o.capacityRampMult ?? base.capacityRampMult,
+    flareRiskBase: o.flareRiskBase ?? base.flareRiskBase,
+    romCeiling: Math.min(o.romCeiling ?? base.romCeiling, base.romCeiling) * ctx.patientRomCeiling,
+  };
+}
+
+function defaultInitialState(input: SimulationInput, ctx?: ConditionContext): RecoveryState {
   const sev = input.conditionSeverity;
   const irr = input.irritability;
   const acuityFactor = input.acuity === 'acute' ? 1 : input.acuity === 'subacute' ? 0.7 : 0.5;
+  const o = ctx ? classifyCondition(ctx.conditionLabel || ctx.conditionId).override : { primaryTissue: 'generic' as ConditionTissue };
+  const profile = ctx ? tissueProfileForContext(ctx) : TISSUE_HEALING.generic;
+
+  const baselineRom = ctx ? clamp(ctx.baselineRomPercent + (o.initialRomAdd ?? 0)) : clamp(70 - sev * 0.3);
+  const baselineMotor = ctx ? clamp(ctx.baselineMotorControl) : clamp(60 - sev * 0.3);
+  const baselineCap = ctx ? clamp(ctx.baselineCapacity + (o.initialCapacityAdd ?? 0)) : clamp(45 - sev * 0.3);
+  const painAdd = ctx ? ((o.initialPainAdd ?? 0) + (ctx.painMechanism === 'neuropathic' ? 8 : ctx.painMechanism === 'central' ? 12 : 0)) : 0;
+  const neuralBoost = ctx && (ctx.painMechanism === 'neuropathic' || ctx.hasNerveRoot) ? 25 : ctx?.painMechanism === 'central' ? 30 : 0;
+  const fearBoost = ctx?.painMechanism === 'central' ? 20 : 0;
+  const chronicityBoost = ctx ? ((o.chronicityRiskAdd ?? 0) + (ctx.painMechanism === 'central' ? 15 : 0)) : 0;
+  const slingPenalty = ctx ? ctx.slingWeakLinkSeverity * 0.3 : 0;
+  const scarPenalty = ctx ? ctx.scarLoad * 0.25 : 0;
+  const tissueLoadPenalty = ctx ? ctx.tissueLoad * 0.15 : 0;
+
   return {
     week: 0,
-    pain: clamp(50 + sev * 0.4),
-    stiffness: clamp(40 + sev * 0.3),
+    pain: clamp(50 + sev * 0.4 + painAdd),
+    stiffness: clamp(40 + sev * 0.3 + scarPenalty * 0.5),
     swelling: clamp(input.acuity === 'acute' ? 50 : 20),
     irritability: irr,
     inflammation: clamp(input.acuity === 'acute' ? 65 : 25),
     healingPhase: input.acuity === 'acute' ? 'inflammatory' : input.acuity === 'subacute' ? 'proliferative' : 'remodeling',
     healingProgress: input.acuity === 'acute' ? 5 : input.acuity === 'subacute' ? 30 : 60,
-    loadTolerance: clamp(50 - sev * 0.4),
-    structuralIntegrity: clamp(80 - sev * 0.3),
+    loadTolerance: clamp(50 - sev * 0.4 - tissueLoadPenalty),
+    structuralIntegrity: clamp(80 - sev * 0.3 - tissueLoadPenalty - scarPenalty * 0.6),
     walking: clamp(70 - sev * 0.3),
     stairs: clamp(60 - sev * 0.4),
     squat: clamp(50 - sev * 0.45),
@@ -693,22 +879,22 @@ function defaultInitialState(input: SimulationInput): RecoveryState {
     sport: clamp(15 - sev * 0.15),
     workCapacity: clamp(60 - sev * 0.3),
     jointLoading: clamp(50 + sev * 0.3),
-    compensation: clamp(30 + sev * 0.3),
-    movementQuality: clamp(70 - sev * 0.3),
-    asymmetry: clamp(20 + sev * 0.3),
-    reinjuryRisk: clamp(30 + sev * 0.3 * acuityFactor),
-    flareRisk: clamp(40 + irr * 0.3),
-    chronicityRisk: clamp(input.acuity === 'chronic' ? 60 : 25),
-    compensatoryInjuryRisk: clamp(20 + sev * 0.2),
-    romPercent: clamp(70 - sev * 0.3),
-    strength: clamp(60 - sev * 0.3),
-    motorControl: clamp(60 - sev * 0.3),
-    neuralSensitivity: clamp(40 + irr * 0.3),
-    fearAvoidance: clamp(30 + irr * 0.3),
+    compensation: clamp(30 + sev * 0.3 + slingPenalty),
+    movementQuality: clamp(70 - sev * 0.3 - slingPenalty * 0.5),
+    asymmetry: clamp(20 + sev * 0.3 + slingPenalty * 0.5),
+    reinjuryRisk: clamp(30 + sev * 0.3 * acuityFactor + profile.flareRiskBase * 0.5),
+    flareRisk: clamp(40 + irr * 0.3 + profile.flareRiskBase),
+    chronicityRisk: clamp((input.acuity === 'chronic' ? 60 : 25) + chronicityBoost),
+    compensatoryInjuryRisk: clamp(20 + sev * 0.2 + slingPenalty * 0.4),
+    romPercent: baselineRom,
+    strength: clamp(60 - sev * 0.3 - tissueLoadPenalty * 0.5),
+    motorControl: baselineMotor,
+    neuralSensitivity: clamp(40 + irr * 0.3 + neuralBoost),
+    fearAvoidance: clamp(30 + irr * 0.3 + fearBoost),
     sleep: 65,
     adherence: input.patientAdherence,
-    slingFunction: clamp(60 - sev * 0.3),
-    capacity: clamp(45 - sev * 0.3),
+    slingFunction: clamp(60 - sev * 0.3 - slingPenalty),
+    capacity: baselineCap,
     demand: clamp((input.workDemand + input.sportDemand) / 2),
     ...(input.initialState ?? {}),
   };
@@ -739,7 +925,7 @@ function advanceHealingPhase(state: RecoveryState, baselineProgressPerWeek: numb
   return { phase, progress: newProgress };
 }
 
-function naturalProgressionRate(mode: BaselineMode, state: RecoveryState): number {
+function naturalProgressionRate(mode: BaselineMode, state: RecoveryState, profile?: TissueHealingProfile): number {
   const base =
     mode === 'no_treatment' ? 1.5 :
     mode === 'rest_only' ? 2.5 :
@@ -747,7 +933,9 @@ function naturalProgressionRate(mode: BaselineMode, state: RecoveryState): numbe
     -2;
   const irrPenalty = state.irritability > 60 ? -0.5 : 0;
   const sleepBoost = state.sleep > 70 ? 0.3 : -0.2;
-  return base + irrPenalty + sleepBoost;
+  const tissueMult = profile?.healingRateMult ?? 1;
+  const sign = base >= 0 ? 1 : -1;
+  return ((base + irrPenalty + sleepBoost)) * (sign > 0 ? tissueMult : 1);
 }
 
 interface SimContext {
@@ -756,6 +944,8 @@ interface SimContext {
   input: SimulationInput;
   noiseSeed: number;
   lookup: Map<string, TreatmentEffectProfile>;
+  conditionContext?: ConditionContext;
+  profile?: TissueHealingProfile;
 }
 
 function applyTreatmentEffects(
@@ -767,14 +957,16 @@ function applyTreatmentEffects(
   const markers: InterventionMarker[] = [];
   const attribution = new Map<string, number>();
 
-  const naturalRate = naturalProgressionRate(ctx.baselineMode, state);
-  const phaseUpdate = advanceHealingPhase(state, naturalRate * 1.2);
+  const naturalRate = naturalProgressionRate(ctx.baselineMode, state, ctx.profile);
+  const phaseAdvance = (ctx.profile?.healingRateMult ?? 1) / Math.max(0.4, ctx.profile?.phaseDurationMult ?? 1);
+  const phaseUpdate = advanceHealingPhase(state, naturalRate * 1.2 * phaseAdvance);
   next.healingPhase = phaseUpdate.phase;
   next.healingProgress = phaseUpdate.progress;
 
+  const painDecay = ctx.profile?.painDecayMult ?? 1;
   next.inflammation = clamp(next.inflammation - (ctx.baselineMode === 'continued_aggravation' ? -3 : 2.5));
   next.swelling = clamp(next.swelling - (ctx.baselineMode === 'continued_aggravation' ? -2 : 2));
-  next.pain = clamp(next.pain - (ctx.baselineMode === 'continued_aggravation' ? -2 : 1));
+  next.pain = clamp(next.pain - (ctx.baselineMode === 'continued_aggravation' ? -2 : 1 * painDecay));
   next.irritability = clamp(next.irritability - 0.5);
 
   for (const intv of ctx.branch.interventions) {
@@ -897,14 +1089,17 @@ function applyTreatmentEffects(
   const passRunning = next.pain < 40 && next.capacity >= 60 && next.healingProgress >= 50 && next.romPercent >= 75 && next.flareRisk < 45 && next.running >= 0;
   const passSport = passRunning && next.running >= 55 && next.capacity >= 75 && next.healingProgress >= 70 && next.flareRisk < 35 && next.reinjuryRisk < 40;
 
-  next.walking = clamp(next.walking + (passWalking ? 1.5 : -0.3) * holdMultiplier);
-  next.stairs = clamp(next.stairs + (passStairs ? 1.2 : -0.3) * holdMultiplier);
-  next.squat = clamp(next.squat + (passSquat ? 1.0 : -0.2) * holdMultiplier);
-  next.running = clamp(next.running + (passRunning ? 2.0 : (next.running > 5 ? -0.5 : 0)) * holdMultiplier);
-  next.sport = clamp(next.sport + (passSport ? 2.0 : (next.sport > 5 ? -0.6 : 0)) * holdMultiplier);
-  next.workCapacity = clamp(next.workCapacity + (next.pain < 55 ? 1.0 : -0.2) * holdMultiplier);
-  next.romPercent = clamp(next.romPercent + (next.inflammation < 60 ? 1.5 : 0.2) * holdMultiplier);
-  next.strength = clamp(next.strength + 0.5 * holdMultiplier);
+  const capRamp = ctx.profile?.capacityRampMult ?? 1;
+  const romMult = ctx.profile?.romRecoveryMult ?? 1;
+  const romCeil = ctx.profile?.romCeiling ?? 100;
+  next.walking = clamp(next.walking + (passWalking ? 1.5 : -0.3) * holdMultiplier * capRamp);
+  next.stairs = clamp(next.stairs + (passStairs ? 1.2 : -0.3) * holdMultiplier * capRamp);
+  next.squat = clamp(next.squat + (passSquat ? 1.0 : -0.2) * holdMultiplier * capRamp);
+  next.running = clamp(next.running + (passRunning ? 2.0 : (next.running > 5 ? -0.5 : 0)) * holdMultiplier * capRamp);
+  next.sport = clamp(next.sport + (passSport ? 2.0 : (next.sport > 5 ? -0.6 : 0)) * holdMultiplier * capRamp);
+  next.workCapacity = clamp(next.workCapacity + (next.pain < 55 ? 1.0 : -0.2) * holdMultiplier * capRamp);
+  next.romPercent = Math.min(romCeil, clamp(next.romPercent + (next.inflammation < 60 ? 1.5 : 0.2) * holdMultiplier * romMult));
+  next.strength = clamp(next.strength + 0.5 * holdMultiplier * capRamp);
   next.compensation = clamp(next.compensation - 0.5 * holdMultiplier);
   next.asymmetry = clamp(next.asymmetry - 0.4 * holdMultiplier);
   next.movementQuality = clamp(next.movementQuality + 0.6 * holdMultiplier);
@@ -920,8 +1115,10 @@ function applyTreatmentEffects(
     markers.push({ week, type: 'load_change', label: `Progression hold (until w${ctx.branch.progressionHoldUntilWeek})` });
   }
 
-  next.reinjuryRisk = clamp(0.5 * next.flareRisk + 0.3 * (100 - next.capacity) + 0.2 * next.compensation - 5);
-  next.flareRisk = clamp(0.6 * next.irritability + 0.2 * (next.demand - next.capacity) + 0.2 * next.fearAvoidance);
+  const flareFloor = ctx.profile?.flareRiskBase ?? 0;
+  const reinjurySens = ctx.profile?.reinjurySensitivity ?? 1;
+  next.reinjuryRisk = clamp((0.5 * next.flareRisk + 0.3 * (100 - next.capacity) + 0.2 * next.compensation - 5) * reinjurySens);
+  next.flareRisk = Math.max(flareFloor, clamp(0.6 * next.irritability + 0.2 * (next.demand - next.capacity) + 0.2 * next.fearAvoidance));
   next.chronicityRisk = clamp(0.4 * next.fearAvoidance + 0.3 * next.pain + 0.3 * (100 - next.adherence));
   next.compensatoryInjuryRisk = clamp(0.5 * next.compensation + 0.3 * next.asymmetry + 0.2 * (100 - next.movementQuality));
 
@@ -934,15 +1131,17 @@ export function simulateBranch(
   baselineMode: BaselineMode = 'usual_care',
   initialOverride?: RecoveryState,
   customProfiles?: TreatmentEffectProfile[] | null,
+  conditionContext?: ConditionContext,
 ): SimulationProjection {
   const states: RecoveryState[] = [];
   const allMarkers: InterventionMarker[] = [];
   const totalAttribution = new Map<string, number>();
-  let state = initialOverride ? { ...initialOverride } : defaultInitialState(input);
+  let state = initialOverride ? { ...initialOverride } : defaultInitialState(input, conditionContext);
   states.push({ ...state, week: 0 });
 
   const lookup = buildLookup(customProfiles);
-  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42, lookup };
+  const profile = conditionContext ? tissueProfileForContext(conditionContext) : undefined;
+  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42, lookup, conditionContext, profile };
 
   for (let w = 1; w <= input.totalWeeks; w++) {
     const { newState, markers, attribution } = applyTreatmentEffects(state, ctx, w);
@@ -1036,7 +1235,7 @@ export function simulateBranch(
   };
 }
 
-export function simulateNaturalHistoryBaselines(input: SimulationInput): Record<BaselineMode, SimulationProjection> {
+export function simulateNaturalHistoryBaselines(input: SimulationInput, conditionContext?: ConditionContext): Record<BaselineMode, SimulationProjection> {
   const result = {} as Record<BaselineMode, SimulationProjection>;
   for (const mode of ['no_treatment', 'rest_only', 'usual_care', 'continued_aggravation'] as BaselineMode[]) {
     const branch: ScenarioBranch = {
@@ -1054,7 +1253,7 @@ export function simulateNaturalHistoryBaselines(input: SimulationInput): Record<
       loadAdjustments: [],
       color: mode === 'no_treatment' ? '#6b7280' : mode === 'rest_only' ? '#a78bfa' : mode === 'usual_care' ? '#94a3b8' : '#ef4444',
     };
-    result[mode] = simulateBranch(input, branch, mode);
+    result[mode] = simulateBranch(input, branch, mode, undefined, null, conditionContext);
   }
   return result;
 }
@@ -1124,6 +1323,7 @@ export function optimizeSequence(
   baselineProjection: SimulationProjection,
   mode: GoalMode,
   customProfiles?: TreatmentEffectProfile[] | null,
+  conditionContext?: ConditionContext,
 ): OptimizerResult {
   const lookup = buildLookup(customProfiles);
   const sequence: { week: number; action: string; rationale: string }[] = [];
@@ -1170,7 +1370,7 @@ export function optimizeSequence(
     loadAdjustments: [],
     color: '#22c55e',
   };
-  const optimizedProj = simulateBranch(input, optimizedBranch, 'usual_care', undefined, customProfiles);
+  const optimizedProj = simulateBranch(input, optimizedBranch, 'usual_care', undefined, customProfiles, conditionContext);
   const optScore = scoreProjection(optimizedProj, mode);
   const baseScore = scoreProjection(baselineProjection, mode);
 

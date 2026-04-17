@@ -152,6 +152,7 @@ const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/Unifie
 const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
 const RecoverySimulationPanel = lazy(() => import("@/components/skeleton/RecoverySimulationPanel"));
+import { buildConditionContext, type ConditionContext } from "@/lib/recoverySimulationEngine";
 const TimelineBottomBar = lazy(() => import("@/components/skeleton/TimelineBottomBar"));
 import type { PlaybackSyncState, TimelinePlaybackRef, ConditionPhaseInfo } from "@/components/skeleton/TimelineBottomBar";
 const MechanismTreatmentTab = lazy(() => import("@/components/skeleton/MechanismTreatmentTab"));
@@ -3898,6 +3899,58 @@ ${ddxList}`;
     Object.keys(muscleOverrides).length > 0 ||
     collectModelConfigDeviations(modelConfig).length > 0
   ), [painMarkers, compromisedTissues, scarMarkers, muscleOverrides, modelConfig, collectModelConfigDeviations]);
+
+  const recoverySimConditionContext = useMemo<ConditionContext | null>(() => {
+    if (!recoverySimHasClinicalInput && !extractionResult?.mainComplaint) return null;
+
+    const compromisedTissueInputs = compromisedTissues.map(ct => ({
+      type: ct.tissue_type as string,
+      severity: ct.severity,
+    }));
+
+    const mechCounts: Record<string, number> = {};
+    let nerveRootHit = false;
+    for (const pm of painMarkers as Array<{ painMechanism?: string; anatomicalLabel?: string; description?: string }>) {
+      const m = (pm.painMechanism ?? '').toString().toLowerCase();
+      if (m) mechCounts[m] = (mechCounts[m] ?? 0) + 1;
+      const lbl = `${pm.anatomicalLabel ?? ''} ${pm.description ?? ''}`.toLowerCase();
+      if (/nerve root|radicul|sciatic|c[3-8]|l[3-5]|s1/.test(lbl)) nerveRootHit = true;
+    }
+    const dominantMech = Object.entries(mechCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+    let romAvg: number | null = null;
+    if (currentRomForGoals && currentRomForGoals.length > 0) {
+      const sum = currentRomForGoals.reduce((s, v) => s + v.currentDegrees, 0);
+      romAvg = sum / currentRomForGoals.length;
+    }
+
+    const sa = slingAnalysisRef.current;
+    let slingSeverity = 0;
+    if (sa) {
+      const totalWeak = sa.slings.reduce((sum, s) => sum + s.weakLinks.length, 0);
+      const dysCount = sa.slings.filter(s => s.status === 'underperforming' || s.status === 'compensating').length;
+      slingSeverity = Math.min(100, totalWeak * 12 + dysCount * 10);
+    }
+
+    const baselineCap = compromisedTissueInputs.length > 0
+      ? Math.max(20, 60 - compromisedTissueInputs.reduce((s, t) => s + t.severity, 0) * 0.3)
+      : 50;
+    const baselineMotor = slingSeverity > 0 ? Math.max(30, 70 - slingSeverity * 0.4) : 60;
+
+    return buildConditionContext({
+      mainComplaint: extractionResult?.mainComplaint ?? null,
+      compromisedTissues: compromisedTissueInputs,
+      scarSeverityList: scarMarkers.map(s => s.severity ?? 0),
+      adhesionCount: adhesionBands.length,
+      painMechanism: dominantMech,
+      hasNerveRoot: nerveRootHit,
+      currentRomPercent: romAvg,
+      baselineMotorControl: baselineMotor,
+      baselineCapacity: baselineCap,
+      slingWeakLinkSeverity: slingSeverity,
+      ageYears: extractionResult?.patientAge ?? null,
+    });
+  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, currentRomForGoals]);
 
   const chainIntegrityScores = useMemo(() => {
     if (!showUnifiedChainPanel || (liteMode && computeStage < 3)) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
@@ -9346,6 +9399,7 @@ ${ddxList}`;
                   <Suspense fallback={<LazyPanelFallback />}>
                     <RecoverySimulationPanel
                       conditionLabel={extractionResult?.mainComplaint || undefined}
+                      conditionContext={recoverySimConditionContext}
                       onApplyState={handleApplyRecoverySimState}
                       hasClinicalInput={recoverySimHasClinicalInput}
                       customExercises={customExerciseResult?.customExercises ?? null}

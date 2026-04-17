@@ -38,6 +38,7 @@ import {
   type TreatmentEffectProfile,
   type CustomExerciseInput,
   type CustomManualTechniqueInput,
+  type ConditionContext,
   TREATMENT_LIBRARY,
   TREATMENT_BY_ID,
   simulateBranch,
@@ -57,6 +58,7 @@ interface Props {
   hasClinicalInput?: boolean;
   customExercises?: CustomExerciseInput[] | null;
   customTechniques?: CustomManualTechniqueInput[] | null;
+  conditionContext?: ConditionContext | null;
 }
 
 type TimelineKey = 'symptoms' | 'tissue' | 'function' | 'biomechanics' | 'risk';
@@ -206,7 +208,7 @@ function MultiLineChart({
   );
 }
 
-export default function RecoverySimulationPanel({ initialInput, conditionLabel, onApplyState, hasClinicalInput, customExercises, customTechniques }: Props) {
+export default function RecoverySimulationPanel({ initialInput, conditionLabel, onApplyState, hasClinicalInput, customExercises, customTechniques, conditionContext }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
   const [activeBranchId, setActiveBranchId] = useState<string>('plan_active');
@@ -244,17 +246,18 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
     return m;
   }, [customProfiles]);
 
+  const ctxForSim = conditionContext ?? undefined;
   const projections = useMemo(
-    () => branches.map(b => simulateBranch(input, b, 'usual_care', undefined, customProfiles)),
-    [branches, input, customProfiles],
+    () => branches.map(b => simulateBranch(input, b, 'usual_care', undefined, customProfiles, ctxForSim)),
+    [branches, input, customProfiles, ctxForSim],
   );
   const activeProjection = useMemo(() => projections.find(p => p.branchId === activeBranchId) ?? projections[0], [projections, activeBranchId]);
-  const baselines = useMemo(() => simulateNaturalHistoryBaselines(input), [input]);
+  const baselines = useMemo(() => simulateNaturalHistoryBaselines(input, ctxForSim), [input, ctxForSim]);
   const baselineProj = baselines[activeBaseline];
 
   const optimizer: OptimizerResult = useMemo(
-    () => optimizeSequence(input, activeProjection, goalMode, customProfiles),
-    [input, activeProjection, goalMode, customProfiles],
+    () => optimizeSequence(input, activeProjection, goalMode, customProfiles, ctxForSim),
+    [input, activeProjection, goalMode, customProfiles, ctxForSim],
   );
   const reverse: ReversePlanResult = useMemo(
     () => reversePlan(activeProjection, reverseGoal),
@@ -369,11 +372,29 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
           <Activity className="h-3.5 w-3.5 text-cyan-400" />
           <span className="text-xs font-semibold">Recovery Simulation Engine</span>
           {conditionLabel && <Badge variant="outline" className="text-[8px] px-1 py-0 border-cyan-700 text-cyan-300">{conditionLabel}</Badge>}
+          {conditionContext && (
+            <Badge variant="outline" className="text-[8px] px-1 py-0 border-purple-700 text-purple-300" title={conditionContext.conditionLabel}>
+              {conditionContext.conditionId.replace(/_/g, ' ')}
+            </Badge>
+          )}
         </div>
         <button onClick={() => setShowSettings(!showSettings)} className="text-[9px] text-gray-400 hover:text-gray-200 flex items-center gap-0.5">
           <Gauge className="h-3 w-3" />Settings{showSettings ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </button>
       </div>
+
+      {conditionContext && (
+        <div className="bg-purple-950/30 border border-purple-800/40 rounded p-1.5 text-[9px] text-gray-300 flex flex-wrap gap-x-2 gap-y-0.5">
+          <span><span className="text-purple-300 font-semibold">Tissue:</span> {conditionContext.primaryTissue}</span>
+          <span><span className="text-purple-300 font-semibold">Pain mech:</span> {conditionContext.painMechanism}{conditionContext.hasNerveRoot ? ' • nerve root' : ''}</span>
+          <span><span className="text-purple-300 font-semibold">ROM:</span> {conditionContext.baselineRomPercent.toFixed(0)}%</span>
+          <span><span className="text-purple-300 font-semibold">Capacity:</span> {conditionContext.baselineCapacity.toFixed(0)}</span>
+          {conditionContext.scarLoad > 0 && <span><span className="text-purple-300 font-semibold">Scar:</span> {conditionContext.scarLoad.toFixed(0)}</span>}
+          {conditionContext.tissueLoad > 0 && <span><span className="text-purple-300 font-semibold">Tissue load:</span> {conditionContext.tissueLoad.toFixed(0)}</span>}
+          {conditionContext.slingWeakLinkSeverity > 0 && <span><span className="text-purple-300 font-semibold">Sling:</span> {conditionContext.slingWeakLinkSeverity.toFixed(0)}</span>}
+          {conditionContext.ageYears !== null && <span><span className="text-purple-300 font-semibold">Age:</span> {conditionContext.ageYears}</span>}
+        </div>
+      )}
 
       {showSettings && (
         <div className="bg-gray-900/60 border border-gray-700/40 rounded p-2 space-y-1.5 text-[9px]">

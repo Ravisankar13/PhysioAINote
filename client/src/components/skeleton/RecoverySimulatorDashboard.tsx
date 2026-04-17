@@ -83,6 +83,48 @@ function phaseIndexFor(phase: HealingPhase): number {
   return PHASE_DEFS.findIndex(p => p.id === phase);
 }
 
+/** Condition-aware goal headline per phase. Uses primary tissue + pain mechanism
+ *  so each card tells the clinician what we are *trying to achieve* in that
+ *  phase for this specific patient — not a generic textbook label. */
+function phaseGoalForCondition(phase: HealingPhase, tissue?: string, painMechanism?: string): string {
+  const t = (tissue ?? 'generic').toLowerCase();
+  const central = painMechanism === 'central' || painMechanism === 'neuropathic';
+  switch (phase) {
+    case 'inflammatory':
+      if (central) return 'Desensitize · pain education · gentle movement';
+      if (t === 'tendon') return 'Isometric load below pain threshold · offload';
+      if (t === 'nerve' || t === 'disc') return 'Decompress · neural glides · positional relief';
+      if (t === 'joint') return 'Effusion control · pain-free AROM';
+      if (t === 'muscle' || t === 'ligament') return 'Protect · PRICE · pain-free isometrics';
+      if (t === 'bone') return 'Immobilize / protect · monitor union';
+      return 'Settle pain · protect tissue · gentle motion';
+    case 'proliferative':
+      if (t === 'tendon') return 'Isotonic loading · slow heavy resistance build-up';
+      if (t === 'nerve' || t === 'disc') return 'Directional preference · nerve mobility · core endurance';
+      if (t === 'joint') return 'Restore ROM · open & closed-chain control';
+      if (t === 'muscle') return 'Concentric → eccentric strength · length restore';
+      if (t === 'ligament') return 'Proprioception · graded loading in stable range';
+      if (t === 'bone') return 'Progressive weight-bearing · early loading';
+      return 'Rebuild capacity through progressive loading';
+    case 'remodeling':
+      if (t === 'tendon') return 'Heavy slow resistance · energy-storage prep';
+      if (t === 'nerve' || t === 'disc') return 'Multi-plane loading · trunk dissociation';
+      if (t === 'joint') return 'End-range strength · symmetric power';
+      if (t === 'muscle') return 'High-velocity eccentrics · sport patterns';
+      if (t === 'ligament') return 'Reactive control · cutting / pivoting prep';
+      if (t === 'bone') return 'Plyo-prep · bone-loading drills';
+      return 'Reintroduce impact and power';
+    case 'maturation':
+      if (t === 'tendon') return 'Plyometrics · energy-storage · sport drills';
+      if (t === 'nerve' || t === 'disc') return 'Full-load tasks · workplace / sport simulation';
+      if (t === 'joint') return 'RTS testing · symmetry & confidence';
+      if (t === 'muscle') return 'Sport-specific sprint / cut · max-velocity';
+      if (t === 'ligament') return 'RTS battery · reactive agility';
+      if (t === 'bone') return 'Full-load return · monitor for stress reaction';
+      return 'Restore full performance · return to activity';
+  }
+}
+
 function MiniChart({
   series,
   scrubWeek,
@@ -378,47 +420,98 @@ export default function RecoverySimulatorDashboard({
   // Phase week ranges for phase cards (find first/last week in each phase).
   // Treatments per phase = top 3 by attribution contribution that were
   // scheduled to start within the phase's week window on the active branch.
+  // Each phase also carries a condition-aware goal headline plus a snapshot
+  // of state at the phase midpoint (capacity / flare / pain / irritability)
+  // so the card reflects *this patient's* trajectory, not a generic textbook
+  // version.
+  type PhaseInfo = {
+    start: number;
+    end: number;
+    treatments: string[];
+    treatmentSource: 'scheduled' | 'attribution' | 'stage_recommended';
+    goal: string;
+    capacity: number;
+    flareRisk: number;
+    pain: number;
+    irritability: number;
+    isCurrent: boolean;
+  };
   const phaseRanges = useMemo(() => {
-    const ranges: Record<HealingPhase, { start: number; end: number; treatments: string[] }> = {
-      inflammatory: { start: -1, end: -1, treatments: [] },
-      proliferative: { start: -1, end: -1, treatments: [] },
-      remodeling: { start: -1, end: -1, treatments: [] },
-      maturation: { start: -1, end: -1, treatments: [] },
+    const tissue = conditionContext?.primaryTissue;
+    const painMech = conditionContext?.painMechanism;
+    const ranges: Record<HealingPhase, PhaseInfo> = {
+      inflammatory:  { start: -1, end: -1, treatments: [], treatmentSource: 'stage_recommended', goal: phaseGoalForCondition('inflammatory', tissue, painMech),  capacity: 0, flareRisk: 0, pain: 0, irritability: 0, isCurrent: false },
+      proliferative: { start: -1, end: -1, treatments: [], treatmentSource: 'stage_recommended', goal: phaseGoalForCondition('proliferative', tissue, painMech), capacity: 0, flareRisk: 0, pain: 0, irritability: 0, isCurrent: false },
+      remodeling:    { start: -1, end: -1, treatments: [], treatmentSource: 'stage_recommended', goal: phaseGoalForCondition('remodeling', tissue, painMech),    capacity: 0, flareRisk: 0, pain: 0, irritability: 0, isCurrent: false },
+      maturation:    { start: -1, end: -1, treatments: [], treatmentSource: 'stage_recommended', goal: phaseGoalForCondition('maturation', tissue, painMech),    capacity: 0, flareRisk: 0, pain: 0, irritability: 0, isCurrent: false },
     };
     activeProjection.states.forEach((s, i) => {
       const r = ranges[s.healingPhase];
       if (r.start === -1) r.start = i;
       r.end = i;
     });
+    const currentPhaseId = stateAtScrub.healingPhase;
     const attribIndex = new Map(activeProjection.attribution.map(a => [a.treatmentId, a.contributionPercent]));
     for (const phase of PHASE_DEFS) {
       const r = ranges[phase.id];
+      r.isCurrent = phase.id === currentPhaseId;
       if (r.start === -1) continue;
-      const ranked = activeBranch.interventions
+
+      // Snapshot at phase midpoint
+      const mid = Math.min(activeProjection.states.length - 1, Math.round((r.start + r.end) / 2));
+      const midState = activeProjection.states[mid];
+      r.capacity = Math.round(midState.capacity);
+      r.flareRisk = Math.round(midState.flareRisk);
+      r.pain = Math.round(midState.pain / 10);
+      r.irritability = Math.round(midState.irritability);
+
+      // 1) Prefer scheduled interventions that are *appropriate* for this
+      //    phase (healingStageMultiplier ≥ 0.9), ranked by attribution.
+      const scheduled = activeBranch.interventions
         .filter(i => i.startWeek >= r.start && i.startWeek <= r.end)
-        .map(i => ({
-          name: treatmentLookup.get(i.treatmentId)?.name ?? i.treatmentId,
-          score: attribIndex.get(i.treatmentId) ?? 0,
-        }))
+        .map(i => {
+          const t = treatmentLookup.get(i.treatmentId);
+          const stageFit = t?.healingStageMultiplier?.[phase.id] ?? 1;
+          return { name: t?.name ?? i.treatmentId, score: (attribIndex.get(i.treatmentId) ?? 0) + stageFit * 5, stageFit };
+        })
+        .filter(x => x.stageFit >= 0.9)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
+        .slice(0, 2)
         .map(x => x.name);
-      if (ranked.length > 0) {
-        r.treatments = ranked;
-      } else {
-        // No interventions yet in this window — show the highest-attribution
-        // treatments overall whose effects are most relevant in this phase
-        const overall = [...activeProjection.attribution]
-          .sort((a, b) => b.contributionPercent - a.contributionPercent)
-          .slice(0, 3)
-          .map(a => a.name);
-        r.treatments = overall.length > 0
-          ? overall
-          : TREATMENT_LIBRARY.filter(t => (t.healingStageMultiplier?.[phase.id] ?? 1) >= 1).slice(0, 3).map(t => t.name);
+      if (scheduled.length > 0) {
+        r.treatments = scheduled;
+        r.treatmentSource = 'scheduled';
+        continue;
       }
+
+      // 2) Fall back to the engine's top-attribution treatments that *fit*
+      //    this stage — this still reflects what the simulation thinks is
+      //    moving the needle for this patient.
+      const attributionFit = [...activeProjection.attribution]
+        .map(a => {
+          const t = treatmentLookup.get(a.treatmentId);
+          const stageFit = t?.healingStageMultiplier?.[phase.id] ?? 1;
+          return { name: a.name, score: a.contributionPercent * stageFit, stageFit };
+        })
+        .filter(x => x.stageFit >= 0.9)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 2)
+        .map(x => x.name);
+      if (attributionFit.length > 0) {
+        r.treatments = attributionFit;
+        r.treatmentSource = 'attribution';
+        continue;
+      }
+
+      // 3) Final fallback: stage-recommended treatments from the library.
+      r.treatments = TREATMENT_LIBRARY
+        .filter(t => (t.healingStageMultiplier?.[phase.id] ?? 1) >= 1.1)
+        .slice(0, 2)
+        .map(t => t.name);
+      r.treatmentSource = 'stage_recommended';
     }
     return ranges;
-  }, [activeProjection, activeBranch.interventions, treatmentLookup]);
+  }, [activeProjection, activeBranch.interventions, treatmentLookup, conditionContext, stateAtScrub.healingPhase]);
 
   // Compute scenario A vs B comparison summary lines from end-of-period deltas
   const scenarioComparison = useMemo(() => {
@@ -725,34 +818,75 @@ export default function RecoverySimulatorDashboard({
             </div>
           </div>
 
-          {/* PHASE CARDS ROW */}
-          <div className="grid grid-cols-4 gap-2 shrink-0">
+          {/* PHASE CARDS ROW — condition-aware brief per healing phase. Lives
+              below the chart (shrink-0) so it never overlaps. Each card shows
+              the goal we're driving toward in that phase for *this tissue*,
+              the patient's projected state at the phase midpoint, and the
+              top stage-appropriate treatments (scheduled or recommended). */}
+          <div className="grid grid-cols-4 gap-2 shrink-0" data-testid="phase-cards-row">
             {PHASE_DEFS.map((p) => {
               const r = phaseRanges[p.id];
               const enabled = r.start !== -1;
+              const flareTone = r.flareRisk > 60 ? 'text-red-300 border-red-700/40 bg-red-950/30'
+                : r.flareRisk > 35 ? 'text-amber-300 border-amber-700/40 bg-amber-950/30'
+                : 'text-emerald-300 border-emerald-700/40 bg-emerald-950/30';
+              const capTone = r.capacity > 70 ? 'text-emerald-300' : r.capacity > 40 ? 'text-amber-300' : 'text-red-300';
+              const sourceLabel = r.treatmentSource === 'scheduled' ? 'Scheduled'
+                : r.treatmentSource === 'attribution' ? 'Top driver'
+                : 'Recommended';
               return (
-                <div key={p.id} className={`rounded-lg p-2.5 border ${p.ring} ${p.bg}`} data-testid={`phase-card-${p.id}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="text-[9px] font-semibold uppercase" style={{ color: p.color }}>{enabled ? `Week ${r.start} - ${r.end}` : 'Not yet'}</div>
-                    <Badge className="bg-gray-900/60 text-gray-300 border-gray-700/50 text-[8px]">{p.id}</Badge>
+                <div
+                  key={p.id}
+                  className={`rounded-lg p-2 border ${p.ring} ${p.bg} ${r.isCurrent ? 'ring-2 ring-offset-0' : ''} flex flex-col gap-1`}
+                  style={r.isCurrent ? { boxShadow: `0 0 0 1px ${p.color}55` } : undefined}
+                  data-testid={`phase-card-${p.id}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-[9px] font-semibold uppercase" style={{ color: p.color }}>
+                      {enabled ? `Week ${r.start}–${r.end}` : 'Not reached'}
+                    </div>
+                    {r.isCurrent && (
+                      <Badge className="bg-gray-900/70 border-gray-700/60 text-[8px] py-0 px-1.5" style={{ color: p.color }}>NOW</Badge>
+                    )}
                   </div>
                   <div className="text-[12px] font-bold text-white leading-tight">{p.name}</div>
-                  <div className="text-[10px] text-gray-300 mb-1.5">{p.subtitle}</div>
-                  <ul className="space-y-0.5 mb-2">
+                  <div className="text-[10px] text-gray-300 leading-snug" data-testid={`phase-goal-${p.id}`}>
+                    {enabled ? r.goal : <span className="italic text-gray-500">Reached after earlier phases progress</span>}
+                  </div>
+
+                  {enabled && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded border ${flareTone}`} data-testid={`phase-flare-${p.id}`}>
+                        Flare {r.flareRisk}
+                      </span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded border border-gray-700/60 bg-gray-900/40 ${capTone}`} data-testid={`phase-cap-${p.id}`}>
+                        Cap {r.capacity}%
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border border-gray-700/60 bg-gray-900/40 text-gray-300">
+                        Pain {r.pain}/10
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mt-0.5">
+                    <div className="text-[8px] uppercase tracking-wide text-gray-500 font-semibold mb-0.5">{sourceLabel} treatments</div>
                     {r.treatments.length === 0 ? (
-                      <li className="text-[10px] text-gray-500 italic">No treatments scheduled</li>
+                      <div className="text-[10px] text-gray-500 italic">No stage-appropriate treatment</div>
                     ) : (
-                      r.treatments.map((t, i) => (
-                        <li key={i} className="text-[10px] text-gray-200 truncate">• {t}</li>
-                      ))
+                      <ul className="space-y-0.5">
+                        {r.treatments.map((t, i) => (
+                          <li key={i} className="text-[10px] text-gray-200 truncate">• {t}</li>
+                        ))}
+                      </ul>
                     )}
-                  </ul>
+                  </div>
+
                   <button
                     onClick={() => { setScrubWeek(Math.max(0, r.start === -1 ? 0 : r.start)); setShowInterventionEditor(true); }}
-                    className="w-full text-[10px] text-gray-300 hover:text-white border border-gray-700/60 hover:bg-gray-800/60 rounded py-1 flex items-center justify-center gap-1"
+                    className="mt-auto w-full text-[10px] text-gray-300 hover:text-white border border-gray-700/60 hover:bg-gray-800/60 rounded py-0.5 flex items-center justify-center gap-1"
                     data-testid={`modify-phase-${p.id}`}
                   >
-                    Modify Phase <ChevronRight className="h-3 w-3" />
+                    Modify <ChevronRight className="h-3 w-3" />
                   </button>
                 </div>
               );

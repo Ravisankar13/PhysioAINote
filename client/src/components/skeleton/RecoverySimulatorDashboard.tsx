@@ -429,11 +429,10 @@ export default function RecoverySimulatorDashboard({
     () => findConditionProfile(conditionLabel ?? conditionContext?.conditionLabel ?? ''),
     [conditionLabel, conditionContext?.conditionLabel],
   );
-  const goalProfile: RecoveryGoalProfile | null = useMemo(() => {
-    if (!conditionProfile) return null;
-    try { return generateGoalProfile(conditionProfile); }
-    catch { return null; }
-  }, [conditionProfile]);
+  const goalProfile: RecoveryGoalProfile | null = useMemo(
+    () => (conditionProfile ? generateGoalProfile(conditionProfile) : null),
+    [conditionProfile],
+  );
   type PhaseInfo = {
     start: number;
     end: number;
@@ -593,6 +592,21 @@ export default function RecoverySimulatorDashboard({
     for (const phase of PHASE_DEFS) {
       const r = ranges[phase.id];
       r.isCurrent = phase.id === currentPhaseId;
+
+      // Window used to map flare / load events onto this card. Reached
+      // phases use their actual simulation span; unreached phases fall
+      // back to the expected window from the condition profile so a
+      // future event still shows on the right card.
+      const winStart = r.reached ? r.start : r.expectedStart;
+      const winEnd   = r.reached ? r.end   : r.expectedEnd;
+      r.flareNotes = activeBranch.flareEvents
+        .filter(f => f.week >= winStart && f.week <= winEnd)
+        .slice(0, 2)
+        .map(f => `Flare wk ${f.week}${f.cause ? ` — ${f.cause}` : ''}`);
+      r.loadNotes = activeBranch.loadAdjustments
+        .filter(l => l.week >= winStart && l.week <= winEnd)
+        .slice(0, 2)
+        .map(l => `Load ${l.deltaPercent >= 0 ? '+' : ''}${l.deltaPercent}% wk ${l.week}${l.label ? ` — ${l.label}` : ''}`);
 
       // Per-phase patient-factor badge: only show when *this* phase's
       // window appears affected.
@@ -992,12 +1006,16 @@ export default function RecoverySimulatorDashboard({
           </div>
 
           {(() => {
-            const total = Math.max(1, input.totalWeeks);
+            // Strip widths come from each phase's actual week span (reached
+            // → simulation window, unreached → expected window from the
+            // condition profile) so card boundaries map deterministically to
+            // the same week axis the chart above uses.
             const cols = PHASE_DEFS.map(p => {
               const r = phaseRanges[p.id];
-              if (!r.reached) return 'minmax(130px, 0.6fr)';
-              const span = Math.max(1, r.end - r.start + 1);
-              return `minmax(150px, ${(span / total).toFixed(3)}fr)`;
+              const span = r.reached
+                ? Math.max(1, r.end - r.start + 1)
+                : Math.max(1, r.expectedEnd - r.expectedStart);
+              return `minmax(140px, ${span}fr)`;
             }).join(' ');
             return (
               <div

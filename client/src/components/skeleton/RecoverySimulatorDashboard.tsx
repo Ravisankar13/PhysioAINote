@@ -61,6 +61,11 @@ interface Props {
   customExercises?: CustomExerciseInput[] | null;
   customTechniques?: CustomManualTechniqueInput[] | null;
   conditionContext?: ConditionContext | null;
+  /** Render-prop returning the live 3D skeleton viewer JSX. When provided
+   *  and the user activates the Skeleton View tab, the dashboard mounts
+   *  it inside the central pane so scrubbing the timeline updates the
+   *  same viewer that's driving the underlying clinical scene. */
+  renderSkeleton?: () => React.ReactNode;
 }
 
 const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
@@ -197,6 +202,7 @@ export default function RecoverySimulatorDashboard({
   customExercises,
   customTechniques,
   conditionContext,
+  renderSkeleton,
 }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
@@ -209,6 +215,8 @@ export default function RecoverySimulatorDashboard({
   const [goalMode] = useState<GoalMode>('fastest_function');
   const [showInterventionEditor, setShowInterventionEditor] = useState(false);
   const [showRemoveTreatment, setShowRemoveTreatment] = useState(false);
+  const [showLoadAdjust, setShowLoadAdjust] = useState(false);
+  const [loadAdjustPercent, setLoadAdjustPercent] = useState(20);
 
   useEffect(() => {
     if (initialInput) setInput(prev => ({ ...prev, ...initialInput }));
@@ -342,7 +350,9 @@ export default function RecoverySimulatorDashboard({
     return TREATMENT_LIBRARY[0];
   }, [bestAction]);
 
-  // Phase week ranges for phase cards (find first/last week in each phase)
+  // Phase week ranges for phase cards (find first/last week in each phase).
+  // Treatments per phase = top 3 by attribution contribution that were
+  // scheduled to start within the phase's week window on the active branch.
   const phaseRanges = useMemo(() => {
     const ranges: Record<HealingPhase, { start: number; end: number; treatments: string[] }> = {
       inflammatory: { start: -1, end: -1, treatments: [] },
@@ -355,28 +365,76 @@ export default function RecoverySimulatorDashboard({
       if (r.start === -1) r.start = i;
       r.end = i;
     });
-    // Top treatments per phase from attribution (simple split by phase index)
+    const attribIndex = new Map(activeProjection.attribution.map(a => [a.treatmentId, a.contributionPercent]));
     for (const phase of PHASE_DEFS) {
       const r = ranges[phase.id];
       if (r.start === -1) continue;
-      // Pick interventions that overlap this phase window
-      const inWindow = activeBranch.interventions
+      const ranked = activeBranch.interventions
         .filter(i => i.startWeek >= r.start && i.startWeek <= r.end)
-        .map(i => treatmentLookup.get(i.treatmentId)?.name ?? i.treatmentId)
-        .slice(0, 3);
-      if (inWindow.length > 0) {
-        r.treatments = inWindow;
+        .map(i => ({
+          name: treatmentLookup.get(i.treatmentId)?.name ?? i.treatmentId,
+          score: attribIndex.get(i.treatmentId) ?? 0,
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .map(x => x.name);
+      if (ranked.length > 0) {
+        r.treatments = ranked;
       } else {
-        // Fall back to phase-suitable library treatments
-        const fallback = TREATMENT_LIBRARY
-          .filter(t => (t.healingStageMultiplier?.[phase.id] ?? 1) >= 1)
+        // No interventions yet in this window — show the highest-attribution
+        // treatments overall whose effects are most relevant in this phase
+        const overall = [...activeProjection.attribution]
+          .sort((a, b) => b.contributionPercent - a.contributionPercent)
           .slice(0, 3)
-          .map(t => t.name);
-        r.treatments = fallback;
+          .map(a => a.name);
+        r.treatments = overall.length > 0
+          ? overall
+          : TREATMENT_LIBRARY.filter(t => (t.healingStageMultiplier?.[phase.id] ?? 1) >= 1).slice(0, 3).map(t => t.name);
       }
     }
     return ranges;
   }, [activeProjection, activeBranch.interventions, treatmentLookup]);
+
+  // Compute scenario A vs B comparison summary lines from end-of-period deltas
+  const scenarioComparison = useMemo(() => {
+    const lastIdx = Math.min(
+      activeProjection.timelines.symptoms.pain.length - 1,
+      baselineProj.timelines.symptoms.pain.length - 1,
+    );
+    if (lastIdx < 0) return { a: [] as { text: string; tone: string }[], b: [] as { text: string; tone: string }[] };
+    const aPain = activeProjection.timelines.symptoms.pain[lastIdx];
+    const bPain = baselineProj.timelines.symptoms.pain[lastIdx];
+    const aFn = activeProjection.timelines.function.walking[lastIdx];
+    const bFn = baselineProj.timelines.function.walking[lastIdx];
+    const aCap = activeProjection.timelines.capacity[lastIdx];
+    const bCap = baselineProj.timelines.capacity[lastIdx];
+    const aRisk = activeProjection.timelines.risk.reinjury[lastIdx];
+    const bRisk = baselineProj.timelines.risk.reinjury[lastIdx];
+
+    const tag = (good: boolean, text: string) => ({ tone: good ? 'text-emerald-300' : 'text-amber-300', text });
+    const a: { text: string; tone: string }[] = [];
+    const b: { text: string; tone: string }[] = [];
+
+    if (aRisk < bRisk - 2) a.push(tag(true, `• Lower Risk (-${(bRisk - aRisk).toFixed(0)})`));
+    else if (aRisk > bRisk + 2) a.push(tag(false, `• Higher Risk (+${(aRisk - bRisk).toFixed(0)})`));
+    else a.push(tag(true, '• Comparable Risk'));
+
+    if (aFn > bFn + 2) a.push(tag(true, `• Better Function (+${(aFn - bFn).toFixed(0)}%)`));
+    else if (aFn < bFn - 2) a.push(tag(false, `• Slower Function (${(aFn - bFn).toFixed(0)}%)`));
+    else a.push(tag(true, '• Similar Function'));
+
+    if (aCap > bCap + 2) a.push(tag(true, `• Better Capacity (+${(aCap - bCap).toFixed(0)}%)`));
+    else a.push(tag(true, '• Better Long-Term'));
+
+    if (bPain < aPain - 2) b.push({ tone: 'text-emerald-300', text: `• Feels Better Sooner (-${(aPain - bPain).toFixed(0)} pain)` });
+    else b.push({ tone: 'text-amber-300', text: '• Slower Symptom Relief' });
+    if (bRisk > aRisk + 2) b.push({ tone: 'text-amber-300', text: `• Higher Reinjury Risk (+${(bRisk - aRisk).toFixed(0)})` });
+    else b.push({ tone: 'text-emerald-300', text: '• Comparable Risk' });
+    if (bCap < aCap - 2) b.push({ tone: 'text-red-300', text: `• Slower Capacity (${(bCap - aCap).toFixed(0)}%)` });
+    else b.push({ tone: 'text-emerald-300', text: '• Builds Capacity' });
+
+    return { a, b };
+  }, [activeProjection, baselineProj]);
 
   // Comparison scenario B — closest baseline
   const scenarioBSeries = useMemo(() => {
@@ -490,6 +548,8 @@ export default function RecoverySimulatorDashboard({
           <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3">
             <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-2">Key Metrics</div>
             <div className="space-y-2.5">
+              {/* Pain is stored 0-100 in the engine but displayed on a 0-10 clinical scale.
+                  pct = ((pain/10) / 10) * 100 = pain — bar fill matches engine value. */}
               <MetricBar label="Pain (0-10)" value={stateAtScrub.pain / 10} max={10} color="#ef4444" severity={severityFor(stateAtScrub.pain, true)} />
               <MetricBar label="Irritability" value={stateAtScrub.irritability} suffix="" color="#f97316" severity={severityFor(stateAtScrub.irritability, true)} />
               <MetricBar label="Tissue Capacity" value={stateAtScrub.capacity} suffix="%" color="#06b6d4" severity={severityFor(stateAtScrub.capacity)} />
@@ -568,6 +628,13 @@ export default function RecoverySimulatorDashboard({
                   ))}
                 </div>
               </>
+            ) : renderSkeleton ? (
+              <div className="flex-1 min-h-[240px] rounded overflow-hidden border border-gray-800/60 bg-black relative" data-testid="dashboard-skeleton-slot">
+                {renderSkeleton()}
+                <div className="absolute top-1.5 left-1.5 bg-gray-900/70 border border-cyan-700/40 rounded px-1.5 py-0.5 text-[9px] text-cyan-200 pointer-events-none">
+                  Live · markers ×{painFactor.toFixed(2)} · wk {scrubWeek}
+                </div>
+              </div>
             ) : (
               <div className="flex-1 flex items-center justify-center bg-gray-950/40 rounded border border-dashed border-gray-700/50 min-h-[180px]">
                 <div className="text-center text-[11px] text-gray-400 max-w-xs px-4">
@@ -759,22 +826,22 @@ export default function RecoverySimulatorDashboard({
               <div className="text-[9px] text-gray-400 mb-1">With Progressive Loading</div>
               <MiniChart series={scenarioASeries} totalWeeks={input.totalWeeks} height={120} showWeekLabel={false} />
               <div className="flex flex-wrap gap-1.5 mt-1">
-                <span className="text-[9px] text-emerald-300">• Lower Risk</span>
-                <span className="text-[9px] text-cyan-300">• Faster &amp; Safer</span>
-                <span className="text-[9px] text-violet-300">• Better Long-Term</span>
+                {scenarioComparison.a.map((line, i) => (
+                  <span key={i} className={`text-[9px] ${line.tone}`}>{line.text}</span>
+                ))}
               </div>
             </div>
             <div className="bg-gray-950/40 border border-gray-800 rounded p-2">
               <div className="flex items-center gap-1 mb-1">
                 <Badge className="bg-amber-700/40 text-amber-200 border-amber-600/40 text-[8px] uppercase">Alternative</Badge>
               </div>
-              <div className="text-[11px] font-bold text-white">Scenario B: Passive Focused</div>
-              <div className="text-[9px] text-gray-400 mb-1">More Manual Therapy &amp; Less Loading</div>
+              <div className="text-[11px] font-bold text-white">Scenario B: {baselineProj.branchName}</div>
+              <div className="text-[9px] text-gray-400 mb-1">Baseline (no progressive loading additions)</div>
               <MiniChart series={scenarioBSeries} totalWeeks={input.totalWeeks} height={120} showWeekLabel={false} />
               <div className="flex flex-wrap gap-1.5 mt-1">
-                <span className="text-[9px] text-emerald-300">• Feels Better Sooner</span>
-                <span className="text-[9px] text-amber-300">• Higher Reinjury Risk</span>
-                <span className="text-[9px] text-red-300">• Slower Capacity</span>
+                {scenarioComparison.b.map((line, i) => (
+                  <span key={i} className={`text-[9px] ${line.tone}`}>{line.text}</span>
+                ))}
               </div>
             </div>
           </div>
@@ -823,7 +890,10 @@ export default function RecoverySimulatorDashboard({
             size="sm"
             variant="outline"
             className="h-7 text-[10px] border-amber-700/50 text-amber-200 hover:bg-amber-900/30"
-            onClick={() => addBranch({ name: `Flare wk${scrubWeek}`, flareEvents: [{ week: scrubWeek, severity: 25 }] })}
+            onClick={() => setBranches(prev => prev.map(b => b.id !== activeBranchId ? b : {
+              ...b,
+              flareEvents: [...b.flareEvents, { week: scrubWeek, severity: 25 }],
+            }))}
             data-testid="add-flareup"
           >
             <Flame className="h-3 w-3 mr-1" />Add Flare-Up
@@ -832,7 +902,7 @@ export default function RecoverySimulatorDashboard({
             size="sm"
             variant="outline"
             className="h-7 text-[10px] border-cyan-700/50 text-cyan-200 hover:bg-cyan-900/30"
-            onClick={() => addBranch({ name: `+Load wk${scrubWeek}`, loadAdjustments: [{ week: scrubWeek, deltaPercent: 20, label: 'Increase load' }] })}
+            onClick={() => setShowLoadAdjust(true)}
             data-testid="adjust-load"
           >
             <TrendingUp className="h-3 w-3 mr-1" />Adjust Load
@@ -938,6 +1008,69 @@ export default function RecoverySimulatorDashboard({
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      {showLoadAdjust && (
+        <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center" onClick={() => setShowLoadAdjust(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 w-80" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-white">Adjust Load @ week {scrubWeek}</div>
+              <button onClick={() => setShowLoadAdjust(false)} className="text-gray-400 hover:text-white"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="text-[11px] text-gray-300 mb-2">
+              Apply a one-time load change to the active branch. Positive values increase mechanical demand; negative values deload.
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[11px] text-gray-300 w-14">Δ Load</span>
+              <Slider
+                value={[loadAdjustPercent]}
+                min={-50}
+                max={50}
+                step={5}
+                onValueChange={([v]) => setLoadAdjustPercent(v)}
+              />
+              <span className="text-[11px] font-mono text-cyan-300 w-10 text-right">{loadAdjustPercent > 0 ? '+' : ''}{loadAdjustPercent}%</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1 h-7 text-[11px] bg-cyan-600 hover:bg-cyan-500 text-white"
+                onClick={() => {
+                  setBranches(prev => prev.map(b => b.id !== activeBranchId ? b : {
+                    ...b,
+                    loadAdjustments: [...b.loadAdjustments, {
+                      week: scrubWeek,
+                      deltaPercent: loadAdjustPercent,
+                      label: `${loadAdjustPercent > 0 ? '+' : ''}${loadAdjustPercent}% load`,
+                    }],
+                  }));
+                  setShowLoadAdjust(false);
+                }}
+                data-testid="apply-load-adjust"
+              >Apply</Button>
+              <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setShowLoadAdjust(false)}>Cancel</Button>
+            </div>
+            {activeBranch.loadAdjustments.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-800">
+                <div className="text-[10px] text-gray-400 mb-1">Existing adjustments on this branch:</div>
+                <div className="space-y-1">
+                  {activeBranch.loadAdjustments.map((la, i) => (
+                    <div key={i} className="flex items-center justify-between text-[10px] bg-gray-800/60 rounded px-2 py-1">
+                      <span className="text-gray-200">w{la.week} · {la.label}</span>
+                      <button
+                        onClick={() => setBranches(prev => prev.map(b => b.id !== activeBranchId ? b : {
+                          ...b,
+                          loadAdjustments: b.loadAdjustments.filter((_, j) => j !== i),
+                        }))}
+                        className="text-red-400 hover:text-red-200"
+                      ><Trash2 className="h-3 w-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

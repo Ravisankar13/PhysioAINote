@@ -9446,6 +9446,16 @@ ${ddxList}`;
                   hasClinicalInput={recoverySimHasClinicalInput}
                   customExercises={customExerciseResult?.customExercises ?? null}
                   customTechniques={customManualTherapyResult?.customTechniques ?? null}
+                  renderSkeleton={() => (
+                    <PureThreeGLBViewer
+                      modelPath="/models/skeleton_character.glb"
+                      modelConfig={finalModelConfig as any}
+                      className="w-full h-full"
+                      enablePainMarkers={false}
+                      painMarkers={painMarkers}
+                      bodyWeightKg={bodyWeightKg}
+                    />
+                  )}
                   initialInput={{
                     conditionSeverity: painMarkers.length > 0
                       ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)

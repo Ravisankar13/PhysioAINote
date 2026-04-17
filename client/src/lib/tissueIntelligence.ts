@@ -605,8 +605,8 @@ export function aggregateTissueIntelligence(input: AggregatorInput): TissueIntel
 
   if (input.chainIntegrityScores) {
     for (const ch of input.chainIntegrityScores) {
-      if (ch.score >= 70) continue;
-      const failure = (70 - ch.score) / 70;
+      if (ch.score >= 55) continue;
+      const failure = (55 - ch.score) / 55;
       const fasciaIds = mapMyofascialChainToFasciaIds(ch.chainId);
       for (const id of fasciaIds) {
         const k = keyOf('fascia', id);

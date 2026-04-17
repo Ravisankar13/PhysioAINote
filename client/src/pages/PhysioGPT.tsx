@@ -4122,11 +4122,22 @@ ${ddxList}`;
 
   const tissueOverloadHighlights = useMemo(() => {
     const out: Array<{ boneName: string; color: number; intensity: number; glowSize?: number }> = [];
+    if (!tissueViewMode || tissueViewMode === 'muscle') return out;
+    const hasClinicalInput =
+      painMarkers.length > 0 ||
+      compromisedTissues.length > 0 ||
+      scarMarkers.length > 0 ||
+      adhesionBands.length > 0 ||
+      Object.keys(compensatedOverrides || {}).length > 0;
+    if (!hasClinicalInput) return out;
     const seen = new Set<string>();
     for (const intel of Array.from(tissueIntelligenceMap.values())) {
       const overload = intel.capacityDemand?.overloadRatio ?? 0;
       const sev = intel.severity ?? 0;
-      if (overload < 0.6 && sev < 0.45) continue;
+      if (overload < 0.85 || sev < 0.55) continue;
+      const sources = new Set((intel.evidence || []).map(e => e.source));
+      const onlyChain = sources.size === 1 && sources.has('fascial_chain');
+      if (onlyChain) continue;
       const stress = Math.max(overload, sev);
       let color = 0x84cc16;
       if (stress >= 1.0) color = 0xef4444;
@@ -4141,7 +4152,7 @@ ${ddxList}`;
       }
     }
     return out;
-  }, [tissueIntelligenceMap]);
+  }, [tissueIntelligenceMap, tissueViewMode, painMarkers, compromisedTissues, scarMarkers, adhesionBands, compensatedOverrides]);
 
   const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
   useEffect(() => {

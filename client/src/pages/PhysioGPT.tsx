@@ -9348,6 +9348,8 @@ ${ddxList}`;
                       conditionLabel={extractionResult?.mainComplaint || undefined}
                       onApplyState={handleApplyRecoverySimState}
                       hasClinicalInput={recoverySimHasClinicalInput}
+                      customExercises={customExerciseResult?.customExercises ?? null}
+                      customTechniques={customManualTherapyResult?.customTechniques ?? null}
                       initialInput={{
                         conditionSeverity: painMarkers.length > 0
                           ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)

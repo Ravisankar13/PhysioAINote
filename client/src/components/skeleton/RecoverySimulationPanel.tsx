@@ -35,6 +35,9 @@ import {
   type ReversePlanResult,
   type OptimizerResult,
   type Milestone,
+  type TreatmentEffectProfile,
+  type CustomExerciseInput,
+  type CustomManualTechniqueInput,
   TREATMENT_LIBRARY,
   TREATMENT_BY_ID,
   simulateBranch,
@@ -44,6 +47,7 @@ import {
   generateNarrative,
   defaultBranch,
   defaultInput,
+  buildCustomTreatmentProfiles,
 } from "@/lib/recoverySimulationEngine";
 
 interface Props {
@@ -51,6 +55,8 @@ interface Props {
   conditionLabel?: string;
   onApplyState?: (info: { week: number; state: import("@/lib/recoverySimulationEngine").RecoveryState; baselineState: import("@/lib/recoverySimulationEngine").RecoveryState; branchName: string }) => void;
   hasClinicalInput?: boolean;
+  customExercises?: CustomExerciseInput[] | null;
+  customTechniques?: CustomManualTechniqueInput[] | null;
 }
 
 type TimelineKey = 'symptoms' | 'tissue' | 'function' | 'biomechanics' | 'risk';
@@ -192,7 +198,7 @@ function MultiLineChart({
   );
 }
 
-export default function RecoverySimulationPanel({ initialInput, conditionLabel, onApplyState, hasClinicalInput }: Props) {
+export default function RecoverySimulationPanel({ initialInput, conditionLabel, onApplyState, hasClinicalInput, customExercises, customTechniques }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
   const [activeBranchId, setActiveBranchId] = useState<string>('plan_active');
@@ -218,14 +224,28 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
 
   const activeBranch = useMemo(() => branches.find(b => b.id === activeBranchId) ?? branches[0], [branches, activeBranchId]);
 
-  const projections = useMemo(() => branches.map(b => simulateBranch(input, b)), [branches, input]);
+  const customProfiles: TreatmentEffectProfile[] = useMemo(
+    () => buildCustomTreatmentProfiles(customExercises, customTechniques),
+    [customExercises, customTechniques],
+  );
+  const treatmentLookup = useMemo(() => {
+    if (customProfiles.length === 0) return TREATMENT_BY_ID;
+    const m = new Map(TREATMENT_BY_ID);
+    for (const p of customProfiles) m.set(p.id, p);
+    return m;
+  }, [customProfiles]);
+
+  const projections = useMemo(
+    () => branches.map(b => simulateBranch(input, b, 'usual_care', undefined, customProfiles)),
+    [branches, input, customProfiles],
+  );
   const activeProjection = useMemo(() => projections.find(p => p.branchId === activeBranchId) ?? projections[0], [projections, activeBranchId]);
   const baselines = useMemo(() => simulateNaturalHistoryBaselines(input), [input]);
   const baselineProj = baselines[activeBaseline];
 
   const optimizer: OptimizerResult = useMemo(
-    () => optimizeSequence(input, activeProjection, goalMode),
-    [input, activeProjection, goalMode],
+    () => optimizeSequence(input, activeProjection, goalMode, customProfiles),
+    [input, activeProjection, goalMode, customProfiles],
   );
   const reverse: ReversePlanResult = useMemo(
     () => reversePlan(activeProjection, reverseGoal),
@@ -538,7 +558,9 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
             <div className="text-[9px] text-gray-300 font-semibold mt-1">Active interventions:</div>
             <div className="space-y-0.5">
               {activeBranch.interventions.map(i => {
-                const t = TREATMENT_BY_ID.get(i.treatmentId);
+                const t = treatmentLookup.get(i.treatmentId);
+                const isCustom = i.treatmentId.startsWith('custom_');
+                const customKind = i.treatmentId.startsWith('custom_ex_') ? 'Exercise' : i.treatmentId.startsWith('custom_mt_') ? 'Manual' : null;
                 const lastDose = (activeBranch.doseChanges ?? []).filter(d => d.interventionId === i.id && d.week <= scrubWeek).sort((a, b) => b.week - a.week)[0]?.newDoseMultiplier ?? i.doseMultiplier;
                 const applyDose = (mul: number) => {
                   const newMul = Math.max(0, Math.min(2, lastDose * mul));
@@ -546,7 +568,12 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
                 };
                 return (
                   <div key={i.id} className="flex items-center gap-1 text-[8px] bg-gray-800/40 rounded px-1 py-0.5">
-                    <span className="text-gray-200 flex-1">{t?.name ?? i.treatmentId}</span>
+                    <span className="text-gray-200 flex-1 truncate" title={t?.name ?? i.treatmentId}>{t?.name ?? i.treatmentId}</span>
+                    {isCustom && (
+                      <span className="px-1 py-px rounded bg-cyan-900/50 text-cyan-300 border border-cyan-700/50 flex items-center gap-0.5" title={`AI-designed ${customKind?.toLowerCase()} prescription`}>
+                        <Sparkles className="h-2 w-2" />{customKind}
+                      </span>
+                    )}
                     <span className="text-gray-500">w{i.startWeek}{i.endWeek ? `–${i.endWeek}` : '+'}</span>
                     <span className="text-gray-500">×{lastDose.toFixed(2)}</span>
                     <button onClick={() => applyDose(0.5)} className="px-1 rounded bg-blue-900/40 text-blue-200 hover:bg-blue-700/40" title="Halve dose at this week (new branch)">−50%</button>
@@ -562,6 +589,55 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
           </div>
         )}
       </div>
+
+      {customProfiles.length > 0 && (
+        <div className="bg-cyan-950/20 border border-cyan-700/40 rounded p-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] text-cyan-200 font-semibold flex items-center gap-1">
+              <Sparkles className="h-3 w-3 text-cyan-400" />
+              AI-Designed Prescriptions ({customProfiles.length})
+            </span>
+            <span className="text-[8px] text-cyan-400/70">Add to plan @ wk {scrubWeek}</span>
+          </div>
+          <div className="text-[8px] text-cyan-300/70 mb-1.5 leading-tight">
+            Patient-specific exercises and manual techniques designed by the AI engines, modeled into the recovery curve with synthesized treatment effects.
+          </div>
+          <div className="space-y-0.5 max-h-[140px] overflow-y-auto">
+            {customProfiles.map(p => {
+              const isInPlan = activeBranch.interventions.some(i => i.treatmentId === p.id);
+              const kind = p.id.startsWith('custom_ex_') ? 'Exercise' : 'Manual';
+              const badgeColor = kind === 'Exercise' ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50' : 'bg-rose-900/40 text-rose-300 border-rose-700/50';
+              const topEffects = Object.entries(p.effects)
+                .sort((a, b) => Math.abs(b[1] as number) - Math.abs(a[1] as number))
+                .slice(0, 3)
+                .map(([k, v]) => `${k} ${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(1)}`)
+                .join(', ');
+              return (
+                <div key={p.id} className="flex items-center gap-1 text-[8px] bg-gray-900/60 rounded px-1 py-0.5 border border-gray-700/40">
+                  <span className={`px-1 py-px rounded border shrink-0 ${badgeColor}`} title={`AI-designed ${kind.toLowerCase()}`}>{kind}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-cyan-100 truncate" title={p.name}>{p.name}</div>
+                    <div className="text-gray-500 truncate" title={topEffects}>{topEffects}</div>
+                  </div>
+                  {isInPlan ? (
+                    <span className="text-emerald-400 px-1" title="Already in active plan">
+                      <CheckCircle2 className="h-2.5 w-2.5" />
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => addInterventionToActiveBranch(p.id, scrubWeek)}
+                      className="px-1.5 py-0.5 rounded bg-cyan-700/40 text-cyan-200 hover:bg-cyan-600/50 border border-cyan-700/50 flex items-center gap-0.5 shrink-0"
+                      title={`Add ${p.name} to active plan starting at week ${scrubWeek}`}
+                    >
+                      <Plus className="h-2 w-2" />Add
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="bg-gray-900/40 border border-gray-700/40 rounded p-1.5">
         <div className="flex items-center gap-1 mb-1">

@@ -346,6 +346,190 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
 
 export const TREATMENT_BY_ID = new Map(TREATMENT_LIBRARY.map(t => [t.id, t]));
 
+export interface CustomExerciseInput {
+  name: string;
+  targetSystem?: string;
+  clinicalTarget?: string;
+  activationPattern?: { role?: string; muscle?: string }[];
+  forceVector?: { resistanceType?: string; direction?: string };
+  dosage?: { sets?: string; reps?: string; tempo?: string; frequency?: string };
+  progressionStages?: { stage: number; name: string }[];
+}
+
+export interface CustomManualTechniqueInput {
+  name: string;
+  targetSystem?: string;
+  clinicalTarget?: string;
+  forceApplicationSequence?: { grade?: string; depth?: string }[];
+  dosage?: { duration?: string; repetitions?: string; sets?: string; frequency?: string };
+  progressionStages?: { stage: number; name: string }[];
+  tissueTargets?: { goalType?: string }[];
+}
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+
+const containsAny = (s: string | undefined, words: string[]): boolean => {
+  if (!s) return false;
+  const lower = s.toLowerCase();
+  return words.some(w => lower.includes(w));
+};
+
+export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: number): TreatmentEffectProfile {
+  const id = `custom_ex_${slug(ex.name) || idx}`;
+  const target = `${ex.targetSystem ?? ''} ${ex.clinicalTarget ?? ''}`;
+  const roles = (ex.activationPattern ?? []).map(a => (a.role ?? '').toLowerCase());
+  const hasStabilizer = roles.includes('stabilizer');
+  const hasPrimeMover = roles.includes('prime_mover');
+  const hasForceTransmitter = roles.includes('force_transmitter');
+  const hasDecelerator = roles.includes('decelerator');
+  const isIsometric = (ex.forceVector?.resistanceType ?? '').toLowerCase().includes('isometric');
+  const isPlyo = containsAny(target, ['plyo', 'reactive', 'jump', 'sprint', 'ballistic']);
+  const isMobility = containsAny(target, ['mobility', 'rom', 'range', 'flexibility', 'stretch']);
+  const isMotorControl = containsAny(target, ['motor control', 'coordination', 'sling', 'stability', 'neuromuscular']);
+  const stages = (ex.progressionStages ?? []).length || 3;
+  const setsNum = parseInt(ex.dosage?.sets ?? '3') || 3;
+
+  const effects: Partial<Record<keyof RecoveryState, number>> = {
+    motorControl: 1.5,
+    capacity: 1.5,
+    fearAvoidance: -1,
+    asymmetry: -0.8,
+    movementQuality: 1,
+  };
+  if (hasStabilizer || isMotorControl) {
+    effects.motorControl = (effects.motorControl ?? 0) + 2.5;
+    effects.slingFunction = (effects.slingFunction ?? 0) + 3;
+    effects.compensation = (effects.compensation ?? 0) - 1.5;
+  }
+  if (hasPrimeMover) {
+    effects.strength = (effects.strength ?? 0) + 3;
+    effects.loadTolerance = (effects.loadTolerance ?? 0) + 2.5;
+    effects.structuralIntegrity = (effects.structuralIntegrity ?? 0) + 1.5;
+  }
+  if (hasForceTransmitter) {
+    effects.slingFunction = (effects.slingFunction ?? 0) + 2;
+    effects.compensation = (effects.compensation ?? 0) - 1;
+  }
+  if (hasDecelerator) {
+    effects.motorControl = (effects.motorControl ?? 0) + 1.5;
+    effects.reinjuryRisk = (effects.reinjuryRisk ?? 0) - 1;
+  }
+  if (isIsometric) {
+    effects.pain = (effects.pain ?? 0) - 2.5;
+    effects.loadTolerance = (effects.loadTolerance ?? 0) + 2.5;
+  }
+  if (isMobility) {
+    effects.romPercent = (effects.romPercent ?? 0) + 4;
+    effects.stiffness = (effects.stiffness ?? 0) - 3;
+  }
+  if (isPlyo) {
+    effects.sport = (effects.sport ?? 0) + 4;
+    effects.running = (effects.running ?? 0) + 3;
+    effects.capacity = (effects.capacity ?? 0) + 2;
+  }
+  effects.strength = (effects.strength ?? 0) + Math.min(2, setsNum * 0.4);
+
+  const peakWeeks = Math.max(2, Math.min(6, stages * 2));
+  return {
+    id,
+    name: ex.name,
+    modality: 'exercise',
+    onsetWeeks: isIsometric ? 0 : 1,
+    peakWeeks,
+    durationWeeks: 8,
+    carryoverWeeks: 3,
+    effects,
+    healingStageMultiplier: isPlyo
+      ? { inflammatory: 0.1, proliferative: 0.4, remodeling: 1.0, maturation: 1.4 }
+      : isIsometric
+        ? { inflammatory: 0.7, proliferative: 1.2, remodeling: 1.0, maturation: 0.8 }
+        : { inflammatory: 0.5, proliferative: 1.0, remodeling: 1.2, maturation: 1.0 },
+    irritabilityPenalty: isPlyo ? 1.0 : isIsometric ? 0.3 : 0.6,
+    mistimingFlareRisk: isPlyo ? 20 : 10,
+    description: `AI-designed exercise targeting ${ex.targetSystem ?? 'patient-specific dysfunction'}.`,
+    gates: isPlyo
+      ? { minCapacity: 60, maxPain: 40, maxFlareRisk: 40, minHealingProgress: 55, minRomPercent: 75, minStrength: 65 }
+      : { maxPain: 70, minHealingProgress: 15 },
+  };
+}
+
+export function synthesizeCustomManualTechniqueProfile(tech: CustomManualTechniqueInput, idx: number): TreatmentEffectProfile {
+  const id = `custom_mt_${slug(tech.name) || idx}`;
+  const target = `${tech.targetSystem ?? ''} ${tech.clinicalTarget ?? ''}`;
+  const goalTypes = (tech.tissueTargets ?? []).map(t => (t.goalType ?? '').toLowerCase());
+  const isNeural = containsAny(target, ['neural', 'nerve', 'neurodynamic', 'sciatic', 'median', 'ulnar']);
+  const isFascial = containsAny(target, ['fascia', 'fascial', 'myofascial', 'thoracolumbar']);
+  const isJointMob = containsAny(target, ['joint', 'mobilization', 'mobilisation', 'arthrokinematic', 'capsule']);
+
+  const effects: Partial<Record<keyof RecoveryState, number>> = {
+    pain: -2,
+    movementQuality: 1.5,
+  };
+  if (goalTypes.includes('release') || isFascial) {
+    effects.stiffness = (effects.stiffness ?? 0) - 4;
+    effects.romPercent = (effects.romPercent ?? 0) + 3;
+    effects.neuralSensitivity = (effects.neuralSensitivity ?? 0) - 2;
+    effects.pain = (effects.pain ?? 0) - 2;
+  }
+  if (goalTypes.includes('mobilize') || isJointMob) {
+    effects.romPercent = (effects.romPercent ?? 0) + 4;
+    effects.stiffness = (effects.stiffness ?? 0) - 3;
+    effects.movementQuality = (effects.movementQuality ?? 0) + 1.5;
+  }
+  if (goalTypes.includes('activate')) {
+    effects.motorControl = (effects.motorControl ?? 0) + 2.5;
+    effects.slingFunction = (effects.slingFunction ?? 0) + 2;
+  }
+  if (goalTypes.includes('stabilize')) {
+    effects.motorControl = (effects.motorControl ?? 0) + 2.5;
+    effects.slingFunction = (effects.slingFunction ?? 0) + 2.5;
+    effects.compensation = (effects.compensation ?? 0) - 2;
+  }
+  if (goalTypes.includes('decompress') || isNeural) {
+    effects.pain = (effects.pain ?? 0) - 2;
+    effects.jointLoading = (effects.jointLoading ?? 0) - 2;
+    effects.neuralSensitivity = (effects.neuralSensitivity ?? 0) - 3;
+  }
+  if (Object.keys(effects).length <= 2) {
+    effects.stiffness = -3;
+    effects.romPercent = 3;
+  }
+
+  return {
+    id,
+    name: tech.name,
+    modality: 'manual',
+    onsetWeeks: 0,
+    peakWeeks: 2,
+    durationWeeks: 6,
+    carryoverWeeks: 1,
+    effects,
+    healingStageMultiplier: isNeural
+      ? { inflammatory: 0.4, proliferative: 1.0, remodeling: 1.2, maturation: 1.0 }
+      : { inflammatory: 0.6, proliferative: 1.0, remodeling: 1.1, maturation: 0.9 },
+    irritabilityPenalty: isNeural ? 0.6 : 0.4,
+    mistimingFlareRisk: isNeural ? 12 : 8,
+    description: `AI-designed manual therapy targeting ${tech.targetSystem ?? 'patient-specific tissue restrictions'}.`,
+  };
+}
+
+export function buildCustomTreatmentProfiles(
+  customExercises?: CustomExerciseInput[] | null,
+  customTechniques?: CustomManualTechniqueInput[] | null,
+): TreatmentEffectProfile[] {
+  const out: TreatmentEffectProfile[] = [];
+  (customExercises ?? []).forEach((ex, i) => out.push(synthesizeCustomExerciseProfile(ex, i)));
+  (customTechniques ?? []).forEach((t, i) => out.push(synthesizeCustomManualTechniqueProfile(t, i)));
+  return out;
+}
+
+function buildLookup(custom?: TreatmentEffectProfile[] | null): Map<string, TreatmentEffectProfile> {
+  if (!custom || custom.length === 0) return TREATMENT_BY_ID;
+  const m = new Map(TREATMENT_BY_ID);
+  for (const p of custom) m.set(p.id, p);
+  return m;
+}
+
 function defaultInitialState(input: SimulationInput): RecoveryState {
   const sev = input.conditionSeverity;
   const irr = input.irritability;
@@ -430,6 +614,7 @@ interface SimContext {
   baselineMode: BaselineMode;
   input: SimulationInput;
   noiseSeed: number;
+  lookup: Map<string, TreatmentEffectProfile>;
 }
 
 function applyTreatmentEffects(
@@ -456,7 +641,7 @@ function applyTreatmentEffects(
     const ended = intv.endWeek !== undefined && week >= intv.endWeek;
     const weeksActive = ended ? (intv.endWeek! - intv.startWeek) : (week - intv.startWeek);
     const weeksSinceStop = ended ? week - intv.endWeek! : null;
-    const treatment = TREATMENT_BY_ID.get(intv.treatmentId);
+    const treatment = ctx.lookup.get(intv.treatmentId);
     if (!treatment) continue;
 
     const ramp = effectRamp(treatment, weeksActive, weeksSinceStop);
@@ -606,6 +791,7 @@ export function simulateBranch(
   branch: ScenarioBranch,
   baselineMode: BaselineMode = 'usual_care',
   initialOverride?: RecoveryState,
+  customProfiles?: TreatmentEffectProfile[] | null,
 ): SimulationProjection {
   const states: RecoveryState[] = [];
   const allMarkers: InterventionMarker[] = [];
@@ -613,7 +799,8 @@ export function simulateBranch(
   let state = initialOverride ? { ...initialOverride } : defaultInitialState(input);
   states.push({ ...state, week: 0 });
 
-  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42 };
+  const lookup = buildLookup(customProfiles);
+  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42, lookup };
 
   for (let w = 1; w <= input.totalWeeks; w++) {
     const { newState, markers, attribution } = applyTreatmentEffects(state, ctx, w);
@@ -688,7 +875,7 @@ export function simulateBranch(
   const totalAttribContribution = Array.from(totalAttribution.values()).reduce((a, b) => a + b, 0) || 1;
   const attribution: TreatmentAttribution[] = Array.from(totalAttribution.entries()).map(([id, v]) => ({
     treatmentId: id,
-    name: TREATMENT_BY_ID.get(id)?.name ?? id,
+    name: lookup.get(id)?.name ?? id,
     contributionPercent: (v / totalAttribContribution) * 100,
     contributesTo: 'function' as const,
   })).sort((a, b) => b.contributionPercent - a.contributionPercent);
@@ -794,7 +981,9 @@ export function optimizeSequence(
   input: SimulationInput,
   baselineProjection: SimulationProjection,
   mode: GoalMode,
+  customProfiles?: TreatmentEffectProfile[] | null,
 ): OptimizerResult {
+  const lookup = buildLookup(customProfiles);
   const sequence: { week: number; action: string; rationale: string }[] = [];
   const phases: { startWeek: number; endWeek: number; preferred: string[]; rationale: string }[] = [
     { startWeek: 0, endWeek: 2, preferred: ['rest_offload', 'education', 'electrophysical', 'taping_bracing'], rationale: 'Acute / inflammatory: settle symptoms, control load.' },
@@ -815,7 +1004,7 @@ export function optimizeSequence(
   for (const phase of phases) {
     if (phase.startWeek >= input.totalWeeks) continue;
     for (const tid of phase.preferred) {
-      const tr = TREATMENT_BY_ID.get(tid);
+      const tr = lookup.get(tid);
       if (!tr) continue;
       interventions.push({
         id: `opt_${id++}`,
@@ -839,12 +1028,12 @@ export function optimizeSequence(
     loadAdjustments: [],
     color: '#22c55e',
   };
-  const optimizedProj = simulateBranch(input, optimizedBranch);
+  const optimizedProj = simulateBranch(input, optimizedBranch, 'usual_care', undefined, customProfiles);
   const optScore = scoreProjection(optimizedProj, mode);
   const baseScore = scoreProjection(baselineProjection, mode);
 
   const bestNextAction = phases.find(p => p.startWeek <= 0 && p.endWeek > 0)?.preferred[0] ?? 'education';
-  const nextLabel = TREATMENT_BY_ID.get(bestNextAction)?.name ?? bestNextAction;
+  const nextLabel = lookup.get(bestNextAction)?.name ?? bestNextAction;
 
   const narrative = `Under "${mode.replace(/_/g, ' ')}", the optimized sequence improves outcome score by ${(optScore - baseScore).toFixed(1)} pts vs baseline. Best next action: ${nextLabel}. The plan progresses through inflammatory → proliferative → remodeling → maturation, holding back high-load reactive work until capacity gates pass.`;
 

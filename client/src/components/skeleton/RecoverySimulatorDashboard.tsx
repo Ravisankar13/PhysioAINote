@@ -503,7 +503,7 @@ export default function RecoverySimulatorDashboard({
   }, [stateAtScrub, conditionContext]);
 
   return (
-    <div className="fixed inset-0 z-[120] flex flex-col bg-gray-950/97 backdrop-blur-md text-gray-100" data-testid="recovery-sim-dashboard">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-gray-950/97 backdrop-blur-md text-gray-100" data-testid="recovery-sim-dashboard">
       {/* TOP HEADER BAR */}
       <header className="flex items-center justify-between px-4 py-2 border-b border-gray-800/80 bg-gray-900/70 shrink-0">
         <div className="flex items-center gap-3">

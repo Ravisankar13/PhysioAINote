@@ -49,6 +49,7 @@ import {
   defaultBranch,
   defaultInput,
   buildCustomTreatmentProfiles,
+  tissueProfileForContext,
 } from "@/lib/recoverySimulationEngine";
 
 interface Props {
@@ -389,6 +390,13 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
           <span><span className="text-purple-300 font-semibold">Pain mech:</span> {conditionContext.painMechanism}{conditionContext.hasNerveRoot ? ' • nerve root' : ''}</span>
           <span><span className="text-purple-300 font-semibold">ROM:</span> {conditionContext.baselineRomPercent.toFixed(0)}%</span>
           <span><span className="text-purple-300 font-semibold">Capacity:</span> {conditionContext.baselineCapacity.toFixed(0)}</span>
+          {(() => { const p = tissueProfileForContext(conditionContext); return (
+            <>
+              <span title="Pathway-specific capacity ceiling"><span className="text-purple-300 font-semibold">Cap ceil:</span> {p.capacityCeiling.toFixed(0)}</span>
+              <span title="Pathway-specific ROM ceiling"><span className="text-purple-300 font-semibold">ROM ceil:</span> {p.romCeiling.toFixed(0)}</span>
+              {p.gateRelaxation !== 0 && <span title="Pathway gate threshold shift"><span className="text-purple-300 font-semibold">Gate Δ:</span> {p.gateRelaxation > 0 ? '+' : ''}{p.gateRelaxation}</span>}
+            </>
+          ); })()}
           {conditionContext.scarLoad > 0 && <span><span className="text-purple-300 font-semibold">Scar:</span> {conditionContext.scarLoad.toFixed(0)}</span>}
           {conditionContext.tissueLoad > 0 && <span><span className="text-purple-300 font-semibold">Tissue load:</span> {conditionContext.tissueLoad.toFixed(0)}</span>}
           {conditionContext.slingWeakLinkSeverity > 0 && <span><span className="text-purple-300 font-semibold">Sling:</span> {conditionContext.slingWeakLinkSeverity.toFixed(0)}</span>}

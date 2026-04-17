@@ -704,18 +704,20 @@ export interface TissueHealingProfile {
   capacityRampMult: number;
   flareRiskBase: number;
   romCeiling: number;
+  capacityCeiling: number;
+  gateRelaxation: number;
 }
 
 const TISSUE_HEALING: Record<ConditionTissue, TissueHealingProfile> = {
-  muscle:   { healingRateMult: 1.20, phaseDurationMult: 0.80, reinjurySensitivity: 0.9, painDecayMult: 1.10, romRecoveryMult: 1.10, capacityRampMult: 1.10, flareRiskBase: 0,  romCeiling: 100 },
-  ligament: { healingRateMult: 0.80, phaseDurationMult: 1.30, reinjurySensitivity: 1.2, painDecayMult: 0.90, romRecoveryMult: 0.90, capacityRampMult: 0.85, flareRiskBase: 4, romCeiling: 95 },
-  tendon:   { healingRateMult: 0.60, phaseDurationMult: 1.60, reinjurySensitivity: 1.4, painDecayMult: 0.85, romRecoveryMult: 0.90, capacityRampMult: 0.80, flareRiskBase: 8, romCeiling: 95 },
-  nerve:    { healingRateMult: 0.50, phaseDurationMult: 1.80, reinjurySensitivity: 1.3, painDecayMult: 0.70, romRecoveryMult: 0.80, capacityRampMult: 0.70, flareRiskBase: 10, romCeiling: 90 },
-  joint:    { healingRateMult: 0.70, phaseDurationMult: 1.40, reinjurySensitivity: 1.1, painDecayMult: 0.95, romRecoveryMult: 0.70, capacityRampMult: 0.85, flareRiskBase: 5, romCeiling: 90 },
-  fascia:   { healingRateMult: 1.00, phaseDurationMult: 1.00, reinjurySensitivity: 0.9, painDecayMult: 1.00, romRecoveryMult: 1.10, capacityRampMult: 0.95, flareRiskBase: 2, romCeiling: 95 },
-  disc:     { healingRateMult: 0.55, phaseDurationMult: 1.70, reinjurySensitivity: 1.4, painDecayMult: 0.80, romRecoveryMult: 0.85, capacityRampMult: 0.80, flareRiskBase: 8, romCeiling: 85 },
-  bone:     { healingRateMult: 0.70, phaseDurationMult: 1.50, reinjurySensitivity: 1.0, painDecayMult: 0.90, romRecoveryMult: 0.85, capacityRampMult: 0.80, flareRiskBase: 4, romCeiling: 92 },
-  generic:  { healingRateMult: 1.00, phaseDurationMult: 1.00, reinjurySensitivity: 1.0, painDecayMult: 1.00, romRecoveryMult: 1.00, capacityRampMult: 1.00, flareRiskBase: 0, romCeiling: 100 },
+  muscle:   { healingRateMult: 1.20, phaseDurationMult: 0.80, reinjurySensitivity: 0.9, painDecayMult: 1.10, romRecoveryMult: 1.10, capacityRampMult: 1.10, flareRiskBase: 0,  romCeiling: 100, capacityCeiling: 100, gateRelaxation: 0 },
+  ligament: { healingRateMult: 0.80, phaseDurationMult: 1.30, reinjurySensitivity: 1.2, painDecayMult: 0.90, romRecoveryMult: 0.90, capacityRampMult: 0.85, flareRiskBase: 4, romCeiling: 95, capacityCeiling: 92, gateRelaxation: -2 },
+  tendon:   { healingRateMult: 0.60, phaseDurationMult: 1.60, reinjurySensitivity: 1.4, painDecayMult: 0.85, romRecoveryMult: 0.90, capacityRampMult: 0.80, flareRiskBase: 8, romCeiling: 95, capacityCeiling: 88, gateRelaxation: -5 },
+  nerve:    { healingRateMult: 0.50, phaseDurationMult: 1.80, reinjurySensitivity: 1.3, painDecayMult: 0.70, romRecoveryMult: 0.80, capacityRampMult: 0.70, flareRiskBase: 10, romCeiling: 90, capacityCeiling: 80, gateRelaxation: 5 },
+  joint:    { healingRateMult: 0.70, phaseDurationMult: 1.40, reinjurySensitivity: 1.1, painDecayMult: 0.95, romRecoveryMult: 0.70, capacityRampMult: 0.85, flareRiskBase: 5, romCeiling: 90, capacityCeiling: 85, gateRelaxation: 3 },
+  fascia:   { healingRateMult: 1.00, phaseDurationMult: 1.00, reinjurySensitivity: 0.9, painDecayMult: 1.00, romRecoveryMult: 1.10, capacityRampMult: 0.95, flareRiskBase: 2, romCeiling: 95, capacityCeiling: 95, gateRelaxation: 0 },
+  disc:     { healingRateMult: 0.55, phaseDurationMult: 1.70, reinjurySensitivity: 1.4, painDecayMult: 0.80, romRecoveryMult: 0.85, capacityRampMult: 0.80, flareRiskBase: 8, romCeiling: 85, capacityCeiling: 80, gateRelaxation: 5 },
+  bone:     { healingRateMult: 0.70, phaseDurationMult: 1.50, reinjurySensitivity: 1.0, painDecayMult: 0.90, romRecoveryMult: 0.85, capacityRampMult: 0.80, flareRiskBase: 4, romCeiling: 92, capacityCeiling: 90, gateRelaxation: -3 },
+  generic:  { healingRateMult: 1.00, phaseDurationMult: 1.00, reinjurySensitivity: 1.0, painDecayMult: 1.00, romRecoveryMult: 1.00, capacityRampMult: 1.00, flareRiskBase: 0, romCeiling: 100, capacityCeiling: 100, gateRelaxation: 0 },
 };
 
 interface ConditionOverride {
@@ -723,27 +725,31 @@ interface ConditionOverride {
   healingRateMult?: number;
   flareRiskBase?: number;
   romCeiling?: number;
+  capacityCeiling?: number;
   capacityRampMult?: number;
   painDecayMult?: number;
   initialPainAdd?: number;
   initialRomAdd?: number;
   initialCapacityAdd?: number;
   chronicityRiskAdd?: number;
+  initialIrritabilityAdd?: number;
+  initialDemandAdd?: number;
+  gateRelaxation?: number;
 }
 
 const CONDITION_OVERRIDES: { match: RegExp; id: string; override: ConditionOverride }[] = [
   { match: /(rotator cuff|supraspinatus tendin|subacromial|shoulder impinge)/i, id: 'rotator_cuff_tendinopathy', override: { primaryTissue: 'tendon', romCeiling: 95, flareRiskBase: 8 } },
-  { match: /(frozen shoulder|adhesive capsulitis)/i, id: 'frozen_shoulder', override: { primaryTissue: 'joint', healingRateMult: 0.55, romCeiling: 70, painDecayMult: 0.70, initialRomAdd: -25, capacityRampMult: 0.70, chronicityRiskAdd: 15 } },
+  { match: /(frozen shoulder|adhesive capsulitis)/i, id: 'frozen_shoulder', override: { primaryTissue: 'joint', healingRateMult: 0.55, romCeiling: 70, capacityCeiling: 75, painDecayMult: 0.70, initialRomAdd: -25, capacityRampMult: 0.70, chronicityRiskAdd: 15, initialIrritabilityAdd: 15, gateRelaxation: 8 } },
   { match: /(achilles)/i, id: 'achilles_tendinopathy', override: { primaryTissue: 'tendon', healingRateMult: 0.55, romCeiling: 90, flareRiskBase: 10, capacityRampMult: 0.75 } },
   { match: /(patellar tendin|jumper'?s knee)/i, id: 'patellar_tendinopathy', override: { primaryTissue: 'tendon', healingRateMult: 0.60, flareRiskBase: 9 } },
-  { match: /(stenosis)/i, id: 'lumbar_stenosis', override: { primaryTissue: 'nerve', healingRateMult: 0.45, romCeiling: 75, capacityRampMult: 0.65, chronicityRiskAdd: 15 } },
-  { match: /(radicul|sciatica|nerve root)/i, id: 'radiculopathy', override: { primaryTissue: 'nerve', healingRateMult: 0.55, painDecayMult: 0.70, flareRiskBase: 10, initialPainAdd: 10 } },
-  { match: /(myelopath)/i, id: 'cervical_myelopathy', override: { primaryTissue: 'nerve', healingRateMult: 0.40, romCeiling: 70, capacityRampMult: 0.60, chronicityRiskAdd: 20 } },
-  { match: /(disc herniat|prolaps|disc bulge)/i, id: 'disc_herniation', override: { primaryTissue: 'disc', healingRateMult: 0.60, painDecayMult: 0.85, initialPainAdd: 5 } },
-  { match: /(spondylolisthe)/i, id: 'spondylolisthesis', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, capacityRampMult: 0.70 } },
-  { match: /(osteoarthr|^oa\b|knee arthritis|hip arthritis)/i, id: 'osteoarthritis', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, painDecayMult: 0.85, capacityRampMult: 0.75, chronicityRiskAdd: 10 } },
-  { match: /(post[- ]?surg|post[- ]?op|reconstruction|repair surgery)/i, id: 'post_surgical', override: { primaryTissue: 'joint', healingRateMult: 0.70, romCeiling: 90, initialRomAdd: -20, initialCapacityAdd: -15, capacityRampMult: 0.80 } },
-  { match: /(replacement|arthroplasty|tkr|thr|tka)/i, id: 'joint_replacement', override: { primaryTissue: 'joint', healingRateMult: 0.65, romCeiling: 85, initialRomAdd: -25, initialCapacityAdd: -20, capacityRampMult: 0.75 } },
+  { match: /(stenosis)/i, id: 'lumbar_stenosis', override: { primaryTissue: 'nerve', healingRateMult: 0.45, romCeiling: 75, capacityCeiling: 75, capacityRampMult: 0.65, chronicityRiskAdd: 15, initialDemandAdd: -10, gateRelaxation: 8 } },
+  { match: /(radicul|sciatica|nerve root)/i, id: 'radiculopathy', override: { primaryTissue: 'nerve', healingRateMult: 0.55, painDecayMult: 0.70, flareRiskBase: 10, initialPainAdd: 10, initialIrritabilityAdd: 10, gateRelaxation: 5 } },
+  { match: /(myelopath)/i, id: 'cervical_myelopathy', override: { primaryTissue: 'nerve', healingRateMult: 0.40, romCeiling: 70, capacityCeiling: 70, capacityRampMult: 0.60, chronicityRiskAdd: 20, initialDemandAdd: -15, gateRelaxation: 10 } },
+  { match: /(disc herniat|prolaps|disc bulge)/i, id: 'disc_herniation', override: { primaryTissue: 'disc', healingRateMult: 0.60, painDecayMult: 0.85, initialPainAdd: 5, initialIrritabilityAdd: 8 } },
+  { match: /(spondylolisthe)/i, id: 'spondylolisthesis', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, capacityCeiling: 80, capacityRampMult: 0.70, gateRelaxation: 5 } },
+  { match: /(osteoarthr|^oa\b|knee arthritis|hip arthritis)/i, id: 'osteoarthritis', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, capacityCeiling: 78, painDecayMult: 0.85, capacityRampMult: 0.75, chronicityRiskAdd: 10, gateRelaxation: 5 } },
+  { match: /(post[- ]?surg|post[- ]?op|reconstruction|repair surgery)/i, id: 'post_surgical', override: { primaryTissue: 'joint', healingRateMult: 0.70, romCeiling: 90, capacityCeiling: 85, initialRomAdd: -20, initialCapacityAdd: -15, capacityRampMult: 0.80, initialIrritabilityAdd: 10, gateRelaxation: 5 } },
+  { match: /(replacement|arthroplasty|tkr|thr|tka)/i, id: 'joint_replacement', override: { primaryTissue: 'joint', healingRateMult: 0.65, romCeiling: 85, capacityCeiling: 80, initialRomAdd: -25, initialCapacityAdd: -20, capacityRampMult: 0.75, initialIrritabilityAdd: 12, initialDemandAdd: -10, gateRelaxation: 8 } },
   { match: /(hamstring strain|muscle strain|grade [12] tear)/i, id: 'muscle_strain', override: { primaryTissue: 'muscle', healingRateMult: 1.10, capacityRampMult: 1.10 } },
   { match: /(plantar fasc)/i, id: 'plantar_fasciitis', override: { primaryTissue: 'fascia', healingRateMult: 0.85, painDecayMult: 0.90, flareRiskBase: 5 } },
   { match: /(carpal tunnel|cubital tunnel|tarsal tunnel|nerve entrap)/i, id: 'nerve_entrapment', override: { primaryTissue: 'nerve', healingRateMult: 0.60, painDecayMult: 0.80, flareRiskBase: 8 } },
@@ -840,15 +846,21 @@ export function tissueProfileForContext(ctx: ConditionContext): TissueHealingPro
     capacityRampMult: o.capacityRampMult ?? base.capacityRampMult,
     flareRiskBase: o.flareRiskBase ?? base.flareRiskBase,
     romCeiling: Math.min(o.romCeiling ?? base.romCeiling, base.romCeiling) * ctx.patientRomCeiling,
+    capacityCeiling: Math.min(o.capacityCeiling ?? base.capacityCeiling, base.capacityCeiling) * ctx.patientTissueQualityMult,
+    gateRelaxation: (o.gateRelaxation ?? base.gateRelaxation),
   };
 }
 
 function defaultInitialState(input: SimulationInput, ctx?: ConditionContext): RecoveryState {
   const sev = input.conditionSeverity;
-  const irr = input.irritability;
-  const acuityFactor = input.acuity === 'acute' ? 1 : input.acuity === 'subacute' ? 0.7 : 0.5;
   const o = ctx ? classifyCondition(ctx.conditionLabel || ctx.conditionId).override : { primaryTissue: 'generic' as ConditionTissue };
   const profile = ctx ? tissueProfileForContext(ctx) : TISSUE_HEALING.generic;
+  const irrCtxAdd = ctx ? ((o.initialIrritabilityAdd ?? 0)
+    + (ctx.painMechanism === 'central' ? 12 : ctx.painMechanism === 'neuropathic' ? 8 : 0)
+    + ctx.scarLoad * 0.1
+    + ctx.tissueLoad * 0.08) : 0;
+  const irr = clamp(input.irritability + irrCtxAdd);
+  const acuityFactor = input.acuity === 'acute' ? 1 : input.acuity === 'subacute' ? 0.7 : 0.5;
 
   const baselineRom = ctx ? clamp(ctx.baselineRomPercent + (o.initialRomAdd ?? 0)) : clamp(70 - sev * 0.3);
   const baselineMotor = ctx ? clamp(ctx.baselineMotorControl) : clamp(60 - sev * 0.3);
@@ -895,7 +907,7 @@ function defaultInitialState(input: SimulationInput, ctx?: ConditionContext): Re
     adherence: input.patientAdherence,
     slingFunction: clamp(60 - sev * 0.3 - slingPenalty),
     capacity: baselineCap,
-    demand: clamp((input.workDemand + input.sportDemand) / 2),
+    demand: clamp((input.workDemand + input.sportDemand) / 2 + (ctx ? (o.initialDemandAdd ?? 0) : 0)),
     ...(input.initialState ?? {}),
   };
 }
@@ -1078,16 +1090,21 @@ function applyTreatmentEffects(
     }
   }
 
-  next.capacity = clamp(0.45 * next.loadTolerance + 0.25 * next.strength + 0.2 * next.motorControl + 0.1 * next.slingFunction);
+  const tissueQualityMult = ctx.conditionContext?.patientTissueQualityMult ?? 1;
+  const capCeilingPctOfFull = (ctx.profile?.capacityCeiling ?? 100) * tissueQualityMult;
+  const rawCap = 0.45 * next.loadTolerance + 0.25 * next.strength + 0.2 * next.motorControl + 0.1 * next.slingFunction;
+  next.capacity = Math.min(capCeilingPctOfFull, clamp(rawCap));
+  next.loadTolerance = Math.min(capCeilingPctOfFull, next.loadTolerance);
 
   const branchProgressionHold = ctx.branch.progressionHoldUntilWeek !== undefined && week < ctx.branch.progressionHoldUntilWeek;
   const holdMultiplier = branchProgressionHold ? 0 : 1;
 
-  const passWalking = next.inflammation < 50 && next.pain < 70;
-  const passStairs = passWalking && next.walking >= 55 && next.pain < 60;
-  const passSquat = next.pain < 55 && next.romPercent >= 65 && next.healingProgress >= 20;
-  const passRunning = next.pain < 40 && next.capacity >= 60 && next.healingProgress >= 50 && next.romPercent >= 75 && next.flareRisk < 45 && next.running >= 0;
-  const passSport = passRunning && next.running >= 55 && next.capacity >= 75 && next.healingProgress >= 70 && next.flareRisk < 35 && next.reinjuryRisk < 40;
+  const gateRelax = ctx.profile?.gateRelaxation ?? 0;
+  const passWalking = next.inflammation < (50 + gateRelax) && next.pain < (70 + gateRelax);
+  const passStairs = passWalking && next.walking >= (55 - gateRelax) && next.pain < (60 + gateRelax);
+  const passSquat = next.pain < (55 + gateRelax) && next.romPercent >= (65 - gateRelax) && next.healingProgress >= 20;
+  const passRunning = next.pain < (40 + Math.max(0, gateRelax * 0.5)) && next.capacity >= (60 - gateRelax) && next.healingProgress >= 50 && next.romPercent >= (75 - gateRelax) && next.flareRisk < (45 + Math.max(0, gateRelax * 0.5)) && next.running >= 0;
+  const passSport = passRunning && next.running >= (55 - gateRelax) && next.capacity >= (75 - gateRelax) && next.healingProgress >= 70 && next.flareRisk < (35 + Math.max(0, gateRelax * 0.5)) && next.reinjuryRisk < 40;
 
   const capRamp = ctx.profile?.capacityRampMult ?? 1;
   const romMult = ctx.profile?.romRecoveryMult ?? 1;

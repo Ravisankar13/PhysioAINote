@@ -394,8 +394,8 @@ export default function RecoverySimulatorDashboard({
   // frozen/thawing, etc.) instead of the same four-phase healing model
   // for every condition.
   const archetype = useMemo(
-    () => getArchetypeForCondition(conditionContext?.conditionId),
-    [conditionContext?.conditionId],
+    () => getArchetypeForCondition(conditionContext?.archetypeId ?? conditionContext?.conditionId, conditionContext?.conditionLabel),
+    [conditionContext?.archetypeId, conditionContext?.conditionId, conditionContext?.conditionLabel],
   );
   const scrubbedStageIdx = useMemo(
     () => stageIndexForHealingPhase(archetype, stateAtScrub.healingPhase),

@@ -1,3 +1,5 @@
+import { resolveArchetypeId } from './recoveryArchetypes';
+
 export type HealingPhase = 'inflammatory' | 'proliferative' | 'remodeling' | 'maturation';
 
 export interface RecoveryState {
@@ -677,6 +679,12 @@ export type PainMechanismKind = 'nociceptive' | 'neuropathic' | 'central' | 'mix
 export interface ConditionContext {
   conditionId: string;
   conditionLabel: string;
+  /** Recovery archetype ID resolved from conditionId + label. The dashboard
+   *  uses this to render condition-appropriate stage models (tendinopathy
+   *  load-capacity, OA, frozen shoulder, mechanical impingement, radicular,
+   *  disc, bone stress, chronic, instability) instead of the default
+   *  4-phase acute tissue healing layout. */
+  archetypeId: string;
   primaryTissue: ConditionTissue;
   tissueLoad: number;
   scarLoad: number;
@@ -737,22 +745,51 @@ interface ConditionOverride {
   gateRelaxation?: number;
 }
 
+// Order matters: more specific patterns must come before more general ones so
+// e.g. "subacromial impingement" maps to subacromial_impingement (mechanical
+// impingement archetype) instead of falling through to rotator_cuff_tendinopathy.
 const CONDITION_OVERRIDES: { match: RegExp; id: string; override: ConditionOverride }[] = [
-  { match: /(rotator cuff|supraspinatus tendin|subacromial|shoulder impinge)/i, id: 'rotator_cuff_tendinopathy', override: { primaryTissue: 'tendon', romCeiling: 95, flareRiskBase: 8 } },
+  // Frozen shoulder — must precede the generic shoulder/impingement matches
   { match: /(frozen shoulder|adhesive capsulitis)/i, id: 'frozen_shoulder', override: { primaryTissue: 'joint', healingRateMult: 0.55, romCeiling: 70, capacityCeiling: 75, painDecayMult: 0.70, initialRomAdd: -25, capacityRampMult: 0.70, chronicityRiskAdd: 15, initialIrritabilityAdd: 15, gateRelaxation: 8 } },
+  // Mechanical impingement — must precede rotator_cuff_tendinopathy
+  { match: /(subacromial impinge|subacromial pain|shoulder impinge)/i, id: 'subacromial_impingement', override: { primaryTissue: 'joint', healingRateMult: 0.85, painDecayMult: 0.95, flareRiskBase: 5 } },
+  { match: /(patellofemoral|pfps|runner'?s knee)/i, id: 'patellofemoral_pain', override: { primaryTissue: 'joint', healingRateMult: 0.85, romCeiling: 95, painDecayMult: 0.95 } },
+  { match: /(femoroacetabular|^fai\b|hip impinge)/i, id: 'subacromial_impingement', override: { primaryTissue: 'joint', healingRateMult: 0.80, romCeiling: 90, capacityRampMult: 0.85 } },
+  // Tendinopathies
+  { match: /(rotator cuff tendin|supraspinatus tendin|rotator cuff)/i, id: 'rotator_cuff_tendinopathy', override: { primaryTissue: 'tendon', romCeiling: 95, flareRiskBase: 8 } },
   { match: /(achilles)/i, id: 'achilles_tendinopathy', override: { primaryTissue: 'tendon', healingRateMult: 0.55, romCeiling: 90, flareRiskBase: 10, capacityRampMult: 0.75 } },
   { match: /(patellar tendin|jumper'?s knee)/i, id: 'patellar_tendinopathy', override: { primaryTissue: 'tendon', healingRateMult: 0.60, flareRiskBase: 9 } },
+  { match: /(gluteal tendin|greater trochanteric|trochanteric pain)/i, id: 'gluteal_tendinopathy', override: { primaryTissue: 'tendon', healingRateMult: 0.65, flareRiskBase: 8 } },
+  { match: /(lateral epicond|tennis elbow)/i, id: 'lateral_epicondylalgia', override: { primaryTissue: 'tendon', healingRateMult: 0.65, flareRiskBase: 7 } },
+  { match: /(medial epicond|golfer'?s elbow)/i, id: 'lateral_epicondylalgia', override: { primaryTissue: 'tendon', healingRateMult: 0.65, flareRiskBase: 7 } },
+  // Radicular / nerve / stenosis / myelopathy
   { match: /(stenosis)/i, id: 'lumbar_stenosis', override: { primaryTissue: 'nerve', healingRateMult: 0.45, romCeiling: 75, capacityCeiling: 75, capacityRampMult: 0.65, chronicityRiskAdd: 15, initialDemandAdd: -10, gateRelaxation: 8 } },
+  { match: /(cervical radicul)/i, id: 'cervical_radiculopathy', override: { primaryTissue: 'nerve', healingRateMult: 0.55, painDecayMult: 0.70, flareRiskBase: 10, initialPainAdd: 10, initialIrritabilityAdd: 10, gateRelaxation: 5 } },
   { match: /(radicul|sciatica|nerve root)/i, id: 'radiculopathy', override: { primaryTissue: 'nerve', healingRateMult: 0.55, painDecayMult: 0.70, flareRiskBase: 10, initialPainAdd: 10, initialIrritabilityAdd: 10, gateRelaxation: 5 } },
   { match: /(myelopath)/i, id: 'cervical_myelopathy', override: { primaryTissue: 'nerve', healingRateMult: 0.40, romCeiling: 70, capacityCeiling: 70, capacityRampMult: 0.60, chronicityRiskAdd: 20, initialDemandAdd: -15, gateRelaxation: 10 } },
-  { match: /(disc herniat|prolaps|disc bulge)/i, id: 'disc_herniation', override: { primaryTissue: 'disc', healingRateMult: 0.60, painDecayMult: 0.85, initialPainAdd: 5, initialIrritabilityAdd: 8 } },
+  // Disc / spondy
+  { match: /(disc herniat|prolaps|disc bulge|lumbar disc)/i, id: 'lumbar_disc_herniation', override: { primaryTissue: 'disc', healingRateMult: 0.60, painDecayMult: 0.85, initialPainAdd: 5, initialIrritabilityAdd: 8 } },
   { match: /(spondylolisthe)/i, id: 'spondylolisthesis', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, capacityCeiling: 80, capacityRampMult: 0.70, gateRelaxation: 5 } },
-  { match: /(osteoarthr|^oa\b|knee arthritis|hip arthritis)/i, id: 'osteoarthritis', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, capacityCeiling: 78, painDecayMult: 0.85, capacityRampMult: 0.75, chronicityRiskAdd: 10, gateRelaxation: 5 } },
-  { match: /(post[- ]?surg|post[- ]?op|reconstruction|repair surgery)/i, id: 'post_surgical', override: { primaryTissue: 'joint', healingRateMult: 0.70, romCeiling: 90, capacityCeiling: 85, initialRomAdd: -20, initialCapacityAdd: -15, capacityRampMult: 0.80, initialIrritabilityAdd: 10, gateRelaxation: 5 } },
+  // OA
+  { match: /(hip osteoarthr|hip arthritis|hip oa)/i, id: 'hip_oa', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, capacityCeiling: 78, painDecayMult: 0.85, capacityRampMult: 0.75, chronicityRiskAdd: 10, gateRelaxation: 5 } },
+  { match: /(osteoarthr|^oa\b|knee arthritis)/i, id: 'osteoarthritis', override: { primaryTissue: 'joint', healingRateMult: 0.60, romCeiling: 80, capacityCeiling: 78, painDecayMult: 0.85, capacityRampMult: 0.75, chronicityRiskAdd: 10, gateRelaxation: 5 } },
+  // Surgical / acute tissue healing
   { match: /(replacement|arthroplasty|tkr|thr|tka)/i, id: 'joint_replacement', override: { primaryTissue: 'joint', healingRateMult: 0.65, romCeiling: 85, capacityCeiling: 80, initialRomAdd: -25, initialCapacityAdd: -20, capacityRampMult: 0.75, initialIrritabilityAdd: 12, initialDemandAdd: -10, gateRelaxation: 8 } },
+  { match: /(acl reconstruct|acl repair)/i, id: 'acl_reconstruction', override: { primaryTissue: 'ligament', healingRateMult: 0.65, romCeiling: 95, capacityCeiling: 90, initialRomAdd: -20, initialCapacityAdd: -25, capacityRampMult: 0.80, initialIrritabilityAdd: 10, gateRelaxation: 5 } },
+  { match: /(post[- ]?surg|post[- ]?op|reconstruction|repair surgery)/i, id: 'post_surgical', override: { primaryTissue: 'joint', healingRateMult: 0.70, romCeiling: 90, capacityCeiling: 85, initialRomAdd: -20, initialCapacityAdd: -15, capacityRampMult: 0.80, initialIrritabilityAdd: 10, gateRelaxation: 5 } },
+  { match: /(meniscal|meniscus)/i, id: 'meniscal_injury', override: { primaryTissue: 'joint', healingRateMult: 0.70, romCeiling: 92, painDecayMult: 0.90 } },
+  { match: /(ankle sprain|lateral ligament)/i, id: 'ankle_sprain_lateral', override: { primaryTissue: 'ligament', healingRateMult: 0.85, flareRiskBase: 5 } },
+  { match: /(whiplash|wad)/i, id: 'whiplash', override: { primaryTissue: 'muscle', healingRateMult: 0.85, painDecayMult: 0.90 } },
   { match: /(hamstring strain|muscle strain|grade [12] tear)/i, id: 'muscle_strain', override: { primaryTissue: 'muscle', healingRateMult: 1.10, capacityRampMult: 1.10 } },
+  // Fascia / nerve entrapment
   { match: /(plantar fasc)/i, id: 'plantar_fasciitis', override: { primaryTissue: 'fascia', healingRateMult: 0.85, painDecayMult: 0.90, flareRiskBase: 5 } },
   { match: /(carpal tunnel|cubital tunnel|tarsal tunnel|nerve entrap)/i, id: 'nerve_entrapment', override: { primaryTissue: 'nerve', healingRateMult: 0.60, painDecayMult: 0.80, flareRiskBase: 8 } },
+  // Bone stress / fracture
+  { match: /(stress fracture|stress reaction|bone stress|fracture)/i, id: 'bone_stress', override: { primaryTissue: 'bone', healingRateMult: 0.65, romCeiling: 92, flareRiskBase: 4 } },
+  // Chronic / nociplastic
+  { match: /(fibromyalg|chronic pain|chronic widespread|central sensit|cps|nociplastic)/i, id: 'chronic_pain', override: { primaryTissue: 'generic', healingRateMult: 0.70, painDecayMult: 0.75, chronicityRiskAdd: 25 } },
+  // Instability / hypermobility
+  { match: /(hypermobil|eds|ehlers[- ]danlos|joint instab|multidirectional instab|shoulder instab)/i, id: 'joint_instability', override: { primaryTissue: 'ligament', healingRateMult: 0.85, capacityRampMult: 0.90 } },
 ];
 
 export function classifyCondition(mainComplaint?: string | null): { id: string; label: string; override: ConditionOverride } {
@@ -815,6 +852,7 @@ export function buildConditionContext(args: {
   return {
     conditionId: cls.id,
     conditionLabel: cls.label,
+    archetypeId: resolveArchetypeId(cls.id, cls.label),
     primaryTissue: pickedTissue,
     tissueLoad,
     scarLoad,

@@ -228,10 +228,47 @@ const CONDITION_ARCHETYPE_MAP: Record<string, RecoveryArchetypeId> = {
   whiplash:                  'acute_tissue_healing',
 };
 
-export function getArchetypeForCondition(conditionId?: string | null): RecoveryArchetype {
-  if (!conditionId) return RECOVERY_ARCHETYPES.acute_tissue_healing;
-  const mapped = CONDITION_ARCHETYPE_MAP[conditionId];
-  return mapped ? RECOVERY_ARCHETYPES[mapped] : RECOVERY_ARCHETYPES.acute_tissue_healing;
+/** Natural-language fallback rules used when a conditionId is unknown
+ *  (e.g. classifyCondition fell through to 'generic'). Patterns are checked
+ *  in order; the first hit wins. */
+const NL_ARCHETYPE_FALLBACKS: { match: RegExp; archetype: RecoveryArchetypeId }[] = [
+  { match: /(frozen shoulder|adhesive capsulitis)/i,                                           archetype: 'frozen_shoulder' },
+  { match: /(tendinopath|tendinos|tendinitis|tendonitis)/i,                                    archetype: 'tendinopathy_load_capacity' },
+  { match: /(impinge|fai|patellofemoral|pfps)/i,                                               archetype: 'mechanical_impingement' },
+  { match: /(osteoarthr|degenerat|^oa\b|joint arthritis|hip arthritis|knee arthritis)/i,       archetype: 'degenerative_oa' },
+  { match: /(radicul|sciatica|nerve root|stenosis|myelopath|nerve entrap|carpal tunnel)/i,     archetype: 'radicular_neuropathic' },
+  { match: /(disc|prolaps|herniat|spondylolisthe)/i,                                           archetype: 'disc_centralisation' },
+  { match: /(stress fracture|stress reaction|bone stress|fracture)/i,                          archetype: 'bone_stress' },
+  { match: /(fibromyalg|chronic pain|chronic widespread|central sensit|nociplastic|cps)/i,     archetype: 'chronic_nociplastic' },
+  { match: /(hypermobil|ehlers[- ]danlos|eds|joint instab|multidirectional instab|subluxation)/i, archetype: 'instability_hypermobility' },
+];
+
+/** Resolve an archetype ID from a condition ID and/or a free-text label.
+ *  Order of resolution:
+ *   1. Direct conditionId → CONDITION_ARCHETYPE_MAP lookup.
+ *   2. Natural-language regex against the label (or the conditionId itself).
+ *   3. Fallback to acute_tissue_healing. */
+export function resolveArchetypeId(
+  conditionId?: string | null,
+  conditionLabel?: string | null,
+): RecoveryArchetypeId {
+  if (conditionId && CONDITION_ARCHETYPE_MAP[conditionId]) {
+    return CONDITION_ARCHETYPE_MAP[conditionId];
+  }
+  const text = `${conditionLabel ?? ''} ${conditionId ?? ''}`.trim();
+  if (text) {
+    for (const rule of NL_ARCHETYPE_FALLBACKS) {
+      if (rule.match.test(text)) return rule.archetype;
+    }
+  }
+  return 'acute_tissue_healing';
+}
+
+export function getArchetypeForCondition(
+  conditionId?: string | null,
+  conditionLabel?: string | null,
+): RecoveryArchetype {
+  return RECOVERY_ARCHETYPES[resolveArchetypeId(conditionId, conditionLabel)];
 }
 
 /** Index of the archetype stage that contains a given engine HealingPhase.

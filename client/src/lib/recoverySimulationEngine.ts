@@ -1090,8 +1090,7 @@ function applyTreatmentEffects(
     }
   }
 
-  const tissueQualityMult = ctx.conditionContext?.patientTissueQualityMult ?? 1;
-  const capCeilingPctOfFull = (ctx.profile?.capacityCeiling ?? 100) * tissueQualityMult;
+  const capCeilingPctOfFull = ctx.profile?.capacityCeiling ?? 100;
   const rawCap = 0.45 * next.loadTolerance + 0.25 * next.strength + 0.2 * next.motorControl + 0.1 * next.slingFunction;
   next.capacity = Math.min(capCeilingPctOfFull, clamp(rawCap));
   next.loadTolerance = Math.min(capCeilingPctOfFull, next.loadTolerance);

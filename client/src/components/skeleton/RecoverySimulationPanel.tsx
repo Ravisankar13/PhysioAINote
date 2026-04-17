@@ -231,6 +231,7 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
   }, [initialInput]);
 
   const [autoSyncSkeleton, setAutoSyncSkeleton] = useState(true);
+  const [showCustomPrescriptions, setShowCustomPrescriptions] = useState(true);
 
   const activeBranch = useMemo(() => branches.find(b => b.id === activeBranchId) ?? branches[0], [branches, activeBranchId]);
 
@@ -602,13 +603,18 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
 
       <div className="bg-cyan-950/20 border border-cyan-700/40 rounded p-1.5">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] text-cyan-200 font-semibold flex items-center gap-1">
+          <button
+            onClick={() => setShowCustomPrescriptions(v => !v)}
+            className="text-[9px] text-cyan-200 font-semibold flex items-center gap-1 hover:text-cyan-100"
+            title={showCustomPrescriptions ? 'Collapse' : 'Expand'}
+          >
+            {showCustomPrescriptions ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             <Sparkles className="h-3 w-3 text-cyan-400" />
             AI-Designed Prescriptions ({customProfiles.length})
-          </span>
-          {customProfiles.length > 0 && <span className="text-[8px] text-cyan-400/70">Add to plan @ wk {scrubWeek}</span>}
+          </button>
+          {showCustomPrescriptions && customProfiles.length > 0 && <span className="text-[8px] text-cyan-400/70">Add to plan @ wk {scrubWeek}</span>}
         </div>
-        {customProfiles.length === 0 ? (
+        {!showCustomPrescriptions ? null : customProfiles.length === 0 ? (
           <div className="text-[8px] text-cyan-300/70 leading-tight bg-cyan-950/30 border border-dashed border-cyan-700/40 rounded px-1.5 py-1.5">
             No AI-designed exercises or manual techniques yet. Open the <span className="text-cyan-200 font-semibold">Exercise Engine</span> or <span className="text-cyan-200 font-semibold">Manual Therapy Engine</span> tabs to design patient-specific prescriptions — they will appear here and can be added directly to the recovery plan.
           </div>

@@ -399,9 +399,101 @@ export function buildCustomTechniqueId(tech: CustomManualTechniqueInput, idx: nu
   return `custom_mt_${idx}_${slug(tech.name) || 'untitled'}`;
 }
 
+type TissueClass = 'tendon' | 'muscle' | 'joint' | 'fascia' | 'nerve' | 'generic';
+
+function detectTissueClass(target: string): TissueClass {
+  const t = target.toLowerCase();
+  if (/(tendon|tendinopathy|tendinosis|tenosynovitis|achilles|patellar tendon|rotator cuff)/.test(t)) return 'tendon';
+  if (/(nerve|neural|neurodynamic|sciatic|median|ulnar|radial|peroneal|radicul)/.test(t)) return 'nerve';
+  if (/(fascia|fascial|myofascial|thoracolumbar|plantar fascia|iliotibial|it band)/.test(t)) return 'fascia';
+  if (/(joint|capsule|capsular|articular|arthrokinematic|cartilage|meniscus|labrum)/.test(t)) return 'joint';
+  if (/(muscle|muscular|myo(?!fascial)|strain|fiber|hypertrophy|sarcomere)/.test(t)) return 'muscle';
+  return 'generic';
+}
+
+interface TissueBias {
+  effectScale: Partial<Record<keyof RecoveryState, number>>;
+  onsetDelta: number;
+  peakDelta: number;
+  durationDelta: number;
+  carryoverDelta: number;
+}
+
+function exerciseTissueBias(cls: TissueClass): TissueBias {
+  switch (cls) {
+    case 'tendon':
+      return {
+        effectScale: { loadTolerance: 1.5, structuralIntegrity: 1.4, strength: 1.2, capacity: 1.3, pain: 0.7, romPercent: 0.7, stiffness: 0.8 },
+        onsetDelta: 1, peakDelta: 2, durationDelta: 4, carryoverDelta: 2,
+      };
+    case 'muscle':
+      return {
+        effectScale: { strength: 1.5, capacity: 1.3, motorControl: 1.2, asymmetry: 1.3, romPercent: 0.9 },
+        onsetDelta: 0, peakDelta: 0, durationDelta: 0, carryoverDelta: 1,
+      };
+    case 'joint':
+      return {
+        effectScale: { romPercent: 1.4, stiffness: 1.4, jointLoading: 1.2, structuralIntegrity: 1.1, pain: 1.1, motorControl: 1.1 },
+        onsetDelta: 1, peakDelta: 1, durationDelta: 2, carryoverDelta: 1,
+      };
+    case 'fascia':
+      return {
+        effectScale: { stiffness: 1.4, romPercent: 1.3, slingFunction: 1.3, compensation: 1.2, movementQuality: 1.2 },
+        onsetDelta: 0, peakDelta: 0, durationDelta: 1, carryoverDelta: 0,
+      };
+    case 'nerve':
+      return {
+        effectScale: { neuralSensitivity: 1.5, pain: 1.3, fearAvoidance: 1.2, romPercent: 1.1 },
+        onsetDelta: 1, peakDelta: 1, durationDelta: 2, carryoverDelta: 1,
+      };
+    default:
+      return { effectScale: {}, onsetDelta: 0, peakDelta: 0, durationDelta: 0, carryoverDelta: 0 };
+  }
+}
+
+function manualTissueBias(cls: TissueClass): TissueBias {
+  switch (cls) {
+    case 'tendon':
+      return {
+        effectScale: { pain: 1.2, stiffness: 1.2, structuralIntegrity: 1.1, romPercent: 0.9 },
+        onsetDelta: 0, peakDelta: 1, durationDelta: 2, carryoverDelta: 1,
+      };
+    case 'muscle':
+      return {
+        effectScale: { stiffness: 1.4, pain: 1.3, motorControl: 1.2, asymmetry: 1.2, romPercent: 1.2 },
+        onsetDelta: 0, peakDelta: 0, durationDelta: 0, carryoverDelta: 0,
+      };
+    case 'joint':
+      return {
+        effectScale: { romPercent: 1.5, stiffness: 1.4, jointLoading: 1.3, movementQuality: 1.2, pain: 1.1 },
+        onsetDelta: 0, peakDelta: 0, durationDelta: 1, carryoverDelta: 0,
+      };
+    case 'fascia':
+      return {
+        effectScale: { stiffness: 1.5, romPercent: 1.3, slingFunction: 1.3, compensation: 1.2 },
+        onsetDelta: 0, peakDelta: 0, durationDelta: 0, carryoverDelta: 0,
+      };
+    case 'nerve':
+      return {
+        effectScale: { neuralSensitivity: 1.6, pain: 1.4, fearAvoidance: 1.2 },
+        onsetDelta: 0, peakDelta: 1, durationDelta: 1, carryoverDelta: 1,
+      };
+    default:
+      return { effectScale: {}, onsetDelta: 0, peakDelta: 0, durationDelta: 0, carryoverDelta: 0 };
+  }
+}
+
+function applyTissueBias(effects: Partial<Record<keyof RecoveryState, number>>, bias: TissueBias): void {
+  for (const [k, mult] of Object.entries(bias.effectScale) as [keyof RecoveryState, number][]) {
+    if (effects[k] !== undefined) effects[k] = (effects[k] as number) * mult;
+  }
+}
+
 export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: number): TreatmentEffectProfile {
   const id = buildCustomExerciseId(ex, idx);
   const target = `${ex.targetSystem ?? ''} ${ex.clinicalTarget ?? ''}`;
+  const tissueClass = detectTissueClass(target);
+  const tissueBias = exerciseTissueBias(tissueClass);
   const roles = (ex.activationPattern ?? []).map(a => (a.role ?? '').toLowerCase());
   const hasStabilizer = roles.includes('stabilizer');
   const hasPrimeMover = roles.includes('prime_mover');
@@ -456,19 +548,23 @@ export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: nu
     effects.capacity = (effects.capacity ?? 0) + 2;
   }
   effects.strength = (effects.strength ?? 0) + Math.min(2.5, setsNum * 0.4);
+  applyTissueBias(effects, tissueBias);
   for (const k of Object.keys(effects) as (keyof RecoveryState)[]) {
     if (effects[k] !== undefined) effects[k] = (effects[k] as number) * volumeFactor;
   }
 
-  const peakWeeks = Math.max(2, Math.min(8, stages * 2));
+  const baseOnset = isIsometric ? 0 : 1;
+  const basePeak = Math.max(2, Math.min(8, stages * 2));
+  const baseDuration = Math.max(6, basePeak + 4);
+  const baseCarryover = 3;
   return {
     id,
     name: ex.name,
     modality: 'exercise',
-    onsetWeeks: isIsometric ? 0 : 1,
-    peakWeeks,
-    durationWeeks: Math.max(6, peakWeeks + 4),
-    carryoverWeeks: 3,
+    onsetWeeks: Math.max(0, baseOnset + tissueBias.onsetDelta),
+    peakWeeks: Math.max(1, basePeak + tissueBias.peakDelta),
+    durationWeeks: Math.max(baseDuration, baseDuration + tissueBias.durationDelta),
+    carryoverWeeks: Math.max(0, baseCarryover + tissueBias.carryoverDelta),
     effects,
     healingStageMultiplier: isPlyo
       ? { inflammatory: 0.1, proliferative: 0.4, remodeling: 1.0, maturation: 1.4 }
@@ -477,7 +573,7 @@ export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: nu
         : { inflammatory: 0.5, proliferative: 1.0, remodeling: 1.2, maturation: 1.0 },
     irritabilityPenalty: isPlyo ? 1.0 : isIsometric ? 0.3 : 0.6,
     mistimingFlareRisk: isPlyo ? 20 : 10,
-    description: `AI-designed exercise targeting ${ex.targetSystem ?? 'patient-specific dysfunction'}.`,
+    description: `AI-designed exercise targeting ${ex.targetSystem ?? 'patient-specific dysfunction'} (${tissueClass}).`,
     gates: isPlyo
       ? { minCapacity: 60, maxPain: 40, maxFlareRisk: 40, minHealingProgress: 55, minRomPercent: 75, minStrength: 65 }
       : { maxPain: 70, minHealingProgress: 15 },
@@ -487,10 +583,12 @@ export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: nu
 export function synthesizeCustomManualTechniqueProfile(tech: CustomManualTechniqueInput, idx: number): TreatmentEffectProfile {
   const id = buildCustomTechniqueId(tech, idx);
   const target = `${tech.targetSystem ?? ''} ${tech.clinicalTarget ?? ''}`;
+  const tissueClass = detectTissueClass(target);
+  const tissueBias = manualTissueBias(tissueClass);
   const goalTypes = (tech.tissueTargets ?? []).map(t => (t.goalType ?? '').toLowerCase());
-  const isNeural = containsAny(target, ['neural', 'nerve', 'neurodynamic', 'sciatic', 'median', 'ulnar']);
-  const isFascial = containsAny(target, ['fascia', 'fascial', 'myofascial', 'thoracolumbar']);
-  const isJointMob = containsAny(target, ['joint', 'mobilization', 'mobilisation', 'arthrokinematic', 'capsule']);
+  const isNeural = tissueClass === 'nerve';
+  const isFascial = tissueClass === 'fascia';
+  const isJointMob = tissueClass === 'joint';
   const stages = (tech.progressionStages ?? []).length || 3;
   const repsNum = firstNumber(tech.dosage?.repetitions) ?? firstNumber(tech.dosage?.sets) ?? 3;
   const durationSec = firstNumber(tech.dosage?.duration) ?? 30;
@@ -531,26 +629,28 @@ export function synthesizeCustomManualTechniqueProfile(tech: CustomManualTechniq
     effects.stiffness = -3;
     effects.romPercent = 3;
   }
+  applyTissueBias(effects, tissueBias);
   for (const k of Object.keys(effects) as (keyof RecoveryState)[]) {
     if (effects[k] !== undefined) effects[k] = (effects[k] as number) * intensityFactor;
   }
-  const peakWeeks = Math.max(1, Math.min(4, Math.ceil(stages * 0.8)));
+  const basePeak = Math.max(1, Math.min(4, Math.ceil(stages * 0.8)));
+  const baseDuration = Math.max(4, basePeak + 3);
 
   return {
     id,
     name: tech.name,
     modality: 'manual',
-    onsetWeeks: 0,
-    peakWeeks,
-    durationWeeks: Math.max(4, peakWeeks + 3),
-    carryoverWeeks: 1,
+    onsetWeeks: Math.max(0, 0 + tissueBias.onsetDelta),
+    peakWeeks: Math.max(1, basePeak + tissueBias.peakDelta),
+    durationWeeks: Math.max(baseDuration, baseDuration + tissueBias.durationDelta),
+    carryoverWeeks: Math.max(0, 1 + tissueBias.carryoverDelta),
     effects,
     healingStageMultiplier: isNeural
       ? { inflammatory: 0.4, proliferative: 1.0, remodeling: 1.2, maturation: 1.0 }
       : { inflammatory: 0.6, proliferative: 1.0, remodeling: 1.1, maturation: 0.9 },
     irritabilityPenalty: isNeural ? 0.6 : 0.4,
     mistimingFlareRisk: isNeural ? 12 : 8,
-    description: `AI-designed manual therapy targeting ${tech.targetSystem ?? 'patient-specific tissue restrictions'}.`,
+    description: `AI-designed manual therapy targeting ${tech.targetSystem ?? 'patient-specific tissue restrictions'} (${tissueClass}).`,
   };
 }
 

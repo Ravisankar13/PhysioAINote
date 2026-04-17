@@ -1264,11 +1264,16 @@ export function reversePlan(
   conditionContext?: ConditionContext,
 ): ReversePlanResult {
   const { weekTarget, minCapacity, minFunction, maxFlareRisk } = goal;
+  // tissueProfileForContext already folds in patient phase-timing and ROM-ceiling
+  // multipliers, so we use the profile values directly here (no double application).
   const profile = conditionContext ? tissueProfileForContext(conditionContext) : null;
-  const phaseScale = profile ? profile.phaseDurationMult * (conditionContext?.patientPhaseTimingMult ?? 1) : 1;
-  const ceilingScale = profile ? profile.romCeiling * (conditionContext?.patientRomCeiling ?? 1) : 1;
+  const phaseScale = profile ? profile.phaseDurationMult : 1;
+  // romCeiling is a percent (e.g., 70–100). Convert to a 0–1 ratio so milestone
+  // capacity targets are nudged downward for stiffer/lower-ceiling tissues
+  // rather than blown past the 100 clamp.
+  const ceilingRatio = profile ? Math.max(0.5, Math.min(1.05, profile.romCeiling / 100)) : 1;
   const scaleWeek = (frac: number, min: number) => Math.max(min, Math.floor(weekTarget * frac * phaseScale));
-  const scaleCap = (cap: number) => Math.max(10, Math.min(100, Math.round(cap * ceilingScale)));
+  const scaleCap = (cap: number) => Math.max(10, Math.min(100, Math.round(cap * ceilingRatio)));
   const requiredMilestones: ReversePlanResult['required'] = [
     { milestone: 'Pain at rest < 3/10', deadlineWeek: scaleWeek(0.25, 1), capacityNeeded: scaleCap(30) },
     { milestone: 'Normal walking', deadlineWeek: scaleWeek(0.4, 2), capacityNeeded: scaleCap(50) },

@@ -36,7 +36,6 @@ import {
   type CustomManualTechniqueInput,
   type ConditionContext,
   type RecoveryState,
-  type HealingPhase,
   TREATMENT_LIBRARY,
   TREATMENT_BY_ID,
   simulateBranch,
@@ -50,6 +49,13 @@ import {
 } from "@/lib/recoverySimulationEngine";
 import { findConditionProfile } from "@/lib/patientFactorsEngine";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
+import {
+  getArchetypeForCondition,
+  stageIndexForHealingPhase,
+  stageFitForTreatment,
+  type RecoveryStage,
+  type StageGoalDimension,
+} from "@/lib/recoveryArchetypes";
 
 interface Props {
   initialInput?: Partial<SimulationInput>;
@@ -74,25 +80,16 @@ interface Props {
 
 const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
 
-const PHASE_DEFS: { id: HealingPhase; name: string; subtitle: string; color: string; ring: string; bg: string }[] = [
-  { id: 'inflammatory', name: 'Calm & Prepare',  subtitle: 'Reduce Irritability',     color: '#a855f7', ring: 'border-purple-500/60',  bg: 'bg-purple-950/40' },
-  { id: 'proliferative', name: 'Build Capacity',  subtitle: 'Progressive Loading',     color: '#06b6d4', ring: 'border-cyan-500/60',    bg: 'bg-cyan-950/40' },
-  { id: 'remodeling',   name: 'Restore Power',    subtitle: 'Reintroduce Impact',      color: '#22c55e', ring: 'border-emerald-500/60', bg: 'bg-emerald-950/40' },
-  { id: 'maturation',   name: 'Return to Sport',  subtitle: 'Full Performance',        color: '#f59e0b', ring: 'border-amber-500/60',   bg: 'bg-amber-950/40' },
-];
-
-function phaseIndexFor(phase: HealingPhase): number {
-  return PHASE_DEFS.findIndex(p => p.id === phase);
-}
-
-/** Condition-aware goal headline per phase. Uses primary tissue + pain mechanism
- *  so each card tells the clinician what we are *trying to achieve* in that
- *  phase for this specific patient — not a generic textbook label. */
-function phaseGoalForCondition(phase: HealingPhase, tissue?: string, painMechanism?: string): string {
+/** Condition-aware goal headline per stage for the acute-tissue-healing
+ *  archetype — preserved verbatim so existing cases (rotator cuff tear, ACL,
+ *  ankle sprain, post-surgical, muscle strain) render unchanged. Other
+ *  archetypes use their own stage.subtitle which is already
+ *  archetype-specific and tissue-aware. */
+function acuteStageGoal(stageIdx: number, tissue?: string, painMechanism?: string): string {
   const t = (tissue ?? 'generic').toLowerCase();
   const central = painMechanism === 'central' || painMechanism === 'neuropathic';
-  switch (phase) {
-    case 'inflammatory':
+  switch (stageIdx) {
+    case 0:
       if (central) return 'Desensitize · pain education · gentle movement';
       if (t === 'tendon') return 'Isometric load below pain threshold · offload';
       if (t === 'nerve' || t === 'disc') return 'Decompress · neural glides · positional relief';
@@ -100,7 +97,7 @@ function phaseGoalForCondition(phase: HealingPhase, tissue?: string, painMechani
       if (t === 'muscle' || t === 'ligament') return 'Protect · PRICE · pain-free isometrics';
       if (t === 'bone') return 'Immobilize / protect · monitor union';
       return 'Settle pain · protect tissue · gentle motion';
-    case 'proliferative':
+    case 1:
       if (t === 'tendon') return 'Isotonic loading · slow heavy resistance build-up';
       if (t === 'nerve' || t === 'disc') return 'Directional preference · nerve mobility · core endurance';
       if (t === 'joint') return 'Restore ROM · open & closed-chain control';
@@ -108,7 +105,7 @@ function phaseGoalForCondition(phase: HealingPhase, tissue?: string, painMechani
       if (t === 'ligament') return 'Proprioception · graded loading in stable range';
       if (t === 'bone') return 'Progressive weight-bearing · early loading';
       return 'Rebuild capacity through progressive loading';
-    case 'remodeling':
+    case 2:
       if (t === 'tendon') return 'Heavy slow resistance · energy-storage prep';
       if (t === 'nerve' || t === 'disc') return 'Multi-plane loading · trunk dissociation';
       if (t === 'joint') return 'End-range strength · symmetric power';
@@ -116,7 +113,7 @@ function phaseGoalForCondition(phase: HealingPhase, tissue?: string, painMechani
       if (t === 'ligament') return 'Reactive control · cutting / pivoting prep';
       if (t === 'bone') return 'Plyo-prep · bone-loading drills';
       return 'Reintroduce impact and power';
-    case 'maturation':
+    default:
       if (t === 'tendon') return 'Plyometrics · energy-storage · sport drills';
       if (t === 'nerve' || t === 'disc') return 'Full-load tasks · workplace / sport simulation';
       if (t === 'joint') return 'RTS testing · symmetry & confidence';
@@ -389,8 +386,21 @@ export default function RecoverySimulatorDashboard({
     setAnimate(false);
   }, []);
 
-  // Phase mapping for the scrubbed week
-  const scrubbedPhaseIdx = useMemo(() => phaseIndexFor(stateAtScrub.healingPhase), [stateAtScrub.healingPhase]);
+  // Archetype-driven stage strip. The simulation engine still emits the
+  // four biological HealingPhases; the archetype maps those onto its own
+  // stages (variable count 3-5) so the dashboard renders condition-
+  // appropriate phase cards (tendinopathy load-capacity, OA capacity-build,
+  // mechanical-impingement criterion stages, frozen-shoulder freezing/
+  // frozen/thawing, etc.) instead of the same four-phase healing model
+  // for every condition.
+  const archetype = useMemo(
+    () => getArchetypeForCondition(conditionContext?.conditionId),
+    [conditionContext?.conditionId],
+  );
+  const scrubbedStageIdx = useMemo(
+    () => stageIndexForHealingPhase(archetype, stateAtScrub.healingPhase),
+    [archetype, stateAtScrub.healingPhase],
+  );
 
   // Tissue Stress (inverse of loadTolerance — high stress when tolerance is low)
   const tissueStress = useMemo(() => {
@@ -434,12 +444,14 @@ export default function RecoverySimulatorDashboard({
     [conditionProfile],
   );
   type PhaseInfo = {
+    stage: RecoveryStage;
+    stageIndex: number;
     start: number;
     end: number;
     reached: boolean;
     isCurrent: boolean;
-    expectedStart: number; expectedEnd: number;       // expected weeks from condition profile
-    strategy: string;                                  // tissue/pain-mechanism subtitle
+    expectedStart: number; expectedEnd: number;       // expected weeks from condition profile / archetype
+    strategy: string;                                  // tissue/pain-mechanism (acute) or stage subtitle
     goalDimension: string;                             // e.g. "Pain", "ROM", "Capacity"
     goalTargetText: string | null;                     // e.g. "≤2/10", "≥75%"
     goalCurrentText: string | null;                    // current end-of-phase value
@@ -453,49 +465,45 @@ export default function RecoverySimulatorDashboard({
     treatments: string[];
     treatmentSource: 'scheduled' | 'attribution' | 'stage_recommended';
   };
-  const phaseRanges = useMemo(() => {
+  const phaseRanges = useMemo<PhaseInfo[]>(() => {
+    const stages = archetype.stages;
     const tissue = conditionContext?.primaryTissue;
     const painMech = conditionContext?.painMechanism;
     const tl = activeProjection.timelines;
     const states = activeProjection.states;
+    const isAcute = archetype.id === 'acute_tissue_healing';
 
-    // Expected windows (cumulative) from the condition recovery profile.
-    // PHASE_DEFS index lines up with conditionProfile.phases[index] when
-    // the profile defines four phases; otherwise we fall back to even
-    // splitting the totalRecoveryWeeks across PHASE_DEFS.
-    const expectedWindows: Record<HealingPhase, { start: number; end: number }> = {
-      inflammatory: { start: 0, end: 0 },
-      proliferative: { start: 0, end: 0 },
-      remodeling: { start: 0, end: 0 },
-      maturation: { start: 0, end: 0 },
-    };
-    if (conditionProfile && conditionProfile.phases.length > 0) {
+    // Expected windows per archetype stage. When the bound condition
+    // recovery profile has the same number of phases as the archetype,
+    // we pull the expected durations from the profile (preserves all
+    // existing acute-tissue cases). Otherwise we slice the total recovery
+    // weeks using each stage's defaultFraction so 3-stage frozen-shoulder,
+    // 5-stage criterion archetypes, etc. all get sensible windows.
+    const expectedWindows: { start: number; end: number }[] = stages.map(() => ({ start: 0, end: 0 }));
+    if (conditionProfile && conditionProfile.phases.length === stages.length) {
       let cursor = 0;
-      const phasesToUse = conditionProfile.phases.slice(0, PHASE_DEFS.length);
-      phasesToUse.forEach((p, i) => {
+      stages.forEach((_, i) => {
+        const p = conditionProfile.phases[i];
         const dur = (p.durationWeeksMin + p.durationWeeksMax) / 2;
-        const id = PHASE_DEFS[i].id;
-        expectedWindows[id] = { start: Math.round(cursor), end: Math.round(cursor + dur) };
+        expectedWindows[i] = { start: Math.round(cursor), end: Math.round(cursor + dur) };
         cursor += dur;
       });
-      // Phases beyond the condition profile fall back to extrapolation
-      for (let i = phasesToUse.length; i < PHASE_DEFS.length; i++) {
-        const lastEnd = i > 0 ? expectedWindows[PHASE_DEFS[i - 1].id].end : 0;
-        const id = PHASE_DEFS[i].id;
-        expectedWindows[id] = { start: lastEnd, end: lastEnd + 4 };
-      }
     } else {
-      const total = input.totalWeeks;
-      const slice = Math.max(1, Math.round(total / 4));
-      PHASE_DEFS.forEach((p, i) => {
-        expectedWindows[p.id] = { start: i * slice, end: Math.min(total, (i + 1) * slice) };
+      const total = conditionProfile
+        ? conditionProfile.phases.reduce((sum, p) => sum + (p.durationWeeksMin + p.durationWeeksMax) / 2, 0)
+        : input.totalWeeks;
+      let cursor = 0;
+      stages.forEach((s, i) => {
+        const dur = Math.max(1, Math.round(total * s.defaultFraction));
+        expectedWindows[i] = { start: Math.round(cursor), end: Math.round(cursor + dur) };
+        cursor += dur;
       });
     }
 
     // Pick the dominant compromised dimension. Prefer the Goal-Driven
     // Recovery Engine's largest current-vs-target gap when a goal profile
     // is available; otherwise fall back to a tissue heuristic.
-    type Dim = 'pain' | 'rom' | 'capacity' | 'loadTolerance' | 'function';
+    type Dim = StageGoalDimension;
     const tissueDefault: Dim = (() => {
       switch (tissue) {
         case 'nerve':
@@ -543,16 +551,16 @@ export default function RecoverySimulatorDashboard({
       }
     };
 
-    // Goal-Driven Recovery Engine targets per healing phase. The target
-    // ramps from the patient's current state at the start of treatment up
-    // to the goal profile's terminal value, with each healing phase
-    // receiving a milestone fraction (25/50/75/100%).
-    const targetForPhase = (phaseId: HealingPhase, d: Dim): { value: number; text: string } | null => {
+    // Per-stage milestone target. Each stage gets an evenly-spaced
+    // fraction of the patient's current → goal trajectory (e.g. for a
+    // 4-stage archetype: 25/50/75/100; for a 3-stage frozen shoulder:
+    // 33/66/100). Stages may declare goalDimension to override the
+    // dashboard's dominantDim — e.g. frozen shoulder's "Frozen" stage
+    // targets ROM regardless of the dominant tissue gap.
+    const stageDimFor = (s: RecoveryStage): Dim => s.goalDimension ?? dominantDim;
+    const targetForStage = (idx: number, d: Dim): { value: number; text: string } | null => {
       if (!goalProfile) return null;
-      const phaseFraction: Record<HealingPhase, number> = {
-        inflammatory: 0.25, proliferative: 0.5, remodeling: 0.75, maturation: 1.0,
-      };
-      const f = phaseFraction[phaseId];
+      const f = (idx + 1) / stages.length;
       const startVal = readDim(0, d);
       let terminal: number | null = null;
       switch (d) {
@@ -574,45 +582,49 @@ export default function RecoverySimulatorDashboard({
       return { value: milestone, text: `${compare}${r}${dimUnit[d]}` };
     };
 
-    const blank = (phaseId: HealingPhase): PhaseInfo => ({
-      start: -1, end: -1, reached: false, isCurrent: false,
-      expectedStart: expectedWindows[phaseId].start,
-      expectedEnd: expectedWindows[phaseId].end,
-      strategy: phaseGoalForCondition(phaseId, tissue, painMech),
-      goalDimension: dimLabel[dominantDim],
-      goalTargetText: targetForPhase(phaseId, dominantDim)?.text ?? null,
-      goalCurrentText: null,
-      goalAchievement: null,
-      tissueLabel: dimLabel[dominantDim],
-      tissueStartText: '—', tissueEndText: '—', tissueImproved: false,
-      flareNotes: [], loadNotes: [],
-      patientFactor: null,
-      treatments: [], treatmentSource: 'stage_recommended',
+    const ranges: PhaseInfo[] = stages.map((stage, i) => {
+      const stageDim = stageDimFor(stage);
+      return {
+        stage, stageIndex: i,
+        start: -1, end: -1, reached: false, isCurrent: false,
+        expectedStart: expectedWindows[i].start,
+        expectedEnd: expectedWindows[i].end,
+        strategy: isAcute
+          ? acuteStageGoal(i, tissue, painMech)
+          : stage.subtitle,
+        goalDimension: dimLabel[stageDim],
+        goalTargetText: targetForStage(i, stageDim)?.text ?? null,
+        goalCurrentText: null,
+        goalAchievement: null,
+        tissueLabel: dimLabel[stageDim],
+        tissueStartText: '—', tissueEndText: '—', tissueImproved: false,
+        flareNotes: [], loadNotes: [],
+        patientFactor: null,
+        treatments: [], treatmentSource: 'stage_recommended',
+      };
     });
-    const ranges: Record<HealingPhase, PhaseInfo> = {
-      inflammatory: blank('inflammatory'),
-      proliferative: blank('proliferative'),
-      remodeling: blank('remodeling'),
-      maturation: blank('maturation'),
-    };
 
+    // Place each simulation state onto its archetype stage by mapping the
+    // engine's HealingPhase through the archetype.
     states.forEach((s, i) => {
-      const r = ranges[s.healingPhase];
+      const stageIdx = stageIndexForHealingPhase(archetype, s.healingPhase);
+      const r = ranges[stageIdx];
       if (r.start === -1) r.start = i;
       r.end = i;
       r.reached = true;
     });
-    const currentPhaseId = stateAtScrub.healingPhase;
+    const currentStageIdx = stageIndexForHealingPhase(archetype, stateAtScrub.healingPhase);
     const attribIndex = new Map(activeProjection.attribution.map(a => [a.treatmentId, a.contributionPercent]));
 
     const fmtDim = (v: number, d: Dim) => `${Math.round(v * 10) / 10}${dimUnit[d]}`;
 
-    for (const phase of PHASE_DEFS) {
-      const r = ranges[phase.id];
-      r.isCurrent = phase.id === currentPhaseId;
+    ranges.forEach((r, idx) => {
+      const stage = r.stage;
+      const stageDim = stageDimFor(stage);
+      r.isCurrent = idx === currentStageIdx;
 
       // Window used to map flare / load events onto this card. Reached
-      // phases use their actual simulation span; unreached phases fall
+      // stages use their actual simulation span; unreached stages fall
       // back to the expected window from the condition profile so a
       // future event still shows on the right card.
       const winStart = r.reached ? r.start : r.expectedStart;
@@ -626,44 +638,45 @@ export default function RecoverySimulatorDashboard({
         .slice(0, 2)
         .map(l => `Load ${l.deltaPercent >= 0 ? '+' : ''}${l.deltaPercent}% wk ${l.week}${l.label ? ` — ${l.label}` : ''}`);
 
-      // Per-phase patient-factor badge: only show when *this* phase's
+      // Per-stage patient-factor badge: only show when *this* stage's
       // window appears affected.
       const expectedDur = r.expectedEnd - r.expectedStart;
       const actualDur = r.reached ? r.end - r.start + 1 : 0;
+      const isLateStage = idx >= stages.length - 2;
       if (r.reached && expectedDur > 0 && actualDur > expectedDur * 1.15) {
         r.patientFactor = `Extended (+${actualDur - expectedDur} wk)`;
       } else if (!r.reached && conditionContext && conditionContext.patientPhaseTimingMult > 1.05) {
         r.patientFactor = `Delayed by patient factors (×${conditionContext.patientPhaseTimingMult.toFixed(2)})`;
-      } else if (r.reached && tissueProfile && tissueProfile.phaseDurationMult > 1.15 && (phase.id === 'remodeling' || phase.id === 'maturation')) {
+      } else if (r.reached && tissueProfile && tissueProfile.phaseDurationMult > 1.15 && isLateStage) {
         r.patientFactor = `Tissue-driven slow phase (×${tissueProfile.phaseDurationMult.toFixed(2)})`;
       }
 
       if (!r.reached) {
         r.treatments = TREATMENT_LIBRARY
-          .filter(t => (t.healingStageMultiplier?.[phase.id] ?? 1) >= 1.1)
+          .filter(t => stageFitForTreatment(stage, t.healingStageMultiplier, t.name) >= 1.1)
           .slice(0, 3)
           .map(t => t.name);
         r.treatmentSource = 'stage_recommended';
-        continue;
+        return;
       }
 
       const sIdx = r.start;
       const eIdx = r.end;
 
-      // Tissue status: dominant compromised dimension, current → end of phase
-      const startVal = readDim(sIdx, dominantDim);
-      const endVal = readDim(eIdx, dominantDim);
-      r.tissueStartText = fmtDim(startVal, dominantDim);
-      r.tissueEndText = fmtDim(endVal, dominantDim);
-      r.tissueImproved = lowerIsBetter[dominantDim] ? endVal <= startVal : endVal >= startVal;
+      // Tissue status: dominant compromised dimension, current → end of stage
+      const startVal = readDim(sIdx, stageDim);
+      const endVal = readDim(eIdx, stageDim);
+      r.tissueStartText = fmtDim(startVal, stageDim);
+      r.tissueEndText = fmtDim(endVal, stageDim);
+      r.tissueImproved = lowerIsBetter[stageDim] ? endVal <= startVal : endVal >= startVal;
 
       // Goal current-vs-target
-      const tgt = targetForPhase(phase.id, dominantDim);
-      r.goalCurrentText = fmtDim(endVal, dominantDim);
+      const tgt = targetForStage(idx, stageDim);
+      r.goalCurrentText = fmtDim(endVal, stageDim);
       if (tgt) {
         r.goalTargetText = tgt.text;
         const range = Math.abs(tgt.value - startVal) || 1;
-        const progress = lowerIsBetter[dominantDim] ? (startVal - endVal) / range : (endVal - startVal) / range;
+        const progress = lowerIsBetter[stageDim] ? (startVal - endVal) / range : (endVal - startVal) / range;
         r.goalAchievement = Math.max(0, Math.min(1, progress));
       }
 
@@ -678,12 +691,15 @@ export default function RecoverySimulatorDashboard({
         .slice(0, 2)
         .map(l => `Load ${l.deltaPercent >= 0 ? '+' : ''}${l.deltaPercent}% wk ${l.week}${l.label ? ` — ${l.label}` : ''}`);
 
-      // Top-3 stage-fit treatments
+      // Top-3 stage-fit treatments. Stage-fit cascades the existing
+      // healingStageMultiplier metadata onto every archetype by taking
+      // the max multiplier across the engine phases that map onto this
+      // stage, with an optional bonus for treatment-tag matches.
       const scheduled = activeBranch.interventions
         .filter(i => i.startWeek >= sIdx && i.startWeek <= eIdx)
         .map(i => {
           const t = treatmentLookup.get(i.treatmentId);
-          const stageFit = t?.healingStageMultiplier?.[phase.id] ?? 1;
+          const stageFit = t ? stageFitForTreatment(stage, t.healingStageMultiplier, t.name) : 1;
           return { name: t?.name ?? i.treatmentId, score: (attribIndex.get(i.treatmentId) ?? 0) + stageFit * 5, stageFit };
         })
         .filter(x => x.stageFit >= 0.9)
@@ -693,12 +709,12 @@ export default function RecoverySimulatorDashboard({
       if (scheduled.length > 0) {
         r.treatments = scheduled;
         r.treatmentSource = 'scheduled';
-        continue;
+        return;
       }
       const attributionFit = [...activeProjection.attribution]
         .map(a => {
           const t = treatmentLookup.get(a.treatmentId);
-          const stageFit = t?.healingStageMultiplier?.[phase.id] ?? 1;
+          const stageFit = t ? stageFitForTreatment(stage, t.healingStageMultiplier, t.name) : 1;
           return { name: a.name, score: a.contributionPercent * stageFit, stageFit };
         })
         .filter(x => x.stageFit >= 0.9)
@@ -708,16 +724,16 @@ export default function RecoverySimulatorDashboard({
       if (attributionFit.length > 0) {
         r.treatments = attributionFit;
         r.treatmentSource = 'attribution';
-        continue;
+        return;
       }
       r.treatments = TREATMENT_LIBRARY
-        .filter(t => (t.healingStageMultiplier?.[phase.id] ?? 1) >= 1.1)
+        .filter(t => stageFitForTreatment(stage, t.healingStageMultiplier, t.name) >= 1.1)
         .slice(0, 3)
         .map(t => t.name);
       r.treatmentSource = 'stage_recommended';
-    }
+    });
     return ranges;
-  }, [activeProjection, activeBranch.interventions, activeBranch.flareEvents, activeBranch.loadAdjustments, treatmentLookup, conditionContext, tissueProfile, conditionProfile, goalProfile, input.totalWeeks, stateAtScrub.healingPhase]);
+  }, [archetype, activeProjection, activeBranch.interventions, activeBranch.flareEvents, activeBranch.loadAdjustments, treatmentLookup, conditionContext, tissueProfile, conditionProfile, goalProfile, input.totalWeeks, stateAtScrub.healingPhase]);
 
   // Compute scenario A vs B comparison summary lines from end-of-period deltas
   const scenarioComparison = useMemo(() => {
@@ -983,9 +999,12 @@ export default function RecoverySimulatorDashboard({
             )}
 
             {/* Phase pills row + tissue stress */}
-            <div className="grid grid-cols-4 gap-1.5 mt-3">
-              {PHASE_DEFS.map((p, i) => {
-                const active = i === scrubbedPhaseIdx;
+            <div
+              className="grid gap-1.5 mt-3"
+              style={{ gridTemplateColumns: `repeat(${archetype.stages.length}, minmax(0, 1fr))` }}
+            >
+              {archetype.stages.map((p, i) => {
+                const active = i === scrubbedStageIdx;
                 return (
                   <div
                     key={p.id}
@@ -1028,8 +1047,7 @@ export default function RecoverySimulatorDashboard({
             // → simulation window, unreached → expected window from the
             // condition profile) so card boundaries map deterministically to
             // the same week axis the chart above uses.
-            const cols = PHASE_DEFS.map(p => {
-              const r = phaseRanges[p.id];
+            const cols = phaseRanges.map(r => {
               const span = r.reached
                 ? Math.max(1, r.end - r.start + 1)
                 : Math.max(1, r.expectedEnd - r.expectedStart);
@@ -1041,8 +1059,8 @@ export default function RecoverySimulatorDashboard({
                 style={{ gridTemplateColumns: cols }}
                 data-testid="phase-cards-row"
               >
-                {PHASE_DEFS.map((p) => {
-                  const r = phaseRanges[p.id];
+                {phaseRanges.map((r) => {
+                  const p = r.stage;
                   const sourceLabel = r.treatmentSource === 'scheduled' ? 'Scheduled'
                     : r.treatmentSource === 'attribution' ? 'Top driver'
                     : 'Recommended';

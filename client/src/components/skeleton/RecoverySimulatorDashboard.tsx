@@ -41,6 +41,7 @@ import {
   type CustomManualTechniqueInput,
   type ConditionContext,
   type RecoveryState,
+  type AINaturalTimeline,
   TREATMENT_LIBRARY,
   TREATMENT_BY_ID,
   simulateBranch,
@@ -143,6 +144,16 @@ interface Props {
    *  intervention referencing a custom item is removed via the on-chart
    *  controls, so plan list + recovery curve stay consistent. */
   onRemoveCustomItem?: (treatmentId: string) => void;
+  /** AI-generated natural-history timeline (per-finding healing verdicts,
+   *  recovery windows, residual deficits) used to drive
+   *  `simulateNaturalHistoryBaselines` so the no-treatment / rest-only /
+   *  usual-care / aggravation curves reflect the actual condition + patient
+   *  factors instead of generic heuristics. */
+  aiNaturalTimeline?: AINaturalTimeline | null;
+  /** Optional UI element rendered inside the dashboard's left summary
+   *  column — used by PhysioGPT to host the Natural Timeline panel
+   *  (with Q&A UX) so it sits alongside the recovery curves. */
+  naturalTimelineSlot?: React.ReactNode;
 }
 
 const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
@@ -374,6 +385,8 @@ export default function RecoverySimulatorDashboard({
   onAddCustomExercises,
   onAddCustomTechniques,
   onRemoveCustomItem,
+  aiNaturalTimeline,
+  naturalTimelineSlot,
 }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
@@ -479,12 +492,12 @@ export default function RecoverySimulatorDashboard({
 
   const ctxForSim = conditionContext ?? undefined;
   const projections = useMemo(
-    () => branches.map(b => simulateBranch(input, b, 'usual_care', undefined, customProfiles, ctxForSim)),
-    [branches, input, customProfiles, ctxForSim],
+    () => branches.map(b => simulateBranch(input, b, 'usual_care', undefined, customProfiles, ctxForSim, aiNaturalTimeline ?? null)),
+    [branches, input, customProfiles, ctxForSim, aiNaturalTimeline],
   );
   const activeBranch = useMemo(() => branches.find(b => b.id === activeBranchId) ?? branches[0], [branches, activeBranchId]);
   const activeProjection = useMemo(() => projections.find(p => p.branchId === activeBranchId) ?? projections[0], [projections, activeBranchId]);
-  const baselines = useMemo(() => simulateNaturalHistoryBaselines(input, ctxForSim), [input, ctxForSim]);
+  const baselines = useMemo(() => simulateNaturalHistoryBaselines(input, ctxForSim, aiNaturalTimeline ?? null), [input, ctxForSim, aiNaturalTimeline]);
   /** Pick the passive baseline closest to the active projection's trajectory
    *  (sum-of-squared-differences across pain, function, capacity & risk
    *  timelines) so the Compare panel always shows the most informative
@@ -2819,6 +2832,12 @@ export default function RecoverySimulatorDashboard({
           </div>
         </aside>
       </div>
+
+      {naturalTimelineSlot && (
+        <div className="px-3 pb-3 shrink-0">
+          {naturalTimelineSlot}
+        </div>
+      )}
 
       {/* COMPARE SCENARIOS ROW */}
       <div className="px-3 pb-3 grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-3 shrink-0">

@@ -5351,3 +5351,79 @@ export const savedSkeletonConfigurationRelations = relations(savedSkeletonConfig
     references: [patientPresentations.id],
   }),
 }));
+
+export interface NaturalTimelineFollowUpQuestion {
+  id: string;
+  question: string;
+  options?: string[];
+  clinical_relevance: string;
+}
+
+export type NaturalTimelineHealingClass = "resolves" | "partially_resolves" | "persists" | "worsens";
+
+export interface NaturalTimelineFinding {
+  finding_id: string;
+  label: string;
+  tissue_type?: "tendon" | "nerve" | "joint" | "fascia" | "muscle" | "ligament" | "disc" | "bone" | "generic";
+  tissue_id?: string;
+  healing_class: NaturalTimelineHealingClass;
+  expected_weeks_to_resolution: number | null;
+  residual_deficit_percent: number;
+  phase_durations_weeks?: {
+    inflammatory?: number;
+    proliferative?: number;
+    remodeling?: number;
+    maturation?: number;
+  };
+  rationale: string;
+}
+
+export interface NaturalTimelineRequestContext {
+  clinical_summary?: string;
+  main_complaint?: string;
+  pain_markers?: Array<{
+    anatomical_label: string;
+    symptom_type?: string;
+    pain_mechanism?: string;
+    description?: string;
+    severity?: number;
+  }>;
+  compromised_tissues?: Array<{
+    tissue_type: string;
+    tissue_id: string;
+    severity: number;
+    rationale?: string;
+  }>;
+  region_highlights?: Array<{ region: string; type?: string; severity?: number; label?: string }>;
+  postural_deviations?: Record<string, number>;
+  sling_weak_links?: Array<{ sling: string; weakLink: string; severity?: number }>;
+  joint_deviations?: Array<{ joint: string; parameter: string; degrees: number }>;
+  has_nerve_root?: boolean;
+  patient_factors?: Record<string, string | number | boolean | null | undefined>;
+}
+
+export interface NaturalTimelineQA {
+  question: string;
+  answer: string;
+}
+
+export interface NaturalTimelineRequest {
+  context: NaturalTimelineRequestContext;
+  qa_history?: NaturalTimelineQA[];
+}
+
+export interface NaturalTimelineResult {
+  per_finding: NaturalTimelineFinding[];
+  overall_window_weeks: { expected: number; best: number; worst: number };
+  residual_deficit_summary: {
+    overall_percent: number;
+    description: string;
+  };
+  chronicity_risk_percent: number;
+  recurrence_risk_percent: number;
+  flare_risk_percent: number;
+  rationale: string;
+  confidence_percent: number;
+  follow_up_questions: NaturalTimelineFollowUpQuestion[];
+  incorporated_factors: string[];
+}

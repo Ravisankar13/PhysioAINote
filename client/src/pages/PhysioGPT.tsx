@@ -79,7 +79,9 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
+import type { PhysioGptConversation, PhysioGptMessage, NaturalTimelineRequestContext } from "@shared/schema";
+import { useNaturalTimeline } from "@/hooks/useNaturalTimeline";
+const NaturalTimelinePanel = lazy(() => import("@/components/skeleton/NaturalTimelinePanel"));
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
@@ -4130,6 +4132,80 @@ ${ddxList}`;
       patientRomCeiling: mods.romCeilingAdjustment,
     });
   }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, collectModelConfigDeviations]);
+
+  const naturalTimelineRequestContext = useMemo<NaturalTimelineRequestContext | null>(() => {
+    if (!showRecoverySim) return null;
+    const hasInput = recoverySimHasClinicalInput || !!extractionResult?.mainComplaint || !!structuredReasoningData;
+    if (!hasInput) return null;
+    const factors = autoPopulateFromPipeline(extractionResult ?? null, structuredReasoningData ?? null, DEFAULT_PATIENT_FACTORS);
+    return {
+      clinical_summary: structuredReasoningData
+        ? `${structuredReasoningData.dominantMechanism?.label ?? ''} | ${structuredReasoningData.problemClass?.label ?? ''} | ${structuredReasoningData.dominantSymptomDriver?.driver ?? ''}`.trim()
+        : undefined,
+      main_complaint: extractionResult?.mainComplaint ?? undefined,
+      pain_markers: (painMarkers as unknown as Array<Record<string, unknown>>).map(pm => ({
+        anatomical_label: String(pm.anatomicalLabel ?? ''),
+        symptom_type: pm.symptomType ? String(pm.symptomType) : undefined,
+        pain_mechanism: pm.painMechanism ? String(pm.painMechanism) : undefined,
+        description: pm.description ? String(pm.description) : undefined,
+        severity: typeof pm.severity === 'number' ? pm.severity : undefined,
+      })),
+      compromised_tissues: compromisedTissues.map(ct => {
+        const r = ct as unknown as Record<string, unknown>;
+        return {
+          tissue_type: String(ct.tissue_type),
+          tissue_id: String(r.tissue_id ?? r.id ?? ct.tissue_type),
+          severity: ct.severity,
+          rationale: r.rationale ? String(r.rationale) : undefined,
+        };
+      }),
+      has_nerve_root: /nerve root|radicul|sciatic/.test(JSON.stringify(painMarkers).toLowerCase()),
+      sling_weak_links: slingAnalysis
+        ? slingAnalysis.slings.flatMap(s =>
+            (s.weakLinks ?? []).map(wl => ({
+              sling: s.name ?? s.id ?? 'sling',
+              weakLink: typeof wl === 'string' ? wl : String(wl),
+              severity: s.status === 'compensating' ? 70 : s.status === 'underperforming' ? 55 : 30,
+            }))
+          )
+        : undefined,
+      joint_deviations: collectModelConfigDeviations(modelConfig).map(d => ({
+        joint: d.joint,
+        parameter: d.param,
+        degrees: d.value,
+      })),
+      postural_deviations: collectModelConfigDeviations(modelConfig).reduce<Record<string, number>>((acc, d) => {
+        acc[`${d.joint}.${d.param}`] = d.value;
+        return acc;
+      }, {}),
+      region_highlights: [
+        ...scarMarkers.map(s => ({ region: String((s as unknown as Record<string, unknown>).anatomicalLabel ?? 'scar'), type: 'scar', severity: s.severity ?? 0 })),
+        ...adhesionBands.map(b => ({ region: String((b as unknown as Record<string, unknown>).anatomicalLabel ?? 'adhesion'), type: 'adhesion', severity: ((b as unknown as Record<string, unknown>).severity as number) ?? 0 })),
+        ...romMeasurements.map(m => ({
+          region: String((m as unknown as Record<string, unknown>).joint ?? (m as unknown as Record<string, unknown>).movement ?? 'rom'),
+          type: 'rom_restriction',
+          severity: m.normalRange[1] > 0 ? Math.max(0, Math.round(100 - (m.measuredValue / m.normalRange[1]) * 100)) : undefined,
+          label: `${(m as unknown as Record<string, unknown>).movement ?? ''}: ${m.measuredValue}/${m.normalRange[1]}°`,
+        })),
+      ],
+      patient_factors: {
+        age: factors.age ?? extractionResult?.patientAge ?? null,
+        bmi: factors.bmi,
+        smoking: factors.smoking,
+        diabetes: factors.diabetes,
+        activity_level: factors.activityLevel,
+        sleep_quality: factors.sleepQuality,
+        psychological_risk: factors.psychologicalRisk,
+        previous_episodes: factors.previousEpisodes,
+        chronicity: factors.chronicity,
+        compliance_percent: factors.compliance,
+        symptom_duration: extractionResult?.duration ?? null,
+        irritability: extractionResult?.irritability ?? null,
+      },
+    };
+  }, [showRecoverySim, recoverySimHasClinicalInput, extractionResult, structuredReasoningData, painMarkers, compromisedTissues, slingAnalysis, modelConfig, scarMarkers, adhesionBands, romMeasurements, collectModelConfigDeviations]);
+
+  const naturalTimeline = useNaturalTimeline({ context: naturalTimelineRequestContext, enabled: showRecoverySim });
 
   const clinicalPlan = useMemo<ClinicalPlanResult | null>(() => {
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
@@ -9668,6 +9744,19 @@ ${ddxList}`;
                   onAddCustomExercises={handleAddCustomExercises}
                   onAddCustomTechniques={handleAddCustomTechniques}
                   onRemoveCustomItem={handleRemoveCustomItem}
+                  aiNaturalTimeline={naturalTimeline.result ?? null}
+                  naturalTimelineSlot={
+                    <Suspense fallback={null}>
+                      <NaturalTimelinePanel
+                        result={naturalTimeline.result}
+                        qaHistory={naturalTimeline.qaHistory}
+                        loading={naturalTimeline.loading}
+                        error={naturalTimeline.error}
+                        hasContext={!!naturalTimelineRequestContext}
+                        onAnswer={naturalTimeline.answerQuestion}
+                      />
+                    </Suspense>
+                  }
                   initialInput={{
                     conditionSeverity: painMarkers.length > 0
                       ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)

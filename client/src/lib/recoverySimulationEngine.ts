@@ -1298,7 +1298,108 @@ function advanceHealingPhase(state: RecoveryState, baselineProgressPerWeek: numb
   return { phase, progress: newProgress };
 }
 
-function naturalProgressionRate(mode: BaselineMode, state: RecoveryState, profile?: TissueHealingProfile): number {
+export interface AINaturalTimeline {
+  per_finding?: Array<{
+    healing_class: 'resolves' | 'partially_resolves' | 'persists' | 'worsens';
+    expected_weeks_to_resolution: number | null;
+    residual_deficit_percent: number;
+    tissue_type?: string;
+  }>;
+  overall_window_weeks?: { expected: number; best: number; worst: number };
+  residual_deficit_summary?: { overall_percent: number };
+  chronicity_risk_percent?: number;
+  recurrence_risk_percent?: number;
+  flare_risk_percent?: number;
+}
+
+/** Aggregate per-finding tissue timing into the engine's per-tissue
+ *  modifier vector. When a condition context's primaryTissue matches a
+ *  per-finding entry, that entry is weighted heavily so the baseline
+ *  curves reflect the dominant tissue's healing dynamics rather than a
+ *  pure global average. */
+function aiBaselineModifiers(
+  ai: AINaturalTimeline | undefined,
+  mode: BaselineMode,
+  primaryTissue?: ConditionTissue,
+): {
+  rateMult: number;
+  ceiling: number;
+  initialChronicity: number | null;
+  initialFlare: number | null;
+} {
+  if (!ai) return { rateMult: 1, ceiling: 100, initialChronicity: null, initialFlare: null };
+  const baselineExpectedWeeks = 12;
+  const findings = ai.per_finding ?? [];
+  const worsens = findings.some(f => f.healing_class === 'worsens');
+  const persists = findings.some(f => f.healing_class === 'persists');
+  const allResolve = findings.length > 0 && findings.every(f => f.healing_class === 'resolves');
+
+  // Per-tissue weighting: prefer the entry whose tissue_type matches
+  // the condition's primary tissue, falling back to the longest /
+  // worst-residual entry, then to the overall window.
+  type HClass = 'resolves' | 'partially_resolves' | 'persists' | 'worsens';
+  let perTissueExpected: number | null = null;
+  let perTissueResidual: number | null = null;
+  let perTissueClass: HClass | null = null;
+  if (findings.length > 0) {
+    const matched = primaryTissue
+      ? findings.find(f => (f.tissue_type ?? '').toLowerCase() === primaryTissue)
+      : null;
+    const worst = findings.reduce<typeof findings[number] | null>((acc, f) => {
+      if (!acc) return f;
+      const accE = acc.expected_weeks_to_resolution ?? 0;
+      const fE = f.expected_weeks_to_resolution ?? 0;
+      if (fE > accE) return f;
+      if (f.residual_deficit_percent > acc.residual_deficit_percent) return f;
+      return acc;
+    }, null);
+    const target = matched ?? worst;
+    if (target) {
+      perTissueExpected = target.expected_weeks_to_resolution ?? null;
+      perTissueResidual = target.residual_deficit_percent;
+      perTissueClass = target.healing_class as HClass;
+    }
+  }
+  const expected = perTissueExpected ?? ai.overall_window_weeks?.expected ?? null;
+  const residual = perTissueResidual ?? ai.residual_deficit_summary?.overall_percent ?? 30;
+
+  const speedRatio = expected && expected > 0 ? Math.max(0.25, Math.min(2.5, baselineExpectedWeeks / expected)) : 1;
+  let rateMult = speedRatio;
+  // Per-finding healing-class modifier (per-tissue if matched, else
+  // aggregate). 'worsens' on the dominant tissue dominates.
+  const tissueClassMul = (cls: typeof perTissueClass) => {
+    if (cls === 'worsens') return mode === 'continued_aggravation' ? 1.4 : 0.3;
+    if (cls === 'persists') return mode === 'no_treatment' ? 0.55 : mode === 'rest_only' ? 0.7 : 0.8;
+    if (cls === 'resolves') return mode === 'no_treatment' ? 0.95 : 1.05;
+    return mode === 'no_treatment' ? 0.7 : mode === 'rest_only' ? 0.85 : 0.95;
+  };
+  if (perTissueClass) {
+    rateMult *= tissueClassMul(perTissueClass);
+  } else if (mode === 'no_treatment') {
+    rateMult *= allResolve ? 0.9 : persists ? 0.55 : worsens ? 0.3 : 0.7;
+  } else if (mode === 'rest_only') {
+    rateMult *= allResolve ? 1 : persists ? 0.7 : worsens ? 0.45 : 0.85;
+  } else if (mode === 'usual_care') {
+    rateMult *= allResolve ? 1.05 : persists ? 0.8 : worsens ? 0.55 : 0.95;
+  }
+  if (mode === 'continued_aggravation') rateMult = -Math.abs(rateMult) * (worsens ? 1.4 : 1);
+
+  const ceiling = Math.max(
+    40,
+    Math.min(
+      100,
+      100 - residual * (mode === 'continued_aggravation' ? 1.3 : mode === 'no_treatment' ? 1 : mode === 'rest_only' ? 0.9 : 0.75),
+    ),
+  );
+  return {
+    rateMult,
+    ceiling,
+    initialChronicity: typeof ai.chronicity_risk_percent === 'number' ? ai.chronicity_risk_percent : null,
+    initialFlare: typeof ai.flare_risk_percent === 'number' ? ai.flare_risk_percent : null,
+  };
+}
+
+function naturalProgressionRate(mode: BaselineMode, state: RecoveryState, profile?: TissueHealingProfile, ai?: AINaturalTimeline, primaryTissue?: ConditionTissue): number {
   const base =
     mode === 'no_treatment' ? 1.5 :
     mode === 'rest_only' ? 2.5 :
@@ -1308,7 +1409,9 @@ function naturalProgressionRate(mode: BaselineMode, state: RecoveryState, profil
   const sleepBoost = state.sleep > 70 ? 0.3 : -0.2;
   const tissueMult = profile?.healingRateMult ?? 1;
   const sign = base >= 0 ? 1 : -1;
-  return ((base + irrPenalty + sleepBoost)) * (sign > 0 ? tissueMult : 1);
+  const aiMods = aiBaselineModifiers(ai, mode, primaryTissue);
+  const aiMult = ai ? Math.abs(aiMods.rateMult) : 1;
+  return ((base + irrPenalty + sleepBoost)) * (sign > 0 ? tissueMult : 1) * aiMult;
 }
 
 interface SimContext {
@@ -1319,6 +1422,7 @@ interface SimContext {
   lookup: Map<string, TreatmentEffectProfile>;
   conditionContext?: ConditionContext;
   profile?: TissueHealingProfile;
+  aiNaturalTimeline?: AINaturalTimeline;
   /** Per-intervention cache of the resolved phase-exit week. Once an
    *  intervention with `endOnPhaseExit` first observes the simulated
    *  healing phase advance past its bound phase, that week is stored
@@ -1336,7 +1440,7 @@ function applyTreatmentEffects(
   const markers: InterventionMarker[] = [];
   const attribution = new Map<string, number>();
 
-  const naturalRate = naturalProgressionRate(ctx.baselineMode, state, ctx.profile);
+  const naturalRate = naturalProgressionRate(ctx.baselineMode, state, ctx.profile, ctx.aiNaturalTimeline, ctx.conditionContext?.primaryTissue);
   const phaseAdvance = (ctx.profile?.healingRateMult ?? 1) / Math.max(0.4, ctx.profile?.phaseDurationMult ?? 1);
   const phaseUpdate = advanceHealingPhase(state, naturalRate * 1.2 * phaseAdvance);
   next.healingPhase = phaseUpdate.phase;
@@ -1594,20 +1698,54 @@ export function simulateBranch(
   initialOverride?: RecoveryState,
   customProfiles?: TreatmentEffectProfile[] | null,
   conditionContext?: ConditionContext,
+  aiNaturalTimeline?: AINaturalTimeline | null,
 ): SimulationProjection {
   const states: RecoveryState[] = [];
   const allMarkers: InterventionMarker[] = [];
   const totalAttribution = new Map<string, number>();
+  // Restrict AI natural-timeline influence to baseline (natural-history)
+  // branches only. Treatment scenario branches must keep their existing
+  // mechanics so intervention projections are not distorted by the
+  // baseline-overlay AI estimates.
+  const isBaselineBranch = branch.id.startsWith('baseline_');
+  const effectiveAI = isBaselineBranch ? (aiNaturalTimeline ?? null) : null;
+
   let state = initialOverride ? { ...initialOverride } : defaultInitialState(input, conditionContext);
+  if (!initialOverride && effectiveAI) {
+    const mods = aiBaselineModifiers(effectiveAI, baselineMode, conditionContext?.primaryTissue);
+    if (mods.initialChronicity !== null) state.chronicityRisk = clamp(Math.max(state.chronicityRisk, mods.initialChronicity));
+    if (mods.initialFlare !== null) state.flareRisk = clamp(Math.max(state.flareRisk, mods.initialFlare));
+    // AI residual deficit caps the achievable capacity / function for
+    // passive baselines so natural-history curves visibly plateau below
+    // 100% when the AI predicts persistent deficit.
+    state.capacity = Math.min(state.capacity, mods.ceiling);
+    state.romPercent = Math.min(state.romPercent, mods.ceiling);
+    state.strength = Math.min(state.strength, mods.ceiling);
+    state.workCapacity = Math.min(state.workCapacity, mods.ceiling);
+  }
   states.push({ ...state, week: 0 });
 
   const lookup = buildLookup(customProfiles);
   const profile = conditionContext ? tissueProfileForContext(conditionContext) : undefined;
-  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42, lookup, conditionContext, profile, phaseExitWeeks: new Map() };
+  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42, lookup, conditionContext, profile, aiNaturalTimeline: effectiveAI ?? undefined, phaseExitWeeks: new Map() };
+
+  // For baseline (no-treatment / rest / usual-care / continued aggravation)
+  // branches, the AI's predicted residual deficit defines a ceiling that
+  // capacity / function / ROM cannot exceed — this is what makes the
+  // natural-history curve plateau condition-specifically.
+  const aiCeiling = effectiveAI
+    ? aiBaselineModifiers(effectiveAI, baselineMode, conditionContext?.primaryTissue).ceiling
+    : 100;
 
   for (let w = 1; w <= input.totalWeeks; w++) {
     const { newState, markers, attribution } = applyTreatmentEffects(state, ctx, w);
     state = newState;
+    if (effectiveAI) {
+      state.capacity = Math.min(state.capacity, aiCeiling);
+      state.romPercent = Math.min(state.romPercent, aiCeiling);
+      state.strength = Math.min(state.strength, aiCeiling);
+      state.workCapacity = Math.min(state.workCapacity, aiCeiling);
+    }
     states.push({ ...state });
     allMarkers.push(...markers);
     attribution.forEach((v, k) => totalAttribution.set(k, (totalAttribution.get(k) ?? 0) + v));
@@ -1697,7 +1835,7 @@ export function simulateBranch(
   };
 }
 
-export function simulateNaturalHistoryBaselines(input: SimulationInput, conditionContext?: ConditionContext): Record<BaselineMode, SimulationProjection> {
+export function simulateNaturalHistoryBaselines(input: SimulationInput, conditionContext?: ConditionContext, aiNaturalTimeline?: AINaturalTimeline | null): Record<BaselineMode, SimulationProjection> {
   const result = {} as Record<BaselineMode, SimulationProjection>;
   for (const mode of ['no_treatment', 'rest_only', 'usual_care', 'continued_aggravation'] as BaselineMode[]) {
     const branch: ScenarioBranch = {
@@ -1715,7 +1853,7 @@ export function simulateNaturalHistoryBaselines(input: SimulationInput, conditio
       loadAdjustments: [],
       color: mode === 'no_treatment' ? '#6b7280' : mode === 'rest_only' ? '#a78bfa' : mode === 'usual_care' ? '#94a3b8' : '#ef4444',
     };
-    result[mode] = simulateBranch(input, branch, mode, undefined, null, conditionContext);
+    result[mode] = simulateBranch(input, branch, mode, undefined, null, conditionContext, aiNaturalTimeline ?? null);
   }
   return result;
 }

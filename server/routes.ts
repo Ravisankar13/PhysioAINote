@@ -12715,6 +12715,160 @@ EXAMPLES of good predictions:
     }
   });
 
+  app.post('/api/clinical-text/natural-timeline', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { context, qa_history } = req.body ?? {};
+      if (!context || typeof context !== 'object') {
+        return res.status(400).json({ error: 'Clinical context is required' });
+      }
+      const qaHistory = Array.isArray(qa_history) ? qa_history as Array<{ question: string; answer: string }> : [];
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const ctxJson = JSON.stringify(context, null, 2);
+      let qaBlock = '';
+      if (qaHistory.length > 0) {
+        qaBlock = '\n\n--- PATIENT FACTORS PROVIDED (incorporate into the timeline) ---\n' +
+          qaHistory.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n') +
+          '\n--- END PATIENT FACTORS ---\n\nUse these answers to refine the natural timeline. REMOVE any follow_up_questions that are now answered. Increase confidence_percent. Adjust per-finding healing classes, weeks-to-resolution, residual deficit, chronicity and recurrence risk based on what the answers reveal.';
+      }
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert physiotherapy NATURAL-HISTORY PROGNOSIS engine. The clinician has already produced a structured clinical picture (compromised tissues with tissue type, pain markers with mechanism / nerve-root involvement, sling weak links, joint deviations, region highlights, and a clinical summary). Your single job is to predict what would happen to THIS specific clinical picture if NOTHING were done — no manual therapy, no exercise, no rest, no activity modification — just the patient's natural healing biology playing out under usual day-to-day load.
+            
+You must reason from tissue biology (tendons heal slowly with high recurrence; nerves are slow with chronicity risk; joints with OA persist; ligaments scar; muscles heal fast; discs partially resolve; bone heals well if loaded normally; fascia is variable), the pain mechanism (nociceptive vs neuropathic vs central — central pain rarely self-resolves), nerve-root involvement (radiculopathy raises chronicity), sling weak links (compensation patterns persist without intervention), and joint deviations (load asymmetry drives chronicity).
+
+Then identify which PATIENT FACTORS are still missing that would materially shift this natural timeline (age band, sex, diabetes, smoking, BMI, activity level, occupation/load demand, prior episodes of the same complaint, sleep quality, menopausal status, steroid / anticoagulant / NSAID use, fear-avoidance, mental health) — and emit follow_up_questions ONLY for the ones not already known from the provided context or QA history.
+
+Return ONLY valid JSON in EXACTLY this shape:
+{
+  "per_finding": [
+    {
+      "finding_id": "stable id like t_supraspinatus_r",
+      "label": "human label, e.g. Supraspinatus tendinopathy (R)",
+      "tissue_type": "tendon | nerve | joint | fascia | muscle | ligament | disc | bone | generic",
+      "tissue_id": "optional tissue id from context if available",
+      "healing_class": "resolves | partially_resolves | persists | worsens",
+      "expected_weeks_to_resolution": <number or null if persists/worsens>,
+      "residual_deficit_percent": <0-100 — how much functional/structural deficit remains at end of natural course>,
+      "phase_durations_weeks": { "inflammatory": n, "proliferative": n, "remodeling": n, "maturation": n },
+      "rationale": "1-2 sentence clinical reasoning grounded in tissue biology + this patient's modifiers"
+    }
+  ],
+  "overall_window_weeks": { "expected": n, "best": n, "worst": n },
+  "residual_deficit_summary": { "overall_percent": <0-100>, "description": "1 sentence summary of what does NOT recover on its own" },
+  "chronicity_risk_percent": <0-100 — probability this becomes chronic with no intervention>,
+  "recurrence_risk_percent": <0-100 — probability of recurrence within 12 months even if it does resolve>,
+  "flare_risk_percent": <0-100 — probability of symptomatic flares during the natural course>,
+  "rationale": "3-5 sentence written clinical rationale: which findings self-resolve, which persist or worsen, and why, given tissue biology + known patient factors",
+  "confidence_percent": <0-100 — your confidence in this timeline; rises as more patient factors are answered>,
+  "follow_up_questions": [
+    {
+      "id": "ntq1",
+      "question": "Concise clinical question",
+      "options": ["preset chips when meaningful"],
+      "clinical_relevance": "why this answer changes the natural timeline"
+    }
+  ],
+  "incorporated_factors": ["short labels of factors already accounted for, e.g. 'Age 70', 'Diabetic', 'Smoker', 'Manual labour'"]
+}
+
+Generate 3-6 follow-up questions when major modifiers are unknown; emit FEWER as questions get answered. The natural timeline must change visibly across patients — a 25 y/o non-diabetic non-smoker athlete with an acute hamstring strain should resolve in 4-8 weeks with low chronicity, while a 70 y/o diabetic smoker with chronic supraspinatus tendinopathy should persist or partially resolve over 6+ months with high chronicity and residual deficit.`,
+          },
+          {
+            role: 'user',
+            content: `CLINICAL CONTEXT (extracted by the clinical prediction engine):\n${ctxJson}${qaBlock}`,
+          },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 3500,
+        temperature: 0.3,
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+
+      const clamp01 = (v: unknown, dflt: number) => {
+        const n = typeof v === 'number' ? v : Number(v);
+        if (!Number.isFinite(n)) return dflt;
+        return Math.max(0, Math.min(100, n));
+      };
+      const num = (v: unknown, dflt: number) => {
+        const n = typeof v === 'number' ? v : Number(v);
+        return Number.isFinite(n) ? n : dflt;
+      };
+
+      const findings = Array.isArray(parsed.per_finding) ? parsed.per_finding : [];
+      const overall = parsed.overall_window_weeks ?? {};
+      const residual = parsed.residual_deficit_summary ?? {};
+
+      res.json({
+        per_finding: findings.map((f: Record<string, unknown>, i: number) => ({
+          finding_id: typeof f.finding_id === 'string' ? f.finding_id : `f_${i}`,
+          label: typeof f.label === 'string' ? f.label : `Finding ${i + 1}`,
+          tissue_type: f.tissue_type,
+          tissue_id: f.tissue_id,
+          healing_class: ['resolves', 'partially_resolves', 'persists', 'worsens'].includes(String(f.healing_class)) ? f.healing_class : 'partially_resolves',
+          expected_weeks_to_resolution: f.expected_weeks_to_resolution === null ? null : num(f.expected_weeks_to_resolution, 12),
+          residual_deficit_percent: clamp01(f.residual_deficit_percent, 20),
+          phase_durations_weeks: f.phase_durations_weeks ?? undefined,
+          rationale: typeof f.rationale === 'string' ? f.rationale : '',
+        })),
+        overall_window_weeks: {
+          expected: num(overall.expected, 12),
+          best: num(overall.best, 8),
+          worst: num(overall.worst, 24),
+        },
+        residual_deficit_summary: {
+          overall_percent: clamp01(residual.overall_percent, 20),
+          description: typeof residual.description === 'string' ? residual.description : '',
+        },
+        chronicity_risk_percent: clamp01(parsed.chronicity_risk_percent, 30),
+        recurrence_risk_percent: clamp01(parsed.recurrence_risk_percent, 25),
+        flare_risk_percent: clamp01(parsed.flare_risk_percent, 30),
+        rationale: typeof parsed.rationale === 'string' ? parsed.rationale : '',
+        confidence_percent: clamp01(parsed.confidence_percent, 50),
+        follow_up_questions: (() => {
+          const raw = Array.isArray(parsed.follow_up_questions) ? parsed.follow_up_questions : [];
+          // Deterministic suppression: drop any follow-up whose
+          // question / factor_key is already present in the qa_history
+          // or in the request's patient_factors. Protects against the
+          // model repeating already-answered prompts.
+          const norm = (s: unknown) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+          const answeredKeys = new Set<string>();
+          for (const qa of qaHistory) {
+            answeredKeys.add(norm(qa.question));
+            const m = (qa.question || '').match(/\b([a-z][a-z0-9_]+)\s*[:?]/i);
+            if (m) answeredKeys.add(norm(m[1]));
+          }
+          const factors = (context && typeof context === 'object' && (context as any).patient_factors) || {};
+          for (const k of Object.keys(factors)) {
+            if (factors[k] !== undefined && factors[k] !== null && factors[k] !== '') answeredKeys.add(norm(k));
+          }
+          return raw.filter((q: any) => {
+            const fk = norm(q?.factor_key);
+            const qk = norm(q?.question);
+            if (fk && answeredKeys.has(fk)) return false;
+            if (qk && answeredKeys.has(qk)) return false;
+            return true;
+          });
+        })(),
+        incorporated_factors: Array.isArray(parsed.incorporated_factors) ? parsed.incorporated_factors : [],
+      });
+    } catch (error: unknown) {
+      console.error('Error generating natural timeline:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate natural timeline', details: message });
+    }
+  });
+
   app.post('/api/pain-intelligence/behaviour', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { anatomical_label, pain_mechanism, marker_type, description, nearest_bone, severity } = req.body;

@@ -9745,6 +9745,7 @@ ${ddxList}`;
                   onAddCustomTechniques={handleAddCustomTechniques}
                   onRemoveCustomItem={handleRemoveCustomItem}
                   aiNaturalTimeline={naturalTimeline.result ?? null}
+                  naturalTimelineLoading={naturalTimeline.loading}
                   naturalTimelineSlot={
                     <Suspense fallback={null}>
                       <NaturalTimelinePanel

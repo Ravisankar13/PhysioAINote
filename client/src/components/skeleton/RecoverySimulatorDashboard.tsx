@@ -150,6 +150,10 @@ interface Props {
    *  usual-care / aggravation curves reflect the actual condition + patient
    *  factors instead of generic heuristics. */
   aiNaturalTimeline?: AINaturalTimeline | null;
+  /** True while the parent's natural-timeline request is in flight.
+   *  Drives the small "Loading natural history…" hint shown next to the
+   *  chart's mode toggle while the AI verdict is being fetched. */
+  naturalTimelineLoading?: boolean;
   /** Optional UI element rendered inside the dashboard's left summary
    *  column — used by PhysioGPT to host the Natural Timeline panel
    *  (with Q&A UX) so it sits alongside the recovery curves. */
@@ -386,6 +390,7 @@ export default function RecoverySimulatorDashboard({
   onAddCustomTechniques,
   onRemoveCustomItem,
   aiNaturalTimeline,
+  naturalTimelineLoading,
   naturalTimelineSlot,
 }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
@@ -498,6 +503,56 @@ export default function RecoverySimulatorDashboard({
   const activeBranch = useMemo(() => branches.find(b => b.id === activeBranchId) ?? branches[0], [branches, activeBranchId]);
   const activeProjection = useMemo(() => projections.find(p => p.branchId === activeBranchId) ?? projections[0], [projections, activeBranchId]);
   const baselines = useMemo(() => simulateNaturalHistoryBaselines(input, ctxForSim, aiNaturalTimeline ?? null), [input, ctxForSim, aiNaturalTimeline]);
+
+  /** Natural-history projection driven directly by the AI Natural
+   *  Timeline (no_treatment mode, AI-predicted window). Used to *be*
+   *  the main Recovery Timeline chart when AI data is available so
+   *  the line graph reflects the patient's true natural healing
+   *  trajectory rather than the treatment-modified curves. Falls back
+   *  to null when no AI verdict is loaded yet. */
+  const naturalProjection = useMemo(() => {
+    if (!aiNaturalTimeline) return null;
+    const exp = Math.max(1, Math.round(aiNaturalTimeline.overall_window_weeks?.expected ?? 0));
+    const worst = Math.max(exp, Math.round(aiNaturalTimeline.overall_window_weeks?.worst ?? exp));
+    const naturalWeeks = Math.max(4, Math.min(104, worst));
+    const naturalInput: SimulationInput = { ...input, totalWeeks: naturalWeeks };
+    const emptyBranch: ScenarioBranch = {
+      id: 'baseline_natural_chart',
+      name: 'Natural history',
+      fromWeek: 0,
+      interventions: [],
+      flareEvents: [],
+      reaggravationEvents: [],
+      loadAdjustments: [],
+      color: '#a855f7',
+    };
+    return simulateBranch(naturalInput, emptyBranch, 'no_treatment', undefined, [], ctxForSim, aiNaturalTimeline);
+  }, [aiNaturalTimeline, input, ctxForSim]);
+
+  /** Mode toggle for the main chart. Defaults to 'natural' the first
+   *  time an AI Natural Timeline result becomes available, then stays
+   *  wherever the user puts it. Falls back to 'plan' (existing
+   *  treatment projection) when no AI data is loaded. */
+  const [chartMode, setChartMode] = useState<'natural' | 'plan'>('plan');
+  const naturalAutoSetRef = useRef(false);
+  useEffect(() => {
+    if (aiNaturalTimeline && !naturalAutoSetRef.current) {
+      naturalAutoSetRef.current = true;
+      setChartMode('natural');
+    }
+    if (!aiNaturalTimeline) naturalAutoSetRef.current = false;
+  }, [aiNaturalTimeline]);
+
+  const usingNaturalChart = chartMode === 'natural' && !!naturalProjection;
+  const displayProjection = usingNaturalChart && naturalProjection ? naturalProjection : activeProjection;
+  const displayTotalWeeks = Math.max(1, displayProjection.states.length - 1);
+
+  // Re-clamp scrub when total weeks change so the cursor never points
+  // past the end of the displayed projection (e.g. user toggles from a
+  // 24-week treatment plan back to a 12-week natural window).
+  useEffect(() => {
+    setScrubWeek(prev => Math.max(0, Math.min(prev, displayTotalWeeks)));
+  }, [displayTotalWeeks]);
   /** Pick the passive baseline closest to the active projection's trajectory
    *  (sum-of-squared-differences across pain, function, capacity & risk
    *  timelines) so the Compare panel always shows the most informative
@@ -528,15 +583,15 @@ export default function RecoverySimulatorDashboard({
   );
   const narrative = useMemo(() => generateNarrative(activeProjection, baselineProj), [activeProjection, baselineProj]);
 
-  const stateAtScrub = activeProjection.states[Math.min(scrubWeek, activeProjection.states.length - 1)];
-  const baselineState = activeProjection.states[0];
+  const stateAtScrub = displayProjection.states[Math.min(scrubWeek, displayProjection.states.length - 1)];
+  const baselineState = displayProjection.states[0];
 
   // Auto-sync to skeleton
   useEffect(() => {
     if (autoSyncSkeleton && onApplyState && stateAtScrub && baselineState) {
-      onApplyState({ week: scrubWeek, state: stateAtScrub, baselineState, branchName: activeProjection.branchName });
+      onApplyState({ week: scrubWeek, state: stateAtScrub, baselineState, branchName: displayProjection.branchName });
     }
-  }, [autoSyncSkeleton, scrubWeek, stateAtScrub, baselineState, onApplyState, activeProjection.branchName]);
+  }, [autoSyncSkeleton, scrubWeek, stateAtScrub, baselineState, onApplyState, displayProjection.branchName]);
 
   // Animate playback
   const animateRef = useRef<number | null>(null);
@@ -548,12 +603,12 @@ export default function RecoverySimulatorDashboard({
     animateRef.current = window.setInterval(() => {
       setScrubWeek(prev => {
         const next = prev + 1;
-        if (next > input.totalWeeks) { setAnimate(false); return prev; }
+        if (next > displayTotalWeeks) { setAnimate(false); return prev; }
         return next;
       });
     }, 1000);
     return () => { if (animateRef.current) { clearInterval(animateRef.current); animateRef.current = null; } };
-  }, [animate, input.totalWeeks]);
+  }, [animate, displayTotalWeeks]);
 
   const addBranch = useCallback((mod: Partial<ScenarioBranch> & { name: string }) => {
     const base = activeBranch;
@@ -890,9 +945,9 @@ export default function RecoverySimulatorDashboard({
 
   // Tissue Stress (inverse of loadTolerance — high stress when tolerance is low)
   const tissueStress = useMemo(() => {
-    const tol = activeProjection.timelines.tissue.loadTolerance[Math.min(scrubWeek, activeProjection.timelines.tissue.loadTolerance.length - 1)] ?? 0;
+    const tol = displayProjection.timelines.tissue.loadTolerance[Math.min(scrubWeek, displayProjection.timelines.tissue.loadTolerance.length - 1)] ?? 0;
     return Math.max(0, Math.min(100, 100 - tol));
-  }, [activeProjection, scrubWeek]);
+  }, [displayProjection, scrubWeek]);
 
   // Function aggregate
   const functionScore = useMemo(() => (stateAtScrub.walking + stateAtScrub.stairs + stateAtScrub.squat) / 3, [stateAtScrub]);
@@ -1387,11 +1442,11 @@ export default function RecoverySimulatorDashboard({
 
   // Main timeline — Function / Capacity / Pain / Reinjury
   const mainSeries = useMemo(() => [
-    { label: 'Function',       color: '#06b6d4', values: activeProjection.timelines.function.walking },
-    { label: 'Tendon Capacity', color: '#22c55e', values: activeProjection.timelines.capacity },
-    { label: 'Pain',           color: '#ef4444', values: activeProjection.timelines.symptoms.pain },
-    { label: 'Reinjury Risk',  color: '#f59e0b', values: activeProjection.timelines.risk.reinjury, dash: '3,2' },
-  ], [activeProjection]);
+    { label: 'Function',       color: '#06b6d4', values: displayProjection.timelines.function.walking },
+    { label: 'Tendon Capacity', color: '#22c55e', values: displayProjection.timelines.capacity },
+    { label: 'Pain',           color: '#ef4444', values: displayProjection.timelines.symptoms.pain },
+    { label: 'Reinjury Risk',  color: '#f59e0b', values: displayProjection.timelines.risk.reinjury, dash: '3,2' },
+  ], [displayProjection]);
 
   // Header info
   const initials = (patientName ?? 'PT').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -1576,10 +1631,46 @@ export default function RecoverySimulatorDashboard({
 
             {activeTab === 'timeline' ? (
               <>
-                <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1">Recovery Progression</div>
-                <div className="text-[9px] text-gray-500 mb-1">Drag timeline or modify treatments to see changes</div>
+                <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
+                      {usingNaturalChart ? 'Natural Recovery Trajectory' : 'Recovery Progression'}
+                    </div>
+                    {usingNaturalChart && aiNaturalTimeline && (
+                      <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[9px]" data-testid="badge-natural-window">
+                        AI window · ~{Math.round(aiNaturalTimeline.overall_window_weeks?.expected ?? displayTotalWeeks)} wk expected
+                      </Badge>
+                    )}
+                    {naturalTimelineLoading && !aiNaturalTimeline && (
+                      <span className="text-[9px] text-violet-300 italic flex items-center gap-1" data-testid="natural-timeline-loading-hint">
+                        <Sparkles className="h-2.5 w-2.5 animate-pulse" />Loading natural history…
+                      </span>
+                    )}
+                  </div>
+                  {/* Mode toggle: only meaningful once an AI verdict exists */}
+                  <div className="flex items-center gap-1 bg-gray-950/60 border border-gray-800/80 rounded p-0.5" role="tablist" aria-label="Chart mode">
+                    <button
+                      onClick={() => setChartMode('natural')}
+                      disabled={!naturalProjection}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${chartMode === 'natural' && naturalProjection ? 'bg-violet-600/40 text-violet-100' : 'text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed'}`}
+                      data-testid="chart-mode-natural"
+                      title={naturalProjection ? 'Show AI-predicted natural healing trajectory' : 'Generate the natural-history timeline first'}
+                    >Natural timeline</button>
+                    <button
+                      onClick={() => setChartMode('plan')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${chartMode === 'plan' ? 'bg-cyan-600/40 text-cyan-100' : 'text-gray-400 hover:text-gray-200'}`}
+                      data-testid="chart-mode-plan"
+                      title="Show the projection with the current treatment plan applied"
+                    >With current plan</button>
+                  </div>
+                </div>
+                <div className="text-[9px] text-gray-500 mb-1">
+                  {usingNaturalChart
+                    ? 'AI-predicted recovery without treatment — drag to scrub the natural trajectory.'
+                    : 'Drag timeline or modify treatments to see changes'}
+                </div>
                 <div className="h-[260px] shrink-0 overflow-hidden">
-                  <MiniChart series={mainSeries} scrubWeek={scrubWeek} totalWeeks={input.totalWeeks} onScrub={setScrubWeek} height={240} axisUnit={axisUnit} />
+                  <MiniChart series={mainSeries} scrubWeek={scrubWeek} totalWeeks={displayTotalWeeks} onScrub={setScrubWeek} height={240} axisUnit={axisUnit} />
                 </div>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {mainSeries.map(s => (

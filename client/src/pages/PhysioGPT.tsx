@@ -11032,6 +11032,15 @@ ${ddxList}`;
               <Hand className="h-3 w-3 mr-1" />
               Manual Therapy
             </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 text-[11px] bg-amber-600/90 text-white hover:bg-amber-500 border border-amber-400/30 shadow-lg shadow-amber-900/30"
+              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('electroRx'); }}
+            >
+              <Zap className="h-3 w-3 mr-1" />
+              Electro Rx
+            </Button>
           </div>
         )}
       </div>

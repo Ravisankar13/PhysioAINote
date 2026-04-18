@@ -530,10 +530,16 @@ export default function RecoverySimulatorDashboard({
     setActiveBranchId(newBranch.id);
   }, [activeBranch, branches.length]);
 
+  const interventionIdCounterRef = useRef(0);
   const addInterventionToActiveBranch = useCallback((treatmentId: string, startWeek: number) => {
+    interventionIdCounterRef.current += 1;
+    const seq = interventionIdCounterRef.current;
+    const uid = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+      ? crypto.randomUUID()
+      : `${Date.now()}_${seq}_${Math.random().toString(36).slice(2, 8)}`;
     setBranches(prev => prev.map(b => b.id !== activeBranchId ? b : {
       ...b,
-      interventions: [...b.interventions, { id: `i_${Date.now()}`, treatmentId, startWeek, doseMultiplier: 1, adherence: input.patientAdherence }],
+      interventions: [...b.interventions, { id: `i_${uid}`, treatmentId, startWeek, doseMultiplier: 1, adherence: input.patientAdherence }],
     }));
   }, [activeBranchId, input.patientAdherence]);
 
@@ -2031,7 +2037,7 @@ export default function RecoverySimulatorDashboard({
                       data-testid="optimizer-add-all-exercises"
                       title={`Add to plan & schedule at Wk ${scrubWeek}`}
                     >
-                      <Plus className="h-2.5 w-2.5" />Add all
+                      <Plus className="h-2.5 w-2.5" />Add all to Wk {scrubWeek}
                     </button>
                   ) : null}
                 </div>
@@ -2130,7 +2136,7 @@ export default function RecoverySimulatorDashboard({
                       data-testid="optimizer-add-all-manual"
                       title={`Add to plan & schedule at Wk ${scrubWeek}`}
                     >
-                      <Plus className="h-2.5 w-2.5" />Add all
+                      <Plus className="h-2.5 w-2.5" />Add all to Wk {scrubWeek}
                     </button>
                   ) : null}
                 </div>

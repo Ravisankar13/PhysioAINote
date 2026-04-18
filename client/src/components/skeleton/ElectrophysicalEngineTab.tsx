@@ -603,8 +603,16 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
         </div>
       </div>
       {evidenceError && (
-        <div className="text-[9px] text-red-300 bg-red-500/10 border border-red-500/30 rounded px-2 py-1">
-          Evidence fetch failed: {evidenceError}
+        <div className="flex items-center justify-between gap-2 text-[9px] text-red-300 bg-red-500/10 border border-red-500/30 rounded px-2 py-1">
+          <span className="truncate">Evidence fetch failed: {evidenceError}</span>
+          <button
+            onClick={() => plan && fetchEvidence(plan)}
+            disabled={evidenceLoading}
+            className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/40 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-2.5 w-2.5 ${evidenceLoading ? 'animate-spin' : ''}`} />
+            Retry
+          </button>
         </div>
       )}
 

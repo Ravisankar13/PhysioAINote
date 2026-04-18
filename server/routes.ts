@@ -8775,9 +8775,14 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
             };
           });
 
+          const gradeRank: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
+          const bestGrade = top.length > 0
+            ? top.reduce((best, a) => ((gradeRank[a.evidenceGrade] ?? 3) < (gradeRank[best] ?? 3) ? a.evidenceGrade : best), top[0].evidenceGrade)
+            : evidence.overallGrade;
+
           return [m.key, {
             articles: top,
-            overallGrade: evidence.overallGrade,
+            overallGrade: bestGrade,
             confidence: evidence.confidence,
             source: evidence.source,
             searchQuery: evidence.searchQuery,

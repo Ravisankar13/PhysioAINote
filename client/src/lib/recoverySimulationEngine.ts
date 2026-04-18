@@ -1365,7 +1365,7 @@ function applyTreatmentEffects(
     // bound phase. The crossing week is cached on ctx and reused for
     // every subsequent week so weeksSinceStop decays monotonically
     // (rather than resetting to 0 every week).
-    const PHASE_ORDER: HealingPhase[] = ['inflammatory', 'proliferative', 'remodeling'];
+    const PHASE_ORDER: HealingPhase[] = ['inflammatory', 'proliferative', 'remodeling', 'maturation'];
     if (intv.endOnPhaseExit && !ctx.phaseExitWeeks.has(intv.id)) {
       const boundIdx = PHASE_ORDER.indexOf(intv.endOnPhaseExit);
       const curIdx = PHASE_ORDER.indexOf(next.healingPhase);

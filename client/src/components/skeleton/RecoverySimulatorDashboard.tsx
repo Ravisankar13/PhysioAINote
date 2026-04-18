@@ -144,15 +144,34 @@ const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899
  *       strength/loading/AROM/remodel → middle).
  *    3. Fallback: the patient's current stage. */
 function mapItemToPhaseIndex(
-  item: { name?: string; progressionStages?: { stage: number }[] | undefined },
+  item: {
+    name?: string;
+    phaseIndex?: number;
+    phaseLabel?: string;
+    progressionStages?: { stage: number }[] | undefined;
+  },
   phaseCount: number,
   currentIdx: number,
+  phaseLabels?: string[],
 ): number {
   if (phaseCount <= 0) return 0;
+  // 1. Explicit phase index stamped by per-phase generators wins.
+  if (typeof item.phaseIndex === 'number' && Number.isFinite(item.phaseIndex)) {
+    return Math.min(Math.max(0, item.phaseIndex), phaseCount - 1);
+  }
+  // 2. Explicit phase label normalized against the archetype's
+  //    stage names (case-insensitive).
+  if (item.phaseLabel && phaseLabels && phaseLabels.length > 0) {
+    const target = item.phaseLabel.toLowerCase().trim();
+    const idx = phaseLabels.findIndex(l => l.toLowerCase().trim() === target);
+    if (idx >= 0) return idx;
+  }
+  // 3. Engine-supplied progression-stage metadata (1-indexed).
   const stage = item.progressionStages?.[0]?.stage;
   if (typeof stage === 'number' && stage >= 1) {
     return Math.min(Math.max(0, stage - 1), phaseCount - 1);
   }
+  // 4. Name keyword heuristic (last-resort, brittle by design).
   const n = (item.name ?? '').toLowerCase();
   if (/(early|acute|protect|isometric|prom\b|gentle|settle|offload)/.test(n)) return 0;
   if (/(return.to.sport|return.to.run|plyometric|power|sport.specific|end.stage|maintenance)/.test(n)) {
@@ -161,6 +180,7 @@ function mapItemToPhaseIndex(
   if (/(strength|loading|progressive|resisted|arom\b|remodel|eccentric|hsr)/.test(n)) {
     return Math.min(Math.max(1, Math.floor(phaseCount / 2)), phaseCount - 1);
   }
+  // 5. Fallback: current stage.
   return Math.min(Math.max(0, currentIdx), phaseCount - 1);
 }
 
@@ -1507,11 +1527,12 @@ export default function RecoverySimulatorDashboard({
                         // current phase. The same item is therefore
                         // shown on exactly one card.
                         const totalPhases = phaseRanges.length;
+                        const phaseLabels = phaseRanges.map(pr => pr.stage.name);
                         const sessionEx = (customExercises ?? []).filter(
-                          ex => mapItemToPhaseIndex(ex, totalPhases, scrubbedStageIdx) === r.stageIndex,
+                          ex => mapItemToPhaseIndex(ex, totalPhases, scrubbedStageIdx, phaseLabels) === r.stageIndex,
                         );
                         const sessionMt = (customTechniques ?? []).filter(
-                          mt => mapItemToPhaseIndex(mt, totalPhases, scrubbedStageIdx) === r.stageIndex,
+                          mt => mapItemToPhaseIndex(mt, totalPhases, scrubbedStageIdx, phaseLabels) === r.stageIndex,
                         );
                         const exReady = entry.exercise.status === 'ready' ? entry.exercise.exercises ?? [] : [];
                         const mtReady = entry.manual.status === 'ready' ? entry.manual.techniques ?? [] : [];
@@ -1531,8 +1552,15 @@ export default function RecoverySimulatorDashboard({
                           ...exReadyPending.map(ex => ({ kind: 'ai-ex' as const, label: ex.name })),
                           ...mtReadyPending.map(mt => ({ kind: 'ai-mt' as const, label: mt.name })),
                         ];
+                        // Preserve baseline pixel-identical behavior: when
+                        // no AI / session items map onto this card, keep
+                        // the prior 2-item truncation. Cards with AI items
+                        // get a slightly higher floor (3) so at least one
+                        // AI item is visible without clicking expand.
+                        const hasAi = sessionEx.length + sessionMt.length + exReadyPending.length + mtReadyPending.length > 0;
+                        const baseLimit = hasAi ? 3 : 2;
                         const isExpanded = expandedTreatments.has(p.id);
-                        const visible = isExpanded ? combined : combined.slice(0, 3);
+                        const visible = isExpanded ? combined : combined.slice(0, baseLimit);
                         const hidden = combined.length - visible.length;
 
                         const renderItem = (t: CombinedTreatment, i: number) => {
@@ -1649,7 +1677,19 @@ export default function RecoverySimulatorDashboard({
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          onAddCustomExercises(exReady);
+                                          // Stamp phase metadata so the
+                                          // dashboard later places these
+                                          // session-wide items back on
+                                          // THIS card via the explicit
+                                          // phaseIndex / phaseLabel path
+                                          // in mapItemToPhaseIndex,
+                                          // bypassing any name heuristic.
+                                          const stamped = exReady.map(ex => ({
+                                            ...ex,
+                                            phaseIndex: r.stageIndex,
+                                            phaseLabel: p.name,
+                                          }));
+                                          onAddCustomExercises(stamped);
                                           updatePhaseRx(p.id, 'exercise', { status: 'ready', exercises: exReady, added: true });
                                         }}
                                         className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
@@ -1673,7 +1713,12 @@ export default function RecoverySimulatorDashboard({
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          onAddCustomTechniques(mtReady);
+                                          const stamped = mtReady.map(mt => ({
+                                            ...mt,
+                                            phaseIndex: r.stageIndex,
+                                            phaseLabel: p.name,
+                                          }));
+                                          onAddCustomTechniques(stamped);
                                           updatePhaseRx(p.id, 'manual', { status: 'ready', techniques: mtReady, added: true });
                                         }}
                                         className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"

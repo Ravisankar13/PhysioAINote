@@ -356,6 +356,12 @@ export interface CustomExerciseInput {
   forceVector?: { resistanceType?: string; direction?: string };
   dosage?: { sets?: string; reps?: string; tempo?: string; frequency?: string };
   progressionStages?: { stage: number; name: string }[];
+  /** Optional explicit recovery-phase metadata stamped by per-phase
+   *  generators so the simulator dashboard can surface this item on
+   *  the originating phase card without resorting to keyword
+   *  heuristics. Items generated from non-phase contexts may omit. */
+  phaseIndex?: number;
+  phaseLabel?: string;
 }
 
 export interface CustomManualTechniqueInput {
@@ -366,6 +372,8 @@ export interface CustomManualTechniqueInput {
   dosage?: { duration?: string; repetitions?: string; sets?: string; frequency?: string };
   progressionStages?: { stage: number; name: string }[];
   tissueTargets?: { goalType?: string }[];
+  phaseIndex?: number;
+  phaseLabel?: string;
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);

@@ -4205,7 +4205,74 @@ ${ddxList}`;
     };
   }, [showRecoverySim, recoverySimHasClinicalInput, extractionResult, structuredReasoningData, painMarkers, compromisedTissues, slingAnalysis, modelConfig, scarMarkers, adhesionBands, romMeasurements, collectModelConfigDeviations]);
 
-  const naturalTimeline = useNaturalTimeline({ context: naturalTimelineRequestContext, enabled: showRecoverySim });
+  /** Stable dedup signature for the natural-timeline request. Built
+   *  from clinically meaningful fields only (with quantized numeric
+   *  values) so trivial floating-point drift from the live 3D model
+   *  state — driven by the simulator's auto-sync skeleton wiring —
+   *  cannot retrigger an AI fetch. The full live context is still
+   *  POSTed to the server; this signature just controls when we
+   *  *consider* the request inputs to have meaningfully changed. */
+  const naturalTimelineSignature = useMemo<string | null>(() => {
+    if (!naturalTimelineRequestContext) return null;
+    const ctx = naturalTimelineRequestContext;
+    const bucket = (n: number | null | undefined, step: number) =>
+      n === null || n === undefined || !Number.isFinite(n) ? null : Math.round(n / step) * step;
+    const sigPainMarkers = (ctx.pain_markers ?? [])
+      .map(pm => [
+        pm.anatomical_label ?? '',
+        pm.symptom_type ?? '',
+        pm.pain_mechanism ?? '',
+        bucket(pm.severity, 1),
+      ].join('|'))
+      .sort();
+    const sigTissues = (ctx.compromised_tissues ?? [])
+      .map(t => [t.tissue_id, t.tissue_type, bucket(t.severity, 5)].join('|'))
+      .sort();
+    const sigSlings = (ctx.sling_weak_links ?? [])
+      .map(s => [s.sling, s.weakLink, bucket(s.severity, 10)].join('|'))
+      .sort();
+    const sigRegions = (ctx.region_highlights ?? [])
+      .map(r => [r.region, r.type, bucket(r.severity ?? null, 10)].join('|'))
+      .sort();
+    const f: Record<string, string | number | boolean | null | undefined> = ctx.patient_factors ?? {};
+    const num = (v: string | number | boolean | null | undefined): number | null =>
+      typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) ? Number(v) : null;
+    const str = (v: string | number | boolean | null | undefined): string =>
+      v === null || v === undefined ? '' : String(v);
+    const sigFactors = [
+      bucket(num(f.age), 5),
+      bucket(num(f.bmi), 2),
+      str(f.smoking),
+      str(f.diabetes),
+      str(f.activity_level),
+      str(f.sleep_quality),
+      str(f.psychological_risk),
+      bucket(num(f.previous_episodes), 1),
+      str(f.chronicity),
+      bucket(num(f.compliance_percent), 10),
+      str(f.symptom_duration),
+      str(f.irritability),
+    ].join('|');
+    return JSON.stringify({
+      cs: ctx.clinical_summary ?? '',
+      mc: ctx.main_complaint ?? '',
+      pm: sigPainMarkers,
+      tis: sigTissues,
+      nr: !!ctx.has_nerve_root,
+      sl: sigSlings,
+      rh: sigRegions,
+      pf: sigFactors,
+      // joint_deviations + postural_deviations intentionally OMITTED:
+      // they are driven by the live skeleton state and would otherwise
+      // retrigger an AI fetch on every chart scrub.
+    });
+  }, [naturalTimelineRequestContext]);
+
+  const naturalTimeline = useNaturalTimeline({
+    context: naturalTimelineRequestContext,
+    enabled: showRecoverySim,
+    signature: naturalTimelineSignature,
+  });
 
   const clinicalPlan = useMemo<ClinicalPlanResult | null>(() => {
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;

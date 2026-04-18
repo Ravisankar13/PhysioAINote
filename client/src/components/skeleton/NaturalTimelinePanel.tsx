@@ -43,6 +43,9 @@ export default function NaturalTimelinePanel({ result, qaHistory, loading, error
           )}
         </div>
         <div className="flex items-center gap-2">
+          {loading && result && (
+            <span className="text-[9px] text-violet-300 italic" data-testid="natural-timeline-refreshing">Refreshing…</span>
+          )}
           {result && (
             <span className="text-[9px] text-gray-300">
               Confidence <span className="text-violet-300 font-mono">{Math.round(result.confidence_percent)}%</span>

@@ -55,6 +55,7 @@ import {
   isCustomTreatmentId,
   tissueProfileForContext,
   proposeScheduleForTreatment,
+  type HealingPhase,
 } from "@/lib/recoverySimulationEngine";
 import { findConditionProfile } from "@/lib/patientFactorsEngine";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
@@ -840,6 +841,39 @@ export default function RecoverySimulatorDashboard({
     [archetype.progressionMode],
   );
   const unitLabelTitle = axisUnit === 'CHECKPOINT' ? 'Checkpoint' : 'Week';
+
+  /** Phase-bound end options for the per-treatment schedule editor.
+   *  Maps each archetype stage label onto one of the engine's three
+   *  HealingPhases (the engine cannot represent finer-grained
+   *  pathology stages — first stage → inflammatory, last → remodeling,
+   *  middle stages → proliferative). When no archetype is loaded we
+   *  fall back to the raw biological-phase names. */
+  const phaseEndOptions = useMemo<{ label: string; phase: HealingPhase }[]>(() => {
+    const stages = archetype?.stages ?? [];
+    if (stages.length === 0) {
+      return [
+        { label: 'inflammatory', phase: 'inflammatory' },
+        { label: 'proliferative', phase: 'proliferative' },
+        { label: 'remodeling', phase: 'remodeling' },
+      ];
+    }
+    const last = stages.length - 1;
+    const out: { label: string; phase: HealingPhase }[] = [];
+    const seen = new Set<HealingPhase>();
+    stages.forEach((s, idx) => {
+      const phase: HealingPhase = idx === 0
+        ? 'inflammatory'
+        : idx >= last
+          ? 'remodeling'
+          : 'proliferative';
+      // De-duplicate so a 4+ stage archetype doesn't produce two
+      // identical "proliferative" rows — keep the first label hit.
+      if (seen.has(phase)) return;
+      seen.add(phase);
+      out.push({ label: s.name.toLowerCase(), phase });
+    });
+    return out;
+  }, [archetype]);
 
   // Tissue Stress (inverse of loadTolerance — high stress when tolerance is low)
   const tissueStress = useMemo(() => {
@@ -3090,18 +3124,20 @@ export default function RecoverySimulatorDashboard({
                           value={i.endOnPhaseExit ?? 'numeric'}
                           onChange={e => {
                             const v = e.target.value;
+                            const isPhase = (s: string): s is HealingPhase =>
+                              s === 'inflammatory' || s === 'proliferative' || s === 'remodeling';
                             if (v === 'numeric') {
                               updateInterventionSchedule(i.id, { endOnPhaseExit: undefined, scheduleSource: 'manual' });
-                            } else {
-                              updateInterventionSchedule(i.id, { endOnPhaseExit: v as any, scheduleSource: 'manual' });
+                            } else if (isPhase(v)) {
+                              updateInterventionSchedule(i.id, { endOnPhaseExit: v, scheduleSource: 'manual' });
                             }
                           }}
                           className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100"
                         >
                           <option value="numeric">at week…</option>
-                          <option value="inflammatory">end of inflammatory</option>
-                          <option value="proliferative">end of proliferative</option>
-                          <option value="remodeling">end of remodeling</option>
+                          {phaseEndOptions.map(opt => (
+                            <option key={opt.phase} value={opt.phase}>end of {opt.label}</option>
+                          ))}
                         </select>
                         {!i.endOnPhaseExit && (
                           <input

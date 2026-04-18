@@ -1319,6 +1319,12 @@ interface SimContext {
   lookup: Map<string, TreatmentEffectProfile>;
   conditionContext?: ConditionContext;
   profile?: TissueHealingProfile;
+  /** Per-intervention cache of the resolved phase-exit week. Once an
+   *  intervention with `endOnPhaseExit` first observes the simulated
+   *  healing phase advance past its bound phase, that week is stored
+   *  here and reused for every subsequent week so weeksSinceStop
+   *  decays monotonically (instead of resetting to 0 each week). */
+  phaseExitWeeks: Map<string, number>;
 }
 
 function applyTreatmentEffects(
@@ -1355,18 +1361,21 @@ function applyTreatmentEffects(
     // delivery).
     const isOneOff = !!intv.oneOff;
     // Phase-bound end: an intervention with endOnPhaseExit ends as
-    // soon as the simulated healing phase advances past the bound
-    // phase. We resolve the effective end-week lazily — the first
-    // week the phase has changed becomes its endWeek for ramp/decay.
+    // soon as the simulated healing phase first advances past the
+    // bound phase. The crossing week is cached on ctx and reused for
+    // every subsequent week so weeksSinceStop decays monotonically
+    // (rather than resetting to 0 every week).
     const PHASE_ORDER: HealingPhase[] = ['inflammatory', 'proliferative', 'remodeling'];
-    let phaseEndWeek: number | undefined;
-    if (intv.endOnPhaseExit) {
+    if (intv.endOnPhaseExit && !ctx.phaseExitWeeks.has(intv.id)) {
       const boundIdx = PHASE_ORDER.indexOf(intv.endOnPhaseExit);
       const curIdx = PHASE_ORDER.indexOf(next.healingPhase);
-      if (boundIdx >= 0 && curIdx > boundIdx) phaseEndWeek = week;
+      if (boundIdx >= 0 && curIdx > boundIdx) {
+        ctx.phaseExitWeeks.set(intv.id, week);
+      }
     }
-    const explicitEnd = phaseEndWeek !== undefined
-      ? Math.min(intv.endWeek ?? phaseEndWeek, phaseEndWeek)
+    const cachedPhaseEnd = ctx.phaseExitWeeks.get(intv.id);
+    const explicitEnd = cachedPhaseEnd !== undefined
+      ? Math.min(intv.endWeek ?? cachedPhaseEnd, cachedPhaseEnd)
       : intv.endWeek;
     const ended = isOneOff
       ? week > intv.startWeek
@@ -1586,7 +1595,7 @@ export function simulateBranch(
 
   const lookup = buildLookup(customProfiles);
   const profile = conditionContext ? tissueProfileForContext(conditionContext) : undefined;
-  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42, lookup, conditionContext, profile };
+  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42, lookup, conditionContext, profile, phaseExitWeeks: new Map() };
 
   for (let w = 1; w <= input.totalWeeks; w++) {
     const { newState, markers, attribution } = applyTreatmentEffects(state, ctx, w);

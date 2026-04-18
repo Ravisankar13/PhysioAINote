@@ -49,6 +49,8 @@ import {
   defaultBranch,
   defaultInput,
   buildCustomTreatmentProfiles,
+  buildCustomExerciseId,
+  buildCustomTechniqueId,
   tissueProfileForContext,
 } from "@/lib/recoverySimulationEngine";
 import { findConditionProfile } from "@/lib/patientFactorsEngine";
@@ -2018,11 +2020,16 @@ export default function RecoverySimulatorDashboard({
                         const items = optimizerEx.status === 'ready' ? (optimizerEx.exercises ?? []) : [];
                         const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
                         const stamped = items.map(ex => ({ ...ex, phaseIndex: optimizerPhaseIdx, phaseLabel }));
+                        const baseIdx = (customExercises ?? []).length;
                         onAddCustomExercises(stamped);
+                        items.forEach((ex, k) => {
+                          addInterventionToActiveBranch(buildCustomExerciseId(ex, baseIdx + k), scrubWeek);
+                        });
                         setOptimizerEx({ status: 'ready', exercises: items, added: true });
                       }}
                       className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
                       data-testid="optimizer-add-all-exercises"
+                      title={`Add to plan & schedule at Wk ${scrubWeek}`}
                     >
                       <Plus className="h-2.5 w-2.5" />Add all
                     </button>
@@ -2068,11 +2075,13 @@ export default function RecoverySimulatorDashboard({
                             type="button"
                             onClick={() => {
                               const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
+                              const idx = (customExercises ?? []).length;
                               onAddCustomExercises([{ ...ex, phaseIndex: optimizerPhaseIdx, phaseLabel }]);
+                              addInterventionToActiveBranch(buildCustomExerciseId(ex, idx), scrubWeek);
                             }}
                             className="text-emerald-400 hover:text-emerald-200 shrink-0"
                             data-testid={`optimizer-add-exercise-${i}`}
-                            title="Add to plan"
+                            title={`Add to plan & schedule at Wk ${scrubWeek}`}
                           >
                             <Plus className="h-3 w-3" />
                           </button>
@@ -2110,11 +2119,16 @@ export default function RecoverySimulatorDashboard({
                         const items = optimizerMt.status === 'ready' ? (optimizerMt.techniques ?? []) : [];
                         const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
                         const stamped = items.map(mt => ({ ...mt, phaseIndex: optimizerPhaseIdx, phaseLabel }));
+                        const baseIdx = (customTechniques ?? []).length;
                         onAddCustomTechniques(stamped);
+                        items.forEach((mt, k) => {
+                          addInterventionToActiveBranch(buildCustomTechniqueId(mt, baseIdx + k), scrubWeek);
+                        });
                         setOptimizerMt({ status: 'ready', techniques: items, added: true });
                       }}
                       className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
                       data-testid="optimizer-add-all-manual"
+                      title={`Add to plan & schedule at Wk ${scrubWeek}`}
                     >
                       <Plus className="h-2.5 w-2.5" />Add all
                     </button>
@@ -2166,11 +2180,13 @@ export default function RecoverySimulatorDashboard({
                             type="button"
                             onClick={() => {
                               const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
+                              const idx = (customTechniques ?? []).length;
                               onAddCustomTechniques([{ ...mt, phaseIndex: optimizerPhaseIdx, phaseLabel }]);
+                              addInterventionToActiveBranch(buildCustomTechniqueId(mt, idx), scrubWeek);
                             }}
                             className="text-emerald-400 hover:text-emerald-200 shrink-0"
                             data-testid={`optimizer-add-manual-${i}`}
-                            title="Add to plan"
+                            title={`Add to plan & schedule at Wk ${scrubWeek}`}
                           >
                             <Plus className="h-3 w-3" />
                           </button>

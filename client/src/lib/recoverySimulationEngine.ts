@@ -1386,6 +1386,14 @@ function applyTreatmentEffects(
       : (week - intv.startWeek);
     const weeksSinceStop = ended ? week - effectiveEndWeek! : null;
 
+    // Emit a removal marker on the first week the intervention
+    // becomes effectively stopped — covers explicit endWeek, phase-
+    // exit termination, and one-off deliveries (which "end" the week
+    // after their single delivery).
+    if (ended && effectiveEndWeek !== undefined && weeksSinceStop === 1) {
+      markers.push({ week, type: 'remove', label: `Stop ${treatment.name}`, treatmentId: treatment.id });
+    }
+
     if (!isOneOff) {
       // Cadence gate — fortnightly/monthly treatments only deliver on
       // their schedule weeks. The intro marker still fires on startWeek

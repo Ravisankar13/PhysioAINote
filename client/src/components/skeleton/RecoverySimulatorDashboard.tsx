@@ -1152,12 +1152,17 @@ export default function RecoverySimulatorDashboard({
             container's fixed-height children visually bleed under the
             phase-cards row. */}
         <main className="flex flex-col gap-3 min-h-0 overflow-y-auto">
-          {/* In timeline mode the card hugs its natural height (chart
-              + pills + treatment-timeline strip) so overflow propagates
-              up to <main> and the column scrolls as one unit. In
-              skeleton mode the card flexes to fill remaining height so
-              the live 3D viewer has somewhere to render. */}
-          <div className={`bg-gray-900/60 border border-gray-800/80 rounded-lg p-3 flex flex-col ${activeTab === 'skeleton' ? 'flex-1 min-h-0 overflow-hidden' : 'shrink-0'}`}>
+          {/* `flex-1` keeps the original tall-viewport layout — the card
+              stretches to fill available height. `overflow-hidden`
+              guarantees its rounded bounds clip child paint (chart can
+              never bleed into the phase-cards row). Critically we omit
+              `min-h-0` in timeline mode so the card's intrinsic content
+              height (chart + pills + timeline strip) becomes the floor;
+              when the viewport is too short, that intrinsic height
+              propagates overflow up to <main>, which scrolls. Skeleton
+              mode keeps `min-h-0` so the live 3D viewer can shrink to
+              the available area instead of forcing scroll. */}
+          <div className={`bg-gray-900/60 border border-gray-800/80 rounded-lg p-3 flex-1 flex flex-col overflow-hidden ${activeTab === 'skeleton' ? 'min-h-0' : ''}`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1">
                 <button

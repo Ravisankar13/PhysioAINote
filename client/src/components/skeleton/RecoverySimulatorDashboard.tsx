@@ -424,6 +424,25 @@ export default function RecoverySimulatorDashboard({
   const [optimizerMtOpen, setOptimizerMtOpen] = useState(true);
   const [optimizerMt, setOptimizerMt] = useState<PhaseRxKindState>({ status: 'idle' });
 
+  // Custom (user-authored) treatment composer — funnels into the same
+  // customExercises / customTechniques pipeline AI items use, plus
+  // schedules an Intervention on the active branch at the chosen week
+  // so the recovery curve responds identically.
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customKind, setCustomKind] = useState<'exercise' | 'manual'>('exercise');
+  const [customName, setCustomName] = useState('');
+  const [customRegion, setCustomRegion] = useState('');
+  const [customClinicalTarget, setCustomClinicalTarget] = useState('');
+  const [customSets, setCustomSets] = useState('3');
+  const [customReps, setCustomReps] = useState('10');
+  const [customTempo, setCustomTempo] = useState('');
+  const [customDuration, setCustomDuration] = useState('30s');
+  const [customGrade, setCustomGrade] = useState('III');
+  const [customDepth, setCustomDepth] = useState('');
+  const [customFrequency, setCustomFrequency] = useState('3x/week');
+  const [customStartWeek, setCustomStartWeek] = useState<number | null>(null);
+  const [customJustAdded, setCustomJustAdded] = useState<string | null>(null);
+
   useEffect(() => {
     if (initialInput) setInput(prev => ({ ...prev, ...initialInput }));
   }, [initialInput]);
@@ -1666,10 +1685,22 @@ export default function RecoverySimulatorDashboard({
                         const hasAi = sessionEx.length + sessionMt.length + exReadyPending.length + mtReadyPending.length > 0;
                         const baseLimit = hasAi ? 3 : 2;
                         const isExpanded = expandedTreatments.has(p.id);
-                        const visible = isExpanded ? combined : combined.slice(0, baseLimit);
-                        const hidden = combined.length - visible.length;
 
-                        const renderItem = (t: CombinedTreatment, i: number) => {
+                        type CombinedTreatmentExt = CombinedTreatment & { userAuthored?: boolean };
+                        const combinedExt: CombinedTreatmentExt[] = combined.map((t, idx) => {
+                          if (t.kind === 'session-ex') {
+                            return { ...t, userAuthored: !!sessionEx[idx - r.treatments.length]?.userAuthored };
+                          }
+                          if (t.kind === 'session-mt') {
+                            const mtIdx = idx - r.treatments.length - sessionEx.length;
+                            return { ...t, userAuthored: !!sessionMt[mtIdx]?.userAuthored };
+                          }
+                          return t;
+                        });
+                        const visible = isExpanded ? combinedExt : combinedExt.slice(0, baseLimit);
+                        const hidden = combinedExt.length - visible.length;
+
+                        const renderItem = (t: CombinedTreatmentExt, i: number) => {
                           const isSession = t.kind === 'session-ex' || t.kind === 'session-mt';
                           const isAi = t.kind === 'ai-ex' || t.kind === 'ai-mt';
                           const tone = (t.kind === 'session-ex' || t.kind === 'ai-ex')
@@ -1683,9 +1714,14 @@ export default function RecoverySimulatorDashboard({
                           return (
                             <li key={`${t.kind}-${i}`} className={`text-[10px] truncate flex items-center gap-1 ${tone}`} data-testid={testid}>
                               <span className="opacity-60">•</span>
-                              {(isSession || isAi) && <Sparkles className="h-2.5 w-2.5 shrink-0 opacity-80" />}
+                              {(isSession || isAi) && !t.userAuthored && <Sparkles className="h-2.5 w-2.5 shrink-0 opacity-80" />}
                               <span className="truncate">{t.label}</span>
-                              {isAi && (
+                              {t.userAuthored && (
+                                <span className="ml-auto text-[8px] uppercase tracking-wide px-1 py-px rounded bg-amber-700/30 border border-amber-600/40 text-amber-200 shrink-0" data-testid={`phase-rx-custom-badge-${p.id}-${i}`}>
+                                  Custom
+                                </span>
+                              )}
+                              {isAi && !t.userAuthored && (
                                 <span className="ml-auto text-[8px] uppercase tracking-wide px-1 py-px rounded border border-current/40 opacity-70 shrink-0">
                                   Pending
                                 </span>
@@ -2241,6 +2277,201 @@ export default function RecoverySimulatorDashboard({
                 );
               })()}
             </div>
+          </div>
+
+          {/* CUSTOM TREATMENT COMPOSER — user-authored exercise / manual
+              therapy items that flow through the same custom pipeline
+              the AI Optimizer uses, scheduled at the chosen week so the
+              recovery curve responds identically. */}
+          <div className="bg-gradient-to-br from-amber-900/20 to-orange-900/10 border border-amber-700/40 rounded-lg p-3" data-testid="custom-treatment-card">
+            <button
+              type="button"
+              onClick={() => setCustomOpen(o => !o)}
+              className="w-full flex items-center justify-between text-[10px] text-amber-200 font-semibold uppercase tracking-wide mb-1 hover:text-amber-100"
+              data-testid="custom-treatment-toggle"
+              aria-expanded={customOpen}
+            >
+              <span className="inline-flex items-center gap-1">
+                <ChevronRight className={`h-3 w-3 transition-transform ${customOpen ? 'rotate-90' : ''}`} />
+                <FilePlus className="h-3 w-3" />Add Your Own Treatment
+              </span>
+              <span className="text-[9px] text-amber-300/80 normal-case tracking-normal">Wk {scrubWeek}</span>
+            </button>
+            {!customOpen ? (
+              <div className="text-[10px] text-amber-200/70">
+                Author exercise or manual therapy. Affects the recovery curve like AI items.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="flex gap-1" role="tablist" aria-label="Treatment kind">
+                  <button
+                    type="button"
+                    onClick={() => setCustomKind('exercise')}
+                    role="tab"
+                    aria-selected={customKind === 'exercise'}
+                    className={`flex-1 text-[10px] py-1 px-1.5 rounded inline-flex items-center justify-center gap-1 ${customKind === 'exercise' ? 'bg-violet-700/40 border border-violet-600/60 text-violet-100' : 'bg-gray-900/50 border border-gray-700/50 text-gray-300 hover:bg-gray-900/80'}`}
+                    data-testid="custom-kind-exercise"
+                  >
+                    <Dumbbell className="h-2.5 w-2.5" />Exercise
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomKind('manual')}
+                    role="tab"
+                    aria-selected={customKind === 'manual'}
+                    className={`flex-1 text-[10px] py-1 px-1.5 rounded inline-flex items-center justify-center gap-1 ${customKind === 'manual' ? 'bg-cyan-700/40 border border-cyan-600/60 text-cyan-100' : 'bg-gray-900/50 border border-gray-700/50 text-gray-300 hover:bg-gray-900/80'}`}
+                    data-testid="custom-kind-manual"
+                  >
+                    <Hand className="h-2.5 w-2.5" />Manual
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="Name (e.g. Bulgarian split squat)"
+                  value={customName}
+                  onChange={e => setCustomName(e.target.value)}
+                  className="w-full text-[11px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-amber-500/60"
+                  data-testid="custom-name-input"
+                />
+
+                <div className="grid grid-cols-2 gap-1">
+                  <input
+                    type="text"
+                    placeholder="Region (e.g. Knee, Lumbar)"
+                    value={customRegion}
+                    onChange={e => setCustomRegion(e.target.value)}
+                    className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-amber-500/60"
+                    data-testid="custom-region-input"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Target (e.g. quad strength)"
+                    value={customClinicalTarget}
+                    onChange={e => setCustomClinicalTarget(e.target.value)}
+                    className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-amber-500/60"
+                    data-testid="custom-target-input"
+                  />
+                </div>
+
+                {customKind === 'exercise' ? (
+                  <div className="grid grid-cols-3 gap-1">
+                    <input type="text" placeholder="Sets" value={customSets} onChange={e => setCustomSets(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-sets-input" />
+                    <input type="text" placeholder="Reps" value={customReps} onChange={e => setCustomReps(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-reps-input" />
+                    <input type="text" placeholder="Tempo" value={customTempo} onChange={e => setCustomTempo(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-tempo-input" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-4 gap-1">
+                    <input type="text" placeholder="Grade" value={customGrade} onChange={e => setCustomGrade(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-grade-input" />
+                    <input type="text" placeholder="Depth" value={customDepth} onChange={e => setCustomDepth(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-depth-input" />
+                    <input type="text" placeholder="Dur." value={customDuration} onChange={e => setCustomDuration(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-duration-input" />
+                    <input type="text" placeholder="Reps" value={customReps} onChange={e => setCustomReps(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-mt-reps-input" />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-1 items-center">
+                  <input
+                    type="text"
+                    placeholder="Frequency (e.g. 3x/week)"
+                    value={customFrequency}
+                    onChange={e => setCustomFrequency(e.target.value)}
+                    className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500"
+                    data-testid="custom-frequency-input"
+                  />
+                  <label className="flex items-center gap-1 text-[10px] text-gray-300">
+                    <span className="shrink-0">Start Wk</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={Math.max(0, input.totalWeeks)}
+                      placeholder={String(scrubWeek)}
+                      value={customStartWeek === null ? '' : customStartWeek}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (v === '') { setCustomStartWeek(null); return; }
+                        const n = parseInt(v, 10);
+                        if (Number.isFinite(n)) setCustomStartWeek(Math.max(0, Math.min(input.totalWeeks, n)));
+                      }}
+                      className="w-full text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500"
+                      data-testid="custom-start-week-input"
+                    />
+                  </label>
+                </div>
+
+                <Button
+                  size="sm"
+                  disabled={!customName.trim() || (customKind === 'exercise' ? !onAddCustomExercises : !onAddCustomTechniques)}
+                  onClick={() => {
+                    const name = customName.trim();
+                    if (!name) return;
+                    const startWeek = Math.max(0, Math.min(input.totalWeeks, customStartWeek ?? scrubWeek));
+                    // Resolve phase from the start week so the item lands on
+                    // the correct phase card via the explicit phaseIndex
+                    // path in mapItemToPhaseIndex.
+                    let phaseIdx = optimizerPhaseIdx;
+                    for (let i = phaseRanges.length - 1; i >= 0; i--) {
+                      const r = phaseRanges[i];
+                      const s = r.reached ? r.start : r.expectedStart;
+                      if (startWeek >= s) { phaseIdx = i; break; }
+                    }
+                    const phaseRange = phaseRanges[phaseIdx];
+                    const phaseLabel = phaseRange?.stage.name;
+                    if (customKind === 'exercise' && onAddCustomExercises) {
+                      const item: CustomExerciseInput = {
+                        name,
+                        targetSystem: customRegion.trim() || undefined,
+                        clinicalTarget: customClinicalTarget.trim() || undefined,
+                        dosage: {
+                          sets: customSets.trim() || undefined,
+                          reps: customReps.trim() || undefined,
+                          tempo: customTempo.trim() || undefined,
+                          frequency: customFrequency.trim() || undefined,
+                        },
+                        phaseIndex: phaseRange?.stageIndex ?? phaseIdx,
+                        phaseLabel,
+                        userAuthored: true,
+                      };
+                      const idx = (customExercises ?? []).length;
+                      onAddCustomExercises([item]);
+                      addInterventionToActiveBranch(buildCustomExerciseId(item, idx), startWeek);
+                    } else if (customKind === 'manual' && onAddCustomTechniques) {
+                      const item: CustomManualTechniqueInput = {
+                        name,
+                        targetSystem: customRegion.trim() || undefined,
+                        clinicalTarget: customClinicalTarget.trim() || undefined,
+                        forceApplicationSequence: (customGrade.trim() || customDepth.trim())
+                          ? [{ grade: customGrade.trim() || undefined, depth: customDepth.trim() || undefined }]
+                          : undefined,
+                        dosage: {
+                          duration: customDuration.trim() || undefined,
+                          repetitions: customReps.trim() || undefined,
+                          sets: customSets.trim() || undefined,
+                          frequency: customFrequency.trim() || undefined,
+                        },
+                        phaseIndex: phaseRange?.stageIndex ?? phaseIdx,
+                        phaseLabel,
+                        userAuthored: true,
+                      };
+                      const idx = (customTechniques ?? []).length;
+                      onAddCustomTechniques([item]);
+                      addInterventionToActiveBranch(buildCustomTechniqueId(item, idx), startWeek);
+                    }
+                    setCustomJustAdded(`${name} · Wk ${startWeek}`);
+                    setCustomName('');
+                    window.setTimeout(() => setCustomJustAdded(null), 2500);
+                  }}
+                  className="w-full h-7 text-[11px] bg-amber-600 hover:bg-amber-500 text-white"
+                  data-testid="custom-add-button"
+                >
+                  <Plus className="h-3 w-3 mr-1" />Add to Plan & Schedule at Wk {customStartWeek ?? scrubWeek}
+                </Button>
+                {customJustAdded && (
+                  <div className="text-[10px] text-emerald-300 inline-flex items-center gap-1" data-testid="custom-just-added">
+                    <CheckCircle2 className="h-2.5 w-2.5" />Added: {customJustAdded}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* KEY MILESTONES */}

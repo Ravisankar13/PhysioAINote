@@ -366,6 +366,9 @@ export interface CustomExerciseInput {
    *  heuristics. Items generated from non-phase contexts may omit. */
   phaseIndex?: number;
   phaseLabel?: string;
+  /** Marks items authored by the practitioner (vs AI-generated) so the
+   *  UI can show a "Custom" badge. Engine math ignores this field. */
+  userAuthored?: boolean;
 }
 
 export interface CustomManualTechniqueInput {
@@ -378,6 +381,9 @@ export interface CustomManualTechniqueInput {
   tissueTargets?: { goalType?: string }[];
   phaseIndex?: number;
   phaseLabel?: string;
+  /** Marks items authored by the practitioner (vs AI-generated) so the
+   *  UI can show a "Custom" badge. Engine math ignores this field. */
+  userAuthored?: boolean;
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);

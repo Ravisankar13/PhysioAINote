@@ -653,8 +653,8 @@ export default function RecoverySimulatorDashboard({
     treatmentId: string;
     treatmentName: string;
     isManual: boolean;
-    current: { sessionsPerWeek: number; cadenceWeeks: number; endWeek?: number; taperWeeks?: number; oneOff?: boolean };
-    proposed: { sessionsPerWeek: number; cadenceWeeks: number; endWeek?: number; taperWeeks?: number; oneOff?: boolean };
+    current: { sessionsPerWeek: number; cadenceWeeks: number; endWeek?: number; taperWeeks?: number; taperFinalDose?: number; oneOff?: boolean };
+    proposed: { sessionsPerWeek: number; cadenceWeeks: number; endWeek?: number; taperWeeks?: number; taperFinalDose?: number; oneOff?: boolean };
     rationale: string;
   };
   const [bulkDiff, setBulkDiff] = useState<BulkDiffEntry[] | null>(null);
@@ -684,6 +684,7 @@ export default function RecoverySimulatorDashboard({
           cadenceWeeks: iv.cadenceWeeks ?? 1,
           endWeek: iv.endWeek,
           taperWeeks: iv.taperWeeks,
+          taperFinalDose: iv.taperFinalDose,
           oneOff: iv.oneOff,
         },
         proposed: proposal ? {
@@ -691,12 +692,14 @@ export default function RecoverySimulatorDashboard({
           cadenceWeeks: proposal.cadenceWeeks,
           endWeek: proposal.endWeek,
           taperWeeks: proposal.taperWeeks,
+          taperFinalDose: proposal.taperFinalDose,
           oneOff: proposal.oneOff,
         } : {
           sessionsPerWeek: iv.sessionsPerWeek ?? 3,
           cadenceWeeks: iv.cadenceWeeks ?? 1,
           endWeek: iv.endWeek,
           taperWeeks: iv.taperWeeks,
+          taperFinalDose: iv.taperFinalDose,
           oneOff: iv.oneOff,
         },
         rationale: proposal?.rationale ?? '(no profile resolved)',
@@ -723,7 +726,9 @@ export default function RecoverySimulatorDashboard({
             cadenceWeeks: entry.proposed.cadenceWeeks,
             endWeek: entry.proposed.endWeek,
             taperWeeks: entry.proposed.taperWeeks,
-            taperFinalDose: iv.taperFinalDose ?? 0.5,
+            taperFinalDose: entry.proposed.taperWeeks
+              ? (entry.proposed.taperFinalDose ?? iv.taperFinalDose ?? 0.5)
+              : undefined,
             oneOff: entry.proposed.oneOff,
             scheduleSource: 'ai',
             scheduleRationale: entry.rationale,

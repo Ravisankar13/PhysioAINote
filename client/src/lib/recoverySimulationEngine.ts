@@ -1345,12 +1345,16 @@ function applyTreatmentEffects(
     const treatment = ctx.lookup.get(intv.treatmentId);
     if (!treatment) continue;
 
-    // One-off treatments only fire on the start week — carryover
-    // afterwards still decays normally via effectRamp.
+    // One-off treatments only fire on the start week. Skip effect
+    // application entirely on every other week — only the remove
+    // marker (if scheduled) is allowed through.
     if (intv.oneOff && week !== intv.startWeek) {
-      // Carryover from the single delivery still flows through
-      // effectRamp below, but we must skip the cadence gate logic.
-    } else {
+      if (intv.endWeek === week) {
+        markers.push({ week, type: 'remove', label: `Stop ${treatment.name}`, treatmentId: treatment.id });
+      }
+      continue;
+    }
+    {
       // Cadence gate — fortnightly/monthly treatments only deliver on
       // their schedule weeks. The intro marker still fires on startWeek
       // (which is by definition a delivery week) so the chart still

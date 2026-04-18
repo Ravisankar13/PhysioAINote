@@ -257,8 +257,8 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
   const baselineProj = baselines[activeBaseline];
 
   const optimizer: OptimizerResult = useMemo(
-    () => optimizeSequence(input, activeProjection, goalMode, customProfiles, ctxForSim),
-    [input, activeProjection, goalMode, customProfiles, ctxForSim],
+    () => optimizeSequence(input, activeProjection, goalMode, customProfiles, ctxForSim, scrubWeek),
+    [input, activeProjection, goalMode, customProfiles, ctxForSim, scrubWeek],
   );
   const reverse: ReversePlanResult = useMemo(
     () => reversePlan(activeProjection, reverseGoal, ctxForSim),

@@ -466,8 +466,8 @@ export default function RecoverySimulatorDashboard({
   }, [baselines, activeProjection]);
 
   const optimizer = useMemo(
-    () => optimizeSequence(input, activeProjection, goalMode, customProfiles, ctxForSim),
-    [input, activeProjection, goalMode, customProfiles, ctxForSim],
+    () => optimizeSequence(input, activeProjection, goalMode, customProfiles, ctxForSim, scrubWeek),
+    [input, activeProjection, goalMode, customProfiles, ctxForSim, scrubWeek],
   );
   const narrative = useMemo(() => generateNarrative(activeProjection, baselineProj), [activeProjection, baselineProj]);
 
@@ -591,17 +591,12 @@ export default function RecoverySimulatorDashboard({
     return baselineState.pain > 0.001 ? Math.max(0, Math.min(2, stateAtScrub.pain / baselineState.pain)) : (stateAtScrub.pain > 0.001 ? 1 : 0);
   }, [stateAtScrub, baselineState]);
 
-  // Best Next Action from optimizer
-  const bestAction = optimizer.recommendedSequence[0];
-  const altAction = optimizer.recommendedSequence[1];
+  // Best Next Action from optimizer (week-aware)
+  const bestAction = { action: `Introduce ${optimizer.bestNextAction}`, rationale: optimizer.bestNextRationale };
+  const altAction = optimizer.alternativeAction;
   const bestActionTreatment = useMemo(() => {
-    if (!bestAction) return null;
-    // Try to match a treatment by name in the action string
-    for (const t of TREATMENT_LIBRARY) {
-      if (bestAction.action.toLowerCase().includes(t.name.toLowerCase().split(' ')[0])) return t;
-    }
-    return TREATMENT_LIBRARY[0];
-  }, [bestAction]);
+    return TREATMENT_LIBRARY.find(t => t.id === optimizer.bestNextActionId) ?? TREATMENT_LIBRARY[0];
+  }, [optimizer.bestNextActionId]);
 
   // Per-phase view-model. All fields are sourced from the existing
   // simulation projection, the Goal-Driven Recovery Engine
@@ -1846,7 +1841,11 @@ export default function RecoverySimulatorDashboard({
             <div className="bg-gray-900/40 rounded p-2">
               <div className="text-[9px] text-gray-400 uppercase tracking-wide mb-1 font-semibold">Optimization Insight</div>
               <div className="text-[10px] text-gray-200 leading-snug">
-                {optimizer.narrative.split('.')[0]}. <span className="text-amber-300 font-semibold">Score Δ {(optimizer.expectedScore - optimizer.comparisonScore).toFixed(1)}</span>
+                {(() => {
+                  const sentences = optimizer.narrative.split('.').map(s => s.trim()).filter(Boolean);
+                  const phaseSentence = sentences.find(s => /week\s+\d+/i.test(s)) ?? sentences[0] ?? optimizer.narrative;
+                  return `${phaseSentence}.`;
+                })()} <span className="text-amber-300 font-semibold">Score Δ {(optimizer.expectedScore - optimizer.comparisonScore).toFixed(1)}</span>
               </div>
             </div>
           </div>

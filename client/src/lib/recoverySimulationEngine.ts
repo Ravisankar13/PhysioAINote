@@ -190,6 +190,10 @@ export interface ReversePlanResult {
 export interface OptimizerResult {
   mode: GoalMode;
   bestNextAction: string;
+  bestNextActionId: string;
+  bestNextRationale: string;
+  currentPhaseLabel: string;
+  alternativeAction?: { action: string; actionId: string; rationale: string };
   recommendedSequence: { week: number; action: string; rationale: string }[];
   expectedScore: number;
   comparisonScore: number;
@@ -1400,14 +1404,15 @@ export function optimizeSequence(
   mode: GoalMode,
   customProfiles?: TreatmentEffectProfile[] | null,
   conditionContext?: ConditionContext,
+  currentWeek: number = 0,
 ): OptimizerResult {
   const lookup = buildLookup(customProfiles);
   const sequence: { week: number; action: string; rationale: string }[] = [];
-  const phases: { startWeek: number; endWeek: number; preferred: string[]; rationale: string }[] = [
-    { startWeek: 0, endWeek: 2, preferred: ['rest_offload', 'education', 'electrophysical', 'taping_bracing'], rationale: 'Acute / inflammatory: settle symptoms, control load.' },
-    { startWeek: 2, endWeek: 5, preferred: ['isometric_load', 'manual_therapy', 'motor_control', 'education'], rationale: 'Subacute / proliferative: restore tolerance and ROM.' },
-    { startWeek: 5, endWeek: 9, preferred: ['progressive_strength', 'graded_load', 'motor_control'], rationale: 'Remodeling: build capacity and tissue strength.' },
-    { startWeek: 9, endWeek: input.totalWeeks, preferred: ['plyometric_rts', 'progressive_strength', 'graded_load'], rationale: 'Maturation: sport-specific load and reactive capacity.' },
+  const phases: { startWeek: number; endWeek: number; preferred: string[]; rationale: string; label: string }[] = [
+    { startWeek: 0, endWeek: 2, preferred: ['rest_offload', 'education', 'electrophysical', 'taping_bracing'], rationale: 'Acute / inflammatory: settle symptoms, control load.', label: 'Acute / inflammatory' },
+    { startWeek: 2, endWeek: 5, preferred: ['isometric_load', 'manual_therapy', 'motor_control', 'education'], rationale: 'Subacute / proliferative: restore tolerance and ROM.', label: 'Subacute / proliferative' },
+    { startWeek: 5, endWeek: 9, preferred: ['progressive_strength', 'graded_load', 'motor_control'], rationale: 'Remodeling: build capacity and tissue strength.', label: 'Remodeling' },
+    { startWeek: 9, endWeek: input.totalWeeks, preferred: ['plyometric_rts', 'progressive_strength', 'graded_load'], rationale: 'Maturation: sport-specific load and reactive capacity.', label: 'Maturation / return-to-sport' },
   ];
 
   if (mode === 'lowest_flare') {
@@ -1450,12 +1455,58 @@ export function optimizeSequence(
   const optScore = scoreProjection(optimizedProj, mode);
   const baseScore = scoreProjection(baselineProjection, mode);
 
-  const bestNextAction = phases.find(p => p.startWeek <= 0 && p.endWeek > 0)?.preferred[0] ?? 'education';
-  const nextLabel = lookup.get(bestNextAction)?.name ?? bestNextAction;
+  const clampedWeek = Math.max(0, Math.min(currentWeek, input.totalWeeks));
+  const currentPhase =
+    phases.find(p => clampedWeek >= p.startWeek && clampedWeek < p.endWeek) ??
+    [...phases].reverse().find(p => clampedWeek >= p.startWeek) ??
+    phases[phases.length - 1];
 
-  const narrative = `Under "${mode.replace(/_/g, ' ')}", the optimized sequence improves outcome score by ${(optScore - baseScore).toFixed(1)} pts vs baseline. Best next action: ${nextLabel}. The plan progresses through inflammatory → proliferative → remodeling → maturation, holding back high-load reactive work until capacity gates pass.`;
+  const stateIdx = Math.min(clampedWeek, baselineProjection.states.length - 1);
+  const projectedState = baselineProjection.states[stateIdx];
+  const projectedLoadTol =
+    baselineProjection.timelines.tissue.loadTolerance[
+      Math.min(clampedWeek, baselineProjection.timelines.tissue.loadTolerance.length - 1)
+    ] ?? projectedState?.loadTolerance ?? 0;
 
-  return { mode, bestNextAction: nextLabel, recommendedSequence: sequence, expectedScore: optScore, comparisonScore: baseScore, narrative, optimizedInterventions: interventions, optimizedBranchTemplate: optimizedBranch };
+  // Safety gates: block plyometric/RTS work until load tolerance is sufficient
+  // and irritability has settled. If gated, fall back to the next preferred
+  // treatment in the current phase.
+  const isGatedPlyometric = (tid: string) =>
+    tid === 'plyometric_rts' && (projectedLoadTol < 65 || (projectedState?.irritability ?? 100) > 45);
+
+  const safePreferred = currentPhase.preferred.filter(tid => !isGatedPlyometric(tid));
+  const bestNextActionId = safePreferred[0] ?? currentPhase.preferred[0] ?? 'education';
+  const nextLabel = lookup.get(bestNextActionId)?.name ?? bestNextActionId;
+  const altId = safePreferred[1] ?? currentPhase.preferred.find(t => t !== bestNextActionId);
+  const altLabel = altId ? (lookup.get(altId)?.name ?? altId) : undefined;
+
+  const gateNote =
+    currentPhase.preferred.includes('plyometric_rts') && bestNextActionId !== 'plyometric_rts'
+      ? ` Plyometric / return-to-sport work is held back at week ${clampedWeek} (load tolerance ${projectedLoadTol.toFixed(0)}, irritability ${(projectedState?.irritability ?? 0).toFixed(0)}) until capacity gates pass.`
+      : '';
+
+  const bestNextRationale = `Week ${clampedWeek} · ${currentPhase.label}: ${currentPhase.rationale}${gateNote}`;
+
+  const capStr = projectedState ? projectedState.capacity.toFixed(0) : '—';
+  const irrStr = projectedState ? projectedState.irritability.toFixed(0) : '—';
+  const tolStr = projectedLoadTol.toFixed(0);
+
+  const narrative = `Under "${mode.replace(/_/g, ' ')}", the optimized sequence improves outcome score by ${(optScore - baseScore).toFixed(1)} pts vs baseline. At week ${clampedWeek} the patient is in the ${currentPhase.label.toLowerCase()} phase (capacity ${capStr}, irritability ${irrStr}, load tolerance ${tolStr}). Best next action: ${nextLabel}.${gateNote} The plan progresses through inflammatory → proliferative → remodeling → maturation, holding back high-load reactive work until capacity gates pass.`;
+
+  return {
+    mode,
+    bestNextAction: nextLabel,
+    bestNextActionId,
+    bestNextRationale,
+    currentPhaseLabel: currentPhase.label,
+    alternativeAction: altId && altLabel ? { action: `Introduce ${altLabel}`, actionId: altId, rationale: currentPhase.rationale } : undefined,
+    recommendedSequence: sequence,
+    expectedScore: optScore,
+    comparisonScore: baseScore,
+    narrative,
+    optimizedInterventions: interventions,
+    optimizedBranchTemplate: optimizedBranch,
+  };
 }
 
 export function generateNarrative(active: SimulationProjection, baseline: SimulationProjection): string {

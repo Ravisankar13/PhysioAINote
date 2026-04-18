@@ -3085,15 +3085,34 @@ export default function RecoverySimulatorDashboard({
                         </select>
                       </label>
                       <label className="flex flex-col gap-0.5">
-                        <span>End wk</span>
-                        <input
-                          type="number"
-                          min={i.startWeek + 1}
-                          max={Math.max(i.startWeek + 1, scrubWeek + 52)}
-                          value={endWeek}
-                          onChange={e => updateInterventionSchedule(i.id, { endWeek: Number(e.target.value), scheduleSource: 'manual' })}
-                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100 w-full"
-                        />
+                        <span>End</span>
+                        <select
+                          value={i.endOnPhaseExit ?? 'numeric'}
+                          onChange={e => {
+                            const v = e.target.value;
+                            if (v === 'numeric') {
+                              updateInterventionSchedule(i.id, { endOnPhaseExit: undefined, scheduleSource: 'manual' });
+                            } else {
+                              updateInterventionSchedule(i.id, { endOnPhaseExit: v as any, scheduleSource: 'manual' });
+                            }
+                          }}
+                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100"
+                        >
+                          <option value="numeric">at week…</option>
+                          <option value="inflammatory">end of inflammatory</option>
+                          <option value="proliferative">end of proliferative</option>
+                          <option value="remodeling">end of remodeling</option>
+                        </select>
+                        {!i.endOnPhaseExit && (
+                          <input
+                            type="number"
+                            min={i.startWeek + 1}
+                            max={Math.max(i.startWeek + 1, scrubWeek + 52)}
+                            value={endWeek}
+                            onChange={e => updateInterventionSchedule(i.id, { endWeek: Number(e.target.value), scheduleSource: 'manual' })}
+                            className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100 w-full mt-0.5"
+                          />
+                        )}
                       </label>
                       <label className="flex flex-col gap-0.5">
                         <span>Taper wks</span>

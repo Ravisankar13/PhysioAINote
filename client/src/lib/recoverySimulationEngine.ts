@@ -97,6 +97,11 @@ export interface Intervention {
    *  education booster). When true the engine applies the effect on
    *  the start week only; carryover still decays normally afterwards. */
   oneOff?: boolean;
+  /** Phase-bound schedule: when set the intervention is treated as
+   *  ended the moment the simulated healing phase advances past this
+   *  phase. Used to express clinical schedules such as "ice while
+   *  inflammatory" or "manual therapy through proliferative phase". */
+  endOnPhaseExit?: HealingPhase;
   /** Provenance + rationale for the chosen schedule, surfaced in UI. */
   scheduleSource?: 'manual' | 'ai' | 'default';
   scheduleRationale?: string;
@@ -1339,22 +1344,40 @@ function applyTreatmentEffects(
 
   for (const intv of ctx.branch.interventions) {
     if (week < intv.startWeek) continue;
-    const ended = intv.endWeek !== undefined && week >= intv.endWeek;
-    const weeksActive = ended ? (intv.endWeek! - intv.startWeek) : (week - intv.startWeek);
-    const weeksSinceStop = ended ? week - intv.endWeek! : null;
     const treatment = ctx.lookup.get(intv.treatmentId);
     if (!treatment) continue;
 
-    // One-off treatments only fire on the start week. Skip effect
-    // application entirely on every other week — only the remove
-    // marker (if scheduled) is allowed through.
-    if (intv.oneOff && week !== intv.startWeek) {
-      if (intv.endWeek === week) {
-        markers.push({ week, type: 'remove', label: `Stop ${treatment.name}`, treatmentId: treatment.id });
-      }
-      continue;
+    // For one-off interventions, model the schedule as a single
+    // delivery on startWeek. Subsequent weeks behave as if the
+    // treatment "ended" at startWeek, so effectRamp produces the
+    // natural carryover decay via weeksSinceStop. The cadence gate
+    // is bypassed entirely (cadence is meaningless for a single
+    // delivery).
+    const isOneOff = !!intv.oneOff;
+    // Phase-bound end: an intervention with endOnPhaseExit ends as
+    // soon as the simulated healing phase advances past the bound
+    // phase. We resolve the effective end-week lazily — the first
+    // week the phase has changed becomes its endWeek for ramp/decay.
+    const PHASE_ORDER: HealingPhase[] = ['inflammatory', 'proliferative', 'remodeling'];
+    let phaseEndWeek: number | undefined;
+    if (intv.endOnPhaseExit) {
+      const boundIdx = PHASE_ORDER.indexOf(intv.endOnPhaseExit);
+      const curIdx = PHASE_ORDER.indexOf(next.healingPhase);
+      if (boundIdx >= 0 && curIdx > boundIdx) phaseEndWeek = week;
     }
-    {
+    const explicitEnd = phaseEndWeek !== undefined
+      ? Math.min(intv.endWeek ?? phaseEndWeek, phaseEndWeek)
+      : intv.endWeek;
+    const ended = isOneOff
+      ? week > intv.startWeek
+      : (explicitEnd !== undefined && week >= explicitEnd);
+    const effectiveEndWeek = isOneOff ? intv.startWeek : explicitEnd;
+    const weeksActive = ended
+      ? (effectiveEndWeek! - intv.startWeek)
+      : (week - intv.startWeek);
+    const weeksSinceStop = ended ? week - effectiveEndWeek! : null;
+
+    if (!isOneOff) {
       // Cadence gate — fortnightly/monthly treatments only deliver on
       // their schedule weeks. The intro marker still fires on startWeek
       // (which is by definition a delivery week) so the chart still

@@ -16,7 +16,8 @@ interface EvidenceArticle {
   pubmedUrl?: string;
   openAccessUrl?: string;
   sources?: string[];
-  matchedOn?: string[];
+  conclusion?: string;
+  matchedOn?: { modality: string[]; region: string[]; condition: string[] };
 }
 
 interface EvidenceForModality {
@@ -93,6 +94,11 @@ function ModalityEvidenceSection({ evidence, loading }: { evidence?: EvidenceFor
           const aGrade = GRADE_STYLES[art.evidenceGrade] || GRADE_STYLES.D;
           const studyBadge = STUDY_TYPE_BADGE[art.studyType] || 'bg-gray-600/30 text-gray-300';
           const url = art.pubmedUrl || (art.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${art.pmid}/` : (art.doi ? `https://doi.org/${art.doi}` : ''));
+          const mo = art.matchedOn;
+          const matchedParts: string[] = [];
+          if (mo?.modality?.length) matchedParts.push(`modality: ${mo.modality.join(', ')}`);
+          if (mo?.region?.length) matchedParts.push(`region: ${mo.region.join(', ')}`);
+          if (mo?.condition?.length) matchedParts.push(`condition: ${mo.condition.join(', ')}`);
           return (
             <div key={i} className="bg-gray-900/50 border border-gray-700/40 rounded p-1.5">
               <div className="flex items-start gap-1.5">
@@ -107,6 +113,11 @@ function ModalityEvidenceSection({ evidence, loading }: { evidence?: EvidenceFor
                   <span className={`text-[8px] px-1 py-0.5 rounded ${studyBadge}`}>{art.studyType}</span>
                 </div>
               </div>
+              {art.conclusion && (
+                <div className="mt-1 text-[9px] text-gray-300 leading-snug border-l-2 border-teal-500/40 pl-1.5 italic">
+                  “{art.conclusion}”
+                </div>
+              )}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {url && (
                   <a
@@ -130,15 +141,22 @@ function ModalityEvidenceSection({ evidence, loading }: { evidence?: EvidenceFor
                     Full text
                   </a>
                 )}
-                {art.matchedOn && art.matchedOn.length > 0 && (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className="text-[8px] text-gray-500">matched on:</span>
-                    {art.matchedOn.slice(0, 4).map((m, j) => (
-                      <span key={j} className="text-[8px] px-1 py-0.5 rounded bg-teal-500/10 text-teal-300/80 border border-teal-500/20">{m}</span>
-                    ))}
-                  </div>
-                )}
               </div>
+              {matchedParts.length > 0 && (
+                <div className="mt-1 text-[8px] text-gray-500">
+                  <span className="text-gray-400 font-medium">matched on </span>
+                  {matchedParts.map((part, k) => {
+                    const [label, val] = part.split(': ');
+                    return (
+                      <span key={k}>
+                        {k > 0 && <span className="text-gray-600"> · </span>}
+                        <span className="text-gray-400">{label}:</span>{' '}
+                        <span className="text-teal-300/80">{val}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
@@ -221,7 +239,23 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
       >
         <span className="text-[10px] font-mono text-gray-500 mt-0.5 min-w-[16px]">{index + 1}.</span>
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-medium text-gray-200">{modality.modality}</div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="text-[11px] font-medium text-gray-200">{modality.modality}</div>
+            {evidence ? (
+              <span
+                className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${(GRADE_STYLES[evidence.overallGrade] || GRADE_STYLES.D).bg} ${(GRADE_STYLES[evidence.overallGrade] || GRADE_STYLES.D).text} inline-flex items-center gap-0.5`}
+                title={`Overall evidence grade · ${evidence.articles.length} supporting article${evidence.articles.length === 1 ? '' : 's'}`}
+              >
+                <Award className="h-2 w-2" />
+                {evidence.overallGrade}
+              </span>
+            ) : evidenceLoading ? (
+              <span className="text-[8px] text-gray-500 inline-flex items-center gap-0.5">
+                <Loader2 className="h-2 w-2 animate-spin" />
+                evidence
+              </span>
+            ) : null}
+          </div>
           {modality.targetFinding && (
             <div className="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1">
               <Target className="h-2.5 w-2.5 text-teal-400 shrink-0" />

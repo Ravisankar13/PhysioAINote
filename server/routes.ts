@@ -8714,14 +8714,34 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         .map(t => t.trim())
         .filter(t => t.length > 2 && !STOPWORDS.has(t));
 
-      const buildMatchedOn = (paper: { title: string; abstract?: string }, ctxTokens: string[]): string[] => {
-        const hay = `${paper.title} ${paper.abstract || ''}`.toLowerCase();
-        const hits = new Set<string>();
-        for (const t of ctxTokens) {
-          if (hay.includes(t)) hits.add(t);
-          if (hits.size >= 4) break;
+      const matchedTermsIn = (hay: string, raw: string): string[] => {
+        const tokens = tokenize(raw);
+        const found: string[] = [];
+        for (const t of tokens) {
+          if (hay.includes(t) && !found.includes(t)) found.push(t);
+          if (found.length >= 3) break;
         }
-        return Array.from(hits);
+        return found;
+      };
+
+      const buildConclusion = (abstract?: string): string => {
+        if (!abstract || abstract === 'No abstract available.') return '';
+        const cleaned = abstract.replace(/\s+/g, ' ').trim();
+        const lower = cleaned.toLowerCase();
+        const conclusionIdx = Math.max(
+          lower.indexOf('conclusion'),
+          lower.indexOf('conclusions'),
+          lower.indexOf('findings:'),
+          lower.indexOf('results:'),
+        );
+        let segment = cleaned;
+        if (conclusionIdx >= 0) {
+          segment = cleaned.slice(conclusionIdx);
+          segment = segment.replace(/^(conclusions?|findings|results)\s*[:\-]\s*/i, '');
+        }
+        const sentenceMatch = segment.match(/[^.!?]+[.!?]/);
+        const sentence = sentenceMatch ? sentenceMatch[0].trim() : segment.slice(0, 220).trim();
+        return sentence.length > 240 ? sentence.slice(0, 237).trimEnd() + '…' : sentence;
       };
 
       const results = await Promise.all(modalities.map(async (m) => {
@@ -8731,28 +8751,29 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
           const reg = region || m.targetStructure || '';
           const evidence = await fetchMultiSourceEvidence(reg, cond, treatment);
 
-          const ctxTokens = Array.from(new Set([
-            ...tokenize(treatment),
-            ...tokenize(cond),
-            ...tokenize(reg),
-            ...tokenize(m.targetStructure || ''),
-            ...tokenize(m.targetFinding || ''),
-          ]));
-
-          const top = (evidence.papers || []).slice(0, 4).map(p => ({
-            title: p.title,
-            authors: p.authors,
-            journal: p.journal,
-            year: p.year,
-            pmid: p.pmid || '',
-            doi: p.doi,
-            studyType: p.studyType,
-            evidenceGrade: p.evidenceGrade,
-            pubmedUrl: p.pubmedUrl || (p.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/` : (p.doi ? `https://doi.org/${p.doi}` : '')),
-            openAccessUrl: p.openAccessUrl,
-            sources: p.sources || [],
-            matchedOn: buildMatchedOn(p, ctxTokens),
-          }));
+          const top = (evidence.papers || []).slice(0, 4).map(p => {
+            const hay = `${p.title} ${p.abstract || ''}`.toLowerCase();
+            const matchedOn = {
+              modality: matchedTermsIn(hay, treatment),
+              region: matchedTermsIn(hay, `${reg} ${m.targetStructure || ''}`),
+              condition: matchedTermsIn(hay, `${cond} ${m.targetFinding || ''}`),
+            };
+            return {
+              title: p.title,
+              authors: p.authors,
+              journal: p.journal,
+              year: p.year,
+              pmid: p.pmid || '',
+              doi: p.doi,
+              studyType: p.studyType,
+              evidenceGrade: p.evidenceGrade,
+              pubmedUrl: p.pubmedUrl || (p.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/` : (p.doi ? `https://doi.org/${p.doi}` : '')),
+              openAccessUrl: p.openAccessUrl,
+              sources: p.sources || [],
+              conclusion: buildConclusion(p.abstract),
+              matchedOn,
+            };
+          });
 
           return [m.key, {
             articles: top,

@@ -974,6 +974,10 @@ export default function RecoverySimulatorDashboard({
   }, [optimizerPhaseIdx]);
 
   const buildOptimizerReq = useCallback((): PhaseRxRequest => {
+    // Mirror per-phase buildReq exactly (line 1490-1507 above): use the
+    // phase start index for both the dosage anchor (phaseStartWeek) and
+    // the pain-at-phase lookup. Slider position is captured in phaseId
+    // so generations across weeks within the same phase don't dedupe.
     const r = phaseRanges[optimizerPhaseIdx];
     const startIdx = r ? (r.reached ? r.start : r.expectedStart) : scrubWeek;
     const safeIdx = Math.min(
@@ -985,7 +989,7 @@ export default function RecoverySimulatorDashboard({
       phaseId: `optimizer_idx${r?.stageIndex ?? optimizerPhaseIdx}_wk${scrubWeek}`,
       phaseLabel: r?.stage.name ?? optimizer.currentPhaseLabel,
       phaseStageIndex: r?.stageIndex ?? optimizerPhaseIdx,
-      phaseStartWeek: scrubWeek,
+      phaseStartWeek: startIdx,
       predictedPainAtPhase: Math.max(0, Math.min(100, painPct)),
       predictedGoalAchievementPct: Math.round(((r?.goalAchievement ?? 0)) * 100),
       goalDimensionLabel: r?.goalDimension ?? '',
@@ -1973,6 +1977,20 @@ export default function RecoverySimulatorDashboard({
               </div>
             )}
 
+            {/* Ready-but-empty: generation succeeded with zero items */}
+            {optimizerEx.status === 'ready' && (optimizerEx.exercises?.length ?? 0) === 0 && (
+              <div className="bg-violet-950/15 border border-violet-800/30 rounded p-2 mb-2 text-[9px] text-violet-200/70 flex items-center justify-between gap-2" data-testid="optimizer-rx-exercises-empty">
+                <span>No suitable exercises returned for this phase. Try a different week or refine the patient profile.</span>
+                <button type="button" onClick={runOptimizerExercise} className="underline hover:text-violet-100 shrink-0">Retry</button>
+              </div>
+            )}
+            {optimizerMt.status === 'ready' && (optimizerMt.techniques?.length ?? 0) === 0 && (
+              <div className="bg-cyan-950/15 border border-cyan-800/30 rounded p-2 mb-2 text-[9px] text-cyan-200/70 flex items-center justify-between gap-2" data-testid="optimizer-rx-manual-empty">
+                <span>No suitable manual techniques returned for this phase. Try a different week or refine the patient profile.</span>
+                <button type="button" onClick={runOptimizerManual} className="underline hover:text-cyan-100 shrink-0">Retry</button>
+              </div>
+            )}
+
             {/* Generated exercises list — named items with sets×reps */}
             {optimizerEx.status === 'ready' && (optimizerEx.exercises?.length ?? 0) > 0 && (
               <div className="bg-violet-950/20 border border-violet-800/40 rounded p-2 mb-2" data-testid="optimizer-rx-exercises">
@@ -2007,16 +2025,26 @@ export default function RecoverySimulatorDashboard({
                     const reps = ex.dosage?.reps;
                     const tempo = ex.dosage?.tempo;
                     const freq = ex.dosage?.frequency;
-                    const dose = [sets && `${sets} sets`, reps && `${reps} reps`, tempo, freq].filter(Boolean).join(' · ');
+                    const intensity = ex.forceVector?.resistanceType;
+                    const dose = [
+                      sets && `${sets} sets`,
+                      reps && `${reps} reps`,
+                      tempo,
+                      freq,
+                      intensity,
+                    ].filter(Boolean).join(' · ');
+                    const region = ex.targetSystem;
+                    const meta = [region, ex.clinicalTarget].filter(Boolean).join(' · ');
                     return (
                       <li key={i} className="text-[10px] flex items-start gap-1" data-testid={`optimizer-exercise-${i}`}>
                         <span className="text-violet-300 mt-px">•</span>
                         <div className="flex-1 min-w-0">
                           <div className="text-violet-100 font-semibold leading-tight">{ex.name}</div>
-                          {(dose || ex.clinicalTarget) && (
-                            <div className="text-[9px] text-gray-400 leading-tight">
-                              {dose}{dose && ex.clinicalTarget ? ' · ' : ''}{ex.clinicalTarget ?? ''}
-                            </div>
+                          {dose && (
+                            <div className="text-[9px] text-violet-300/80 leading-tight">{dose}</div>
+                          )}
+                          {meta && (
+                            <div className="text-[9px] text-gray-400 leading-tight">{meta}</div>
                           )}
                         </div>
                         {!optimizerEx.added && onAddCustomExercises && (
@@ -2075,16 +2103,36 @@ export default function RecoverySimulatorDashboard({
                     const dur = mt.dosage?.duration;
                     const reps = mt.dosage?.repetitions;
                     const sets = mt.dosage?.sets;
-                    const dose = [grade, depth, sets && `${sets} sets`, reps && `${reps} reps`, dur].filter(Boolean).join(' · ');
+                    const freq = mt.dosage?.frequency;
+                    const dose = [
+                      grade && `Grade ${grade}`,
+                      depth,
+                      sets && `${sets} sets`,
+                      reps && `${reps} reps`,
+                      dur,
+                      freq,
+                    ].filter(Boolean).join(' · ');
+                    const targetStructures = (mt.tissueTargets ?? [])
+                      .map(t => t?.goalType)
+                      .filter(Boolean)
+                      .slice(0, 3)
+                      .join(', ');
+                    const region = mt.targetSystem;
+                    const meta = [
+                      region && `Target: ${region}`,
+                      targetStructures,
+                      mt.clinicalTarget,
+                    ].filter(Boolean).join(' · ');
                     return (
                       <li key={i} className="text-[10px] flex items-start gap-1" data-testid={`optimizer-manual-${i}`}>
                         <span className="text-cyan-300 mt-px">•</span>
                         <div className="flex-1 min-w-0">
                           <div className="text-cyan-100 font-semibold leading-tight">{mt.name}</div>
-                          {(dose || mt.clinicalTarget) && (
-                            <div className="text-[9px] text-gray-400 leading-tight">
-                              {dose}{dose && mt.clinicalTarget ? ' · ' : ''}{mt.clinicalTarget ?? ''}
-                            </div>
+                          {dose && (
+                            <div className="text-[9px] text-cyan-300/80 leading-tight">{dose}</div>
+                          )}
+                          {meta && (
+                            <div className="text-[9px] text-gray-400 leading-tight">{meta}</div>
                           )}
                         </div>
                         {!optimizerMt.added && onAddCustomTechniques && (
@@ -2116,15 +2164,33 @@ export default function RecoverySimulatorDashboard({
               </div>
             )}
 
-            <div className="bg-gray-900/40 rounded p-2">
+            <div className="bg-gray-900/40 rounded p-2" data-testid="optimizer-insight">
               <div className="text-[9px] text-gray-400 uppercase tracking-wide mb-1 font-semibold">Optimization Insight</div>
-              <div className="text-[10px] text-gray-200 leading-snug">
-                {(() => {
-                  const sentences = optimizer.narrative.split('.').map(s => s.trim()).filter(Boolean);
-                  const phaseSentence = sentences.find(s => /week\s+\d+/i.test(s)) ?? sentences[0] ?? optimizer.narrative;
-                  return `${phaseSentence}.`;
-                })()} <span className="text-amber-300 font-semibold">Score Δ {(optimizer.expectedScore - optimizer.comparisonScore).toFixed(1)}</span>
-              </div>
+              {(() => {
+                const exNames = optimizerEx.status === 'ready' ? (optimizerEx.exercises ?? []).map(e => e.name).filter(Boolean) : [];
+                const mtNames = optimizerMt.status === 'ready' ? (optimizerMt.techniques ?? []).map(m => m.name).filter(Boolean) : [];
+                const combined = [...exNames.slice(0, 3), ...mtNames.slice(0, 2)];
+                const extra = (exNames.length + mtNames.length) - combined.length;
+                if (combined.length > 0) {
+                  return (
+                    <div className="text-[10px] text-gray-200 leading-snug" data-testid="optimizer-combination-summary">
+                      <span className="text-emerald-300 font-semibold">Recommend:</span>{' '}
+                      {combined.join(' + ')}
+                      {extra > 0 ? <span className="text-gray-400"> +{extra} more</span> : null}
+                      {' · '}
+                      <span className="text-amber-300 font-semibold">Score Δ {(optimizer.expectedScore - optimizer.comparisonScore).toFixed(1)}</span>
+                    </div>
+                  );
+                }
+                const sentences = optimizer.narrative.split('.').map(s => s.trim()).filter(Boolean);
+                const phaseSentence = sentences.find(s => /week\s+\d+/i.test(s)) ?? sentences[0] ?? optimizer.narrative;
+                return (
+                  <div className="text-[10px] text-gray-200 leading-snug">
+                    {phaseSentence}.{' '}
+                    <span className="text-amber-300 font-semibold">Score Δ {(optimizer.expectedScore - optimizer.comparisonScore).toFixed(1)}</span>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

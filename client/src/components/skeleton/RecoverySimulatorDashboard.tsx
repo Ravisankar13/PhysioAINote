@@ -51,6 +51,7 @@ import {
   buildCustomTreatmentProfiles,
   buildCustomExerciseId,
   buildCustomTechniqueId,
+  isCustomTreatmentId,
   tissueProfileForContext,
 } from "@/lib/recoverySimulationEngine";
 import { findConditionProfile } from "@/lib/patientFactorsEngine";
@@ -577,18 +578,19 @@ export default function RecoverySimulatorDashboard({
   }, [activeBranchId, input.patientAdherence]);
 
   const removeInterventionFromActive = useCallback((interventionId: string) => {
-    let removedTreatmentId: string | undefined;
-    setBranches(prev => prev.map(b => {
-      if (b.id !== activeBranchId) return b;
-      const removed = b.interventions.find(i => i.id === interventionId);
-      if (removed) removedTreatmentId = removed.treatmentId;
-      return { ...b, interventions: b.interventions.filter(i => i.id !== interventionId) };
-    }));
-    if (removedTreatmentId && onRemoveCustomItem &&
-        (removedTreatmentId.startsWith('custom_ex_') || removedTreatmentId.startsWith('custom_mt_'))) {
+    // Look up the treatmentId synchronously from current state BEFORE
+    // dispatching the update so the parent removal callback runs
+    // deterministically (no reliance on updater side effects).
+    const branch = branches.find(b => b.id === activeBranchId);
+    const removed = branch?.interventions.find(i => i.id === interventionId);
+    const removedTreatmentId = removed?.treatmentId;
+    setBranches(prev => prev.map(b => (
+      b.id !== activeBranchId ? b : { ...b, interventions: b.interventions.filter(i => i.id !== interventionId) }
+    )));
+    if (removedTreatmentId && onRemoveCustomItem && isCustomTreatmentId(removedTreatmentId)) {
       onRemoveCustomItem(removedTreatmentId);
     }
-  }, [activeBranchId, onRemoveCustomItem]);
+  }, [activeBranchId, branches, onRemoveCustomItem]);
 
   const resetSimulation = useCallback(() => {
     setBranches([defaultBranch(defaultInput())]);
@@ -2453,28 +2455,36 @@ export default function RecoverySimulatorDashboard({
                   onClick={() => {
                     const name = customName.trim();
                     if (!name) return;
-                    // Phase picker wins; otherwise derive phase from start week.
+                    // Precedence: explicit start week ALWAYS wins. The
+                    // phase picker is only used when no start week is
+                    // entered. Otherwise the phase is derived from the
+                    // chosen week so the phase metadata stays consistent
+                    // with the actual schedule.
                     let phaseIdx: number;
-                    if (customPhaseIdx !== null && phaseRanges[customPhaseIdx]) {
-                      phaseIdx = customPhaseIdx;
-                    } else {
-                      const sw = Math.max(0, Math.min(input.totalWeeks, customStartWeek ?? scrubWeek));
+                    let startWeek: number;
+                    if (customStartWeek !== null) {
+                      startWeek = Math.max(0, Math.min(input.totalWeeks, customStartWeek));
                       phaseIdx = optimizerPhaseIdx;
                       for (let i = phaseRanges.length - 1; i >= 0; i--) {
                         const r = phaseRanges[i];
                         const s = r.reached ? r.start : r.expectedStart;
-                        if (sw >= s) { phaseIdx = i; break; }
+                        if (startWeek >= s) { phaseIdx = i; break; }
+                      }
+                    } else if (customPhaseIdx !== null && phaseRanges[customPhaseIdx]) {
+                      phaseIdx = customPhaseIdx;
+                      const r = phaseRanges[phaseIdx];
+                      startWeek = Math.max(0, Math.min(input.totalWeeks, r.reached ? r.start : r.expectedStart));
+                    } else {
+                      startWeek = Math.max(0, Math.min(input.totalWeeks, scrubWeek));
+                      phaseIdx = optimizerPhaseIdx;
+                      for (let i = phaseRanges.length - 1; i >= 0; i--) {
+                        const r = phaseRanges[i];
+                        const s = r.reached ? r.start : r.expectedStart;
+                        if (startWeek >= s) { phaseIdx = i; break; }
                       }
                     }
                     const phaseRange = phaseRanges[phaseIdx];
                     const phaseLabel = phaseRange?.stage.name;
-                    // If phase explicitly chosen and no startWeek override,
-                    // anchor the schedule to that phase's start week.
-                    const phaseStart = phaseRange ? (phaseRange.reached ? phaseRange.start : phaseRange.expectedStart) : scrubWeek;
-                    const startWeek = Math.max(0, Math.min(
-                      input.totalWeeks,
-                      customStartWeek ?? (customPhaseIdx !== null ? phaseStart : scrubWeek),
-                    ));
                     const stableId = genStableId();
                     if (customKind === 'exercise' && onAddCustomExercises) {
                       const item: CustomExerciseInput = {

@@ -9609,9 +9609,12 @@ ${ddxList}`;
               const handleAddCustomExercises = (items: CustomExerciseInput[]) => {
                 setCustomExerciseResult(prev => {
                   const existing = prev?.customExercises ?? [];
-                  // De-dupe by name to avoid promoting the same item twice.
-                  const existingNames = new Set(existing.map(e => e.name));
-                  const merged = [...existing, ...items.filter(i => !existingNames.has(i.name))];
+                  // De-dupe by stableId only when present so that
+                  // user-authored items with the same name remain
+                  // distinct (each gets its own backing profile and
+                  // can be scheduled independently).
+                  const existingStableIds = new Set(existing.map(e => e.stableId).filter(Boolean) as string[]);
+                  const merged = [...existing, ...items.filter(i => !i.stableId || !existingStableIds.has(i.stableId))];
                   return {
                     customExercises: merged as typeof existing,
                     designRationale: prev?.designRationale ?? '',
@@ -9622,8 +9625,8 @@ ${ddxList}`;
               const handleAddCustomTechniques = (items: CustomManualTechniqueInput[]) => {
                 setCustomManualTherapyResult(prev => {
                   const existing = prev?.customTechniques ?? [];
-                  const existingNames = new Set(existing.map(t => t.name));
-                  const merged = [...existing, ...items.filter(i => !existingNames.has(i.name))];
+                  const existingStableIds = new Set(existing.map(t => t.stableId).filter(Boolean) as string[]);
+                  const merged = [...existing, ...items.filter(i => !i.stableId || !existingStableIds.has(i.stableId))];
                   return {
                     customTechniques: merged as typeof existing,
                     designRationale: prev?.designRationale ?? '',

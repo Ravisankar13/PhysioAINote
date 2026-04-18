@@ -1145,9 +1145,14 @@ export default function RecoverySimulatorDashboard({
           )}
         </aside>
 
-        {/* CENTER COLUMN — TIMELINE / SKELETON */}
-        <main className="flex flex-col gap-3 min-h-0 overflow-hidden">
-          <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3 flex-1 flex flex-col min-h-0">
+        {/* CENTER COLUMN — TIMELINE / SKELETON
+            overflow-y-auto (not overflow-hidden) so the column scrolls
+            cleanly when chart + phase pills + treatment-timeline strip +
+            phase cards exceed available height. Without this, the chart
+            container's fixed-height children visually bleed under the
+            phase-cards row. */}
+        <main className="flex flex-col gap-3 min-h-0 overflow-y-auto">
+          <div className="bg-gray-900/60 border border-gray-800/80 rounded-lg p-3 flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1">
                 <button

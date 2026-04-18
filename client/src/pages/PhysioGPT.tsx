@@ -11276,6 +11276,16 @@ ${ddxList}`;
               <Zap className="h-3 w-3 mr-1" />
               Electro Rx
             </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 text-[11px] bg-emerald-600/90 text-white hover:bg-emerald-500 border border-emerald-400/30 shadow-lg shadow-emerald-900/30"
+              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('adjunctRx'); }}
+              data-testid="button-adjunct-rx-quick"
+            >
+              <Leaf className="h-3 w-3 mr-1" />
+              Adjunct Rx
+            </Button>
           </div>
         )}
       </div>

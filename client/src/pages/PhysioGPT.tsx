@@ -154,7 +154,7 @@ const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSim
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
 const RecoverySimulationPanel = lazy(() => import("@/components/skeleton/RecoverySimulationPanel"));
 const RecoverySimulatorDashboard = lazy(() => import("@/components/skeleton/RecoverySimulatorDashboard"));
-import { buildConditionContext, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput } from "@/lib/recoverySimulationEngine";
+import { buildConditionContext, buildCustomExerciseId, buildCustomTechniqueId, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput } from "@/lib/recoverySimulationEngine";
 import { buildPrescriptionContext } from "@/lib/prescriptionAdapterEngine";
 import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDashboard";
 import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers } from "@/lib/patientFactorsEngine";
@@ -9631,6 +9631,20 @@ ${ddxList}`;
                   };
                 });
               };
+              const handleRemoveCustomItem = (treatmentId: string) => {
+                setCustomExerciseResult(prev => {
+                  if (!prev?.customExercises?.length) return prev;
+                  const next = prev.customExercises.filter((ex, idx) => buildCustomExerciseId(ex, idx) !== treatmentId);
+                  if (next.length === prev.customExercises.length) return prev;
+                  return { ...prev, customExercises: next as typeof prev.customExercises };
+                });
+                setCustomManualTherapyResult(prev => {
+                  if (!prev?.customTechniques?.length) return prev;
+                  const next = prev.customTechniques.filter((tech, idx) => buildCustomTechniqueId(tech, idx) !== treatmentId);
+                  if (next.length === prev.customTechniques.length) return prev;
+                  return { ...prev, customTechniques: next as typeof prev.customTechniques };
+                });
+              };
 
               return (
               <Suspense fallback={<LazyPanelFallback />}>
@@ -9650,6 +9664,7 @@ ${ddxList}`;
                   onGeneratePhaseManualRx={handleGeneratePhaseManualRx}
                   onAddCustomExercises={handleAddCustomExercises}
                   onAddCustomTechniques={handleAddCustomTechniques}
+                  onRemoveCustomItem={handleRemoveCustomItem}
                   initialInput={{
                     conditionSeverity: painMarkers.length > 0
                       ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)

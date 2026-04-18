@@ -133,6 +133,12 @@ interface Props {
   onAddCustomExercises?: (items: CustomExerciseInput[]) => void;
   /** Same as onAddCustomExercises for manual techniques. */
   onAddCustomTechniques?: (items: CustomManualTechniqueInput[]) => void;
+  /** Remove a custom (user- or AI-added) item from the parent-managed
+   *  custom arrays by its deterministic treatmentId (the same id used
+   *  to schedule its Intervention). The dashboard invokes this when an
+   *  intervention referencing a custom item is removed via the on-chart
+   *  controls, so plan list + recovery curve stay consistent. */
+  onRemoveCustomItem?: (treatmentId: string) => void;
 }
 
 const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
@@ -363,6 +369,7 @@ export default function RecoverySimulatorDashboard({
   onGeneratePhaseManualRx,
   onAddCustomExercises,
   onAddCustomTechniques,
+  onRemoveCustomItem,
 }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
@@ -441,6 +448,7 @@ export default function RecoverySimulatorDashboard({
   const [customDepth, setCustomDepth] = useState('');
   const [customFrequency, setCustomFrequency] = useState('3x/week');
   const [customStartWeek, setCustomStartWeek] = useState<number | null>(null);
+  const [customPhaseIdx, setCustomPhaseIdx] = useState<number | null>(null);
   const [customJustAdded, setCustomJustAdded] = useState<string | null>(null);
 
   useEffect(() => {
@@ -550,6 +558,12 @@ export default function RecoverySimulatorDashboard({
   }, [activeBranch, branches.length]);
 
   const interventionIdCounterRef = useRef(0);
+  const stableIdCounterRef = useRef(0);
+  const genStableId = useCallback(() => {
+    stableIdCounterRef.current += 1;
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    return `${Date.now().toString(36)}_${stableIdCounterRef.current}_${Math.random().toString(36).slice(2, 8)}`;
+  }, []);
   const addInterventionToActiveBranch = useCallback((treatmentId: string, startWeek: number) => {
     interventionIdCounterRef.current += 1;
     const seq = interventionIdCounterRef.current;
@@ -563,8 +577,18 @@ export default function RecoverySimulatorDashboard({
   }, [activeBranchId, input.patientAdherence]);
 
   const removeInterventionFromActive = useCallback((interventionId: string) => {
-    setBranches(prev => prev.map(b => b.id !== activeBranchId ? b : { ...b, interventions: b.interventions.filter(i => i.id !== interventionId) }));
-  }, [activeBranchId]);
+    let removedTreatmentId: string | undefined;
+    setBranches(prev => prev.map(b => {
+      if (b.id !== activeBranchId) return b;
+      const removed = b.interventions.find(i => i.id === interventionId);
+      if (removed) removedTreatmentId = removed.treatmentId;
+      return { ...b, interventions: b.interventions.filter(i => i.id !== interventionId) };
+    }));
+    if (removedTreatmentId && onRemoveCustomItem &&
+        (removedTreatmentId.startsWith('custom_ex_') || removedTreatmentId.startsWith('custom_mt_'))) {
+      onRemoveCustomItem(removedTreatmentId);
+    }
+  }, [activeBranchId, onRemoveCustomItem]);
 
   const resetSimulation = useCallback(() => {
     setBranches([defaultBranch(defaultInput())]);
@@ -1830,9 +1854,10 @@ export default function RecoverySimulatorDashboard({
                                             ...ex,
                                             phaseIndex: r.stageIndex,
                                             phaseLabel: p.name,
+                                            stableId: ex.stableId ?? genStableId(),
                                           }));
                                           onAddCustomExercises(stamped);
-                                          updatePhaseRx(p.id, 'exercise', { status: 'ready', exercises: exReady, added: true });
+                                          updatePhaseRx(p.id, 'exercise', { status: 'ready', exercises: stamped, added: true });
                                         }}
                                         className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
                                         data-testid={`phase-rx-add-exercise-${p.id}`}
@@ -1859,9 +1884,10 @@ export default function RecoverySimulatorDashboard({
                                             ...mt,
                                             phaseIndex: r.stageIndex,
                                             phaseLabel: p.name,
+                                            stableId: mt.stableId ?? genStableId(),
                                           }));
                                           onAddCustomTechniques(stamped);
-                                          updatePhaseRx(p.id, 'manual', { status: 'ready', techniques: mtReady, added: true });
+                                          updatePhaseRx(p.id, 'manual', { status: 'ready', techniques: stamped, added: true });
                                         }}
                                         className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
                                         data-testid={`phase-rx-add-manual-${p.id}`}
@@ -2061,13 +2087,13 @@ export default function RecoverySimulatorDashboard({
                       onClick={() => {
                         const items = optimizerEx.status === 'ready' ? (optimizerEx.exercises ?? []) : [];
                         const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
-                        const stamped = items.map(ex => ({ ...ex, phaseIndex: optimizerPhaseIdx, phaseLabel }));
+                        const stamped = items.map(ex => ({ ...ex, phaseIndex: optimizerPhaseIdx, phaseLabel, stableId: ex.stableId ?? genStableId() }));
                         const baseIdx = (customExercises ?? []).length;
                         onAddCustomExercises(stamped);
-                        items.forEach((ex, k) => {
+                        stamped.forEach((ex, k) => {
                           addInterventionToActiveBranch(buildCustomExerciseId(ex, baseIdx + k), scrubWeek);
                         });
-                        setOptimizerEx({ status: 'ready', exercises: items, added: true });
+                        setOptimizerEx({ status: 'ready', exercises: stamped, added: true });
                       }}
                       className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
                       data-testid="optimizer-add-all-exercises"
@@ -2118,8 +2144,9 @@ export default function RecoverySimulatorDashboard({
                             onClick={() => {
                               const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
                               const idx = (customExercises ?? []).length;
-                              onAddCustomExercises([{ ...ex, phaseIndex: optimizerPhaseIdx, phaseLabel }]);
-                              addInterventionToActiveBranch(buildCustomExerciseId(ex, idx), scrubWeek);
+                              const stamped = { ...ex, phaseIndex: optimizerPhaseIdx, phaseLabel, stableId: ex.stableId ?? genStableId() };
+                              onAddCustomExercises([stamped]);
+                              addInterventionToActiveBranch(buildCustomExerciseId(stamped, idx), scrubWeek);
                             }}
                             className="text-emerald-400 hover:text-emerald-200 shrink-0"
                             data-testid={`optimizer-add-exercise-${i}`}
@@ -2160,13 +2187,13 @@ export default function RecoverySimulatorDashboard({
                       onClick={() => {
                         const items = optimizerMt.status === 'ready' ? (optimizerMt.techniques ?? []) : [];
                         const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
-                        const stamped = items.map(mt => ({ ...mt, phaseIndex: optimizerPhaseIdx, phaseLabel }));
+                        const stamped = items.map(mt => ({ ...mt, phaseIndex: optimizerPhaseIdx, phaseLabel, stableId: mt.stableId ?? genStableId() }));
                         const baseIdx = (customTechniques ?? []).length;
                         onAddCustomTechniques(stamped);
-                        items.forEach((mt, k) => {
+                        stamped.forEach((mt, k) => {
                           addInterventionToActiveBranch(buildCustomTechniqueId(mt, baseIdx + k), scrubWeek);
                         });
-                        setOptimizerMt({ status: 'ready', techniques: items, added: true });
+                        setOptimizerMt({ status: 'ready', techniques: stamped, added: true });
                       }}
                       className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
                       data-testid="optimizer-add-all-manual"
@@ -2223,8 +2250,9 @@ export default function RecoverySimulatorDashboard({
                             onClick={() => {
                               const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
                               const idx = (customTechniques ?? []).length;
-                              onAddCustomTechniques([{ ...mt, phaseIndex: optimizerPhaseIdx, phaseLabel }]);
-                              addInterventionToActiveBranch(buildCustomTechniqueId(mt, idx), scrubWeek);
+                              const stamped = { ...mt, phaseIndex: optimizerPhaseIdx, phaseLabel, stableId: mt.stableId ?? genStableId() };
+                              onAddCustomTechniques([stamped]);
+                              addInterventionToActiveBranch(buildCustomTechniqueId(stamped, idx), scrubWeek);
                             }}
                             className="text-emerald-400 hover:text-emerald-200 shrink-0"
                             data-testid={`optimizer-add-manual-${i}`}
@@ -2361,13 +2389,34 @@ export default function RecoverySimulatorDashboard({
                     <input type="text" placeholder="Tempo" value={customTempo} onChange={e => setCustomTempo(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-tempo-input" />
                   </div>
                 ) : (
-                  <div className="grid grid-cols-4 gap-1">
+                  <div className="grid grid-cols-5 gap-1">
                     <input type="text" placeholder="Grade" value={customGrade} onChange={e => setCustomGrade(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-grade-input" />
                     <input type="text" placeholder="Depth" value={customDepth} onChange={e => setCustomDepth(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-depth-input" />
-                    <input type="text" placeholder="Dur." value={customDuration} onChange={e => setCustomDuration(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-duration-input" />
+                    <input type="text" placeholder="Sets" value={customSets} onChange={e => setCustomSets(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-mt-sets-input" />
                     <input type="text" placeholder="Reps" value={customReps} onChange={e => setCustomReps(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-mt-reps-input" />
+                    <input type="text" placeholder="Dur." value={customDuration} onChange={e => setCustomDuration(e.target.value)} className="text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100 placeholder:text-gray-500" data-testid="custom-duration-input" />
                   </div>
                 )}
+
+                <label className="flex items-center gap-1 text-[10px] text-gray-300">
+                  <span className="shrink-0 w-12">Phase</span>
+                  <select
+                    value={customPhaseIdx === null ? '' : customPhaseIdx}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setCustomPhaseIdx(v === '' ? null : parseInt(v, 10));
+                    }}
+                    className="flex-1 text-[10px] py-1 px-1.5 rounded bg-gray-900/60 border border-gray-700/60 text-gray-100"
+                    data-testid="custom-phase-select"
+                  >
+                    <option value="">Auto (from start week)</option>
+                    {phaseRanges.map((r, i) => (
+                      <option key={r.stage.id ?? i} value={i}>
+                        {`P${i + 1}: ${r.stage.name}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
                 <div className="grid grid-cols-2 gap-1 items-center">
                   <input
@@ -2404,18 +2453,29 @@ export default function RecoverySimulatorDashboard({
                   onClick={() => {
                     const name = customName.trim();
                     if (!name) return;
-                    const startWeek = Math.max(0, Math.min(input.totalWeeks, customStartWeek ?? scrubWeek));
-                    // Resolve phase from the start week so the item lands on
-                    // the correct phase card via the explicit phaseIndex
-                    // path in mapItemToPhaseIndex.
-                    let phaseIdx = optimizerPhaseIdx;
-                    for (let i = phaseRanges.length - 1; i >= 0; i--) {
-                      const r = phaseRanges[i];
-                      const s = r.reached ? r.start : r.expectedStart;
-                      if (startWeek >= s) { phaseIdx = i; break; }
+                    // Phase picker wins; otherwise derive phase from start week.
+                    let phaseIdx: number;
+                    if (customPhaseIdx !== null && phaseRanges[customPhaseIdx]) {
+                      phaseIdx = customPhaseIdx;
+                    } else {
+                      const sw = Math.max(0, Math.min(input.totalWeeks, customStartWeek ?? scrubWeek));
+                      phaseIdx = optimizerPhaseIdx;
+                      for (let i = phaseRanges.length - 1; i >= 0; i--) {
+                        const r = phaseRanges[i];
+                        const s = r.reached ? r.start : r.expectedStart;
+                        if (sw >= s) { phaseIdx = i; break; }
+                      }
                     }
                     const phaseRange = phaseRanges[phaseIdx];
                     const phaseLabel = phaseRange?.stage.name;
+                    // If phase explicitly chosen and no startWeek override,
+                    // anchor the schedule to that phase's start week.
+                    const phaseStart = phaseRange ? (phaseRange.reached ? phaseRange.start : phaseRange.expectedStart) : scrubWeek;
+                    const startWeek = Math.max(0, Math.min(
+                      input.totalWeeks,
+                      customStartWeek ?? (customPhaseIdx !== null ? phaseStart : scrubWeek),
+                    ));
+                    const stableId = genStableId();
                     if (customKind === 'exercise' && onAddCustomExercises) {
                       const item: CustomExerciseInput = {
                         name,
@@ -2430,6 +2490,7 @@ export default function RecoverySimulatorDashboard({
                         phaseIndex: phaseRange?.stageIndex ?? phaseIdx,
                         phaseLabel,
                         userAuthored: true,
+                        stableId,
                       };
                       const idx = (customExercises ?? []).length;
                       onAddCustomExercises([item]);
@@ -2451,13 +2512,26 @@ export default function RecoverySimulatorDashboard({
                         phaseIndex: phaseRange?.stageIndex ?? phaseIdx,
                         phaseLabel,
                         userAuthored: true,
+                        stableId,
                       };
                       const idx = (customTechniques ?? []).length;
                       onAddCustomTechniques([item]);
                       addInterventionToActiveBranch(buildCustomTechniqueId(item, idx), startWeek);
                     }
                     setCustomJustAdded(`${name} · Wk ${startWeek}`);
+                    // Full form reset.
                     setCustomName('');
+                    setCustomRegion('');
+                    setCustomClinicalTarget('');
+                    setCustomSets('3');
+                    setCustomReps('10');
+                    setCustomTempo('');
+                    setCustomDuration('30s');
+                    setCustomGrade('III');
+                    setCustomDepth('');
+                    setCustomFrequency('3x/week');
+                    setCustomStartWeek(null);
+                    setCustomPhaseIdx(null);
                     window.setTimeout(() => setCustomJustAdded(null), 2500);
                   }}
                   className="w-full h-7 text-[11px] bg-amber-600 hover:bg-amber-500 text-white"

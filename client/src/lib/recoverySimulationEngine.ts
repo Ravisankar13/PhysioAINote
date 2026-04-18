@@ -369,6 +369,11 @@ export interface CustomExerciseInput {
   /** Marks items authored by the practitioner (vs AI-generated) so the
    *  UI can show a "Custom" badge. Engine math ignores this field. */
   userAuthored?: boolean;
+  /** Stable identity for removal/lookup. When present,
+   *  buildCustomExerciseId uses this instead of the positional
+   *  index, so removing one item from the middle of the list does
+   *  not invalidate the deterministic IDs of the others. */
+  stableId?: string;
 }
 
 export interface CustomManualTechniqueInput {
@@ -384,6 +389,8 @@ export interface CustomManualTechniqueInput {
   /** Marks items authored by the practitioner (vs AI-generated) so the
    *  UI can show a "Custom" badge. Engine math ignores this field. */
   userAuthored?: boolean;
+  /** Stable identity for removal/lookup. See CustomExerciseInput. */
+  stableId?: string;
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
@@ -412,11 +419,19 @@ const parseFrequencyPerWeek = (s: string | undefined): number => {
 };
 
 export function buildCustomExerciseId(ex: CustomExerciseInput, idx: number): string {
+  if (ex.stableId) return `custom_ex_s_${ex.stableId}`;
   return `custom_ex_${idx}_${slug(ex.name) || 'untitled'}`;
 }
 
 export function buildCustomTechniqueId(tech: CustomManualTechniqueInput, idx: number): string {
+  if (tech.stableId) return `custom_mt_s_${tech.stableId}`;
   return `custom_mt_${idx}_${slug(tech.name) || 'untitled'}`;
+}
+
+/** True when the given treatmentId belongs to a user/AI-promoted custom
+ *  item (either stableId-based or legacy index-based form). */
+export function isCustomTreatmentId(treatmentId: string): boolean {
+  return treatmentId.startsWith('custom_ex_') || treatmentId.startsWith('custom_mt_');
 }
 
 type TissueClass = 'tendon' | 'muscle' | 'joint' | 'fascia' | 'nerve' | 'generic';

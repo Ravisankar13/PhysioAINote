@@ -582,11 +582,30 @@ export default function RecoverySimulatorDashboard({
     const arch = archetypeRef.current;
     const stageIdx = currentStageIdxRef.current;
     const stage = arch ? arch.stages[Math.min(stageIdx, arch.stages.length - 1)] : undefined;
+    // Map SimulationInput.acuity ('acute'|'subacute'|'chronic') to a 0–100
+    // acuity score the proposer expects. Combine work + sport demand
+    // into a single load-demand axis. Pull region tags from the
+    // condition label as a low-effort hint.
+    const acuityScore = input.acuity === 'acute' ? 85 : input.acuity === 'subacute' ? 55 : 25;
+    const demand = Math.round(((input.workDemand ?? 0) + (input.sportDemand ?? 0)) / 2);
+    const regionTags = (conditionContext?.conditionLabel ?? '').toLowerCase().split(/\s+/).filter(Boolean);
     return proposeScheduleForTreatment(profile, {
       currentWeek: startWeek,
       archetypeStageTags: stage?.treatmentTags ?? [],
+      acuity: acuityScore,
+      irritability: Math.round((input.irritability ?? 0) * 100) > 100
+        ? input.irritability
+        : (input.irritability <= 1 ? input.irritability * 100 : input.irritability),
+      severity: input.conditionSeverity <= 1 ? input.conditionSeverity * 100 : input.conditionSeverity,
+      primaryTissue: conditionContext?.primaryTissue,
+      regionTags,
+      age: conditionContext?.ageYears ?? undefined,
+      romPercent: conditionContext?.baselineRomPercent,
+      workSportDemand: demand,
+      adherence: input.patientAdherence,
     });
-  }, [customExercises, customTechniques]);
+  }, [customExercises, customTechniques, input.acuity, input.irritability, input.conditionSeverity,
+      input.workDemand, input.sportDemand, input.patientAdherence, conditionContext]);
 
   const addInterventionToActiveBranch = useCallback((treatmentId: string, startWeek: number) => {
     interventionIdCounterRef.current += 1;
@@ -626,29 +645,126 @@ export default function RecoverySimulatorDashboard({
     )));
   }, [activeBranchId]);
 
-  /** Re-run the AI schedule proposer for every intervention on the
-   *  active branch (keeps each intervention's startWeek as-is). */
+  /** Diff preview state for bulk re-frequency. Maps interventionId →
+   *  the proposed schedule. While set, the UI renders a confirm panel
+   *  showing per-field diffs and only commits on user confirmation. */
+  type BulkDiffEntry = {
+    interventionId: string;
+    treatmentId: string;
+    treatmentName: string;
+    isManual: boolean;
+    current: { sessionsPerWeek: number; cadenceWeeks: number; endWeek?: number; taperWeeks?: number; oneOff?: boolean };
+    proposed: { sessionsPerWeek: number; cadenceWeeks: number; endWeek?: number; taperWeeks?: number; oneOff?: boolean };
+    rationale: string;
+  };
+  const [bulkDiff, setBulkDiff] = useState<BulkDiffEntry[] | null>(null);
+  const [bulkIncludeManual, setBulkIncludeManual] = useState(false);
+
+  /** Compute proposals for every intervention and stage them in a diff
+   *  preview. The preview must be confirmed before the changes are
+   *  applied — no silent mutation. By default manual entries are
+   *  preserved (skipped); the user can toggle to include them. */
   const reproposeAllSchedules = useCallback(() => {
+    const branch = branches.find(b => b.id === activeBranchId);
+    if (!branch) return;
+    const customProfiles = buildCustomTreatmentProfiles(customExercises, customTechniques);
+    const lookup = new Map<string, string>();
+    TREATMENT_LIBRARY.forEach(t => lookup.set(t.id, t.name));
+    customProfiles.forEach(p => lookup.set(p.id, p.name));
+    const entries: BulkDiffEntry[] = branch.interventions.map(iv => {
+      const proposal = buildScheduleProposal(iv.treatmentId, iv.startWeek);
+      const isManual = iv.scheduleSource === 'manual';
+      return {
+        interventionId: iv.id,
+        treatmentId: iv.treatmentId,
+        treatmentName: lookup.get(iv.treatmentId) ?? iv.treatmentId,
+        isManual,
+        current: {
+          sessionsPerWeek: iv.sessionsPerWeek ?? 3,
+          cadenceWeeks: iv.cadenceWeeks ?? 1,
+          endWeek: iv.endWeek,
+          taperWeeks: iv.taperWeeks,
+          oneOff: iv.oneOff,
+        },
+        proposed: proposal ? {
+          sessionsPerWeek: proposal.sessionsPerWeek,
+          cadenceWeeks: proposal.cadenceWeeks,
+          endWeek: proposal.endWeek,
+          taperWeeks: proposal.taperWeeks,
+          oneOff: proposal.oneOff,
+        } : {
+          sessionsPerWeek: iv.sessionsPerWeek ?? 3,
+          cadenceWeeks: iv.cadenceWeeks ?? 1,
+          endWeek: iv.endWeek,
+          taperWeeks: iv.taperWeeks,
+          oneOff: iv.oneOff,
+        },
+        rationale: proposal?.rationale ?? '(no profile resolved)',
+      };
+    });
+    setBulkDiff(entries);
+  }, [activeBranchId, branches, customExercises, customTechniques, buildScheduleProposal]);
+
+  /** Commit a previously-staged bulk diff. Manual entries are kept
+   *  intact unless the user opted-in via bulkIncludeManual. */
+  const commitBulkDiff = useCallback(() => {
+    if (!bulkDiff) return;
+    const proposalsById = new Map(bulkDiff.map(e => [e.interventionId, e]));
     setBranches(prev => prev.map(b => (
       b.id !== activeBranchId ? b : {
         ...b,
         interventions: b.interventions.map(iv => {
-          const proposal = buildScheduleProposal(iv.treatmentId, iv.startWeek);
-          if (!proposal) return iv;
+          const entry = proposalsById.get(iv.id);
+          if (!entry) return iv;
+          if (entry.isManual && !bulkIncludeManual) return iv;
           return {
             ...iv,
-            sessionsPerWeek: proposal.sessionsPerWeek,
-            cadenceWeeks: proposal.cadenceWeeks,
-            endWeek: proposal.endWeek,
-            taperWeeks: proposal.taperWeeks,
-            taperFinalDose: proposal.taperFinalDose,
+            sessionsPerWeek: entry.proposed.sessionsPerWeek,
+            cadenceWeeks: entry.proposed.cadenceWeeks,
+            endWeek: entry.proposed.endWeek,
+            taperWeeks: entry.proposed.taperWeeks,
+            taperFinalDose: iv.taperFinalDose ?? 0.5,
+            oneOff: entry.proposed.oneOff,
             scheduleSource: 'ai',
-            scheduleRationale: proposal.rationale,
+            scheduleRationale: entry.rationale,
           };
         }),
       }
     )));
-  }, [activeBranchId, buildScheduleProposal]);
+    setBulkDiff(null);
+  }, [bulkDiff, activeBranchId, bulkIncludeManual]);
+
+  /** Auto-recompute trigger: when the patient's clinical context
+   *  changes materially (acuity, irritability, severity, demand,
+   *  adherence, primary tissue, age), open the bulk diff preview so
+   *  the clinician can choose to apply or dismiss the recomputed
+   *  schedules. Manual fields stay protected by default. */
+  const lastContextSigRef = useRef<string>('');
+  useEffect(() => {
+    const sig = JSON.stringify({
+      a: input.acuity,
+      i: Math.round((input.irritability ?? 0) * 100) / 100,
+      s: Math.round((input.conditionSeverity ?? 0) * 100) / 100,
+      w: input.workDemand, sp: input.sportDemand,
+      ad: Math.round((input.patientAdherence ?? 0) * 100) / 100,
+      t: conditionContext?.primaryTissue,
+      ar: conditionContext?.archetypeId,
+      age: conditionContext?.ageYears,
+    });
+    if (lastContextSigRef.current && lastContextSigRef.current !== sig) {
+      const branch = branches.find(b => b.id === activeBranchId);
+      if (branch && branch.interventions.length > 0) {
+        // Defer to next tick so we don't fight an in-flight setBranches.
+        setTimeout(() => reproposeAllSchedules(), 0);
+      }
+    }
+    lastContextSigRef.current = sig;
+    // Intentionally only react to the context fields — not to branch
+    // identity churn — so we don't loop on our own state updates.
+  }, [input.acuity, input.irritability, input.conditionSeverity, input.workDemand,
+      input.sportDemand, input.patientAdherence, conditionContext?.primaryTissue,
+      conditionContext?.archetypeId, conditionContext?.ageYears,
+      activeBranchId, branches, reproposeAllSchedules]);
 
   const removeInterventionFromActive = useCallback((interventionId: string) => {
     // Look up the treatmentId synchronously from current state BEFORE
@@ -2810,6 +2926,62 @@ export default function RecoverySimulatorDashboard({
                 </button>
               )}
             </div>
+            {bulkDiff && (
+              <div className="mb-1 rounded border border-violet-700/50 bg-violet-950/30 p-1.5 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] text-violet-200 font-semibold flex items-center gap-1">
+                    <Sparkles className="h-2.5 w-2.5" />Review proposed schedule changes
+                  </div>
+                  <label className="flex items-center gap-1 text-[9px] text-violet-200/80">
+                    <input
+                      type="checkbox"
+                      checked={bulkIncludeManual}
+                      onChange={e => setBulkIncludeManual(e.target.checked)}
+                      className="h-3 w-3"
+                    />
+                    Include manually-edited
+                  </label>
+                </div>
+                <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+                  {bulkDiff.map(d => {
+                    const skipped = d.isManual && !bulkIncludeManual;
+                    const fmt = (s: typeof d.current) => `${s.oneOff ? 'one-off' : `${s.sessionsPerWeek}×/wk`}` +
+                      `${s.cadenceWeeks > 1 && !s.oneOff ? `, every ${s.cadenceWeeks}w` : ''}` +
+                      `${s.endWeek !== undefined ? `, end wk ${s.endWeek}` : ''}` +
+                      `${s.taperWeeks ? `, taper ${s.taperWeeks}w` : ''}`;
+                    const changed = JSON.stringify(d.current) !== JSON.stringify(d.proposed);
+                    return (
+                      <div key={d.interventionId} className={`text-[9px] rounded border px-1.5 py-1 ${skipped ? 'border-gray-800 bg-gray-900/40 opacity-60' : changed ? 'border-violet-700/40 bg-violet-900/20' : 'border-gray-800 bg-gray-900/40'}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-gray-100 font-medium truncate">{d.treatmentName}</span>
+                          {d.isManual && <span className="px-1 rounded border border-amber-700/40 bg-amber-900/30 text-amber-200">manual</span>}
+                          {!changed && <span className="text-gray-500">no change</span>}
+                        </div>
+                        {changed && !skipped && (
+                          <div className="mt-0.5 text-gray-400">
+                            <span className="line-through text-gray-500">{fmt(d.current)}</span>
+                            <span className="text-violet-300"> → {fmt(d.proposed)}</span>
+                          </div>
+                        )}
+                        {changed && skipped && (
+                          <div className="mt-0.5 text-gray-500 italic">manual override preserved</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-end gap-1.5 pt-0.5">
+                  <button
+                    onClick={() => setBulkDiff(null)}
+                    className="text-[10px] px-2 py-0.5 rounded border border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700"
+                  >Cancel</button>
+                  <button
+                    onClick={commitBulkDiff}
+                    className="text-[10px] px-2 py-0.5 rounded border border-violet-600 bg-violet-700/60 text-violet-50 hover:bg-violet-600/70"
+                  >Apply</button>
+                </div>
+              </div>
+            )}
             {activeBranch.interventions.length === 0 && <div className="text-[10px] text-gray-500 italic">No active treatments</div>}
             <div className="space-y-1">
               {activeBranch.interventions.map(i => {
@@ -2851,24 +3023,56 @@ export default function RecoverySimulatorDashboard({
                         <Trash2 className="h-2.5 w-2.5" />
                       </button>
                     </div>
-                    <div className="mt-1 grid grid-cols-4 gap-1.5 text-[9px] text-gray-400">
+                    <div className="mt-1 grid grid-cols-5 gap-1.5 text-[9px] text-gray-400">
+                      <label className="flex flex-col gap-0.5">
+                        <span>Start wk</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={Math.max(0, (i.endWeek ?? scrubWeek + 52) - 1)}
+                          value={i.startWeek}
+                          onChange={e => updateInterventionSchedule(i.id, { startWeek: Number(e.target.value), scheduleSource: 'manual' })}
+                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100 w-full"
+                        />
+                      </label>
                       <label className="flex flex-col gap-0.5">
                         <span>Sessions/wk</span>
                         <select
-                          value={sessions}
+                          value={i.oneOff ? 'oneoff' : sessions}
+                          disabled={!!i.oneOff}
                           onChange={e => updateInterventionSchedule(i.id, { sessionsPerWeek: Number(e.target.value), scheduleSource: 'manual' })}
-                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100"
+                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100 disabled:opacity-50"
                         >
+                          {i.oneOff && <option value="oneoff">—</option>}
                           {[1, 2, 3, 4, 5, 6, 7].map(n => <option key={n} value={n}>{n}×</option>)}
                         </select>
                       </label>
                       <label className="flex flex-col gap-0.5">
                         <span>Cadence</span>
                         <select
-                          value={cadence}
-                          onChange={e => updateInterventionSchedule(i.id, { cadenceWeeks: Number(e.target.value), scheduleSource: 'manual' })}
+                          value={i.oneOff ? 'oneoff' : cadence}
+                          onChange={e => {
+                            const v = e.target.value;
+                            if (v === 'oneoff') {
+                              updateInterventionSchedule(i.id, {
+                                oneOff: true,
+                                cadenceWeeks: 1,
+                                endWeek: i.startWeek + 1,
+                                taperWeeks: undefined,
+                                taperFinalDose: undefined,
+                                scheduleSource: 'manual',
+                              });
+                            } else {
+                              updateInterventionSchedule(i.id, {
+                                oneOff: false,
+                                cadenceWeeks: Number(v),
+                                scheduleSource: 'manual',
+                              });
+                            }
+                          }}
                           className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100"
                         >
+                          <option value="oneoff">one-off</option>
                           <option value={1}>weekly</option>
                           <option value={2}>2-weekly</option>
                           <option value={3}>3-weekly</option>
@@ -2890,12 +3094,13 @@ export default function RecoverySimulatorDashboard({
                         <span>Taper wks</span>
                         <select
                           value={taperWeeks}
+                          disabled={!!i.oneOff}
                           onChange={e => updateInterventionSchedule(i.id, {
                             taperWeeks: Number(e.target.value) || undefined,
                             taperFinalDose: Number(e.target.value) > 0 ? (i.taperFinalDose ?? 0.5) : undefined,
                             scheduleSource: 'manual',
                           })}
-                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100"
+                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100 disabled:opacity-50"
                         >
                           <option value={0}>none</option>
                           <option value={1}>1 wk</option>

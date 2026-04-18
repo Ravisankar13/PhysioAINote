@@ -93,6 +93,10 @@ export interface Intervention {
    *  interpolates dose from 1.0 → taperFinalDose. */
   taperWeeks?: number;
   taperFinalDose?: number;
+  /** Single-delivery treatment (e.g., one-off injection, single
+   *  education booster). When true the engine applies the effect on
+   *  the start week only; carryover still decays normally afterwards. */
+  oneOff?: boolean;
   /** Provenance + rationale for the chosen schedule, surfaced in UI. */
   scheduleSource?: 'manual' | 'ai' | 'default';
   scheduleRationale?: string;
@@ -748,13 +752,55 @@ export interface ScheduleProposal {
   cadenceWeeks: number;
   taperWeeks?: number;
   taperFinalDose?: number;
+  oneOff?: boolean;
   rationale: string;
+}
+
+/** Patient + skeleton context the proposer can reason over. Every
+ *  field is optional; the proposer degrades gracefully (modality +
+ *  defaults) when no context is supplied. */
+export interface ScheduleProposerContext {
+  /** Engine sim week the schedule is anchored to. */
+  currentWeek?: number;
+  /** Treatment-tag list from the patient's currently-active archetype
+   *  stage (e.g., ['plyo', 'sport'] or ['education', 'manual']). */
+  archetypeStageTags?: string[];
+  /** Coarse delivery intensity preference. */
+  intensity?: 'low' | 'standard' | 'high';
+  /** 0–100; high acuity → more frequent early hands-on, shorter
+   *  duration window. */
+  acuity?: number;
+  /** 0–100; high irritability → reduced sessions/wk for high-load
+   *  modalities, more frequent for analgesic ones. */
+  irritability?: number;
+  /** 0–100; severity raises duration and biases towards in-clinic
+   *  manual/electrophysical cadence. */
+  severity?: number;
+  /** Primary tissue class — bone/disc bias to longer windows; nerve
+   *  to gentler, more spaced cadences. */
+  primaryTissue?: ConditionTissue;
+  /** Free-form region/joint hints (lower-back, shoulder, etc.) used
+   *  to apply region-specific carryover heuristics. */
+  regionTags?: string[];
+  /** Patient age in years; <18 and >65 reduce per-session load
+   *  tolerance, biasing towards smaller bouts × more days. */
+  age?: number;
+  /** Current ROM percent (0–100); low ROM → daily mobility cadence. */
+  romPercent?: number;
+  /** Work / sport demand 0–100; high demand → keep RTS / plyo at
+   *  prescribed frequency, extend program duration. */
+  workSportDemand?: number;
+  /** 0–100 (or 0–1); low adherence → cap sessions/wk to a realistic
+   *  ceiling and prefer daily-cue modalities (taping, education). */
+  adherence?: number;
 }
 
 /**
  * Heuristic AI-style schedule proposer for a treatment. Uses modality,
  * the profile's calibrated default sessions/week, and (when available)
- * the profile's natural duration to suggest a realistic dosing schedule.
+ * the patient's clinical + skeleton context (acuity, irritability,
+ * severity, primary tissue, region, age, ROM, demand, adherence) to
+ * suggest a realistic dosing schedule with a short rationale.
  *
  * The proposer is intentionally local + deterministic so it runs
  * instantly when treatments are added and can be re-run as a "bulk
@@ -762,13 +808,44 @@ export interface ScheduleProposal {
  */
 export function proposeScheduleForTreatment(
   profile: TreatmentEffectProfile,
-  opts?: { currentWeek?: number; archetypeStageTags?: string[]; intensity?: 'low' | 'standard' | 'high' },
+  opts?: ScheduleProposerContext,
 ): ScheduleProposal {
   const startWeek = Math.max(0, Math.round(opts?.currentWeek ?? 0));
   const intensity = opts?.intensity ?? 'standard';
   const intensityScale = intensity === 'high' ? 1.25 : intensity === 'low' ? 0.8 : 1;
   const baseSessions = profile.defaultSessionsPerWeek ?? 3;
   const naturalDuration = profile.peakWeeks + profile.durationWeeks;
+  // Normalise context inputs to the [0,1] / sane-default ranges the
+  // heuristics below expect.
+  const acuity = clampRange(opts?.acuity, 0, 100, 50) / 100;
+  const irritability = clampRange(opts?.irritability, 0, 100, 40) / 100;
+  const severity = clampRange(opts?.severity, 0, 100, 50) / 100;
+  const adherenceRaw = opts?.adherence ?? 80;
+  const adherence = (adherenceRaw > 1 ? adherenceRaw : adherenceRaw * 100) / 100;
+  const demand = clampRange(opts?.workSportDemand, 0, 100, 50) / 100;
+  const romFrac = clampRange(opts?.romPercent, 0, 100, 80) / 100;
+  const age = opts?.age;
+  const tissue = opts?.primaryTissue;
+  const region = (opts?.regionTags ?? []).map(r => r.toLowerCase());
+
+  // Adherence ceiling — clinicians realistically can't prescribe 7×/wk
+  // to a patient with sub-50% adherence and expect compliance.
+  const adherenceSessionCap = adherence < 0.4 ? 2 : adherence < 0.6 ? 4 : adherence < 0.8 ? 5 : 7;
+  // Tissue-specific duration bias — bone / disc / nerve heal slower
+  // and need a longer active window than soft-tissue dominant cases.
+  const tissueDurationMul = tissue === 'bone' ? 1.6
+    : tissue === 'disc' ? 1.4
+      : tissue === 'nerve' ? 1.3
+        : tissue === 'ligament' ? 1.2
+          : 1.0;
+  // Age load-tolerance modifier — paediatric / older adults benefit
+  // from smaller per-session loads spread across more days.
+  const ageSpreadBonus = (age !== undefined && (age < 16 || age > 65)) ? 1 : 0;
+  // High-irritability damping for high-load modalities.
+  const irritDamp = irritability > 0.7 ? 0.7 : irritability > 0.5 ? 0.85 : 1;
+  // Region-specific carryover boost for chronic spinal cases
+  // (education + pacing keeps low cadence but long carryover).
+  const isSpinalRegion = region.some(r => r.includes('back') || r.includes('lumbar') || r.includes('cervical') || r.includes('spine'));
 
   let sessionsPerWeek = Math.max(1, Math.round(baseSessions * intensityScale));
   let cadenceWeeks = 1;
@@ -777,57 +854,97 @@ export function proposeScheduleForTreatment(
   let taperFinalDose: number | undefined;
   let rationale = '';
 
+  let oneOff: boolean | undefined;
+  // Composite duration multiplier from clinical context.
+  const ctxDurationMul = tissueDurationMul * (1 + 0.4 * severity) * (demand > 0.7 ? 1.2 : 1);
+  const adjDuration = (base: number) => Math.max(1, Math.round(base * ctxDurationMul));
+  // Tagging the rationale with the clinical drivers used.
+  const drivers: string[] = [];
+  if (acuity > 0.7) drivers.push('high acuity');
+  if (irritability > 0.7) drivers.push('high irritability');
+  if (severity > 0.7) drivers.push('high severity');
+  if (adherence < 0.6) drivers.push('low adherence');
+  if (demand > 0.7) drivers.push('high work/sport demand');
+  if (age !== undefined && age < 16) drivers.push('paediatric');
+  else if (age !== undefined && age > 65) drivers.push('older adult');
+  if (tissue && tissue !== 'generic') drivers.push(`${tissue} tissue`);
+  const driverTag = drivers.length ? ` (${drivers.join(', ')})` : '';
+
   switch (profile.modality) {
     case 'rest': {
+      // Higher acuity → longer offload; lower acuity → very short
       sessionsPerWeek = 7; cadenceWeeks = 1;
-      endWeek = startWeek + Math.min(3, naturalDuration);
+      const restWks = Math.max(1, Math.min(4, Math.round(1 + acuity * 3)));
+      endWeek = startWeek + Math.min(restWks, naturalDuration);
       taperWeeks = 1; taperFinalDose = 0.3;
-      rationale = 'Acute offload daily for short window, then taper as inflammation settles to avoid deconditioning.';
+      rationale = `Daily offload for ${restWks} wk(s) then taper to avoid deconditioning${driverTag}.`;
       break;
     }
     case 'manual': {
-      sessionsPerWeek = Math.max(1, Math.min(2, Math.round(baseSessions * intensityScale)));
-      cadenceWeeks = 1;
-      endWeek = startWeek + Math.min(6, naturalDuration);
-      taperWeeks = 2; taperFinalDose = 0.5;
-      rationale = 'Clinic-typical 1–2× weekly hands-on; taper over final 2 weeks as patient self-manages.';
+      // Clinic cadence: 2-3×/wk for high-irritability acute, 1-2×/wk
+      // standard, fortnightly maintenance for low-irritability chronic.
+      let weekly = Math.round(baseSessions * intensityScale);
+      if (acuity > 0.7 || severity > 0.7) weekly = Math.max(weekly, 2);
+      if (irritability > 0.7) weekly = Math.max(weekly, 2);
+      if (acuity < 0.3 && irritability < 0.3) {
+        cadenceWeeks = 2; weekly = 1;
+      }
+      sessionsPerWeek = Math.max(1, Math.min(adherenceSessionCap, weekly));
+      const dur = adjDuration(Math.min(6, naturalDuration));
+      endWeek = startWeek + dur;
+      taperWeeks = Math.min(2, Math.max(1, Math.round(dur / 4)));
+      taperFinalDose = 0.5;
+      rationale = `${cadenceWeeks > 1 ? 'Fortnightly' : `${sessionsPerWeek}×/wk`} clinic hands-on across ${dur} wks; taper as patient self-manages${driverTag}.`;
       break;
     }
     case 'electrophysical': {
-      sessionsPerWeek = 3; cadenceWeeks = 1;
-      endWeek = startWeek + Math.min(4, naturalDuration);
+      // High irritability → 3-5×/wk early; low irritability → 2×/wk
+      sessionsPerWeek = Math.min(adherenceSessionCap, irritability > 0.6 ? 4 : 3);
+      cadenceWeeks = 1;
+      const dur = adjDuration(Math.min(4, naturalDuration));
+      endWeek = startWeek + dur;
       taperWeeks = 1; taperFinalDose = 0.4;
-      rationale = 'Symptomatic modulation 3×/wk in clinic for the irritable phase; brief taper as pain resolves.';
+      rationale = `${sessionsPerWeek}×/wk symptomatic modulation while irritable; taper as pain resolves${driverTag}.`;
       break;
     }
     case 'education': {
+      // Intensive weekly start, then carryover monthly checkpoint.
       sessionsPerWeek = 1; cadenceWeeks = 1;
-      endWeek = startWeek + Math.min(3, naturalDuration);
-      rationale = 'Initial weekly education sessions; long carryover means switching to monthly check-ins after.';
-      // Schedule a follow-up monthly cadence after the intensive window
-      // by simply ending the intervention — clinician can re-add as needed.
+      const intensiveWks = isSpinalRegion ? 4 : 3;
+      endWeek = startWeek + Math.min(intensiveWks, naturalDuration);
+      // Long carryover from education means a single follow-up
+      // booster is more realistic than continued weekly contact.
+      rationale = `Weekly pain-neuroscience / pacing education for ${intensiveWks} wks, then re-add a one-off booster monthly${driverTag}.`;
       break;
     }
     case 'taping': {
       sessionsPerWeek = 7; cadenceWeeks = 1;
-      endWeek = startWeek + Math.min(4, naturalDuration);
-      taperWeeks = 2; taperFinalDose = 0;
-      rationale = 'Worn daily for short-term offload; taper off over 2 weeks as capacity returns.';
+      const wearWks = Math.min(4, Math.max(2, Math.round(2 + severity * 2)));
+      endWeek = startWeek + Math.min(wearWks, naturalDuration);
+      taperWeeks = Math.min(2, wearWks - 1); taperFinalDose = 0;
+      rationale = `Daily wear ${wearWks} wks; taper as capacity returns${driverTag}.`;
       break;
     }
     case 'medication': {
       sessionsPerWeek = 7; cadenceWeeks = 1;
       endWeek = startWeek + Math.min(2, naturalDuration);
       taperWeeks = 1; taperFinalDose = 0.5;
-      rationale = 'Daily symptomatic cover for short course; taper to minimum effective dose.';
+      rationale = `Short daily symptomatic course; taper to minimum effective dose${driverTag}.`;
       break;
     }
     case 'load': {
       // Isometric loading vs graded load — both are home/gym programs
-      sessionsPerWeek = Math.max(3, Math.round(baseSessions * intensityScale));
+      let weekly = Math.max(3, Math.round(baseSessions * intensityScale));
+      // High irritability + load → reduce to keep below pain threshold
+      weekly = Math.round(weekly * irritDamp);
+      // Low ROM → add a daily gentle bout via spreading
+      if (romFrac < 0.6) weekly = Math.max(weekly, 5);
+      // Older adults / paediatric → spread the load
+      weekly = Math.min(adherenceSessionCap, weekly + ageSpreadBonus);
+      sessionsPerWeek = Math.max(2, weekly);
       cadenceWeeks = 1;
-      endWeek = startWeek + naturalDuration;
-      rationale = `Home program ${sessionsPerWeek}×/wk through the loading phase; sustained dose drives capacity gains.`;
+      endWeek = startWeek + adjDuration(naturalDuration);
+      rationale = `Home loading ${sessionsPerWeek}×/wk through capacity-build phase${driverTag}.`;
       break;
     }
     case 'exercise': {
@@ -835,25 +952,40 @@ export function proposeScheduleForTreatment(
       const isPlyo = tags.some(t => t.includes('plyo') || t.includes('energy storage') || t.includes('rts'));
       const isMotor = tags.some(t => t.includes('motor') || t.includes('control') || t.includes('stabili'));
       if (isPlyo) {
-        sessionsPerWeek = 2; cadenceWeeks = 1;
-        endWeek = startWeek + naturalDuration;
-        rationale = 'Plyometric / RTS work limited to 2×/wk to allow tissue recovery between high-load sessions.';
+        // Plyo cadence sensitive to irritability and demand.
+        const weekly = irritability > 0.5 ? 1 : (demand > 0.7 ? 3 : 2);
+        sessionsPerWeek = Math.min(adherenceSessionCap, weekly);
+        cadenceWeeks = 1;
+        endWeek = startWeek + adjDuration(naturalDuration);
+        rationale = `Plyometric / RTS at ${sessionsPerWeek}×/wk to allow recovery between high-load sessions${driverTag}.`;
       } else if (isMotor) {
-        sessionsPerWeek = Math.max(4, Math.round(baseSessions * intensityScale));
+        let weekly = Math.max(4, Math.round(baseSessions * intensityScale));
+        if (romFrac < 0.6) weekly = Math.min(adherenceSessionCap, weekly + 1);
+        sessionsPerWeek = Math.min(adherenceSessionCap, weekly);
         cadenceWeeks = 1;
-        endWeek = startWeek + naturalDuration;
-        rationale = 'Motor-control work tolerates daily/near-daily practice — short low-load sets.';
+        endWeek = startWeek + adjDuration(naturalDuration);
+        rationale = `Motor-control work ${sessionsPerWeek}×/wk — short low-load sets, daily-tolerant${driverTag}.`;
       } else {
-        sessionsPerWeek = Math.max(3, Math.round(baseSessions * intensityScale));
+        let weekly = Math.max(3, Math.round(baseSessions * intensityScale));
+        weekly = Math.round(weekly * irritDamp);
+        sessionsPerWeek = Math.min(adherenceSessionCap, Math.max(2, weekly));
         cadenceWeeks = 1;
-        endWeek = startWeek + naturalDuration;
-        rationale = `Strength/loading program ${sessionsPerWeek}×/wk through the active phase.`;
+        endWeek = startWeek + adjDuration(naturalDuration);
+        rationale = `Strength / loading program ${sessionsPerWeek}×/wk through the active phase${driverTag}.`;
       }
       break;
     }
   }
 
-  return { startWeek, endWeek, sessionsPerWeek, cadenceWeeks, taperWeeks, taperFinalDose, rationale };
+  return { startWeek, endWeek, sessionsPerWeek, cadenceWeeks, taperWeeks, taperFinalDose, oneOff, rationale };
+}
+
+/** Local helper used by proposeScheduleForTreatment — clamp a number
+ *  to a range, falling back to a default when the input is undefined
+ *  or non-finite. Kept inline to keep the proposer self-contained. */
+function clampRange(v: number | undefined, lo: number, hi: number, dflt: number): number {
+  if (v === undefined || !Number.isFinite(v)) return dflt;
+  return Math.max(lo, Math.min(hi, v));
 }
 
 export type ConditionTissue = 'tendon' | 'ligament' | 'muscle' | 'nerve' | 'joint' | 'fascia' | 'disc' | 'bone' | 'generic';
@@ -1213,20 +1345,27 @@ function applyTreatmentEffects(
     const treatment = ctx.lookup.get(intv.treatmentId);
     if (!treatment) continue;
 
-    // Cadence gate — fortnightly/monthly treatments only deliver on
-    // their schedule weeks. The intro marker still fires on startWeek
-    // (which is by definition a delivery week) so the chart still
-    // shows when the treatment was added.
-    const cadence = Math.max(1, Math.round(intv.cadenceWeeks ?? 1));
-    if (!ended && cadence > 1) {
-      const offset = week - intv.startWeek;
-      if (offset > 0 && offset % cadence !== 0) {
-        // Skip effect application this week, but still let the
-        // remove marker fire below if it's the endWeek.
-        if (intv.endWeek === week) {
-          markers.push({ week, type: 'remove', label: `Stop ${treatment.name}`, treatmentId: treatment.id });
+    // One-off treatments only fire on the start week — carryover
+    // afterwards still decays normally via effectRamp.
+    if (intv.oneOff && week !== intv.startWeek) {
+      // Carryover from the single delivery still flows through
+      // effectRamp below, but we must skip the cadence gate logic.
+    } else {
+      // Cadence gate — fortnightly/monthly treatments only deliver on
+      // their schedule weeks. The intro marker still fires on startWeek
+      // (which is by definition a delivery week) so the chart still
+      // shows when the treatment was added.
+      const cadence = Math.max(1, Math.round(intv.cadenceWeeks ?? 1));
+      if (!ended && cadence > 1) {
+        const offset = week - intv.startWeek;
+        if (offset > 0 && offset % cadence !== 0) {
+          // Skip effect application this week, but still let the
+          // remove marker fire below if it's the endWeek.
+          if (intv.endWeek === week) {
+            markers.push({ week, type: 'remove', label: `Stop ${treatment.name}`, treatmentId: treatment.id });
+          }
+          continue;
         }
-        continue;
       }
     }
 

@@ -36,6 +36,7 @@ import {
   type GoalMode,
   type BaselineMode,
   type TreatmentEffectProfile,
+  type Intervention,
   type CustomExerciseInput,
   type CustomManualTechniqueInput,
   type ConditionContext,
@@ -53,6 +54,7 @@ import {
   buildCustomTechniqueId,
   isCustomTreatmentId,
   tissueProfileForContext,
+  proposeScheduleForTreatment,
 } from "@/lib/recoverySimulationEngine";
 import { findConditionProfile } from "@/lib/patientFactorsEngine";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
@@ -565,17 +567,88 @@ export default function RecoverySimulatorDashboard({
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
     return `${Date.now().toString(36)}_${stableIdCounterRef.current}_${Math.random().toString(36).slice(2, 8)}`;
   }, []);
+  /** Refs kept in sync with the current archetype and stage index so
+   *  the schedule-proposer callbacks (defined here, before those values
+   *  are computed in the render body) can read the latest values
+   *  without a temporal-dead-zone error. */
+  const archetypeRef = useRef<ReturnType<typeof getArchetypeForCondition> | null>(null);
+  const currentStageIdxRef = useRef<number>(0);
+
+  const buildScheduleProposal = useCallback((treatmentId: string, startWeek: number) => {
+    const customProfiles = buildCustomTreatmentProfiles(customExercises, customTechniques);
+    const profile = customProfiles.find(p => p.id === treatmentId)
+      ?? TREATMENT_LIBRARY.find(t => t.id === treatmentId);
+    if (!profile) return undefined;
+    const arch = archetypeRef.current;
+    const stageIdx = currentStageIdxRef.current;
+    const stage = arch ? arch.stages[Math.min(stageIdx, arch.stages.length - 1)] : undefined;
+    return proposeScheduleForTreatment(profile, {
+      currentWeek: startWeek,
+      archetypeStageTags: stage?.treatmentTags ?? [],
+    });
+  }, [customExercises, customTechniques]);
+
   const addInterventionToActiveBranch = useCallback((treatmentId: string, startWeek: number) => {
     interventionIdCounterRef.current += 1;
     const seq = interventionIdCounterRef.current;
     const uid = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
       ? crypto.randomUUID()
       : `${Date.now()}_${seq}_${Math.random().toString(36).slice(2, 8)}`;
+    const proposal = buildScheduleProposal(treatmentId, startWeek);
     setBranches(prev => prev.map(b => b.id !== activeBranchId ? b : {
       ...b,
-      interventions: [...b.interventions, { id: `i_${uid}`, treatmentId, startWeek, doseMultiplier: 1, adherence: input.patientAdherence }],
+      interventions: [...b.interventions, {
+        id: `i_${uid}`,
+        treatmentId,
+        startWeek,
+        doseMultiplier: 1,
+        adherence: input.patientAdherence,
+        sessionsPerWeek: proposal?.sessionsPerWeek,
+        cadenceWeeks: proposal?.cadenceWeeks,
+        endWeek: proposal?.endWeek,
+        taperWeeks: proposal?.taperWeeks,
+        taperFinalDose: proposal?.taperFinalDose,
+        scheduleSource: proposal ? 'ai' : 'default',
+        scheduleRationale: proposal?.rationale,
+      }],
     }));
-  }, [activeBranchId, input.patientAdherence]);
+  }, [activeBranchId, input.patientAdherence, buildScheduleProposal]);
+
+  /** Patch arbitrary schedule fields on one intervention. */
+  const updateInterventionSchedule = useCallback((interventionId: string, patch: Partial<Intervention>) => {
+    setBranches(prev => prev.map(b => (
+      b.id !== activeBranchId ? b : {
+        ...b,
+        interventions: b.interventions.map(iv => iv.id === interventionId
+          ? { ...iv, ...patch, scheduleSource: patch.scheduleSource ?? 'manual' }
+          : iv),
+      }
+    )));
+  }, [activeBranchId]);
+
+  /** Re-run the AI schedule proposer for every intervention on the
+   *  active branch (keeps each intervention's startWeek as-is). */
+  const reproposeAllSchedules = useCallback(() => {
+    setBranches(prev => prev.map(b => (
+      b.id !== activeBranchId ? b : {
+        ...b,
+        interventions: b.interventions.map(iv => {
+          const proposal = buildScheduleProposal(iv.treatmentId, iv.startWeek);
+          if (!proposal) return iv;
+          return {
+            ...iv,
+            sessionsPerWeek: proposal.sessionsPerWeek,
+            cadenceWeeks: proposal.cadenceWeeks,
+            endWeek: proposal.endWeek,
+            taperWeeks: proposal.taperWeeks,
+            taperFinalDose: proposal.taperFinalDose,
+            scheduleSource: 'ai',
+            scheduleRationale: proposal.rationale,
+          };
+        }),
+      }
+    )));
+  }, [activeBranchId, buildScheduleProposal]);
 
   const removeInterventionFromActive = useCallback((interventionId: string) => {
     // Look up the treatmentId synchronously from current state BEFORE
@@ -628,6 +701,13 @@ export default function RecoverySimulatorDashboard({
     if (archetype.progressionMode === 'criterion-gated') return critIdx;
     return Math.min(phaseIdx, critIdx);
   }, [archetype, stateAtScrub]);
+
+  // Keep schedule-proposer refs in sync so callbacks defined earlier
+  // in this component body (before archetype/scrubbedStageIdx are
+  // computed) can read the latest archetype + current stage at call
+  // time without temporal-dead-zone issues.
+  useEffect(() => { archetypeRef.current = archetype; }, [archetype]);
+  useEffect(() => { currentStageIdxRef.current = scrubbedStageIdx; }, [scrubbedStageIdx]);
 
   /** Display unit shown on chart axis and current-week badges. Purely
    *  criterion-gated archetypes show "Checkpoint" — the underlying
@@ -2718,19 +2798,120 @@ export default function RecoverySimulatorDashboard({
         </div>
         {showRemoveTreatment && (
           <div className="mt-2 bg-gray-950/60 border border-gray-800 rounded p-2">
-            <div className="text-[10px] text-gray-400 mb-1">Active Treatments — click to remove:</div>
-            <div className="flex flex-wrap gap-1">
-              {activeBranch.interventions.length === 0 && <div className="text-[10px] text-gray-500 italic">No active treatments</div>}
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[10px] text-gray-400">Active Treatments — schedule:</div>
+              {activeBranch.interventions.length > 0 && (
+                <button
+                  onClick={reproposeAllSchedules}
+                  className="text-[10px] px-2 py-0.5 rounded bg-violet-900/40 text-violet-100 border border-violet-700/50 hover:bg-violet-800/60 flex items-center gap-1"
+                  title="Re-run AI schedule proposer for every active treatment"
+                >
+                  <Sparkles className="h-2.5 w-2.5" />AI re-propose all
+                </button>
+              )}
+            </div>
+            {activeBranch.interventions.length === 0 && <div className="text-[10px] text-gray-500 italic">No active treatments</div>}
+            <div className="space-y-1">
               {activeBranch.interventions.map(i => {
                 const t = treatmentLookup.get(i.treatmentId);
+                const sessions = i.sessionsPerWeek ?? t?.defaultSessionsPerWeek ?? 3;
+                const cadence = i.cadenceWeeks ?? 1;
+                const taperWeeks = i.taperWeeks ?? 0;
+                const naturalEnd = t ? i.startWeek + t.peakWeeks + t.durationWeeks : i.startWeek + 6;
+                const endWeek = i.endWeek ?? naturalEnd;
+                const sourceBadge = i.scheduleSource === 'manual'
+                  ? { label: 'manual', cls: 'bg-amber-900/40 text-amber-200 border-amber-700/40' }
+                  : i.scheduleSource === 'default'
+                    ? { label: 'default', cls: 'bg-gray-800 text-gray-300 border-gray-700' }
+                    : { label: 'AI', cls: 'bg-violet-900/40 text-violet-200 border-violet-700/40' };
                 return (
-                  <button
-                    key={i.id}
-                    onClick={() => removeInterventionFromActive(i.id)}
-                    className="text-[10px] px-2 py-0.5 rounded bg-red-900/30 text-red-200 border border-red-700/40 hover:bg-red-800/40 flex items-center gap-1"
-                  >
-                    <Trash2 className="h-2.5 w-2.5" />{t?.name ?? i.treatmentId} · w{i.startWeek}
-                  </button>
+                  <div key={i.id} className="bg-gray-900/60 border border-gray-800/60 rounded p-1.5">
+                    <div className="flex items-center gap-2 text-[10px]">
+                      <span className="flex-1 text-gray-100 font-medium truncate">{t?.name ?? i.treatmentId}</span>
+                      <span className={`px-1 rounded border text-[9px] ${sourceBadge.cls}`}>{sourceBadge.label}</span>
+                      <button
+                        onClick={() => {
+                          const proposal = buildScheduleProposal(i.treatmentId, i.startWeek);
+                          if (proposal) updateInterventionSchedule(i.id, {
+                            sessionsPerWeek: proposal.sessionsPerWeek,
+                            cadenceWeeks: proposal.cadenceWeeks,
+                            endWeek: proposal.endWeek,
+                            taperWeeks: proposal.taperWeeks,
+                            taperFinalDose: proposal.taperFinalDose,
+                            scheduleSource: 'ai',
+                            scheduleRationale: proposal.rationale,
+                          });
+                        }}
+                        className="px-1 rounded text-violet-300 hover:text-violet-100 hover:bg-violet-900/30"
+                        title="Re-run AI schedule proposer for this treatment"
+                      >
+                        <Sparkles className="h-2.5 w-2.5" />
+                      </button>
+                      <button onClick={() => removeInterventionFromActive(i.id)} className="text-red-400 hover:text-red-200" title="Remove">
+                        <Trash2 className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                    <div className="mt-1 grid grid-cols-4 gap-1.5 text-[9px] text-gray-400">
+                      <label className="flex flex-col gap-0.5">
+                        <span>Sessions/wk</span>
+                        <select
+                          value={sessions}
+                          onChange={e => updateInterventionSchedule(i.id, { sessionsPerWeek: Number(e.target.value), scheduleSource: 'manual' })}
+                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7].map(n => <option key={n} value={n}>{n}×</option>)}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-0.5">
+                        <span>Cadence</span>
+                        <select
+                          value={cadence}
+                          onChange={e => updateInterventionSchedule(i.id, { cadenceWeeks: Number(e.target.value), scheduleSource: 'manual' })}
+                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100"
+                        >
+                          <option value={1}>weekly</option>
+                          <option value={2}>2-weekly</option>
+                          <option value={3}>3-weekly</option>
+                          <option value={4}>monthly</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-0.5">
+                        <span>End wk</span>
+                        <input
+                          type="number"
+                          min={i.startWeek + 1}
+                          max={Math.max(i.startWeek + 1, scrubWeek + 52)}
+                          value={endWeek}
+                          onChange={e => updateInterventionSchedule(i.id, { endWeek: Number(e.target.value), scheduleSource: 'manual' })}
+                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100 w-full"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-0.5">
+                        <span>Taper wks</span>
+                        <select
+                          value={taperWeeks}
+                          onChange={e => updateInterventionSchedule(i.id, {
+                            taperWeeks: Number(e.target.value) || undefined,
+                            taperFinalDose: Number(e.target.value) > 0 ? (i.taperFinalDose ?? 0.5) : undefined,
+                            scheduleSource: 'manual',
+                          })}
+                          className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-100"
+                        >
+                          <option value={0}>none</option>
+                          <option value={1}>1 wk</option>
+                          <option value={2}>2 wks</option>
+                          <option value={3}>3 wks</option>
+                          <option value={4}>4 wks</option>
+                        </select>
+                      </label>
+                    </div>
+                    {i.scheduleRationale && (
+                      <div className="mt-1 text-[9px] text-violet-300/80 italic flex items-start gap-1">
+                        <Sparkles className="h-2.5 w-2.5 shrink-0 mt-0.5" />
+                        <span className="leading-tight">{i.scheduleRationale}</span>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>

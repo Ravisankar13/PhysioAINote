@@ -63,6 +63,11 @@ export interface TreatmentEffectProfile {
   doseResponseSlope?: number;
   description?: string;
   gates?: TreatmentGate;
+  /** Sessions/week the profile's effect magnitudes were calibrated for.
+   *  When an Intervention sets a different sessionsPerWeek, the engine
+   *  scales the per-week dose by sqrt(sessions / defaultSessionsPerWeek)
+   *  (diminishing returns). Defaults to 3 if absent. */
+  defaultSessionsPerWeek?: number;
 }
 
 export interface Intervention {
@@ -73,6 +78,24 @@ export interface Intervention {
   doseMultiplier: number;
   adherence: number;
   label?: string;
+  /** Sessions/week the patient actually performs this treatment (1, 2, 3, 5, 7).
+   *  Scales effect magnitude relative to the profile's defaultSessionsPerWeek.
+   *  When undefined, falls back to the profile default (no scaling). */
+  sessionsPerWeek?: number;
+  /** Cadence in weeks: 1 = every week, 2 = fortnightly, 4 = monthly.
+   *  Weeks where (week - startWeek) % cadenceWeeks !== 0 are skipped
+   *  (no effect applied that week, but carryover from prior delivery
+   *  weeks still decays normally). Default 1. */
+  cadenceWeeks?: number;
+  /** Optional taper ramp applied as a dose multiplier in the last
+   *  taperWeeks of the intervention's active window (before endWeek,
+   *  or before the profile's natural duration if no endWeek). Linearly
+   *  interpolates dose from 1.0 → taperFinalDose. */
+  taperWeeks?: number;
+  taperFinalDose?: number;
+  /** Provenance + rationale for the chosen schedule, surfaced in UI. */
+  scheduleSource?: 'manual' | 'ai' | 'default';
+  scheduleRationale?: string;
 }
 
 export type GoalMode =
@@ -218,6 +241,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     irritabilityPenalty: 0,
     mistimingFlareRisk: 0,
     description: 'Acute offloading reduces inflammation and irritability; loses value in remodeling.',
+    defaultSessionsPerWeek: 7,
   },
   {
     id: 'manual_therapy',
@@ -232,6 +256,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     irritabilityPenalty: 0.4,
     mistimingFlareRisk: 8,
     description: 'Improves ROM and reduces stiffness; cautious in inflammatory phase.',
+    defaultSessionsPerWeek: 2,
   },
   {
     id: 'isometric_load',
@@ -246,6 +271,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     irritabilityPenalty: 0.5,
     mistimingFlareRisk: 10,
     description: 'Analgesic and load-tolerance building without high tissue stress.',
+    defaultSessionsPerWeek: 5,
   },
   {
     id: 'progressive_strength',
@@ -261,6 +287,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     mistimingFlareRisk: 14,
     description: 'Builds strength and capacity; primary driver of "is better".',
     gates: { maxPain: 65, minHealingProgress: 25 },
+    defaultSessionsPerWeek: 3,
   },
   {
     id: 'motor_control',
@@ -275,6 +302,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     irritabilityPenalty: 0.2,
     mistimingFlareRisk: 4,
     description: 'Restores coordinated function and reduces compensation.',
+    defaultSessionsPerWeek: 4,
   },
   {
     id: 'plyometric_rts',
@@ -290,6 +318,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     mistimingFlareRisk: 22,
     description: 'High-load reactive training; only safe when capacity gates met.',
     gates: { minCapacity: 65, maxPain: 35, maxFlareRisk: 40, minHealingProgress: 60, minRomPercent: 80, minStrength: 70 },
+    defaultSessionsPerWeek: 2,
   },
   {
     id: 'electrophysical',
@@ -304,6 +333,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     irritabilityPenalty: 0.1,
     mistimingFlareRisk: 2,
     description: 'Symptomatic relief and modulation; supports adherence.',
+    defaultSessionsPerWeek: 3,
   },
   {
     id: 'education',
@@ -318,6 +348,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     irritabilityPenalty: 0,
     mistimingFlareRisk: 0,
     description: 'Reduces fear-avoidance and chronicity risk; long carryover.',
+    defaultSessionsPerWeek: 1,
   },
   {
     id: 'taping_bracing',
@@ -332,6 +363,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     irritabilityPenalty: 0,
     mistimingFlareRisk: 0,
     description: 'Short-term offloading and proprioception; remove as capacity returns.',
+    defaultSessionsPerWeek: 7,
   },
   {
     id: 'graded_load',
@@ -347,6 +379,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     mistimingFlareRisk: 12,
     description: 'Drives the "is better" line — capacity outpaces symptom curve.',
     gates: { maxPain: 65, minHealingProgress: 15 },
+    defaultSessionsPerWeek: 4,
   },
 ];
 
@@ -612,6 +645,7 @@ export function synthesizeCustomExerciseProfile(ex: CustomExerciseInput, idx: nu
     gates: isPlyo
       ? { minCapacity: 60, maxPain: 40, maxFlareRisk: 40, minHealingProgress: 55, minRomPercent: 75, minStrength: 65 }
       : { maxPain: 70, minHealingProgress: 15 },
+    defaultSessionsPerWeek: freqPerWeek,
   };
 }
 
@@ -686,6 +720,7 @@ export function synthesizeCustomManualTechniqueProfile(tech: CustomManualTechniq
     irritabilityPenalty: isNeural ? 0.6 : 0.4,
     mistimingFlareRisk: isNeural ? 12 : 8,
     description: `AI-designed manual therapy targeting ${tech.targetSystem ?? 'patient-specific tissue restrictions'} (${tissueClass}).`,
+    defaultSessionsPerWeek: freqPerWeek,
   };
 }
 
@@ -704,6 +739,121 @@ function buildLookup(custom?: TreatmentEffectProfile[] | null): Map<string, Trea
   const m = new Map(TREATMENT_BY_ID);
   for (const p of custom) m.set(p.id, p);
   return m;
+}
+
+export interface ScheduleProposal {
+  startWeek: number;
+  endWeek?: number;
+  sessionsPerWeek: number;
+  cadenceWeeks: number;
+  taperWeeks?: number;
+  taperFinalDose?: number;
+  rationale: string;
+}
+
+/**
+ * Heuristic AI-style schedule proposer for a treatment. Uses modality,
+ * the profile's calibrated default sessions/week, and (when available)
+ * the profile's natural duration to suggest a realistic dosing schedule.
+ *
+ * The proposer is intentionally local + deterministic so it runs
+ * instantly when treatments are added and can be re-run as a "bulk
+ * re-frequency" action without hitting the network.
+ */
+export function proposeScheduleForTreatment(
+  profile: TreatmentEffectProfile,
+  opts?: { currentWeek?: number; archetypeStageTags?: string[]; intensity?: 'low' | 'standard' | 'high' },
+): ScheduleProposal {
+  const startWeek = Math.max(0, Math.round(opts?.currentWeek ?? 0));
+  const intensity = opts?.intensity ?? 'standard';
+  const intensityScale = intensity === 'high' ? 1.25 : intensity === 'low' ? 0.8 : 1;
+  const baseSessions = profile.defaultSessionsPerWeek ?? 3;
+  const naturalDuration = profile.peakWeeks + profile.durationWeeks;
+
+  let sessionsPerWeek = Math.max(1, Math.round(baseSessions * intensityScale));
+  let cadenceWeeks = 1;
+  let endWeek: number | undefined = startWeek + naturalDuration;
+  let taperWeeks: number | undefined;
+  let taperFinalDose: number | undefined;
+  let rationale = '';
+
+  switch (profile.modality) {
+    case 'rest': {
+      sessionsPerWeek = 7; cadenceWeeks = 1;
+      endWeek = startWeek + Math.min(3, naturalDuration);
+      taperWeeks = 1; taperFinalDose = 0.3;
+      rationale = 'Acute offload daily for short window, then taper as inflammation settles to avoid deconditioning.';
+      break;
+    }
+    case 'manual': {
+      sessionsPerWeek = Math.max(1, Math.min(2, Math.round(baseSessions * intensityScale)));
+      cadenceWeeks = 1;
+      endWeek = startWeek + Math.min(6, naturalDuration);
+      taperWeeks = 2; taperFinalDose = 0.5;
+      rationale = 'Clinic-typical 1–2× weekly hands-on; taper over final 2 weeks as patient self-manages.';
+      break;
+    }
+    case 'electrophysical': {
+      sessionsPerWeek = 3; cadenceWeeks = 1;
+      endWeek = startWeek + Math.min(4, naturalDuration);
+      taperWeeks = 1; taperFinalDose = 0.4;
+      rationale = 'Symptomatic modulation 3×/wk in clinic for the irritable phase; brief taper as pain resolves.';
+      break;
+    }
+    case 'education': {
+      sessionsPerWeek = 1; cadenceWeeks = 1;
+      endWeek = startWeek + Math.min(3, naturalDuration);
+      rationale = 'Initial weekly education sessions; long carryover means switching to monthly check-ins after.';
+      // Schedule a follow-up monthly cadence after the intensive window
+      // by simply ending the intervention — clinician can re-add as needed.
+      break;
+    }
+    case 'taping': {
+      sessionsPerWeek = 7; cadenceWeeks = 1;
+      endWeek = startWeek + Math.min(4, naturalDuration);
+      taperWeeks = 2; taperFinalDose = 0;
+      rationale = 'Worn daily for short-term offload; taper off over 2 weeks as capacity returns.';
+      break;
+    }
+    case 'medication': {
+      sessionsPerWeek = 7; cadenceWeeks = 1;
+      endWeek = startWeek + Math.min(2, naturalDuration);
+      taperWeeks = 1; taperFinalDose = 0.5;
+      rationale = 'Daily symptomatic cover for short course; taper to minimum effective dose.';
+      break;
+    }
+    case 'load': {
+      // Isometric loading vs graded load — both are home/gym programs
+      sessionsPerWeek = Math.max(3, Math.round(baseSessions * intensityScale));
+      cadenceWeeks = 1;
+      endWeek = startWeek + naturalDuration;
+      rationale = `Home program ${sessionsPerWeek}×/wk through the loading phase; sustained dose drives capacity gains.`;
+      break;
+    }
+    case 'exercise': {
+      const tags = (opts?.archetypeStageTags ?? []).map(t => t.toLowerCase());
+      const isPlyo = tags.some(t => t.includes('plyo') || t.includes('energy storage') || t.includes('rts'));
+      const isMotor = tags.some(t => t.includes('motor') || t.includes('control') || t.includes('stabili'));
+      if (isPlyo) {
+        sessionsPerWeek = 2; cadenceWeeks = 1;
+        endWeek = startWeek + naturalDuration;
+        rationale = 'Plyometric / RTS work limited to 2×/wk to allow tissue recovery between high-load sessions.';
+      } else if (isMotor) {
+        sessionsPerWeek = Math.max(4, Math.round(baseSessions * intensityScale));
+        cadenceWeeks = 1;
+        endWeek = startWeek + naturalDuration;
+        rationale = 'Motor-control work tolerates daily/near-daily practice — short low-load sets.';
+      } else {
+        sessionsPerWeek = Math.max(3, Math.round(baseSessions * intensityScale));
+        cadenceWeeks = 1;
+        endWeek = startWeek + naturalDuration;
+        rationale = `Strength/loading program ${sessionsPerWeek}×/wk through the active phase.`;
+      }
+      break;
+    }
+  }
+
+  return { startWeek, endWeek, sessionsPerWeek, cadenceWeeks, taperWeeks, taperFinalDose, rationale };
 }
 
 export type ConditionTissue = 'tendon' | 'ligament' | 'muscle' | 'nerve' | 'joint' | 'fascia' | 'disc' | 'bone' | 'generic';
@@ -1063,6 +1213,23 @@ function applyTreatmentEffects(
     const treatment = ctx.lookup.get(intv.treatmentId);
     if (!treatment) continue;
 
+    // Cadence gate — fortnightly/monthly treatments only deliver on
+    // their schedule weeks. The intro marker still fires on startWeek
+    // (which is by definition a delivery week) so the chart still
+    // shows when the treatment was added.
+    const cadence = Math.max(1, Math.round(intv.cadenceWeeks ?? 1));
+    if (!ended && cadence > 1) {
+      const offset = week - intv.startWeek;
+      if (offset > 0 && offset % cadence !== 0) {
+        // Skip effect application this week, but still let the
+        // remove marker fire below if it's the endWeek.
+        if (intv.endWeek === week) {
+          markers.push({ week, type: 'remove', label: `Stop ${treatment.name}`, treatmentId: treatment.id });
+        }
+        continue;
+      }
+    }
+
     const ramp = effectRamp(treatment, weeksActive, weeksSinceStop);
     if (ramp <= 0) continue;
 
@@ -1074,6 +1241,28 @@ function applyTreatmentEffects(
     if (applicableDoseChanges.length > 0 && applicableDoseChanges[0].week === week) {
       markers.push({ week, type: 'dose_change', label: `${treatment.name} dose → ×${effectiveDoseMultiplier.toFixed(2)}`, treatmentId: treatment.id });
     }
+    // Sessions/week scalar — diminishing returns relative to the
+    // profile's calibrated default (sqrt ratio so doubling sessions
+    // gives ~1.41× effect, halving gives ~0.71×).
+    const defaultSessions = Math.max(0.5, treatment.defaultSessionsPerWeek ?? 3);
+    const sessions = Math.max(0.25, intv.sessionsPerWeek ?? defaultSessions);
+    const sessionScalar = Math.sqrt(sessions / defaultSessions);
+
+    // Taper scalar — linear ramp 1 → taperFinalDose over the last
+    // taperWeeks of the active window (capped at endWeek if set,
+    // otherwise the profile's natural duration end).
+    let taperScalar = 1;
+    if (intv.taperWeeks && intv.taperWeeks > 0) {
+      const taperFinal = Math.max(0, Math.min(1, intv.taperFinalDose ?? 0.5));
+      const naturalEnd = intv.startWeek + treatment.peakWeeks + treatment.durationWeeks;
+      const intvEnd = intv.endWeek ?? naturalEnd;
+      const taperStart = intvEnd - intv.taperWeeks;
+      if (week >= taperStart && week < intvEnd) {
+        const t = (week - taperStart) / Math.max(1, intv.taperWeeks);
+        taperScalar = 1 + (taperFinal - 1) * t;
+      }
+    }
+
     const dose = effectiveDoseMultiplier * adherence;
 
     let gateBlocked = false;
@@ -1089,7 +1278,7 @@ function applyTreatmentEffects(
       if (gateFailures.length > 0) gateBlocked = true;
     }
 
-    let totalScale = ramp * phaseMul * dose;
+    let totalScale = ramp * phaseMul * dose * sessionScalar * taperScalar;
     if (gateBlocked) {
       totalScale *= 0.15;
       const overload = (treatment.mistimingFlareRisk ?? 8) * dose * 0.5;

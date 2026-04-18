@@ -8680,6 +8680,114 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  app.post("/api/electrophysical-engine/evidence", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const evidenceInputSchema = z.object({
+        modalities: z.array(z.object({
+          key: z.string(),
+          modality: z.string(),
+          targetStructure: z.string().optional().default(''),
+          targetFinding: z.string().optional().default(''),
+          goalTitle: z.string().optional().default(''),
+        })).min(1).max(40),
+        region: z.string().optional().default(''),
+        condition: z.string().optional().default(''),
+      });
+
+      const parsed = evidenceInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.format() });
+      }
+      const { modalities, region, condition } = parsed.data;
+
+      const { fetchMultiSourceEvidence } = await import("./services/clinicalEvidenceService");
+
+      const STOPWORDS = new Set([
+        'the','and','for','with','from','that','this','not','but','are','was','were','been','has','had','have','will','can',
+        'pain','therapy','treatment','muscle','tissue','joint','left','right','bilateral','acute','chronic','mild','moderate','severe',
+        'a','an','of','in','on','to','or','at','by','as','is','it','be','via','using','use','due','per','non',
+      ]);
+      const tokenize = (s: string): string[] => s
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, ' ')
+        .split(/\s+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 2 && !STOPWORDS.has(t));
+
+      const buildMatchedOn = (paper: { title: string; abstract?: string }, ctxTokens: string[]): string[] => {
+        const hay = `${paper.title} ${paper.abstract || ''}`.toLowerCase();
+        const hits = new Set<string>();
+        for (const t of ctxTokens) {
+          if (hay.includes(t)) hits.add(t);
+          if (hits.size >= 4) break;
+        }
+        return Array.from(hits);
+      };
+
+      const results = await Promise.all(modalities.map(async (m) => {
+        try {
+          const treatment = m.modality;
+          const cond = condition || m.targetFinding || m.goalTitle || '';
+          const reg = region || m.targetStructure || '';
+          const evidence = await fetchMultiSourceEvidence(reg, cond, treatment);
+
+          const ctxTokens = Array.from(new Set([
+            ...tokenize(treatment),
+            ...tokenize(cond),
+            ...tokenize(reg),
+            ...tokenize(m.targetStructure || ''),
+            ...tokenize(m.targetFinding || ''),
+          ]));
+
+          const top = (evidence.papers || []).slice(0, 4).map(p => ({
+            title: p.title,
+            authors: p.authors,
+            journal: p.journal,
+            year: p.year,
+            pmid: p.pmid || '',
+            doi: p.doi,
+            studyType: p.studyType,
+            evidenceGrade: p.evidenceGrade,
+            pubmedUrl: p.pubmedUrl || (p.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/` : (p.doi ? `https://doi.org/${p.doi}` : '')),
+            openAccessUrl: p.openAccessUrl,
+            sources: p.sources || [],
+            matchedOn: buildMatchedOn(p, ctxTokens),
+          }));
+
+          return [m.key, {
+            articles: top,
+            overallGrade: evidence.overallGrade,
+            confidence: evidence.confidence,
+            source: evidence.source,
+            searchQuery: evidence.searchQuery,
+            fallbackReason: evidence.source === 'fallback' ? 'No live results returned; showing curated fallback library.' : undefined,
+          }] as const;
+        } catch (err) {
+          console.error(`Electro evidence fetch failed for modality "${m.modality}":`, err);
+          return [m.key, {
+            articles: [],
+            overallGrade: 'D' as const,
+            confidence: 'Very Low' as const,
+            source: 'fallback' as const,
+            searchQuery: '',
+            fallbackReason: err instanceof Error ? err.message : 'Failed to fetch evidence',
+          }] as const;
+        }
+      }));
+
+      const evidenceByModality: Record<string, unknown> = {};
+      for (const [key, payload] of results) {
+        evidenceByModality[key] = payload;
+      }
+
+      res.json({ evidenceByModality });
+    } catch (error: unknown) {
+      console.error("Electrophysical evidence error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to fetch evidence", details: message });
+    }
+  });
+
   app.post("/api/patient-education-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const eduInputSchema = z.object({

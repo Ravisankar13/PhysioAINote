@@ -1,8 +1,151 @@
 import { useState, useCallback, useRef } from 'react';
-import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle } from 'lucide-react';
+import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
+
+interface EvidenceArticle {
+  title: string;
+  authors: string;
+  journal: string;
+  year: number;
+  pmid?: string;
+  doi?: string;
+  studyType: string;
+  evidenceGrade: 'A' | 'B' | 'C' | 'D';
+  pubmedUrl?: string;
+  openAccessUrl?: string;
+  sources?: string[];
+  matchedOn?: string[];
+}
+
+interface EvidenceForModality {
+  articles: EvidenceArticle[];
+  overallGrade: 'A' | 'B' | 'C' | 'D';
+  confidence?: string;
+  source?: 'multi' | 'fallback' | string;
+  fallbackReason?: string;
+}
+
+type EvidenceMap = Record<string, EvidenceForModality>;
+
+const GRADE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  A: { bg: 'bg-green-500/20', text: 'text-green-300', label: 'Strong' },
+  B: { bg: 'bg-blue-500/20', text: 'text-blue-300', label: 'Moderate' },
+  C: { bg: 'bg-yellow-500/20', text: 'text-yellow-300', label: 'Limited' },
+  D: { bg: 'bg-red-500/20', text: 'text-red-300', label: 'Insufficient' },
+};
+
+const STUDY_TYPE_BADGE: Record<string, string> = {
+  'Meta-Analysis': 'bg-purple-500/20 text-purple-300',
+  'Systematic Review': 'bg-purple-500/20 text-purple-300',
+  'RCT': 'bg-emerald-500/20 text-emerald-300',
+  'Clinical Guideline': 'bg-amber-500/20 text-amber-300',
+  'Cohort': 'bg-sky-500/20 text-sky-300',
+  'Case Study': 'bg-gray-600/30 text-gray-300',
+};
+
+function modalityKey(groupId: string, index: number): string {
+  return `${groupId}::${index}`;
+}
+
+function ModalityEvidenceSection({ evidence, loading }: { evidence?: EvidenceForModality; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="mt-1.5 border-t border-gray-700/40 pt-1.5">
+        <div className="flex items-center gap-1.5 text-[9px] text-gray-500">
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+          Searching PubMed / PEDro / Europe PMC / OpenAlex…
+        </div>
+        <div className="mt-1 space-y-1">
+          {[0, 1].map(i => (
+            <div key={i} className="h-3 bg-gray-700/30 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!evidence || evidence.articles.length === 0) {
+    return (
+      <div className="mt-1.5 border-t border-gray-700/40 pt-1.5 text-[9px] text-gray-500 italic">
+        {evidence?.fallbackReason || 'No supporting evidence found for this modality.'}
+      </div>
+    );
+  }
+
+  const grade = GRADE_STYLES[evidence.overallGrade] || GRADE_STYLES.D;
+  return (
+    <div className="mt-1.5 border-t border-gray-700/40 pt-1.5 space-y-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <BookOpen className="h-2.5 w-2.5 text-teal-400" />
+        <span className="text-[9px] font-medium text-gray-300">Evidence ({evidence.articles.length})</span>
+        <span className={`inline-flex items-center gap-0.5 text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${grade.bg} ${grade.text}`}>
+          <Award className="h-2 w-2" />
+          Grade {evidence.overallGrade} · {grade.label}
+        </span>
+        {evidence.source === 'fallback' && (
+          <span className="text-[8px] text-amber-400/70 italic">curated fallback</span>
+        )}
+      </div>
+      <div className="space-y-1">
+        {evidence.articles.map((art, i) => {
+          const aGrade = GRADE_STYLES[art.evidenceGrade] || GRADE_STYLES.D;
+          const studyBadge = STUDY_TYPE_BADGE[art.studyType] || 'bg-gray-600/30 text-gray-300';
+          const url = art.pubmedUrl || (art.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${art.pmid}/` : (art.doi ? `https://doi.org/${art.doi}` : ''));
+          return (
+            <div key={i} className="bg-gray-900/50 border border-gray-700/40 rounded p-1.5">
+              <div className="flex items-start gap-1.5">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] text-gray-200 leading-tight font-medium">{art.title}</div>
+                  <div className="text-[9px] text-gray-500 mt-0.5">
+                    {art.authors.split(',').slice(0, 3).join(', ')}{art.authors.split(',').length > 3 ? ' et al.' : ''} · <span className="italic">{art.journal}</span> ({art.year})
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${aGrade.bg} ${aGrade.text}`}>{art.evidenceGrade}</span>
+                  <span className={`text-[8px] px-1 py-0.5 rounded ${studyBadge}`}>{art.studyType}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {url && (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-[9px] text-teal-400 hover:text-teal-300"
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" />
+                    {art.pmid ? `PMID ${art.pmid}` : (art.doi ? `DOI` : 'Open')}
+                  </a>
+                )}
+                {art.openAccessUrl && (
+                  <a
+                    href={art.openAccessUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-[9px] text-emerald-400 hover:text-emerald-300"
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" />
+                    Full text
+                  </a>
+                )}
+                {art.matchedOn && art.matchedOn.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[8px] text-gray-500">matched on:</span>
+                    {art.matchedOn.slice(0, 4).map((m, j) => (
+                      <span key={j} className="text-[8px] px-1 py-0.5 rounded bg-teal-500/10 text-teal-300/80 border border-teal-500/20">{m}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 interface ResourceLink {
   title: string;
@@ -67,7 +210,7 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; b
 
 const DEFAULT_COLORS = { bg: 'bg-teal-500/10', border: 'border-teal-500/30', text: 'text-teal-300', badge: 'bg-teal-500/20 text-teal-300' };
 
-function ModalityCard({ modality, index }: { modality: ModalityItem; index: number }) {
+function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality: ModalityItem; index: number; evidence?: EvidenceForModality; evidenceLoading: boolean }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -159,6 +302,29 @@ function ModalityCard({ modality, index }: { modality: ModalityItem; index: numb
               </div>
             </div>
           )}
+          <ModalityEvidenceSection evidence={evidence} loading={evidenceLoading && !evidence} />
+        </div>
+      )}
+      {!expanded && (evidence || evidenceLoading) && (
+        <div className="px-2 pb-1.5 -mt-0.5">
+          {evidenceLoading && !evidence ? (
+            <div className="flex items-center gap-1 text-[8px] text-gray-500">
+              <Loader2 className="h-2 w-2 animate-spin" />
+              fetching evidence…
+            </div>
+          ) : evidence ? (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${(GRADE_STYLES[evidence.overallGrade] || GRADE_STYLES.D).bg} ${(GRADE_STYLES[evidence.overallGrade] || GRADE_STYLES.D).text}`}>
+                Grade {evidence.overallGrade}
+              </span>
+              <span className="text-[8px] text-gray-500">
+                {evidence.articles.length} article{evidence.articles.length === 1 ? '' : 's'}
+              </span>
+              {evidence.source === 'fallback' && (
+                <span className="text-[8px] text-amber-400/70 italic">curated</span>
+              )}
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -171,7 +337,57 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
   const [error, setError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showNotes, setShowNotes] = useState(false);
+  const [evidenceMap, setEvidenceMap] = useState<EvidenceMap>({});
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const evidenceAbortRef = useRef<AbortController | null>(null);
+
+  const fetchEvidence = useCallback(async (currentPlan: ElectrophysicalPlan) => {
+    if (evidenceAbortRef.current) evidenceAbortRef.current.abort();
+    const controller = new AbortController();
+    evidenceAbortRef.current = controller;
+
+    const modalitiesPayload: Array<{ key: string; modality: string; targetStructure: string; targetFinding: string; goalTitle: string }> = [];
+    currentPlan.modalityGroups.forEach(group => {
+      group.modalities.forEach((mod, idx) => {
+        modalitiesPayload.push({
+          key: modalityKey(group.groupId, idx),
+          modality: mod.modality,
+          targetStructure: mod.targetStructure || '',
+          targetFinding: mod.targetFinding || '',
+          goalTitle: group.goalTitle || '',
+        });
+      });
+    });
+
+    if (modalitiesPayload.length === 0) return;
+
+    const region = (mechanismAnalysis?.topContributors?.[0] as { region?: string } | undefined)?.region
+      || painMarkers[0]?.label
+      || '';
+    const condition = mechanismAnalysis?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim().slice(0, 80) || '';
+
+    setEvidenceLoading(true);
+    setEvidenceError(null);
+    setEvidenceMap({});
+
+    try {
+      const result = await apiRequest('/api/electrophysical-engine/evidence', 'POST', {
+        modalities: modalitiesPayload,
+        region,
+        condition,
+      }) as { evidenceByModality: EvidenceMap };
+      if (controller.signal.aborted) return;
+      setEvidenceMap(result.evidenceByModality || {});
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setEvidenceError(msg);
+    } finally {
+      if (!controller.signal.aborted) setEvidenceLoading(false);
+    }
+  }, [mechanismAnalysis, painMarkers]);
 
   const toggleGroup = useCallback((groupId: string) => {
     setExpandedGroups(prev => {
@@ -261,6 +477,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
       setPlan(sorted);
       const allIds = new Set(sorted.modalityGroups.map(g => g.groupId));
       setExpandedGroups(allIds);
+      void fetchEvidence(sorted);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -332,14 +549,30 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
             {totalModalities} Modalities · {plan.modalityGroups.length} Groups
           </span>
         </div>
-        <button
-          onClick={generatePlan}
-          className="px-2 py-1 text-[9px] bg-gray-700/40 text-gray-400 border border-gray-600/30 rounded hover:text-gray-200 hover:bg-gray-700/60 transition-colors flex items-center gap-1"
-        >
-          <RefreshCw className="h-2.5 w-2.5" />
-          Regenerate
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => plan && fetchEvidence(plan)}
+            disabled={evidenceLoading || !plan}
+            className="px-2 py-1 text-[9px] bg-teal-500/10 text-teal-300 border border-teal-500/30 rounded hover:bg-teal-500/20 transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Re-fetch supporting research evidence for each modality"
+          >
+            {evidenceLoading ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <BookOpen className="h-2.5 w-2.5" />}
+            Refresh evidence
+          </button>
+          <button
+            onClick={generatePlan}
+            className="px-2 py-1 text-[9px] bg-gray-700/40 text-gray-400 border border-gray-600/30 rounded hover:text-gray-200 hover:bg-gray-700/60 transition-colors flex items-center gap-1"
+          >
+            <RefreshCw className="h-2.5 w-2.5" />
+            Regenerate
+          </button>
+        </div>
       </div>
+      {evidenceError && (
+        <div className="text-[9px] text-red-300 bg-red-500/10 border border-red-500/30 rounded px-2 py-1">
+          Evidence fetch failed: {evidenceError}
+        </div>
+      )}
 
       {plan.modalityGroups.map(group => {
         const colors = GROUP_COLORS[group.goalTitle] ?? DEFAULT_COLORS;
@@ -367,7 +600,13 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
             {isExpanded && (
               <div className="p-2 space-y-1.5">
                 {group.modalities.map((mod, i) => (
-                  <ModalityCard key={`${group.groupId}-${i}`} modality={mod} index={i} />
+                  <ModalityCard
+                    key={`${group.groupId}-${i}`}
+                    modality={mod}
+                    index={i}
+                    evidence={evidenceMap[modalityKey(group.groupId, i)]}
+                    evidenceLoading={evidenceLoading}
+                  />
                 ))}
               </div>
             )}

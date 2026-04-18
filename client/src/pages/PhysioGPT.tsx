@@ -9553,13 +9553,18 @@ ${ddxList}`;
                     })),
                   };
                   const ctx = buildPrescriptionContext(activeGoalProfile, phaseClinicalState, null, null);
-                  payload.recoveryGoalContext = {
+                  const goalCtx: Record<string, unknown> = {
                     condition: ctx.conditionName,
                     phaseLabel: req.phaseLabel,
+                    // Engine prompts use phaseStartWeek to anchor
+                    // dosage / progression language temporally
+                    // (e.g. "by wk 4") rather than just by phase.
+                    phaseStartWeek: req.phaseStartWeek,
                     goalAchievementPct: req.predictedGoalAchievementPct,
                     painCurrent: Math.round(req.predictedPainAtPhase),
                     painTarget: ctx.painTarget,
                     dosageIntensity: ctx.dosageScaling.intensityLabel,
+                    dosageRationale: ctx.dosageScaling.rationale,
                     painCeiling: ctx.dosageScaling.painCeiling,
                     priorityBodyParts: ctx.priorityBodyParts,
                     contraindications: ctx.contraindications,
@@ -9570,6 +9575,20 @@ ${ddxList}`;
                       categories: g.recommendedCategories,
                     })),
                   };
+                  if (kind === 'manual') {
+                    // Manual-therapy generator needs the phase's
+                    // Maitland/Mulligan grade ceiling so it doesn't
+                    // prescribe Grade IV mobs in an inflammatory phase
+                    // or stay at Grade I when the patient can tolerate
+                    // end-range loading.
+                    goalCtx.mtGradeRange = {
+                      min: ctx.mtGradeGuidance.minGrade,
+                      max: ctx.mtGradeGuidance.maxGrade,
+                    };
+                    goalCtx.mtGradeRationale = ctx.mtGradeGuidance.rationale;
+                    goalCtx.mtPreferSustained = ctx.mtGradeGuidance.preferSustained;
+                  }
+                  payload.recoveryGoalContext = goalCtx;
                 }
                 return payload;
               };

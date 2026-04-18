@@ -133,6 +133,37 @@ interface Props {
 
 const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
 
+/** Map a session-wide custom Rx item (exercise or manual technique) onto
+ *  the most relevant archetype phase so AI items generated from the
+ *  parent Exercise / Manual Therapy tabs surface on the right phase
+ *  card — not just on the current phase. Resolution order:
+ *    1. Explicit progression-stage metadata produced by the engines
+ *       (1-indexed; clamped to phaseCount).
+ *    2. Name keyword heuristic (early/protect/isometric → first phase;
+ *       return-to-sport / plyometric / power → last phase;
+ *       strength/loading/AROM/remodel → middle).
+ *    3. Fallback: the patient's current stage. */
+function mapItemToPhaseIndex(
+  item: { name?: string; progressionStages?: { stage: number }[] | undefined },
+  phaseCount: number,
+  currentIdx: number,
+): number {
+  if (phaseCount <= 0) return 0;
+  const stage = item.progressionStages?.[0]?.stage;
+  if (typeof stage === 'number' && stage >= 1) {
+    return Math.min(Math.max(0, stage - 1), phaseCount - 1);
+  }
+  const n = (item.name ?? '').toLowerCase();
+  if (/(early|acute|protect|isometric|prom\b|gentle|settle|offload)/.test(n)) return 0;
+  if (/(return.to.sport|return.to.run|plyometric|power|sport.specific|end.stage|maintenance)/.test(n)) {
+    return phaseCount - 1;
+  }
+  if (/(strength|loading|progressive|resisted|arom\b|remodel|eccentric|hsr)/.test(n)) {
+    return Math.min(Math.max(1, Math.floor(phaseCount / 2)), phaseCount - 1);
+  }
+  return Math.min(Math.max(0, currentIdx), phaseCount - 1);
+}
+
 /** Condition-aware goal headline per stage for the acute-tissue-healing
  *  archetype — preserved verbatim so existing cases (rotator cuff tear, ACL,
  *  ankle sprain, post-surgical, muscle strain) render unchanged. Other
@@ -1403,56 +1434,26 @@ export default function RecoverySimulatorDashboard({
                         </div>
                       )}
 
-                      <div className="mt-0.5">
-                        <div className="text-[8px] uppercase tracking-wide text-gray-500 font-semibold mb-0.5">{sourceLabel} treatments</div>
-                        {r.treatments.length === 0 ? (
-                          <div className="text-[10px] text-gray-500 italic">No stage-appropriate treatment</div>
-                        ) : (() => {
-                          const isExpanded = expandedTreatments.has(p.id);
-                          const visible = isExpanded ? r.treatments : r.treatments.slice(0, 2);
-                          const hidden = r.treatments.length - visible.length;
-                          return (
-                            <>
-                              <ul className="space-y-0.5">
-                                {visible.map((t, i) => (
-                                  <li key={i} className="text-[10px] text-gray-200 truncate">• {t}</li>
-                                ))}
-                              </ul>
-                              {(hidden > 0 || isExpanded) && r.treatments.length > 2 && (
-                                <button
-                                  type="button"
-                                  onClick={() => togglePhaseSet(p.id, setExpandedTreatments)}
-                                  className="mt-0.5 text-[9px] text-gray-400 hover:text-gray-200 underline underline-offset-2"
-                                  data-testid={`phase-treatments-more-${p.id}`}
-                                >
-                                  {isExpanded ? 'Show less' : `+${hidden} more`}
-                                </button>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Per-phase Exercise Rx + Manual Therapy Rx.
-                          Buttons invoke the parent-supplied generators
-                          (which own mechanism / sling / pain-marker
-                          state). Generated items render inline with an
-                          AI badge + an "Add to plan" affordance that
-                          promotes them into the simulation's
-                          customExercises / customTechniques arrays so
-                          they actually shape the recovery curves.
-
-                          Session-wide customExercises / customTechniques
-                          (already feeding the simulation via
-                          buildCustomTreatmentProfiles) auto-map onto
-                          the current phase as read-only "Session Rx"
-                          chips so the clinician sees which AI items the
-                          engine is consuming for that phase. */}
+                      {/* Treatments list with integrated per-phase AI Rx.
+                          Baseline = stage-recommended / scheduled / top-driver
+                          treatments. Augmented inline (with an AI badge)
+                          by:
+                            - Session-wide custom items from the parent
+                              Exercise / Manual Therapy tabs that map onto
+                              THIS phase via mapItemToPhaseIndex (explicit
+                              progressionStages metadata, then name
+                              keyword heuristic, then current-phase
+                              fallback).
+                            - Phase-generated items the clinician
+                              produced via the per-phase Generate buttons
+                              below but has not yet promoted into the
+                              session plan.
+                          The "Add to plan" affordance below the list
+                          turns the latter into the former. */}
                       {(() => {
                         const entry = phaseRx.get(p.id) ?? emptyEntry();
                         const hasExGen = !!onGeneratePhaseExerciseRx;
                         const hasMtGen = !!onGeneratePhaseManualRx;
-                        if (!hasExGen && !hasMtGen && !r.isCurrent) return null;
 
                         const buildReq = (): PhaseRxRequest => {
                           const startIdx = r.reached ? r.start : r.expectedStart;
@@ -1500,145 +1501,192 @@ export default function RecoverySimulatorDashboard({
                           }
                         };
 
-                        const sessionEx = r.isCurrent ? (customExercises ?? []) : [];
-                        const sessionMt = r.isCurrent ? (customTechniques ?? []) : [];
+                        // Auto-map session-wide custom items onto the
+                        // phase whose progression-stage metadata (or
+                        // name keywords) best fits — NOT just the
+                        // current phase. The same item is therefore
+                        // shown on exactly one card.
+                        const totalPhases = phaseRanges.length;
+                        const sessionEx = (customExercises ?? []).filter(
+                          ex => mapItemToPhaseIndex(ex, totalPhases, scrubbedStageIdx) === r.stageIndex,
+                        );
+                        const sessionMt = (customTechniques ?? []).filter(
+                          mt => mapItemToPhaseIndex(mt, totalPhases, scrubbedStageIdx) === r.stageIndex,
+                        );
                         const exReady = entry.exercise.status === 'ready' ? entry.exercise.exercises ?? [] : [];
                         const mtReady = entry.manual.status === 'ready' ? entry.manual.techniques ?? [] : [];
+                        const exReadyPending = entry.exercise.status === 'ready' && !entry.exercise.added ? exReady : [];
+                        const mtReadyPending = entry.manual.status === 'ready' && !entry.manual.added ? mtReady : [];
+
+                        type CombinedTreatment =
+                          | { kind: 'baseline'; label: string }
+                          | { kind: 'session-ex'; label: string }
+                          | { kind: 'session-mt'; label: string }
+                          | { kind: 'ai-ex'; label: string }
+                          | { kind: 'ai-mt'; label: string };
+                        const combined: CombinedTreatment[] = [
+                          ...r.treatments.map(t => ({ kind: 'baseline' as const, label: t })),
+                          ...sessionEx.map(ex => ({ kind: 'session-ex' as const, label: ex.name })),
+                          ...sessionMt.map(mt => ({ kind: 'session-mt' as const, label: mt.name })),
+                          ...exReadyPending.map(ex => ({ kind: 'ai-ex' as const, label: ex.name })),
+                          ...mtReadyPending.map(mt => ({ kind: 'ai-mt' as const, label: mt.name })),
+                        ];
+                        const isExpanded = expandedTreatments.has(p.id);
+                        const visible = isExpanded ? combined : combined.slice(0, 3);
+                        const hidden = combined.length - visible.length;
+
+                        const renderItem = (t: CombinedTreatment, i: number) => {
+                          const isSession = t.kind === 'session-ex' || t.kind === 'session-mt';
+                          const isAi = t.kind === 'ai-ex' || t.kind === 'ai-mt';
+                          const tone = (t.kind === 'session-ex' || t.kind === 'ai-ex')
+                            ? 'text-violet-200'
+                            : (t.kind === 'session-mt' || t.kind === 'ai-mt') ? 'text-cyan-200' : 'text-gray-200';
+                          const testid = isAi
+                            ? (t.kind === 'ai-ex' ? `phase-rx-item-exercise-${p.id}-${i}` : `phase-rx-item-manual-${p.id}-${i}`)
+                            : isSession
+                              ? (t.kind === 'session-ex' ? `phase-rx-session-ex-${p.id}-${i}` : `phase-rx-session-mt-${p.id}-${i}`)
+                              : undefined;
+                          return (
+                            <li key={`${t.kind}-${i}`} className={`text-[10px] truncate flex items-center gap-1 ${tone}`} data-testid={testid}>
+                              <span className="opacity-60">•</span>
+                              {(isSession || isAi) && <Sparkles className="h-2.5 w-2.5 shrink-0 opacity-80" />}
+                              <span className="truncate">{t.label}</span>
+                              {isAi && (
+                                <span className="ml-auto text-[8px] uppercase tracking-wide px-1 py-px rounded border border-current/40 opacity-70 shrink-0">
+                                  Pending
+                                </span>
+                              )}
+                            </li>
+                          );
+                        };
 
                         return (
-                          <div className="mt-1 pt-1 border-t border-gray-700/40 flex flex-col gap-1" data-testid={`phase-rx-${p.id}`}>
-                            {/* Session-wide AI items currently feeding
-                                the simulation for this (current) phase. */}
-                            {(sessionEx.length > 0 || sessionMt.length > 0) && (
-                              <div className="flex flex-wrap gap-1">
-                                {sessionEx.slice(0, 3).map((ex, i) => (
-                                  <span key={`sx${i}`} className="text-[9px] px-1.5 py-0.5 rounded border border-violet-700/50 bg-violet-950/40 text-violet-200 inline-flex items-center gap-1" data-testid={`phase-rx-session-ex-${p.id}-${i}`}>
-                                    <Sparkles className="h-2.5 w-2.5 text-violet-300" />
-                                    <span className="truncate max-w-[120px]">{ex.name}</span>
-                                  </span>
-                                ))}
-                                {sessionMt.slice(0, 3).map((mt, i) => (
-                                  <span key={`sm${i}`} className="text-[9px] px-1.5 py-0.5 rounded border border-cyan-700/50 bg-cyan-950/40 text-cyan-200 inline-flex items-center gap-1" data-testid={`phase-rx-session-mt-${p.id}-${i}`}>
-                                    <Sparkles className="h-2.5 w-2.5 text-cyan-300" />
-                                    <span className="truncate max-w-[120px]">{mt.name}</span>
-                                  </span>
-                                ))}
+                          <>
+                            <div className="mt-0.5">
+                              <div className="text-[8px] uppercase tracking-wide text-gray-500 font-semibold mb-0.5">
+                                {sourceLabel} treatments
                               </div>
-                            )}
-
-                            {/* Generator buttons. Only render the kind the
-                                parent has wired up. */}
-                            <div className="flex gap-1">
-                              {hasExGen && (
-                                <button
-                                  type="button"
-                                  onClick={runExercise}
-                                  disabled={entry.exercise.status === 'loading'}
-                                  className="flex-1 text-[9px] py-1 px-1.5 rounded border border-violet-700/50 bg-violet-950/30 hover:bg-violet-900/40 text-violet-200 disabled:opacity-60 inline-flex items-center justify-center gap-1"
-                                  data-testid={`phase-rx-gen-exercise-${p.id}`}
-                                >
-                                  {entry.exercise.status === 'loading'
-                                    ? <RefreshCw className="h-2.5 w-2.5 animate-spin" />
-                                    : <Sparkles className="h-2.5 w-2.5" />}
-                                  Exercise Rx
-                                </button>
-                              )}
-                              {hasMtGen && (
-                                <button
-                                  type="button"
-                                  onClick={runManual}
-                                  disabled={entry.manual.status === 'loading'}
-                                  className="flex-1 text-[9px] py-1 px-1.5 rounded border border-cyan-700/50 bg-cyan-950/30 hover:bg-cyan-900/40 text-cyan-200 disabled:opacity-60 inline-flex items-center justify-center gap-1"
-                                  data-testid={`phase-rx-gen-manual-${p.id}`}
-                                >
-                                  {entry.manual.status === 'loading'
-                                    ? <RefreshCw className="h-2.5 w-2.5 animate-spin" />
-                                    : <Sparkles className="h-2.5 w-2.5" />}
-                                  Manual Rx
-                                </button>
+                              {combined.length === 0 ? (
+                                <div className="text-[10px] text-gray-500 italic">No stage-appropriate treatment</div>
+                              ) : (
+                                <>
+                                  <ul className="space-y-0.5">{visible.map(renderItem)}</ul>
+                                  {(hidden > 0 || isExpanded) && combined.length > 3 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => togglePhaseSet(p.id, setExpandedTreatments)}
+                                      className="mt-0.5 text-[9px] text-gray-400 hover:text-gray-200 underline underline-offset-2"
+                                      data-testid={`phase-treatments-more-${p.id}`}
+                                    >
+                                      {isExpanded ? 'Show less' : `+${hidden} more`}
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
 
-                            {/* Errors with retry. */}
-                            {entry.exercise.status === 'error' && (
-                              <div className="text-[9px] text-red-300 flex items-center justify-between gap-1" data-testid={`phase-rx-err-exercise-${p.id}`}>
-                                <span className="truncate">Exercise Rx: {entry.exercise.message}</span>
-                                <button type="button" onClick={runExercise} className="underline hover:text-red-200">Retry</button>
-                              </div>
-                            )}
-                            {entry.manual.status === 'error' && (
-                              <div className="text-[9px] text-red-300 flex items-center justify-between gap-1" data-testid={`phase-rx-err-manual-${p.id}`}>
-                                <span className="truncate">Manual Rx: {entry.manual.message}</span>
-                                <button type="button" onClick={runManual} className="underline hover:text-red-200">Retry</button>
-                              </div>
-                            )}
+                            {/* Per-phase Rx control panel: generator
+                                buttons (only the kinds wired up by the
+                                parent), error+retry, and Add-to-plan
+                                actions for any pending AI items shown in
+                                the Treatments list above. */}
+                            {(hasExGen || hasMtGen) && (
+                              <div className="mt-1 pt-1 border-t border-gray-700/40 flex flex-col gap-1" data-testid={`phase-rx-${p.id}`}>
+                                <div className="flex gap-1">
+                                  {hasExGen && (
+                                    <button
+                                      type="button"
+                                      onClick={runExercise}
+                                      disabled={entry.exercise.status === 'loading'}
+                                      className="flex-1 text-[9px] py-1 px-1.5 rounded border border-violet-700/50 bg-violet-950/30 hover:bg-violet-900/40 text-violet-200 disabled:opacity-60 inline-flex items-center justify-center gap-1"
+                                      data-testid={`phase-rx-gen-exercise-${p.id}`}
+                                    >
+                                      {entry.exercise.status === 'loading'
+                                        ? <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+                                        : <Sparkles className="h-2.5 w-2.5" />}
+                                      Exercise Rx
+                                    </button>
+                                  )}
+                                  {hasMtGen && (
+                                    <button
+                                      type="button"
+                                      onClick={runManual}
+                                      disabled={entry.manual.status === 'loading'}
+                                      className="flex-1 text-[9px] py-1 px-1.5 rounded border border-cyan-700/50 bg-cyan-950/30 hover:bg-cyan-900/40 text-cyan-200 disabled:opacity-60 inline-flex items-center justify-center gap-1"
+                                      data-testid={`phase-rx-gen-manual-${p.id}`}
+                                    >
+                                      {entry.manual.status === 'loading'
+                                        ? <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+                                        : <Sparkles className="h-2.5 w-2.5" />}
+                                      Manual Rx
+                                    </button>
+                                  )}
+                                </div>
 
-                            {/* Generated items + Add to plan. */}
-                            {entry.exercise.status === 'ready' && exReady.length > 0 && (
-                              <div className="flex flex-col gap-0.5" data-testid={`phase-rx-ready-exercise-${p.id}`}>
-                                <div className="flex items-center justify-between">
-                                  <div className="text-[9px] uppercase tracking-wide text-violet-300/80 font-semibold inline-flex items-center gap-1">
-                                    <Sparkles className="h-2.5 w-2.5" />AI Exercises ({exReady.length})
+                                {entry.exercise.status === 'error' && (
+                                  <div className="text-[9px] text-red-300 flex items-center justify-between gap-1" data-testid={`phase-rx-err-exercise-${p.id}`}>
+                                    <span className="truncate">Exercise Rx: {entry.exercise.message}</span>
+                                    <button type="button" onClick={runExercise} className="underline hover:text-red-200">Retry</button>
                                   </div>
-                                  {entry.exercise.status === 'ready' && (entry.exercise.added ? (
-                                    <span className="text-[9px] text-emerald-300 inline-flex items-center gap-0.5"><CheckCircle2 className="h-2.5 w-2.5" />Added</span>
-                                  ) : onAddCustomExercises ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        onAddCustomExercises(exReady);
-                                        updatePhaseRx(p.id, 'exercise', { status: 'ready', exercises: exReady, added: true });
-                                      }}
-                                      className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
-                                      data-testid={`phase-rx-add-exercise-${p.id}`}
-                                    >
-                                      <Plus className="h-2.5 w-2.5" />Add to plan
-                                    </button>
-                                  ) : null)}
-                                </div>
-                                <ul className="flex flex-col gap-0.5">
-                                  {exReady.slice(0, 3).map((ex, i) => (
-                                    <li key={i} className="text-[10px] text-gray-200 truncate" data-testid={`phase-rx-item-exercise-${p.id}-${i}`}>• {ex.name}</li>
-                                  ))}
-                                  {exReady.length > 3 && (
-                                    <li className="text-[9px] text-gray-500">+{exReady.length - 3} more</li>
-                                  )}
-                                </ul>
+                                )}
+                                {entry.manual.status === 'error' && (
+                                  <div className="text-[9px] text-red-300 flex items-center justify-between gap-1" data-testid={`phase-rx-err-manual-${p.id}`}>
+                                    <span className="truncate">Manual Rx: {entry.manual.message}</span>
+                                    <button type="button" onClick={runManual} className="underline hover:text-red-200">Retry</button>
+                                  </div>
+                                )}
+
+                                {entry.exercise.status === 'ready' && exReady.length > 0 && (
+                                  <div className="flex items-center justify-between gap-1" data-testid={`phase-rx-ready-exercise-${p.id}`}>
+                                    <span className="text-[9px] text-violet-300/80 inline-flex items-center gap-1">
+                                      <Sparkles className="h-2.5 w-2.5" />AI Exercises ({exReady.length})
+                                    </span>
+                                    {entry.exercise.added ? (
+                                      <span className="text-[9px] text-emerald-300 inline-flex items-center gap-0.5">
+                                        <CheckCircle2 className="h-2.5 w-2.5" />Added to plan
+                                      </span>
+                                    ) : onAddCustomExercises ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          onAddCustomExercises(exReady);
+                                          updatePhaseRx(p.id, 'exercise', { status: 'ready', exercises: exReady, added: true });
+                                        }}
+                                        className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
+                                        data-testid={`phase-rx-add-exercise-${p.id}`}
+                                      >
+                                        <Plus className="h-2.5 w-2.5" />Add to plan
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                )}
+                                {entry.manual.status === 'ready' && mtReady.length > 0 && (
+                                  <div className="flex items-center justify-between gap-1" data-testid={`phase-rx-ready-manual-${p.id}`}>
+                                    <span className="text-[9px] text-cyan-300/80 inline-flex items-center gap-1">
+                                      <Sparkles className="h-2.5 w-2.5" />AI Manual ({mtReady.length})
+                                    </span>
+                                    {entry.manual.added ? (
+                                      <span className="text-[9px] text-emerald-300 inline-flex items-center gap-0.5">
+                                        <CheckCircle2 className="h-2.5 w-2.5" />Added to plan
+                                      </span>
+                                    ) : onAddCustomTechniques ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          onAddCustomTechniques(mtReady);
+                                          updatePhaseRx(p.id, 'manual', { status: 'ready', techniques: mtReady, added: true });
+                                        }}
+                                        className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
+                                        data-testid={`phase-rx-add-manual-${p.id}`}
+                                      >
+                                        <Plus className="h-2.5 w-2.5" />Add to plan
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                )}
                               </div>
                             )}
-                            {entry.manual.status === 'ready' && mtReady.length > 0 && (
-                              <div className="flex flex-col gap-0.5" data-testid={`phase-rx-ready-manual-${p.id}`}>
-                                <div className="flex items-center justify-between">
-                                  <div className="text-[9px] uppercase tracking-wide text-cyan-300/80 font-semibold inline-flex items-center gap-1">
-                                    <Sparkles className="h-2.5 w-2.5" />AI Manual ({mtReady.length})
-                                  </div>
-                                  {entry.manual.status === 'ready' && (entry.manual.added ? (
-                                    <span className="text-[9px] text-emerald-300 inline-flex items-center gap-0.5"><CheckCircle2 className="h-2.5 w-2.5" />Added</span>
-                                  ) : onAddCustomTechniques ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        onAddCustomTechniques(mtReady);
-                                        updatePhaseRx(p.id, 'manual', { status: 'ready', techniques: mtReady, added: true });
-                                      }}
-                                      className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
-                                      data-testid={`phase-rx-add-manual-${p.id}`}
-                                    >
-                                      <Plus className="h-2.5 w-2.5" />Add to plan
-                                    </button>
-                                  ) : null)}
-                                </div>
-                                <ul className="flex flex-col gap-0.5">
-                                  {mtReady.slice(0, 3).map((mt, i) => (
-                                    <li key={i} className="text-[10px] text-gray-200 truncate" data-testid={`phase-rx-item-manual-${p.id}-${i}`}>• {mt.name}</li>
-                                  ))}
-                                  {mtReady.length > 3 && (
-                                    <li className="text-[9px] text-gray-500">+{mtReady.length - 3} more</li>
-                                  )}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
+                          </>
                         );
                       })()}
 

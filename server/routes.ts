@@ -8899,6 +8899,152 @@ Based on this data, generate a prioritized, evidence-informed adjunct natural th
     }
   });
 
+  app.post("/api/adjunct-therapies-engine/evidence", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const evidenceInputSchema = z.object({
+        recommendations: z.array(z.object({
+          key: z.string(),
+          therapyName: z.string(),
+          therapyCategory: z.string().optional().default(''),
+          targetStructure: z.string().optional().default(''),
+          targetFinding: z.string().optional().default(''),
+        })).min(1).max(40),
+        region: z.string().optional().default(''),
+        condition: z.string().optional().default(''),
+      });
+
+      const parsed = evidenceInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.format() });
+      }
+      const { recommendations, region, condition } = parsed.data;
+
+      const { fetchMultiSourceEvidence } = await import("./services/clinicalEvidenceService");
+
+      const STOPWORDS = new Set([
+        'the','and','for','with','from','that','this','not','but','are','was','were','been','has','had','have','will','can',
+        'pain','therapy','treatment','muscle','tissue','joint','left','right','bilateral','acute','chronic','mild','moderate','severe',
+        'a','an','of','in','on','to','or','at','by','as','is','it','be','via','using','use','due','per','non',
+      ]);
+      const tokenize = (s: string): string[] => s
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, ' ')
+        .split(/\s+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 2 && !STOPWORDS.has(t));
+
+      const matchedTermsIn = (hay: string, raw: string): string[] => {
+        const tokens = tokenize(raw);
+        const found: string[] = [];
+        for (const t of tokens) {
+          if (hay.includes(t) && !found.includes(t)) found.push(t);
+          if (found.length >= 3) break;
+        }
+        return found;
+      };
+
+      const buildConclusion = (abstract?: string): string => {
+        if (!abstract || abstract === 'No abstract available.') return '';
+        const cleaned = abstract.replace(/\s+/g, ' ').trim();
+        const lower = cleaned.toLowerCase();
+        const conclusionIdx = Math.max(
+          lower.indexOf('conclusion'),
+          lower.indexOf('conclusions'),
+          lower.indexOf('findings:'),
+          lower.indexOf('results:'),
+        );
+        let segment = cleaned;
+        if (conclusionIdx >= 0) {
+          segment = cleaned.slice(conclusionIdx);
+          segment = segment.replace(/^(conclusions?|findings|results)\s*[:\-]\s*/i, '');
+        }
+        const sentenceMatch = segment.match(/[^.!?]+[.!?]/);
+        const sentence = sentenceMatch ? sentenceMatch[0].trim() : segment.slice(0, 220).trim();
+        return sentence.length > 240 ? sentence.slice(0, 237).trimEnd() + '…' : sentence;
+      };
+
+      const deriveTreatmentTerm = (therapyName: string, therapyCategory: string): string => {
+        const cat = (therapyCategory || '').trim();
+        const name = (therapyName || '').trim();
+        if (cat && name) {
+          const catLower = cat.toLowerCase();
+          const nameLower = name.toLowerCase();
+          if (nameLower.includes(catLower)) return name;
+          return `${cat} ${name}`;
+        }
+        return name || cat;
+      };
+
+      const results = await Promise.all(recommendations.map(async (r) => {
+        try {
+          const treatment = deriveTreatmentTerm(r.therapyName, r.therapyCategory);
+          const cond = condition || r.targetFinding || '';
+          const reg = region || r.targetStructure || '';
+          const evidence = await fetchMultiSourceEvidence(reg, cond, treatment);
+
+          const top = (evidence.papers || []).slice(0, 4).map(p => {
+            const hay = `${p.title} ${p.abstract || ''}`.toLowerCase();
+            const matchedOn = {
+              modality: matchedTermsIn(hay, treatment),
+              region: matchedTermsIn(hay, `${reg} ${r.targetStructure || ''}`),
+              condition: matchedTermsIn(hay, `${cond} ${r.targetFinding || ''}`),
+            };
+            return {
+              title: p.title,
+              authors: p.authors,
+              journal: p.journal,
+              year: p.year,
+              pmid: p.pmid || '',
+              doi: p.doi,
+              studyType: p.studyType,
+              evidenceGrade: p.evidenceGrade,
+              pubmedUrl: p.pubmedUrl || (p.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/` : (p.doi ? `https://doi.org/${p.doi}` : '')),
+              openAccessUrl: p.openAccessUrl,
+              sources: p.sources || [],
+              conclusion: buildConclusion(p.abstract),
+              matchedOn,
+            };
+          });
+
+          const gradeRank: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
+          const bestGrade = top.length > 0
+            ? top.reduce((best, a) => ((gradeRank[a.evidenceGrade] ?? 3) < (gradeRank[best] ?? 3) ? a.evidenceGrade : best), top[0].evidenceGrade)
+            : evidence.overallGrade;
+
+          return [r.key, {
+            articles: top,
+            overallGrade: bestGrade,
+            confidence: evidence.confidence,
+            source: evidence.source,
+            searchQuery: evidence.searchQuery,
+            fallbackReason: evidence.source === 'fallback' ? 'No live results returned; showing curated fallback library.' : undefined,
+          }] as const;
+        } catch (err) {
+          console.error(`Adjunct evidence fetch failed for "${r.therapyName}":`, err);
+          return [r.key, {
+            articles: [],
+            overallGrade: 'D' as const,
+            confidence: 'Very Low' as const,
+            source: 'fallback' as const,
+            searchQuery: '',
+            fallbackReason: err instanceof Error ? err.message : 'Failed to fetch evidence',
+          }] as const;
+        }
+      }));
+
+      const evidenceByRecommendation: Record<string, unknown> = {};
+      for (const [key, payload] of results) {
+        evidenceByRecommendation[key] = payload;
+      }
+
+      res.json({ evidenceByRecommendation });
+    } catch (error: unknown) {
+      console.error("Adjunct therapies evidence error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to fetch evidence", details: message });
+    }
+  });
+
   app.post("/api/electrophysical-engine/evidence", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const evidenceInputSchema = z.object({

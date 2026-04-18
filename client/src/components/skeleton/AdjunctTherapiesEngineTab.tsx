@@ -1,7 +1,33 @@
 import { useState, useCallback, useRef } from 'react';
-import { Leaf, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Loader2, Info, ShieldAlert, Sparkles, Award, Stethoscope } from 'lucide-react';
+import { Leaf, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Loader2, Info, ShieldAlert, Sparkles, Award, Stethoscope, BookOpen, ExternalLink } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
+
+interface EvidenceArticle {
+  title: string;
+  authors: string;
+  journal: string;
+  year: number;
+  pmid?: string;
+  doi?: string;
+  studyType: string;
+  evidenceGrade: 'A' | 'B' | 'C' | 'D';
+  pubmedUrl?: string;
+  openAccessUrl?: string;
+  sources?: string[];
+  conclusion?: string;
+  matchedOn?: { modality: string[]; region: string[]; condition: string[] };
+}
+
+interface EvidenceForRecommendation {
+  articles: EvidenceArticle[];
+  overallGrade: 'A' | 'B' | 'C' | 'D';
+  confidence?: string;
+  source?: 'multi' | 'fallback' | string;
+  fallbackReason?: string;
+}
+
+type EvidenceMap = Record<string, EvidenceForRecommendation>;
 
 interface AdjunctRecommendation {
   therapyName: string;
@@ -64,9 +90,139 @@ const EVIDENCE_STYLES: Record<string, { bg: string; text: string; label: string 
   D: { bg: 'bg-red-500/20', text: 'text-red-300', label: 'Anecdotal' },
 };
 
-function RecommendationCard({ rec, index }: { rec: AdjunctRecommendation; index: number }) {
+const STUDY_TYPE_BADGE: Record<string, string> = {
+  'Meta-Analysis': 'bg-purple-500/20 text-purple-300',
+  'Systematic Review': 'bg-purple-500/20 text-purple-300',
+  'RCT': 'bg-emerald-500/20 text-emerald-300',
+  'Clinical Guideline': 'bg-amber-500/20 text-amber-300',
+  'Cohort': 'bg-sky-500/20 text-sky-300',
+  'Case Study': 'bg-gray-600/30 text-gray-300',
+};
+
+function recommendationKey(groupId: string, index: number): string {
+  return `${groupId}::${index}`;
+}
+
+function RecommendationEvidenceSection({ evidence, loading }: { evidence?: EvidenceForRecommendation; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="mt-1.5 border-t border-gray-700/40 pt-1.5">
+        <div className="flex items-center gap-1.5 text-[9px] text-gray-500">
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+          Searching PubMed / PEDro / Europe PMC / OpenAlex…
+        </div>
+        <div className="mt-1 space-y-1">
+          {[0, 1].map(i => (
+            <div key={i} className="h-3 bg-gray-700/30 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!evidence || evidence.articles.length === 0) {
+    return (
+      <div className="mt-1.5 border-t border-gray-700/40 pt-1.5 text-[9px] text-gray-500 italic">
+        {evidence?.fallbackReason || 'No supporting evidence found for this therapy.'}
+      </div>
+    );
+  }
+
+  const grade = EVIDENCE_STYLES[evidence.overallGrade] || EVIDENCE_STYLES.D;
+  return (
+    <div className="mt-1.5 border-t border-gray-700/40 pt-1.5 space-y-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <BookOpen className="h-2.5 w-2.5 text-emerald-400" />
+        <span className="text-[9px] font-medium text-gray-300">Live Evidence ({evidence.articles.length})</span>
+        <span className={`inline-flex items-center gap-0.5 text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${grade.bg} ${grade.text}`}>
+          <Award className="h-2 w-2" />
+          Grade {evidence.overallGrade} · {grade.label}
+        </span>
+        {evidence.source === 'fallback' && (
+          <span className="text-[8px] text-amber-400/70 italic">curated fallback</span>
+        )}
+      </div>
+      <div className="space-y-1">
+        {evidence.articles.map((art, i) => {
+          const aGrade = EVIDENCE_STYLES[art.evidenceGrade] || EVIDENCE_STYLES.D;
+          const studyBadge = STUDY_TYPE_BADGE[art.studyType] || 'bg-gray-600/30 text-gray-300';
+          const url = art.pubmedUrl || (art.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${art.pmid}/` : (art.doi ? `https://doi.org/${art.doi}` : ''));
+          const mo = art.matchedOn;
+          const matchedParts: string[] = [];
+          if (mo?.modality?.length) matchedParts.push(`therapy: ${mo.modality.join(', ')}`);
+          if (mo?.region?.length) matchedParts.push(`region: ${mo.region.join(', ')}`);
+          if (mo?.condition?.length) matchedParts.push(`condition: ${mo.condition.join(', ')}`);
+          return (
+            <div key={i} className="bg-gray-900/50 border border-gray-700/40 rounded p-1.5">
+              <div className="flex items-start gap-1.5">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] text-gray-200 leading-tight font-medium">{art.title}</div>
+                  <div className="text-[9px] text-gray-500 mt-0.5">
+                    {art.authors.split(',').slice(0, 3).join(', ')}{art.authors.split(',').length > 3 ? ' et al.' : ''} · <span className="italic">{art.journal}</span> ({art.year})
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${aGrade.bg} ${aGrade.text}`}>{art.evidenceGrade}</span>
+                  <span className={`text-[8px] px-1 py-0.5 rounded ${studyBadge}`}>{art.studyType}</span>
+                </div>
+              </div>
+              {art.conclusion && (
+                <div className="mt-1 text-[9px] text-gray-300 leading-snug border-l-2 border-emerald-500/40 pl-1.5 italic">
+                  &ldquo;{art.conclusion}&rdquo;
+                </div>
+              )}
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {url && (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-[9px] text-emerald-400 hover:text-emerald-300"
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" />
+                    {art.pmid ? `PMID ${art.pmid}` : (art.doi ? 'DOI' : 'Open')}
+                  </a>
+                )}
+                {art.openAccessUrl && (
+                  <a
+                    href={art.openAccessUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-[9px] text-emerald-400 hover:text-emerald-300"
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" />
+                    Full text
+                  </a>
+                )}
+              </div>
+              {matchedParts.length > 0 && (
+                <div className="mt-1 text-[8px] text-gray-500">
+                  <span className="text-gray-400 font-medium">matched on </span>
+                  {matchedParts.map((part, k) => {
+                    const [label, val] = part.split(': ');
+                    return (
+                      <span key={k}>
+                        {k > 0 && <span className="text-gray-600"> · </span>}
+                        <span className="text-gray-400">{label}:</span>{' '}
+                        <span className="text-emerald-300/80">{val}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RecommendationCard({ rec, index, evidence, evidenceLoading }: { rec: AdjunctRecommendation; index: number; evidence?: EvidenceForRecommendation; evidenceLoading: boolean }) {
   const [expanded, setExpanded] = useState(false);
-  const evGrade = EVIDENCE_STYLES[rec.evidenceLevel] || EVIDENCE_STYLES.C;
+  const liveGrade = evidence?.overallGrade;
+  const displayGrade = liveGrade || rec.evidenceLevel;
+  const evGrade = EVIDENCE_STYLES[displayGrade] || EVIDENCE_STYLES.C;
   const hasContra = rec.contraindications && !['none', 'none identified', ''].includes(rec.contraindications.trim().toLowerCase());
 
   return (
@@ -79,10 +235,21 @@ function RecommendationCard({ rec, index }: { rec: AdjunctRecommendation; index:
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <div className="text-[11px] font-medium text-gray-200">{rec.therapyName}</div>
-            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${evGrade.bg} ${evGrade.text} inline-flex items-center gap-0.5`} title={`Evidence ${rec.evidenceLevel} · ${evGrade.label}`}>
+            <span
+              className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${evGrade.bg} ${evGrade.text} inline-flex items-center gap-0.5`}
+              title={liveGrade
+                ? `Live evidence grade · ${evidence?.articles.length ?? 0} supporting article${(evidence?.articles.length ?? 0) === 1 ? '' : 's'}`
+                : `Model-rated evidence ${rec.evidenceLevel} · ${evGrade.label}`}
+            >
               <Award className="h-2 w-2" />
-              {rec.evidenceLevel}
+              {displayGrade}
             </span>
+            {evidenceLoading && !evidence && (
+              <span className="text-[8px] text-gray-500 inline-flex items-center gap-0.5">
+                <Loader2 className="h-2 w-2 animate-spin" />
+                evidence
+              </span>
+            )}
             {hasContra && (
               <span className="text-[8px] font-medium px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-300 inline-flex items-center gap-0.5" title="Has contraindications">
                 <ShieldAlert className="h-2 w-2" />
@@ -127,7 +294,7 @@ function RecommendationCard({ rec, index }: { rec: AdjunctRecommendation; index:
             <div className="border border-blue-500/20 rounded bg-blue-500/5 p-1.5">
               <div className="text-[9px] font-medium text-blue-400/80 uppercase tracking-wider flex items-center gap-1 mb-0.5">
                 <Award className="h-2.5 w-2.5" />
-                Evidence ({rec.evidenceLevel} · {evGrade.label})
+                Model Evidence Summary ({rec.evidenceLevel} · {(EVIDENCE_STYLES[rec.evidenceLevel] || EVIDENCE_STYLES.C).label})
               </div>
               <div className="text-[10px] text-gray-300 leading-relaxed">{rec.evidenceSummary}</div>
             </div>
@@ -150,6 +317,29 @@ function RecommendationCard({ rec, index }: { rec: AdjunctRecommendation; index:
               <div className="text-[10px] text-gray-300">{rec.referralGuidance}</div>
             </div>
           )}
+          <RecommendationEvidenceSection evidence={evidence} loading={evidenceLoading && !evidence} />
+        </div>
+      )}
+      {!expanded && (evidence || evidenceLoading) && (
+        <div className="px-2 pb-1.5 -mt-0.5">
+          {evidenceLoading && !evidence ? (
+            <div className="flex items-center gap-1 text-[8px] text-gray-500">
+              <Loader2 className="h-2 w-2 animate-spin" />
+              fetching evidence…
+            </div>
+          ) : evidence ? (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${(EVIDENCE_STYLES[evidence.overallGrade] || EVIDENCE_STYLES.D).bg} ${(EVIDENCE_STYLES[evidence.overallGrade] || EVIDENCE_STYLES.D).text}`}>
+                Grade {evidence.overallGrade}
+              </span>
+              <span className="text-[8px] text-gray-500">
+                {evidence.articles.length} article{evidence.articles.length === 1 ? '' : 's'}
+              </span>
+              {evidence.source === 'fallback' && (
+                <span className="text-[8px] text-amber-400/70 italic">curated</span>
+              )}
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -162,7 +352,59 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
   const [error, setError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showNotes, setShowNotes] = useState(false);
+  const [evidenceMap, setEvidenceMap] = useState<EvidenceMap>({});
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const evidenceAbortRef = useRef<AbortController | null>(null);
+
+  const fetchEvidence = useCallback(async (currentPlan: AdjunctTherapiesPlan) => {
+    if (evidenceAbortRef.current) evidenceAbortRef.current.abort();
+    const controller = new AbortController();
+    evidenceAbortRef.current = controller;
+
+    const recommendationsPayload: Array<{ key: string; therapyName: string; therapyCategory: string; targetStructure: string; targetFinding: string }> = [];
+    currentPlan.therapyGroups.forEach(group => {
+      group.recommendations.forEach((rec, idx) => {
+        recommendationsPayload.push({
+          key: recommendationKey(group.groupId, idx),
+          therapyName: rec.therapyName,
+          therapyCategory: group.therapyCategory || '',
+          targetStructure: rec.targetStructure || '',
+          targetFinding: rec.targetFinding || '',
+        });
+      });
+    });
+
+    if (recommendationsPayload.length === 0) return;
+
+    const region = (mechanismAnalysis?.topContributors?.[0] as { region?: string } | undefined)?.region
+      || painMarkers[0]?.label
+      || '';
+    const condition = diagnosis
+      || mechanismAnalysis?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim().slice(0, 80)
+      || '';
+
+    setEvidenceLoading(true);
+    setEvidenceError(null);
+    setEvidenceMap({});
+
+    try {
+      const result = await apiRequest('/api/adjunct-therapies-engine/evidence', 'POST', {
+        recommendations: recommendationsPayload,
+        region,
+        condition,
+      }) as { evidenceByRecommendation: EvidenceMap };
+      if (controller.signal.aborted) return;
+      setEvidenceMap(result.evidenceByRecommendation || {});
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setEvidenceError(msg);
+    } finally {
+      if (!controller.signal.aborted) setEvidenceLoading(false);
+    }
+  }, [mechanismAnalysis, painMarkers, diagnosis]);
 
   const toggleGroup = useCallback((groupId: string) => {
     setExpandedGroups(prev => {
@@ -230,6 +472,7 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
       };
       setPlan(sorted);
       setExpandedGroups(new Set(sorted.therapyGroups.map(g => g.groupId)));
+      void fetchEvidence(sorted);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -237,7 +480,7 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [mechanismAnalysis, painMarkers, diagnosis, recoveryPhase, irritability]);
+  }, [mechanismAnalysis, painMarkers, diagnosis, recoveryPhase, irritability, fetchEvidence]);
 
   const hasData = mechanismAnalysis !== null || (painMarkers && painMarkers.length > 0);
 
@@ -294,6 +537,7 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
   }
 
   const totalRecs = plan.therapyGroups.reduce((sum, g) => sum + g.recommendations.length, 0);
+  const evidenceCount = Object.values(evidenceMap).reduce((sum, e) => sum + (e?.articles?.length ?? 0), 0);
 
   return (
     <div className="space-y-2">
@@ -318,11 +562,26 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
       </div>
 
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Leaf className="h-3.5 w-3.5 text-emerald-400" />
           <span className="text-[11px] font-medium text-gray-200">
             {totalRecs} Recommendations · {plan.therapyGroups.length} Categories
           </span>
+          {evidenceLoading && (
+            <span className="text-[9px] text-gray-500 inline-flex items-center gap-1">
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+              fetching live evidence…
+            </span>
+          )}
+          {!evidenceLoading && evidenceCount > 0 && (
+            <span className="text-[9px] text-emerald-400/80 inline-flex items-center gap-1">
+              <BookOpen className="h-2.5 w-2.5" />
+              {evidenceCount} article{evidenceCount === 1 ? '' : 's'}
+            </span>
+          )}
+          {evidenceError && (
+            <span className="text-[9px] text-red-400/80" title={evidenceError}>evidence fetch failed</span>
+          )}
         </div>
         <button
           onClick={generatePlan}
@@ -357,9 +616,18 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
             </button>
             {isExpanded && (
               <div className="p-2 space-y-1.5">
-                {group.recommendations.map((rec, i) => (
-                  <RecommendationCard key={`${group.groupId}-${i}`} rec={rec} index={i} />
-                ))}
+                {group.recommendations.map((rec, i) => {
+                  const key = recommendationKey(group.groupId, i);
+                  return (
+                    <RecommendationCard
+                      key={`${group.groupId}-${i}`}
+                      rec={rec}
+                      index={i}
+                      evidence={evidenceMap[key]}
+                      evidenceLoading={evidenceLoading}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>

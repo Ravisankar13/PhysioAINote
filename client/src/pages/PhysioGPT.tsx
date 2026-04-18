@@ -76,6 +76,7 @@ import {
   Link2,
   FlaskConical,
   GraduationCap,
+  Leaf,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -153,6 +154,7 @@ const ManualTherapyEngineTab = lazy(() => import("@/components/skeleton/ManualTh
 import type { TissueTarget } from "@/components/skeleton/ManualTherapyEngineTab";
 const ElectrophysicalEngineTab = lazy(() => import("@/components/skeleton/ElectrophysicalEngineTab"));
 const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/PatientEducationEngineTab"));
+const AdjunctTherapiesEngineTab = lazy(() => import("@/components/skeleton/AdjunctTherapiesEngineTab"));
 const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/UnifiedBiomechanicsPanel"));
 const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
@@ -629,7 +631,7 @@ export default function PhysioGPT() {
   const [timelinePlaybackState, setTimelinePlaybackState] = useState<PlaybackSyncState | null>(null);
   const [conditionPhases, setConditionPhases] = useState<ConditionPhaseInfo[] | null>(null);
   const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
-  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd'>('mechanism');
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'adjunctRx' | 'patientEd'>('mechanism');
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
@@ -9442,6 +9444,13 @@ ${ddxList}`;
                       Electro Rx
                     </button>
                     <button
+                      onClick={() => { setMechanismActiveTab('adjunctRx'); setManualTherapyAnnotations(null); }}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'adjunctRx' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                    >
+                      <Leaf className="h-3 w-3" />
+                      Adjunct Rx
+                    </button>
+                    <button
                       onClick={() => { setMechanismActiveTab('patientEd'); setManualTherapyAnnotations(null); }}
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'patientEd' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
@@ -9563,6 +9572,19 @@ ${ddxList}`;
                         severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                    />
+                  )}
+                  {mechanismActiveTab === 'adjunctRx' && (
+                    <AdjunctTherapiesEngineTab
+                      mechanismAnalysis={mechanismAnalysisResult}
+                      painMarkers={painMarkers.map(pm => ({
+                        label: pm.anatomicalLabel || pm.nearestBone,
+                        severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                        type: pm.type,
+                      }))}
+                      diagnosis={extractionResult?.mainComplaint || undefined}
+                      recoveryPhase={extractionResult?.duration || undefined}
+                      irritability={extractionResult?.irritability || undefined}
                     />
                   )}
                   {mechanismActiveTab === 'patientEd' && (

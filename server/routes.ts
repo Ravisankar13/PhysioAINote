@@ -8680,6 +8680,225 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  app.post("/api/adjunct-therapies-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const adjunctInputSchema = z.object({
+        mechanismSummary: z.string().optional().default(""),
+        diagnosis: z.string().optional().default(""),
+        recoveryPhase: z.string().optional().default(""),
+        irritability: z.string().optional().default(""),
+        causalChains: z.array(z.array(z.object({
+          step: z.number(),
+          structure: z.string(),
+          finding: z.string(),
+          mechanism: z.string().optional(),
+          category: z.string().optional(),
+          severity: z.string().optional(),
+        }))).optional().default([]),
+        compensationCards: z.array(z.object({
+          title: z.string(),
+          description: z.string().optional(),
+          severity: z.string().optional(),
+          primaryRegion: z.string().optional(),
+          compensatingRegion: z.string().optional(),
+        })).optional().default([]),
+        loadRedistribution: z.array(z.object({
+          joint: z.string(),
+          change: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+        painMarkers: z.array(z.object({
+          label: z.string(),
+          severity: z.number().optional(),
+          type: z.string().optional(),
+        })).optional().default([]),
+        topContributors: z.array(z.string()).optional().default([]),
+        kineticChainDysfunctions: z.array(z.object({
+          chain: z.string().optional(),
+          dysfunction: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+      });
+
+      const parsed = adjunctInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const causalChainText = data.causalChains.length > 0
+        ? data.causalChains.map((chain, i) =>
+            `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
+          ).join('\n')
+        : 'None identified';
+
+      const compensationText = data.compensationCards.length > 0
+        ? data.compensationCards.map(c =>
+            `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
+          ).join('\n')
+        : 'None identified';
+
+      const loadText = data.loadRedistribution.length > 0
+        ? data.loadRedistribution.map(l => `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`).join('\n')
+        : 'None identified';
+
+      const painText = data.painMarkers.length > 0
+        ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
+        : 'None';
+
+      const contributorsText = data.topContributors.length > 0 ? data.topContributors.join(', ') : 'None identified';
+
+      const kineticText = data.kineticChainDysfunctions.length > 0
+        ? data.kineticChainDysfunctions.map(k => `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`).join('\n')
+        : 'None identified';
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const systemPrompt = `You are an expert musculoskeletal physiotherapist with advanced training in evidence-informed complementary and adjunct natural therapies (Traditional Chinese Medicine techniques, Bowen therapy, cupping, moxibustion, myofascial release adjuncts). Physiotherapists cannot prescribe medications, but adjunct natural therapies are commonly recommended or referred to alongside physiotherapy care.
+
+Your task is to generate a prioritized list of evidence-informed ADJUNCT NATURAL THERAPIES tailored to the patient's condition, irritability, and recovery phase. These are SUGGESTIONS for the clinician to discuss with the patient or refer to a qualified practitioner — NOT medical prescriptions.
+
+SUPPORTED THERAPY CATEGORIES (group recommendations under these):
+- Acupuncture: classical TCM points, trigger-point dry-needling adjacent points, auricular points; needle gauge, retention time, manual/electrical stimulation
+- Tui Na (Chinese therapeutic massage): specific techniques (gun-fa rolling, an-fa pressing, mo-fa rubbing, na-fa grasping, tui-fa pushing), meridian lines, treatment area, duration
+- Bowen Therapy: specific Bowen "moves" (e.g. BRM1 lower back, BRM2 upper back, BRM3 neck, knee/shoulder procedures), pause intervals, body position
+- Cupping Therapy: technique (stationary/sliding/flash/wet), cup size and material, suction level, treatment area, duration, number of cups
+- Moxibustion: technique (direct/indirect/stick/cone/warm needle), points, duration, distance from skin, number of cones/sessions
+- Myofascial Release Adjuncts: cross-hand release, skin rolling, fascial unwinding, indirect/direct fascial techniques, treatment area, duration
+- Other Evidence-Informed Adjuncts (only if directly relevant): Gua Sha (scraping), Shiatsu pressure points, Thai therapeutic massage stretches
+
+EXPLICITLY EXCLUDED (do NOT include these): herbal medicine, supplements, essential oils ingestion, any oral/ingested or topical medication-like products, homeopathy.
+
+CLINICAL REASONING RULES:
+1. Match each therapy to the patient's CURRENT recovery phase and tissue irritability — favour gentler, lower-stimulation approaches (e.g. light stationary cupping, indirect moxibustion, Bowen) for acute/highly irritable presentations; deeper or more vigorous techniques (sliding cupping, deep tui na, electroacupuncture) only for subacute/chronic low-irritability presentations.
+2. Each recommendation MUST link to a SPECIFIC finding from the data (causal chain, compensation, kinetic dysfunction, or pain marker).
+3. For acupuncture, provide CONCRETE point selections (e.g. LI4, ST36, GB34, BL23, Ah Shi local points, or trigger-point relevant locations) and rationale.
+4. For Tui Na, name the SPECIFIC techniques and meridian/region targeted.
+5. For Bowen, reference the actual procedure name (e.g. "BRM1 stoppers + lumbar moves").
+6. For cupping/moxa, state cup type/suction or moxa form clearly.
+7. ALWAYS list contraindications and safety notes (anticoagulants, pregnancy, skin integrity, fragile skin in elderly, infection, malignancy in area, deep vein thrombosis, undiagnosed lumps, etc.).
+8. Provide an evidenceLevel rating ('A' strong / 'B' moderate / 'C' limited / 'D' anecdotal) for each recommendation based on the current research base for that therapy in that condition.
+9. Frame everything as ADJUNCT suggestions for clinician discussion or referral — never as a prescription.
+
+RESPONSE FORMAT — return valid JSON with this exact structure:
+{
+  "therapyGroups": [
+    {
+      "groupId": "string",
+      "therapyCategory": "string (MUST be one of: 'Acupuncture', 'Tui Na', 'Bowen Therapy', 'Cupping Therapy', 'Moxibustion', 'Myofascial Release Adjuncts', 'Other Adjuncts')",
+      "categoryDescription": "string — brief description of what this therapy category is and why it is being suggested for this presentation",
+      "priority": number (1 = highest),
+      "recommendations": [
+        {
+          "therapyName": "string — specific named technique (e.g. 'Acupuncture — Local + Distal Points for Lateral Epicondylalgia')",
+          "techniqueDetails": "string — exact technique, points/sequence, dosage parameters (needle gauge & retention, cup type/suction, moxa form/duration, Bowen procedure name, Tui Na technique sequence, etc.)",
+          "targetStructure": "string — anatomical/meridian region or tissue targeted",
+          "targetFinding": "string — the SPECIFIC clinical finding from the assessment data this addresses",
+          "clinicalRationale": "string — clinical reasoning linking this therapy to the patient's condition, phase and irritability",
+          "expectedBenefit": "string — what the patient is realistically expected to experience and over what time frame",
+          "contraindications": "string — absolute and relative contraindications and safety considerations specific to this technique and patient",
+          "evidenceLevel": "A | B | C | D",
+          "evidenceSummary": "string — 1-2 sentence summary of the current evidence base for this therapy in this condition (cite study type if known, e.g. 'Cochrane review supports modest short-term effect')",
+          "referralGuidance": "string — whether this is something the physiotherapist can discuss/perform within scope, or should refer to a qualified TCM practitioner / acupuncturist / Bowen therapist; what to look for in the practitioner"
+        }
+      ]
+    }
+  ],
+  "overallRationale": "string — overall reasoning for the selected mix of adjunct therapies given this patient's phase and irritability",
+  "safetyConsiderations": "string — overall safety considerations across all recommended therapies (red flags, when to defer, interactions with current physiotherapy plan)",
+  "clinicianDisclaimer": "string — explicit disclaimer that these are adjunct suggestions for clinician discussion / referral and not a medical prescription, and that any practitioner referral should be to a qualified, registered provider in the relevant modality"
+}`;
+
+      const userPrompt = `CLINICAL ASSESSMENT DATA:
+
+WORKING DIAGNOSIS: ${data.diagnosis || 'Not specified'}
+RECOVERY PHASE: ${data.recoveryPhase || 'Not specified'}
+TISSUE IRRITABILITY: ${data.irritability || 'Not specified'}
+
+OVERALL MECHANISM SUMMARY:
+${data.mechanismSummary || 'Not available'}
+
+CAUSAL CHAINS (root cause → symptom):
+${causalChainText}
+
+TOP CONTRIBUTORS:
+${contributorsText}
+
+COMPENSATION PATTERNS:
+${compensationText}
+
+LOAD REDISTRIBUTION:
+${loadText}
+
+KINETIC CHAIN DYSFUNCTIONS:
+${kineticText}
+
+PAIN MARKERS:
+${painText}
+
+Based on this data, generate a prioritized, evidence-informed adjunct natural therapies plan with concrete techniques, specific points/sequences, clear safety notes, and explicit clinician/referral framing.`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 6000,
+        temperature: 0.4,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const adjunctResponseSchema = z.object({
+        therapyGroups: z.array(z.object({
+          groupId: z.string(),
+          therapyCategory: z.string(),
+          categoryDescription: z.string(),
+          priority: z.number(),
+          recommendations: z.array(z.object({
+            therapyName: z.string(),
+            techniqueDetails: z.string(),
+            targetStructure: z.string().default(''),
+            targetFinding: z.string().default(''),
+            clinicalRationale: z.string(),
+            expectedBenefit: z.string(),
+            contraindications: z.string().default('None identified'),
+            evidenceLevel: z.enum(['A', 'B', 'C', 'D']).or(z.string()).default('C'),
+            evidenceSummary: z.string().default(''),
+            referralGuidance: z.string().default(''),
+          })),
+        })),
+        overallRationale: z.string().default(''),
+        safetyConsiderations: z.string().default(''),
+        clinicianDisclaimer: z.string().default('These are adjunct suggestions for clinician discussion or referral to a qualified practitioner. They are not a medical prescription.'),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = adjunctResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Adjunct therapies engine response validation failed:", validated.error.format());
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          validationErrors: validated.error.format(),
+        });
+      }
+      res.json(validated.data);
+    } catch (error: unknown) {
+      console.error("Adjunct therapies engine generation error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate adjunct therapies plan", details: message });
+    }
+  });
+
   app.post("/api/electrophysical-engine/evidence", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const evidenceInputSchema = z.object({

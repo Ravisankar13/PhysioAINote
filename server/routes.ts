@@ -12916,8 +12916,10 @@ For EACH phase you must emit:
   - rationale: 1-2 sentences linking this phase's plan to the natural-history verdict + clinical picture (cite tissue biology + the patient's specific risks).
   - techniques: 2-5 hands-on / manual / modality items, each with name + target + dosage + rationale + the finding_ids/tissue_ids/sling_ids it addresses.
   - exercises: 2-5 prescriptions, each with concrete name + target + sets×reps×load dosage + progression cue + rationale + finding_ids/tissue_ids/sling_ids.
-  - criteria: 2-4 objective entry/exit milestones in the patient's own clinical units.
+  - criteria: 2-4 objective entry/exit milestones in the patient's own clinical units (these gate movement INTO the next phase — they must be measurable on this patient: pain on a specific test, AROM in degrees, single-leg balance time, hop distance symmetry, etc.).
   - finding_notes: per-finding healing notes — short clinician-facing reminders for THIS phase tied to a finding_id from the natural timeline.
+
+NAMING CONSTRAINT — keep names within the established physiotherapy concept vocabulary used by this app's exercise and manual-therapy libraries. Use canonical clinical terminology — e.g. "Isometric shoulder ER @ 0° abd", "Theraband ER 3×15", "HSR calf raise on step", "Posterior glenohumeral mobilisation grade III", "Sciatic nerve slider in slump", "Single-leg Romanian deadlift", "Side-plank with hip abd", "McKenzie repeated extension in lying". DO NOT invent novel branded protocols, marketing names, or non-clinical phrasing. If a finding has no specific evidence-based item, use the closest established graded-loading or motor-control concept rather than fabricating one. Dosage must be in standard clinical units (sets × reps × load/hold, frequency per day/week, hands-on grade × duration).
 
 Return ONLY valid JSON in EXACTLY this shape:
 {

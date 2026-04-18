@@ -9867,6 +9867,8 @@ ${ddxList}`;
                   naturalTimelineLoading={naturalTimeline.loading}
                   caseSpecificPlan={caseSpecificPlan.result ?? null}
                   caseSpecificPlanLoading={caseSpecificPlan.loading}
+                  caseSpecificPlanError={caseSpecificPlan.error ?? null}
+                  onRetryCaseSpecificPlan={caseSpecificPlan.refresh}
                   naturalTimelineSlot={
                     <Suspense fallback={null}>
                       <NaturalTimelinePanel

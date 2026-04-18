@@ -167,8 +167,15 @@ interface Props {
    *  preserved as "Clinician additions" on top of this baseline. */
   caseSpecificPlan?: CaseSpecificTreatmentPlan | null;
   /** True while the parent's case-specific plan request is in flight.
-   *  Drives a small "Refreshing…" badge on each phase card. */
+   *  Drives a "Generating…" first-load state per card and a "Refreshing…"
+   *  badge when an existing plan is being updated. */
   caseSpecificPlanLoading?: boolean;
+  /** Last hard error from the case-specific plan fetch (after stale plan
+   *  has been cleared by the hook). When present each phase card shows
+   *  a visible failure card with a retry hint. */
+  caseSpecificPlanError?: string | null;
+  /** Manual refresh trigger surfaced on the failure card. */
+  onRetryCaseSpecificPlan?: () => void;
   /** Optional UI element rendered inside the dashboard's left summary
    *  column — used by PhysioGPT to host the Natural Timeline panel
    *  (with Q&A UX) so it sits alongside the recovery curves. */
@@ -407,6 +414,8 @@ export default function RecoverySimulatorDashboard({
   aiNaturalTimeline,
   caseSpecificPlan,
   caseSpecificPlanLoading,
+  caseSpecificPlanError,
+  onRetryCaseSpecificPlan,
   naturalTimelineLoading,
   naturalTimelineSlot,
 }: Props) {
@@ -1917,10 +1926,16 @@ export default function RecoverySimulatorDashboard({
 
                       {/* Case-specific AI plan for this phase, when present.
                           Replaces the generic strategy line and references the
-                          patient's actual tissues + drivers. */}
+                          patient's actual tissues + drivers. Rationale +
+                          structured Techniques / Exercises / Criteria sections
+                          are rendered further down inside the treatments
+                          block; here we surface only the Goal line, the
+                          first-load state, and any hard-error card. */}
                       {(() => {
                         const csPhase: CaseSpecificPhasePlan | null =
                           caseSpecificPlan?.phases.find((ph: CaseSpecificPhasePlan) => ph.phase_id === p.id) ?? null;
+                        const firstLoad =
+                          !!caseSpecificPlanLoading && !caseSpecificPlan && !caseSpecificPlanError;
                         return (
                           <>
                             {/* Goal-Driven Recovery Engine target for this phase */}
@@ -1941,25 +1956,50 @@ export default function RecoverySimulatorDashboard({
                               )}
                             </div>
 
-                            {csPhase?.goal ? (
+                            {csPhase?.goal && (
                               <div className="text-[10px] text-cyan-100 leading-snug font-medium" data-testid={`phase-case-goal-${p.id}`}>
                                 <span className="text-cyan-400/80">▸ </span>{csPhase.goal}
                                 {caseSpecificPlanLoading && (
                                   <span className="ml-1 text-[8px] uppercase tracking-wide text-cyan-400/70">Refreshing…</span>
                                 )}
                               </div>
-                            ) : (
+                            )}
+
+                            {!csPhase && !firstLoad && !caseSpecificPlanError && (
                               <div className="text-[10px] text-gray-300 leading-snug" data-testid={`phase-strategy-${p.id}`}>
                                 {r.strategy}
-                                {caseSpecificPlanLoading && !caseSpecificPlan && (
-                                  <span className="ml-1 text-[8px] uppercase tracking-wide text-cyan-400/70">AI plan loading…</span>
-                                )}
                               </div>
                             )}
 
-                            {csPhase?.rationale && (
-                              <div className="text-[9px] text-gray-400 leading-snug italic" data-testid={`phase-case-rationale-${p.id}`}>
-                                {csPhase.rationale}
+                            {firstLoad && (
+                              <div
+                                className="text-[10px] text-cyan-200 leading-snug flex items-center gap-1 px-1.5 py-1 rounded border border-cyan-700/40 bg-cyan-950/30"
+                                data-testid={`phase-case-loading-${p.id}`}
+                              >
+                                <RefreshCw className="h-2.5 w-2.5 animate-spin shrink-0" />
+                                Generating case-specific plan…
+                              </div>
+                            )}
+
+                            {caseSpecificPlanError && !csPhase && (
+                              <div
+                                className="text-[10px] text-red-200 leading-snug flex items-start gap-1 px-1.5 py-1 rounded border border-red-700/50 bg-red-950/40"
+                                data-testid={`phase-case-error-${p.id}`}
+                              >
+                                <AlertTriangle className="h-2.5 w-2.5 mt-0.5 shrink-0" />
+                                <div className="flex-1">
+                                  <div>Case-specific plan failed: <span className="text-red-300">{caseSpecificPlanError}</span></div>
+                                  {onRetryCaseSpecificPlan && (
+                                    <button
+                                      type="button"
+                                      onClick={onRetryCaseSpecificPlan}
+                                      className="mt-0.5 underline hover:text-red-100"
+                                      data-testid={`phase-case-retry-${p.id}`}
+                                    >
+                                      Retry
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </>
@@ -2094,11 +2134,15 @@ export default function RecoverySimulatorDashboard({
                           | { kind: 'session-mt'; label: string }
                           | { kind: 'ai-ex'; label: string }
                           | { kind: 'ai-mt'; label: string };
+                        // When the case-specific plan is present we render
+                        // its Techniques and Exercises in their own dedicated
+                        // sections (below) rather than in this combined list,
+                        // so this list is reserved for clinician additions
+                        // (session-wide custom items + pending per-phase AI
+                        // items). When no case-specific plan exists, fall
+                        // back to the legacy baseline strategy treatments.
                         const baselineList: CombinedTreatment[] = csPhase
-                          ? [
-                              ...csPhase.techniques.map((it: CaseSpecificTreatmentItem) => ({ kind: 'case-mt' as const, label: it.name, item: it })),
-                              ...csPhase.exercises.map((it: CaseSpecificTreatmentItem) => ({ kind: 'case-ex' as const, label: it.name, item: it })),
-                            ]
+                          ? []
                           : r.treatments.map(t => ({ kind: 'baseline' as const, label: t }));
                         const combined: CombinedTreatment[] = [
                           ...baselineList,
@@ -2191,14 +2235,105 @@ export default function RecoverySimulatorDashboard({
                           );
                         };
 
+                        const renderCaseItem = (
+                          item: CaseSpecificTreatmentItem,
+                          i: number,
+                          kind: 'case-mt' | 'case-ex',
+                        ) => {
+                          const tone = kind === 'case-ex' ? 'text-violet-200' : 'text-cyan-200';
+                          const testid = kind === 'case-ex'
+                            ? `phase-rx-case-ex-${p.id}-${i}`
+                            : `phase-rx-case-mt-${p.id}-${i}`;
+                          return (
+                            <li key={`${kind}-${i}`} className={`text-[10px] flex flex-col gap-0.5 ${tone}`} data-testid={testid}>
+                              <div className="flex items-start gap-1">
+                                <span className="opacity-60 mt-0.5">•</span>
+                                <span className="font-semibold leading-snug">{item.name}</span>
+                              </div>
+                              {(item.dosage || item.target) && (
+                                <div className="text-[9px] text-gray-300 leading-snug pl-3">
+                                  {item.dosage && <span>{item.dosage}</span>}
+                                  {item.dosage && item.target && <span className="text-gray-500"> · </span>}
+                                  {item.target && <span className="text-gray-400">→ {item.target}</span>}
+                                </div>
+                              )}
+                              {item.rationale && (
+                                <div className="text-[9px] text-gray-400 italic leading-snug pl-3" data-testid={`${testid}-rationale`}>
+                                  {item.rationale}
+                                </div>
+                              )}
+                              {item.progression && (
+                                <div className="text-[9px] text-emerald-300/80 leading-snug pl-3">
+                                  Progress · {item.progression}
+                                </div>
+                              )}
+                            </li>
+                          );
+                        };
+
                         return (
                           <>
+                            {/* Case-specific structured plan: Techniques,
+                                Exercises, Entry/Exit Criteria, Rationale.
+                                Each section is rendered only when the AI
+                                returned items for it. */}
+                            {csPhase && csPhase.techniques.length > 0 && (
+                              <div className="mt-0.5" data-testid={`phase-case-techniques-${p.id}`}>
+                                <div className="text-[8px] uppercase tracking-wide text-cyan-400/80 font-semibold mb-0.5">
+                                  Techniques
+                                </div>
+                                <ul className="space-y-0.5">
+                                  {csPhase.techniques.map((it, i) => renderCaseItem(it, i, 'case-mt'))}
+                                </ul>
+                              </div>
+                            )}
+                            {csPhase && csPhase.exercises.length > 0 && (
+                              <div className="mt-0.5" data-testid={`phase-case-exercises-${p.id}`}>
+                                <div className="text-[8px] uppercase tracking-wide text-violet-400/80 font-semibold mb-0.5">
+                                  Exercises
+                                </div>
+                                <ul className="space-y-0.5">
+                                  {csPhase.exercises.map((it, i) => renderCaseItem(it, i, 'case-ex'))}
+                                </ul>
+                              </div>
+                            )}
+                            {csPhase && (csPhase.criteria?.length ?? 0) > 0 && (
+                              <div className="mt-0.5" data-testid={`phase-case-criteria-${p.id}`}>
+                                <div className="text-[8px] uppercase tracking-wide text-emerald-400/80 font-semibold mb-0.5">
+                                  Entry / Exit criteria
+                                </div>
+                                <ul className="space-y-0.5">
+                                  {(csPhase.criteria ?? []).map((c, i) => (
+                                    <li
+                                      key={`crit-${i}`}
+                                      className="text-[10px] text-emerald-100 flex items-start gap-1 leading-snug"
+                                      data-testid={`phase-case-criterion-${p.id}-${i}`}
+                                    >
+                                      <span className="opacity-60 mt-0.5">✓</span>
+                                      <span>{c}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {csPhase?.rationale && (
+                              <div
+                                className="mt-0.5 text-[9px] text-gray-400 leading-snug italic"
+                                data-testid={`phase-case-rationale-${p.id}`}
+                              >
+                                <span className="not-italic text-gray-500 font-semibold uppercase tracking-wide text-[8px]">Rationale · </span>
+                                {csPhase.rationale}
+                              </div>
+                            )}
+
                             <div className="mt-0.5">
                               <div className="text-[8px] uppercase tracking-wide text-gray-500 font-semibold mb-0.5">
-                                {sourceLabel} treatments
+                                {csPhase ? 'Clinician additions' : `${sourceLabel} treatments`}
                               </div>
                               {combined.length === 0 ? (
-                                <div className="text-[10px] text-gray-500 italic">No stage-appropriate treatment</div>
+                                <div className="text-[10px] text-gray-500 italic">
+                                  {csPhase ? 'No clinician additions yet' : 'No stage-appropriate treatment'}
+                                </div>
                               ) : (
                                 <>
                                   <ul className="space-y-0.5">{visible.map(renderItem)}</ul>

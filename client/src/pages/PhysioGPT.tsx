@@ -154,7 +154,9 @@ const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSim
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
 const RecoverySimulationPanel = lazy(() => import("@/components/skeleton/RecoverySimulationPanel"));
 const RecoverySimulatorDashboard = lazy(() => import("@/components/skeleton/RecoverySimulatorDashboard"));
-import { buildConditionContext, type ConditionContext } from "@/lib/recoverySimulationEngine";
+import { buildConditionContext, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput } from "@/lib/recoverySimulationEngine";
+import { buildPrescriptionContext } from "@/lib/prescriptionAdapterEngine";
+import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDashboard";
 import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers } from "@/lib/patientFactorsEngine";
 const TimelineBottomBar = lazy(() => import("@/components/skeleton/TimelineBottomBar"));
 import type { PlaybackSyncState, TimelinePlaybackRef, ConditionPhaseInfo } from "@/components/skeleton/TimelineBottomBar";
@@ -9441,7 +9443,174 @@ ${ddxList}`;
               </div>
             )}
 
-            {showRecoverySim && (
+            {showRecoverySim && (() => {
+              /** Build the shared engine payload once per call from
+               *  PhysioGPT's clinical state (mechanism / sling / pain
+               *  markers / scar / adhesion / muscle pathology), then
+               *  override the recoveryGoalContext per phase so the AI
+               *  knows the dosage / MT-grade ceiling and gap focus for
+               *  THIS phase rather than the patient's current phase. */
+              const buildEnginePayload = (req: PhaseRxRequest, kind: 'exercise' | 'manual'): Record<string, unknown> => {
+                const ma = mechanismAnalysisResult;
+                const payload: Record<string, unknown> = {
+                  mechanismSummary: ma?.overallMechanismSummary ?? '',
+                  causalChains: (ma?.causalChains ?? []).map(chain =>
+                    chain.map(s => ({
+                      step: s.step,
+                      structure: s.structure,
+                      finding: s.finding,
+                      mechanism: s.mechanism ?? '',
+                      category: s.category ?? '',
+                      severity: s.severity ?? '',
+                    })),
+                  ),
+                  compensationCards: (ma?.compensationCards ?? []).map(c => ({
+                    title: c.title,
+                    description: c.clinicalSignificance ?? '',
+                    severity: c.severity ?? '',
+                    primaryRegion: c.primaryDysfunction ?? '',
+                    compensatingRegion: c.compensatingStructures?.join(', ') ?? '',
+                  })),
+                  loadRedistribution: (ma?.loadRedistribution ?? []).map(l => ({
+                    joint: l.joint,
+                    change: `${l.changePct > 0 ? '+' : ''}${l.changePct}%`,
+                    clinical: l.status,
+                  })),
+                  topContributors: ma?.topContributors ?? [],
+                  kineticChainDysfunctions: (ma?.kineticChainDysfunctions ?? []).map(k => ({
+                    chain: k.chainLabel ?? '',
+                    dysfunction: k.dysfunction ?? '',
+                    clinical: k.relevance ?? '',
+                  })),
+                  painMarkers: painMarkers.map(pm => ({
+                    label: pm.anatomicalLabel || pm.nearestBone,
+                    severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                    type: pm.type,
+                  })),
+                };
+                if (slingAnalysis) {
+                  payload.slingData = {
+                    systemSummary: slingAnalysis.systemSummary,
+                    overallForceTransferScore: slingAnalysis.overallForceTransferScore,
+                    slings: slingAnalysis.slings.map(s => ({
+                      label: s.label,
+                      status: s.status,
+                      activationScore: s.activationScore,
+                      forceTransferQuality: s.forceTransferQuality,
+                      weakLinks: s.weakLinks.map(w => ({ muscle: w.muscle, activationPct: w.activationPct, reason: w.reason })),
+                      forceReroutes: s.forceReroutes.map(r => ({ fromMuscle: r.fromMuscle, toMuscle: r.toMuscle, reroutePct: r.reroutePct, clinical: r.clinical })),
+                      treatmentTargets: s.treatmentTargets.map(t => ({ muscle: t.muscle, intervention: t.intervention, rationale: t.rationale })),
+                      narrative: s.narrative,
+                    })),
+                  };
+                }
+                if (kind === 'manual') {
+                  if (scarMarkers.length > 0) {
+                    payload.scarMarkers = scarMarkers.map(s => ({
+                      anatomicalLabel: s.anatomicalLabel,
+                      type: s.type,
+                      severity: s.severity,
+                      age: s.age,
+                      mobility: s.mobility,
+                      affectedLayers: s.affectedLayers,
+                      painOnPalpation: s.painOnPalpation,
+                      nearestBone: s.nearestBone,
+                    }));
+                  }
+                  if (adhesionBands.length > 0) {
+                    payload.adhesionBands = adhesionBands.map(b => ({
+                      startBone: b.startBone,
+                      endBone: b.endBone,
+                      tensionLevel: b.tensionLevel,
+                      depth: b.depth,
+                      restrictedMovements: b.restrictedMovements,
+                    }));
+                  }
+                  const musclePathologies = Object.entries(compensatedOverrides)
+                    .filter(([, ov]) => ov?.pathology && ov.pathology !== 'none')
+                    .map(([muscleId, ov]) => ({
+                      muscleId,
+                      label: muscleId.replace(/_/g, ' '),
+                      pathology: ov!.pathology as string,
+                      severity: (ov!.tensionOffset > 20 ? 'severe' : ov!.tensionOffset > 10 ? 'moderate' : 'mild'),
+                    }));
+                  if (musclePathologies.length > 0) payload.musclePathologies = musclePathologies;
+                }
+
+                // Build a phase-specific PrescriptionContext by overriding
+                // clinicalState.activePhaseIndex with the requested phase
+                // so dosage scaling + MT-grade guidance reflect THIS
+                // phase rather than the patient's current phase.
+                if (activeGoalProfile) {
+                  const phaseClinicalState = {
+                    ...exerciseMtClinicalState,
+                    activePhaseIndex: req.phaseStageIndex,
+                    painMarkers: (exerciseMtClinicalState.painMarkers ?? []).map(pm => ({
+                      ...pm,
+                      // Use the projected pain at the start of this phase
+                      // so the AI gets phase-appropriate irritability.
+                      intensity: req.predictedPainAtPhase,
+                    })),
+                  };
+                  const ctx = buildPrescriptionContext(activeGoalProfile, phaseClinicalState, null, null);
+                  payload.recoveryGoalContext = {
+                    condition: ctx.conditionName,
+                    phaseLabel: req.phaseLabel,
+                    goalAchievementPct: req.predictedGoalAchievementPct,
+                    painCurrent: Math.round(req.predictedPainAtPhase),
+                    painTarget: ctx.painTarget,
+                    dosageIntensity: ctx.dosageScaling.intensityLabel,
+                    painCeiling: ctx.dosageScaling.painCeiling,
+                    priorityBodyParts: ctx.priorityBodyParts,
+                    contraindications: ctx.contraindications,
+                    topGaps: ctx.goalGaps.slice(0, 5).map(g => ({
+                      label: g.label,
+                      gapPercent: Math.round(g.gapPercent),
+                      priority: g.priority,
+                      categories: g.recommendedCategories,
+                    })),
+                  };
+                }
+                return payload;
+              };
+
+              const handleGeneratePhaseExerciseRx = async (req: PhaseRxRequest): Promise<CustomExerciseInput[]> => {
+                const payload = buildEnginePayload(req, 'exercise');
+                const result = await apiRequest('/api/exercise-engine/design-custom', 'POST', payload) as { customExercises?: CustomExerciseInput[] };
+                return result.customExercises ?? [];
+              };
+              const handleGeneratePhaseManualRx = async (req: PhaseRxRequest): Promise<CustomManualTechniqueInput[]> => {
+                const payload = buildEnginePayload(req, 'manual');
+                const result = await apiRequest('/api/manual-therapy-engine/design-custom', 'POST', payload) as { customTechniques?: CustomManualTechniqueInput[] };
+                return result.customTechniques ?? [];
+              };
+              const handleAddCustomExercises = (items: CustomExerciseInput[]) => {
+                setCustomExerciseResult(prev => {
+                  const existing = prev?.customExercises ?? [];
+                  // De-dupe by name to avoid promoting the same item twice.
+                  const existingNames = new Set(existing.map(e => e.name));
+                  const merged = [...existing, ...items.filter(i => !existingNames.has(i.name))];
+                  return {
+                    customExercises: merged as typeof existing,
+                    designRationale: prev?.designRationale ?? '',
+                    safetyNotes: prev?.safetyNotes ?? '',
+                  };
+                });
+              };
+              const handleAddCustomTechniques = (items: CustomManualTechniqueInput[]) => {
+                setCustomManualTherapyResult(prev => {
+                  const existing = prev?.customTechniques ?? [];
+                  const existingNames = new Set(existing.map(t => t.name));
+                  const merged = [...existing, ...items.filter(i => !existingNames.has(i.name))];
+                  return {
+                    customTechniques: merged as typeof existing,
+                    designRationale: prev?.designRationale ?? '',
+                    safetyNotes: prev?.safetyNotes ?? '',
+                  };
+                });
+              };
+
+              return (
               <Suspense fallback={<LazyPanelFallback />}>
                 <RecoverySimulatorDashboard
                   conditionLabel={extractionResult?.mainComplaint || undefined}
@@ -9455,6 +9624,10 @@ ${ddxList}`;
                   customExercises={customExerciseResult?.customExercises ?? null}
                   customTechniques={customManualTherapyResult?.customTechniques ?? null}
                   onSkeletonSlotMount={setRecoverySimSlot}
+                  onGeneratePhaseExerciseRx={handleGeneratePhaseExerciseRx}
+                  onGeneratePhaseManualRx={handleGeneratePhaseManualRx}
+                  onAddCustomExercises={handleAddCustomExercises}
+                  onAddCustomTechniques={handleAddCustomTechniques}
                   initialInput={{
                     conditionSeverity: painMarkers.length > 0
                       ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)
@@ -9465,7 +9638,8 @@ ${ddxList}`;
                   }}
                 />
               </Suspense>
-            )}
+              );
+            })()}
 
             {showShoulderAssessment && (
               <div className="absolute top-2 right-2 z-30 w-80 h-[calc(100%-50px)]">

@@ -5427,3 +5427,73 @@ export interface NaturalTimelineResult {
   follow_up_questions: NaturalTimelineFollowUpQuestion[];
   incorporated_factors: string[];
 }
+
+/** Case-specific per-phase treatment item (technique or exercise) emitted by
+ *  the Case-Specific Treatment Plan engine. Each item references the actual
+ *  finding ids / tissue ids / sling ids it targets so the dashboard can show
+ *  WHY this prescription exists for THIS patient (rather than a generic
+ *  textbook list). */
+export interface CaseSpecificTreatmentItem {
+  /** Concrete clinical name, e.g. "Supraspinatus isometric @ 30° abd",
+   *  "Grade III post-glide R glenohumeral", "Sciatic nerve slider supine". */
+  name: string;
+  /** What this item is intended to change (tissue/finding/sling/posture). */
+  target: string;
+  /** Sets × reps × hold/intensity, frequency, or hands-on dosage. */
+  dosage: string;
+  /** When/how to progress or regress within this phase. */
+  progression?: string;
+  /** 1-2 sentence per-finding healing rationale tying the item to tissue
+   *  biology + the patient's specific drivers. */
+  rationale: string;
+  /** finding_ids from the AI natural-timeline this item is targeting. */
+  finding_ids?: string[];
+  /** tissue_ids from compromised_tissues this item is targeting. */
+  tissue_ids?: string[];
+  /** sling names from sling_weak_links this item is targeting. */
+  sling_ids?: string[];
+}
+
+export interface CaseSpecificPhasePlan {
+  /** Stable archetype stage id (e.g. "calm_prepare", "build_capacity",
+   *  "restore_power", "return_to_sport"). Matches RecoveryStage.id. */
+  phase_id: string;
+  /** Human label (e.g. "Calm & Prepare"). */
+  phase_name: string;
+  /** Case-specific one-line goal — references the actual tissues and
+   *  drivers, not a generic textbook goal. */
+  goal: string;
+  /** 1-2 sentence narrative tying this phase's plan to the patient's
+   *  natural-history verdict + clinical picture. */
+  rationale: string;
+  /** Concrete manual therapy / hands-on / modality items. */
+  techniques: CaseSpecificTreatmentItem[];
+  /** Concrete exercise prescriptions with dosage. */
+  exercises: CaseSpecificTreatmentItem[];
+  /** Objective entry/exit criteria for this phase, written in the
+   *  patient's own clinical units (e.g. "Pain ≤3/10 on isometric ER",
+   *  "Single-leg balance >20s with eyes open"). */
+  criteria?: string[];
+  /** Per-finding healing notes for this phase, e.g. "Supraspinatus:
+   *  protect inflammatory phase, isometrics only". */
+  finding_notes?: Array<{ finding_id: string; note: string }>;
+}
+
+export interface CaseSpecificTreatmentPlan {
+  phases: CaseSpecificPhasePlan[];
+  /** Overall 2-3 sentence narrative for the case as a whole. */
+  case_summary: string;
+  /** AI confidence in this case-specific plan. */
+  confidence_percent: number;
+}
+
+export interface CaseSpecificTreatmentPlanRequest {
+  context: NaturalTimelineRequestContext;
+  natural_timeline: NaturalTimelineResult;
+  /** Archetype stage labels in order so the AI emits one phase plan per
+   *  card with matching ids. */
+  phases: Array<{ id: string; name: string; subtitle?: string }>;
+  archetype_id?: string;
+  condition_label?: string;
+  qa_history?: NaturalTimelineQA[];
+}

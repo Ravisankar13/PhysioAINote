@@ -81,6 +81,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { PhysioGptConversation, PhysioGptMessage, NaturalTimelineRequestContext } from "@shared/schema";
 import { useNaturalTimeline } from "@/hooks/useNaturalTimeline";
+import { useCaseSpecificPlan } from "@/hooks/useCaseSpecificPlan";
+import { RECOVERY_ARCHETYPES, getArchetypeForCondition } from "@/lib/recoveryArchetypes";
 const NaturalTimelinePanel = lazy(() => import("@/components/skeleton/NaturalTimelinePanel"));
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
@@ -4272,6 +4274,56 @@ ${ddxList}`;
     context: naturalTimelineRequestContext,
     enabled: showRecoverySim,
     signature: naturalTimelineSignature,
+  });
+
+  /** Resolve the same archetype the dashboard will render so the
+   *  case-specific plan request sends matching phase ids/names. The
+   *  dashboard mirrors this resolution: trust the precomputed
+   *  archetypeId on conditionContext if available, otherwise fall back
+   *  to label-based resolution. */
+  const recoverySimArchetype = useMemo(() => {
+    if (!recoverySimConditionContext) return null;
+    const precomputed = recoverySimConditionContext.archetypeId;
+    if (precomputed && RECOVERY_ARCHETYPES[precomputed]) return RECOVERY_ARCHETYPES[precomputed];
+    return getArchetypeForCondition(recoverySimConditionContext.conditionId, recoverySimConditionContext.conditionLabel);
+  }, [recoverySimConditionContext]);
+
+  const recoverySimPhases = useMemo(() => {
+    if (!recoverySimArchetype) return [] as Array<{ id: string; name: string; subtitle?: string }>;
+    return recoverySimArchetype.stages.map(s => ({ id: s.id, name: s.name, subtitle: s.subtitle }));
+  }, [recoverySimArchetype]);
+
+  /** Case-specific plan signature. Reuses the natural-timeline signature
+   *  (which already excludes high-frequency live skeleton fields) and
+   *  adds the natural-timeline verdict + archetype phase ids so the
+   *  plan refetches whenever the verdict or archetype changes. */
+  const caseSpecificPlanSignature = useMemo<string | null>(() => {
+    if (!naturalTimelineSignature || !naturalTimeline.result || recoverySimPhases.length === 0) return null;
+    const nt = naturalTimeline.result;
+    const ntSig = JSON.stringify({
+      pf: nt.per_finding.map(f => [f.finding_id, f.healing_class, f.expected_weeks_to_resolution, Math.round(f.residual_deficit_percent / 5) * 5].join('|')).sort(),
+      ow: [Math.round(nt.overall_window_weeks.expected), Math.round(nt.overall_window_weeks.best), Math.round(nt.overall_window_weeks.worst)],
+      cr: Math.round(nt.chronicity_risk_percent / 10) * 10,
+      rr: Math.round(nt.recurrence_risk_percent / 10) * 10,
+      fr: Math.round(nt.flare_risk_percent / 10) * 10,
+    });
+    return JSON.stringify({
+      base: naturalTimelineSignature,
+      arch: recoverySimArchetype?.id ?? '',
+      phases: recoverySimPhases.map(p => p.id),
+      nt: ntSig,
+    });
+  }, [naturalTimelineSignature, naturalTimeline.result, recoverySimPhases, recoverySimArchetype]);
+
+  const caseSpecificPlan = useCaseSpecificPlan({
+    context: naturalTimelineRequestContext,
+    naturalTimeline: naturalTimeline.result,
+    phases: recoverySimPhases,
+    archetypeId: recoverySimArchetype?.id,
+    conditionLabel: recoverySimConditionContext?.conditionLabel ?? extractionResult?.mainComplaint ?? undefined,
+    qaHistory: naturalTimeline.qaHistory,
+    enabled: showRecoverySim && !!naturalTimeline.result && recoverySimPhases.length > 0,
+    signature: caseSpecificPlanSignature,
   });
 
   const clinicalPlan = useMemo<ClinicalPlanResult | null>(() => {
@@ -9813,6 +9865,8 @@ ${ddxList}`;
                   onRemoveCustomItem={handleRemoveCustomItem}
                   aiNaturalTimeline={naturalTimeline.result ?? null}
                   naturalTimelineLoading={naturalTimeline.loading}
+                  caseSpecificPlan={caseSpecificPlan.result ?? null}
+                  caseSpecificPlanLoading={caseSpecificPlan.loading}
                   naturalTimelineSlot={
                     <Suspense fallback={null}>
                       <NaturalTimelinePanel

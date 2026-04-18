@@ -73,6 +73,11 @@ import {
   type StageGoalDimension,
   type StageCriteriaEvaluation,
 } from "@/lib/recoveryArchetypes";
+import type {
+  CaseSpecificTreatmentPlan,
+  CaseSpecificPhasePlan,
+  CaseSpecificTreatmentItem,
+} from "@shared/schema";
 
 /** Phase context the dashboard hands to the parent so it can build a
  *  phase-specific PrescriptionContext for the engine APIs. The parent
@@ -154,6 +159,16 @@ interface Props {
    *  Drives the small "Loading natural history…" hint shown next to the
    *  chart's mode toggle while the AI verdict is being fetched. */
   naturalTimelineLoading?: boolean;
+  /** AI-generated case-specific treatment plan keyed per archetype phase.
+   *  When present, each phase card replaces its generic
+   *  TREATMENT_LIBRARY-derived strategy + treatments with this patient's
+   *  actual goal, techniques, exercises, criteria and per-finding
+   *  rationale. The existing per-phase Exercise / Manual Rx buttons are
+   *  preserved as "Clinician additions" on top of this baseline. */
+  caseSpecificPlan?: CaseSpecificTreatmentPlan | null;
+  /** True while the parent's case-specific plan request is in flight.
+   *  Drives a small "Refreshing…" badge on each phase card. */
+  caseSpecificPlanLoading?: boolean;
   /** Optional UI element rendered inside the dashboard's left summary
    *  column — used by PhysioGPT to host the Natural Timeline panel
    *  (with Q&A UX) so it sits alongside the recovery curves. */
@@ -390,6 +405,8 @@ export default function RecoverySimulatorDashboard({
   onAddCustomTechniques,
   onRemoveCustomItem,
   aiNaturalTimeline,
+  caseSpecificPlan,
+  caseSpecificPlanLoading,
   naturalTimelineLoading,
   naturalTimelineSlot,
 }: Props) {
@@ -1898,27 +1915,56 @@ export default function RecoverySimulatorDashboard({
                         </div>
                       )}
 
-                      {/* Goal-Driven Recovery Engine target for this phase */}
-                      <div className="text-[10px] leading-snug" data-testid={`phase-goal-${p.id}`}>
-                        <span className="text-gray-400">Goal · </span>
-                        <span className="font-semibold text-cyan-200">{r.goalDimension}</span>
-                        {r.goalTargetText && (
+                      {/* Case-specific AI plan for this phase, when present.
+                          Replaces the generic strategy line and references the
+                          patient's actual tissues + drivers. */}
+                      {(() => {
+                        const csPhase: CaseSpecificPhasePlan | null =
+                          caseSpecificPlan?.phases.find((ph: CaseSpecificPhasePlan) => ph.phase_id === p.id) ?? null;
+                        return (
                           <>
-                            <span className="text-gray-400"> target </span>
-                            <span className="text-emerald-200 font-semibold">{r.goalTargetText}</span>
-                          </>
-                        )}
-                        {r.reached && r.goalCurrentText && (
-                          <>
-                            <span className="text-gray-400"> · now </span>
-                            <span className="text-white font-semibold">{r.goalCurrentText}</span>
-                          </>
-                        )}
-                      </div>
+                            {/* Goal-Driven Recovery Engine target for this phase */}
+                            <div className="text-[10px] leading-snug" data-testid={`phase-goal-${p.id}`}>
+                              <span className="text-gray-400">Goal · </span>
+                              <span className="font-semibold text-cyan-200">{r.goalDimension}</span>
+                              {r.goalTargetText && (
+                                <>
+                                  <span className="text-gray-400"> target </span>
+                                  <span className="text-emerald-200 font-semibold">{r.goalTargetText}</span>
+                                </>
+                              )}
+                              {r.reached && r.goalCurrentText && (
+                                <>
+                                  <span className="text-gray-400"> · now </span>
+                                  <span className="text-white font-semibold">{r.goalCurrentText}</span>
+                                </>
+                              )}
+                            </div>
 
-                      <div className="text-[10px] text-gray-300 leading-snug" data-testid={`phase-strategy-${p.id}`}>
-                        {r.strategy}
-                      </div>
+                            {csPhase?.goal ? (
+                              <div className="text-[10px] text-cyan-100 leading-snug font-medium" data-testid={`phase-case-goal-${p.id}`}>
+                                <span className="text-cyan-400/80">▸ </span>{csPhase.goal}
+                                {caseSpecificPlanLoading && (
+                                  <span className="ml-1 text-[8px] uppercase tracking-wide text-cyan-400/70">Refreshing…</span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-gray-300 leading-snug" data-testid={`phase-strategy-${p.id}`}>
+                                {r.strategy}
+                                {caseSpecificPlanLoading && !caseSpecificPlan && (
+                                  <span className="ml-1 text-[8px] uppercase tracking-wide text-cyan-400/70">AI plan loading…</span>
+                                )}
+                              </div>
+                            )}
+
+                            {csPhase?.rationale && (
+                              <div className="text-[9px] text-gray-400 leading-snug italic" data-testid={`phase-case-rationale-${p.id}`}>
+                                {csPhase.rationale}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
 
                       {/* Tissue status: dominant compromised dimension current → end-of-phase */}
                       {r.reached && (
@@ -2034,14 +2080,28 @@ export default function RecoverySimulatorDashboard({
                         const exReadyPending = entry.exercise.status === 'ready' && !entry.exercise.added ? exReady : [];
                         const mtReadyPending = entry.manual.status === 'ready' && !entry.manual.added ? mtReady : [];
 
+                        // Case-specific AI plan for this stage (when present).
+                        // Replaces the generic baseline treatment list with
+                        // patient-specific techniques/exercises that include
+                        // dosage + per-finding rationale.
+                        const csPhase: CaseSpecificPhasePlan | null =
+                          caseSpecificPlan?.phases.find((ph: CaseSpecificPhasePlan) => ph.phase_id === p.id) ?? null;
                         type CombinedTreatment =
                           | { kind: 'baseline'; label: string }
+                          | { kind: 'case-mt'; label: string; item: CaseSpecificTreatmentItem }
+                          | { kind: 'case-ex'; label: string; item: CaseSpecificTreatmentItem }
                           | { kind: 'session-ex'; label: string }
                           | { kind: 'session-mt'; label: string }
                           | { kind: 'ai-ex'; label: string }
                           | { kind: 'ai-mt'; label: string };
+                        const baselineList: CombinedTreatment[] = csPhase
+                          ? [
+                              ...csPhase.techniques.map((it: CaseSpecificTreatmentItem) => ({ kind: 'case-mt' as const, label: it.name, item: it })),
+                              ...csPhase.exercises.map((it: CaseSpecificTreatmentItem) => ({ kind: 'case-ex' as const, label: it.name, item: it })),
+                            ]
+                          : r.treatments.map(t => ({ kind: 'baseline' as const, label: t }));
                         const combined: CombinedTreatment[] = [
-                          ...r.treatments.map(t => ({ kind: 'baseline' as const, label: t })),
+                          ...baselineList,
                           ...sessionEx.map(ex => ({ kind: 'session-ex' as const, label: ex.name })),
                           ...sessionMt.map(mt => ({ kind: 'session-mt' as const, label: mt.name })),
                           ...exReadyPending.map(ex => ({ kind: 'ai-ex' as const, label: ex.name })),
@@ -2073,14 +2133,45 @@ export default function RecoverySimulatorDashboard({
                         const renderItem = (t: CombinedTreatmentExt, i: number) => {
                           const isSession = t.kind === 'session-ex' || t.kind === 'session-mt';
                           const isAi = t.kind === 'ai-ex' || t.kind === 'ai-mt';
-                          const tone = (t.kind === 'session-ex' || t.kind === 'ai-ex')
+                          const isCase = t.kind === 'case-ex' || t.kind === 'case-mt';
+                          const tone = (t.kind === 'session-ex' || t.kind === 'ai-ex' || t.kind === 'case-ex')
                             ? 'text-violet-200'
-                            : (t.kind === 'session-mt' || t.kind === 'ai-mt') ? 'text-cyan-200' : 'text-gray-200';
+                            : (t.kind === 'session-mt' || t.kind === 'ai-mt' || t.kind === 'case-mt') ? 'text-cyan-200' : 'text-gray-200';
                           const testid = isAi
                             ? (t.kind === 'ai-ex' ? `phase-rx-item-exercise-${p.id}-${i}` : `phase-rx-item-manual-${p.id}-${i}`)
                             : isSession
                               ? (t.kind === 'session-ex' ? `phase-rx-session-ex-${p.id}-${i}` : `phase-rx-session-mt-${p.id}-${i}`)
-                              : undefined;
+                              : isCase
+                                ? (t.kind === 'case-ex' ? `phase-rx-case-ex-${p.id}-${i}` : `phase-rx-case-mt-${p.id}-${i}`)
+                                : undefined;
+                          if (isCase && (t.kind === 'case-ex' || t.kind === 'case-mt')) {
+                            const item = t.item;
+                            return (
+                              <li key={`${t.kind}-${i}`} className={`text-[10px] flex flex-col gap-0.5 ${tone}`} data-testid={testid}>
+                                <div className="flex items-start gap-1">
+                                  <span className="opacity-60 mt-0.5">•</span>
+                                  <span className="font-semibold leading-snug">{t.label}</span>
+                                </div>
+                                {(item.dosage || item.target) && (
+                                  <div className="text-[9px] text-gray-300 leading-snug pl-3">
+                                    {item.dosage && <span>{item.dosage}</span>}
+                                    {item.dosage && item.target && <span className="text-gray-500"> · </span>}
+                                    {item.target && <span className="text-gray-400">→ {item.target}</span>}
+                                  </div>
+                                )}
+                                {item.rationale && (
+                                  <div className="text-[9px] text-gray-400 italic leading-snug pl-3" data-testid={`${testid}-rationale`}>
+                                    {item.rationale}
+                                  </div>
+                                )}
+                                {item.progression && (
+                                  <div className="text-[9px] text-emerald-300/80 leading-snug pl-3">
+                                    Progress · {item.progression}
+                                  </div>
+                                )}
+                              </li>
+                            );
+                          }
                           return (
                             <li key={`${t.kind}-${i}`} className={`text-[10px] truncate flex items-center gap-1 ${tone}`} data-testid={testid}>
                               <span className="opacity-60">•</span>

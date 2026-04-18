@@ -12869,6 +12869,159 @@ Generate 3-6 follow-up questions when major modifiers are unknown; emit FEWER as
     }
   });
 
+  app.post('/api/clinical-text/case-specific-treatment-plan', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { context, natural_timeline, phases, archetype_id, condition_label, qa_history } = req.body ?? {};
+      if (!context || typeof context !== 'object') {
+        return res.status(400).json({ error: 'Clinical context is required' });
+      }
+      if (!natural_timeline || typeof natural_timeline !== 'object') {
+        return res.status(400).json({ error: 'Natural-history timeline result is required' });
+      }
+      if (!Array.isArray(phases) || phases.length === 0) {
+        return res.status(400).json({ error: 'Archetype phases are required' });
+      }
+      const qaHistory = Array.isArray(qa_history) ? qa_history as Array<{ question: string; answer: string }> : [];
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const ctxJson = JSON.stringify(context, null, 2);
+      const ntJson = JSON.stringify(natural_timeline, null, 2);
+      const phasesJson = JSON.stringify(phases, null, 2);
+      const qaBlock = qaHistory.length > 0
+        ? '\n\n--- PATIENT FACTORS PROVIDED ---\n' +
+          qaHistory.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n') +
+          '\n--- END PATIENT FACTORS ---\n'
+        : '';
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert physiotherapy CASE-SPECIFIC TREATMENT PLAN engine. The clinician has already produced (a) a structured clinical picture (compromised tissues with tissue type and ids, pain markers with mechanism / nerve-root involvement, sling weak links, joint deviations, region highlights, posture, patient factors) and (b) a natural-history verdict (per-finding healing class, weeks-to-resolution, residual deficit, chronicity / recurrence / flare risk).
+
+Your job is to take the rehab archetype's named phases (e.g. "Calm & Prepare", "Build Capacity", "Restore Power", "Return to Sport") and write a CASE-SPECIFIC prescription for EACH phase that:
+  1. References the patient's actual compromised tissues by name (use the labels from per_finding) — never generic "the tendon".
+  2. Targets the patient's actual sling weak links and joint deviations / postural drivers.
+  3. Reasons from the natural-history verdict — protect findings classed as "persists" or "worsens"; load findings classed as "resolves" earlier; account for high chronicity / flare risk by prescribing more pain-monitoring and graded loading.
+  4. Reads like a clinician's case note, NOT a textbook template. The same archetype phase for two different patients must look different.
+
+For EACH phase you must emit:
+  - goal: ONE concrete sentence referencing the actual tissues/drivers (e.g. "Settle supraspinatus inflammation, restore pain-free GH AROM 0-90°, off-load posterior cuff").
+  - rationale: 1-2 sentences linking this phase's plan to the natural-history verdict + clinical picture (cite tissue biology + the patient's specific risks).
+  - techniques: 2-5 hands-on / manual / modality items, each with name + target + dosage + rationale + the finding_ids/tissue_ids/sling_ids it addresses.
+  - exercises: 2-5 prescriptions, each with concrete name + target + sets×reps×load dosage + progression cue + rationale + finding_ids/tissue_ids/sling_ids.
+  - criteria: 2-4 objective entry/exit milestones in the patient's own clinical units.
+  - finding_notes: per-finding healing notes — short clinician-facing reminders for THIS phase tied to a finding_id from the natural timeline.
+
+Return ONLY valid JSON in EXACTLY this shape:
+{
+  "case_summary": "2-3 sentence narrative for the case as a whole",
+  "confidence_percent": <0-100>,
+  "phases": [
+    {
+      "phase_id": "MUST match the id passed in the input phases array",
+      "phase_name": "MUST match the name passed in the input phases array",
+      "goal": "...",
+      "rationale": "...",
+      "techniques": [
+        { "name": "...", "target": "...", "dosage": "...", "progression": "...", "rationale": "...", "finding_ids": ["..."], "tissue_ids": ["..."], "sling_ids": ["..."] }
+      ],
+      "exercises": [
+        { "name": "...", "target": "...", "dosage": "...", "progression": "...", "rationale": "...", "finding_ids": ["..."], "tissue_ids": ["..."], "sling_ids": ["..."] }
+      ],
+      "criteria": ["...", "..."],
+      "finding_notes": [{ "finding_id": "...", "note": "..." }]
+    }
+  ]
+}
+
+Emit exactly one phase entry per phase in the input phases array, in the same order, with phase_id and phase_name matching exactly. Do NOT invent extra phases. Do NOT skip any.`,
+          },
+          {
+            role: 'user',
+            content: `ARCHETYPE: ${archetype_id ?? 'unspecified'}
+CONDITION: ${condition_label ?? 'unspecified'}
+
+PHASES (emit one plan per id, in order):
+${phasesJson}
+
+CLINICAL CONTEXT:
+${ctxJson}
+
+NATURAL-HISTORY VERDICT (drives healing rationale, residual deficits, risk):
+${ntJson}${qaBlock}`,
+          },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 4500,
+        temperature: 0.3,
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+      const clamp01 = (v: unknown, dflt: number) => {
+        const n = typeof v === 'number' ? v : Number(v);
+        if (!Number.isFinite(n)) return dflt;
+        return Math.max(0, Math.min(100, n));
+      };
+      const str = (v: unknown, dflt = ''): string => typeof v === 'string' ? v : (v === null || v === undefined ? dflt : String(v));
+      const arrStr = (v: unknown): string[] => Array.isArray(v) ? v.map(x => str(x)).filter(Boolean) : [];
+      const normItem = (it: Record<string, unknown>) => ({
+        name: str(it.name),
+        target: str(it.target),
+        dosage: str(it.dosage),
+        progression: it.progression ? str(it.progression) : undefined,
+        rationale: str(it.rationale),
+        finding_ids: arrStr(it.finding_ids),
+        tissue_ids: arrStr(it.tissue_ids),
+        sling_ids: arrStr(it.sling_ids),
+      });
+
+      // Re-key the AI's phases against the input phase ids/names so the
+      // dashboard can match by stage id with zero ambiguity. Phases the
+      // AI failed to emit fall back to an empty plan rather than vanishing.
+      const aiPhases = Array.isArray(parsed.phases) ? parsed.phases as Array<Record<string, unknown>> : [];
+      const byId = new Map<string, Record<string, unknown>>();
+      for (const ap of aiPhases) {
+        const pid = str(ap.phase_id);
+        if (pid) byId.set(pid, ap);
+      }
+      const orderedPhases = (phases as Array<{ id: string; name: string }>).map(p => {
+        const ap = byId.get(p.id) ?? aiPhases.find(x => str(x.phase_name).toLowerCase() === p.name.toLowerCase()) ?? {};
+        const techs = Array.isArray(ap.techniques) ? ap.techniques as Array<Record<string, unknown>> : [];
+        const exs = Array.isArray(ap.exercises) ? ap.exercises as Array<Record<string, unknown>> : [];
+        const notes = Array.isArray(ap.finding_notes) ? ap.finding_notes as Array<Record<string, unknown>> : [];
+        return {
+          phase_id: p.id,
+          phase_name: p.name,
+          goal: str(ap.goal),
+          rationale: str(ap.rationale),
+          techniques: techs.map(normItem).filter(t => t.name),
+          exercises: exs.map(normItem).filter(t => t.name),
+          criteria: arrStr(ap.criteria),
+          finding_notes: notes
+            .map(n => ({ finding_id: str(n.finding_id), note: str(n.note) }))
+            .filter(n => n.finding_id && n.note),
+        };
+      });
+
+      res.json({
+        case_summary: str(parsed.case_summary),
+        confidence_percent: clamp01(parsed.confidence_percent, 60),
+        phases: orderedPhases,
+      });
+    } catch (error: unknown) {
+      console.error('Error generating case-specific treatment plan:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate case-specific treatment plan', details: message });
+    }
+  });
+
   app.post('/api/pain-intelligence/behaviour', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { anatomical_label, pain_mechanism, marker_type, description, nearest_bone, severity } = req.body;

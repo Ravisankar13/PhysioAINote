@@ -8407,6 +8407,15 @@ Return JSON: {"conditionId":"ai_generated_<snake_case>","conditionName":string,"
           dysfunction: z.string().optional(),
           clinical: z.string().optional(),
         })).optional().default([]),
+        condition: z.string().trim().max(200).optional().default(""),
+        stage: z.union([z.enum(['acute', 'subacute', 'chronic']), z.literal("")]).optional().default(""),
+        irritability: z.union([z.enum(['low', 'moderate', 'high']), z.literal("")]).optional().default(""),
+        tissueType: z.string().trim().max(100).optional().default(""),
+        primaryGoal: z.union([z.enum(['pain', 'healing', 'loading', 'mobility', 'activation']), z.literal("")]).optional().default(""),
+        contraindicationFlags: z.array(z.enum([
+          'pregnancy', 'pacemaker', 'metal_implant', 'malignancy', 'open_wound',
+          'active_infection', 'dvt', 'hemorrhage', 'sensory_deficit', 'epilepsy', 'skin_breakdown'
+        ])).optional().default([]),
       });
 
       const parsed = electroInputSchema.safeParse(req.body);
@@ -8460,12 +8469,40 @@ Return JSON: {"conditionId":"ai_generated_<snake_case>","conditionName":string,"
           ).join('\n')
         : 'None identified';
 
+      const conditionDriven = !!data.condition;
+      const contraindicationLabels: Record<string, string> = {
+        pregnancy: 'Pregnancy',
+        pacemaker: 'Cardiac pacemaker / implanted electronic device',
+        metal_implant: 'Metal implant in treatment area',
+        malignancy: 'Active malignancy in/near treatment area',
+        open_wound: 'Open wound / broken skin',
+        active_infection: 'Active local infection',
+        dvt: 'DVT / thromboembolic risk',
+        hemorrhage: 'Active hemorrhage / bleeding disorder',
+        sensory_deficit: 'Impaired sensation in treatment area',
+        epilepsy: 'Epilepsy / seizure disorder',
+        skin_breakdown: 'Fragile skin / skin breakdown',
+      };
+      const contraindicationText = data.contraindicationFlags.length > 0
+        ? data.contraindicationFlags.map(f => `- ${contraindicationLabels[f] || f}`).join('\n')
+        : 'None reported';
+
       const OpenAI = (await import("openai")).default;
       const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
       const aiClient = new OpenAI({ apiKey, baseURL });
 
       const systemPrompt = `You are an expert musculoskeletal physiotherapist and electrophysical agents specialist with comprehensive training across ALL electrophysical and physical agent modalities used in modern physiotherapy practice. You are given detailed biomechanical analysis data from a clinical assessment.
+
+CONDITION-FIRST MODE: If a specific condition (diagnosis) is supplied in the user input, you MUST reason CONDITION-FIRST. That means:
+- Pick the modalities with the strongest published research support for THAT diagnosis at THAT stage/irritability/goal.
+- Give condition-specific dosages drawn from the published literature (e.g. ESWT for plantar fasciitis ≈ 0.20 mJ/mm², 2000 impulses, 3 sessions weekly; LLLT for Achilles tendinopathy ≈ 904nm, 60 mW, 5.4 J/point, 6 points, 3×/wk × 4–6 wks; etc.). Doses MUST be plausible and match what is reported in the cited literature.
+- Explicitly grade the evidence per modality (A = high-quality systematic review/meta-analysis or multiple RCTs; B = ≥1 RCT or strong cohort; C = limited/expert opinion / mechanistic only).
+- For each modality, return 1–3 REAL citations the clinician can verify. Use real titles, real journals, real years, and real, verifiable URLs (PubMed pmid links, Cochrane URLs, clinical practice guideline URLs, Physiopedia URLs). Do NOT invent citations. If you cannot recall a real, specific citation for a recommendation, return citations: [] and lower the evidenceGrade accordingly. Never fabricate.
+- Add a top-level "topPicks" array of the 2–4 highest-evidence, most condition-specific modalities for this diagnosis with a one-line "why this for {condition}" rationale.
+- Rank modalities within each group with the best-evidence and most condition-specific FIRST.
+
+CONTRAINDICATION HANDLING: If the user supplies contraindication flags, for any modality that is contraindicated by those flags either OMIT it entirely OR include it with notAdvisedReason set to a clear one-sentence explanation, no parameters block (parameters: ""), and evidenceGrade: "C". Do not invent dosages for contraindicated modalities.
 
 Your task is to reason through ALL clinical data and generate a highly specific, prioritized electrophysical agents prescription that addresses the patient's underlying dysfunctions using the most appropriate modalities from the FULL range available.
 
@@ -8581,13 +8618,24 @@ RESPONSE FORMAT — return valid JSON with this exact structure:
               "title": "string — descriptive title for the resource (e.g. 'Physiopedia: TENS Overview', 'PubMed: PEMF for Bone Healing')",
               "url": "string — full URL to the resource"
             }
-          ]
+          ],
+          "evidenceGrade": "A | B | C  (A = SR/meta-analysis or multiple RCTs; B = ≥1 RCT or strong cohort; C = limited / mechanistic / expert opinion)",
+          "evidenceJustification": "string — one line explaining why this grade was assigned for this condition+stage",
+          "stageAppropriateness": "string — which stage / irritability this fits best (e.g. 'Best for chronic, low-irritability presentations; avoid in acute reactive tendinopathy')",
+          "citations": [
+            { "title": "string — real article/guideline title", "source": "PubMed | Cochrane | CPG | Physiopedia | Journal name", "year": 2023, "url": "string — verifiable URL (PubMed pmid link, DOI, Cochrane URL, etc.)" }
+          ],
+          "notAdvisedReason": "string — only set if a contraindication flag rules this modality out; in that case parameters MUST be empty and citations MAY be empty"
         }
       ]
     }
   ],
   "clinicalNotes": "string — overall clinical reasoning summary, treatment sequencing rationale, and modality interaction considerations",
-  "irritabilityConsiderations": "string — tissue irritability assessment, how it influenced modality selection and dosing, and safety precautions"
+  "irritabilityConsiderations": "string — tissue irritability assessment, how it influenced modality selection and dosing, and safety precautions",
+  "topPicks": [
+    { "modality": "string — modality name (must match one in modalityGroups)", "why": "string — one-line 'why this for {condition}' rationale", "evidenceGrade": "A | B | C" }
+  ],
+  "conditionEcho": "string — echo back the condition you reasoned about (or empty if no condition was supplied)"
 }`;
 
       const userPrompt = `CLINICAL ASSESSMENT DATA:
@@ -8618,6 +8666,22 @@ ${slingText}
 PAIN MARKERS:
 ${painText}
 
+${conditionDriven
+  ? `CLINICIAN-ENTERED CONDITION (PRIMARY DRIVER):
+- Condition / diagnosis: ${data.condition}
+- Stage: ${data.stage || 'not specified'}
+- Irritability: ${data.irritability || 'not specified'}
+- Tissue type focus: ${data.tissueType || 'not specified'}
+- Primary clinical goal: ${data.primaryGoal || 'not specified'}
+- Patient contraindication flags:
+${contraindicationText}
+
+You MUST reason CONDITION-FIRST per the system prompt. Use the biomechanical analysis above as supporting context only. Return condition-specific dosages with real citations and evidence grades, plus a topPicks array for "${data.condition}".`
+  : `No specific condition was entered by the clinician — drive the plan from the biomechanical analysis above. Patient contraindication flags:
+${contraindicationText}
+
+You may still optionally return a topPicks array for the most clinically central pattern you infer.`}
+
 Based on this clinical data, generate a comprehensive, prioritized electrophysical agents prescription. Think through the tissue states (acute vs chronic, superficial vs deep), pain mechanisms (nociceptive/neuropathic/central), tissue healing phases, and functional deficits. Prescribe specific modalities with precise parameters that address the underlying dysfunction pattern.`;
 
       const response = await aiClient.chat.completions.create({
@@ -8646,21 +8710,37 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
             modality: z.string(),
             targetStructure: z.string(),
             targetFinding: z.string(),
-            parameters: z.string(),
+            parameters: z.string().default(''),
             patientPosition: z.string().default('Supine'),
             rationale: z.string(),
             contraindications: z.string().default('None'),
-            expectedPhysiologicalEffect: z.string(),
-            reassessmentCriteria: z.string(),
-            modalityDescription: z.string().min(1),
+            expectedPhysiologicalEffect: z.string().default(''),
+            reassessmentCriteria: z.string().default(''),
+            modalityDescription: z.string().default(''),
             resourceLinks: z.array(z.object({
               title: z.string(),
               url: z.string().url(),
-            })).min(1).max(5).default([]),
+            })).max(5).default([]),
+            evidenceGrade: z.enum(['A', 'B', 'C']).optional(),
+            evidenceJustification: z.string().optional().default(''),
+            stageAppropriateness: z.string().optional().default(''),
+            citations: z.array(z.object({
+              title: z.string(),
+              source: z.string().optional().default(''),
+              year: z.union([z.number(), z.string()]).optional(),
+              url: z.string().optional().default(''),
+            })).optional().default([]),
+            notAdvisedReason: z.string().optional().default(''),
           })),
         })),
         clinicalNotes: z.string().default(''),
         irritabilityConsiderations: z.string().default(''),
+        topPicks: z.array(z.object({
+          modality: z.string(),
+          why: z.string().default(''),
+          evidenceGrade: z.enum(['A', 'B', 'C']).optional(),
+        })).optional().default([]),
+        conditionEcho: z.string().optional().default(''),
       });
 
       const raw = JSON.parse(content);

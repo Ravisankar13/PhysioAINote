@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award } from 'lucide-react';
+import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award, Stethoscope, Sparkles, Ban } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
@@ -170,6 +170,13 @@ interface ResourceLink {
   url: string;
 }
 
+interface Citation {
+  title: string;
+  source?: string;
+  year?: number | string;
+  url?: string;
+}
+
 interface ModalityItem {
   modality: string;
   targetStructure: string;
@@ -182,6 +189,11 @@ interface ModalityItem {
   reassessmentCriteria: string;
   modalityDescription?: string;
   resourceLinks?: ResourceLink[];
+  evidenceGrade?: 'A' | 'B' | 'C';
+  evidenceJustification?: string;
+  stageAppropriateness?: string;
+  citations?: Citation[];
+  notAdvisedReason?: string;
 }
 
 interface ModalityGroup {
@@ -192,11 +204,46 @@ interface ModalityGroup {
   modalities: ModalityItem[];
 }
 
+interface TopPick {
+  modality: string;
+  why: string;
+  evidenceGrade?: 'A' | 'B' | 'C';
+}
+
 interface ElectrophysicalPlan {
   modalityGroups: ModalityGroup[];
   clinicalNotes: string;
   irritabilityConsiderations: string;
+  topPicks?: TopPick[];
+  conditionEcho?: string;
 }
+
+type Stage = '' | 'acute' | 'subacute' | 'chronic';
+type Irritability = '' | 'low' | 'moderate' | 'high';
+type PrimaryGoal = '' | 'pain' | 'healing' | 'loading' | 'mobility' | 'activation';
+type ContraindicationFlag =
+  | 'pregnancy' | 'pacemaker' | 'metal_implant' | 'malignancy' | 'open_wound'
+  | 'active_infection' | 'dvt' | 'hemorrhage' | 'sensory_deficit' | 'epilepsy' | 'skin_breakdown';
+
+const CONTRAINDICATION_OPTIONS: { value: ContraindicationFlag; label: string }[] = [
+  { value: 'pregnancy', label: 'Pregnancy' },
+  { value: 'pacemaker', label: 'Pacemaker / IED' },
+  { value: 'metal_implant', label: 'Metal implant' },
+  { value: 'malignancy', label: 'Malignancy' },
+  { value: 'open_wound', label: 'Open wound' },
+  { value: 'active_infection', label: 'Active infection' },
+  { value: 'dvt', label: 'DVT risk' },
+  { value: 'hemorrhage', label: 'Bleeding / hemorrhage' },
+  { value: 'sensory_deficit', label: 'Sensory deficit' },
+  { value: 'epilepsy', label: 'Epilepsy' },
+  { value: 'skin_breakdown', label: 'Skin breakdown' },
+];
+
+const CONDITION_GRADE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  A: { bg: 'bg-emerald-500/20', text: 'text-emerald-300', label: 'Strong' },
+  B: { bg: 'bg-sky-500/20', text: 'text-sky-300', label: 'Moderate' },
+  C: { bg: 'bg-amber-500/20', text: 'text-amber-300', label: 'Limited' },
+};
 
 interface PainMarkerInput {
   label: string;
@@ -230,9 +277,11 @@ const DEFAULT_COLORS = { bg: 'bg-teal-500/10', border: 'border-teal-500/30', tex
 
 function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality: ModalityItem; index: number; evidence?: EvidenceForModality; evidenceLoading: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const isNotAdvised = !!modality.notAdvisedReason;
+  const conditionGrade = modality.evidenceGrade ? CONDITION_GRADE_STYLES[modality.evidenceGrade] : null;
 
   return (
-    <div className="border border-gray-600/30 rounded bg-gray-800/40">
+    <div className={`border rounded ${isNotAdvised ? 'border-red-500/40 bg-red-500/5' : 'border-gray-600/30 bg-gray-800/40'}`}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-start gap-2 p-2 text-left hover:bg-gray-700/20 transition-colors"
@@ -241,6 +290,23 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <div className="text-[11px] font-medium text-gray-200">{modality.modality}</div>
+            {isNotAdvised && (
+              <span className="inline-flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/30 text-red-200 border border-red-500/50">
+                <Ban className="h-2 w-2" />
+                Not advised
+              </span>
+            )}
+            {conditionGrade && (
+              <span className={`inline-flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full ${conditionGrade.bg} ${conditionGrade.text}`} title={modality.evidenceJustification || `Evidence grade ${modality.evidenceGrade}`}>
+                <Award className="h-2 w-2" />
+                {modality.evidenceGrade} · {conditionGrade.label}
+              </span>
+            )}
+            {modality.stageAppropriateness && (
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 truncate max-w-[180px]" title={modality.stageAppropriateness}>
+                {modality.stageAppropriateness}
+              </span>
+            )}
             {evidence ? (
               <span
                 className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${(GRADE_STYLES[evidence.overallGrade] || GRADE_STYLES.D).bg} ${(GRADE_STYLES[evidence.overallGrade] || GRADE_STYLES.D).text} inline-flex items-center gap-0.5`}
@@ -336,6 +402,60 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
               </div>
             </div>
           )}
+          {modality.notAdvisedReason && (
+            <div className="border border-red-500/40 rounded bg-red-500/10 p-1.5">
+              <div className="text-[9px] font-medium text-red-300 uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                <Ban className="h-2.5 w-2.5" />
+                Not advised — reason
+              </div>
+              <div className="text-[10px] text-red-200 leading-relaxed">{modality.notAdvisedReason}</div>
+            </div>
+          )}
+          {modality.evidenceJustification && (
+            <div>
+              <div className="text-[9px] font-medium text-emerald-400/80 uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                <Award className="h-2.5 w-2.5" />
+                Evidence rationale
+              </div>
+              <div className="text-[10px] text-gray-300 leading-snug">{modality.evidenceJustification}</div>
+            </div>
+          )}
+          {modality.citations && modality.citations.length > 0 && (
+            <div>
+              <div className="text-[9px] font-medium text-purple-400/80 uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                <BookOpen className="h-2.5 w-2.5" />
+                Citations
+              </div>
+              <div className="space-y-0.5">
+                {modality.citations.map((c, ci) => {
+                  const inner = (
+                    <>
+                      <span className="text-[10px] text-gray-200">{c.title}</span>
+                      {(c.source || c.year) && (
+                        <span className="text-[9px] text-gray-500 ml-1">
+                          {c.source}{c.source && c.year ? ', ' : ''}{c.year}
+                        </span>
+                      )}
+                    </>
+                  );
+                  return c.url ? (
+                    <a
+                      key={ci}
+                      href={c.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-[10px] hover:text-purple-300 hover:underline transition-colors"
+                    >
+                      <ExternalLink className="inline h-2 w-2 mr-1 text-purple-400" />
+                      {inner}
+                    </a>
+                  ) : (
+                    <div key={ci} className="text-[10px]">{inner}</div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <ModalityEvidenceSection evidence={evidence} loading={evidenceLoading && !evidence} />
         </div>
       )}
@@ -374,8 +494,22 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
   const [evidenceMap, setEvidenceMap] = useState<EvidenceMap>({});
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
+
+  // Condition & context inputs
+  const [condition, setCondition] = useState('');
+  const [stage, setStage] = useState<Stage>('');
+  const [irritability, setIrritability] = useState<Irritability>('');
+  const [tissueType, setTissueType] = useState('');
+  const [primaryGoal, setPrimaryGoal] = useState<PrimaryGoal>('');
+  const [contraindicationFlags, setContraindicationFlags] = useState<ContraindicationFlag[]>([]);
+  const [showContextEditor, setShowContextEditor] = useState(true);
+
   const abortRef = useRef<AbortController | null>(null);
   const evidenceAbortRef = useRef<AbortController | null>(null);
+
+  const toggleContraindication = useCallback((flag: ContraindicationFlag) => {
+    setContraindicationFlags(prev => prev.includes(flag) ? prev.filter(f => f !== flag) : [...prev, flag]);
+  }, []);
 
   const fetchEvidence = useCallback(async (currentPlan: ElectrophysicalPlan) => {
     if (evidenceAbortRef.current) evidenceAbortRef.current.abort();
@@ -400,7 +534,9 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     const region = (mechanismAnalysis?.topContributors?.[0] as { region?: string } | undefined)?.region
       || painMarkers[0]?.label
       || '';
-    const condition = mechanismAnalysis?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim().slice(0, 80) || '';
+    const evidenceCondition = condition.trim()
+      || mechanismAnalysis?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim().slice(0, 80)
+      || '';
 
     setEvidenceLoading(true);
     setEvidenceError(null);
@@ -410,7 +546,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
       const result = await apiRequest('/api/electrophysical-engine/evidence', 'POST', {
         modalities: modalitiesPayload,
         region,
-        condition,
+        condition: evidenceCondition,
       }) as { evidenceByModality: EvidenceMap };
       if (controller.signal.aborted) return;
       setEvidenceMap(result.evidenceByModality || {});
@@ -476,6 +612,12 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
           severity: p.severity,
           type: p.type,
         })),
+        condition: condition.trim(),
+        stage,
+        irritability,
+        tissueType: tissueType.trim(),
+        primaryGoal,
+        contraindicationFlags,
       };
 
       if (slingAnalysis) {
@@ -519,9 +661,107 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [mechanismAnalysis, slingAnalysis, painMarkers]);
+  }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, fetchEvidence]);
 
-  const hasData = mechanismAnalysis !== null || (painMarkers && painMarkers.length > 0);
+  const hasData = mechanismAnalysis !== null || (painMarkers && painMarkers.length > 0) || condition.trim().length > 0;
+
+  const conditionContextSection = (
+    <div className="border border-teal-500/30 rounded-lg bg-teal-500/5 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setShowContextEditor(v => !v)}
+        className="w-full flex items-center gap-2 p-2 text-left hover:bg-teal-500/10 transition-colors"
+      >
+        <Stethoscope className="h-3.5 w-3.5 text-teal-300 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-medium text-teal-200">Condition & context</div>
+          <div className="text-[9px] text-teal-300/60 truncate">
+            {condition
+              ? `${condition}${stage ? ` · ${stage}` : ''}${irritability ? ` · ${irritability} irritability` : ''}${primaryGoal ? ` · ${primaryGoal}` : ''}${contraindicationFlags.length ? ` · ${contraindicationFlags.length} contraindication${contraindicationFlags.length === 1 ? '' : 's'}` : ''}`
+              : 'Optional — type a diagnosis (e.g. "Achilles tendinopathy") to drive the plan'}
+          </div>
+        </div>
+        {showContextEditor ? <ChevronUp className="h-3 w-3 text-teal-300/70 shrink-0" /> : <ChevronDown className="h-3 w-3 text-teal-300/70 shrink-0" />}
+      </button>
+      {showContextEditor && (
+        <div className="px-2 pb-2 pt-1 space-y-2 border-t border-teal-500/20">
+          <div>
+            <label className="text-[9px] text-teal-300/80 uppercase tracking-wider">Condition / diagnosis</label>
+            <input
+              type="text"
+              value={condition}
+              onChange={e => setCondition(e.target.value)}
+              placeholder="e.g. Achilles tendinopathy, plantar fasciitis, lateral epicondylalgia…"
+              className="mt-0.5 w-full bg-gray-900/60 border border-gray-700/60 rounded px-2 py-1 text-[10px] text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-teal-500/60"
+              data-testid="input-electro-condition"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            <div>
+              <label className="text-[9px] text-teal-300/80 uppercase tracking-wider">Stage</label>
+              <select value={stage} onChange={e => setStage(e.target.value as Stage)} className="mt-0.5 w-full bg-gray-900/60 border border-gray-700/60 rounded px-1 py-1 text-[10px] text-gray-100 focus:outline-none focus:border-teal-500/60">
+                <option value="">—</option>
+                <option value="acute">Acute</option>
+                <option value="subacute">Subacute</option>
+                <option value="chronic">Chronic</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-teal-300/80 uppercase tracking-wider">Irritability</label>
+              <select value={irritability} onChange={e => setIrritability(e.target.value as Irritability)} className="mt-0.5 w-full bg-gray-900/60 border border-gray-700/60 rounded px-1 py-1 text-[10px] text-gray-100 focus:outline-none focus:border-teal-500/60">
+                <option value="">—</option>
+                <option value="low">Low</option>
+                <option value="moderate">Moderate</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-teal-300/80 uppercase tracking-wider">Primary goal</label>
+              <select value={primaryGoal} onChange={e => setPrimaryGoal(e.target.value as PrimaryGoal)} className="mt-0.5 w-full bg-gray-900/60 border border-gray-700/60 rounded px-1 py-1 text-[10px] text-gray-100 focus:outline-none focus:border-teal-500/60">
+                <option value="">—</option>
+                <option value="pain">Pain modulation</option>
+                <option value="healing">Tissue healing</option>
+                <option value="loading">Loading tolerance</option>
+                <option value="mobility">Mobility</option>
+                <option value="activation">Activation</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-[9px] text-teal-300/80 uppercase tracking-wider">Tissue type (optional)</label>
+            <input
+              type="text"
+              value={tissueType}
+              onChange={e => setTissueType(e.target.value)}
+              placeholder="e.g. tendon, ligament, muscle, joint capsule, nerve…"
+              className="mt-0.5 w-full bg-gray-900/60 border border-gray-700/60 rounded px-2 py-1 text-[10px] text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-teal-500/60"
+            />
+          </div>
+          <div>
+            <label className="text-[9px] text-red-300/80 uppercase tracking-wider flex items-center gap-1">
+              <Shield className="h-2.5 w-2.5" /> Contraindication flags
+            </label>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {CONTRAINDICATION_OPTIONS.map(opt => {
+                const active = contraindicationFlags.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => toggleContraindication(opt.value)}
+                    className={`text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${active ? 'bg-red-500/20 border-red-500/50 text-red-200' : 'bg-gray-800/60 border-gray-700/60 text-gray-400 hover:text-gray-200'}`}
+                    data-testid={`button-contraindication-${opt.value}`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   if (!hasData) {
     return (
@@ -558,24 +798,65 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   if (!plan) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 px-4">
-        <Zap className="h-8 w-8 text-teal-400/60 mb-3" />
-        <div className="text-[11px] text-gray-300 mb-1">AI Electrophysical Agents Prescription</div>
-        <div className="text-[9px] text-gray-500 mb-4 text-center max-w-[250px]">
-          Generate a targeted electrophysical modality plan based on mechanism analysis, tissue irritability, and clinical findings.
+      <div className="space-y-2">
+        {conditionContextSection}
+        <div className="flex flex-col items-center justify-center py-6 px-4 border border-gray-700/40 rounded-lg bg-gray-800/20">
+          <Zap className="h-8 w-8 text-teal-400/60 mb-3" />
+          <div className="text-[11px] text-gray-300 mb-1">AI Electrophysical Agents Prescription</div>
+          <div className="text-[9px] text-gray-500 mb-4 text-center max-w-[260px]">
+            {condition
+              ? `Generate a research-backed electrophysical plan for "${condition}" with condition-specific dosages and citations.`
+              : 'Generate a targeted electrophysical modality plan based on mechanism analysis, tissue irritability, and clinical findings — or type a condition above for a research-backed, diagnosis-specific plan.'}
+          </div>
+          <button onClick={generatePlan} className="px-4 py-2 text-[11px] font-medium bg-teal-500/20 text-teal-300 border border-teal-500/40 rounded-lg hover:bg-teal-500/30 transition-colors flex items-center gap-2" data-testid="button-generate-electro-plan">
+            <Zap className="h-3.5 w-3.5" />
+            {condition ? `Generate plan for ${condition}` : 'Generate Electrophysical Plan'}
+          </button>
         </div>
-        <button onClick={generatePlan} className="px-4 py-2 text-[11px] font-medium bg-teal-500/20 text-teal-300 border border-teal-500/40 rounded-lg hover:bg-teal-500/30 transition-colors flex items-center gap-2">
-          <Zap className="h-3.5 w-3.5" />
-          Generate Electrophysical Plan
-        </button>
       </div>
     );
   }
 
   const totalModalities = plan.modalityGroups.reduce((sum, g) => sum + g.modalities.length, 0);
 
+  const conditionLabel = (plan.conditionEcho || condition).trim();
+
   return (
     <div className="space-y-2">
+      {conditionContextSection}
+      {plan.topPicks && plan.topPicks.length > 0 && (
+        <div className="border border-emerald-500/40 rounded-lg bg-gradient-to-br from-emerald-500/10 to-teal-500/5 p-2" data-testid="card-top-picks">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Sparkles className="h-3 w-3 text-emerald-300" />
+            <span className="text-[10px] font-semibold text-emerald-200">
+              Top picks{conditionLabel ? ` for ${conditionLabel}` : ''}
+            </span>
+            <span className="text-[8px] text-emerald-300/60">({plan.topPicks.length})</span>
+          </div>
+          <div className="space-y-1">
+            {plan.topPicks.map((pick, i) => {
+              const grade = pick.evidenceGrade ? CONDITION_GRADE_STYLES[pick.evidenceGrade] : null;
+              return (
+                <div key={i} className="flex items-start gap-1.5 bg-gray-900/40 border border-emerald-500/20 rounded p-1.5">
+                  <span className="text-[10px] font-mono text-emerald-300/70 mt-0.5 min-w-[14px]">{i + 1}.</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-medium text-gray-100">{pick.modality}</span>
+                      {grade && (
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${grade.bg} ${grade.text} inline-flex items-center gap-0.5`}>
+                          <Award className="h-2 w-2" />
+                          {pick.evidenceGrade} · {grade.label}
+                        </span>
+                      )}
+                    </div>
+                    {pick.why && <div className="text-[9px] text-gray-300 mt-0.5 leading-snug">{pick.why}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Zap className="h-3.5 w-3.5 text-teal-400" />

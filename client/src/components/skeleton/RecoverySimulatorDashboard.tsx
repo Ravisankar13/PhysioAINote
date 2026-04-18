@@ -9,7 +9,9 @@ import {
   ArrowRight,
   Brain,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Flame,
   GitBranch,
   Pause,
@@ -277,6 +279,9 @@ export default function RecoverySimulatorDashboard({
   // page resets to collapsed.
   const [expandedCriteria, setExpandedCriteria] = useState<Set<string>>(() => new Set());
   const [expandedTreatments, setExpandedTreatments] = useState<Set<string>>(() => new Set());
+  // Per-card collapsed state. Cards are expanded by default; collapsing
+  // hides everything below the header (status row + phase name).
+  const [collapsedCards, setCollapsedCards] = useState<Set<string>>(() => new Set());
   const togglePhaseSet = (id: string, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
     setter(prev => {
       const next = new Set(prev);
@@ -1174,6 +1179,7 @@ export default function RecoverySimulatorDashboard({
                   const locked = isHybrid
                     ? !(critUnlocked && timeMetAtScrub)
                     : (usesCriteriaCard ? !critUnlocked : !r.reached);
+                  const isCardCollapsed = collapsedCards.has(p.id);
                   return (
                     <div
                       key={p.id}
@@ -1181,8 +1187,8 @@ export default function RecoverySimulatorDashboard({
                       style={r.isCurrent ? { boxShadow: `0 0 0 2px ${p.color}88` } : undefined}
                       data-testid={`phase-card-${p.id}`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="text-[9px] font-semibold uppercase" style={{ color: p.color }}>
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="text-[9px] font-semibold uppercase truncate" style={{ color: p.color }}>
                           {usesCriteriaCard
                             ? (crit && crit.totalCount > 0
                                 ? (critUnlocked
@@ -1193,15 +1199,31 @@ export default function RecoverySimulatorDashboard({
                                 ? `Week ${r.start}–${r.end}`
                                 : `Expected wk ${r.expectedStart}–${r.expectedEnd}`)}
                         </div>
-                        {r.isCurrent ? (
-                          <Badge className="bg-gray-900/70 border-gray-700/60 text-[8px] py-0 px-1.5" style={{ color: p.color }}>NOW</Badge>
-                        ) : locked ? (
-                          <Badge className="bg-gray-800/70 text-gray-400 border-gray-700/50 text-[8px] py-0 px-1.5">
-                            {usesCriteriaCard ? 'LOCKED' : 'NOT YET'}
-                          </Badge>
-                        ) : null}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {r.isCurrent ? (
+                            <Badge className="bg-gray-900/70 border-gray-700/60 text-[8px] py-0 px-1.5" style={{ color: p.color }}>NOW</Badge>
+                          ) : locked ? (
+                            <Badge className="bg-gray-800/70 text-gray-400 border-gray-700/50 text-[8px] py-0 px-1.5">
+                              {usesCriteriaCard ? 'LOCKED' : 'NOT YET'}
+                            </Badge>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => togglePhaseSet(p.id, setCollapsedCards)}
+                            className="h-4 w-4 rounded text-gray-400 hover:text-white hover:bg-gray-800/60 flex items-center justify-center"
+                            aria-label={isCardCollapsed ? 'Expand phase card' : 'Collapse phase card'}
+                            aria-expanded={!isCardCollapsed}
+                            data-testid={`phase-card-toggle-${p.id}`}
+                          >
+                            {isCardCollapsed
+                              ? <ChevronDown className="h-3 w-3" />
+                              : <ChevronUp className="h-3 w-3" />}
+                          </button>
+                        </div>
                       </div>
                       <div className="text-[12px] font-bold text-white leading-tight">{p.name}</div>
+
+                      {!isCardCollapsed && (<>
 
                       {/* Hybrid archetypes show the soft week corridor as a
                           subtitle so clinicians see "earliest by week N"
@@ -1383,6 +1405,7 @@ export default function RecoverySimulatorDashboard({
                       >
                         Modify <ChevronRight className="h-3 w-3" />
                       </button>
+                      </>)}
                     </div>
                   );
                 })}

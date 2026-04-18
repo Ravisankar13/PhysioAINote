@@ -9552,7 +9552,10 @@ ${ddxList}`;
                       intensity: req.predictedPainAtPhase,
                     })),
                   };
-                  const ctx = buildPrescriptionContext(activeGoalProfile, phaseClinicalState, null, null);
+                  // Pass the live goal-gap snapshot so ctx.goalGaps
+                  // reflects the actual ROM / strength / functional
+                  // shortfalls at this phase start (not an empty list).
+                  const ctx = buildPrescriptionContext(activeGoalProfile, phaseClinicalState, activeGoalGap ?? null, null);
                   const goalCtx: Record<string, unknown> = {
                     condition: ctx.conditionName,
                     phaseLabel: req.phaseLabel,

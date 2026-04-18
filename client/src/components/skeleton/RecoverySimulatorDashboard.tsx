@@ -1599,7 +1599,7 @@ export default function RecoverySimulatorDashboard({
                               ) : (
                                 <>
                                   <ul className="space-y-0.5">{visible.map(renderItem)}</ul>
-                                  {(hidden > 0 || isExpanded) && combined.length > 3 && (
+                                  {(hidden > 0 || isExpanded) && combined.length > baseLimit && (
                                     <button
                                       type="button"
                                       onClick={() => togglePhaseSet(p.id, setExpandedTreatments)}

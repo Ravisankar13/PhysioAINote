@@ -418,6 +418,8 @@ export default function RecoverySimulatorDashboard({
   // scrub week. Mirrors PhaseRxKindState but is scoped to the
   // optimizer card so it lives independently from per-phase generation.
   const [optimizerEx, setOptimizerEx] = useState<PhaseRxKindState>({ status: 'idle' });
+  const [optimizerExOpen, setOptimizerExOpen] = useState(true);
+  const [optimizerMtOpen, setOptimizerMtOpen] = useState(true);
   const [optimizerMt, setOptimizerMt] = useState<PhaseRxKindState>({ status: 'idle' });
 
   useEffect(() => {
@@ -1995,9 +1997,16 @@ export default function RecoverySimulatorDashboard({
             {optimizerEx.status === 'ready' && (optimizerEx.exercises?.length ?? 0) > 0 && (
               <div className="bg-violet-950/20 border border-violet-800/40 rounded p-2 mb-2" data-testid="optimizer-rx-exercises">
                 <div className="flex items-center justify-between mb-1">
-                  <div className="text-[9px] text-violet-300 uppercase tracking-wide font-semibold inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setOptimizerExOpen(o => !o)}
+                    className="text-[9px] text-violet-300 uppercase tracking-wide font-semibold inline-flex items-center gap-1 hover:text-violet-100"
+                    data-testid="optimizer-toggle-exercises"
+                    aria-expanded={optimizerExOpen}
+                  >
+                    <ChevronRight className={`h-3 w-3 transition-transform ${optimizerExOpen ? 'rotate-90' : ''}`} />
                     <Dumbbell className="h-3 w-3" />Exercises ({optimizerEx.exercises!.length})
-                  </div>
+                  </button>
                   {optimizerEx.added ? (
                     <span className="text-[9px] text-emerald-300 inline-flex items-center gap-0.5">
                       <CheckCircle2 className="h-2.5 w-2.5" />Added
@@ -2019,6 +2028,7 @@ export default function RecoverySimulatorDashboard({
                     </button>
                   ) : null}
                 </div>
+                {optimizerExOpen && (
                 <ul className="space-y-1">
                   {optimizerEx.exercises!.map((ex, i) => {
                     const sets = ex.dosage?.sets;
@@ -2026,15 +2036,21 @@ export default function RecoverySimulatorDashboard({
                     const tempo = ex.dosage?.tempo;
                     const freq = ex.dosage?.frequency;
                     const intensity = ex.forceVector?.resistanceType;
-                    const dose = [
-                      sets && `${sets} sets`,
-                      reps && `${reps} reps`,
-                      tempo,
-                      freq,
-                      intensity,
-                    ].filter(Boolean).join(' · ');
+                    // Normalize dosage as "S×R" (e.g. 3×8) when both are numeric,
+                    // else fall back to the readable list. Append RPE band if
+                    // tempo string contains an explicit RPE marker.
+                    const setsNum = typeof sets === 'number' ? sets : Number(sets);
+                    const repsRaw = typeof reps === 'string' ? reps : (typeof reps === 'number' ? String(reps) : '');
+                    const setsXReps = Number.isFinite(setsNum) && setsNum > 0 && repsRaw
+                      ? `${setsNum}×${repsRaw}`
+                      : '';
+                    const rpeMatch = typeof tempo === 'string' ? tempo.match(/RPE\s*[\d.\-–]+/i) : null;
+                    const rpeBand = rpeMatch ? rpeMatch[0] : '';
+                    const dose = setsXReps
+                      ? [setsXReps, rpeBand || tempo, freq, intensity].filter(Boolean).join(' · ')
+                      : [sets && `${sets} sets`, reps && `${reps} reps`, tempo, freq, intensity].filter(Boolean).join(' · ');
                     const region = ex.targetSystem;
-                    const meta = [region, ex.clinicalTarget].filter(Boolean).join(' · ');
+                    const meta = [region && `Region: ${region}`, ex.clinicalTarget].filter(Boolean).join(' · ');
                     return (
                       <li key={i} className="text-[10px] flex items-start gap-1" data-testid={`optimizer-exercise-${i}`}>
                         <span className="text-violet-300 mt-px">•</span>
@@ -2065,6 +2081,7 @@ export default function RecoverySimulatorDashboard({
                     );
                   })}
                 </ul>
+                )}
               </div>
             )}
 
@@ -2072,9 +2089,16 @@ export default function RecoverySimulatorDashboard({
             {optimizerMt.status === 'ready' && (optimizerMt.techniques?.length ?? 0) > 0 && (
               <div className="bg-cyan-950/20 border border-cyan-800/40 rounded p-2 mb-2" data-testid="optimizer-rx-manual">
                 <div className="flex items-center justify-between mb-1">
-                  <div className="text-[9px] text-cyan-300 uppercase tracking-wide font-semibold inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setOptimizerMtOpen(o => !o)}
+                    className="text-[9px] text-cyan-300 uppercase tracking-wide font-semibold inline-flex items-center gap-1 hover:text-cyan-100"
+                    data-testid="optimizer-toggle-manual"
+                    aria-expanded={optimizerMtOpen}
+                  >
+                    <ChevronRight className={`h-3 w-3 transition-transform ${optimizerMtOpen ? 'rotate-90' : ''}`} />
                     <Hand className="h-3 w-3" />Manual Therapy ({optimizerMt.techniques!.length})
-                  </div>
+                  </button>
                   {optimizerMt.added ? (
                     <span className="text-[9px] text-emerald-300 inline-flex items-center gap-0.5">
                       <CheckCircle2 className="h-2.5 w-2.5" />Added
@@ -2096,6 +2120,7 @@ export default function RecoverySimulatorDashboard({
                     </button>
                   ) : null}
                 </div>
+                {optimizerMtOpen && (
                 <ul className="space-y-1">
                   {optimizerMt.techniques!.map((mt, i) => {
                     const grade = mt.forceApplicationSequence?.[0]?.grade;
@@ -2104,14 +2129,15 @@ export default function RecoverySimulatorDashboard({
                     const reps = mt.dosage?.repetitions;
                     const sets = mt.dosage?.sets;
                     const freq = mt.dosage?.frequency;
-                    const dose = [
-                      grade && `Grade ${grade}`,
-                      depth,
-                      sets && `${sets} sets`,
-                      reps && `${reps} reps`,
-                      dur,
-                      freq,
-                    ].filter(Boolean).join(' · ');
+                    // Normalize as Maitland-style "Grade III · 3×30s" when possible.
+                    const setsNum = typeof sets === 'number' ? sets : Number(sets);
+                    const repsNum = typeof reps === 'number' ? reps : Number(reps);
+                    const setsXReps = Number.isFinite(setsNum) && setsNum > 0 && Number.isFinite(repsNum) && repsNum > 0
+                      ? `${setsNum}×${repsNum}${dur ? ` (${dur})` : ''}`
+                      : '';
+                    const dose = setsXReps
+                      ? [grade && `Grade ${grade}`, depth, setsXReps, freq].filter(Boolean).join(' · ')
+                      : [grade && `Grade ${grade}`, depth, sets && `${sets} sets`, reps && `${reps} reps`, dur, freq].filter(Boolean).join(' · ');
                     const targetStructures = (mt.tissueTargets ?? [])
                       .map(t => t?.goalType)
                       .filter(Boolean)
@@ -2153,6 +2179,7 @@ export default function RecoverySimulatorDashboard({
                     );
                   })}
                 </ul>
+                )}
               </div>
             )}
 

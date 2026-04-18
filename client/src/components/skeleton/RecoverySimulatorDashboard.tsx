@@ -514,7 +514,12 @@ export default function RecoverySimulatorDashboard({
     if (!aiNaturalTimeline) return null;
     const exp = Math.max(1, Math.round(aiNaturalTimeline.overall_window_weeks?.expected ?? 0));
     const worst = Math.max(exp, Math.round(aiNaturalTimeline.overall_window_weeks?.worst ?? exp));
-    const naturalWeeks = Math.max(4, Math.min(104, worst));
+    // Snap projection length to the AI's *expected* window (per spec)
+    // and add only a small worst-case axis padding (capped) so the user
+    // can scrub a few weeks past expected to see the worst-case tail
+    // without distorting the main scale.
+    const padded = Math.min(worst, exp + Math.min(4, Math.max(0, worst - exp)));
+    const naturalWeeks = Math.max(4, Math.min(104, padded));
     const naturalInput: SimulationInput = { ...input, totalWeeks: naturalWeeks };
     const emptyBranch: ScenarioBranch = {
       id: 'baseline_natural_chart',

@@ -12,8 +12,10 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Dumbbell,
   Flame,
   GitBranch,
+  Hand,
   Pause,
   Play,
   Plus,
@@ -410,6 +412,13 @@ export default function RecoverySimulatorDashboard({
       return next;
     });
   }, []);
+
+  // AI Optimizer Recommendation card — concrete exercise + manual
+  // therapy items generated for the phase that contains the current
+  // scrub week. Mirrors PhaseRxKindState but is scoped to the
+  // optimizer card so it lives independently from per-phase generation.
+  const [optimizerEx, setOptimizerEx] = useState<PhaseRxKindState>({ status: 'idle' });
+  const [optimizerMt, setOptimizerMt] = useState<PhaseRxKindState>({ status: 'idle' });
 
   useEffect(() => {
     if (initialInput) setInput(prev => ({ ...prev, ...initialInput }));
@@ -942,6 +951,77 @@ export default function RecoverySimulatorDashboard({
   }, [archetype, activeProjection, activeBranch.interventions, activeBranch.flareEvents, activeBranch.loadAdjustments, treatmentLookup, conditionContext, tissueProfile, conditionProfile, goalProfile, input.totalWeeks, stateAtScrub, scrubbedStageIdx]);
 
   // Compute scenario A vs B comparison summary lines from end-of-period deltas
+  // Map the current scrub week onto the phase whose [start, end) range
+  // contains it. The optimizer recommendation is anchored to this
+  // phase — when the slider crosses a boundary we invalidate any
+  // previously generated specific Rx so the user always sees items
+  // tailored to where the patient currently is.
+  const optimizerPhaseIdx = useMemo(() => {
+    for (let i = phaseRanges.length - 1; i >= 0; i--) {
+      const r = phaseRanges[i];
+      const s = r.reached ? r.start : r.expectedStart;
+      if (scrubWeek >= s) return i;
+    }
+    return 0;
+  }, [phaseRanges, scrubWeek]);
+  const lastOptimizerPhaseIdxRef = useRef(optimizerPhaseIdx);
+  useEffect(() => {
+    if (lastOptimizerPhaseIdxRef.current !== optimizerPhaseIdx) {
+      setOptimizerEx({ status: 'idle' });
+      setOptimizerMt({ status: 'idle' });
+      lastOptimizerPhaseIdxRef.current = optimizerPhaseIdx;
+    }
+  }, [optimizerPhaseIdx]);
+
+  const buildOptimizerReq = useCallback((): PhaseRxRequest => {
+    const r = phaseRanges[optimizerPhaseIdx];
+    const startIdx = r ? (r.reached ? r.start : r.expectedStart) : scrubWeek;
+    const safeIdx = Math.min(
+      Math.max(0, startIdx),
+      activeProjection.timelines.symptoms.pain.length - 1,
+    );
+    const painPct = (activeProjection.timelines.symptoms.pain[safeIdx] ?? 30) * 10;
+    return {
+      phaseId: `optimizer_idx${r?.stageIndex ?? optimizerPhaseIdx}_wk${scrubWeek}`,
+      phaseLabel: r?.stage.name ?? optimizer.currentPhaseLabel,
+      phaseStageIndex: r?.stageIndex ?? optimizerPhaseIdx,
+      phaseStartWeek: scrubWeek,
+      predictedPainAtPhase: Math.max(0, Math.min(100, painPct)),
+      predictedGoalAchievementPct: Math.round(((r?.goalAchievement ?? 0)) * 100),
+      goalDimensionLabel: r?.goalDimension ?? '',
+      goalTargetText: r?.goalTargetText ?? null,
+    };
+  }, [phaseRanges, optimizerPhaseIdx, scrubWeek, activeProjection.timelines.symptoms.pain, optimizer.currentPhaseLabel]);
+
+  const runOptimizerExercise = useCallback(async () => {
+    if (!onGeneratePhaseExerciseRx) return;
+    setOptimizerEx({ status: 'loading' });
+    try {
+      const items = await onGeneratePhaseExerciseRx(buildOptimizerReq());
+      setOptimizerEx({ status: 'ready', exercises: items, added: false });
+    } catch (err) {
+      setOptimizerEx({ status: 'error', message: err instanceof Error ? err.message : 'Generation failed' });
+    }
+  }, [onGeneratePhaseExerciseRx, buildOptimizerReq]);
+
+  const runOptimizerManual = useCallback(async () => {
+    if (!onGeneratePhaseManualRx) return;
+    setOptimizerMt({ status: 'loading' });
+    try {
+      const items = await onGeneratePhaseManualRx(buildOptimizerReq());
+      setOptimizerMt({ status: 'ready', techniques: items, added: false });
+    } catch (err) {
+      setOptimizerMt({ status: 'error', message: err instanceof Error ? err.message : 'Generation failed' });
+    }
+  }, [onGeneratePhaseManualRx, buildOptimizerReq]);
+
+  const runOptimizerCombination = useCallback(async () => {
+    await Promise.all([
+      onGeneratePhaseExerciseRx ? runOptimizerExercise() : Promise.resolve(),
+      onGeneratePhaseManualRx ? runOptimizerManual() : Promise.resolve(),
+    ]);
+  }, [onGeneratePhaseExerciseRx, onGeneratePhaseManualRx, runOptimizerExercise, runOptimizerManual]);
+
   const scenarioComparison = useMemo(() => {
     const lastIdx = Math.min(
       activeProjection.timelines.symptoms.pain.length - 1,
@@ -1818,17 +1898,215 @@ export default function RecoverySimulatorDashboard({
               </Button>
             </div>
 
-            <div className="bg-gray-900/40 rounded p-2 mb-2">
-              <div className="text-[9px] text-gray-400 uppercase tracking-wide mb-1 font-semibold">Why This Works</div>
-              <ul className="space-y-0.5">
-                {(bestActionTreatment?.description ?? 'Improves load tolerance').split(/[.;]/).filter(s => s.trim().length > 4).slice(0, 3).map((line, i) => (
-                  <li key={i} className="text-[10px] text-gray-300 flex items-start gap-1">
-                    <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0 mt-0.5" />
-                    <span>{line.trim()}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {/* Specific Rx generator — produces concrete named exercises
+                and manual therapy techniques for the phase containing
+                the current scrub week, alongside (not replacing) the
+                category-level "Best Next Action" above. */}
+            {(onGeneratePhaseExerciseRx || onGeneratePhaseManualRx) && (
+              <div className="bg-gray-900/40 rounded p-2 mb-2" data-testid="optimizer-rx-panel">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-[9px] text-gray-400 uppercase tracking-wide font-semibold">
+                    Specific Combination · Wk {scrubWeek}
+                  </div>
+                  <span className="text-[9px] text-violet-300/80 truncate ml-2">
+                    {phaseRanges[optimizerPhaseIdx]?.stage.name ?? optimizer.currentPhaseLabel}
+                  </span>
+                </div>
+                <div className="flex gap-1 mb-1">
+                  {onGeneratePhaseExerciseRx && (
+                    <button
+                      type="button"
+                      onClick={runOptimizerExercise}
+                      disabled={optimizerEx.status === 'loading'}
+                      className="flex-1 text-[10px] py-1 px-1.5 rounded border border-violet-700/50 bg-violet-950/40 hover:bg-violet-900/50 text-violet-200 disabled:opacity-60 inline-flex items-center justify-center gap-1"
+                      data-testid="optimizer-generate-exercises"
+                    >
+                      {optimizerEx.status === 'loading'
+                        ? <RefreshCw className="h-3 w-3 animate-spin" />
+                        : <Dumbbell className="h-3 w-3" />}
+                      Exercises
+                    </button>
+                  )}
+                  {onGeneratePhaseManualRx && (
+                    <button
+                      type="button"
+                      onClick={runOptimizerManual}
+                      disabled={optimizerMt.status === 'loading'}
+                      className="flex-1 text-[10px] py-1 px-1.5 rounded border border-cyan-700/50 bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-200 disabled:opacity-60 inline-flex items-center justify-center gap-1"
+                      data-testid="optimizer-generate-manual"
+                    >
+                      {optimizerMt.status === 'loading'
+                        ? <RefreshCw className="h-3 w-3 animate-spin" />
+                        : <Hand className="h-3 w-3" />}
+                      Manual
+                    </button>
+                  )}
+                </div>
+                {onGeneratePhaseExerciseRx && onGeneratePhaseManualRx && (
+                  <button
+                    type="button"
+                    onClick={runOptimizerCombination}
+                    disabled={optimizerEx.status === 'loading' || optimizerMt.status === 'loading'}
+                    className="w-full text-[10px] py-1 px-1.5 rounded border border-emerald-700/50 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-200 disabled:opacity-60 inline-flex items-center justify-center gap-1"
+                    data-testid="optimizer-generate-combination"
+                  >
+                    <Sparkles className="h-3 w-3" />Generate Combination
+                  </button>
+                )}
+                {optimizerEx.status === 'idle' && optimizerMt.status === 'idle' && (
+                  <div className="text-[9px] text-gray-500 italic mt-1.5">
+                    Generate concrete named exercises + manual techniques tailored to this patient at week {scrubWeek}.
+                  </div>
+                )}
+                {optimizerEx.status === 'error' && (
+                  <div className="text-[9px] text-red-300 mt-1 flex items-center justify-between gap-1" data-testid="optimizer-err-exercises">
+                    <span className="truncate">Exercises: {optimizerEx.message}</span>
+                    <button type="button" onClick={runOptimizerExercise} className="underline hover:text-red-200 shrink-0">Retry</button>
+                  </div>
+                )}
+                {optimizerMt.status === 'error' && (
+                  <div className="text-[9px] text-red-300 mt-1 flex items-center justify-between gap-1" data-testid="optimizer-err-manual">
+                    <span className="truncate">Manual: {optimizerMt.message}</span>
+                    <button type="button" onClick={runOptimizerManual} className="underline hover:text-red-200 shrink-0">Retry</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Generated exercises list — named items with sets×reps */}
+            {optimizerEx.status === 'ready' && (optimizerEx.exercises?.length ?? 0) > 0 && (
+              <div className="bg-violet-950/20 border border-violet-800/40 rounded p-2 mb-2" data-testid="optimizer-rx-exercises">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[9px] text-violet-300 uppercase tracking-wide font-semibold inline-flex items-center gap-1">
+                    <Dumbbell className="h-3 w-3" />Exercises ({optimizerEx.exercises!.length})
+                  </div>
+                  {optimizerEx.added ? (
+                    <span className="text-[9px] text-emerald-300 inline-flex items-center gap-0.5">
+                      <CheckCircle2 className="h-2.5 w-2.5" />Added
+                    </span>
+                  ) : onAddCustomExercises ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const items = optimizerEx.status === 'ready' ? (optimizerEx.exercises ?? []) : [];
+                        const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
+                        const stamped = items.map(ex => ({ ...ex, phaseIndex: optimizerPhaseIdx, phaseLabel }));
+                        onAddCustomExercises(stamped);
+                        setOptimizerEx({ status: 'ready', exercises: items, added: true });
+                      }}
+                      className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
+                      data-testid="optimizer-add-all-exercises"
+                    >
+                      <Plus className="h-2.5 w-2.5" />Add all
+                    </button>
+                  ) : null}
+                </div>
+                <ul className="space-y-1">
+                  {optimizerEx.exercises!.map((ex, i) => {
+                    const sets = ex.dosage?.sets;
+                    const reps = ex.dosage?.reps;
+                    const tempo = ex.dosage?.tempo;
+                    const freq = ex.dosage?.frequency;
+                    const dose = [sets && `${sets} sets`, reps && `${reps} reps`, tempo, freq].filter(Boolean).join(' · ');
+                    return (
+                      <li key={i} className="text-[10px] flex items-start gap-1" data-testid={`optimizer-exercise-${i}`}>
+                        <span className="text-violet-300 mt-px">•</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-violet-100 font-semibold leading-tight">{ex.name}</div>
+                          {(dose || ex.clinicalTarget) && (
+                            <div className="text-[9px] text-gray-400 leading-tight">
+                              {dose}{dose && ex.clinicalTarget ? ' · ' : ''}{ex.clinicalTarget ?? ''}
+                            </div>
+                          )}
+                        </div>
+                        {!optimizerEx.added && onAddCustomExercises && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
+                              onAddCustomExercises([{ ...ex, phaseIndex: optimizerPhaseIdx, phaseLabel }]);
+                            }}
+                            className="text-emerald-400 hover:text-emerald-200 shrink-0"
+                            data-testid={`optimizer-add-exercise-${i}`}
+                            title="Add to plan"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {/* Generated manual therapy list — named items with grades */}
+            {optimizerMt.status === 'ready' && (optimizerMt.techniques?.length ?? 0) > 0 && (
+              <div className="bg-cyan-950/20 border border-cyan-800/40 rounded p-2 mb-2" data-testid="optimizer-rx-manual">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[9px] text-cyan-300 uppercase tracking-wide font-semibold inline-flex items-center gap-1">
+                    <Hand className="h-3 w-3" />Manual Therapy ({optimizerMt.techniques!.length})
+                  </div>
+                  {optimizerMt.added ? (
+                    <span className="text-[9px] text-emerald-300 inline-flex items-center gap-0.5">
+                      <CheckCircle2 className="h-2.5 w-2.5" />Added
+                    </span>
+                  ) : onAddCustomTechniques ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const items = optimizerMt.status === 'ready' ? (optimizerMt.techniques ?? []) : [];
+                        const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
+                        const stamped = items.map(mt => ({ ...mt, phaseIndex: optimizerPhaseIdx, phaseLabel }));
+                        onAddCustomTechniques(stamped);
+                        setOptimizerMt({ status: 'ready', techniques: items, added: true });
+                      }}
+                      className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
+                      data-testid="optimizer-add-all-manual"
+                    >
+                      <Plus className="h-2.5 w-2.5" />Add all
+                    </button>
+                  ) : null}
+                </div>
+                <ul className="space-y-1">
+                  {optimizerMt.techniques!.map((mt, i) => {
+                    const grade = mt.forceApplicationSequence?.[0]?.grade;
+                    const depth = mt.forceApplicationSequence?.[0]?.depth;
+                    const dur = mt.dosage?.duration;
+                    const reps = mt.dosage?.repetitions;
+                    const sets = mt.dosage?.sets;
+                    const dose = [grade, depth, sets && `${sets} sets`, reps && `${reps} reps`, dur].filter(Boolean).join(' · ');
+                    return (
+                      <li key={i} className="text-[10px] flex items-start gap-1" data-testid={`optimizer-manual-${i}`}>
+                        <span className="text-cyan-300 mt-px">•</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-cyan-100 font-semibold leading-tight">{mt.name}</div>
+                          {(dose || mt.clinicalTarget) && (
+                            <div className="text-[9px] text-gray-400 leading-tight">
+                              {dose}{dose && mt.clinicalTarget ? ' · ' : ''}{mt.clinicalTarget ?? ''}
+                            </div>
+                          )}
+                        </div>
+                        {!optimizerMt.added && onAddCustomTechniques && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const phaseLabel = phaseRanges[optimizerPhaseIdx]?.stage.name;
+                              onAddCustomTechniques([{ ...mt, phaseIndex: optimizerPhaseIdx, phaseLabel }]);
+                            }}
+                            className="text-emerald-400 hover:text-emerald-200 shrink-0"
+                            data-testid={`optimizer-add-manual-${i}`}
+                            title="Add to plan"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
 
             {altAction && (
               <div className="bg-gray-900/40 rounded p-2 mb-2">

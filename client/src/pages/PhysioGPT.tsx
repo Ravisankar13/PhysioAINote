@@ -4222,7 +4222,7 @@ ${ddxList}`;
         pm.anatomical_label ?? '',
         pm.symptom_type ?? '',
         pm.pain_mechanism ?? '',
-        bucket(pm.severity, 1),
+        bucket(pm.severity, 5),
       ].join('|'))
       .sort();
     const sigTissues = (ctx.compromised_tissues ?? [])

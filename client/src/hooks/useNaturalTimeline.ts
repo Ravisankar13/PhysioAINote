@@ -54,10 +54,17 @@ export function useNaturalTimeline({ context, enabled = true, signature }: Args)
       });
       if (!ac.signal.aborted) {
         setResult(r as NaturalTimelineResult);
+        // Replace Q&A history only on success, so prior answers stay
+        // visible while a refresh is in flight.
+        setQaHistory(qa);
       }
     } catch (e) {
       if (!ac.signal.aborted) {
         setError(e instanceof Error ? e.message : "Failed to fetch natural timeline");
+        // Hard error: clear stale verdict/QA so the UI doesn't keep
+        // showing a result that no longer reflects the current inputs.
+        setResult(null);
+        setQaHistory([]);
       }
     } finally {
       if (!ac.signal.aborted) setLoading(false);
@@ -67,7 +74,6 @@ export function useNaturalTimeline({ context, enabled = true, signature }: Args)
   useEffect(() => {
     if (!enabled || !effectiveSig || !contextRef.current) return;
     if (lastSigRef.current === effectiveSig) return;
-    const isFirstFetch = lastSigRef.current === null;
     lastSigRef.current = effectiveSig;
     // IMPORTANT: do NOT clear `result`/`qaHistory` here. Wiping state
     // on every signature change caused the chart to flicker back to
@@ -81,16 +87,16 @@ export function useNaturalTimeline({ context, enabled = true, signature }: Args)
     // the panel doesn't feel sluggish; subsequent refetches use a
     // slightly longer trailing window.
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    const delay = isFirstFetch ? 50 : 500;
     debounceRef.current = window.setTimeout(() => {
       const latest = contextRef.current;
       if (!latest) return;
+      // Send empty QA history on signature change — new clinical
+      // signature means the prior Q&A is no longer keyed to the same
+      // verdict. Local `qaHistory` state is only replaced once the
+      // request resolves (handled in fetchTimeline) so the panel keeps
+      // showing prior answers while in flight.
       fetchTimeline(latest, []);
-      // Reset Q&A history when the underlying clinical signature
-      // actually changes — the new question set is keyed off the new
-      // verdict.
-      setQaHistory([]);
-    }, delay);
+    }, 500);
     return () => {
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);

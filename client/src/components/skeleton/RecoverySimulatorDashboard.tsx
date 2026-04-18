@@ -177,7 +177,7 @@ function MiniChart({
   return (
     <svg
       width="100%"
-      height={height}
+      height="100%"
       viewBox={`0 0 ${width} ${height}`}
       onClick={handleClick}
       className={onScrub ? 'cursor-crosshair' : ''}
@@ -272,6 +272,18 @@ export default function RecoverySimulatorDashboard({
   const [showRemoveTreatment, setShowRemoveTreatment] = useState(false);
   const [showLoadAdjust, setShowLoadAdjust] = useState(false);
   const [loadAdjustPercent, setLoadAdjustPercent] = useState(20);
+  // Per-card expand state for trimmed criteria/treatments lists. Each set
+  // holds the phase ids whose list is currently expanded; refreshing the
+  // page resets to collapsed.
+  const [expandedCriteria, setExpandedCriteria] = useState<Set<string>>(() => new Set());
+  const [expandedTreatments, setExpandedTreatments] = useState<Set<string>>(() => new Set());
+  const togglePhaseSet = (id: string, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
+    setter(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (initialInput) setInput(prev => ({ ...prev, ...initialInput }));
@@ -1041,7 +1053,7 @@ export default function RecoverySimulatorDashboard({
               <>
                 <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1">Recovery Progression</div>
                 <div className="text-[9px] text-gray-500 mb-1">Drag timeline or modify treatments to see changes</div>
-                <div className="flex-1 min-h-[180px]">
+                <div className="h-[260px] shrink-0 overflow-hidden">
                   <MiniChart series={mainSeries} scrubWeek={scrubWeek} totalWeeks={input.totalWeeks} onScrub={setScrubWeek} height={240} axisUnit={axisUnit} />
                 </div>
                 <div className="flex flex-wrap gap-2 mt-1">
@@ -1203,23 +1215,42 @@ export default function RecoverySimulatorDashboard({
                       {/* Entry-criteria checklist with met/unmet ticks. Only
                           rendered for criterion/hybrid stages that actually
                           declare entry criteria (the first stage of each
-                          archetype has none and is reached by default). */}
-                      {usesCriteriaCard && crit && crit.totalCount > 0 && (
-                        <ul className="flex flex-col gap-0.5 mt-0.5" data-testid={`phase-criteria-${p.id}`}>
-                          {crit.results.map((res, i) => (
-                            <li
-                              key={i}
-                              className={`text-[10px] leading-snug flex items-start gap-1 ${res.met ? 'text-emerald-200' : 'text-gray-300'}`}
-                              data-testid={`phase-criterion-${p.id}-${i}`}
-                            >
-                              {res.met
-                                ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0 mt-0.5 text-emerald-400" />
-                                : <X className="h-2.5 w-2.5 shrink-0 mt-0.5 text-gray-500" />}
-                              <span className="truncate">{res.criterion.label}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                          archetype has none and is reached by default).
+                          Trimmed to 2 items by default with a +N more chip
+                          to keep card vertical footprint manageable. */}
+                      {usesCriteriaCard && crit && crit.totalCount > 0 && (() => {
+                        const isExpanded = expandedCriteria.has(p.id);
+                        const visible = isExpanded ? crit.results : crit.results.slice(0, 2);
+                        const hidden = crit.results.length - visible.length;
+                        return (
+                          <div className="flex flex-col gap-0.5 mt-0.5">
+                            <ul className="flex flex-col gap-0.5" data-testid={`phase-criteria-${p.id}`}>
+                              {visible.map((res, i) => (
+                                <li
+                                  key={i}
+                                  className={`text-[10px] leading-snug flex items-start gap-1 ${res.met ? 'text-emerald-200' : 'text-gray-300'}`}
+                                  data-testid={`phase-criterion-${p.id}-${i}`}
+                                >
+                                  {res.met
+                                    ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0 mt-0.5 text-emerald-400" />
+                                    : <X className="h-2.5 w-2.5 shrink-0 mt-0.5 text-gray-500" />}
+                                  <span className="truncate">{res.criterion.label}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            {(hidden > 0 || isExpanded) && crit.results.length > 2 && (
+                              <button
+                                type="button"
+                                onClick={() => togglePhaseSet(p.id, setExpandedCriteria)}
+                                className="self-start text-[9px] text-gray-400 hover:text-gray-200 underline underline-offset-2"
+                                data-testid={`phase-criteria-more-${p.id}`}
+                              >
+                                {isExpanded ? 'Show less' : `+${hidden} more`}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Projected entry hint when the stage is locked but
                           the simulation predicts the gates will be met. */}
@@ -1284,13 +1315,30 @@ export default function RecoverySimulatorDashboard({
                         <div className="text-[8px] uppercase tracking-wide text-gray-500 font-semibold mb-0.5">{sourceLabel} treatments</div>
                         {r.treatments.length === 0 ? (
                           <div className="text-[10px] text-gray-500 italic">No stage-appropriate treatment</div>
-                        ) : (
-                          <ul className="space-y-0.5">
-                            {r.treatments.map((t, i) => (
-                              <li key={i} className="text-[10px] text-gray-200 truncate">• {t}</li>
-                            ))}
-                          </ul>
-                        )}
+                        ) : (() => {
+                          const isExpanded = expandedTreatments.has(p.id);
+                          const visible = isExpanded ? r.treatments : r.treatments.slice(0, 2);
+                          const hidden = r.treatments.length - visible.length;
+                          return (
+                            <>
+                              <ul className="space-y-0.5">
+                                {visible.map((t, i) => (
+                                  <li key={i} className="text-[10px] text-gray-200 truncate">• {t}</li>
+                                ))}
+                              </ul>
+                              {(hidden > 0 || isExpanded) && r.treatments.length > 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => togglePhaseSet(p.id, setExpandedTreatments)}
+                                  className="mt-0.5 text-[9px] text-gray-400 hover:text-gray-200 underline underline-offset-2"
+                                  data-testid={`phase-treatments-more-${p.id}`}
+                                >
+                                  {isExpanded ? 'Show less' : `+${hidden} more`}
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
 
                       <button

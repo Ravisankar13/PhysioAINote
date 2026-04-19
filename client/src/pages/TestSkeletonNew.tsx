@@ -42,6 +42,9 @@ import ClinicalIntakePanel, { ClinicalIntakeData } from "@/components/skeleton/C
 import ClinicalAssessmentResults from "@/components/skeleton/ClinicalAssessmentResults";
 import { MovementPatternRecognizer, MovementAnalysisResult } from "@/lib/movementPatternRecognition";
 import { StaticPostureAnalyzer } from "@/lib/staticPostureAnalyzer";
+import JointAngleEditor from "@/components/skeleton/JointAngleEditor";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 
 interface GLBErrorBoundaryProps {
   children: ReactNode;
@@ -247,6 +250,8 @@ export default function TestSkeletonNew() {
     shoulders: false,
     elbows: false,
   });
+  const [bilateralMirror, setBilateralMirror] = useState(false);
+  const [advancedSlidersOpen, setAdvancedSlidersOpen] = useState(false);
 
   const [animationState, setAnimationState] = useState<AnimationState>({
     isPlaying: false,
@@ -3067,17 +3072,39 @@ export default function TestSkeletonNew() {
       </Card>
       )}
 
-      {/* Joint Parameters - Sliders Panel (Above Biomechanics) */}
-      <Card className="mt-6">
+      {/* Quick Joint Angle Editor - HUD-paired control surface */}
+      <div className="mt-6">
+        <JointAngleEditor
+          modelConfig={effectiveModelConfig}
+          onAngleChange={(joint, property, value) => handleSliderChange(joint, property, [value])}
+          onJumpToJoint={(joint) => setActiveJointGroup(joint as JointGroup)}
+          bilateralLink={bilateralMirror}
+          onBilateralLinkChange={setBilateralMirror}
+        />
+      </div>
+
+      {/* Advanced Sliders (collapsible legacy panel) */}
+      <Collapsible open={advancedSlidersOpen} onOpenChange={setAdvancedSlidersOpen} className="mt-6">
+        <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Joint Parameters</CardTitle>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 text-left hover:text-primary"
+                data-testid="btn-toggle-advanced-sliders"
+              >
+                <ChevronDown className={`h-4 w-4 transition-transform ${advancedSlidersOpen ? '' : '-rotate-90'}`} />
+                <CardTitle>Advanced Sliders &amp; Preset Poses</CardTitle>
+              </button>
+            </CollapsibleTrigger>
             <Button onClick={resetAll} variant="outline" size="sm">
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset All
             </Button>
           </div>
         </CardHeader>
+        <CollapsibleContent>
         <CardContent>
           <Tabs defaultValue="spine" className="w-full">
             <TabsList className="grid grid-cols-3 w-full">
@@ -4416,7 +4443,9 @@ export default function TestSkeletonNew() {
               </TabsContent>
             </Tabs>
         </CardContent>
+        </CollapsibleContent>
       </Card>
+      </Collapsible>
 
       {/* Biomechanical Analysis Panel */}
       <div className="mt-6">

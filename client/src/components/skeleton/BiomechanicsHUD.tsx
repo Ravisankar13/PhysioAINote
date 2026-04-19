@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers } from 'lucide-react';
+import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown } from 'lucide-react';
 import type { ForceAnalysisResult, WeightDistribution } from '@/lib/posturalForceEngine';
 import { computeMuscleBalanceRatios, type MuscleAnalysisResult } from '@/lib/muscleBiomechanicsEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
@@ -81,6 +81,7 @@ export default function BiomechanicsHUD({
   onToggleTissueView,
 }: BiomechanicsHUDProps) {
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
+  const [directions, setDirections] = useState<Record<string, 'up' | 'down' | null>>({});
   const prevThresholdsRef = useRef<{
     forceStatus: string;
     chainScore: number;
@@ -98,6 +99,8 @@ export default function BiomechanicsHUD({
     romCount: 0,
     tissueCount: 0,
   });
+  const prevNumericRef = useRef<Record<string, number>>({});
+  const directionTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     const prev = prevThresholdsRef.current;
@@ -128,11 +131,60 @@ export default function BiomechanicsHUD({
       tissueCount: curTissueCount,
     };
 
+    // Track numeric value changes for ALL circles to drive pulse + direction indicator on any edit.
+    const numericNow: Record<string, number> = {
+      controls: curRomCount,
+      slings: curSlingScore,
+      biomechanics: curBioScore,
+      tissue: curTissueCount,
+      forces: forceAnalysis?.joints?.[0]?.totalForce ?? 0,
+      chains: curChainScore,
+      muscle: curSyndromes,
+      weight: weightDistribution?.asymmetryPercent ?? 0,
+    };
+    const dirThresholds: Record<string, number> = {
+      controls: 0.5, slings: 0.5, biomechanics: 0.5, tissue: 0.5,
+      forces: 0.005, chains: 0.5, muscle: 0.5, weight: 0.3,
+    };
+    const directionDeltas: Record<string, 'up' | 'down'> = {};
+    Object.entries(numericNow).forEach(([id, v]) => {
+      const prevV = prevNumericRef.current[id];
+      if (prevV !== undefined && Math.abs(v - prevV) >= (dirThresholds[id] ?? 0.5)) {
+        newPulse.add(id);
+        directionDeltas[id] = v > prevV ? 'up' : 'down';
+      }
+      prevNumericRef.current[id] = v;
+    });
+
     if (newPulse.size > 0) {
-      setPulsingIds(newPulse);
-      setTimeout(() => setPulsingIds(new Set()), 600);
+      setPulsingIds(prev => {
+        const next = new Set(prev);
+        newPulse.forEach(id => next.add(id));
+        return next;
+      });
+      setTimeout(() => {
+        setPulsingIds(prev => {
+          const next = new Set(prev);
+          newPulse.forEach(id => next.delete(id));
+          return next;
+        });
+      }, 600);
     }
-  }, [forceAnalysis, chainIntegrityScores, muscleAnalysis, slingAnalysis, biomechanicsOutput, romRestrictionCount, tissueConcernCount]);
+
+    if (Object.keys(directionDeltas).length > 0) {
+      setDirections(prev => ({ ...prev, ...directionDeltas }));
+      Object.keys(directionDeltas).forEach(id => {
+        if (directionTimeoutsRef.current[id]) clearTimeout(directionTimeoutsRef.current[id]);
+        directionTimeoutsRef.current[id] = setTimeout(() => {
+          setDirections(prev => ({ ...prev, [id]: null }));
+        }, 900);
+      });
+    }
+  }, [forceAnalysis, chainIntegrityScores, muscleAnalysis, slingAnalysis, biomechanicsOutput, romRestrictionCount, tissueConcernCount, weightDistribution]);
+
+  useEffect(() => () => {
+    Object.values(directionTimeoutsRef.current).forEach(t => clearTimeout(t));
+  }, []);
 
   const topJoint = useMemo(() => {
     if (!forceAnalysis) return null;
@@ -276,20 +328,27 @@ export default function BiomechanicsHUD({
 
   return (
     <>
-    <style>{`@keyframes hud-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }`}</style>
+    <style>{`
+      @keyframes hud-pulse { 0%,100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,255,255,0); } 50% { transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255,255,255,0.18); } }
+      @keyframes hud-arrow-fade { 0% { opacity: 0; transform: translateY(4px); } 20%,80% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-4px); } }
+    `}</style>
     <div
       className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 flex-wrap justify-center max-w-[500px]"
     >
       {circles.map((c) => {
         const Icon = c.icon;
         const isPulsing = pulsingIds.has(c.id);
+        const dir = directions[c.id];
         return (
           <button
             key={c.id}
             onClick={c.onClick}
-            className={`w-[52px] h-[52px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
+            className={`relative w-[52px] h-[52px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${isPulsing ? 'ring-2 ring-white/70' : c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
             style={isPulsing ? { animation: 'hud-pulse 0.3s ease-in-out 2' } : undefined}
             title={c.label}
+            data-testid={`hud-circle-${c.id}`}
+            data-pulsing={isPulsing ? 'true' : 'false'}
+            data-direction={dir ?? 'none'}
           >
             <Icon className={`h-3 w-3 ${c.color}`} />
             <span
@@ -301,6 +360,18 @@ export default function BiomechanicsHUD({
             <span className="text-[6px] text-gray-400 uppercase tracking-wider leading-none">
               {c.label}
             </span>
+            {dir && (
+              <span
+                className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full shadow"
+                style={{
+                  background: dir === 'up' ? '#ef4444' : '#22c55e',
+                  animation: 'hud-arrow-fade 0.9s ease-in-out forwards',
+                }}
+                aria-label={dir === 'up' ? 'increased' : 'decreased'}
+              >
+                {dir === 'up' ? <ArrowUp className="h-2.5 w-2.5 text-white" /> : <ArrowDown className="h-2.5 w-2.5 text-white" />}
+              </span>
+            )}
           </button>
         );
       })}

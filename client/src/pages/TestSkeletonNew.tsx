@@ -3075,11 +3075,40 @@ export default function TestSkeletonNew() {
       {/* Quick Joint Angle Editor - HUD-paired control surface */}
       <div className="mt-6">
         <JointAngleEditor
-          modelConfig={effectiveModelConfig}
+          modelConfig={effectiveModelConfig as any}
           onAngleChange={(joint, property, value) => handleSliderChange(joint, property, [value])}
-          onJumpToJoint={(joint) => setActiveJointGroup(joint as JointGroup)}
+          onJumpToJoint={(joint) => {
+            setActiveJointGroup(joint as JointGroup);
+            const regionMap: Record<string, AnatomicalRegion> = {
+              spine: 'lumbar_spine', neck: 'cervical_spine', pelvis: 'pelvis',
+              leftHip: 'left_hip', rightHip: 'right_hip',
+              leftKnee: 'left_knee', rightKnee: 'right_knee',
+              leftAnkle: 'left_ankle', rightAnkle: 'right_ankle',
+              leftShoulder: 'left_shoulder', rightShoulder: 'right_shoulder',
+              leftScapula: 'left_scapula', rightScapula: 'right_scapula',
+              leftElbow: 'left_elbow', rightElbow: 'right_elbow',
+              leftWrist: 'left_wrist', rightWrist: 'right_wrist',
+            };
+            const region = regionMap[joint];
+            if (region) setZoomToRegion(region);
+          }}
           bilateralLink={bilateralMirror}
           onBilateralLinkChange={setBilateralMirror}
+          focusJoint={(() => {
+            if (!zoomToRegion) return null;
+            const m: Record<string, string> = {
+              cervical_spine: 'neck', thoracic_spine: 'spine', lumbar_spine: 'spine',
+              pelvis: 'pelvis',
+              left_hip: 'leftHip', right_hip: 'rightHip',
+              left_knee: 'leftKnee', right_knee: 'rightKnee',
+              left_ankle: 'leftAnkle', right_ankle: 'rightAnkle',
+              left_shoulder: 'leftShoulder', right_shoulder: 'rightShoulder',
+              left_scapula: 'leftScapula', right_scapula: 'rightScapula',
+              left_elbow: 'leftElbow', right_elbow: 'rightElbow',
+              left_wrist: 'leftWrist', right_wrist: 'rightWrist',
+            };
+            return m[zoomToRegion as string] ?? null;
+          })()}
         />
       </div>
 

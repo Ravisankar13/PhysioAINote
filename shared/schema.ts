@@ -9,6 +9,7 @@ import {
   boolean,
   pgEnum,
   numeric,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -5217,7 +5218,14 @@ export const electroConditionPresets = pgTable("electro_condition_presets", {
   lastUsedAt: timestamp("last_used_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  // Persistence is keyed by (userId, patientId, name). NULLS NOT DISTINCT
+  // (Postgres 15+) so user-global presets (patientId IS NULL) also enforce
+  // name uniqueness per user.
+  userPatientNameUnique: uniqueIndex('electro_condition_presets_user_patient_name_unique')
+    .on(table.userId, table.patientId, table.name)
+    .nullsNotDistinct(),
+}));
 
 export const insertElectroConditionPresetSchema = createInsertSchema(electroConditionPresets).omit({
   id: true,

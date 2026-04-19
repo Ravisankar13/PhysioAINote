@@ -4927,6 +4927,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async renameElectroConditionPreset(id: number, name: string): Promise<ElectroConditionPreset> {
+    // Enforce (userId, patientId, name) uniqueness explicitly so a rename
+    // can't silently collide with another preset in the same scope. The DB
+    // also has a UNIQUE NULLS NOT DISTINCT index as a final safety net.
+    const current = await this.getElectroConditionPreset(id);
+    if (!current) {
+      throw new Error('Preset not found');
+    }
+    if (current.name === name) return current;
+    const collision = await db
+      .select({ id: electroConditionPresets.id })
+      .from(electroConditionPresets)
+      .where(
+        and(
+          eq(electroConditionPresets.userId, current.userId),
+          current.patientId == null
+            ? isNull(electroConditionPresets.patientId)
+            : eq(electroConditionPresets.patientId, current.patientId),
+          eq(electroConditionPresets.name, name),
+        ),
+      )
+      .limit(1);
+    if (collision[0] && collision[0].id !== id) {
+      const err: Error & { code?: string } = new Error(`A preset named "${name}" already exists in this scope`);
+      err.code = 'PRESET_NAME_CONFLICT';
+      throw err;
+    }
     const result = await db
       .update(electroConditionPresets)
       .set({ name, updatedAt: new Date() })

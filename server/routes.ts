@@ -8888,7 +8888,15 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
 
       let updated = existing;
       if (body.name && body.name !== existing.name) {
-        updated = await storage.renameElectroConditionPreset(id, body.name);
+        try {
+          updated = await storage.renameElectroConditionPreset(id, body.name);
+        } catch (e: unknown) {
+          const code = (e as { code?: string }).code;
+          if (code === 'PRESET_NAME_CONFLICT' || (e instanceof Error && /duplicate key|unique/i.test(e.message))) {
+            return res.status(409).json({ error: 'A preset with that name already exists for this patient' });
+          }
+          throw e;
+        }
       }
       if (body.touch) {
         await storage.touchElectroConditionPreset(id);

@@ -349,6 +349,7 @@ export default function JointAngleEditor({
   const [search, setSearch] = useState('');
   const [activeGroup, setActiveGroup] = useState<DofGroup>('lower');
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
+  const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const registerRef = useCallback((id: string, el: HTMLDivElement | null) => {
     rowRefs.current[id] = el;
@@ -374,6 +375,7 @@ export default function JointAngleEditor({
 
   useEffect(() => {
     if (!focusJoint) return;
+    setSelectedJoint(focusJoint);
     const first = DOF_SPECS.find(d => d.joint === focusJoint);
     if (first) focusRow(first.id);
   }, [focusJoint, focusRow]);
@@ -467,6 +469,42 @@ export default function JointAngleEditor({
     upper: DOF_SPECS.filter(d => d.group === 'upper'),
   }), []);
 
+  const jointChips = useMemo(() => {
+    const order = ['neck', 'spine', 'pelvis',
+      'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle',
+      'leftScapula', 'rightScapula', 'leftShoulder', 'rightShoulder',
+      'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist'];
+    const labelMap: Record<string, string> = {
+      neck: 'Neck', spine: 'Spine', pelvis: 'Pelvis',
+      leftHip: 'L Hip', rightHip: 'R Hip',
+      leftKnee: 'L Knee', rightKnee: 'R Knee',
+      leftAnkle: 'L Ankle', rightAnkle: 'R Ankle',
+      leftScapula: 'L Scap', rightScapula: 'R Scap',
+      leftShoulder: 'L Shldr', rightShoulder: 'R Shldr',
+      leftElbow: 'L Elbow', rightElbow: 'R Elbow',
+      leftWrist: 'L Wrist', rightWrist: 'R Wrist',
+    };
+    const present = new Set(DOF_SPECS.map(d => d.joint));
+    return order.filter(j => present.has(j)).map(j => ({ joint: j, label: labelMap[j] ?? j }));
+  }, []);
+
+  const selectedJointSpecs = useMemo(() => {
+    if (!selectedJoint) return null;
+    return DOF_SPECS.filter(d => d.joint === selectedJoint);
+  }, [selectedJoint]);
+
+  const resetJoint = useCallback((joint: string) => {
+    const specs = DOF_SPECS.filter(d => d.joint === joint);
+    const seen = new Set<string>();
+    specs.forEach(spec => {
+      const key = `${spec.joint}.${spec.property}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      onAngleChange(spec.joint, spec.property, 0);
+      if (bilateralLink && spec.pairJoint) onAngleChange(spec.pairJoint, spec.property, 0);
+    });
+  }, [onAngleChange, bilateralLink]);
+
   return (
     <Card data-testid="card-joint-angle-editor">
       <CardHeader className="pb-3">
@@ -508,6 +546,86 @@ export default function JointAngleEditor({
         </div>
       </CardHeader>
       <CardContent className="pt-0">
+        {/* Joint picker chips - 1-click access to any joint's DOFs */}
+        <div className="flex flex-wrap gap-1 mb-3 pb-2 border-b" data-testid="joint-picker">
+          <Button
+            size="sm"
+            variant={selectedJoint === null ? 'default' : 'outline'}
+            className="h-6 px-2 text-[10px]"
+            onClick={() => setSelectedJoint(null)}
+            data-testid="chip-joint-all"
+          >
+            All
+          </Button>
+          {jointChips.map(c => (
+            <Button
+              key={c.joint}
+              size="sm"
+              variant={selectedJoint === c.joint ? 'default' : 'outline'}
+              className="h-6 px-2 text-[10px]"
+              onClick={() => { setSelectedJoint(c.joint); setSearch(''); }}
+              data-testid={`chip-joint-${c.joint}`}
+            >
+              {c.label}
+            </Button>
+          ))}
+        </div>
+
+        {/* Selected joint detail panel - focused DOFs + Reset this joint */}
+        {selectedJoint && selectedJointSpecs && !filtered && (
+          <div className="mb-3 p-2 rounded-md border border-primary/40 bg-primary/5" data-testid="selected-joint-panel">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-semibold flex items-center gap-1.5">
+                <Target className="h-3 w-3 text-primary" />
+                {jointChips.find(c => c.joint === selectedJoint)?.label ?? selectedJoint}
+                <span className="text-[10px] font-normal text-muted-foreground">
+                  · {selectedJointSpecs.length} DOF{selectedJointSpecs.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 text-[10px] gap-1"
+                  onClick={() => resetJoint(selectedJoint)}
+                  data-testid="btn-reset-this-joint"
+                  title={`Reset all ${selectedJoint} angles to neutral`}
+                >
+                  <RotateCcw className="h-3 w-3" />Reset this joint
+                </Button>
+                {onJumpToJoint && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => onJumpToJoint(selectedJoint)}
+                    data-testid="btn-jump-to-this-joint"
+                  >
+                    Open
+                  </Button>
+                )}
+              </div>
+            </div>
+            <ScrollArea className="h-[260px] pr-2">
+              <div className="space-y-1">
+                {selectedJointSpecs.map(spec => (
+                  <EditorRow
+                    key={spec.id}
+                    spec={spec}
+                    value={getValue(spec)}
+                    pairValue={getPairValue(spec)}
+                    onChange={(v) => handleChange(spec, v)}
+                    onJumpToJoint={onJumpToJoint}
+                    bilateralLink={bilateralLink}
+                    isFocused={focusedRowId === spec.id}
+                    registerRef={registerRef}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
         {filtered ? (
           <ScrollArea className="h-[420px] pr-2">
             {filtered.length === 0 ? (

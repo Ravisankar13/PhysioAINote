@@ -8769,6 +8769,124 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  // -----------------------------------------------------------------
+  // Electrophysical Engine — saved Condition + context presets
+  // -----------------------------------------------------------------
+  const electroPresetBodySchema = z.object({
+    patientId: z.union([z.number().int().positive(), z.null()]).optional().default(null),
+    name: z.string().trim().min(1).max(80),
+    condition: z.string().trim().max(200).optional().default(""),
+    stage: z.union([z.enum(['acute', 'subacute', 'chronic']), z.literal("")]).optional().default(""),
+    irritability: z.union([z.enum(['low', 'moderate', 'high']), z.literal("")]).optional().default(""),
+    tissueType: z.string().trim().max(100).optional().default(""),
+    primaryGoal: z.union([z.enum(['pain', 'healing', 'loading', 'mobility', 'activation']), z.literal("")]).optional().default(""),
+    contraindicationFlags: z.array(z.enum([
+      'pregnancy', 'pacemaker', 'metal_implant', 'malignancy', 'open_wound',
+      'active_infection', 'dvt', 'hemorrhage', 'sensory_deficit', 'epilepsy', 'skin_breakdown'
+    ])).optional().default([]),
+  });
+
+  app.get("/api/electrophysical-engine/presets", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const raw = req.query.patientId;
+      let patientId: number | null = null;
+      if (raw != null && raw !== '' && raw !== 'null') {
+        const parsed = Number(raw);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          return res.status(400).json({ error: 'Invalid patientId' });
+        }
+        patientId = parsed;
+      }
+      const presets = await storage.listElectroConditionPresets(userId, patientId);
+      res.json(presets);
+    } catch (error: unknown) {
+      console.error('List electro presets error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to list presets', details: message });
+    }
+  });
+
+  app.post("/api/electrophysical-engine/presets", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const parsed = electroPresetBodySchema.parse(req.body);
+      const saved = await storage.upsertElectroConditionPreset({
+        userId,
+        patientId: parsed.patientId ?? null,
+        name: parsed.name,
+        condition: parsed.condition,
+        stage: parsed.stage,
+        irritability: parsed.irritability,
+        tissueType: parsed.tissueType,
+        primaryGoal: parsed.primaryGoal,
+        contraindicationFlags: parsed.contraindicationFlags,
+      });
+      res.json(saved);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('Save electro preset error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to save preset', details: message });
+    }
+  });
+
+  app.patch("/api/electrophysical-engine/presets/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) {
+        return res.status(400).json({ error: 'Invalid preset id' });
+      }
+      const existing = await storage.getElectroConditionPreset(id);
+      if (!existing) return res.status(404).json({ error: 'Preset not found' });
+      if (existing.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+      const body = z.object({
+        name: z.string().trim().min(1).max(80).optional(),
+        touch: z.boolean().optional(),
+      }).parse(req.body);
+
+      let updated = existing;
+      if (body.name && body.name !== existing.name) {
+        updated = await storage.renameElectroConditionPreset(id, body.name);
+      }
+      if (body.touch) {
+        await storage.touchElectroConditionPreset(id);
+        updated = (await storage.getElectroConditionPreset(id)) ?? updated;
+      }
+      res.json(updated);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('Update electro preset error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to update preset', details: message });
+    }
+  });
+
+  app.delete("/api/electrophysical-engine/presets/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) {
+        return res.status(400).json({ error: 'Invalid preset id' });
+      }
+      const existing = await storage.getElectroConditionPreset(id);
+      if (!existing) return res.status(404).json({ error: 'Preset not found' });
+      if (existing.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
+      await storage.deleteElectroConditionPreset(id);
+      res.json({ success: true });
+    } catch (error: unknown) {
+      console.error('Delete electro preset error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to delete preset', details: message });
+    }
+  });
+
   app.post("/api/adjunct-therapies-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const adjunctInputSchema = z.object({

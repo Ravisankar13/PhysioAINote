@@ -9583,6 +9583,7 @@ ${ddxList}`;
                       autoGenerateNonce={electroPrefill?.nonce}
                       autoGenerate={!!electroPrefill}
                       onAutoGenerateConsumed={() => setElectroPrefill(null)}
+                      patientId={selectedConversationId ?? null}
                     />
                   )}
                   {mechanismActiveTab === 'adjunctRx' && (

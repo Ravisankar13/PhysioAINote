@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award, Stethoscope, Sparkles, Ban } from 'lucide-react';
-import { apiRequest } from '@/lib/queryClient';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award, Stethoscope, Sparkles, Ban, Save, Trash2, Pencil, BookmarkPlus } from 'lucide-react';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 
@@ -270,6 +271,25 @@ interface ElectrophysicalEngineTabProps {
    *  the supplied initialCondition / initialStage. Resets after firing. */
   autoGenerate?: boolean;
   onAutoGenerateConsumed?: () => void;
+  /** Optional patient/conversation id used to scope saved Condition presets.
+   *  When null/undefined, presets are user-global ("any patient"). */
+  patientId?: number | null;
+}
+
+interface ElectroConditionPreset {
+  id: number;
+  userId: number;
+  patientId: number | null;
+  name: string;
+  condition: string;
+  stage: string;
+  irritability: string;
+  tissueType: string;
+  primaryGoal: string;
+  contraindicationFlags: string[];
+  lastUsedAt: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type { ElectrophysicalPlan, ModalityItem, ModalityGroup };
@@ -506,7 +526,7 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
   );
 }
 
-export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onPlanChange, initialCondition, initialStage, autoGenerateNonce, autoGenerate, onAutoGenerateConsumed }: ElectrophysicalEngineTabProps) {
+export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onPlanChange, initialCondition, initialStage, autoGenerateNonce, autoGenerate, onAutoGenerateConsumed, patientId = null }: ElectrophysicalEngineTabProps) {
   const [plan, setPlan] = useState<ElectrophysicalPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -524,6 +544,104 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
   const [primaryGoal, setPrimaryGoal] = useState<PrimaryGoal>('');
   const [contraindicationFlags, setContraindicationFlags] = useState<ContraindicationFlag[]>([]);
   const [showContextEditor, setShowContextEditor] = useState(true);
+
+  // ----- Saved Condition presets (per-clinician, optionally per-patient) -----
+  const [activePresetId, setActivePresetId] = useState<number | null>(null);
+  const [savePromptOpen, setSavePromptOpen] = useState(false);
+  const [savePromptName, setSavePromptName] = useState('');
+  const [renamingPresetId, setRenamingPresetId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const autoLoadedRef = useRef(false);
+
+  const presetsKey = useMemo(
+    () => ['/api/electrophysical-engine/presets', patientId ?? null] as const,
+    [patientId],
+  );
+  const presetsQuery = useQuery<ElectroConditionPreset[]>({
+    queryKey: presetsKey,
+    queryFn: async () => {
+      const url = patientId != null
+        ? `/api/electrophysical-engine/presets?patientId=${patientId}`
+        : `/api/electrophysical-engine/presets`;
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) throw new Error(`Failed to load presets (${res.status})`);
+      return res.json();
+    },
+  });
+
+  const applyPreset = useCallback((p: ElectroConditionPreset) => {
+    setCondition(p.condition ?? '');
+    setStage((p.stage as Stage) ?? '');
+    setIrritability((p.irritability as Irritability) ?? '');
+    setTissueType(p.tissueType ?? '');
+    setPrimaryGoal((p.primaryGoal as PrimaryGoal) ?? '');
+    setContraindicationFlags(((p.contraindicationFlags ?? []) as ContraindicationFlag[]).filter(Boolean));
+    setActivePresetId(p.id);
+  }, []);
+
+  // Auto-load most-recently-used preset on first mount once the list arrives.
+  useEffect(() => {
+    if (autoLoadedRef.current) return;
+    if (!presetsQuery.data || presetsQuery.data.length === 0) return;
+    // Don't clobber a condition the parent pre-filled via initialCondition.
+    if ((initialCondition ?? '').trim().length > 0) {
+      autoLoadedRef.current = true;
+      return;
+    }
+    autoLoadedRef.current = true;
+    applyPreset(presetsQuery.data[0]);
+  }, [presetsQuery.data, initialCondition, applyPreset]);
+
+  const savePresetMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await apiRequest('POST', '/api/electrophysical-engine/presets', {
+        patientId: patientId ?? null,
+        name,
+        condition,
+        stage,
+        irritability,
+        tissueType,
+        primaryGoal,
+        contraindicationFlags,
+      });
+      return (await res.json()) as ElectroConditionPreset;
+    },
+    onSuccess: (saved) => {
+      queryClient.invalidateQueries({ queryKey: presetsKey });
+      setActivePresetId(saved.id);
+      setSavePromptOpen(false);
+      setSavePromptName('');
+    },
+  });
+
+  const renamePresetMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const res = await apiRequest('PATCH', `/api/electrophysical-engine/presets/${id}`, { name });
+      return (await res.json()) as ElectroConditionPreset;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: presetsKey });
+      setRenamingPresetId(null);
+      setRenameValue('');
+    },
+  });
+
+  const deletePresetMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest('DELETE', `/api/electrophysical-engine/presets/${id}`);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.invalidateQueries({ queryKey: presetsKey });
+      if (activePresetId === id) setActivePresetId(null);
+    },
+  });
+
+  const touchPreset = useCallback((id: number) => {
+    void apiRequest('PATCH', `/api/electrophysical-engine/presets/${id}`, { touch: true })
+      .then(() => queryClient.invalidateQueries({ queryKey: presetsKey }))
+      .catch(() => { /* non-fatal */ });
+  }, [presetsKey]);
 
   const abortRef = useRef<AbortController | null>(null);
   const evidenceAbortRef = useRef<AbortController | null>(null);
@@ -725,6 +843,145 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   const hasData = mechanismAnalysis !== null || (painMarkers && painMarkers.length > 0) || condition.trim().length > 0;
 
+  const presets = presetsQuery.data ?? [];
+  const presetsBar = (
+    <div className="border border-teal-500/30 rounded-lg bg-teal-500/5 px-2 py-1.5 flex items-center gap-1.5 flex-wrap">
+      <BookmarkPlus className="h-3 w-3 text-teal-300 shrink-0" />
+      <span className="text-[10px] text-teal-200 font-medium">Saved condition presets{patientId == null ? '' : ' (this patient)'}:</span>
+      <select
+        value={activePresetId ?? ''}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (!v) { setActivePresetId(null); return; }
+          const id = Number(v);
+          const p = presets.find(x => x.id === id);
+          if (p) {
+            applyPreset(p);
+            touchPreset(p.id);
+          }
+        }}
+        className="bg-gray-900/60 border border-gray-700/60 rounded px-1.5 py-0.5 text-[10px] text-gray-100 focus:outline-none focus:border-teal-500/60 min-w-[140px]"
+        data-testid="select-electro-preset"
+      >
+        <option value="">{presets.length === 0 ? '— no presets saved —' : '— select a preset —'}</option>
+        {presets.map(p => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => {
+          const trimmed = condition.trim();
+          setSavePromptName(trimmed.slice(0, 60) || 'Untitled preset');
+          setSavePromptOpen(true);
+        }}
+        disabled={savePresetMutation.isPending}
+        className="text-[10px] px-1.5 py-0.5 rounded border border-teal-500/40 bg-teal-500/10 text-teal-200 hover:bg-teal-500/20 transition-colors flex items-center gap-1 disabled:opacity-50"
+        data-testid="button-save-electro-preset"
+        title="Save current condition + context as a preset"
+      >
+        <Save className="h-2.5 w-2.5" /> Save
+      </button>
+      {activePresetId != null && (() => {
+        const active = presets.find(p => p.id === activePresetId);
+        if (!active) return null;
+        return (
+          <>
+            <button
+              type="button"
+              onClick={() => { setRenamingPresetId(active.id); setRenameValue(active.name); }}
+              className="text-[10px] px-1.5 py-0.5 rounded border border-gray-600/40 bg-gray-800/40 text-gray-300 hover:bg-gray-800/70 transition-colors flex items-center gap-1"
+              data-testid="button-rename-electro-preset"
+              title="Rename preset"
+            >
+              <Pencil className="h-2.5 w-2.5" /> Rename
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Delete preset "${active.name}"?`)) {
+                  deletePresetMutation.mutate(active.id);
+                }
+              }}
+              disabled={deletePresetMutation.isPending}
+              className="text-[10px] px-1.5 py-0.5 rounded border border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors flex items-center gap-1 disabled:opacity-50"
+              data-testid="button-delete-electro-preset"
+              title="Delete preset"
+            >
+              <Trash2 className="h-2.5 w-2.5" /> Delete
+            </button>
+          </>
+        );
+      })()}
+      {savePromptOpen && (
+        <div className="basis-full flex items-center gap-1.5 mt-1">
+          <input
+            type="text"
+            value={savePromptName}
+            onChange={(e) => setSavePromptName(e.target.value.slice(0, 80))}
+            placeholder="Preset name (e.g. Achilles tendinopathy — chronic)"
+            className="flex-1 bg-gray-900/60 border border-gray-700/60 rounded px-2 py-1 text-[10px] text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-teal-500/60"
+            autoFocus
+            data-testid="input-electro-preset-name"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const name = savePromptName.trim();
+              if (!name) return;
+              savePresetMutation.mutate(name);
+            }}
+            disabled={savePresetMutation.isPending || !savePromptName.trim()}
+            className="text-[10px] px-2 py-1 rounded bg-teal-500/30 text-teal-100 border border-teal-500/50 hover:bg-teal-500/40 disabled:opacity-50"
+            data-testid="button-confirm-save-electro-preset"
+          >
+            {savePresetMutation.isPending ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setSavePromptOpen(false); setSavePromptName(''); }}
+            className="text-[10px] px-2 py-1 rounded bg-gray-800/60 text-gray-300 border border-gray-600/40 hover:bg-gray-800/90"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {renamingPresetId != null && (
+        <div className="basis-full flex items-center gap-1.5 mt-1">
+          <input
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value.slice(0, 80))}
+            placeholder="New name"
+            className="flex-1 bg-gray-900/60 border border-gray-700/60 rounded px-2 py-1 text-[10px] text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-teal-500/60"
+            autoFocus
+            data-testid="input-electro-preset-rename"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const name = renameValue.trim();
+              if (!name || renamingPresetId == null) return;
+              renamePresetMutation.mutate({ id: renamingPresetId, name });
+            }}
+            disabled={renamePresetMutation.isPending || !renameValue.trim()}
+            className="text-[10px] px-2 py-1 rounded bg-teal-500/30 text-teal-100 border border-teal-500/50 hover:bg-teal-500/40 disabled:opacity-50"
+            data-testid="button-confirm-rename-electro-preset"
+          >
+            {renamePresetMutation.isPending ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setRenamingPresetId(null); setRenameValue(''); }}
+            className="text-[10px] px-2 py-1 rounded bg-gray-800/60 text-gray-300 border border-gray-600/40 hover:bg-gray-800/90"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   const conditionContextSection = (
     <div className="border border-teal-500/30 rounded-lg bg-teal-500/5 overflow-hidden">
       <button
@@ -826,6 +1083,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
   if (!hasData) {
     return (
       <div className="space-y-2">
+        {presetsBar}
         {conditionContextSection}
         <div className="flex flex-col items-center justify-center py-6 px-4 text-center border border-gray-700/40 rounded-lg bg-gray-800/20">
           <Zap className="h-8 w-8 text-teal-400/60 mb-2" />
@@ -864,6 +1122,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
   if (!plan) {
     return (
       <div className="space-y-2">
+        {presetsBar}
         {conditionContextSection}
         <div className="flex flex-col items-center justify-center py-6 px-4 border border-gray-700/40 rounded-lg bg-gray-800/20">
           <Zap className="h-8 w-8 text-teal-400/60 mb-3" />
@@ -888,6 +1147,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   return (
     <div className="space-y-2">
+      {presetsBar}
       {conditionContextSection}
       {plan.topPicks && plan.topPicks.length > 0 && (
         <div className="border border-emerald-500/40 rounded-lg bg-gradient-to-br from-emerald-500/10 to-teal-500/5 p-2" data-testid="card-top-picks">

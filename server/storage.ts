@@ -167,6 +167,9 @@ import {
   patientClones,
   type PatientClone,
   type InsertPatientClone,
+  electroConditionPresets,
+  type ElectroConditionPreset,
+  type InsertElectroConditionPreset,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -754,6 +757,14 @@ export interface IStorage {
   getUserPatientClones(userId: number): Promise<PatientClone[]>;
   updatePatientClone(id: number, data: Partial<InsertPatientClone>): Promise<PatientClone>;
   deletePatientClone(id: number): Promise<void>;
+
+  // Electrophysical Engine condition presets
+  listElectroConditionPresets(userId: number, patientId: number | null): Promise<ElectroConditionPreset[]>;
+  getElectroConditionPreset(id: number): Promise<ElectroConditionPreset | undefined>;
+  upsertElectroConditionPreset(preset: InsertElectroConditionPreset): Promise<ElectroConditionPreset>;
+  renameElectroConditionPreset(id: number, name: string): Promise<ElectroConditionPreset>;
+  touchElectroConditionPreset(id: number): Promise<void>;
+  deleteElectroConditionPreset(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4848,6 +4859,91 @@ export class DatabaseStorage implements IStorage {
 
   async deletePatientClone(id: number): Promise<void> {
     await db.delete(patientClones).where(eq(patientClones.id, id));
+  }
+
+  // Electrophysical Engine condition presets
+  async listElectroConditionPresets(userId: number, patientId: number | null): Promise<ElectroConditionPreset[]> {
+    return await db
+      .select()
+      .from(electroConditionPresets)
+      .where(
+        and(
+          eq(electroConditionPresets.userId, userId),
+          patientId == null
+            ? isNull(electroConditionPresets.patientId)
+            : eq(electroConditionPresets.patientId, patientId),
+        ),
+      )
+      .orderBy(desc(electroConditionPresets.lastUsedAt));
+  }
+
+  async getElectroConditionPreset(id: number): Promise<ElectroConditionPreset | undefined> {
+    const result = await db
+      .select()
+      .from(electroConditionPresets)
+      .where(eq(electroConditionPresets.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async upsertElectroConditionPreset(preset: InsertElectroConditionPreset): Promise<ElectroConditionPreset> {
+    const existing = await db
+      .select()
+      .from(electroConditionPresets)
+      .where(
+        and(
+          eq(electroConditionPresets.userId, preset.userId),
+          preset.patientId == null
+            ? isNull(electroConditionPresets.patientId)
+            : eq(electroConditionPresets.patientId, preset.patientId),
+          eq(electroConditionPresets.name, preset.name),
+        ),
+      )
+      .limit(1);
+
+    if (existing[0]) {
+      const result = await db
+        .update(electroConditionPresets)
+        .set({
+          condition: preset.condition ?? "",
+          stage: preset.stage ?? "",
+          irritability: preset.irritability ?? "",
+          tissueType: preset.tissueType ?? "",
+          primaryGoal: preset.primaryGoal ?? "",
+          contraindicationFlags: preset.contraindicationFlags ?? [],
+          lastUsedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(electroConditionPresets.id, existing[0].id))
+        .returning();
+      return result[0];
+    }
+
+    const result = await db
+      .insert(electroConditionPresets)
+      .values({ ...preset, lastUsedAt: new Date() })
+      .returning();
+    return result[0];
+  }
+
+  async renameElectroConditionPreset(id: number, name: string): Promise<ElectroConditionPreset> {
+    const result = await db
+      .update(electroConditionPresets)
+      .set({ name, updatedAt: new Date() })
+      .where(eq(electroConditionPresets.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async touchElectroConditionPreset(id: number): Promise<void> {
+    await db
+      .update(electroConditionPresets)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(electroConditionPresets.id, id));
+  }
+
+  async deleteElectroConditionPreset(id: number): Promise<void> {
+    await db.delete(electroConditionPresets).where(eq(electroConditionPresets.id, id));
   }
 }
 

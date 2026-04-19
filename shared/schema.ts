@@ -5195,6 +5195,47 @@ export const patientCloneRelations = relations(patientClones, ({ one }) => ({
   }),
 }));
 
+// Electrophysical Engine condition presets — per-clinician (and optionally
+// per-patient) saved Condition + context bundles for the Electro Rx tab so
+// clinicians don't have to re-type the diagnosis / contraindications every
+// session for the same patient.
+export const electroConditionPresets = pgTable("electro_condition_presets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  // Optional patient scope. When null, the preset is user-global ("any
+  // patient"); when set, it's scoped to that patient/conversation id.
+  patientId: integer("patient_id"),
+  name: text("name").notNull(),
+  condition: text("condition").notNull().default(""),
+  stage: text("stage").notNull().default(""),
+  irritability: text("irritability").notNull().default(""),
+  tissueType: text("tissue_type").notNull().default(""),
+  primaryGoal: text("primary_goal").notNull().default(""),
+  contraindicationFlags: json("contraindication_flags").$type<string[]>().notNull().default([]),
+  lastUsedAt: timestamp("last_used_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertElectroConditionPresetSchema = createInsertSchema(electroConditionPresets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastUsedAt: true,
+});
+
+export type InsertElectroConditionPreset = z.infer<typeof insertElectroConditionPresetSchema>;
+export type ElectroConditionPreset = typeof electroConditionPresets.$inferSelect;
+
+export const electroConditionPresetRelations = relations(electroConditionPresets, ({ one }) => ({
+  user: one(users, {
+    fields: [electroConditionPresets.userId],
+    references: [users.id],
+  }),
+}));
+
 // Patient Presentation - Links SOAP notes to skeleton visualization with extracted movement restrictions
 export const patientPresentations = pgTable("patient_presentations", {
   id: serial("id").primaryKey(),

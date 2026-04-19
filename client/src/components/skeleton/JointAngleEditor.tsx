@@ -90,7 +90,7 @@ export const DOF_SPECS: DofSpec[] = [
   { id: 'leftShoulder.internalRotation', joint: 'leftShoulder', property: 'internalRotation', label: 'Left Shoulder Int Rotation', shortLabel: 'L Sh IR', group: 'upper', section: 'Shoulder', side: 'L', pairJoint: 'rightShoulder', min: -90, max: 90, unit: '°' },
   { id: 'leftShoulder.externalRotation', joint: 'leftShoulder', property: 'externalRotation', label: 'Left Shoulder Ext Rotation', shortLabel: 'L Sh ER', group: 'upper', section: 'Shoulder', side: 'L', pairJoint: 'rightShoulder', min: -90, max: 90, unit: '°' },
   { id: 'leftShoulder.elevation', joint: 'leftShoulder', property: 'elevation', label: 'Left Shoulder Elevation', shortLabel: 'L Sh Elev', group: 'upper', section: 'Shoulder', side: 'L', pairJoint: 'rightShoulder', min: -30, max: 30, unit: '°' },
-  { id: 'leftShoulder.retroversion', joint: 'leftShoulder', property: 'retroversion', label: 'Left Shoulder Retroversion', shortLabel: 'L Sh RetV', group: 'upper', section: 'Shoulder', side: 'L', pairJoint: 'rightShoulder', searchKeywords: ['anteversion'], min: -30, max: 60, unit: '°' },
+  { id: 'leftShoulder.retroversion', joint: 'leftShoulder', property: 'retroversion', label: 'Left Shoulder Retroversion', shortLabel: 'L Sh RetV', group: 'upper', section: 'Shoulder', side: 'L', pairJoint: 'rightShoulder', searchKeywords: ['anteversion'], min: -60, max: 60, unit: '°' },
   { id: 'leftShoulder.protraction', joint: 'leftShoulder', property: 'protraction', label: 'Left Shoulder Protraction', shortLabel: 'L Sh Prot', group: 'upper', section: 'Shoulder', side: 'L', pairJoint: 'rightShoulder', min: -20, max: 30, unit: '°' },
   { id: 'leftShoulder.winging', joint: 'leftShoulder', property: 'winging', label: 'Left Shoulder Winging', shortLabel: 'L Sh Wing', group: 'upper', section: 'Shoulder', side: 'L', pairJoint: 'rightShoulder', min: 0, max: 30, unit: '°' },
   { id: 'rightShoulder.flexion', joint: 'rightShoulder', property: 'flexion', label: 'Right Shoulder Flexion', shortLabel: 'R Sh Flex', group: 'upper', section: 'Shoulder', side: 'R', pairJoint: 'leftShoulder', min: -180, max: 180, unit: '°' },
@@ -98,7 +98,7 @@ export const DOF_SPECS: DofSpec[] = [
   { id: 'rightShoulder.internalRotation', joint: 'rightShoulder', property: 'internalRotation', label: 'Right Shoulder Int Rotation', shortLabel: 'R Sh IR', group: 'upper', section: 'Shoulder', side: 'R', pairJoint: 'leftShoulder', min: -90, max: 90, unit: '°' },
   { id: 'rightShoulder.externalRotation', joint: 'rightShoulder', property: 'externalRotation', label: 'Right Shoulder Ext Rotation', shortLabel: 'R Sh ER', group: 'upper', section: 'Shoulder', side: 'R', pairJoint: 'leftShoulder', min: -90, max: 90, unit: '°' },
   { id: 'rightShoulder.elevation', joint: 'rightShoulder', property: 'elevation', label: 'Right Shoulder Elevation', shortLabel: 'R Sh Elev', group: 'upper', section: 'Shoulder', side: 'R', pairJoint: 'leftShoulder', min: -30, max: 30, unit: '°' },
-  { id: 'rightShoulder.retroversion', joint: 'rightShoulder', property: 'retroversion', label: 'Right Shoulder Retroversion', shortLabel: 'R Sh RetV', group: 'upper', section: 'Shoulder', side: 'R', pairJoint: 'leftShoulder', searchKeywords: ['anteversion'], min: -30, max: 60, unit: '°' },
+  { id: 'rightShoulder.retroversion', joint: 'rightShoulder', property: 'retroversion', label: 'Right Shoulder Retroversion', shortLabel: 'R Sh RetV', group: 'upper', section: 'Shoulder', side: 'R', pairJoint: 'leftShoulder', searchKeywords: ['anteversion'], min: -60, max: 60, unit: '°' },
   { id: 'rightShoulder.protraction', joint: 'rightShoulder', property: 'protraction', label: 'Right Shoulder Protraction', shortLabel: 'R Sh Prot', group: 'upper', section: 'Shoulder', side: 'R', pairJoint: 'leftShoulder', min: -20, max: 30, unit: '°' },
   { id: 'rightShoulder.winging', joint: 'rightShoulder', property: 'winging', label: 'Right Shoulder Winging', shortLabel: 'R Sh Wing', group: 'upper', section: 'Shoulder', side: 'R', pairJoint: 'leftShoulder', min: 0, max: 30, unit: '°' },
 
@@ -136,7 +136,9 @@ export const DOF_SPECS: DofSpec[] = [
   { id: 'rightWrist.deviation', joint: 'rightWrist', property: 'deviation', label: 'Right Wrist Deviation', shortLabel: 'R Wr Dev', group: 'upper', section: 'Wrist', side: 'R', pairJoint: 'leftWrist', searchKeywords: ['radial', 'ulnar'], min: -30, max: 30, unit: '°' },
 ];
 
-export type ModelConfigLike = Record<string, Record<string, number>>;
+export type ModelConfigLike = {
+  readonly [joint: string]: { readonly [property: string]: number | undefined } | undefined | unknown;
+};
 
 interface Props {
   modelConfig: ModelConfigLike;
@@ -392,14 +394,20 @@ export default function JointAngleEditor({
     ).slice(0, 12);
   }, [search]);
 
-  const getValue = useCallback((spec: DofSpec): number => {
-    return Math.round(modelConfig?.[spec.joint]?.[spec.property] ?? 0);
+  const readNum = useCallback((joint: string, property: string): number => {
+    const sub = (modelConfig as Record<string, Record<string, number> | undefined> | undefined)?.[joint];
+    const v = sub?.[property];
+    return typeof v === 'number' ? v : 0;
   }, [modelConfig]);
+
+  const getValue = useCallback((spec: DofSpec): number => {
+    return Math.round(readNum(spec.joint, spec.property));
+  }, [readNum]);
 
   const getPairValue = useCallback((spec: DofSpec): number | null => {
     if (!spec.pairJoint) return null;
-    return Math.round(modelConfig?.[spec.pairJoint]?.[spec.property] ?? 0);
-  }, [modelConfig]);
+    return Math.round(readNum(spec.pairJoint, spec.property));
+  }, [readNum]);
 
   const handleChange = useCallback((spec: DofSpec, value: number) => {
     onAngleChange(spec.joint, spec.property, value);

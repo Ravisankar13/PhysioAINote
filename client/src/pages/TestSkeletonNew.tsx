@@ -3075,7 +3075,7 @@ export default function TestSkeletonNew() {
       {/* Quick Joint Angle Editor - HUD-paired control surface */}
       <div className="mt-6">
         <JointAngleEditor
-          modelConfig={effectiveModelConfig as unknown as import("@/components/skeleton/JointAngleEditor").ModelConfigLike}
+          modelConfig={effectiveModelConfig}
           onAngleChange={(joint, property, value) => handleSliderChange(joint, property, [value])}
           onJumpToJoint={(joint) => {
             setActiveJointGroup(joint as JointGroup);

@@ -3070,16 +3070,23 @@ ${ddxList}`;
     muscles.forEach(m => { colorMap[m] = "#22d3ee"; });
     setMuscleHighlightColors(colorMap);
     if (fp.expectedPainMarkers && fp.expectedPainMarkers.length > 0) {
-      const predictedMarkers: PainMarker[] = fp.expectedPainMarkers.map((pm, idx) => ({
-        id: `bench-predicted-${fp.hypothesisId}-${idx}`,
-        position: { x: 0, y: 0, z: 0 },
-        nearestBone: pm.anatomicalLabel,
-        anatomicalLabel: pm.anatomicalLabel,
-        type: (pm.type as PainMarkerType) || 'sharp',
-        severity: pm.severity || 5,
-        symptomType: 'pain' as SymptomType,
-        description: pm.label || `Predicted: ${pm.anatomicalLabel}`,
-      }));
+      const predictedMarkers: PainMarker[] = fp.expectedPainMarkers.map((pm, idx) => {
+        const labelLc = (pm.anatomicalLabel || '').toLowerCase();
+        const vp = ANATOMICAL_VIRTUAL_POINTS.find(
+          p => p.label.toLowerCase().includes(labelLc) ||
+               (labelLc && labelLc.includes(p.label.toLowerCase().split(' (')[0]))
+        );
+        return {
+          id: `bench-predicted-${fp.hypothesisId}-${idx}`,
+          position: { x: 0, y: 0, z: 0 },
+          nearestBone: vp ? vp.boneName : 'Root_M',
+          anatomicalLabel: vp ? vp.label : pm.anatomicalLabel,
+          type: (pm.type as PainMarkerType) || 'sharp',
+          severity: pm.severity || 5,
+          symptomType: 'pain' as SymptomType,
+          description: pm.label || `Predicted: ${pm.anatomicalLabel}`,
+        };
+      });
       setPainMarkers(predictedMarkers);
     }
     if (fp.expectedPosture && Object.keys(fp.expectedPosture).length > 0) {
@@ -3088,16 +3095,20 @@ ${ddxList}`;
   }, [modelConfig, painMarkers, biomechanicalMuscleHighlights, muscleHighlightColors, visualizationBoneHighlights, applyPoseCommand]);
 
   const handleBenchCommit = useCallback((update: BenchUpdate) => {
+    const positives = update.appliedTests.filter(t => t.outcome === 'positive');
+    const negatives = update.appliedTests.filter(t => t.outcome === 'negative');
+    const positiveLines = positives.map(t => `Bench: ${t.name} positive (LR+ ${t.lrApplied.toFixed(1)})`);
+    const negativeLines = negatives.map(t => `Bench: ${t.name} negative (LR− ${t.lrApplied.toFixed(2)})`);
     setClinicalReasoningData(prev => {
       if (!prev) return prev;
       const idx = prev.hypotheses.findIndex(h => h.id === update.hypothesisId);
       if (idx < 0) return prev;
       const updated = [...prev.hypotheses];
-      const evidenceLine = `Bench: ${update.rationale}`;
       updated[idx] = {
         ...updated[idx],
         confidence: Math.round(update.newConfidence),
-        supportingEvidence: [...updated[idx].supportingEvidence, evidenceLine],
+        supportingEvidence: [...updated[idx].supportingEvidence, ...positiveLines, `Bench summary: ${update.rationale}`],
+        rulingOutFactors: [...updated[idx].rulingOutFactors, ...negativeLines],
       };
       return { ...prev, hypotheses: updated };
     });
@@ -3109,11 +3120,18 @@ ${ddxList}`;
       updated[idx] = {
         ...updated[idx],
         confidence: Math.round(update.newConfidence),
-        supporting: [...updated[idx].supporting, { feature: `Bench: ${update.rationale}`, weight: 2 }],
+        supporting: [
+          ...updated[idx].supporting,
+          ...positives.map(t => ({ feature: `Bench: ${t.name} positive (LR+ ${t.lrApplied.toFixed(1)})`, weight: 3 })),
+        ],
+        contradicting: [
+          ...updated[idx].contradicting,
+          ...negatives.map(t => ({ feature: `Bench: ${t.name} negative (LR− ${t.lrApplied.toFixed(2)})`, weight: 3 })),
+        ],
       };
       return { ...prev, hypotheses: updated };
     });
-    toast({ title: 'Hypothesis updated', description: `Confidence → ${Math.round(update.newConfidence)}%` });
+    toast({ title: 'Hypothesis updated', description: `Confidence → ${Math.round(update.newConfidence)}% (${positives.length}+ / ${negatives.length}−)` });
   }, [toast]);
 
   const applyClinicalPreset = useCallback((preset: ClinicalPosturePreset) => {

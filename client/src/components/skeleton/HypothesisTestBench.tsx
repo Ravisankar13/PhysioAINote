@@ -170,6 +170,47 @@ async function fetchFingerprint(
   });
 }
 
+function setDiff<T>(a: T[], b: T[]): { onlyA: T[]; onlyB: T[]; shared: T[] } {
+  const sa = new Set(a);
+  const sb = new Set(b);
+  const onlyA: T[] = [];
+  const onlyB: T[] = [];
+  const shared: T[] = [];
+  sa.forEach(v => { if (sb.has(v)) shared.push(v); else onlyA.push(v); });
+  sb.forEach(v => { if (!sa.has(v)) onlyB.push(v); });
+  return { onlyA, onlyB, shared };
+}
+
+function computeTestAgreement(
+  test: FingerprintTest,
+  context: BenchSkeletonContext,
+  fingerprint: HypothesisFingerprint,
+): 'agrees' | 'disagrees' | 'neutral' {
+  const targetTokens: string[] = [];
+  if (test.targetRegion) targetTokens.push(test.targetRegion.toLowerCase());
+  const nameLc = test.name.toLowerCase();
+  const markers = context.painMarkers || [];
+  if (markers.length === 0) return 'neutral';
+  const markerLabels = markers.map(m => (m.anatomicalLabel || m.label || m.nearestBone || '').toLowerCase()).filter(Boolean);
+
+  const matchesMarker = markerLabels.some(ml => {
+    if (!ml) return false;
+    if (targetTokens.some(t => ml.includes(t) || t.includes(ml))) return true;
+    const tokens = ml.split(/[\s_\-/(),]+/).filter(t => t.length > 3);
+    return tokens.some(tok => nameLc.includes(tok));
+  });
+  if (matchesMarker) return 'agrees';
+
+  const expectedRegions = (fingerprint.expectedHighlights.regions || []).map(r => r.toLowerCase());
+  const expectedMarkers = (fingerprint.expectedPainMarkers || []).map(m => m.anatomicalLabel.toLowerCase());
+  const allExpected = [...expectedRegions, ...expectedMarkers];
+  const expectedMatch = allExpected.some(e =>
+    markerLabels.some(ml => ml.includes(e) || e.includes(ml)),
+  );
+  if (allExpected.length > 0 && !expectedMatch) return 'disagrees';
+  return 'neutral';
+}
+
 function diffPosture(a: Record<string, Record<string, number>>, b: Record<string, Record<string, number>>): string[] {
   const diffs: string[] = [];
   const allKeys = Array.from(new Set([...Object.keys(a || {}), ...Object.keys(b || {})]));
@@ -565,6 +606,7 @@ export default function HypothesisTestBench({
                     {fingerprint.confirmatoryTests.map((t) => {
                       const current = outcomes[t.id] || "skip";
                       const isExpanded = expandedTest === t.id;
+                      const agreement = computeTestAgreement(t, context, fingerprint);
                       return (
                         <div
                           key={t.id}
@@ -576,6 +618,16 @@ export default function HypothesisTestBench({
                           >
                             {isExpanded ? <ChevronDown className="h-3 w-3 text-gray-400" /> : <ChevronRight className="h-3 w-3 text-gray-400" />}
                             <span className="text-xs text-gray-200 flex-1 text-left truncate">{t.name}</span>
+                            {agreement === 'agrees' && (
+                              <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" title="Patient already shows findings consistent with this test" data-testid={`badge-agreement-${t.id}`}>
+                                Agrees with current
+                              </span>
+                            )}
+                            {agreement === 'disagrees' && (
+                              <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30" title="Current findings/posture conflict with the predicted region for this test" data-testid={`badge-agreement-${t.id}`}>
+                                Disagrees
+                              </span>
+                            )}
                             <span className="text-[9px] text-gray-500">LR+ {t.lrPositive.toFixed(1)} / LR− {t.lrNegative.toFixed(1)}</span>
                             <OutcomePill outcome={current} />
                           </button>
@@ -663,20 +715,65 @@ export default function HypothesisTestBench({
                         </div>
                       )}
 
-                      <div className="grid grid-cols-2 gap-2 text-[10px]">
-                        <div className="rounded-lg border border-gray-700/50 bg-gray-800/40 p-2">
-                          <p className="text-cyan-300 font-semibold mb-1 truncate">{fingerprint.condition}</p>
-                          <p className="text-gray-400 mb-1">Regions: {fingerprint.expectedHighlights.regions.join(", ") || "—"}</p>
-                          <p className="text-gray-400 mb-1">Muscles: {fingerprint.expectedHighlights.muscleGroups.join(", ") || "—"}</p>
-                          <p className="text-gray-400 mb-1">Tests: {fingerprint.confirmatoryTests.map(t => t.name).join(", ") || "—"}</p>
-                        </div>
-                        <div className="rounded-lg border border-gray-700/50 bg-gray-800/40 p-2">
-                          <p className="text-purple-300 font-semibold mb-1 truncate">{compareFingerprint.condition}</p>
-                          <p className="text-gray-400 mb-1">Regions: {compareFingerprint.expectedHighlights.regions.join(", ") || "—"}</p>
-                          <p className="text-gray-400 mb-1">Muscles: {compareFingerprint.expectedHighlights.muscleGroups.join(", ") || "—"}</p>
-                          <p className="text-gray-400 mb-1">Tests: {compareFingerprint.confirmatoryTests.map(t => t.name).join(", ") || "—"}</p>
-                        </div>
-                      </div>
+                      {(() => {
+                        const aStruct = [
+                          ...fingerprint.expectedHighlights.regions,
+                          ...fingerprint.expectedHighlights.bones,
+                          ...fingerprint.expectedHighlights.muscleGroups,
+                        ];
+                        const bStruct = [
+                          ...compareFingerprint.expectedHighlights.regions,
+                          ...compareFingerprint.expectedHighlights.bones,
+                          ...compareFingerprint.expectedHighlights.muscleGroups,
+                        ];
+                        const structDiff = setDiff(aStruct, bStruct);
+                        const aTests = fingerprint.confirmatoryTests.map(t => t.name);
+                        const bTests = compareFingerprint.confirmatoryTests.map(t => t.name);
+                        const testDiff = setDiff(aTests, bTests);
+                        const aFindings = fingerprint.expectedPainMarkers.map(m => m.anatomicalLabel);
+                        const bFindings = compareFingerprint.expectedPainMarkers.map(m => m.anatomicalLabel);
+                        const findingDiff = setDiff(aFindings, bFindings);
+
+                        const Section = ({ title, diff, aColor, bColor }: { title: string; diff: { onlyA: string[]; onlyB: string[]; shared: string[] }; aColor: string; bColor: string }) => (
+                          <div className="rounded-lg border border-gray-700/50 bg-gray-800/40 p-2">
+                            <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-wider mb-1.5">{title}</p>
+                            <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                              <div>
+                                <p className={`${aColor} font-medium mb-0.5`} data-testid={`compare-only-a-${title.toLowerCase()}`}>Only {fingerprint.condition}</p>
+                                <div className="flex flex-wrap gap-0.5">
+                                  {diff.onlyA.length === 0 ? <span className="text-gray-600 italic">—</span> : diff.onlyA.map((v, i) => (
+                                    <span key={i} className={`px-1 py-0.5 rounded ${aColor.replace('text-', 'bg-').replace('-300', '-500/15')} ${aColor.replace('-300', '-200')} border ${aColor.replace('text-', 'border-').replace('-300', '-500/30')}`}>{v}</span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-gray-400 font-medium mb-0.5" data-testid={`compare-shared-${title.toLowerCase()}`}>Shared</p>
+                                <div className="flex flex-wrap gap-0.5">
+                                  {diff.shared.length === 0 ? <span className="text-gray-600 italic">—</span> : diff.shared.map((v, i) => (
+                                    <span key={i} className="px-1 py-0.5 rounded bg-gray-700/40 text-gray-200 border border-gray-600/40">{v}</span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <p className={`${bColor} font-medium mb-0.5`} data-testid={`compare-only-b-${title.toLowerCase()}`}>Only {compareFingerprint.condition}</p>
+                                <div className="flex flex-wrap gap-0.5">
+                                  {diff.onlyB.length === 0 ? <span className="text-gray-600 italic">—</span> : diff.onlyB.map((v, i) => (
+                                    <span key={i} className={`px-1 py-0.5 rounded ${bColor.replace('text-', 'bg-').replace('-300', '-500/15')} ${bColor.replace('-300', '-200')} border ${bColor.replace('text-', 'border-').replace('-300', '-500/30')}`}>{v}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+
+                        return (
+                          <div className="space-y-2">
+                            <Section title="Structures" diff={structDiff} aColor="text-cyan-300" bColor="text-purple-300" />
+                            <Section title="Tests" diff={testDiff} aColor="text-cyan-300" bColor="text-purple-300" />
+                            <Section title="Expected findings" diff={findingDiff} aColor="text-cyan-300" bColor="text-purple-300" />
+                          </div>
+                        );
+                      })()}
 
                       <div className="rounded-lg border border-gray-700/50 bg-gray-800/40 p-2">
                         <p className="text-[10px] text-amber-300 uppercase tracking-wider mb-1">Postural diff</p>

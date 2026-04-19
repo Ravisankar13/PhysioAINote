@@ -263,6 +263,9 @@ interface ElectrophysicalEngineTabProps {
    *  surface (e.g. a phase card's "Generate electrophysical plan" CTA). */
   initialCondition?: string;
   initialStage?: Stage;
+  /** Monotonic counter; each new value re-syncs initialCondition/initialStage
+   *  into local state and (with autoGenerate) re-fires generation. */
+  autoGenerateNonce?: number;
   /** When true, automatically run generatePlan() once after mount with
    *  the supplied initialCondition / initialStage. Resets after firing. */
   autoGenerate?: boolean;
@@ -503,7 +506,7 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
   );
 }
 
-export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onPlanChange, initialCondition, initialStage, autoGenerate, onAutoGenerateConsumed }: ElectrophysicalEngineTabProps) {
+export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onPlanChange, initialCondition, initialStage, autoGenerateNonce, autoGenerate, onAutoGenerateConsumed }: ElectrophysicalEngineTabProps) {
   const [plan, setPlan] = useState<ElectrophysicalPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -686,17 +689,26 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     }
   }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, fetchEvidence]);
 
-  // Auto-generate the plan once when triggered from a phase card's CTA.
-  // Fires after `condition` / `stage` have been seeded from the
-  // `initialCondition` / `initialStage` props, then signals the parent so
-  // the flag can be cleared.
-  const autoGenFiredRef = useRef(false);
+  // Each new `autoGenerateNonce` from the parent represents a fresh phase-card
+  // CTA: re-sync condition/stage from the latest `initialCondition`/`initialStage`
+  // props into local state, then (if `autoGenerate` is on) fire the engine once
+  // with those exact values. Using a nonce ensures repeated CTAs work and that
+  // generation never runs against stale local state.
+  const lastNonceRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (!autoGenerate || autoGenFiredRef.current) return;
-    autoGenFiredRef.current = true;
-    void generatePlan();
+    if (autoGenerateNonce === undefined || autoGenerateNonce === lastNonceRef.current) return;
+    lastNonceRef.current = autoGenerateNonce;
+    const nextCondition = initialCondition ?? '';
+    const nextStage: Stage = initialStage ?? '';
+    setCondition(nextCondition);
+    setStage(nextStage);
+    if (autoGenerate) {
+      // Defer one tick so the state updates above are committed before
+      // generatePlan() reads condition/stage via its closure on next render.
+      Promise.resolve().then(() => { void generatePlan(); });
+    }
     onAutoGenerateConsumed?.();
-  }, [autoGenerate, generatePlan, onAutoGenerateConsumed]);
+  }, [autoGenerateNonce, autoGenerate, initialCondition, initialStage, generatePlan, onAutoGenerateConsumed]);
 
   const hasData = mechanismAnalysis !== null || (painMarkers && painMarkers.length > 0) || condition.trim().length > 0;
 

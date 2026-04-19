@@ -9580,6 +9580,7 @@ ${ddxList}`;
                       onPlanChange={setElectroPlan}
                       initialCondition={electroPrefill?.condition}
                       initialStage={electroPrefill?.stage}
+                      autoGenerateNonce={electroPrefill?.nonce}
                       autoGenerate={!!electroPrefill}
                       onAutoGenerateConsumed={() => setElectroPrefill(null)}
                     />

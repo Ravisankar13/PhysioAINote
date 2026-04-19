@@ -13901,8 +13901,21 @@ Be specific to THIS skeleton's findings. Every root cause must reference a speci
 
       const subjective: string = (context?.subjectiveHistory || '').slice(0, 1200);
       const painMarkers = Array.isArray(context?.painMarkers) ? context.painMarkers.slice(0, 20) : [];
-      const postureKeys = context?.posture ? Object.keys(context.posture).slice(0, 20).join(',') : '';
-      const cacheKey = `${hypothesis.condition.toLowerCase().trim()}::${subjective.length}:${painMarkers.length}:${postureKeys}`;
+      const hashContent = (s: string): string => {
+        let h = 5381;
+        for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+        return (h >>> 0).toString(36);
+      };
+      const markerSig = painMarkers.map((p: any) => `${p.anatomicalLabel || p.label || p.nearestBone || ''}|${p.type || ''}|${p.severity ?? ''}`).join(';');
+      const postureSig = context?.posture ? Object.entries(context.posture).slice(0, 20).map(([g, params]: [string, any]) => `${g}:${Object.entries(params || {}).map(([k, v]) => `${k}=${typeof v === 'number' ? v.toFixed(1) : v}`).join(',')}`).join('|') : '';
+      const supportingSig = Array.isArray(hypothesis.supportingEvidence) ? hypothesis.supportingEvidence.join('|') : '';
+      const rulingOutSig = Array.isArray(hypothesis.rulingOutFactors) ? hypothesis.rulingOutFactors.join('|') : '';
+      const ctxHash = hashContent(`${subjective}::${markerSig}::${postureSig}::${supportingSig}::${rulingOutSig}`);
+      const cacheKey = `${hypothesis.condition.toLowerCase().trim()}::${ctxHash}`;
+      if (hypothesisFingerprintCache.size > 200) {
+        const firstKey = hypothesisFingerprintCache.keys().next().value;
+        if (firstKey) hypothesisFingerprintCache.delete(firstKey);
+      }
       const cached = hypothesisFingerprintCache.get(cacheKey);
       if (cached) {
         return res.json({ ...cached, hypothesisId: hypothesis.id || cached.hypothesisId });

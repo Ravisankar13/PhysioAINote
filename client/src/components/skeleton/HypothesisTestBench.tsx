@@ -190,24 +190,53 @@ function computeTestAgreement(
   if (test.targetRegion) targetTokens.push(test.targetRegion.toLowerCase());
   const nameLc = test.name.toLowerCase();
   const markers = context.painMarkers || [];
-  if (markers.length === 0) return 'neutral';
   const markerLabels = markers.map(m => (m.anatomicalLabel || m.label || m.nearestBone || '').toLowerCase()).filter(Boolean);
 
-  const matchesMarker = markerLabels.some(ml => {
-    if (!ml) return false;
-    if (targetTokens.some(t => ml.includes(t) || t.includes(ml))) return true;
-    const tokens = ml.split(/[\s_\-/(),]+/).filter(t => t.length > 3);
-    return tokens.some(tok => nameLc.includes(tok));
-  });
-  if (matchesMarker) return 'agrees';
+  // Posture-based agreement: if test name/target mentions a posture group with measurable deviation
+  // from the expected fingerprint posture, that supports/conflicts with the test's relevance.
+  const currentPosture = context.posture || {};
+  const expectedPosture = fingerprint.expectedPosture || {};
+  let postureAgrees = false;
+  let postureDisagrees = false;
+  for (const group of Object.keys(expectedPosture)) {
+    const groupLc = group.toLowerCase();
+    const referencesGroup = nameLc.includes(groupLc) || targetTokens.some(t => t.includes(groupLc) || groupLc.includes(t));
+    if (!referencesGroup) continue;
+    const expParams = expectedPosture[group] || {};
+    const curParams = currentPosture[group] || {};
+    for (const param of Object.keys(expParams)) {
+      const exp = expParams[param];
+      const cur = curParams[param] ?? 0;
+      const expDev = Math.abs(exp);
+      const curDev = Math.abs(cur);
+      if (expDev >= 5 && curDev >= 3 && Math.sign(exp) === Math.sign(cur)) {
+        postureAgrees = true;
+      } else if (expDev >= 5 && Math.abs(exp - cur) >= 8) {
+        postureDisagrees = true;
+      }
+    }
+  }
+  if (postureAgrees) return 'agrees';
 
-  const expectedRegions = (fingerprint.expectedHighlights.regions || []).map(r => r.toLowerCase());
-  const expectedMarkers = (fingerprint.expectedPainMarkers || []).map(m => m.anatomicalLabel.toLowerCase());
-  const allExpected = [...expectedRegions, ...expectedMarkers];
-  const expectedMatch = allExpected.some(e =>
-    markerLabels.some(ml => ml.includes(e) || e.includes(ml)),
-  );
-  if (allExpected.length > 0 && !expectedMatch) return 'disagrees';
+  if (markerLabels.length > 0) {
+    const matchesMarker = markerLabels.some(ml => {
+      if (!ml) return false;
+      if (targetTokens.some(t => ml.includes(t) || t.includes(ml))) return true;
+      const tokens = ml.split(/[\s_\-/(),]+/).filter(t => t.length > 3);
+      return tokens.some(tok => nameLc.includes(tok));
+    });
+    if (matchesMarker) return 'agrees';
+
+    const expectedRegions = (fingerprint.expectedHighlights.regions || []).map(r => r.toLowerCase());
+    const expectedMarkers = (fingerprint.expectedPainMarkers || []).map(m => m.anatomicalLabel.toLowerCase());
+    const allExpected = [...expectedRegions, ...expectedMarkers];
+    const expectedMatch = allExpected.some(e =>
+      markerLabels.some(ml => ml.includes(e) || e.includes(ml)),
+    );
+    if (allExpected.length > 0 && !expectedMatch) return 'disagrees';
+  }
+
+  if (postureDisagrees) return 'disagrees';
   return 'neutral';
 }
 

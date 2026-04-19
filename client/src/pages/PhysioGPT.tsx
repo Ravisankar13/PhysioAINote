@@ -3069,7 +3069,9 @@ ${ddxList}`;
     const colorMap: Record<string, string> = {};
     muscles.forEach(m => { colorMap[m] = "#22d3ee"; });
     setMuscleHighlightColors(colorMap);
-    if (fp.expectedPainMarkers && fp.expectedPainMarkers.length > 0) {
+    if (!fp.expectedPainMarkers || fp.expectedPainMarkers.length === 0) {
+      setPainMarkers([]);
+    } else {
       const predictedMarkers: PainMarker[] = fp.expectedPainMarkers.map((pm, idx) => {
         const labelLc = (pm.anatomicalLabel || '').toLowerCase();
         const vp = ANATOMICAL_VIRTUAL_POINTS.find(

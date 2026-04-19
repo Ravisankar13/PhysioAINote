@@ -44,7 +44,7 @@ import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 import { generateAISuggestions, applySuggestionToSoap, generateEnhancedDifferentials, type EnhancedDifferential, type DifferentialAnalysisResult } from "./services/aiSuggestionsService";
 import { ResearchService } from "./services/researchService";
 
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes, savedSkeletonConfigurations } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes, savedSkeletonConfigurations, physioGptConversations } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -8416,11 +8416,29 @@ Return JSON: {"conditionId":"ai_generated_<snake_case>","conditionName":string,"
           'pregnancy', 'pacemaker', 'metal_implant', 'malignancy', 'open_wound',
           'active_infection', 'dvt', 'hemorrhage', 'sensory_deficit', 'epilepsy', 'skin_breakdown'
         ])).optional().default([]),
+        // Optional saved-preset id whose lastUsedAt should be bumped
+        // server-side whenever the clinician (re)generates a plan with it.
+        presetId: z.number().int().positive().optional(),
       });
 
       const parsed = electroInputSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      // Server-side "last used" bump for any active preset attached to this
+      // generation. Ownership-checked: only touch presets owned by the
+      // requester so a malicious client can't update someone else's preset.
+      if (parsed.data.presetId) {
+        try {
+          const userId = req.user!.id;
+          const existing = await storage.getElectroConditionPreset(parsed.data.presetId);
+          if (existing && existing.userId === userId) {
+            await storage.touchElectroConditionPreset(existing.id);
+          }
+        } catch (e) {
+          console.warn('Non-fatal: failed to touch electro preset on generate:', e);
+        }
       }
 
       const data = parsed.data;
@@ -8786,6 +8804,19 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     ])).optional().default([]),
   });
 
+  // Verifies that the supplied patientId (a physiogpt_conversations.id) is
+  // owned by the authenticated user. Returns true if ownership is valid OR
+  // if patientId is null (user-global scope).
+  const verifyPatientOwnership = async (userId: number, patientId: number | null): Promise<boolean> => {
+    if (patientId == null) return true;
+    const rows = await db
+      .select({ id: physioGptConversations.id, userId: physioGptConversations.userId })
+      .from(physioGptConversations)
+      .where(eq(physioGptConversations.id, patientId))
+      .limit(1);
+    return !!rows[0] && rows[0].userId === userId;
+  };
+
   app.get("/api/electrophysical-engine/presets", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = req.user!.id;
@@ -8797,6 +8828,9 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
           return res.status(400).json({ error: 'Invalid patientId' });
         }
         patientId = parsed;
+      }
+      if (!(await verifyPatientOwnership(userId, patientId))) {
+        return res.status(403).json({ error: 'Forbidden: patient does not belong to this user' });
       }
       const presets = await storage.listElectroConditionPresets(userId, patientId);
       res.json(presets);
@@ -8811,6 +8845,9 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     try {
       const userId = req.user!.id;
       const parsed = electroPresetBodySchema.parse(req.body);
+      if (!(await verifyPatientOwnership(userId, parsed.patientId ?? null))) {
+        return res.status(403).json({ error: 'Forbidden: patient does not belong to this user' });
+      }
       const saved = await storage.upsertElectroConditionPreset({
         userId,
         patientId: parsed.patientId ?? null,

@@ -579,6 +579,15 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     setActivePresetId(p.id);
   }, []);
 
+  // Reset the auto-load latch whenever the active patient changes so the
+  // most-recently-used preset for the *new* patient is picked up the next
+  // time the presets query resolves. Also clears the active selection so we
+  // don't carry the prior patient's preset id over.
+  useEffect(() => {
+    autoLoadedRef.current = false;
+    setActivePresetId(null);
+  }, [patientId]);
+
   // Auto-load most-recently-used preset on first mount once the list arrives.
   useEffect(() => {
     if (autoLoadedRef.current) return;
@@ -594,7 +603,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   const savePresetMutation = useMutation({
     mutationFn: async (name: string) => {
-      const res = await apiRequest('POST', '/api/electrophysical-engine/presets', {
+      const saved = await apiRequest('/api/electrophysical-engine/presets', 'POST', {
         patientId: patientId ?? null,
         name,
         condition,
@@ -604,7 +613,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
         primaryGoal,
         contraindicationFlags,
       });
-      return (await res.json()) as ElectroConditionPreset;
+      return saved as ElectroConditionPreset;
     },
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: presetsKey });
@@ -616,8 +625,8 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   const renamePresetMutation = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
-      const res = await apiRequest('PATCH', `/api/electrophysical-engine/presets/${id}`, { name });
-      return (await res.json()) as ElectroConditionPreset;
+      const updated = await apiRequest(`/api/electrophysical-engine/presets/${id}`, 'PATCH', { name });
+      return updated as ElectroConditionPreset;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: presetsKey });
@@ -628,7 +637,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   const deletePresetMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest('DELETE', `/api/electrophysical-engine/presets/${id}`);
+      await apiRequest(`/api/electrophysical-engine/presets/${id}`, 'DELETE');
       return id;
     },
     onSuccess: (id) => {
@@ -638,7 +647,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
   });
 
   const touchPreset = useCallback((id: number) => {
-    void apiRequest('PATCH', `/api/electrophysical-engine/presets/${id}`, { touch: true })
+    void apiRequest(`/api/electrophysical-engine/presets/${id}`, 'PATCH', { touch: true })
       .then(() => queryClient.invalidateQueries({ queryKey: presetsKey }))
       .catch(() => { /* non-fatal */ });
   }, [presetsKey]);
@@ -777,6 +786,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
         tissueType: tissueType.trim(),
         primaryGoal,
         contraindicationFlags,
+        ...(activePresetId != null ? { presetId: activePresetId } : {}),
       };
 
       if (slingAnalysis) {

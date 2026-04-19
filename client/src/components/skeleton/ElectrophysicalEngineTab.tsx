@@ -830,7 +830,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, fetchEvidence]);
+  }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, activePresetId, fetchEvidence]);
 
   // Each new `autoGenerateNonce` from the parent represents a fresh phase-card
   // CTA: re-sync condition/stage from the latest `initialCondition`/`initialStage`

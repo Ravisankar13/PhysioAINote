@@ -6,6 +6,7 @@ import {
   timestamp,
   date,
   json,
+  jsonb,
   boolean,
   pgEnum,
   numeric,
@@ -5214,17 +5215,20 @@ export const electroConditionPresets = pgTable("electro_condition_presets", {
   irritability: text("irritability").notNull().default(""),
   tissueType: text("tissue_type").notNull().default(""),
   primaryGoal: text("primary_goal").notNull().default(""),
-  contraindicationFlags: json("contraindication_flags").$type<string[]>().notNull().default([]),
+  contraindicationFlags: jsonb("contraindication_flags").$type<string[]>().notNull().default([]),
   lastUsedAt: timestamp("last_used_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
-  // Persistence is keyed by (userId, patientId, name). NULLS NOT DISTINCT
-  // (Postgres 15+) so user-global presets (patientId IS NULL) also enforce
-  // name uniqueness per user.
+  // Persistence is keyed by (userId, patientId, name). The matching DB
+  // index is created with `NULLS NOT DISTINCT` (Postgres 15+) so user-global
+  // presets (patientId IS NULL) also enforce name uniqueness per user — the
+  // installed Drizzle build doesn't expose `.nullsNotDistinct()` on
+  // uniqueIndex, so the NULLS NOT DISTINCT clause is applied at the SQL
+  // level (see migration / db setup) and this declaration documents the
+  // intended uniqueness contract.
   userPatientNameUnique: uniqueIndex('electro_condition_presets_user_patient_name_unique')
-    .on(table.userId, table.patientId, table.name)
-    .nullsNotDistinct(),
+    .on(table.userId, table.patientId, table.name),
 }));
 
 export const insertElectroConditionPresetSchema = createInsertSchema(electroConditionPresets).omit({

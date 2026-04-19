@@ -7,12 +7,14 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Award,
   Brain,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   ChevronUp,
   Dumbbell,
+  ExternalLink,
   Flame,
   GitBranch,
   Hand,
@@ -24,6 +26,7 @@ import {
   Target,
   TrendingUp,
   Trash2,
+  Waves,
   X,
   Zap,
   Save,
@@ -61,7 +64,6 @@ import {
 import { findConditionProfile } from "@/lib/patientFactorsEngine";
 import { matchModalitiesForPhase, dosingOneLiner } from "@/lib/electroPhaseMatcher";
 import type { ElectrophysicalPlan } from "@/components/skeleton/ElectrophysicalEngineTab";
-import { Award, ExternalLink, Waves } from "lucide-react";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
 import {
   getArchetypeForCondition,

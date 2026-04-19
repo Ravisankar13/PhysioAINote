@@ -59,6 +59,9 @@ import {
   type HealingPhase,
 } from "@/lib/recoverySimulationEngine";
 import { findConditionProfile } from "@/lib/patientFactorsEngine";
+import { matchModalitiesForPhase, dosingOneLiner } from "@/lib/electroPhaseMatcher";
+import type { ElectrophysicalPlan } from "@/components/skeleton/ElectrophysicalEngineTab";
+import { Award, ExternalLink, Waves } from "lucide-react";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
 import {
   getArchetypeForCondition,
@@ -180,6 +183,17 @@ interface Props {
    *  column — used by PhysioGPT to host the Natural Timeline panel
    *  (with Q&A UX) so it sits alongside the recovery curves. */
   naturalTimelineSlot?: React.ReactNode;
+  /** Latest electrophysical-agents plan from the Electro Rx tab. When
+   *  present, each phase card shows the 1–3 modalities best fitted to
+   *  that phase (stage + primary goal + evidence grade). */
+  electrophysicalPlan?: ElectrophysicalPlan | null;
+  /** Switch the surrounding workspace to the Electro Rx tab so the
+   *  clinician can see the full modality plan. */
+  onOpenElectroTab?: () => void;
+  /** Generate an electrophysical plan pre-filled with the phase's
+   *  condition + stage. Surfaced inline on every phase card when no
+   *  plan exists yet. */
+  onGenerateElectroPlanForPhase?: (req: { condition: string; stage: 'acute' | 'subacute' | 'chronic'; phaseLabel: string }) => void;
 }
 
 const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
@@ -392,6 +406,162 @@ function severityFor(value: number, inverse = false): 'good' | 'mod' | 'bad' {
   return value > 70 ? 'good' : value < 30 ? 'bad' : 'mod';
 }
 
+/** Per-phase block surfacing 1–3 electrophysical-agent recommendations
+ *  filtered + ranked by phase fit. Pure presentational component;
+ *  matching logic lives in `@/lib/electroPhaseMatcher`. */
+function PhaseElectroBlock({
+  phaseId, phaseLabel, phaseIndex, totalPhases, primaryGoal,
+  electrophysicalPlan, conditionLabel,
+  onOpenElectroTab, onGenerateElectroPlanForPhase,
+}: {
+  phaseId: string;
+  phaseLabel: string;
+  phaseIndex: number;
+  totalPhases: number;
+  primaryGoal: string;
+  electrophysicalPlan: ElectrophysicalPlan | null;
+  conditionLabel: string;
+  onOpenElectroTab?: () => void;
+  onGenerateElectroPlanForPhase?: (req: { condition: string; stage: 'acute' | 'subacute' | 'chronic'; phaseLabel: string }) => void;
+}) {
+  // Stage chosen for the inline "Generate" CTA: derived from phase
+  // position (early → acute, middle → subacute, late → chronic).
+  const inferredStage: 'acute' | 'subacute' | 'chronic' = useMemo(() => {
+    if (totalPhases <= 1) return 'subacute';
+    const ratio = phaseIndex / Math.max(1, totalPhases - 1);
+    if (ratio <= 0.25) return 'acute';
+    if (ratio >= 0.75) return 'chronic';
+    return 'subacute';
+  }, [phaseIndex, totalPhases]);
+
+  const matches = useMemo(
+    () => matchModalitiesForPhase(electrophysicalPlan, {
+      phaseLabel, primaryGoal, phaseIndex, totalPhases,
+    }, 3),
+    [electrophysicalPlan, phaseLabel, primaryGoal, phaseIndex, totalPhases],
+  );
+
+  const gradeChipClass = (g?: string) => {
+    if (g === 'A') return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+    if (g === 'B') return 'bg-sky-500/20 text-sky-300 border-sky-500/40';
+    if (g === 'C') return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+    return 'bg-gray-700/40 text-gray-300 border-gray-600/40';
+  };
+
+  // Empty-plan state: surface inline CTA so the clinician can spawn the
+  // engine without leaving the timeline.
+  if (!electrophysicalPlan) {
+    return (
+      <div
+        className="mt-1 pt-1 border-t border-teal-700/30 flex items-center justify-between gap-2 text-[10px]"
+        data-testid={`phase-electro-empty-${phaseId}`}
+      >
+        <div className="flex items-center gap-1 text-teal-300/80 min-w-0">
+          <Waves className="h-3 w-3 shrink-0" />
+          <span className="truncate">No electrophysical plan yet for this case.</span>
+        </div>
+        {onGenerateElectroPlanForPhase && (
+          <button
+            type="button"
+            onClick={() => onGenerateElectroPlanForPhase({
+              condition: conditionLabel,
+              stage: inferredStage,
+              phaseLabel,
+            })}
+            className="shrink-0 text-[10px] py-1 px-1.5 rounded border border-teal-600/50 bg-teal-950/40 hover:bg-teal-900/50 text-teal-200 inline-flex items-center gap-1"
+            data-testid={`phase-electro-generate-${phaseId}`}
+            title={`Generate electrophysical plan for ${conditionLabel || 'this case'} (${inferredStage})`}
+          >
+            <Sparkles className="h-2.5 w-2.5" />Generate electrophysical plan
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (matches.length === 0) {
+    return (
+      <div
+        className="mt-1 pt-1 border-t border-teal-700/30 flex items-center justify-between gap-2 text-[10px] text-gray-400"
+        data-testid={`phase-electro-nomatch-${phaseId}`}
+      >
+        <div className="flex items-center gap-1 min-w-0">
+          <Waves className="h-3 w-3 text-teal-400/70 shrink-0" />
+          <span className="truncate">No modality clearly suited to this phase.</span>
+        </div>
+        {onOpenElectroTab && (
+          <button
+            type="button"
+            onClick={onOpenElectroTab}
+            className="shrink-0 text-[10px] text-teal-300 hover:text-teal-200 inline-flex items-center gap-1"
+            data-testid={`phase-electro-open-${phaseId}`}
+          >
+            View full plan<ExternalLink className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="mt-1 pt-1 border-t border-teal-700/30 flex flex-col gap-1"
+      data-testid={`phase-electro-${phaseId}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-teal-400/80 font-semibold">
+          <Waves className="h-3 w-3" />Electrophysical agents for this phase
+        </div>
+        {onOpenElectroTab && (
+          <button
+            type="button"
+            onClick={onOpenElectroTab}
+            className="text-[9px] text-teal-300 hover:text-teal-200 inline-flex items-center gap-1"
+            data-testid={`phase-electro-open-${phaseId}`}
+          >
+            View full plan<ExternalLink className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </div>
+      <ul className="space-y-0.5">
+        {matches.map((m, i) => {
+          const dose = dosingOneLiner(m.modality);
+          return (
+            <li
+              key={`${m.groupId}-${i}`}
+              className="flex items-start gap-1 text-[10px] text-teal-100"
+              data-testid={`phase-electro-modality-${phaseId}-${i}`}
+            >
+              <span className="opacity-60 mt-0.5">•</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="font-medium truncate">{m.modality.modality}</span>
+                  {m.modality.evidenceGrade && (
+                    <span
+                      className={`inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-px rounded-full border ${gradeChipClass(m.modality.evidenceGrade)}`}
+                      title={m.modality.evidenceJustification || `Evidence grade ${m.modality.evidenceGrade}`}
+                    >
+                      <Award className="h-2 w-2" />{m.modality.evidenceGrade}
+                    </span>
+                  )}
+                  {m.matchedOn.length > 0 && (
+                    <span className="text-[8px] text-teal-400/70 italic" title={`matched on ${m.matchedOn.join(', ')}`}>
+                      fit
+                    </span>
+                  )}
+                </div>
+                <div className="text-[9px] text-teal-200/80 leading-snug truncate" title={dose}>
+                  {dose}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export default function RecoverySimulatorDashboard({
   initialInput,
   conditionLabel,
@@ -418,6 +588,9 @@ export default function RecoverySimulatorDashboard({
   onRetryCaseSpecificPlan,
   naturalTimelineLoading,
   naturalTimelineSlot,
+  electrophysicalPlan,
+  onOpenElectroTab,
+  onGenerateElectroPlanForPhase,
 }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
@@ -2322,6 +2495,28 @@ export default function RecoverySimulatorDashboard({
                                 </>
                               )}
                             </div>
+
+                            {/* Per-phase Electrophysical agents block:
+                                surfaces 1–3 modalities from the Electro Rx
+                                plan that best fit THIS phase (stage label +
+                                primary goal + evidence grade), so the
+                                clinician does not need to flip back to the
+                                Electro Rx tab. When no plan exists yet,
+                                shows an inline "Generate" CTA pre-filled
+                                with the phase's condition + stage. */}
+                            <PhaseElectroBlock
+                              phaseId={p.id}
+                              phaseLabel={p.name}
+                              phaseIndex={r.stageIndex}
+                              totalPhases={phaseRanges.length}
+                              primaryGoal={(p as { primaryGoal?: string; goalSummary?: string }).primaryGoal
+                                || (p as { goalSummary?: string }).goalSummary
+                                || ''}
+                              electrophysicalPlan={electrophysicalPlan ?? null}
+                              conditionLabel={conditionLabel || conditionContext?.conditionLabel || ''}
+                              onOpenElectroTab={onOpenElectroTab}
+                              onGenerateElectroPlanForPhase={onGenerateElectroPlanForPhase}
+                            />
 
                             {/* Per-phase Rx control panel: generator
                                 buttons (only the kinds wired up by the

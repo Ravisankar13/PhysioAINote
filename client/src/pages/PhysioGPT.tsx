@@ -632,6 +632,11 @@ export default function PhysioGPT() {
   const [conditionPhases, setConditionPhases] = useState<ConditionPhaseInfo[] | null>(null);
   const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
   const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'adjunctRx' | 'patientEd'>('mechanism');
+  // Lifted Electro Rx state so the Recovery Simulator phase cards can read
+  // the latest plan without re-fetching, and so phase-card "Generate" CTAs
+  // can pre-fill the Electro tab and auto-run the engine.
+  const [electroPlan, setElectroPlan] = useState<import('@/components/skeleton/ElectrophysicalEngineTab').ElectrophysicalPlan | null>(null);
+  const [electroPrefill, setElectroPrefill] = useState<{ condition: string; stage: 'acute' | 'subacute' | 'chronic'; nonce: number } | null>(null);
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
@@ -9572,6 +9577,11 @@ ${ddxList}`;
                         severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                      onPlanChange={setElectroPlan}
+                      initialCondition={electroPrefill?.condition}
+                      initialStage={electroPrefill?.stage}
+                      autoGenerate={!!electroPrefill}
+                      onAutoGenerateConsumed={() => setElectroPrefill(null)}
                     />
                   )}
                   {mechanismActiveTab === 'adjunctRx' && (
@@ -9891,6 +9901,17 @@ ${ddxList}`;
                   caseSpecificPlanLoading={caseSpecificPlan.loading}
                   caseSpecificPlanError={caseSpecificPlan.error ?? null}
                   onRetryCaseSpecificPlan={caseSpecificPlan.refresh}
+                  electrophysicalPlan={electroPlan}
+                  onOpenElectroTab={() => { setShowInjuryMechanism(true); setMechanismActiveTab('electroRx'); }}
+                  onGenerateElectroPlanForPhase={(req) => {
+                    setElectroPrefill({
+                      condition: req.condition || extractionResult?.mainComplaint || '',
+                      stage: req.stage,
+                      nonce: Date.now(),
+                    });
+                    setShowInjuryMechanism(true);
+                    setMechanismActiveTab('electroRx');
+                  }}
                   naturalTimelineSlot={
                     <Suspense fallback={null}>
                       <NaturalTimelinePanel

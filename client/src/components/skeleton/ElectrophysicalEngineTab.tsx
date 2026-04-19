@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award, Stethoscope, Sparkles, Ban } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
@@ -255,7 +255,21 @@ interface ElectrophysicalEngineTabProps {
   mechanismAnalysis: InjuryMechanismResult | null;
   slingAnalysis: SlingAnalysisResult | null;
   painMarkers: PainMarkerInput[];
+  /** Notifies parent whenever the local plan changes so other surfaces
+   *  (e.g. Recovery Simulator phase cards) can read the latest
+   *  electrophysical recommendations without re-fetching. */
+  onPlanChange?: (plan: ElectrophysicalPlan | null) => void;
+  /** Pre-fill condition / stage when the tab is opened from another
+   *  surface (e.g. a phase card's "Generate electrophysical plan" CTA). */
+  initialCondition?: string;
+  initialStage?: Stage;
+  /** When true, automatically run generatePlan() once after mount with
+   *  the supplied initialCondition / initialStage. Resets after firing. */
+  autoGenerate?: boolean;
+  onAutoGenerateConsumed?: () => void;
 }
+
+export type { ElectrophysicalPlan, ModalityItem, ModalityGroup };
 
 const GROUP_ICONS: Record<string, typeof Zap> = {
   'Pain Modulation': Waves,
@@ -489,7 +503,7 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
   );
 }
 
-export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers }: ElectrophysicalEngineTabProps) {
+export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onPlanChange, initialCondition, initialStage, autoGenerate, onAutoGenerateConsumed }: ElectrophysicalEngineTabProps) {
   const [plan, setPlan] = useState<ElectrophysicalPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -500,8 +514,8 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
 
   // Condition & context inputs
-  const [condition, setCondition] = useState('');
-  const [stage, setStage] = useState<Stage>('');
+  const [condition, setCondition] = useState(initialCondition ?? '');
+  const [stage, setStage] = useState<Stage>(initialStage ?? '');
   const [irritability, setIrritability] = useState<Irritability>('');
   const [tissueType, setTissueType] = useState('');
   const [primaryGoal, setPrimaryGoal] = useState<PrimaryGoal>('');
@@ -510,6 +524,11 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   const abortRef = useRef<AbortController | null>(null);
   const evidenceAbortRef = useRef<AbortController | null>(null);
+  const planChangeRef = useRef(onPlanChange);
+  planChangeRef.current = onPlanChange;
+  // Notify parent on plan changes so other surfaces (Recovery Simulator
+  // phase cards, etc.) can read the latest electrophysical plan.
+  useEffect(() => { planChangeRef.current?.(plan); }, [plan]);
 
   const toggleContraindication = useCallback((flag: ContraindicationFlag) => {
     setContraindicationFlags(prev => prev.includes(flag) ? prev.filter(f => f !== flag) : [...prev, flag]);
@@ -666,6 +685,18 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
       if (!controller.signal.aborted) setLoading(false);
     }
   }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, fetchEvidence]);
+
+  // Auto-generate the plan once when triggered from a phase card's CTA.
+  // Fires after `condition` / `stage` have been seeded from the
+  // `initialCondition` / `initialStage` props, then signals the parent so
+  // the flag can be cleared.
+  const autoGenFiredRef = useRef(false);
+  useEffect(() => {
+    if (!autoGenerate || autoGenFiredRef.current) return;
+    autoGenFiredRef.current = true;
+    void generatePlan();
+    onAutoGenerateConsumed?.();
+  }, [autoGenerate, generatePlan, onAutoGenerateConsumed]);
 
   const hasData = mechanismAnalysis !== null || (painMarkers && painMarkers.length > 0) || condition.trim().length > 0;
 

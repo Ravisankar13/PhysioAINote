@@ -328,12 +328,14 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
               <span className="truncate">{modality.targetFinding}</span>
             </div>
           )}
-          <div className="flex gap-2 mt-1 text-[9px] flex-wrap">
-            <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300 truncate max-w-[180px]">{modality.parameters || '?'}</span>
-            {modality.patientPosition && (
-              <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Pos: {modality.patientPosition}</span>
-            )}
-          </div>
+          {!isNotAdvised && (
+            <div className="flex gap-2 mt-1 text-[9px] flex-wrap">
+              <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300 truncate max-w-[180px]">{modality.parameters || '?'}</span>
+              {modality.patientPosition && (
+                <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Pos: {modality.patientPosition}</span>
+              )}
+            </div>
+          )}
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0 mt-1" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0 mt-1" />}
       </button>
@@ -343,10 +345,12 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
             <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider">Target Structure</div>
             <div className="text-[10px] text-gray-300">{modality.targetStructure}</div>
           </div>
-          <div>
-            <div className="text-[9px] font-medium text-teal-400/80 uppercase tracking-wider">Parameters</div>
-            <div className="text-[10px] text-gray-300">{modality.parameters}</div>
-          </div>
+          {!isNotAdvised && (
+            <div>
+              <div className="text-[9px] font-medium text-teal-400/80 uppercase tracking-wider">Parameters</div>
+              <div className="text-[10px] text-gray-300">{modality.parameters}</div>
+            </div>
+          )}
           <div>
             <div className="text-[9px] font-medium text-cyan-400/80 uppercase tracking-wider">Clinical Rationale</div>
             <div className="text-[10px] text-gray-300">{modality.rationale}</div>
@@ -557,7 +561,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     } finally {
       if (!controller.signal.aborted) setEvidenceLoading(false);
     }
-  }, [mechanismAnalysis, painMarkers]);
+  }, [mechanismAnalysis, painMarkers, condition]);
 
   const toggleGroup = useCallback((groupId: string) => {
     setExpandedGroups(prev => {
@@ -765,10 +769,15 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   if (!hasData) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-        <Zap className="h-8 w-8 text-gray-600 mb-2" />
-        <div className="text-[11px] text-gray-400 mb-1">No clinical data available</div>
-        <div className="text-[9px] text-gray-500">Place pain markers and run the mechanism analysis first to generate an AI electrophysical agents prescription.</div>
+      <div className="space-y-2">
+        {conditionContextSection}
+        <div className="flex flex-col items-center justify-center py-6 px-4 text-center border border-gray-700/40 rounded-lg bg-gray-800/20">
+          <Zap className="h-8 w-8 text-teal-400/60 mb-2" />
+          <div className="text-[11px] text-gray-300 mb-1">Start with a diagnosis</div>
+          <div className="text-[9px] text-gray-500 max-w-[280px]">
+            Type a condition above (e.g. "Achilles tendinopathy") to generate a research-backed electrophysical plan, or place pain markers and run a mechanism analysis first.
+          </div>
+        </div>
       </div>
     );
   }

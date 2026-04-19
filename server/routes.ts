@@ -8752,7 +8752,16 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
           validationErrors: validated.error.format(),
         });
       }
-      res.json(validated.data);
+      const normalized = {
+        ...validated.data,
+        modalityGroups: validated.data.modalityGroups.map(g => ({
+          ...g,
+          modalities: g.modalities.map(m => m.notAdvisedReason && m.notAdvisedReason.trim().length > 0
+            ? { ...m, parameters: '' }
+            : m),
+        })),
+      };
+      res.json(normalized);
     } catch (error: unknown) {
       console.error("Electrophysical engine generation error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";

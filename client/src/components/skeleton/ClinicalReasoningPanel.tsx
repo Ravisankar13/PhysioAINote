@@ -39,6 +39,7 @@ import {
   Search,
   ExternalLink,
   Globe,
+  FlaskConical,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
@@ -256,9 +257,11 @@ interface ClinicalReasoningPanelProps {
   onVisualizationRequest?: (request: VisualizationRequest | null) => void;
   activeVisualizationId?: string | null;
   onHypothesisClick?: (hypothesis: ClinicalHypothesis) => void;
+  onTestHypothesisClick?: (hypothesis: ClinicalHypothesis) => void;
   structuredData?: StructuredReasoningResult | null;
   structuredLoading?: boolean;
   onStructuredHypothesisClick?: (hypothesis: StructuredHypothesis) => void;
+  onTestStructuredHypothesisClick?: (hypothesis: StructuredHypothesis) => void;
   decisionData?: TreatmentDecisionResult | null;
   decisionLoading?: boolean;
   onDecisionTargetClick?: (regions: string[]) => void;
@@ -477,9 +480,11 @@ export default function ClinicalReasoningPanel({
   onVisualizationRequest,
   activeVisualizationId,
   onHypothesisClick,
+  onTestHypothesisClick,
   structuredData,
   structuredLoading,
   onStructuredHypothesisClick,
+  onTestStructuredHypothesisClick,
   decisionData,
   decisionLoading,
   onDecisionTargetClick,
@@ -1302,6 +1307,7 @@ export default function ClinicalReasoningPanel({
               data={structuredData ?? null}
               isLoading={structuredLoading ?? false}
               onHypothesisClick={onStructuredHypothesisClick}
+              onTestHypothesisClick={onTestStructuredHypothesisClick}
             />
           ) : (
           <>
@@ -1416,6 +1422,16 @@ export default function ClinicalReasoningPanel({
                               >
                                 {isVizActive ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                               </span>
+                            )}
+                            {onTestHypothesisClick && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onTestHypothesisClick(hypothesis); }}
+                                className="flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 hover:bg-cyan-600/50 transition-colors"
+                                title="Test this hypothesis on the skeleton"
+                                data-testid={`button-test-hypothesis-${hypothesis.id}`}
+                              >
+                                <FlaskConical className="h-2.5 w-2.5" /> Test
+                              </button>
                             )}
                           </div>
                         </div>

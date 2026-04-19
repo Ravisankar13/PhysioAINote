@@ -13889,6 +13889,189 @@ Be specific to THIS skeleton's findings. Every root cause must reference a speci
     }
   });
   
+  // ===== Hypothesis Test Bench: fingerprint + distinguish =====
+  const hypothesisFingerprintCache = new Map<string, any>();
+
+  app.post('/api/clinical-reasoning/hypothesis-fingerprint', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { hypothesis, context } = req.body || {};
+      if (!hypothesis || typeof hypothesis.condition !== 'string') {
+        return res.status(400).json({ error: 'hypothesis.condition is required' });
+      }
+
+      const subjective: string = (context?.subjectiveHistory || '').slice(0, 1200);
+      const painMarkers = Array.isArray(context?.painMarkers) ? context.painMarkers.slice(0, 20) : [];
+      const postureKeys = context?.posture ? Object.keys(context.posture).slice(0, 20).join(',') : '';
+      const cacheKey = `${hypothesis.condition.toLowerCase().trim()}::${subjective.length}:${painMarkers.length}:${postureKeys}`;
+      const cached = hypothesisFingerprintCache.get(cacheKey);
+      if (cached) {
+        return res.json({ ...cached, hypothesisId: hypothesis.id || cached.hypothesisId });
+      }
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const painSummary = painMarkers.length > 0
+        ? painMarkers.map((p: any) => `${p.anatomicalLabel || p.label || p.nearestBone || 'unknown'} (${p.type || 'pain'}, ${p.severity ?? '?'} /10)`).join('; ')
+        : 'none reported';
+
+      const sysPrompt = `You are a senior physiotherapy diagnostician. For the given clinical hypothesis, produce a "skeleton fingerprint" describing the EXPECTED clinical presentation if the hypothesis were true, plus 4–6 confirmatory/refutatory clinical tests with evidence-based likelihood ratios.
+
+Return ONLY a JSON object with this exact shape:
+{
+  "expectedHighlights": {
+    "regions": [<AnatomicalRegion strings>],
+    "bones": [<bone-name strings, optional>],
+    "muscleGroups": [<muscle group strings>]
+  },
+  "expectedPainMarkers": [
+    { "anatomicalLabel": "<exact label>", "type": "point|area|referred", "severity": <1-10>, "label": "<short>" }
+  ],
+  "expectedPosture": {
+    "<group>": { "<param>": <degrees> }
+  },
+  "confirmatoryTests": [
+    {
+      "id": "t1",
+      "name": "<test name>",
+      "instruction": "<how to perform, 1-2 sentences>",
+      "sensitivity": <0-1>,
+      "specificity": <0-1>,
+      "lrPositive": <number, typical published LR+>,
+      "lrNegative": <number, 0-1, typical published LR->,
+      "evidenceCitation": "<short citation if known, e.g. 'Hegedus et al. 2012'>",
+      "targetRegion": "<optional region the test focuses on>"
+    }
+  ],
+  "whatWouldConfirm": ["<short bullet>", ...],
+  "whatWouldRuleOut": ["<short bullet>", ...],
+  "fingerprintSummary": "<1-2 sentence clinical fingerprint of this hypothesis>"
+}
+
+CRITICAL CONSTRAINTS:
+- AnatomicalRegion strings must be from: full_body, lumbar_spine, thoracic_spine, cervical_spine, left_shoulder, right_shoulder, left_hip, right_hip, left_knee, right_knee, left_ankle, right_ankle, pelvis, left_elbow, right_elbow, left_scapula, right_scapula, left_wrist, right_wrist, left_hand, right_hand, left_foot, right_foot, head.
+- expectedPosture groups must be from: spine, neck, pelvis, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, leftShoulder, rightShoulder, leftScapula, rightScapula, leftElbow, rightElbow, leftWrist, rightWrist. Params follow standard kinesiology (flexion, extension, lateralFlexion, rotation, tilt, kyphosis, lordosis, scoliosis, forwardHead, protraction, elevation, internalRotation, externalRotation, dorsiflexion, plantarflexion, inversion, eversion, varus, valgus).
+- expectedPainMarkers anatomicalLabel must use clinical labels like: C5-C6, L4-L5, Left Greater Trochanter, Right Subacromial Space, Left Patella, etc.
+- muscleGroups should be from: glut_max, glut_med, piriformis, hamstrings, quadriceps, gastroc, soleus, tib_post, peroneals, hip_flexors, adductors, tfl, erector_spinae, multifidus, rectus_abdominis, obliques, supraspinatus, infraspinatus, subscapularis, upper_trap, lower_trap, rhomboids, pec_major, pec_minor, deltoid, biceps, triceps, scm, scalenes, suboccipitals.
+- Provide REALISTIC published LR+ and LR- values when known (e.g., Spurling LR+ ~3.5, LR- ~0.6 for radiculopathy). Conservative defaults: LR+ 2.0, LR- 0.5 if unknown.
+- Generate 4–6 tests prioritising those with the highest discriminating value.
+- Use degrees in expectedPosture (positive/negative as per standard convention; e.g. anterior pelvic tilt positive).`;
+
+      const userPrompt = `HYPOTHESIS: ${hypothesis.condition} (current confidence ${hypothesis.confidence ?? '?'}%)
+
+Supporting evidence already gathered: ${(hypothesis.supportingEvidence || []).join('; ') || 'none'}
+Ruling-out factors: ${(hypothesis.rulingOutFactors || []).join('; ') || 'none'}
+
+Patient context:
+- Subjective: ${subjective || 'not provided'}
+- Existing pain markers on skeleton: ${painSummary}
+
+Produce the JSON fingerprint now.`;
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: sysPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 2000,
+        temperature: 0.3,
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+      const tests = Array.isArray(parsed.confirmatoryTests) ? parsed.confirmatoryTests : [];
+      const safeTests = tests.map((t: any, i: number) => ({
+        id: typeof t.id === 'string' && t.id ? t.id : `t${i + 1}`,
+        name: String(t.name || `Test ${i + 1}`),
+        instruction: String(t.instruction || ''),
+        sensitivity: Math.max(0, Math.min(1, Number(t.sensitivity) || 0.5)),
+        specificity: Math.max(0, Math.min(1, Number(t.specificity) || 0.5)),
+        lrPositive: Math.max(0.1, Math.min(50, Number(t.lrPositive) || 2.0)),
+        lrNegative: Math.max(0.01, Math.min(1, Number(t.lrNegative) || 0.5)),
+        evidenceCitation: t.evidenceCitation ? String(t.evidenceCitation) : undefined,
+        targetRegion: t.targetRegion ? String(t.targetRegion) : undefined,
+      }));
+
+      const result = {
+        hypothesisId: hypothesis.id || `hyp-${Date.now()}`,
+        condition: hypothesis.condition,
+        expectedHighlights: {
+          regions: Array.isArray(parsed.expectedHighlights?.regions) ? parsed.expectedHighlights.regions : [],
+          bones: Array.isArray(parsed.expectedHighlights?.bones) ? parsed.expectedHighlights.bones : [],
+          muscleGroups: Array.isArray(parsed.expectedHighlights?.muscleGroups) ? parsed.expectedHighlights.muscleGroups : [],
+        },
+        expectedPainMarkers: Array.isArray(parsed.expectedPainMarkers) ? parsed.expectedPainMarkers : [],
+        expectedPosture: parsed.expectedPosture && typeof parsed.expectedPosture === 'object' ? parsed.expectedPosture : {},
+        confirmatoryTests: safeTests,
+        whatWouldConfirm: Array.isArray(parsed.whatWouldConfirm) ? parsed.whatWouldConfirm : [],
+        whatWouldRuleOut: Array.isArray(parsed.whatWouldRuleOut) ? parsed.whatWouldRuleOut : [],
+        fingerprintSummary: String(parsed.fingerprintSummary || ''),
+      };
+
+      hypothesisFingerprintCache.set(cacheKey, result);
+      if (hypothesisFingerprintCache.size > 200) {
+        const firstKey = hypothesisFingerprintCache.keys().next().value;
+        if (firstKey) hypothesisFingerprintCache.delete(firstKey);
+      }
+
+      res.json(result);
+    } catch (error: unknown) {
+      console.error('Error generating hypothesis fingerprint:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate hypothesis fingerprint', details: message });
+    }
+  });
+
+  app.post('/api/clinical-reasoning/hypothesis-distinguish', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { a, b } = req.body || {};
+      if (!a?.condition || !b?.condition) {
+        return res.status(400).json({ error: 'Both a and b hypotheses with conditions are required' });
+      }
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const sys = `You are a physiotherapy diagnostician. In ONE concise sentence (max 35 words), state the SINGLE most useful clinical feature or test that distinguishes hypothesis A from hypothesis B. Return JSON: { "summary": "<one sentence>" }.`;
+      const user = `A: ${a.condition}
+A fingerprint: ${a.fingerprintSummary || ''}
+A regions: ${(a.expectedHighlights?.regions || []).join(', ')}
+A muscles: ${(a.expectedHighlights?.muscleGroups || []).join(', ')}
+A tests: ${(a.confirmatoryTests || []).join(', ')}
+
+B: ${b.condition}
+B fingerprint: ${b.fingerprintSummary || ''}
+B regions: ${(b.expectedHighlights?.regions || []).join(', ')}
+B muscles: ${(b.expectedHighlights?.muscleGroups || []).join(', ')}
+B tests: ${(b.confirmatoryTests || []).join(', ')}`;
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: user },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 200,
+        temperature: 0.2,
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+      res.json({ summary: String(parsed.summary || '') });
+    } catch (error: unknown) {
+      console.error('Error generating distinguishing summary:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate distinguishing summary', details: message });
+    }
+  });
+
   // Document status endpoint for polling
   app.get('/api/documents/status/:documentId', ensureAuthenticated, async (req, res) => {
     try {

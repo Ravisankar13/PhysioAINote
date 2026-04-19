@@ -105,6 +105,7 @@ import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypoth
 import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab";
 import type { TreatmentPlanResult } from "@/components/skeleton/PlanTab";
 import { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
+import HypothesisTestBench, { type BenchHypothesisInput, type BenchSkeletonOverlay, type BenchUpdate, type HypothesisFingerprint } from "@/components/skeleton/HypothesisTestBench";
 import type { ClinicalExtractionResult } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
@@ -550,6 +551,15 @@ export default function PhysioGPT() {
   const [chatPanelOpen, setChatPanelOpen] = useState(true);
   const [hypothesisChatOpen, setHypothesisChatOpen] = useState(false);
   const [selectedHypothesisForChat, setSelectedHypothesisForChat] = useState<HypothesisData | null>(null);
+  const [testBenchOpen, setTestBenchOpen] = useState(false);
+  const [testBenchHypothesis, setTestBenchHypothesis] = useState<BenchHypothesisInput | null>(null);
+  const benchSnapshotRef = useRef<{
+    modelConfig: ModelConfig;
+    painMarkers: PainMarker[];
+    biomechanicalMuscleHighlights: string[];
+    muscleHighlightColors: Record<string, string>;
+    visualizationBoneHighlights: Array<{ boneName: string; color: number; intensity: number }>;
+  } | null>(null);
   const [showJointControls, setShowJointControls] = useState(false);
   const [showClinicalPresets, setShowClinicalPresets] = useState(false);
   const [openControlSections, setOpenControlSections] = useState<Set<string>>(new Set());
@@ -2240,6 +2250,28 @@ ${ddxList}`;
     setHypothesisChatOpen(true);
   }, []);
 
+  const handleTestHypothesisClick = useCallback((hypothesis: ClinicalHypothesis) => {
+    setTestBenchHypothesis({
+      id: hypothesis.id,
+      condition: hypothesis.condition,
+      confidence: hypothesis.confidence,
+      supportingEvidence: hypothesis.supportingEvidence,
+      rulingOutFactors: hypothesis.rulingOutFactors,
+    });
+    setTestBenchOpen(true);
+  }, []);
+
+  const handleTestStructuredHypothesisClick = useCallback((hypothesis: StructuredHypothesis) => {
+    setTestBenchHypothesis({
+      id: hypothesis.id,
+      condition: hypothesis.condition,
+      confidence: hypothesis.confidence,
+      supportingEvidence: hypothesis.supporting.map(s => s.feature),
+      rulingOutFactors: hypothesis.contradicting.map(c => c.feature),
+    });
+    setTestBenchOpen(true);
+  }, []);
+
   const handleStructuredHypothesisClick = useCallback((hypothesis: StructuredHypothesis) => {
     const ctx = structuredReasoningData;
     setSelectedHypothesisForChat({
@@ -3004,6 +3036,84 @@ ${ddxList}`;
     if (appliedCount > 0) {
       toast({ title: "Pose Updated", description: isIncremental ? "Skeleton adjusted incrementally" : "Skeleton pose applied from AI" });
     }
+  }, [toast]);
+
+  const handleBenchApplyOverlay = useCallback((overlay: BenchSkeletonOverlay | null) => {
+    if (!overlay) {
+      const snap = benchSnapshotRef.current;
+      if (snap) {
+        setModelConfig(snap.modelConfig);
+        setPainMarkers(snap.painMarkers);
+        setBiomechanicalMuscleHighlights(snap.biomechanicalMuscleHighlights);
+        setMuscleHighlightColors(snap.muscleHighlightColors);
+        setVisualizationBoneHighlights(snap.visualizationBoneHighlights);
+        benchSnapshotRef.current = null;
+      }
+      return;
+    }
+    if (!benchSnapshotRef.current) {
+      benchSnapshotRef.current = {
+        modelConfig: JSON.parse(JSON.stringify(modelConfig)),
+        painMarkers: [...painMarkers],
+        biomechanicalMuscleHighlights: [...biomechanicalMuscleHighlights],
+        muscleHighlightColors: { ...muscleHighlightColors },
+        visualizationBoneHighlights: [...visualizationBoneHighlights],
+      };
+    }
+    const fp = overlay.fingerprint;
+    const boneHl = (fp.expectedHighlights.bones || []).map(b => ({ boneName: b, color: 0x22d3ee, intensity: 0.9 }));
+    const regionBones = (fp.expectedHighlights.regions || []).map(r => ({ boneName: r, color: 0x60a5fa, intensity: 0.6 }));
+    setVisualizationBoneHighlights([...boneHl, ...regionBones]);
+    const muscles = fp.expectedHighlights.muscleGroups || [];
+    setBiomechanicalMuscleHighlights(muscles);
+    const colorMap: Record<string, string> = {};
+    muscles.forEach(m => { colorMap[m] = "#22d3ee"; });
+    setMuscleHighlightColors(colorMap);
+    if (fp.expectedPainMarkers && fp.expectedPainMarkers.length > 0) {
+      const predictedMarkers: PainMarker[] = fp.expectedPainMarkers.map((pm, idx) => ({
+        id: `bench-predicted-${fp.hypothesisId}-${idx}`,
+        position: { x: 0, y: 0, z: 0 },
+        nearestBone: pm.anatomicalLabel,
+        anatomicalLabel: pm.anatomicalLabel,
+        type: (pm.type as PainMarkerType) || 'sharp',
+        severity: pm.severity || 5,
+        symptomType: 'pain' as SymptomType,
+        description: pm.label || `Predicted: ${pm.anatomicalLabel}`,
+      }));
+      setPainMarkers(predictedMarkers);
+    }
+    if (fp.expectedPosture && Object.keys(fp.expectedPosture).length > 0) {
+      applyPoseCommand(fp.expectedPosture);
+    }
+  }, [modelConfig, painMarkers, biomechanicalMuscleHighlights, muscleHighlightColors, visualizationBoneHighlights, applyPoseCommand]);
+
+  const handleBenchCommit = useCallback((update: BenchUpdate) => {
+    setClinicalReasoningData(prev => {
+      if (!prev) return prev;
+      const idx = prev.hypotheses.findIndex(h => h.id === update.hypothesisId);
+      if (idx < 0) return prev;
+      const updated = [...prev.hypotheses];
+      const evidenceLine = `Bench: ${update.rationale}`;
+      updated[idx] = {
+        ...updated[idx],
+        confidence: Math.round(update.newConfidence),
+        supportingEvidence: [...updated[idx].supportingEvidence, evidenceLine],
+      };
+      return { ...prev, hypotheses: updated };
+    });
+    setStructuredReasoningData(prev => {
+      if (!prev) return prev;
+      const idx = prev.hypotheses.findIndex(h => h.id === update.hypothesisId);
+      if (idx < 0) return prev;
+      const updated = [...prev.hypotheses];
+      updated[idx] = {
+        ...updated[idx],
+        confidence: Math.round(update.newConfidence),
+        supporting: [...updated[idx].supporting, { feature: `Bench: ${update.rationale}`, weight: 2 }],
+      };
+      return { ...prev, hypotheses: updated };
+    });
+    toast({ title: 'Hypothesis updated', description: `Confidence → ${Math.round(update.newConfidence)}%` });
   }, [toast]);
 
   const applyClinicalPreset = useCallback((preset: ClinicalPosturePreset) => {
@@ -11359,9 +11469,11 @@ ${ddxList}`;
         onVisualizationRequest={handleVisualizationRequest}
         activeVisualizationId={activeVisualizationId}
         onHypothesisClick={handleHypothesisClick}
+        onTestHypothesisClick={handleTestHypothesisClick}
         structuredData={structuredReasoningData}
         structuredLoading={structuredReasoningLoading}
         onStructuredHypothesisClick={handleStructuredHypothesisClick}
+        onTestStructuredHypothesisClick={handleTestStructuredHypothesisClick}
         decisionData={treatmentDecisionData}
         decisionLoading={treatmentDecisionLoading}
         onDecisionTargetClick={handleDecisionTargetClick}
@@ -11375,6 +11487,31 @@ ${ddxList}`;
         requestedTab={reasoningRequestedTab}
         onRequestedTabHandled={() => setReasoningRequestedTab(null)}
         onActiveTabChange={setReasoningActiveTab}
+      />
+
+      <HypothesisTestBench
+        isOpen={testBenchOpen}
+        hypothesis={testBenchHypothesis}
+        context={{
+          subjectiveHistory: subjectiveHistoryInput,
+          painMarkers: painMarkers.map(pm => ({
+            anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
+            type: pm.type,
+            severity: pm.severity ?? 5,
+          })),
+          posture: modelConfig as unknown as Record<string, Record<string, number>>,
+        }}
+        candidatesForCompare={[
+          ...((clinicalReasoningData?.hypotheses || []).filter(h => h.status !== 'ruled_out').map(h => ({
+            id: h.id, condition: h.condition, confidence: h.confidence,
+          }))),
+          ...((structuredReasoningData?.hypotheses || []).map(h => ({
+            id: h.id, condition: h.condition, confidence: h.confidence,
+          }))),
+        ]}
+        onClose={() => { handleBenchApplyOverlay(null); setTestBenchOpen(false); }}
+        onApplyOverlay={handleBenchApplyOverlay}
+        onCommit={handleBenchCommit}
       />
 
       <HypothesisChatPanel

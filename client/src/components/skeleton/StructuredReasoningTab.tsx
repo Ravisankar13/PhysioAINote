@@ -21,6 +21,7 @@ import {
   Search,
   ArrowRight,
   Star,
+  FlaskConical,
 } from "lucide-react";
 
 export interface ReasoningHypothesis {
@@ -103,6 +104,7 @@ interface StructuredReasoningTabProps {
   data: StructuredReasoningResult | null;
   isLoading: boolean;
   onHypothesisClick?: (hypothesis: ReasoningHypothesis) => void;
+  onTestHypothesisClick?: (hypothesis: ReasoningHypothesis) => void;
 }
 
 function ConfBar({ value, max = 100 }: { value: number; max?: number }) {
@@ -170,7 +172,7 @@ const MODIFIER_ICONS: Record<string, React.ElementType> = {
   context: Settings,
 };
 
-export default function StructuredReasoningTab({ data, isLoading, onHypothesisClick }: StructuredReasoningTabProps) {
+export default function StructuredReasoningTab({ data, isLoading, onHypothesisClick, onTestHypothesisClick }: StructuredReasoningTabProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
@@ -256,11 +258,23 @@ export default function StructuredReasoningTab({ data, isLoading, onHypothesisCl
                 <span className="text-[9px] font-bold text-teal-400/70">#{idx + 1}</span>
                 <p className="text-[10px] font-medium text-gray-200 truncate">{h.condition}</p>
               </div>
-              {h.fingerprintMatchScore > 0 && (
-                <span className="text-[8px] px-1 py-0.5 bg-violet-500/15 text-violet-400 rounded shrink-0" title="Fingerprint match">
-                  FP {h.fingerprintMatchScore}%
-                </span>
-              )}
+              <div className="flex items-center gap-1 shrink-0">
+                {h.fingerprintMatchScore > 0 && (
+                  <span className="text-[8px] px-1 py-0.5 bg-violet-500/15 text-violet-400 rounded" title="Fingerprint match">
+                    FP {h.fingerprintMatchScore}%
+                  </span>
+                )}
+                {onTestHypothesisClick && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onTestHypothesisClick(h); }}
+                    className="flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 hover:bg-cyan-600/50 transition-colors"
+                    title="Test this hypothesis on the skeleton"
+                    data-testid={`button-test-hypothesis-${h.id}`}
+                  >
+                    <FlaskConical className="h-2.5 w-2.5" /> Test
+                  </button>
+                )}
+              </div>
             </div>
             <ConfBar value={h.confidence} />
             <div className="mt-1">

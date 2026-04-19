@@ -530,8 +530,17 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
   const planChangeRef = useRef(onPlanChange);
   planChangeRef.current = onPlanChange;
   // Notify parent on plan changes so other surfaces (Recovery Simulator
-  // phase cards, etc.) can read the latest electrophysical plan.
-  useEffect(() => { planChangeRef.current?.(plan); }, [plan]);
+  // phase cards, etc.) can read the latest electrophysical plan. Skip the
+  // initial mount-time `null` so we don't wipe a plan the parent is already
+  // holding (e.g. when this tab is unmounted/remounted by tab switching).
+  const skipInitialPlanEmitRef = useRef(true);
+  useEffect(() => {
+    if (skipInitialPlanEmitRef.current) {
+      skipInitialPlanEmitRef.current = false;
+      if (plan === null) return;
+    }
+    planChangeRef.current?.(plan);
+  }, [plan]);
 
   const toggleContraindication = useCallback((flag: ContraindicationFlag) => {
     setContraindicationFlags(prev => prev.includes(flag) ? prev.filter(f => f !== flag) : [...prev, flag]);
@@ -594,13 +603,19 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     });
   }, []);
 
-  const generatePlan = useCallback(async () => {
+  const generatePlan = useCallback(async (overrides?: { condition?: string; stage?: Stage }) => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     setLoading(true);
     setError(null);
+
+    // Allow callers (e.g. the auto-generate effect fired by a phase-card CTA)
+    // to pass explicit condition/stage so we never depend on the React state
+    // having committed before this async call runs.
+    const effectiveCondition = (overrides?.condition ?? condition).trim();
+    const effectiveStage: Stage = overrides?.stage ?? stage;
 
     try {
       const payload: Record<string, unknown> = {
@@ -638,8 +653,8 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
           severity: p.severity,
           type: p.type,
         })),
-        condition: condition.trim(),
-        stage,
+        condition: effectiveCondition,
+        stage: effectiveStage,
         irritability,
         tissueType: tissueType.trim(),
         primaryGoal,
@@ -691,9 +706,9 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   // Each new `autoGenerateNonce` from the parent represents a fresh phase-card
   // CTA: re-sync condition/stage from the latest `initialCondition`/`initialStage`
-  // props into local state, then (if `autoGenerate` is on) fire the engine once
-  // with those exact values. Using a nonce ensures repeated CTAs work and that
-  // generation never runs against stale local state.
+  // props into local state and (if `autoGenerate` is on) fire generatePlan with
+  // those values passed *explicitly* — never relying on the React state having
+  // committed before the async call runs.
   const lastNonceRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (autoGenerateNonce === undefined || autoGenerateNonce === lastNonceRef.current) return;
@@ -703,9 +718,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     setCondition(nextCondition);
     setStage(nextStage);
     if (autoGenerate) {
-      // Defer one tick so the state updates above are committed before
-      // generatePlan() reads condition/stage via its closure on next render.
-      Promise.resolve().then(() => { void generatePlan(); });
+      void generatePlan({ condition: nextCondition, stage: nextStage });
     }
     onAutoGenerateConsumed?.();
   }, [autoGenerateNonce, autoGenerate, initialCondition, initialStage, generatePlan, onAutoGenerateConsumed]);
@@ -841,7 +854,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
         <AlertTriangle className="h-6 w-6 text-red-400 mb-2" />
         <div className="text-[11px] text-red-300 mb-2">Failed to generate electrophysical plan</div>
         <div className="text-[9px] text-gray-400 mb-3">{error}</div>
-        <button onClick={generatePlan} className="px-3 py-1.5 text-[10px] bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded hover:bg-teal-500/30 transition-colors">
+        <button onClick={() => { void generatePlan(); }} className="px-3 py-1.5 text-[10px] bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded hover:bg-teal-500/30 transition-colors">
           Try Again
         </button>
       </div>
@@ -860,7 +873,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
               ? `Generate a research-backed electrophysical plan for "${condition}" with condition-specific dosages and citations.`
               : 'Generate a targeted electrophysical modality plan based on mechanism analysis, tissue irritability, and clinical findings — or type a condition above for a research-backed, diagnosis-specific plan.'}
           </div>
-          <button onClick={generatePlan} className="px-4 py-2 text-[11px] font-medium bg-teal-500/20 text-teal-300 border border-teal-500/40 rounded-lg hover:bg-teal-500/30 transition-colors flex items-center gap-2" data-testid="button-generate-electro-plan">
+          <button onClick={() => { void generatePlan(); }} className="px-4 py-2 text-[11px] font-medium bg-teal-500/20 text-teal-300 border border-teal-500/40 rounded-lg hover:bg-teal-500/30 transition-colors flex items-center gap-2" data-testid="button-generate-electro-plan">
             <Zap className="h-3.5 w-3.5" />
             {condition ? `Generate plan for ${condition}` : 'Generate Electrophysical Plan'}
           </button>
@@ -927,7 +940,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
             Refresh evidence
           </button>
           <button
-            onClick={generatePlan}
+            onClick={() => { void generatePlan(); }}
             className="px-2 py-1 text-[9px] bg-gray-700/40 text-gray-400 border border-gray-600/30 rounded hover:text-gray-200 hover:bg-gray-700/60 transition-colors flex items-center gap-1"
           >
             <RefreshCw className="h-2.5 w-2.5" />

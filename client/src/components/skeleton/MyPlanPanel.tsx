@@ -181,11 +181,11 @@ function SessionOrderStrip({ steps, items }: { steps: OrchestratedSessionStep[];
 }
 
 function WeeklyScheduleGrid({ schedule, items, totalWeeks, frequencies }: { schedule: OrchestratedScheduleCell[]; items: PlanCartItem[]; totalWeeks: number; frequencies: OrchestratedFrequency[] }) {
+  const [activeWeek, setActiveWeek] = useState(0);
   if (schedule.length === 0) return null;
   const itemMap = new Map(items.map(i => [i.id, i]));
   const freqMap = new Map(frequencies.map(f => [f.itemId, f]));
   const weeks = Array.from({ length: Math.max(1, totalWeeks) }, (_, i) => i);
-  const [activeWeek, setActiveWeek] = useState(0);
   const cellsByDay = (week: number) => DAY_LABELS.map((_, day) => {
     return schedule.find(c => c.weekIndex === week && c.dayOfWeek === day);
   });

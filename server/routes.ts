@@ -22664,7 +22664,10 @@ If there are existing notes, seamlessly integrate the new content while maintain
       irritability: z.string().optional(),
       stage: z.string().optional(),
       recoveryPhase: z.string().optional(),
-      patientFactors: z.array(z.string()).optional(),
+      patientFactors: z.union([
+        z.array(z.string()),
+        z.record(z.string(), z.unknown()),
+      ]).optional(),
       constraints: z.array(z.string()).optional(),
       primaryRegion: z.string().optional(),
     }).default({}),
@@ -22750,7 +22753,17 @@ If there are existing notes, seamlessly integrate the new content while maintain
       if (clinicalContext.stage) ctxLines.push(`Stage: ${clinicalContext.stage}`);
       if (clinicalContext.irritability) ctxLines.push(`Irritability: ${clinicalContext.irritability}`);
       if (clinicalContext.recoveryPhase) ctxLines.push(`Recovery phase: ${clinicalContext.recoveryPhase}`);
-      if (clinicalContext.patientFactors?.length) ctxLines.push(`Patient factors: ${clinicalContext.patientFactors.join(', ')}`);
+      if (clinicalContext.patientFactors) {
+        const pf = clinicalContext.patientFactors;
+        if (Array.isArray(pf)) {
+          if (pf.length) ctxLines.push(`Patient factors: ${pf.join(', ')}`);
+        } else if (typeof pf === 'object') {
+          const parts = Object.entries(pf)
+            .filter(([, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => `${k}=${typeof v === 'number' ? Number(v.toFixed(2)) : String(v)}`);
+          if (parts.length) ctxLines.push(`Patient factors: ${parts.join(', ')}`);
+        }
+      }
       if (clinicalContext.constraints?.length) ctxLines.push(`Constraints: ${clinicalContext.constraints.join(', ')}`);
 
       const systemPrompt = `You are a senior physiotherapist organising a multi-modality treatment plan into a coherent program. You will receive a list of clinician-selected items (exercises, manual therapy, electrophysical modalities, adjunct therapies) and must return:

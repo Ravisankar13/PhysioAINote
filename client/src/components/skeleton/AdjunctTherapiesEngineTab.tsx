@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { Leaf, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Loader2, Info, ShieldAlert, Sparkles, Award, Stethoscope, BookOpen, ExternalLink } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+import { AddToPlanButton, makeCartId } from '@/lib/planCart';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 
 interface EvidenceArticle {
@@ -264,6 +265,22 @@ function RecommendationCard({ rec, index, evidence, evidenceLoading }: { rec: Ad
             </div>
           )}
           <div className="text-[9px] text-gray-400 mt-0.5 truncate">{rec.techniqueDetails}</div>
+          <div className="mt-1">
+            <AddToPlanButton
+              size="xs"
+              item={{
+                id: makeCartId('adjunct', rec.therapyName),
+                modality: 'adjunct',
+                name: rec.therapyName,
+                targetStructure: rec.targetStructure,
+                targetFinding: rec.targetFinding,
+                dosage: rec.techniqueDetails,
+                rationale: rec.clinicalRationale,
+                contraindications: rec.contraindications,
+                evidenceGrade: typeof displayGrade === 'string' ? displayGrade : undefined,
+              }}
+            />
+          </div>
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0 mt-1" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0 mt-1" />}
       </button>

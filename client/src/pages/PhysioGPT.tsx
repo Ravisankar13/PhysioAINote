@@ -155,6 +155,27 @@ const ManualTherapyEngineTab = lazy(() => import("@/components/skeleton/ManualTh
 import type { TissueTarget } from "@/components/skeleton/ManualTherapyEngineTab";
 const ElectrophysicalEngineTab = lazy(() => import("@/components/skeleton/ElectrophysicalEngineTab"));
 const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/PatientEducationEngineTab"));
+const MyPlanPanel = lazy(() => import("@/components/skeleton/MyPlanPanel"));
+import { PlanCartProvider, usePlanCart } from "@/lib/planCart";
+
+function MyPlanTabButton({ active, onClick }: { active: boolean; onClick: () => void }) {
+  const { count } = usePlanCart();
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${active ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+      data-testid="button-tab-my-plan"
+    >
+      <Sparkles className="h-3 w-3" />
+      My Plan
+      {count > 0 && (
+        <span className="ml-0.5 text-[9px] font-bold px-1 rounded-full bg-cyan-400/30 text-cyan-100 min-w-[14px] text-center">
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
 const AdjunctTherapiesEngineTab = lazy(() => import("@/components/skeleton/AdjunctTherapiesEngineTab"));
 const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/UnifiedBiomechanicsPanel"));
 const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
@@ -641,7 +662,7 @@ export default function PhysioGPT() {
   const [timelinePlaybackState, setTimelinePlaybackState] = useState<PlaybackSyncState | null>(null);
   const [conditionPhases, setConditionPhases] = useState<ConditionPhaseInfo[] | null>(null);
   const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
-  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'adjunctRx' | 'patientEd'>('mechanism');
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'adjunctRx' | 'patientEd' | 'myPlan'>('mechanism');
   // Lifted Electro Rx state so the Recovery Simulator phase cards can read
   // the latest plan without re-fetching, and so phase-card "Generate" CTAs
   // can pre-fill the Electro tab and auto-run the engine.
@@ -9523,6 +9544,7 @@ ${ddxList}`;
 
             {showInjuryMechanism && (
               <div className="absolute top-2 right-2 z-30 w-[280px] max-h-[calc(100%-50px)] overflow-y-auto animate-in slide-in-from-right-2 duration-200">
+                <PlanCartProvider>
                 <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -9592,6 +9614,10 @@ ${ddxList}`;
                       <GraduationCap className="h-3 w-3" />
                       Patient Ed
                     </button>
+                    <MyPlanTabButton
+                      active={mechanismActiveTab === 'myPlan'}
+                      onClick={() => { setMechanismActiveTab('myPlan'); setManualTherapyAnnotations(null); }}
+                    />
                   </div>
                   {mechanismActiveTab === 'mechanism' && (
                     <InjuryMechanismPanel
@@ -9740,7 +9766,23 @@ ${ddxList}`;
                       }))}
                     />
                   )}
+                  {mechanismActiveTab === 'myPlan' && (
+                    <Suspense fallback={<div className="flex items-center justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-cyan-400" /></div>}>
+                      <MyPlanPanel
+                        clinicalContext={{
+                          topHypothesis: extractionResult?.mainComplaint || mechanismAnalysisResult?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim() || undefined,
+                          irritability: extractionResult?.irritability || undefined,
+                          stage: extractionResult?.duration || undefined,
+                          recoveryPhase: extractionResult?.duration || undefined,
+                          primaryRegion: (mechanismAnalysisResult?.topContributors?.[0] as { region?: string } | undefined)?.region || painMarkers[0]?.anatomicalLabel || painMarkers[0]?.nearestBone || undefined,
+                          patientFactors: undefined,
+                          constraints: undefined,
+                        }}
+                      />
+                    </Suspense>
+                  )}
                 </div>
+                </PlanCartProvider>
               </div>
             )}
 

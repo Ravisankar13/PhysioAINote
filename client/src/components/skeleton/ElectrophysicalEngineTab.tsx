@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award, Stethoscope, Sparkles, Ban, Save, Trash2, Pencil, BookmarkPlus } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { AddToPlanButton, makeCartId } from '@/lib/planCart';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
@@ -316,6 +317,19 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
   const [expanded, setExpanded] = useState(false);
   const isNotAdvised = !!modality.notAdvisedReason;
   const conditionGrade = modality.evidenceGrade ? CONDITION_GRADE_STYLES[modality.evidenceGrade] : null;
+  const cartItem = {
+    id: makeCartId('electrophysical', modality.modality),
+    modality: 'electrophysical' as const,
+    name: modality.modality,
+    targetStructure: modality.targetStructure,
+    targetFinding: modality.targetFinding,
+    parameters: modality.parameters,
+    dosage: modality.parameters,
+    rationale: modality.rationale,
+    contraindications: modality.contraindications,
+    evidenceGrade: modality.evidenceGrade,
+    patientPosition: modality.patientPosition,
+  };
 
   return (
     <div className={`border rounded ${isNotAdvised ? 'border-red-500/40 bg-red-500/5' : 'border-gray-600/30 bg-gray-800/40'}`}>
@@ -366,11 +380,12 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
             </div>
           )}
           {!isNotAdvised && (
-            <div className="flex gap-2 mt-1 text-[9px] flex-wrap">
+            <div className="flex gap-2 mt-1 text-[9px] flex-wrap items-center">
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300 truncate max-w-[180px]">{modality.parameters || '?'}</span>
               {modality.patientPosition && (
                 <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Pos: {modality.patientPosition}</span>
               )}
+              <AddToPlanButton size="xs" item={cartItem} />
             </div>
           )}
         </div>

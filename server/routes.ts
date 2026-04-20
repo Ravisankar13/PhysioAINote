@@ -22641,5 +22641,180 @@ If there are existing notes, seamlessly integrate the new content while maintain
     }
   });
 
+  // ===== Treatment Plan Orchestrator (Task #185) =====
+  const planCartItemSchema = z.object({
+    id: z.string().min(1),
+    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct']),
+    name: z.string().min(1),
+    targetStructure: z.string().optional(),
+    targetFinding: z.string().optional(),
+    dosage: z.string().optional(),
+    rationale: z.string().optional(),
+    evidenceGrade: z.string().optional(),
+    contraindications: z.string().optional(),
+    parameters: z.string().optional(),
+    patientPosition: z.string().optional(),
+    category: z.string().optional(),
+  });
+
+  const orchestrateBodySchema = z.object({
+    items: z.array(planCartItemSchema).min(1).max(40),
+    clinicalContext: z.object({
+      topHypothesis: z.string().optional(),
+      irritability: z.string().optional(),
+      stage: z.string().optional(),
+      recoveryPhase: z.string().optional(),
+      patientFactors: z.array(z.string()).optional(),
+      constraints: z.array(z.string()).optional(),
+      primaryRegion: z.string().optional(),
+    }).default({}),
+  });
+
+  const sessionStepSchema = z.object({
+    order: z.number().int().min(1),
+    itemId: z.string(),
+    itemName: z.string(),
+    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct']),
+    durationMinutes: z.number().min(1).max(90),
+    rationale: z.string().min(1),
+  });
+  const frequencySchema = z.object({
+    itemId: z.string(),
+    itemName: z.string(),
+    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct']),
+    sessionsPerWeek: z.number().min(1).max(14),
+    setting: z.enum(['supervised', 'home', 'either']),
+    notes: z.string().optional(),
+  });
+  const scheduleCellSchema = z.object({
+    weekIndex: z.number().int().min(0).max(11),
+    dayOfWeek: z.number().int().min(0).max(6),
+    itemIds: z.array(z.string()),
+    label: z.string().optional(),
+  });
+  const phaseSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    order: z.number().int().min(1),
+    durationWeeks: z.string(),
+    goals: z.array(z.string()),
+    itemIds: z.array(z.string()),
+    frequency: z.string(),
+    reviewPoint: z.string(),
+  });
+  const milestoneSchema = z.object({
+    weekIndex: z.number().int().min(0).max(52),
+    title: z.string(),
+    description: z.string(),
+    phaseId: z.string().optional(),
+  });
+  const conflictSchema = z.object({
+    severity: z.enum(['info', 'warning', 'critical']),
+    description: z.string(),
+    involvedItemIds: z.array(z.string()),
+  });
+  const orchestratedPlanSchema = z.object({
+    planSummary: z.string(),
+    totalDurationWeeks: z.number().int().min(1).max(52),
+    sessionOrder: z.array(sessionStepSchema),
+    frequencies: z.array(frequencySchema),
+    weeklySchedule: z.array(scheduleCellSchema),
+    phases: z.array(phaseSchema),
+    timeline: z.array(milestoneSchema),
+    conflicts: z.array(conflictSchema),
+  });
+
+  app.post('/api/treatment-plan/orchestrate', async (req: Request, res: Response) => {
+    try {
+      const parse = orchestrateBodySchema.safeParse(req.body);
+      if (!parse.success) {
+        return res.status(400).json({ error: 'Invalid request', details: parse.error.format() });
+      }
+      const { items, clinicalContext } = parse.data;
+
+      const itemsForPrompt = items.map(it => ({
+        id: it.id,
+        modality: it.modality,
+        name: it.name,
+        targetStructure: it.targetStructure || '',
+        targetFinding: it.targetFinding || '',
+        dosage: it.dosage || it.parameters || '',
+        rationale: it.rationale || '',
+        evidenceGrade: it.evidenceGrade || '',
+        contraindications: it.contraindications || '',
+      }));
+
+      const ctxLines: string[] = [];
+      if (clinicalContext.topHypothesis) ctxLines.push(`Top hypothesis: ${clinicalContext.topHypothesis}`);
+      if (clinicalContext.primaryRegion) ctxLines.push(`Primary region: ${clinicalContext.primaryRegion}`);
+      if (clinicalContext.stage) ctxLines.push(`Stage: ${clinicalContext.stage}`);
+      if (clinicalContext.irritability) ctxLines.push(`Irritability: ${clinicalContext.irritability}`);
+      if (clinicalContext.recoveryPhase) ctxLines.push(`Recovery phase: ${clinicalContext.recoveryPhase}`);
+      if (clinicalContext.patientFactors?.length) ctxLines.push(`Patient factors: ${clinicalContext.patientFactors.join(', ')}`);
+      if (clinicalContext.constraints?.length) ctxLines.push(`Constraints: ${clinicalContext.constraints.join(', ')}`);
+
+      const systemPrompt = `You are a senior physiotherapist organising a multi-modality treatment plan into a coherent program. You will receive a list of clinician-selected items (exercises, manual therapy, electrophysical modalities, adjunct therapies) and must return:
+1. The intra-session order (what to do first, second, etc., in a single visit) with rationale and duration in minutes.
+2. Per-item weekly frequency (sessions/week) and setting (supervised in clinic, home, or either).
+3. A multi-week schedule grid (weeklySchedule) mapping items to specific weeks (0-indexed) and days of week (0=Monday..6=Sunday). Only schedule items on the days they actually occur. Use as many weeks as needed (totalDurationWeeks).
+4. A phased program (phases) covering the full duration. Use 2–4 phases (e.g. acute/protect → restore → load → return). Each phase lists which item IDs are active and a review point.
+5. A recovery timeline (timeline) of 3–8 dated milestones (weekIndex from 0).
+6. Any conflicts or cautions (e.g., contradicting modalities, contraindications, dosage clashes).
+
+Clinical principles to apply:
+- Pain/inflammation modulation (electrophysical analgesia, gentle manual) goes BEFORE active loading.
+- Manual therapy that opens range goes BEFORE exercises that use that range.
+- High-intensity strength work goes after activation/warm-up; cool-down/recovery modalities last.
+- Respect irritability: high irritability = lower frequency, gentler dosage, more passive modalities early.
+- Respect contraindications and never stack two contradicting items in the same session — flag them as conflicts.
+- Frequencies should be realistic (e.g., supervised manual rx 1–3×/wk; home exercises 3–7×/wk).
+- Phases must progress (early phase emphasises symptom modulation; late phase emphasises loading/return-to-activity).
+
+Return STRICT JSON only, matching this shape exactly. itemId values MUST come from the provided item IDs.`;
+
+      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none provided)'}\n\nSelected items (${items.length}):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON with keys: planSummary (string, 2–3 sentences), totalDurationWeeks (integer 1–52), sessionOrder (array of {order,itemId,itemName,modality,durationMinutes,rationale}), frequencies (array of {itemId,itemName,modality,sessionsPerWeek,setting,notes?}), weeklySchedule (array of {weekIndex,dayOfWeek,itemIds[],label?}), phases (array of {id,name,order,durationWeeks,goals[],itemIds[],frequency,reviewPoint}), timeline (array of {weekIndex,title,description,phaseId?}), conflicts (array of {severity,description,involvedItemIds[]}).`;
+
+      const completion = await openai.chat.completions.create({
+        // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        model: 'gpt-4o',
+        response_format: { type: 'json_object' },
+        temperature: 0.4,
+        max_tokens: 3500,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || '{}';
+      let parsedJson: unknown;
+      try {
+        parsedJson = JSON.parse(raw);
+      } catch (e) {
+        return res.status(502).json({ error: 'AI returned invalid JSON' });
+      }
+
+      const planParse = orchestratedPlanSchema.safeParse(parsedJson);
+      if (!planParse.success) {
+        return res.status(502).json({ error: 'AI plan failed validation', details: planParse.error.format() });
+      }
+
+      const validIds = new Set(items.map(i => i.id));
+      const filtered = {
+        ...planParse.data,
+        sessionOrder: planParse.data.sessionOrder.filter(s => validIds.has(s.itemId)),
+        frequencies: planParse.data.frequencies.filter(f => validIds.has(f.itemId)),
+        weeklySchedule: planParse.data.weeklySchedule.map(c => ({ ...c, itemIds: c.itemIds.filter(id => validIds.has(id)) })).filter(c => c.itemIds.length > 0),
+        phases: planParse.data.phases.map(p => ({ ...p, itemIds: p.itemIds.filter(id => validIds.has(id)) })),
+        conflicts: planParse.data.conflicts.map(c => ({ ...c, involvedItemIds: c.involvedItemIds.filter(id => validIds.has(id)) })),
+      };
+
+      res.json({ ...filtered, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('[treatment-plan/orchestrate] error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to orchestrate plan' });
+    }
+  });
+
   return httpServer;
 }

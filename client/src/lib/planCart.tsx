@@ -1,0 +1,99 @@
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { Check, Plus } from "lucide-react";
+
+export type PlanCartModality =
+  | "exercise"
+  | "exercise_custom"
+  | "manual_therapy"
+  | "manual_therapy_custom"
+  | "electrophysical"
+  | "adjunct";
+
+export interface PlanCartItem {
+  id: string;
+  modality: PlanCartModality;
+  name: string;
+  targetStructure?: string;
+  targetFinding?: string;
+  dosage?: string;
+  rationale?: string;
+  evidenceGrade?: string;
+  contraindications?: string;
+  parameters?: string;
+  patientPosition?: string;
+  category?: string;
+}
+
+interface PlanCartContextValue {
+  items: PlanCartItem[];
+  add: (item: PlanCartItem) => void;
+  remove: (id: string) => void;
+  clear: () => void;
+  has: (id: string) => boolean;
+  count: number;
+}
+
+const PlanCartContext = createContext<PlanCartContextValue | null>(null);
+
+export function PlanCartProvider({ children }: { children: ReactNode }) {
+  const [items, setItems] = useState<PlanCartItem[]>([]);
+
+  const add = useCallback((item: PlanCartItem) => {
+    setItems(prev => prev.some(i => i.id === item.id) ? prev : [...prev, item]);
+  }, []);
+  const remove = useCallback((id: string) => {
+    setItems(prev => prev.filter(i => i.id !== id));
+  }, []);
+  const clear = useCallback(() => setItems([]), []);
+  const has = useCallback((id: string) => items.some(i => i.id === id), [items]);
+
+  const value = useMemo(() => ({ items, add, remove, clear, has, count: items.length }), [items, add, remove, clear, has]);
+  return <PlanCartContext.Provider value={value}>{children}</PlanCartContext.Provider>;
+}
+
+export function usePlanCart(): PlanCartContextValue {
+  const ctx = useContext(PlanCartContext);
+  if (!ctx) {
+    return {
+      items: [],
+      add: () => {},
+      remove: () => {},
+      clear: () => {},
+      has: () => false,
+      count: 0,
+    };
+  }
+  return ctx;
+}
+
+export function AddToPlanButton({ item, size = "sm" }: { item: PlanCartItem; size?: "sm" | "xs" }) {
+  const { add, remove, has } = usePlanCart();
+  const inPlan = has(item.id);
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (inPlan) remove(item.id);
+    else add(item);
+  };
+  const sizing = size === "xs"
+    ? "px-1.5 py-0.5 text-[8px]"
+    : "px-2 py-0.5 text-[9px]";
+  return (
+    <button
+      onClick={handleClick}
+      className={`${sizing} rounded-full inline-flex items-center gap-1 transition-colors border ${
+        inPlan
+          ? "bg-emerald-500/25 text-emerald-200 border-emerald-500/50 hover:bg-emerald-500/35"
+          : "bg-white/5 text-gray-300 border-white/10 hover:bg-cyan-500/20 hover:text-cyan-200 hover:border-cyan-400/40"
+      }`}
+      title={inPlan ? "Remove from plan" : "Add to plan"}
+      data-testid={`button-add-to-plan-${item.id}`}
+    >
+      {inPlan ? <Check className="h-2.5 w-2.5" /> : <Plus className="h-2.5 w-2.5" />}
+      {inPlan ? "Added" : "Add to Plan"}
+    </button>
+  );
+}
+
+export function makeCartId(modality: PlanCartModality, key: string): string {
+  return `${modality}::${key.replace(/\s+/g, "_").toLowerCase()}`;
+}

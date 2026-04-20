@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
 import { Dumbbell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Sparkles, Zap, ArrowRight, Clock, Activity, ShieldAlert, Crosshair, Image, BarChart3 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+import { AddToPlanButton, makeCartId } from '@/lib/planCart';
 
 const ExerciseBodyDiagram = lazy(() => import('./ExerciseBodyDiagram'));
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
@@ -158,11 +159,24 @@ function ExerciseCard({ exercise, index, dosageScalingData }: { exercise: Exerci
               <span className="truncate">{exercise.targetFinding}</span>
             </div>
           )}
-          <div className="flex gap-2 mt-1 text-[9px]">
+          <div className="flex gap-2 mt-1 text-[9px] flex-wrap items-center">
             <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300">{scaled ? `${scaled.sets} × ${scaled.reps}` : `${displaySets} × ${displayReps}`}</span>
             {exercise.tempo && exercise.tempo !== 'controlled' && (
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Tempo: {exercise.tempo}</span>
             )}
+            <AddToPlanButton
+              size="xs"
+              item={{
+                id: makeCartId('exercise', exercise.name),
+                modality: 'exercise',
+                name: exercise.name,
+                targetStructure: exercise.targetStructure,
+                targetFinding: exercise.targetFinding,
+                dosage: scaled ? `${scaled.sets} × ${scaled.reps}` : `${displaySets} × ${displayReps}`,
+                rationale: exercise.rationale,
+                contraindications: exercise.contraindications,
+              }}
+            />
           </div>
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0 mt-1" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0 mt-1" />}
@@ -294,6 +308,19 @@ function CustomExerciseCard({ exercise, index, dosageScalingData }: { exercise: 
               <Clock className="h-2 w-2" />
               {exercise.dosage.frequency}
             </span>
+            <AddToPlanButton
+              size="xs"
+              item={{
+                id: makeCartId('exercise_custom', exercise.name),
+                modality: 'exercise_custom',
+                name: exercise.name,
+                targetStructure: exercise.targetSystem,
+                targetFinding: exercise.clinicalTarget,
+                dosage: scaledCustomDosage ? `${scaledCustomDosage.sets} × ${scaledCustomDosage.reps} · ${exercise.dosage.frequency}` : `${exercise.dosage.sets} × ${exercise.dosage.reps} · ${exercise.dosage.frequency}`,
+                rationale: exercise.biomechanicalRationale,
+                contraindications: exercise.contraindications,
+              }}
+            />
           </div>
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-cyan-500 shrink-0 mt-1" /> : <ChevronDown className="h-3 w-3 text-cyan-500 shrink-0 mt-1" />}

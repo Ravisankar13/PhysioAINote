@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Zap, Activity, Sparkles, ArrowRight, Clock, ShieldAlert, Crosshair, Home, MessageSquare, Send, RotateCcw } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+import { AddToPlanButton, makeCartId } from '@/lib/planCart';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 import type { ScarMarker, AdhesionBand } from '@/lib/scarTissueMapping';
@@ -459,11 +460,25 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
               <span className="truncate">{technique.targetFinding}</span>
             </div>
           )}
-          <div className="flex gap-2 mt-1 text-[9px]">
+          <div className="flex gap-2 mt-1 text-[9px] flex-wrap items-center">
             <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300">{technique.dosage || '?'}</span>
             {technique.patientPosition && (
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Pos: {technique.patientPosition}</span>
             )}
+            <AddToPlanButton
+              size="xs"
+              item={{
+                id: makeCartId('manual_therapy', technique.technique),
+                modality: 'manual_therapy',
+                name: technique.technique,
+                targetStructure: technique.targetStructure,
+                targetFinding: technique.targetFinding,
+                dosage: technique.dosage,
+                rationale: technique.rationale,
+                contraindications: technique.contraindications,
+                patientPosition: technique.patientPosition,
+              }}
+            />
           </div>
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0 mt-1" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0 mt-1" />}

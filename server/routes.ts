@@ -22686,7 +22686,14 @@ If there are existing notes, seamlessly integrate the new content while maintain
     itemName: z.string(),
     modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct']),
     sessionsPerWeek: z.number().min(1).max(14),
-    setting: z.enum(['supervised', 'home', 'either']),
+    setting: z.string().transform(s => {
+      const v = String(s).toLowerCase().trim();
+      if (v.includes('home')) return 'home' as const;
+      if (v.includes('superv') || v.includes('clinic')) return 'supervised' as const;
+      if (v === 'either' || v.includes('both') || v.includes('mixed') || v.includes('combined')) return 'either' as const;
+      if (v === 'supervised' || v === 'home') return v as 'supervised' | 'home';
+      return 'either' as const;
+    }).pipe(z.enum(['supervised', 'home', 'either'])),
     notes: z.string().optional(),
   });
   const scheduleCellSchema = z.object({
@@ -22699,7 +22706,7 @@ If there are existing notes, seamlessly integrate the new content while maintain
     id: z.string(),
     name: z.string(),
     order: z.number().int().min(1),
-    durationWeeks: z.string(),
+    durationWeeks: z.union([z.string(), z.number()]).transform(v => typeof v === 'number' ? `${v} week${v === 1 ? '' : 's'}` : v),
     goals: z.array(z.string()),
     itemIds: z.array(z.string()),
     frequency: z.string(),

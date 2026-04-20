@@ -22775,7 +22775,6 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
       const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none provided)'}\n\nSelected items (${items.length}):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON with keys: planSummary (string, 2–3 sentences), totalDurationWeeks (integer 1–52), sessionOrder (array of {order,itemId,itemName,modality,durationMinutes,rationale}), frequencies (array of {itemId,itemName,modality,sessionsPerWeek,setting,notes?}), weeklySchedule (array of {weekIndex,dayOfWeek,itemIds[],label?}), phases (array of {id,name,order,durationWeeks,goals[],itemIds[],frequency,reviewPoint}), timeline (array of {weekIndex,title,description,phaseId?}), conflicts (array of {severity,description,involvedItemIds[]}).`;
 
       const completion = await openai.chat.completions.create({
-        // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         model: 'gpt-4o',
         response_format: { type: 'json_object' },
         temperature: 0.4,

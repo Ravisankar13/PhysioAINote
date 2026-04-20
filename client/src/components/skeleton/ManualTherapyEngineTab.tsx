@@ -263,6 +263,19 @@ function CustomTechniqueCard({ technique, index, isSelected, onSelect }: { techn
               <Clock className="h-2 w-2" />
               {technique.dosage.frequency}
             </span>
+            <AddToPlanButton
+              size="xs"
+              item={{
+                id: makeCartId('manual_therapy_custom', `${technique.name}::${technique.targetSystem}::${technique.clinicalTarget}`),
+                modality: 'manual_therapy_custom',
+                name: technique.name,
+                targetStructure: technique.targetSystem,
+                targetFinding: technique.clinicalTarget,
+                dosage: `${technique.dosage.sets} sets × ${technique.dosage.repetitions} · ${technique.dosage.frequency}`,
+                rationale: technique.biomechanicalRationale,
+                contraindications: technique.contraindications,
+              }}
+            />
           </div>
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-cyan-500 shrink-0 mt-1" /> : <ChevronDown className="h-3 w-3 text-cyan-500 shrink-0 mt-1" />}

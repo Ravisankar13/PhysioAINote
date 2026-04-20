@@ -5735,6 +5735,7 @@ ${ddxList}`;
 
   return (
     <Suspense fallback={<LazyPanelFallback />}>
+    <PlanCartProvider>
     <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 flex flex-col overflow-hidden">
     <div className="flex-1 relative overflow-hidden min-h-0">
       {!modelReady && (
@@ -9544,7 +9545,6 @@ ${ddxList}`;
 
             {showInjuryMechanism && (
               <div className="absolute top-2 right-2 z-30 w-[280px] max-h-[calc(100%-50px)] overflow-y-auto animate-in slide-in-from-right-2 duration-200">
-                <PlanCartProvider>
                 <div className="bg-black/85 backdrop-blur rounded-lg px-3 py-2.5">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -9766,23 +9766,67 @@ ${ddxList}`;
                       }))}
                     />
                   )}
-                  {mechanismActiveTab === 'myPlan' && (
-                    <Suspense fallback={<div className="flex items-center justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-cyan-400" /></div>}>
-                      <MyPlanPanel
-                        clinicalContext={{
-                          topHypothesis: extractionResult?.mainComplaint || mechanismAnalysisResult?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim() || undefined,
-                          irritability: extractionResult?.irritability || undefined,
-                          stage: extractionResult?.duration || undefined,
-                          recoveryPhase: extractionResult?.duration || undefined,
-                          primaryRegion: (mechanismAnalysisResult?.topContributors?.[0] as { region?: string } | undefined)?.region || painMarkers[0]?.anatomicalLabel || painMarkers[0]?.nearestBone || undefined,
-                          patientFactors: undefined,
-                          constraints: undefined,
-                        }}
-                      />
-                    </Suspense>
-                  )}
+                  {mechanismActiveTab === 'myPlan' && (() => {
+                    const planFactors = autoPopulateFromPipeline(
+                      extractionResult ?? null,
+                      structuredReasoningData ?? null,
+                      DEFAULT_PATIENT_FACTORS,
+                    );
+                    const planMods = computePatientModifiers(planFactors, null);
+                    const planConstraints: string[] = [];
+                    const er = extractionResult as unknown as Record<string, unknown> | undefined;
+                    const collectStrings = (v: unknown) => {
+                      if (!v) return;
+                      if (Array.isArray(v)) {
+                        v.forEach(item => {
+                          if (typeof item === 'string' && item.trim()) planConstraints.push(item.trim());
+                          else if (item && typeof item === 'object') {
+                            const obj = item as Record<string, unknown>;
+                            const label = obj.label ?? obj.name ?? obj.description ?? obj.flag;
+                            if (typeof label === 'string' && label.trim()) planConstraints.push(label.trim());
+                          }
+                        });
+                      } else if (typeof v === 'string' && v.trim()) {
+                        planConstraints.push(v.trim());
+                      }
+                    };
+                    if (er) {
+                      collectStrings(er.redFlags);
+                      collectStrings(er.yellowFlags);
+                      collectStrings(er.precautions);
+                      collectStrings(er.contraindications);
+                      collectStrings(er.comorbidities);
+                      collectStrings(er.currentMedications);
+                      collectStrings(er.relevantHistory);
+                    }
+                    const archetypePhase = recoverySimArchetype?.id || (recoverySimArchetype?.stages?.[0]?.id ?? undefined);
+                    return (
+                      <Suspense fallback={<div className="flex items-center justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-cyan-400" /></div>}>
+                        <MyPlanPanel
+                          clinicalContext={{
+                            topHypothesis: structuredReasoningData?.hypotheses?.[0]?.condition || extractionResult?.mainComplaint || mechanismAnalysisResult?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim() || undefined,
+                            irritability: extractionResult?.irritability || undefined,
+                            stage: extractionResult?.duration || undefined,
+                            recoveryPhase: archetypePhase || extractionResult?.duration || undefined,
+                            primaryRegion: (mechanismAnalysisResult?.topContributors?.[0] as { region?: string } | undefined)?.region || painMarkers[0]?.anatomicalLabel || painMarkers[0]?.nearestBone || undefined,
+                            patientFactors: {
+                              age: planFactors.age ?? undefined,
+                              healingMultiplier: planMods.healingRateMultiplier,
+                              painSensitivityMultiplier: planMods.painSensitivityMultiplier,
+                              tissueQualityMultiplier: planMods.tissueQualityMultiplier,
+                              phaseTimingMultiplier: planMods.phaseTimingMultiplier,
+                              recurrenceRiskMultiplier: planMods.recurrenceRiskMultiplier,
+                              romCeilingAdjustment: planMods.romCeilingAdjustment,
+                              archetypeId: recoverySimArchetype?.id,
+                              archetypeName: recoverySimArchetype?.name,
+                            },
+                            constraints: planConstraints.length > 0 ? planConstraints.slice(0, 12) : undefined,
+                          }}
+                        />
+                      </Suspense>
+                    );
+                  })()}
                 </div>
-                </PlanCartProvider>
               </div>
             )}
 
@@ -11617,6 +11661,7 @@ ${ddxList}`;
       </Suspense>
     )}
     </div>
+    </PlanCartProvider>
     </Suspense>
   );
 }

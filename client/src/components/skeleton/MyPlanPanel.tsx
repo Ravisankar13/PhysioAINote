@@ -88,7 +88,7 @@ interface ClinicalContextInput {
   irritability?: string;
   stage?: string;
   recoveryPhase?: string;
-  patientFactors?: string[];
+  patientFactors?: string[] | Record<string, unknown>;
   constraints?: string[];
   primaryRegion?: string;
 }

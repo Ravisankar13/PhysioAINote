@@ -2134,6 +2134,49 @@ export default function RecoverySimulatorDashboard({
                   onClearInterventions={() => activeBranch.interventions.forEach(iv => removeInterventionFromActive(iv.id))}
                   conditionLabel={conditionLabel}
                 />
+              </>
+            ) : (
+              <div className="flex-1 min-h-[240px] rounded overflow-hidden border border-gray-800/60 bg-black relative" data-testid="dashboard-skeleton-slot">
+                {/* Parent portals the SAME live PureThreeGLBViewer instance into this slot */}
+                <div ref={onSkeletonSlotMount} className="absolute inset-0" data-testid="skeleton-portal-target" />
+                {!onSkeletonSlotMount && (
+                  <div className="absolute inset-0 flex items-center justify-center text-center text-[11px] text-gray-400 px-4">
+                    <div>
+                      <Activity className="h-8 w-8 mx-auto text-cyan-400/70 mb-2" />
+                      <div className="text-gray-200 font-semibold mb-1">Skeleton View Active</div>
+                      <div>Markers ×{painFactor.toFixed(2)} on the underlying 3D skeleton. Close this dashboard to interact.</div>
+                    </div>
+                  </div>
+                )}
+                <div className="absolute top-1.5 left-1.5 bg-gray-900/70 border border-cyan-700/40 rounded px-1.5 py-0.5 text-[9px] text-cyan-200 pointer-events-none z-10">
+                  Live · markers ×{painFactor.toFixed(2)} · {unitLabelTitle.toLowerCase()} {scrubWeek}
+                </div>
+              </div>
+            )}
+
+
+            <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-400">
+              <span className="font-semibold">TREATMENT TIMELINE</span>
+              <span>· Click any card to edit or drag to reschedule</span>
+              <span className="ml-auto flex items-center gap-1">
+                <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[9px]">{unitLabelTitle} {scrubWeek}</Badge>
+                <button
+                  onClick={() => setAnimate(!animate)}
+                  className="h-5 w-5 rounded-full bg-violet-600 hover:bg-violet-500 flex items-center justify-center text-white"
+                  data-testid="play-pause"
+                  title={animate ? 'Pause' : 'Play'}
+                >
+                  {animate ? <Pause className="h-2.5 w-2.5" /> : <Play className="h-2.5 w-2.5" />}
+                </button>
+                <span className="ml-2 text-[9px]">TISSUE STRESS</span>
+                <span className="inline-flex h-1.5 w-20 rounded bg-gradient-to-r from-emerald-500 via-amber-500 to-red-500 relative">
+                  <span className="absolute -top-0.5 h-2.5 w-0.5 bg-white" style={{ left: `${tissueStress}%` }} />
+                </span>
+                <span className={`text-[9px] ${tissueStress > 60 ? 'text-red-300' : tissueStress > 35 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                  {tissueStress > 60 ? 'High' : tissueStress > 35 ? 'Mod' : 'Low'}
+                </span>
+              </span>
+            </div>
           {(() => {
             // Strip widths come from each phase's actual week span (reached
             // → simulation window, unreached → expected window from the
@@ -2878,49 +2921,6 @@ export default function RecoverySimulatorDashboard({
               </div>
             );
           })()}
-              </>
-            ) : (
-              <div className="flex-1 min-h-[240px] rounded overflow-hidden border border-gray-800/60 bg-black relative" data-testid="dashboard-skeleton-slot">
-                {/* Parent portals the SAME live PureThreeGLBViewer instance into this slot */}
-                <div ref={onSkeletonSlotMount} className="absolute inset-0" data-testid="skeleton-portal-target" />
-                {!onSkeletonSlotMount && (
-                  <div className="absolute inset-0 flex items-center justify-center text-center text-[11px] text-gray-400 px-4">
-                    <div>
-                      <Activity className="h-8 w-8 mx-auto text-cyan-400/70 mb-2" />
-                      <div className="text-gray-200 font-semibold mb-1">Skeleton View Active</div>
-                      <div>Markers ×{painFactor.toFixed(2)} on the underlying 3D skeleton. Close this dashboard to interact.</div>
-                    </div>
-                  </div>
-                )}
-                <div className="absolute top-1.5 left-1.5 bg-gray-900/70 border border-cyan-700/40 rounded px-1.5 py-0.5 text-[9px] text-cyan-200 pointer-events-none z-10">
-                  Live · markers ×{painFactor.toFixed(2)} · {unitLabelTitle.toLowerCase()} {scrubWeek}
-                </div>
-              </div>
-            )}
-
-
-            <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-400">
-              <span className="font-semibold">TREATMENT TIMELINE</span>
-              <span>· Click any card to edit or drag to reschedule</span>
-              <span className="ml-auto flex items-center gap-1">
-                <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[9px]">{unitLabelTitle} {scrubWeek}</Badge>
-                <button
-                  onClick={() => setAnimate(!animate)}
-                  className="h-5 w-5 rounded-full bg-violet-600 hover:bg-violet-500 flex items-center justify-center text-white"
-                  data-testid="play-pause"
-                  title={animate ? 'Pause' : 'Play'}
-                >
-                  {animate ? <Pause className="h-2.5 w-2.5" /> : <Play className="h-2.5 w-2.5" />}
-                </button>
-                <span className="ml-2 text-[9px]">TISSUE STRESS</span>
-                <span className="inline-flex h-1.5 w-20 rounded bg-gradient-to-r from-emerald-500 via-amber-500 to-red-500 relative">
-                  <span className="absolute -top-0.5 h-2.5 w-0.5 bg-white" style={{ left: `${tissueStress}%` }} />
-                </span>
-                <span className={`text-[9px] ${tissueStress > 60 ? 'text-red-300' : tissueStress > 35 ? 'text-amber-300' : 'text-emerald-300'}`}>
-                  {tissueStress > 60 ? 'High' : tissueStress > 35 ? 'Mod' : 'Low'}
-                </span>
-              </span>
-            </div>
           </div>
 
         </main>

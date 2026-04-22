@@ -10401,6 +10401,64 @@ ${ddxList}`;
                     setShowInjuryMechanism(true);
                     setMechanismActiveTab('electroRx');
                   }}
+                  skeletonBiasInputs={{
+                    spine: {
+                      lordosis: modelConfig?.spine?.lumbarLordosis,
+                      kyphosis: modelConfig?.spine?.thoracicKyphosis,
+                      scoliosis: modelConfig?.spine?.scoliosis,
+                      forwardHead: modelConfig?.spine?.forwardHead,
+                      cervicalFlexion: modelConfig?.spine?.cervicalLateralFlexion,
+                    },
+                    pelvis: {
+                      tilt: modelConfig?.pelvis?.tilt,
+                      obliquity: modelConfig?.pelvis?.obliquity,
+                      rotation: modelConfig?.pelvis?.rotation,
+                    },
+                    leftHip: {
+                      flexion: modelConfig?.leftHip?.flexion,
+                      internalRotation: modelConfig?.leftHip?.internalRotation,
+                      anteversion: modelConfig?.leftHip?.anteversion,
+                    },
+                    rightHip: {
+                      flexion: modelConfig?.rightHip?.flexion,
+                      internalRotation: modelConfig?.rightHip?.internalRotation,
+                      anteversion: modelConfig?.rightHip?.anteversion,
+                    },
+                    leftKnee: {
+                      valgus: -(modelConfig?.leftKnee?.varus ?? 0),
+                      recurvatum: modelConfig?.leftKnee?.recurvatum,
+                    },
+                    rightKnee: {
+                      valgus: -(modelConfig?.rightKnee?.varus ?? 0),
+                      recurvatum: modelConfig?.rightKnee?.recurvatum,
+                    },
+                    leftAnkle: {
+                      dorsiflexion: modelConfig?.leftAnkle?.dorsiflexion,
+                      eversion: modelConfig?.leftAnkle?.eversion,
+                      archHeight: modelConfig?.leftAnkle?.archHeight,
+                    },
+                    rightAnkle: {
+                      dorsiflexion: modelConfig?.rightAnkle?.dorsiflexion,
+                      eversion: modelConfig?.rightAnkle?.eversion,
+                      archHeight: modelConfig?.rightAnkle?.archHeight,
+                    },
+                    leftShoulder: {
+                      flexion: modelConfig?.leftShoulder?.flexion,
+                      abduction: modelConfig?.leftShoulder?.abduction,
+                    },
+                    rightShoulder: {
+                      flexion: modelConfig?.rightShoulder?.flexion,
+                      abduction: modelConfig?.rightShoulder?.abduction,
+                    },
+                    // Live derived signals — flow through to driver model
+                    // so compensations / overloaded joints / ROM deficit
+                    // bend irritability, capacity & chronicity even when
+                    // the joint angles themselves look benign.
+                    compensationCount: mechanismAnalysisResult?.compensationCards?.length ?? 0,
+                    jointForceOverloadCount: (hudForceAnalysis?.joints ?? []).filter(
+                      (j: { status?: string }) => j.status === 'high' || j.status === 'very_high'
+                    ).length,
+                  }}
                   naturalTimelineSlot={
                     <Suspense fallback={null}>
                       <NaturalTimelinePanel

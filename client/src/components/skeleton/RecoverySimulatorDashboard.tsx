@@ -62,6 +62,16 @@ import {
   type HealingPhase,
 } from "@/lib/recoverySimulationEngine";
 import { findConditionProfile } from "@/lib/patientFactorsEngine";
+import {
+  computeStructuralBiases,
+  simulateNaturalDriverModel,
+  DRIVER_COLORS,
+  DRIVER_LABELS,
+  type SkeletonBiasInputs,
+  type NaturalDriverProjection,
+  type StructuralBias,
+  relevantBiasWeight,
+} from "@/lib/naturalRecoveryDriverModel";
 import { matchModalitiesForPhase, dosingOneLiner } from "@/lib/electroPhaseMatcher";
 import type { ElectrophysicalPlan } from "@/components/skeleton/ElectrophysicalEngineTab";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
@@ -196,6 +206,14 @@ interface Props {
    *  condition + stage. Surfaced inline on every phase card when no
    *  plan exists yet. */
   onGenerateElectroPlanForPhase?: (req: { condition: string; stage: 'acute' | 'subacute' | 'chronic'; phaseLabel: string }) => void;
+  /** Live skeleton snapshot used by the natural-recovery driver model
+   *  (Task #189) to derive structural biases (extension/compression,
+   *  flexion, valgus/pronation, neural tension, tunnel compression,
+   *  compensation burden). When provided, the natural-history baseline
+   *  is produced by the four-driver + skeleton-bias engine instead of
+   *  the legacy AI-aggregated rate model. Treatment-pathway curves are
+   *  unchanged. */
+  skeletonBiasInputs?: SkeletonBiasInputs | null;
 }
 
 const PALETTE = ['#06b6d4', '#a855f7', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
@@ -304,6 +322,7 @@ function MiniChart({
   showGrid = true,
   showWeekLabel = true,
   axisUnit = 'WEEK',
+  markers,
 }: {
   series: { label: string; color: string; values: number[]; dash?: string }[];
   scrubWeek?: number;
@@ -316,6 +335,11 @@ function MiniChart({
    *  'CHECKPOINT' for purely criterion-gated archetypes; default 'WEEK'
    *  preserves the legacy display for time-gated and hybrid archetypes. */
   axisUnit?: 'WEEK' | 'CHECKPOINT';
+  /** Optional event markers rendered as colored vertical lines + flag
+   *  glyphs at specific weeks. Used by the natural-recovery driver
+   *  model to surface plateau / recurrence / chronic detection points
+   *  directly on the chart timeline. */
+  markers?: { week: number; color: string; label: string; glyph?: string }[];
 }) {
   const width = 720;
   const padding = { top: 14, right: 16, bottom: 26, left: 36 };
@@ -364,6 +388,20 @@ function MiniChart({
       {series.map((s, i) => (
         <path key={i} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray={s.dash} />
       ))}
+
+      {markers && markers.map((m, i) => {
+        const x = xFor(Math.max(0, Math.min(totalWeeks, m.week)));
+        return (
+          <g key={`mk-${i}-${m.week}`}>
+            <title>{m.label}</title>
+            <line x1={x} y1={padding.top} x2={x} y2={padding.top + ch} stroke={m.color} strokeWidth={1} strokeDasharray="2,2" opacity={0.85} />
+            <g transform={`translate(${x - 7}, ${padding.top + 1})`}>
+              <rect width={14} height={12} rx={2} fill={m.color} opacity={0.9} />
+              <text x={7} y={9} textAnchor="middle" fill="white" fontSize={8} fontWeight="bold">{m.glyph ?? '!'}</text>
+            </g>
+          </g>
+        );
+      })}
 
       {scrubWeek !== undefined && (
         <g>
@@ -593,6 +631,7 @@ export default function RecoverySimulatorDashboard({
   electrophysicalPlan,
   onOpenElectroTab,
   onGenerateElectroPlanForPhase,
+  skeletonBiasInputs,
 }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
@@ -705,35 +744,34 @@ export default function RecoverySimulatorDashboard({
   const activeProjection = useMemo(() => projections.find(p => p.branchId === activeBranchId) ?? projections[0], [projections, activeBranchId]);
   const baselines = useMemo(() => simulateNaturalHistoryBaselines(input, ctxForSim, aiNaturalTimeline ?? null), [input, ctxForSim, aiNaturalTimeline]);
 
-  /** Natural-history projection driven directly by the AI Natural
-   *  Timeline (no_treatment mode, AI-predicted window). Used to *be*
-   *  the main Recovery Timeline chart when AI data is available so
-   *  the line graph reflects the patient's true natural healing
-   *  trajectory rather than the treatment-modified curves. Falls back
-   *  to null when no AI verdict is loaded yet. */
-  const naturalProjection = useMemo(() => {
-    if (!aiNaturalTimeline) return null;
-    const exp = Math.max(1, Math.round(aiNaturalTimeline.overall_window_weeks?.expected ?? 0));
-    const worst = Math.max(exp, Math.round(aiNaturalTimeline.overall_window_weeks?.worst ?? exp));
-    // Snap projection length to the AI's *expected* window (per spec)
-    // and add only a small worst-case axis padding (capped) so the user
-    // can scrub a few weeks past expected to see the worst-case tail
-    // without distorting the main scale.
-    const padded = Math.min(worst, exp + Math.min(4, Math.max(0, worst - exp)));
-    const naturalWeeks = Math.max(4, Math.min(104, padded));
-    const naturalInput: SimulationInput = { ...input, totalWeeks: naturalWeeks };
-    const emptyBranch: ScenarioBranch = {
-      id: 'baseline_natural_chart',
-      name: 'Natural history',
-      fromWeek: 0,
-      interventions: [],
-      flareEvents: [],
-      reaggravationEvents: [],
-      loadAdjustments: [],
-      color: '#a855f7',
+  /** Skeleton-derived structural biases (Task #189). Recomputed live
+   *  from the supplied skeleton snapshot + condition context so changes
+   *  in joint angles, compensations, or pain mechanism flow straight
+   *  into the natural-history curve and the bias panel. Not persisted. */
+  const structuralBiases: StructuralBias[] = useMemo(
+    () => computeStructuralBiases(conditionContext, skeletonBiasInputs ?? null),
+    [conditionContext, skeletonBiasInputs],
+  );
+
+  /** Natural-history projection produced by the four-driver +
+   *  skeleton-bias model. Replaces the old AI-aggregated baseline so
+   *  the curve reflects irritability, load-vs-capacity, tissue
+   *  capacity and sensitivity dynamics — modulated by the structural
+   *  biases above and the case's offload-ability — and resolves into
+   *  an A / B / C scenario with plateau, recurrence and chronic
+   *  flags. Falls back to null when no condition context is available
+   *  yet. */
+  const naturalDriverModel: NaturalDriverProjection | null = useMemo(() => {
+    if (!conditionContext) return null;
+    const aiWeeks = aiNaturalTimeline?.overall_window_weeks?.expected;
+    const horizonInput: SimulationInput = {
+      ...input,
+      totalWeeks: Math.max(4, Math.min(52, Math.round(aiWeeks ?? input.totalWeeks))),
     };
-    return simulateBranch(naturalInput, emptyBranch, 'no_treatment', undefined, [], ctxForSim, aiNaturalTimeline);
-  }, [aiNaturalTimeline, input, ctxForSim]);
+    return simulateNaturalDriverModel(horizonInput, conditionContext, structuralBiases, aiNaturalTimeline ?? null);
+  }, [conditionContext, structuralBiases, aiNaturalTimeline, input]);
+
+  const naturalProjection = naturalDriverModel?.projection ?? null;
 
   /** Mode toggle for the main chart. Defaults to 'natural' the first
    *  time an AI Natural Timeline result becomes available, then stays
@@ -742,12 +780,15 @@ export default function RecoverySimulatorDashboard({
   const [chartMode, setChartMode] = useState<'natural' | 'plan'>('plan');
   const naturalAutoSetRef = useRef(false);
   useEffect(() => {
-    if (aiNaturalTimeline && !naturalAutoSetRef.current) {
+    // Auto-flip to "natural" the first time either an AI verdict OR
+    // the driver-model natural projection becomes available so the
+    // user lands on the new clinically honest baseline by default.
+    if ((aiNaturalTimeline || naturalProjection) && !naturalAutoSetRef.current) {
       naturalAutoSetRef.current = true;
       setChartMode('natural');
     }
-    if (!aiNaturalTimeline) naturalAutoSetRef.current = false;
-  }, [aiNaturalTimeline]);
+    if (!aiNaturalTimeline && !naturalProjection) naturalAutoSetRef.current = false;
+  }, [aiNaturalTimeline, naturalProjection]);
 
   const usingNaturalChart = chartMode === 'natural' && !!naturalProjection;
   const displayProjection = usingNaturalChart && naturalProjection ? naturalProjection : activeProjection;
@@ -1872,11 +1913,34 @@ export default function RecoverySimulatorDashboard({
                 </div>
                 <div className="text-[9px] text-gray-500 mb-1">
                   {usingNaturalChart
-                    ? 'AI-predicted recovery without treatment — drag to scrub the natural trajectory.'
+                    ? 'Driver-model natural recovery (irritability, load vs capacity, tissue capacity, sensitivity) modulated by skeleton-derived structural biases — drag to scrub.'
                     : 'Drag timeline or modify treatments to see changes'}
                 </div>
                 <div className="h-[260px] shrink-0 overflow-hidden">
-                  <MiniChart series={mainSeries} scrubWeek={scrubWeek} totalWeeks={displayTotalWeeks} onScrub={setScrubWeek} height={240} axisUnit={axisUnit} />
+                  <MiniChart
+                    series={mainSeries}
+                    scrubWeek={scrubWeek}
+                    totalWeeks={displayTotalWeeks}
+                    onScrub={setScrubWeek}
+                    height={240}
+                    axisUnit={axisUnit}
+                    markers={
+                      usingNaturalChart && naturalDriverModel
+                        ? [
+                            ...(naturalDriverModel.flags.plateau && naturalDriverModel.flags.plateauWeek != null
+                              ? [{ week: naturalDriverModel.flags.plateauWeek, color: '#f59e0b', glyph: 'P', label: `Plateau detected w${naturalDriverModel.flags.plateauWeek} — capacity gain stalled` }]
+                              : []),
+                            ...naturalDriverModel.flags.recurrenceWeeks.map(w => ({
+                              week: w, color: '#fb923c', glyph: 'R',
+                              label: `Recurrence-risk week ${w} — load > capacity & sensitivity elevated`,
+                            })),
+                            ...(naturalDriverModel.flags.chronic && naturalDriverModel.flags.chronicOnsetWeek != null
+                              ? [{ week: naturalDriverModel.flags.chronicOnsetWeek, color: '#ef4444', glyph: 'C', label: `Chronic pathway onset w${naturalDriverModel.flags.chronicOnsetWeek} — sensitivity stuck high & capacity not improving` }]
+                              : []),
+                          ]
+                        : undefined
+                    }
+                  />
                 </div>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {mainSeries.map(s => (
@@ -1885,6 +1949,138 @@ export default function RecoverySimulatorDashboard({
                     </span>
                   ))}
                 </div>
+
+                {/* Task #189 — Natural-recovery driver model overlay.
+                    Renders the four explicit drivers as a sub-chart, the
+                    A/B/C scenario classification, the structural-bias
+                    panel (with per-diagnosis relevance), and the
+                    plateau / recurrence / chronic flag markers. Only
+                    appears in "Natural timeline" mode. */}
+                {usingNaturalChart && naturalDriverModel && (
+                  <div className="mt-3 rounded-lg border border-violet-700/40 bg-violet-950/15 p-2.5" data-testid="natural-driver-panel">
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          className={`text-[10px] uppercase tracking-wide ${
+                            naturalDriverModel.scenario === 'A' ? 'bg-emerald-700/40 text-emerald-100 border-emerald-600/60' :
+                            naturalDriverModel.scenario === 'B' ? 'bg-amber-700/40 text-amber-100 border-amber-600/60' :
+                                                                  'bg-red-700/40 text-red-100 border-red-600/60'
+                          }`}
+                          data-testid="natural-scenario-badge"
+                          title={naturalDriverModel.scenarioRationale}
+                        >Scenario {naturalDriverModel.scenarioLabel}</Badge>
+                        <span className="text-[10px] text-gray-300">
+                          Tissue family: <span className="font-semibold text-violet-200">{naturalDriverModel.family}</span>
+                        </span>
+                        <span className="text-[10px] text-gray-300" title={naturalDriverModel.offload.rationale}>
+                          Offload: <span className={`font-semibold ${
+                            naturalDriverModel.offload.label === 'good' ? 'text-emerald-300' :
+                            naturalDriverModel.offload.label === 'fair' ? 'text-amber-300' : 'text-red-300'
+                          }`}>{naturalDriverModel.offload.label} ({naturalDriverModel.offload.score.toFixed(0)})</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        {naturalDriverModel.flags.plateau && (
+                          <Badge className="bg-amber-800/40 border-amber-600/60 text-amber-100 text-[9px]" title={`Plateau onset around week ${naturalDriverModel.flags.plateauWeek}`}>
+                            Plateau · w{naturalDriverModel.flags.plateauWeek ?? '?'}
+                          </Badge>
+                        )}
+                        {naturalDriverModel.flags.recurrence && (
+                          <Badge className="bg-orange-800/40 border-orange-600/60 text-orange-100 text-[9px]" title={`Natural flare cycles at: ${naturalDriverModel.flags.recurrenceWeeks.map(w => `w${w}`).join(', ')}`}>
+                            Recurrence ×{naturalDriverModel.flags.recurrenceWeeks.length}
+                          </Badge>
+                        )}
+                        {naturalDriverModel.flags.chronic && (
+                          <Badge className="bg-red-800/40 border-red-600/60 text-red-100 text-[9px]" title="Predicted chronic / non-resolving trajectory">
+                            Chronic
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-[10px] text-violet-200/80 italic mb-2" data-testid="natural-scenario-rationale">
+                      {naturalDriverModel.scenarioRationale}
+                    </div>
+                    <div className="text-[9px] text-gray-400 mb-2 font-mono" data-testid="natural-trigger-counters">
+                      Trigger counters · load&gt;cap streak {naturalDriverModel.flags.triggerCounters.loadOverCapacity}w · sens≥60 streak {naturalDriverModel.flags.triggerCounters.sensitivityStuckHigh}w · cap-stagnant streak {naturalDriverModel.flags.triggerCounters.capacityNotImproving}w
+                    </div>
+
+                    {/* Four-driver sub-chart */}
+                    <div className="h-[140px] overflow-hidden rounded bg-gray-950/50 border border-gray-800/70">
+                      <MiniChart
+                        series={[
+                          { label: DRIVER_LABELS.tissueCapacity, color: DRIVER_COLORS.tissueCapacity, values: naturalDriverModel.drivers.tissueCapacity },
+                          { label: DRIVER_LABELS.loadVsCapacity, color: DRIVER_COLORS.loadVsCapacity, values: naturalDriverModel.drivers.loadVsCapacity, dash: '3,2' },
+                          { label: DRIVER_LABELS.irritability,   color: DRIVER_COLORS.irritability,   values: naturalDriverModel.drivers.irritability },
+                          { label: DRIVER_LABELS.sensitivity,    color: DRIVER_COLORS.sensitivity,    values: naturalDriverModel.drivers.sensitivity, dash: '4,2' },
+                        ]}
+                        scrubWeek={Math.min(scrubWeek, naturalDriverModel.drivers.tissueCapacity.length - 1)}
+                        totalWeeks={Math.max(1, naturalDriverModel.drivers.tissueCapacity.length - 1)}
+                        onScrub={setScrubWeek}
+                        height={140}
+                        showWeekLabel={false}
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {(['tissueCapacity','loadVsCapacity','irritability','sensitivity'] as const).map(k => (
+                        <span key={k} className="flex items-center gap-1 text-[9px] text-gray-400">
+                          <span className="w-2.5 h-0.5" style={{ background: DRIVER_COLORS[k] }} />{DRIVER_LABELS[k]}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Structural-bias panel — biases not relevant to
+                        the active diagnosis are shown but de-emphasised
+                        (struck-through label + dimmed bar) so the user
+                        can see the full skeleton picture without losing
+                        sight of which biases actually move the curve. */}
+                    <div className="mt-3">
+                      <div className="text-[10px] uppercase tracking-wide text-violet-200 font-semibold mb-1.5">
+                        Skeleton-derived structural biases
+                      </div>
+                      {naturalDriverModel.biases.length === 0 ? (
+                        <div className="text-[10px] text-gray-400 italic">
+                          No clinically meaningful structural bias detected from the current skeleton state.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5" data-testid="structural-bias-list">
+                          {naturalDriverModel.biases.map(b => {
+                            const w = relevantBiasWeight(naturalDriverModel.family, b.id);
+                            const isRelevant = w > 0;
+                            return (
+                              <div
+                                key={b.id}
+                                className={`rounded border p-1.5 ${isRelevant ? 'border-violet-700/40 bg-gray-900/60' : 'border-gray-800/40 bg-gray-900/30 opacity-70'}`}
+                                data-testid={`bias-${b.id}`}
+                              >
+                                <div className="flex items-center justify-between gap-2 mb-0.5">
+                                  <span className={`text-[10px] font-semibold ${isRelevant ? 'text-violet-100' : 'text-gray-400 line-through'}`}>
+                                    {b.label}
+                                  </span>
+                                  <span className={`text-[10px] font-mono ${isRelevant ? 'text-amber-300' : 'text-gray-500'}`}>
+                                    {b.magnitude.toFixed(0)}
+                                  </span>
+                                </div>
+                                <div className="h-1 rounded bg-gray-800/80 overflow-hidden mb-1">
+                                  <div
+                                    className={`h-full ${isRelevant ? 'bg-amber-400' : 'bg-gray-600'}`}
+                                    style={{ width: `${b.magnitude}%` }}
+                                  />
+                                </div>
+                                <div className={`text-[9px] ${isRelevant ? 'text-gray-300' : 'text-gray-500'}`}>
+                                  {b.explanation}
+                                  {!isRelevant && (
+                                    <span className="text-gray-500 italic"> · not clinically relevant for {naturalDriverModel.family}</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="flex-1 min-h-[240px] rounded overflow-hidden border border-gray-800/60 bg-black relative" data-testid="dashboard-skeleton-slot">

@@ -139,7 +139,7 @@ import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 import { aggregateTissueIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
-import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
+import { computeSlingAnalysis, getSlingBonePathway, SLING_ACTIVATION_BASELINE, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
 
@@ -4512,6 +4512,20 @@ ${ddxList}`;
       slingSeverity = Math.min(100, totalWeak * 12 + dysCount * 10);
     }
 
+    // Activation overrides represent clinician-set under-/over-active slings.
+    // Deviation from baseline (100%) loads the recovery model: under-active
+    // slings degrade force transfer (linear), over-active slings introduce
+    // tone-driven inefficiency (slightly weighted lower per percentage point).
+    let activationDeficitLoad = 0;
+    for (const [, raw] of Object.entries(slingActivationOverrides)) {
+      if (raw === undefined) continue;
+      const pct = Math.max(0, Math.min(200, raw));
+      const dev = pct - SLING_ACTIVATION_BASELINE;
+      activationDeficitLoad += dev < 0 ? Math.abs(dev) : dev * 0.6;
+    }
+    const activationSeverityAdd = Math.min(60, activationDeficitLoad * 0.4);
+    slingSeverity = Math.min(100, slingSeverity + activationSeverityAdd);
+
     const deviations = collectModelConfigDeviations(modelConfig);
     let deviationMag = 0;
     for (const d of deviations) deviationMag += Math.abs(d.value);
@@ -4561,7 +4575,7 @@ ${ddxList}`;
       patientPhaseTimingMult: mods.phaseTimingMultiplier,
       patientRomCeiling: mods.romCeilingAdjustment,
     });
-  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, collectModelConfigDeviations]);
+  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, slingActivationOverrides, collectModelConfigDeviations]);
 
   const naturalTimelineRequestContext = useMemo<NaturalTimelineRequestContext | null>(() => {
     if (!showRecoverySim) return null;
@@ -4593,12 +4607,37 @@ ${ddxList}`;
       sling_weak_links: slingAnalysis
         ? slingAnalysis.slings.flatMap(s =>
             (s.weakLinks ?? []).map(wl => ({
-              sling: s.name ?? s.id ?? 'sling',
+              sling: s.label ?? s.slingId ?? 'sling',
               weakLink: typeof wl === 'string' ? wl : String(wl),
               severity: s.status === 'compensating' ? 70 : s.status === 'underperforming' ? 55 : 30,
             }))
           )
         : undefined,
+      sling_activation_overrides: (() => {
+        const labelById = new Map<string, string>();
+        if (slingAnalysis) {
+          for (const s of slingAnalysis.slings) labelById.set(s.slingId, s.label ?? s.slingId);
+        }
+        const entries: Array<{ sling: string; activation_percent: number; band: string; deficit_severity: number }> = [];
+        for (const [id, raw] of Object.entries(slingActivationOverrides)) {
+          if (raw === undefined) continue;
+          const pct = Math.max(0, Math.min(200, raw));
+          if (pct === SLING_ACTIVATION_BASELINE) continue;
+          const dev = pct - SLING_ACTIVATION_BASELINE;
+          const band =
+            pct < SLING_ACTIVATION_BASELINE
+              ? (pct <= 30 ? 'severe_under' : 'mild_under')
+              : (pct >= 170 ? 'severe_over' : 'mild_over');
+          const deficit_severity = Math.min(100, Math.round(dev < 0 ? Math.abs(dev) : dev * 0.6));
+          entries.push({
+            sling: labelById.get(id) ?? id,
+            activation_percent: Math.round(pct),
+            band,
+            deficit_severity,
+          });
+        }
+        return entries.length > 0 ? entries : undefined;
+      })(),
       joint_deviations: collectModelConfigDeviations(modelConfig).map(d => ({
         joint: d.joint,
         parameter: d.param,
@@ -4633,7 +4672,7 @@ ${ddxList}`;
         irritability: extractionResult?.irritability ?? null,
       },
     };
-  }, [showRecoverySim, recoverySimHasClinicalInput, extractionResult, structuredReasoningData, painMarkers, compromisedTissues, slingAnalysis, modelConfig, scarMarkers, adhesionBands, romMeasurements, collectModelConfigDeviations]);
+  }, [showRecoverySim, recoverySimHasClinicalInput, extractionResult, structuredReasoningData, painMarkers, compromisedTissues, slingAnalysis, modelConfig, scarMarkers, adhesionBands, romMeasurements, slingActivationOverrides, collectModelConfigDeviations]);
 
   /** Stable dedup signature for the natural-timeline request. Built
    *  from clinically meaningful fields only (with quantized numeric
@@ -4660,6 +4699,9 @@ ${ddxList}`;
       .sort();
     const sigSlings = (ctx.sling_weak_links ?? [])
       .map(s => [s.sling, s.weakLink, bucket(s.severity, 10)].join('|'))
+      .sort();
+    const sigSlingActivation = (ctx.sling_activation_overrides ?? [])
+      .map(o => [o.sling, bucket(o.activation_percent, 10), o.band].join('|'))
       .sort();
     const sigRegions = (ctx.region_highlights ?? [])
       .map(r => [r.region, r.type, bucket(r.severity ?? null, 10)].join('|'))
@@ -4690,6 +4732,7 @@ ${ddxList}`;
       tis: sigTissues,
       nr: !!ctx.has_nerve_root,
       sl: sigSlings,
+      sla: sigSlingActivation,
       rh: sigRegions,
       pf: sigFactors,
       // joint_deviations + postural_deviations intentionally OMITTED:

@@ -5450,6 +5450,12 @@ export interface NaturalTimelineRequestContext {
   region_highlights?: Array<{ region: string; type?: string; severity?: number; label?: string }>;
   postural_deviations?: Record<string, number>;
   sling_weak_links?: Array<{ sling: string; weakLink: string; severity?: number }>;
+  sling_activation_overrides?: Array<{
+    sling: string;
+    activation_percent: number;
+    band: string;
+    deficit_severity: number;
+  }>;
   joint_deviations?: Array<{ joint: string; parameter: string; degrees: number }>;
   has_nerve_root?: boolean;
   patient_factors?: Record<string, string | number | boolean | null | undefined>;

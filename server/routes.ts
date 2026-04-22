@@ -10412,6 +10412,35 @@ Now produce the refined hypothesis JSON.`;
     }
   });
 
+  app.post("/api/diagnosis-provocations/compose", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { hypothesisId, condition, supportingEvidence, rulingOutFactors } = req.body || {};
+      if (!hypothesisId || typeof hypothesisId !== "string") {
+        return res.status(400).json({ error: "hypothesisId is required" });
+      }
+      if (!condition || typeof condition !== "string") {
+        return res.status(400).json({ error: "condition is required" });
+      }
+      const { composeProvocationMovements } = await import("./diagnosisProvocationGenerator");
+      const movements = await composeProvocationMovements({
+        hypothesisId,
+        condition,
+        supportingEvidence: Array.isArray(supportingEvidence) ? supportingEvidence : undefined,
+        rulingOutFactors: Array.isArray(rulingOutFactors) ? rulingOutFactors : undefined,
+      });
+      res.json({ movements });
+    } catch (error: any) {
+      console.error("Compose provocation error:", error?.message || error);
+      const status = error?.status === 429 ? 429 : 500;
+      res.status(status).json({
+        error:
+          error?.status === 429
+            ? "AI quota exceeded — try again shortly."
+            : error?.message || "Unable to compose provocation movements",
+      });
+    }
+  });
+
   app.get("/api/physiogpt/conversations", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const conversations = await physioGptService.getUserConversations(req.user!.id);

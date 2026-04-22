@@ -1535,8 +1535,18 @@ export const MOVEMENT_RESTRICTIONS: Record<string, MovementRestriction[]> = {
   ],
 };
 
+const dynamicMovements = new Map<string, MovementSequence>();
+
+export function registerDynamicMovement(seq: MovementSequence): void {
+  dynamicMovements.set(seq.id, seq);
+}
+
+export function unregisterDynamicMovement(id: string): void {
+  dynamicMovements.delete(id);
+}
+
 export function getMovementById(id: string): MovementSequence | undefined {
-  return MOVEMENT_SEQUENCES.find(m => m.id === id);
+  return MOVEMENT_SEQUENCES.find(m => m.id === id) || dynamicMovements.get(id);
 }
 
 export function getMovementCategories(): typeof MOVEMENT_CATEGORIES {

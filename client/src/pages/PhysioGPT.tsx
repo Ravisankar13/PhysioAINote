@@ -572,6 +572,7 @@ export default function PhysioGPT() {
   const [chatPanelOpen, setChatPanelOpen] = useState(true);
   const [hypothesisChatOpen, setHypothesisChatOpen] = useState(false);
   const [selectedHypothesisForChat, setSelectedHypothesisForChat] = useState<HypothesisData | null>(null);
+  const [provocationRefreshKey, setProvocationRefreshKey] = useState(0);
   const [testBenchOpen, setTestBenchOpen] = useState(false);
   const [testBenchHypothesis, setTestBenchHypothesis] = useState<BenchHypothesisInput | null>(null);
   const benchSnapshotRef = useRef<{
@@ -3235,6 +3236,62 @@ ${ddxList}`;
       setStalePoseHint({ replacedFromId: originalId, newId: promotedId, condition: promotedCondition });
     }
   }, []);
+
+  const provocationHypothesis = selectedHypothesisForChat;
+  const provocationQueryEnabled = !!provocationHypothesis && !!provocationHypothesis.id && !!provocationHypothesis.condition;
+  const {
+    data: provocationData,
+    isFetching: provocationLoading,
+    error: provocationError,
+    refetch: refetchProvocations,
+  } = useQuery<{ movements: any[] }>({
+    queryKey: [
+      "/api/diagnosis-provocations/compose",
+      provocationHypothesis?.id,
+      provocationHypothesis?.condition,
+      provocationRefreshKey,
+    ],
+    enabled: provocationQueryEnabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      if (!provocationHypothesis) return { movements: [] };
+      const res = await fetch("/api/diagnosis-provocations/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          hypothesisId: provocationHypothesis.id,
+          condition: provocationHypothesis.condition,
+          supportingEvidence: provocationHypothesis.supportingEvidence,
+          rulingOutFactors: provocationHypothesis.rulingOutFactors,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed to compose provocations");
+      }
+      return res.json();
+    },
+  });
+  const provocationMovements = useMemo(() => {
+    const list = Array.isArray(provocationData?.movements) ? provocationData.movements : [];
+    return list.map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      duration: m.duration,
+      loop: !!m.loop,
+      joints: m.joints,
+      clinicalRationale: m.clinicalRationale,
+      positiveFinding: m.positiveFinding,
+    }));
+  }, [provocationData]);
+  const handleRegenerateProvocations = useCallback(() => {
+    setProvocationRefreshKey(k => k + 1);
+    setTimeout(() => { refetchProvocations(); }, 0);
+  }, [refetchProvocations]);
 
   const handleRePoseToRefined = useCallback(() => {
     if (!stalePoseHint) return;
@@ -6392,6 +6449,11 @@ ${ddxList}`;
               onCompensationChange={handleCompensationChange}
               modelConfig={finalModelConfig as any}
               muscleRestrictionEffects={muscleRestrictionEffects}
+              diagnosisMovements={provocationMovements}
+              diagnosisCondition={provocationHypothesis?.condition || null}
+              diagnosisLoading={provocationLoading}
+              diagnosisError={provocationError ? (provocationError as Error).message : null}
+              onRegenerateDiagnosisMovements={provocationQueryEnabled ? handleRegenerateProvocations : undefined}
             />
 
             {/* Clinical Presets Panel */}

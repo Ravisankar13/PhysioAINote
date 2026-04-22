@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight, PersonStanding, Zap, TrendingUp } from 'lucide-react';
-import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, type MovementSequence } from '@/lib/movementSequences';
+import { Play, Pause, Square, ChevronDown, ChevronUp, Activity, Gauge, GripVertical, SlidersHorizontal, AlertTriangle, Bone, ArrowRight, PersonStanding, Zap, TrendingUp, Stethoscope, RefreshCw, Loader2 } from 'lucide-react';
+import { MOVEMENT_SEQUENCES, MOVEMENT_CATEGORIES, MOVEMENT_RESTRICTIONS, getMovementById, registerDynamicMovement, unregisterDynamicMovement, type MovementSequence } from '@/lib/movementSequences';
 import { calculateCompensations, computePostureDeviations, NORMAL_ROM, getClinicalConsequences, type JointConstraint, type ClinicalWarning, type CompensationResult, type ClinicalConsequence } from '@/lib/jointConstraints';
 import { getMovementBiomechanics, computeRestrictionOverloads, type BiomechanicsSnapshot } from '@/lib/movementBiomechanics';
 import type { MuscleRestrictionEffect } from '@/lib/bidirectionalMuscleJoint';
@@ -40,6 +40,11 @@ function mapToCompensationNames(animJoint: string, animMovement: string): { join
   return { joint: jointMap[animJoint] || animJoint, movement: mapMovement(animMovement) };
 }
 
+export interface DiagnosisProvocationMovement extends MovementSequence {
+  clinicalRationale?: string;
+  positiveFinding?: string;
+}
+
 interface MovementPlayerProps {
   animationState: AnimationState;
   onAnimationStateChange: (state: AnimationState) => void;
@@ -47,9 +52,14 @@ interface MovementPlayerProps {
   onCompensationChange?: (result: CompensationResult | null, movementName: string | null, restrictions: Record<string, number>) => void;
   modelConfig?: PostureConfig;
   muscleRestrictionEffects?: MuscleRestrictionEffect[];
+  diagnosisMovements?: DiagnosisProvocationMovement[];
+  diagnosisCondition?: string | null;
+  diagnosisLoading?: boolean;
+  diagnosisError?: string | null;
+  onRegenerateDiagnosisMovements?: () => void;
 }
 
-export default function MovementPlayer({ animationState, onAnimationStateChange, onConstraintsChange, onCompensationChange, modelConfig, muscleRestrictionEffects }: MovementPlayerProps) {
+export default function MovementPlayer({ animationState, onAnimationStateChange, onConstraintsChange, onCompensationChange, modelConfig, muscleRestrictionEffects, diagnosisMovements, diagnosisCondition, diagnosisLoading, diagnosisError, onRegenerateDiagnosisMovements }: MovementPlayerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showRestrictions, setShowRestrictions] = useState(false);
@@ -60,8 +70,18 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const [showProvocations, setShowProvocations] = useState(true);
+
+  useEffect(() => {
+    if (!diagnosisMovements || diagnosisMovements.length === 0) return;
+    diagnosisMovements.forEach(m => registerDynamicMovement(m));
+    return () => {
+      diagnosisMovements.forEach(m => unregisterDynamicMovement(m.id));
+    };
+  }, [diagnosisMovements]);
+
   const currentMovement = animationState.currentMovement
-    ? MOVEMENT_SEQUENCES.find(m => m.id === animationState.currentMovement)
+    ? getMovementById(animationState.currentMovement) ?? null
     : null;
 
   const currentRestrictions = animationState.currentMovement
@@ -268,6 +288,112 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
         </div>
 
         <div className="overflow-y-auto flex-1 min-h-0">
+        {(diagnosisCondition || (diagnosisMovements && diagnosisMovements.length > 0) || diagnosisLoading || diagnosisError) && (
+          <div className="border-b border-gray-700/50 bg-gradient-to-b from-violet-500/[0.06] to-transparent">
+            <button
+              onClick={() => setShowProvocations(v => !v)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-violet-500/[0.05] transition-colors"
+            >
+              <Stethoscope className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-violet-300 uppercase tracking-wider">
+                  Diagnosis Provocations
+                </div>
+                {diagnosisCondition && (
+                  <div className="text-[10px] text-violet-400/70 truncate">{diagnosisCondition}</div>
+                )}
+              </div>
+              {diagnosisLoading ? (
+                <Loader2 className="w-3.5 h-3.5 text-violet-400 animate-spin flex-shrink-0" />
+              ) : (
+                <span className="text-[9px] text-violet-500/70 font-mono bg-violet-500/15 px-1.5 py-0.5 rounded">
+                  {diagnosisMovements?.length ?? 0}
+                </span>
+              )}
+              {showProvocations ? (
+                <ChevronDown className="w-3.5 h-3.5 text-violet-500/60 flex-shrink-0" />
+              ) : (
+                <ChevronUp className="w-3.5 h-3.5 text-violet-500/60 flex-shrink-0" />
+              )}
+            </button>
+
+            {showProvocations && (
+              <div className="px-3 pb-3 space-y-2">
+                {diagnosisLoading && !diagnosisMovements?.length && (
+                  <div className="text-[10px] text-violet-300/70 italic px-1 py-2">
+                    Composing diagnosis-specific tests…
+                  </div>
+                )}
+                {diagnosisError && !diagnosisLoading && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1.5 text-[10px] text-red-300">
+                    {diagnosisError}
+                  </div>
+                )}
+                {diagnosisMovements && diagnosisMovements.length > 0 && diagnosisMovements.map(movement => {
+                  const isActive = animationState.currentMovement === movement.id;
+                  return (
+                    <div
+                      key={movement.id}
+                      className={`rounded-lg border p-2 transition-all ${
+                        isActive
+                          ? 'bg-violet-500/15 border-violet-500/50 ring-1 ring-violet-500/30'
+                          : 'bg-gray-800/70 border-gray-700/50 hover:border-violet-500/30'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <button
+                          onClick={() => handleSelectMovement(movement)}
+                          className={`mt-0.5 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-all ${
+                            isActive && animationState.isPlaying
+                              ? 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/40'
+                              : 'bg-violet-500/20 text-violet-300 hover:bg-violet-500/30'
+                          }`}
+                          title="Play this provocation"
+                        >
+                          {isActive && animationState.isPlaying ? (
+                            <Pause className="w-3.5 h-3.5" />
+                          ) : (
+                            <Play className="w-3.5 h-3.5 ml-0.5" />
+                          )}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-[11px] font-semibold ${isActive ? 'text-violet-200' : 'text-gray-200'}`}>
+                            {movement.name}
+                          </div>
+                          <div className="text-[9.5px] text-gray-400 mt-0.5 leading-snug">
+                            {movement.description}
+                          </div>
+                          {movement.clinicalRationale && (
+                            <div className="text-[9px] text-violet-300/70 mt-1 italic leading-snug">
+                              <span className="text-violet-400/80 font-medium not-italic">Rationale: </span>
+                              {movement.clinicalRationale}
+                            </div>
+                          )}
+                          {movement.positiveFinding && (
+                            <div className="text-[9px] text-amber-300/80 mt-1 leading-snug">
+                              <span className="text-amber-400/90 font-medium">Positive: </span>
+                              {movement.positiveFinding}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {onRegenerateDiagnosisMovements && (
+                  <button
+                    onClick={onRegenerateDiagnosisMovements}
+                    disabled={diagnosisLoading}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] font-medium text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${diagnosisLoading ? 'animate-spin' : ''}`} />
+                    Regenerate provocations
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {isExpanded && (
           <div className="max-h-[320px] overflow-y-auto p-3 border-b border-gray-700/50">
             <div className="flex gap-2 mb-3 flex-wrap">

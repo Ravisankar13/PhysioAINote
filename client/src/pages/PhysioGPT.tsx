@@ -3256,14 +3256,15 @@ ${ddxList}`;
    * differentials and we don't want to spend AI credits on those.
    * Priority:
    *   1. Most recent refine-commit (clinician just promoted/replaced).
-   *   2. Top-confidence hypothesis with status === "confirmed".
-   * Confidence gate: ≥60%.
+   *   2. Top-confidence hypothesis with status === "confirmed" — no
+   *      additional confidence gate; "confirmed" is itself the clinician's
+   *      sign-off, so we honour it regardless of numeric confidence.
    */
   const provocationHypothesis = useMemo<{ id: string; condition: string; supportingEvidence?: string[]; rulingOutFactors?: string[] } | null>(() => {
     if (lastRefinedCommit) return lastRefinedCommit;
     const hyps = clinicalReasoningData?.hypotheses ?? [];
     const confirmed = hyps
-      .filter(h => h.status === "confirmed" && h.confidence >= 60)
+      .filter(h => h.status === "confirmed")
       .sort((a, b) => b.confidence - a.confidence);
     if (confirmed.length > 0) {
       const h = confirmed[0];

@@ -144,6 +144,12 @@ export type JointVocabRange = ReturnType<typeof getPropertyRange>;
 /**
  * AnatomicalRegion identifiers (snake_case) used by the 3D viewer's pain marker
  * system. Provocation movements declare expectedProvocationSites against these.
+ *
+ * IMPORTANT: This list is a strict subset of REGION_BONE_MAPPING in
+ * client/src/components/skeleton/PureThreeGLBViewer.tsx. Every id below MUST
+ * exist as a key in that map so transient expected-site markers can resolve
+ * to a bone. Do not add ids here without first adding bones for them in the
+ * viewer.
  */
 export interface ProvocationKeyframe {
   time: number;
@@ -209,11 +215,12 @@ export const ANATOMICAL_REGIONS = [
   "right_shoulder",
   "left_hip",
   "right_hip",
+  "pelvis",
+  "anterior_pelvis",
   "left_knee",
   "right_knee",
   "left_ankle",
   "right_ankle",
-  "pelvis",
   "left_elbow",
   "right_elbow",
   "left_scapula",
@@ -222,9 +229,8 @@ export const ANATOMICAL_REGIONS = [
   "right_wrist",
   "left_hand",
   "right_hand",
+  "left_foot",
+  "right_foot",
   "head",
-  "neck",
-  "abdomen",
-  "chest",
 ] as const;
 export type AnatomicalRegionId = (typeof ANATOMICAL_REGIONS)[number];

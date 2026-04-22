@@ -165,24 +165,30 @@ export const DEFAULT_JOINT_LIMITS: JointLimits = {
  * the engine vocabulary at load time.
  */
 function assertSharedVocabIsSubset(): void {
+  const violations: string[] = [];
   for (const [joint, def] of Object.entries(SHARED_JOINT_VOCABULARY)) {
     const engine = DEFAULT_JOINT_LIMITS[joint];
     if (!engine) {
-      console.warn(`[jointVocabulary] shared joint "${joint}" missing from DEFAULT_JOINT_LIMITS`);
+      violations.push(`shared joint "${joint}" missing from DEFAULT_JOINT_LIMITS`);
       continue;
     }
     for (const [prop, range] of Object.entries(def.properties)) {
       const engRange = engine[prop];
       if (!engRange) {
-        console.warn(`[jointVocabulary] shared "${joint}.${prop}" missing from engine limits`);
+        violations.push(`shared "${joint}.${prop}" missing from engine limits`);
         continue;
       }
       if (range.min < engRange.min || range.max > engRange.max) {
-        console.warn(
-          `[jointVocabulary] shared "${joint}.${prop}" (${range.min}..${range.max}) exceeds engine (${engRange.min}..${engRange.max})`,
+        violations.push(
+          `shared "${joint}.${prop}" (${range.min}..${range.max}) exceeds engine (${engRange.min}..${engRange.max})`,
         );
       }
     }
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `[jointVocabulary] shared vocab is not a subset of DEFAULT_JOINT_LIMITS:\n  - ${violations.join("\n  - ")}`,
+    );
   }
 }
 if (typeof window !== "undefined" && import.meta.env.DEV) {

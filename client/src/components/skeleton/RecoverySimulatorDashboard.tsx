@@ -1480,50 +1480,52 @@ export default function RecoverySimulatorDashboard({
         r.patientFactor = `Tissue-driven slow phase (×${tissueProfile.phaseDurationMult.toFixed(2)})`;
       }
 
-      if (!r.reached) {
-        r.treatments = TREATMENT_LIBRARY
-          .filter(t => stageFitForTreatment(stage, t.healingStageMultiplier, t.name) >= 1.1)
-          .slice(0, 3)
-          .map(t => t.name);
-        r.treatmentSource = 'stage_recommended';
-        return;
+      // Window for this stage: use the engine's actual reached span when
+      // available, otherwise fall back to the expected biological corridor.
+      // Using the expected window for unreached stages lets auto-promoted
+      // interventions (which place into the expected corridor) still show
+      // up as the "scheduled" treatments for that phase card.
+      const sIdx = r.reached ? r.start : r.expectedStart;
+      const eIdx = r.reached ? r.end : r.expectedEnd;
+
+      if (r.reached) {
+        // Tissue status: dominant compromised dimension, current → end of stage
+        const startVal = readDim(sIdx, stageDim);
+        const endVal = readDim(eIdx, stageDim);
+        r.tissueStartText = fmtDim(startVal, stageDim);
+        r.tissueEndText = fmtDim(endVal, stageDim);
+        r.tissueImproved = lowerIsBetter[stageDim] ? endVal <= startVal : endVal >= startVal;
+
+        // Goal current-vs-target
+        const tgt = targetForStage(idx, stageDim);
+        r.goalCurrentText = fmtDim(endVal, stageDim);
+        if (tgt) {
+          r.goalTargetText = tgt.text;
+          const range = Math.abs(tgt.value - startVal) || 1;
+          const progress = lowerIsBetter[stageDim] ? (startVal - endVal) / range : (endVal - startVal) / range;
+          r.goalAchievement = Math.max(0, Math.min(1, progress));
+        }
+
+        // Flare events / load adjustments landing in window — show the
+        // first one with week + cause/label so it reads as a real event.
+        r.flareNotes = activeBranch.flareEvents
+          .filter(f => f.week >= sIdx && f.week <= eIdx)
+          .slice(0, 2)
+          .map(f => `Flare wk ${f.week}${f.cause ? ` — ${f.cause}` : ''}`);
+        r.loadNotes = activeBranch.loadAdjustments
+          .filter(l => l.week >= sIdx && l.week <= eIdx)
+          .slice(0, 2)
+          .map(l => `Load ${l.deltaPercent >= 0 ? '+' : ''}${l.deltaPercent}% wk ${l.week}${l.label ? ` — ${l.label}` : ''}`);
       }
 
-      const sIdx = r.start;
-      const eIdx = r.end;
-
-      // Tissue status: dominant compromised dimension, current → end of stage
-      const startVal = readDim(sIdx, stageDim);
-      const endVal = readDim(eIdx, stageDim);
-      r.tissueStartText = fmtDim(startVal, stageDim);
-      r.tissueEndText = fmtDim(endVal, stageDim);
-      r.tissueImproved = lowerIsBetter[stageDim] ? endVal <= startVal : endVal >= startVal;
-
-      // Goal current-vs-target
-      const tgt = targetForStage(idx, stageDim);
-      r.goalCurrentText = fmtDim(endVal, stageDim);
-      if (tgt) {
-        r.goalTargetText = tgt.text;
-        const range = Math.abs(tgt.value - startVal) || 1;
-        const progress = lowerIsBetter[stageDim] ? (startVal - endVal) / range : (endVal - startVal) / range;
-        r.goalAchievement = Math.max(0, Math.min(1, progress));
-      }
-
-      // Flare events / load adjustments landing in window — show the
-      // first one with week + cause/label so it reads as a real event.
-      r.flareNotes = activeBranch.flareEvents
-        .filter(f => f.week >= sIdx && f.week <= eIdx)
-        .slice(0, 2)
-        .map(f => `Flare wk ${f.week}${f.cause ? ` — ${f.cause}` : ''}`);
-      r.loadNotes = activeBranch.loadAdjustments
-        .filter(l => l.week >= sIdx && l.week <= eIdx)
-        .slice(0, 2)
-        .map(l => `Load ${l.deltaPercent >= 0 ? '+' : ''}${l.deltaPercent}% wk ${l.week}${l.label ? ` — ${l.label}` : ''}`);
-
-      // Top-3 stage-fit treatments. Stage-fit cascades the existing
-      // healingStageMultiplier metadata onto every archetype by taking
-      // the max multiplier across the engine phases that map onto this
-      // stage, with an optional bonus for treatment-tag matches.
+      // Single source of truth: every treatment listed in this phase
+      // box must correspond to an actual Intervention bar on the Gantt.
+      // We derive the box from the active branch's interventions whose
+      // startWeek falls in this stage's window. Auto-promotion (below)
+      // ensures empty stages get default stage-recommended interventions
+      // dropped on the branch — so the simulation curve always reflects
+      // what the boxes display, and dragging/resizing/removing a bar
+      // immediately re-bends the chart through the existing engine loop.
       const scheduled = activeBranch.interventions
         .filter(i => i.startWeek >= sIdx && i.startWeek <= eIdx)
         .map(i => {
@@ -1531,38 +1533,102 @@ export default function RecoverySimulatorDashboard({
           const stageFit = t ? stageFitForTreatment(stage, t.healingStageMultiplier, t.name) : 1;
           return { name: t?.name ?? i.treatmentId, score: (attribIndex.get(i.treatmentId) ?? 0) + stageFit * 5, stageFit };
         })
-        .filter(x => x.stageFit >= 0.9)
         .sort((a, b) => b.score - a.score)
         .slice(0, 3)
         .map(x => x.name);
-      if (scheduled.length > 0) {
-        r.treatments = scheduled;
-        r.treatmentSource = 'scheduled';
-        return;
-      }
-      const attributionFit = [...activeProjection.attribution]
-        .map(a => {
-          const t = treatmentLookup.get(a.treatmentId);
-          const stageFit = t ? stageFitForTreatment(stage, t.healingStageMultiplier, t.name) : 1;
-          return { name: a.name, score: a.contributionPercent * stageFit, stageFit };
-        })
-        .filter(x => x.stageFit >= 0.9)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
-        .map(x => x.name);
-      if (attributionFit.length > 0) {
-        r.treatments = attributionFit;
-        r.treatmentSource = 'attribution';
-        return;
-      }
-      r.treatments = TREATMENT_LIBRARY
-        .filter(t => stageFitForTreatment(stage, t.healingStageMultiplier, t.name) >= 1.1)
-        .slice(0, 3)
-        .map(t => t.name);
-      r.treatmentSource = 'stage_recommended';
+      r.treatments = scheduled;
+      r.treatmentSource = 'scheduled';
     });
     return ranges;
   }, [archetype, activeProjection, activeBranch.interventions, activeBranch.flareEvents, activeBranch.loadAdjustments, treatmentLookup, conditionContext, tissueProfile, conditionProfile, goalProfile, input.totalWeeks, stateAtScrub, scrubbedStageIdx]);
+
+  // ─── Auto-promote stage-recommended treatments into Gantt bars ──────
+  // The phase boxes used to surface up to 3 stage-recommended treatments
+  // per stage as plain labels — they were never materialised on the
+  // active branch, so they never appeared on the Gantt and never bent
+  // the recovery curve. Promoting them here turns each recommendation
+  // into a real Intervention dropped on the active branch, anchored
+  // inside the matching stage's window. The phase boxes already read
+  // from the same `interventions` array, so add / drag / resize / remove
+  // stays in lockstep automatically and re-bends the curve through the
+  // existing simulateBranch loop.
+  //
+  // Idempotency: once a stage has been auto-handled for a given branch
+  // (whether we promoted defaults or detected pre-existing coverage),
+  // it is locked in `autoHandledStageIds` so removing a bar does not
+  // silently re-add it. Cloned branches inherit the parent's
+  // interventions, including any tagged auto-promotions, so the
+  // detection step also marks those stages as handled to avoid doubling.
+  const [autoHandledStageIds, setAutoHandledStageIds] = useState<Map<string, Set<string>>>(new Map());
+
+  useEffect(() => {
+    if (!archetype || phaseRanges.length === 0) return;
+    const handled = autoHandledStageIds.get(activeBranchId) ?? new Set<string>();
+    const newlyHandled = new Set<string>();
+    const toAdd: Intervention[] = [];
+    // Track treatmentIds we've placed in this pass to dedupe across
+    // stages — if the same treatment fits multiple stages we only drop
+    // a single canonical bar (placed on the earliest-fitting stage).
+    const placedTreatmentIds = new Set<string>(
+      activeBranch.interventions
+        .filter(iv => iv.scheduleRationale?.startsWith('auto:phase:'))
+        .map(iv => iv.treatmentId),
+    );
+    const horizon = input.totalWeeks ?? 24;
+    for (const r of phaseRanges) {
+      const stage = r.stage;
+      if (handled.has(stage.id)) continue;
+      // Detect inherited auto-promotions on this branch (e.g. clones).
+      const inheritedHere = activeBranch.interventions.some(iv =>
+        iv.scheduleRationale === `auto:phase:${stage.id}`);
+      // Detect any user / cart / AI intervention already covering this
+      // stage's window — if there's already coverage we don't add more.
+      const sIdx = Math.max(0, Math.min(horizon, r.expectedStart));
+      const eIdx = Math.max(sIdx + 1, Math.min(horizon, r.expectedEnd));
+      const existingCoverage = activeBranch.interventions.some(iv =>
+        iv.startWeek >= sIdx && iv.startWeek <= eIdx);
+      if (inheritedHere || existingCoverage) {
+        newlyHandled.add(stage.id);
+        continue;
+      }
+      const recs = TREATMENT_LIBRARY
+        .filter(t => stageFitForTreatment(stage, t.healingStageMultiplier, t.name) >= 1.1)
+        .filter(t => !placedTreatmentIds.has(t.id))
+        .slice(0, 3);
+      for (const t of recs) {
+        const proposal = buildScheduleProposal(t.id, sIdx);
+        toAdd.push({
+          id: `i_auto_${activeBranchId}_${stage.id}_${t.id}`,
+          treatmentId: t.id,
+          startWeek: sIdx,
+          endWeek: proposal?.endWeek ?? eIdx,
+          doseMultiplier: 1,
+          adherence: input.patientAdherence,
+          sessionsPerWeek: proposal?.sessionsPerWeek,
+          cadenceWeeks: proposal?.cadenceWeeks,
+          taperWeeks: proposal?.taperWeeks,
+          taperFinalDose: proposal?.taperFinalDose,
+          scheduleSource: 'default',
+          scheduleRationale: `auto:phase:${stage.id}`,
+        });
+        placedTreatmentIds.add(t.id);
+      }
+      newlyHandled.add(stage.id);
+    }
+    if (newlyHandled.size === 0) return;
+    if (toAdd.length > 0) {
+      setBranches(prev => prev.map(b =>
+        b.id !== activeBranchId ? b : { ...b, interventions: [...b.interventions, ...toAdd] },
+      ));
+    }
+    setAutoHandledStageIds(prev => {
+      const next = new Map(prev);
+      const merged = new Set<string>(prev.get(activeBranchId) ?? []);
+      newlyHandled.forEach(id => merged.add(id));
+      next.set(activeBranchId, merged);
+      return next;
+    });
+  }, [phaseRanges, activeBranchId, autoHandledStageIds, archetype, activeBranch.interventions, input.patientAdherence, input.totalWeeks, buildScheduleProposal]);
 
   // Compute scenario A vs B comparison summary lines from end-of-period deltas
   // Map the current scrub week onto the phase whose [start, end) range

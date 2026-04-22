@@ -2154,25 +2154,6 @@ export default function RecoverySimulatorDashboard({
               </div>
             )}
 
-            {/* Phase pills row + tissue stress */}
-            <div
-              className="grid gap-1.5 mt-3"
-              style={{ gridTemplateColumns: `repeat(${archetype.stages.length}, minmax(0, 1fr))` }}
-            >
-              {archetype.stages.map((p, i) => {
-                const active = i === scrubbedStageIdx;
-                return (
-                  <div
-                    key={p.id}
-                    className={`rounded p-1.5 border text-center ${active ? `${p.bg} ${p.ring}` : 'bg-gray-800/40 border-gray-700/40'}`}
-                    data-testid={`phase-pill-${p.id}`}
-                  >
-                    <div className="text-[9px] font-semibold" style={{ color: active ? p.color : '#9ca3af' }}>Phase {i + 1}</div>
-                    <div className={`text-[10px] font-semibold ${active ? 'text-white' : 'text-gray-400'}`}>{p.name}</div>
-                  </div>
-                );
-              })}
-            </div>
 
             <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-400">
               <span className="font-semibold">TREATMENT TIMELINE</span>
@@ -2946,6 +2927,43 @@ export default function RecoverySimulatorDashboard({
 
         {/* RIGHT COLUMN — AI OPTIMIZER RECOMMENDATION */}
         <aside className="overflow-y-auto space-y-3 pl-1">
+          {/* Recovery phases — compact vertical stack moved out of the
+              chart/gantt area so the line chart sits flush with the
+              Treatment Timeline gantt below it. The active phase
+              (containing the current scrub week) is highlighted in its
+              phase color exactly as before. */}
+          <div className="bg-gray-900/40 border border-gray-800/60 rounded-lg p-2">
+            <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1.5">
+              Recovery Phases
+            </div>
+            <div className="space-y-1" data-testid="phase-stack-sidebar">
+              {archetype.stages.map((p, i) => {
+                const active = i === scrubbedStageIdx;
+                return (
+                  <div
+                    key={p.id}
+                    className={`rounded px-2 py-1 border ${active ? `${p.bg} ${p.ring}` : 'bg-gray-800/40 border-gray-700/40'}`}
+                    data-testid={`phase-pill-${p.id}`}
+                  >
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-[9px] font-semibold" style={{ color: active ? p.color : '#9ca3af' }}>
+                        Phase {i + 1}
+                      </span>
+                      <span className={`text-[10px] font-semibold truncate ${active ? 'text-white' : 'text-gray-400'}`}>
+                        {p.name}
+                      </span>
+                    </div>
+                    {p.subtitle && (
+                      <div className={`text-[9px] leading-tight mt-0.5 ${active ? 'text-gray-300' : 'text-gray-500'}`}>
+                        {p.subtitle}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="bg-gradient-to-br from-violet-900/30 to-cyan-900/20 border border-violet-700/40 rounded-lg p-3">
             <div className="flex items-center gap-1 text-[10px] text-violet-300 font-semibold uppercase tracking-wide mb-2">
               <Sparkles className="h-3 w-3" />AI Optimizer Recommendation

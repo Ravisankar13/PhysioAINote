@@ -2991,13 +2991,13 @@ export default function PureThreeGLBViewer({
       for (let i = 0; i < positions.length; i++) {
         const tension = tensionValues[i];
         const deviation = Math.abs(tension - 50) / 50;
-        const nodeSize = 0.025 + deviation * 0.04;
+        const nodeSize = 0.012 + deviation * 0.02;
         const nodeGeo = new THREE.SphereGeometry(nodeSize, 10, 8);
         const nodeColor = isPainChain ? new THREE.Color('#ff4444') : chainColor;
         const nodeMat = new THREE.MeshBasicMaterial({
           color: nodeColor,
           transparent: true,
-          opacity: 0.4 + deviation * 0.5,
+          opacity: 0.25 + deviation * 0.35,
           depthWrite: false,
         });
         const node = new THREE.Mesh(nodeGeo, nodeMat);
@@ -3052,14 +3052,14 @@ export default function PureThreeGLBViewer({
         if (segDeviation > 0.25 || isPainChain) {
           const effDeviation = isPainChain ? Math.max(segDeviation, 0.3) : segDeviation;
           const mid = new THREE.Vector3().lerpVectors(positions[i], positions[i + 1], 0.5);
-          const tubeRadius = 0.008 + effDeviation * 0.015;
+          const tubeRadius = 0.004 + effDeviation * 0.008;
           const dir = new THREE.Vector3().subVectors(positions[i + 1], positions[i]);
           const segLen = dir.length();
           const tubeGeo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, segLen, 6, 1);
           const tubeMat = new THREE.MeshBasicMaterial({
             color: isPainChain ? new THREE.Color('#ff4444') : chainColor,
             transparent: true,
-            opacity: 0.15 + effDeviation * 0.3,
+            opacity: 0.08 + effDeviation * 0.18,
             depthWrite: false,
           });
           const tube = new THREE.Mesh(tubeGeo, tubeMat);

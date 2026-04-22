@@ -79,7 +79,21 @@ export interface SlingResult {
   overloadedBoneIndices: number[];
   compensatingBoneIndices: number[];
   muscleScores: Array<{ muscle: string; activation: number; found: boolean }>;
+  activationLevelPct: number;
+  activationBand: SlingActivationBand;
+  clinicalConsequences: string[];
 }
+
+export type SlingActivationBand =
+  | 'severe_under'
+  | 'mild_under'
+  | 'baseline'
+  | 'mild_over'
+  | 'severe_over';
+
+export const SLING_ACTIVATION_BASELINE = 100;
+export const SLING_ACTIVATION_MIN = 0;
+export const SLING_ACTIVATION_MAX = 200;
 
 export interface SlingAnalysisResult {
   timestamp: number;
@@ -95,6 +109,7 @@ export interface SlingAnalysisInput {
   biomechanicsOutput: BiomechanicsOutput | null;
   muscleOverrides?: Record<string, { tension?: number; pathology?: string }>;
   movementTaskId?: string;
+  slingActivationOverrides?: Partial<Record<SlingId, number>>;
 }
 
 interface SlingSpec {
@@ -220,6 +235,127 @@ const MUSCLE_ALIASES: Record<string, string[]> = {
   rhomboids: ['Rhomboids', 'rhomboids', 'Rhomboid major', 'Rhomboid minor'],
   rotator_cuff: ['Infraspinatus', 'Supraspinatus', 'Subscapularis', 'Teres minor', 'rotator cuff'],
 };
+
+const SLING_CONSEQUENCE_BANDS: Record<SlingId, Record<SlingActivationBand, string[]>> = {
+  posterior_oblique: {
+    severe_under: [
+      'Marked loss of rotational power during gait push-off',
+      'Compensatory lumbar erector overload and SI joint shear',
+      'Latissimus–contralateral gluteus force couple disconnected',
+    ],
+    mild_under: [
+      'Reduced trunk counter-rotation efficiency',
+      'Early onset of hamstring fatigue during running',
+    ],
+    baseline: ['Posterior oblique sling operating within normal force-transfer range'],
+    mild_over: [
+      'Increased thoracolumbar fascia tension',
+      'Subtle restriction in thoracic rotation',
+    ],
+    severe_over: [
+      'Rigid thoracolumbar fascia limiting trunk rotation',
+      'Sustained latissimus tone driving shoulder depression',
+      'SI joint compression from excessive force-closure',
+    ],
+  },
+  anterior_oblique: {
+    severe_under: [
+      'Loss of rotational deceleration during throwing or kicking',
+      'Pubic symphysis instability and groin overload',
+      'Anterior trunk braced poorly against rotational load',
+    ],
+    mild_under: [
+      'Reduced anti-rotation control in single-leg tasks',
+      'Adductor strain risk on quick direction changes',
+    ],
+    baseline: ['Anterior oblique sling generating rotational power within normal range'],
+    mild_over: [
+      'Mild over-bracing of the abdominal wall',
+      'Slight restriction in diaphragmatic excursion',
+    ],
+    severe_over: [
+      'Rigid abdominal bracing limiting deep breathing',
+      'Excessive adductor tone increasing groin and pubic symphysis load',
+      'Rectus and oblique dominance suppressing deep core recruitment',
+    ],
+  },
+  lateral: {
+    severe_under: [
+      'Trendelenburg gait with contralateral pelvic drop',
+      'Dynamic knee valgus during single-leg stance',
+      'Quadratus lumborum substituting for hip abduction',
+    ],
+    mild_under: [
+      'Subtle pelvic drop during stance phase',
+      'Lateral hip fatigue with prolonged walking',
+    ],
+    baseline: ['Lateral sling stabilizing the pelvis in the frontal plane normally'],
+    mild_over: [
+      'Slight lateral hip tightness and ITB tension',
+      'Mild hip-hike pattern in gait',
+    ],
+    severe_over: [
+      'Excessive ITB tension and lateral knee load',
+      'TFL dominance suppressing gluteus medius recruitment',
+      'Quadratus lumborum overactivity driving lumbar side-bend',
+    ],
+  },
+  deep_longitudinal: {
+    severe_under: [
+      'Poor shock absorption from foot to spine',
+      'Sacroiliac joint instability under longitudinal load',
+      'Lumbar spine overloaded by unattenuated ground reaction forces',
+    ],
+    mild_under: [
+      'Reduced calf-to-spine force transmission during heel strike',
+      'Mild SI joint discomfort with running',
+    ],
+    baseline: ['Deep longitudinal sling transmitting ground reaction force normally'],
+    mild_over: [
+      'Mild erector spinae over-recruitment during gait',
+      'Subtle hamstring tone elevation',
+    ],
+    severe_over: [
+      'Rigid posterior chain limiting lumbar flexion',
+      'Sustained erector spinae and biceps femoris tone',
+      'Sacrotuberous ligament under chronic tensile load',
+    ],
+  },
+  scapular_shoulder: {
+    severe_under: [
+      'Scapular dyskinesis with poor upward rotation',
+      'Subacromial impingement risk during overhead reach',
+      'Loss of glenohumeral force-couple stability',
+    ],
+    mild_under: [
+      'Reduced scapular control in late-range elevation',
+      'Mild fatigue with sustained overhead tasks',
+    ],
+    baseline: ['Scapular–shoulder sling producing normal scapulothoracic rhythm'],
+    mild_over: [
+      'Upper trapezius dominance during elevation',
+      'Mild scapular elevation at rest',
+    ],
+    severe_over: [
+      'Excessive upper trapezius and levator scapulae tone',
+      'Restricted scapular downward rotation',
+      'Glenohumeral force couple biased toward compression',
+    ],
+  },
+};
+
+function classifyActivationBand(activationPct: number): SlingActivationBand {
+  if (activationPct < 60) return 'severe_under';
+  if (activationPct < 85) return 'mild_under';
+  if (activationPct <= 115) return 'baseline';
+  if (activationPct <= 150) return 'mild_over';
+  return 'severe_over';
+}
+
+function getSlingConsequences(slingId: SlingId, activationPct: number): string[] {
+  const band = classifyActivationBand(activationPct);
+  return SLING_CONSEQUENCE_BANDS[slingId]?.[band] ?? [];
+}
 
 const SLING_DOWNSTREAM_RISK_AREAS: Record<SlingId, string> = {
   posterior_oblique: 'Lumbar spine / contralateral hip',
@@ -660,7 +796,7 @@ function generateNarrative(
 export function computeSlingAnalysis(
   input: SlingAnalysisInput
 ): SlingAnalysisResult {
-  const { biomechanicsOutput, muscleOverrides, movementTaskId } = input;
+  const { biomechanicsOutput, muscleOverrides, movementTaskId, slingActivationOverrides } = input;
   const timestamp = Date.now();
 
   if (!biomechanicsOutput) {
@@ -686,6 +822,9 @@ export function computeSlingAnalysis(
         overloadedBoneIndices: [],
         compensatingBoneIndices: [],
         muscleScores: def.muscles.map(m => ({ muscle: m, activation: 50, found: false })),
+        activationLevelPct: SLING_ACTIVATION_BASELINE,
+        activationBand: 'baseline' as SlingActivationBand,
+        clinicalConsequences: getSlingConsequences(def.id, SLING_ACTIVATION_BASELINE),
       })),
       systemSummary: 'No biomechanical data available. Adjust the skeleton posture to generate sling analysis.',
       overallForceTransferScore: 50,
@@ -709,14 +848,46 @@ export function computeSlingAnalysis(
     const compBoost = computeCompensationBoost(def, compensationPatterns);
     const kinematicsPenalty = computeKinematicsPenalty(def, kinematics);
 
-    const adjustedScore = Math.max(0, Math.min(100,
+    const baselineScore = Math.max(0, Math.min(100,
       rawScore - posturalPenalty - faultPenalty + compBoost - kinematicsPenalty
     ));
 
     const weakLinks = detectWeakLinks(def, muscleScores);
     const forceReroutes = detectForceReroutes(def, muscleScores);
 
-    return { def, activationScore: adjustedScore, muscleScores, weakLinks, forceReroutes, status: 'normal' as SlingStatus };
+    const rawActivationLevel = slingActivationOverrides?.[def.id];
+    const activationLevelPct = rawActivationLevel === undefined
+      ? SLING_ACTIVATION_BASELINE
+      : Math.max(SLING_ACTIVATION_MIN, Math.min(SLING_ACTIVATION_MAX, rawActivationLevel));
+    const activationMultiplier = activationLevelPct / SLING_ACTIVATION_BASELINE;
+
+    // Force-transfer efficiency: peaks at baseline, drops off both
+    // when underactive (linear with multiplier) and when overactive
+    // (excess tone reduces coordinated transfer).
+    let efficiency: number;
+    if (activationLevelPct <= SLING_ACTIVATION_BASELINE) {
+      efficiency = activationMultiplier;
+    } else {
+      const overshoot = (activationLevelPct - SLING_ACTIVATION_BASELINE) / SLING_ACTIVATION_BASELINE;
+      efficiency = Math.max(0, 1 - overshoot * 0.6);
+    }
+
+    const adjustedScore = Math.max(0, Math.min(100, baselineScore * efficiency));
+
+    const scaledMuscleScores = muscleScores.map(ms => ({
+      ...ms,
+      activation: Math.max(0, Math.min(100, Math.round(ms.activation * activationMultiplier))),
+    }));
+
+    return {
+      def,
+      activationScore: adjustedScore,
+      muscleScores: scaledMuscleScores,
+      weakLinks,
+      forceReroutes,
+      status: 'normal' as SlingStatus,
+      activationLevelPct,
+    };
   });
 
   intermediateResults.forEach(ir => {
@@ -759,6 +930,9 @@ export function computeSlingAnalysis(
       overloadedBoneIndices,
       compensatingBoneIndices,
       muscleScores: ir.muscleScores.map(ms => ({ muscle: ms.muscle, activation: ms.activation, found: ms.found })),
+      activationLevelPct: ir.activationLevelPct,
+      activationBand: classifyActivationBand(ir.activationLevelPct),
+      clinicalConsequences: getSlingConsequences(ir.def.id, ir.activationLevelPct),
     };
   });
 

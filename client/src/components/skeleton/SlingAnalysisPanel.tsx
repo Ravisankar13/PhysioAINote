@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   Activity, AlertTriangle, ArrowRight, ChevronDown, ChevronRight,
-  Eye, EyeOff, Gauge, GitBranch, Shield, Target, TrendingUp, Zap, Link2
+  Eye, EyeOff, Gauge, GitBranch, RotateCcw, Shield, Stethoscope, Target, TrendingUp, Zap, Link2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -9,7 +9,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import type {
   SlingAnalysisResult, SlingResult, SlingId, WeakLink,
   SlingCompensation, ForceReroute, SlingTreatmentTarget,
-  SlingStatus, ForceTransferQuality, Severity
+  SlingStatus, ForceTransferQuality, Severity, SlingActivationBand
+} from '@/lib/slingEngine';
+import {
+  SLING_ACTIVATION_BASELINE,
+  SLING_ACTIVATION_MIN,
+  SLING_ACTIVATION_MAX,
 } from '@/lib/slingEngine';
 
 interface SlingAnalysisPanelProps {
@@ -18,6 +23,89 @@ interface SlingAnalysisPanelProps {
   selectedSling?: SlingId | null;
   overlayVisible?: boolean;
   onToggleOverlay?: () => void;
+  slingActivation?: Partial<Record<SlingId, number>>;
+  onSlingActivationChange?: (slingId: SlingId, value: number) => void;
+  onResetSling?: (slingId: SlingId) => void;
+  onResetAllSlings?: () => void;
+}
+
+function activationBandLabel(band: SlingActivationBand): string {
+  switch (band) {
+    case 'severe_under': return 'Severely underactive';
+    case 'mild_under': return 'Underactive';
+    case 'baseline': return 'Baseline';
+    case 'mild_over': return 'Overactive';
+    case 'severe_over': return 'Severely overactive';
+  }
+}
+
+function activationBandColor(band: SlingActivationBand): string {
+  switch (band) {
+    case 'severe_under': return 'text-red-400';
+    case 'mild_under': return 'text-amber-400';
+    case 'baseline': return 'text-emerald-400';
+    case 'mild_over': return 'text-amber-400';
+    case 'severe_over': return 'text-red-400';
+  }
+}
+
+function SlingActivationSlider({
+  slingColor,
+  value,
+  band,
+  onChange,
+  onReset,
+}: {
+  slingColor: string;
+  value: number;
+  band: SlingActivationBand;
+  onChange: (val: number) => void;
+  onReset: () => void;
+}) {
+  const isModified = Math.round(value) !== SLING_ACTIVATION_BASELINE;
+  return (
+    <div
+      className="mt-1.5 p-1.5 rounded border bg-slate-900/40"
+      style={{ borderColor: slingColor + '40' }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-[9px] text-slate-300 font-medium uppercase tracking-wide">Sling activation</span>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[10px] font-bold tabular-nums ${activationBandColor(band)}`}>
+            {Math.round(value)}%
+          </span>
+          {isModified && (
+            <button
+              onClick={onReset}
+              className="flex items-center gap-0.5 text-[8px] text-slate-400 hover:text-white px-1 py-0.5 rounded hover:bg-slate-700/50"
+              data-testid="sling-slider-reset"
+            >
+              <RotateCcw className="w-2.5 h-2.5" />
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+      <input
+        type="range"
+        min={SLING_ACTIVATION_MIN}
+        max={SLING_ACTIVATION_MAX}
+        step={5}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value, 10))}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full h-1 rounded-lg appearance-none cursor-pointer"
+        style={{ accentColor: slingColor }}
+        data-testid="sling-activation-slider"
+      />
+      <div className="flex justify-between mt-0.5 text-[7px] text-slate-500">
+        <span>0%</span>
+        <span className={activationBandColor(band)}>{activationBandLabel(band)}</span>
+        <span>200%</span>
+      </div>
+    </div>
+  );
 }
 
 function statusBadge(status: SlingStatus) {
@@ -67,10 +155,16 @@ function SlingCard({
   sling,
   isSelected,
   onSelect,
+  activationValue,
+  onActivationChange,
+  onActivationReset,
 }: {
   sling: SlingResult;
   isSelected: boolean;
   onSelect: () => void;
+  activationValue: number;
+  onActivationChange: (val: number) => void;
+  onActivationReset: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -126,6 +220,43 @@ function SlingCard({
         {sling.confidence < 100 && (
           <div className="text-[9px] text-slate-600 mt-1">
             Confidence: {sling.confidence}%
+          </div>
+        )}
+
+        <SlingActivationSlider
+          slingColor={sling.color}
+          value={activationValue}
+          band={sling.activationBand}
+          onChange={onActivationChange}
+          onReset={onActivationReset}
+        />
+
+        {sling.clinicalConsequences.length > 0 && (
+          <div
+            className="mt-1.5 space-y-0.5"
+            onClick={(e) => e.stopPropagation()}
+            data-testid={`sling-consequences-${sling.slingId}`}
+          >
+            <div className="flex items-center gap-1 text-[9px] text-slate-400">
+              <Stethoscope className="w-2.5 h-2.5" />
+              Clinical consequences
+            </div>
+            <ul className="space-y-0.5">
+              {sling.clinicalConsequences.map((c, i) => (
+                <li
+                  key={i}
+                  className={`text-[9px] pl-2 border-l ${
+                    sling.activationBand === 'baseline'
+                      ? 'border-emerald-500/40 text-slate-400'
+                      : sling.activationBand === 'mild_under' || sling.activationBand === 'mild_over'
+                        ? 'border-amber-500/40 text-slate-300'
+                        : 'border-red-500/50 text-slate-200'
+                  }`}
+                >
+                  {c}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
@@ -259,7 +390,18 @@ export default function SlingAnalysisPanel({
   selectedSling,
   overlayVisible = true,
   onToggleOverlay,
+  slingActivation,
+  onSlingActivationChange,
+  onResetSling,
+  onResetAllSlings,
 }: SlingAnalysisPanelProps) {
+  const hasModifiedActivations = useMemo(() => {
+    if (!slingActivation) return false;
+    return Object.values(slingActivation).some(
+      v => v !== undefined && Math.round(v) !== SLING_ACTIVATION_BASELINE,
+    );
+  }, [slingActivation]);
+
   if (!analysis) {
     return (
       <div className="p-4 text-center text-[11px] text-slate-500">
@@ -271,22 +413,34 @@ export default function SlingAnalysisPanel({
   return (
     <ScrollArea className="h-full">
       <div className="p-3 space-y-3">
-        {onToggleOverlay && (
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-slate-500">3D Sling Overlay</span>
+        <div className="flex items-center justify-between mb-1 gap-2">
+          {onToggleOverlay ? (
+            <>
+              <span className="text-[10px] text-slate-500">3D Sling Overlay</span>
+              <button
+                onClick={onToggleOverlay}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] transition-colors ${
+                  overlayVisible
+                    ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
+                    : 'bg-slate-700/50 text-slate-500 hover:bg-slate-700/70'
+                }`}
+              >
+                {overlayVisible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                {overlayVisible ? 'Visible' : 'Hidden'}
+              </button>
+            </>
+          ) : <span />}
+          {onResetAllSlings && hasModifiedActivations && (
             <button
-              onClick={onToggleOverlay}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] transition-colors ${
-                overlayVisible
-                  ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
-                  : 'bg-slate-700/50 text-slate-500 hover:bg-slate-700/70'
-              }`}
+              onClick={onResetAllSlings}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
+              data-testid="sling-reset-all"
             >
-              {overlayVisible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-              {overlayVisible ? 'Visible' : 'Hidden'}
+              <RotateCcw className="w-3 h-3" />
+              Reset all activations
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
           <div className="flex items-center gap-2 mb-1.5">
@@ -323,6 +477,9 @@ export default function SlingAnalysisPanel({
               sling={sling}
               isSelected={selectedSling === sling.slingId}
               onSelect={() => onSlingSelect?.(selectedSling === sling.slingId ? null : sling.slingId)}
+              activationValue={slingActivation?.[sling.slingId] ?? sling.activationLevelPct ?? SLING_ACTIVATION_BASELINE}
+              onActivationChange={(val) => onSlingActivationChange?.(sling.slingId, val)}
+              onActivationReset={() => onResetSling?.(sling.slingId)}
             />
           ))}
         </div>

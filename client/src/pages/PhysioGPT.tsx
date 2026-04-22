@@ -781,6 +781,7 @@ export default function PhysioGPT() {
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slingAnalysisRef = useRef<ReturnType<typeof computeSlingAnalysis> | null>(null);
+  const [slingActivationOverrides, setSlingActivationOverrides] = useState<Partial<Record<SlingId, number>>>({});
   const triggerClinicalReasoningAnalysisRef = useRef<(forceRefresh?: boolean) => void>(() => {});
   const handleEvidenceQueryRef = useRef<() => void>(() => {});
   const autoEvidenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2983,6 +2984,7 @@ ${ddxList}`;
     setSuggestions([]);
     setMessage("");
     setChatPanelOpen(true);
+    setSlingActivationOverrides({});
   };
 
   const handleRegionSelect = (region: keyof typeof BODY_REGIONS) => {
@@ -4453,11 +4455,12 @@ ${ddxList}`;
       biomechanicsOutput: bioSrc,
       muscleOverrides: muscleOverrides as Record<string, { tension?: number; pathology?: string }> | undefined,
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
+      slingActivationOverrides,
     };
     const result = computeSlingAnalysis(slingInput);
     slingAnalysisRef.current = result;
     return result;
-  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computeStage]);
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computeStage, slingActivationOverrides]);
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
 
@@ -9612,6 +9615,7 @@ ${ddxList}`;
                   clinicalTextAppliedRef.current = null;
                   lastReasoningTriggerRef.current = '';
                   slingAnalysisRef.current = null;
+                  setSlingActivationOverrides({});
                   compensationDataRef.current = { result: null, movementName: null, restrictions: {} };
                   subjectiveHistoryRef.current = '';
                   if (clinicalReasoningTimerRef.current) {
@@ -11379,6 +11383,17 @@ ${ddxList}`;
                 selectedSling={selectedSlingId}
                 overlayVisible={slingOverlayVisible}
                 onToggleOverlay={() => setSlingOverlayVisible(v => !v)}
+                slingActivation={slingActivationOverrides}
+                onSlingActivationChange={(slingId, val) => {
+                  setSlingActivationOverrides(prev => ({ ...prev, [slingId]: val }));
+                }}
+                onResetSling={(slingId) => {
+                  setSlingActivationOverrides(prev => {
+                    const { [slingId]: _omit, ...rest } = prev;
+                    return rest;
+                  });
+                }}
+                onResetAllSlings={() => setSlingActivationOverrides({})}
               />
               </Suspense>
             </div>

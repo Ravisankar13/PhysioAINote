@@ -86,11 +86,21 @@ export interface ProvocationMovement {
   positiveFinding?: string;
 }
 
+export interface ProvocationContextPainMarker {
+  region?: string;
+  anatomicalLabel?: string;
+  symptomType?: string;
+  severity?: number;
+  description?: string;
+}
+
 export interface ProvocationInput {
   hypothesisId: string;
   condition: string;
   supportingEvidence?: string[];
   rulingOutFactors?: string[];
+  region?: string;
+  painMarkers?: ProvocationContextPainMarker[];
 }
 
 function clamp(v: number, min: number, max: number): number {
@@ -270,12 +280,35 @@ RULES:
 - name: short clinical test name. description: 1–2 sentence physical description. clinicalRationale: why this discriminates this hypothesis. positiveFinding: what a positive test looks/feels like.
 - Do NOT invent joints, properties, or regions. Do NOT include extra fields.`;
 
+  const regionContext = input.region ? `Currently focused region: ${input.region}` : "Currently focused region: (none)";
+
+  const markerLines = (input.painMarkers ?? [])
+    .slice(0, 12)
+    .map((m, i) => {
+      const parts: string[] = [];
+      if (m.anatomicalLabel) parts.push(m.anatomicalLabel);
+      else if (m.region) parts.push(m.region);
+      else parts.push(`marker ${i + 1}`);
+      if (m.symptomType) parts.push(`type=${m.symptomType}`);
+      if (typeof m.severity === "number") parts.push(`severity=${m.severity}/10`);
+      if (m.description) parts.push(`note="${String(m.description).slice(0, 80)}"`);
+      return `  - ${parts.join(", ")}`;
+    })
+    .join("\n");
+  const markerContext = markerLines.length > 0
+    ? `Clinician-placed pain markers on the model:\n${markerLines}`
+    : "Clinician-placed pain markers on the model: (none)";
+
   const userPrompt = `WORKING HYPOTHESIS
 Condition: ${input.condition}
 Supporting evidence: ${evidence}
 Ruling-out factors: ${ruling}
 
-Compose 3–6 diagnostic provocation movements specific to this condition. Return JSON only.`;
+CONTEXT
+${regionContext}
+${markerContext}
+
+Compose 3–6 diagnostic provocation movements specific to this condition. Bias your selection and side toward the clinician's focused region and the locations of any pain markers above when relevant. Return JSON only.`;
 
   const completion = await client.chat.completions.create({
     model: "gpt-4o",

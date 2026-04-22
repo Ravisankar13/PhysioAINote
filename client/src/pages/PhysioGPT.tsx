@@ -3296,6 +3296,8 @@ ${ddxList}`;
           condition: provocationHypothesis.condition,
           supportingEvidence: provocationHypothesis.supportingEvidence,
           rulingOutFactors: provocationHypothesis.rulingOutFactors,
+          region: provocationFocusedRegion,
+          painMarkers: provocationMarkerContext,
         }),
       });
       if (!res.ok) {
@@ -3324,8 +3326,82 @@ ${ddxList}`;
   }, [provocationData]);
   const handleRegenerateProvocations = useCallback(() => {
     setProvocationRefreshKey(k => k + 1);
-    setTimeout(() => { refetchProvocations(); }, 0);
-  }, [refetchProvocations]);
+  }, []);
+
+  const provocationMarkerContext = useMemo(() => {
+    return painMarkers
+      .filter(m => !m.id.startsWith("prov-flash-"))
+      .slice(0, 24)
+      .map(m => ({
+        region: (m as any).region,
+        anatomicalLabel: m.anatomicalLabel,
+        symptomType: m.symptomType,
+        severity: m.severity,
+        description: m.description,
+      }));
+  }, [painMarkers]);
+
+  const provocationFocusedRegion = useMemo(() => {
+    return selectedRegion ? BODY_REGIONS[selectedRegion]?.name : undefined;
+  }, [selectedRegion]);
+
+  /**
+   * Transient expected-site pain markers.
+   * When a provocation movement is actively playing, inject one marker per
+   * expectedProvocationSite into the viewer's painMarkers using the bone
+   * positions from REGION_BONE_MAPPING. All transient markers are id-prefixed
+   * `prov-flash-` so they can be removed cleanly without touching clinician
+   * markers when playback stops or the active movement changes.
+   */
+  useEffect(() => {
+    const isPlaying = animationState.isPlaying;
+    const currentId = animationState.currentMovement;
+    const active = currentId && isPlaying
+      ? provocationMovements.find(m => m.id === currentId)
+      : undefined;
+    const sites = active?.expectedProvocationSites ?? [];
+
+    if (!active || sites.length === 0) {
+      setPainMarkers(prev =>
+        prev.some(m => m.id.startsWith("prov-flash-"))
+          ? prev.filter(m => !m.id.startsWith("prov-flash-"))
+          : prev,
+      );
+      return;
+    }
+
+    const transient: PainMarker[] = sites.flatMap((site: { region: string; label: string; severity?: number }, idx: number) => {
+      const region = site.region as AnatomicalRegion;
+      const bones = REGION_BONE_MAPPING[region];
+      const nearestBone = bones && bones.length > 0 ? bones[0] : undefined;
+      if (!nearestBone) return [];
+      return [{
+        id: `prov-flash-${active.id}-${idx}`,
+        type: "point" as PainMarkerType,
+        symptomType: "pain" as SymptomType,
+        position: { x: 0, y: 0, z: 0 },
+        nearestBone,
+        anatomicalLabel: site.label,
+        description: `Expected provocation site for ${active.name}`,
+        severity: typeof site.severity === "number" ? site.severity : 6,
+      }];
+    });
+
+    setPainMarkers(prev => {
+      const kept = prev.filter(m => !m.id.startsWith("prov-flash-"));
+      return [...kept, ...transient];
+    });
+  }, [animationState.isPlaying, animationState.currentMovement, provocationMovements]);
+
+  useEffect(() => {
+    return () => {
+      setPainMarkers(prev =>
+        prev.some(m => m.id.startsWith("prov-flash-"))
+          ? prev.filter(m => !m.id.startsWith("prov-flash-"))
+          : prev,
+      );
+    };
+  }, []);
 
   const handleRePoseToRefined = useCallback(() => {
     if (!stalePoseHint) return;

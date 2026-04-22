@@ -10414,19 +10414,33 @@ Now produce the refined hypothesis JSON.`;
 
   app.post("/api/diagnosis-provocations/compose", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { hypothesisId, condition, supportingEvidence, rulingOutFactors } = req.body || {};
+      const { hypothesisId, condition, supportingEvidence, rulingOutFactors, region, painMarkers } = req.body || {};
       if (!hypothesisId || typeof hypothesisId !== "string") {
         return res.status(400).json({ error: "hypothesisId is required" });
       }
       if (!condition || typeof condition !== "string") {
         return res.status(400).json({ error: "condition is required" });
       }
+      const sanitizedMarkers = Array.isArray(painMarkers)
+        ? painMarkers
+            .filter((m: any) => m && typeof m === "object")
+            .slice(0, 24)
+            .map((m: any) => ({
+              region: typeof m.region === "string" ? m.region : undefined,
+              anatomicalLabel: typeof m.anatomicalLabel === "string" ? m.anatomicalLabel : undefined,
+              symptomType: typeof m.symptomType === "string" ? m.symptomType : undefined,
+              severity: typeof m.severity === "number" ? m.severity : undefined,
+              description: typeof m.description === "string" ? m.description : undefined,
+            }))
+        : undefined;
       const { composeProvocationMovements } = await import("./diagnosisProvocationGenerator");
       const movements = await composeProvocationMovements({
         hypothesisId,
         condition,
         supportingEvidence: Array.isArray(supportingEvidence) ? supportingEvidence : undefined,
         rulingOutFactors: Array.isArray(rulingOutFactors) ? rulingOutFactors : undefined,
+        region: typeof region === "string" ? region : undefined,
+        painMarkers: sanitizedMarkers,
       });
       res.json({ movements });
     } catch (error: any) {

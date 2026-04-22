@@ -104,7 +104,7 @@ import type { ClinicalReasoningData, BiomechanicalLink, VisualizationRequest, Cl
 import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypothesis } from "@/components/skeleton/StructuredReasoningTab";
 import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab";
 import type { TreatmentPlanResult } from "@/components/skeleton/PlanTab";
-import { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
+import { type HypothesisData, type RefinedHypothesisSuggestion } from "@/components/skeleton/HypothesisChatPanel";
 import HypothesisTestBench, { type BenchHypothesisInput, type BenchSkeletonOverlay, type BenchUpdate, type HypothesisFingerprint } from "@/components/skeleton/HypothesisTestBench";
 import type { ClinicalExtractionResult } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
@@ -3019,6 +3019,9 @@ ${ddxList}`;
     });
   };
 
+  const lastPosedHypothesisRef = useRef<{ id: string; condition: string } | null>(null);
+  const [stalePoseHint, setStalePoseHint] = useState<{ replacedFromId: string; newId: string; condition: string } | null>(null);
+
   const applyPoseCommand = useCallback((poseData: Record<string, any>) => {
     if (!poseData || typeof poseData !== 'object') return;
     const isIncremental = poseData.mode === 'incremental';
@@ -3056,6 +3059,11 @@ ${ddxList}`;
 
     if (appliedCount > 0) {
       toast({ title: "Pose Updated", description: isIncremental ? "Skeleton adjusted incrementally" : "Skeleton pose applied from AI" });
+      const ctxId = (poseData as any).__hypothesisId;
+      const ctxCondition = (poseData as any).__hypothesisCondition;
+      if (typeof ctxId === 'string' && typeof ctxCondition === 'string') {
+        lastPosedHypothesisRef.current = { id: ctxId, condition: ctxCondition };
+      }
     }
   }, [toast]);
 
@@ -3156,6 +3164,103 @@ ${ddxList}`;
     });
     toast({ title: 'Hypothesis updated', description: `Confidence → ${Math.round(update.newConfidence)}% (${positives.length}+ / ${negatives.length}−)` });
   }, [toast]);
+
+  const handleRefinedHypothesisCommit = useCallback((
+    refined: RefinedHypothesisSuggestion,
+    action: "replace" | "add",
+    originalId: string,
+  ) => {
+    const newId = `refined-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const supportingFromFindings = refined.keyFindings.map(f => `Refined: ${f}`);
+    const supportingFromRationale = `Refined rationale: ${refined.rationale}`;
+
+    setClinicalReasoningData(prev => {
+      if (!prev) return prev;
+      const idx = prev.hypotheses.findIndex(h => h.id === originalId);
+      const newCR: ClinicalHypothesis = {
+        id: action === "add" ? newId : (idx >= 0 ? prev.hypotheses[idx].id : newId),
+        condition: refined.condition,
+        confidence: Math.round(refined.confidenceSuggestion),
+        supportingEvidence: [...supportingFromFindings, supportingFromRationale],
+        rulingOutFactors: idx >= 0 ? [...prev.hypotheses[idx].rulingOutFactors] : [],
+        status: "active",
+      };
+      const updated = [...prev.hypotheses];
+      if (action === "replace" && idx >= 0) {
+        updated[idx] = newCR;
+      } else {
+        updated.push(newCR);
+      }
+      return { ...prev, hypotheses: updated };
+    });
+
+    setStructuredReasoningData(prev => {
+      if (!prev) return prev;
+      const idx = prev.hypotheses.findIndex(h => h.id === originalId);
+      const supporting = refined.keyFindings.map(f => ({ feature: `Refined: ${f}`, weight: 3 }));
+      const newSR: StructuredHypothesis = {
+        id: action === "add" ? newId : (idx >= 0 ? prev.hypotheses[idx].id : newId),
+        condition: refined.condition,
+        confidence: Math.round(refined.confidenceSuggestion),
+        supporting: [...supporting, { feature: `Refined rationale: ${refined.rationale}`, weight: 4 }],
+        contradicting: idx >= 0 ? [...prev.hypotheses[idx].contradicting] : [],
+        fingerprintMatchScore: idx >= 0 ? prev.hypotheses[idx].fingerprintMatchScore : 0,
+        structuralHypothesis: idx >= 0 ? prev.hypotheses[idx].structuralHypothesis : refined.condition,
+        dominantClinicalDriver: idx >= 0 ? prev.hypotheses[idx].dominantClinicalDriver : (prev.dominantSymptomDriver?.driver || ''),
+      };
+      const updated = [...prev.hypotheses];
+      if (action === "replace" && idx >= 0) {
+        updated[idx] = newSR;
+      } else {
+        updated.push(newSR);
+      }
+      const sorted = [...updated].sort((a, b) => b.confidence - a.confidence);
+      return { ...prev, hypotheses: sorted };
+    });
+
+    const promotedId = action === "add" ? newId : originalId;
+    const promotedCondition = refined.condition;
+
+    setSelectedHypothesisForChat(prev => prev && prev.id === originalId ? {
+      ...prev,
+      id: action === "add" ? originalId : prev.id,
+      condition: action === "replace" ? refined.condition : prev.condition,
+      confidence: action === "replace" ? Math.round(refined.confidenceSuggestion) : prev.confidence,
+      supportingEvidence: action === "replace"
+        ? [...supportingFromFindings, supportingFromRationale]
+        : prev.supportingEvidence,
+    } : prev);
+
+    if (action === "replace" && lastPosedHypothesisRef.current?.id === originalId) {
+      setStalePoseHint({ replacedFromId: originalId, newId: promotedId, condition: promotedCondition });
+    }
+  }, []);
+
+  const handleRePoseToRefined = useCallback(() => {
+    if (!stalePoseHint) return;
+    const targetId = stalePoseHint.newId;
+    const target = structuredReasoningData?.hypotheses.find(h => h.id === targetId)
+      || clinicalReasoningData?.hypotheses.find(h => h.id === targetId);
+    if (!target) {
+      setStalePoseHint(null);
+      return;
+    }
+    const hypForChat: HypothesisData = {
+      id: target.id,
+      condition: target.condition,
+      confidence: target.confidence,
+      supportingEvidence: 'supporting' in target
+        ? (target as StructuredHypothesis).supporting.map(s => s.feature)
+        : (target as ClinicalHypothesis).supportingEvidence,
+      rulingOutFactors: 'contradicting' in target
+        ? (target as StructuredHypothesis).contradicting.map(c => c.feature)
+        : (target as ClinicalHypothesis).rulingOutFactors,
+    };
+    setSelectedHypothesisForChat(hypForChat);
+    setHypothesisChatOpen(true);
+    setStalePoseHint(null);
+    toast({ title: "Re-pose ready", description: `Use "Pose to Hypothesis" for ${stalePoseHint.condition}` });
+  }, [stalePoseHint, structuredReasoningData, clinicalReasoningData, toast]);
 
   const applyClinicalPreset = useCallback((preset: ClinicalPosturePreset) => {
     const newConfig = applyPresetToConfig(modelConfig, preset, DEFAULT_MODEL_CONFIG);
@@ -11620,11 +11725,35 @@ ${ddxList}`;
         onCommit={handleBenchCommit}
       />
 
+      {stalePoseHint && (
+        <div className="fixed top-4 right-[440px] z-50 max-w-xs bg-amber-950/90 border border-amber-500/40 rounded-lg px-3 py-2 shadow-2xl backdrop-blur-md">
+          <div className="text-[11px] text-amber-200 font-semibold mb-1">Skeleton may be stale</div>
+          <div className="text-[11px] text-amber-100/90 mb-2">
+            You replaced the hypothesis the skeleton was posed to. Re-pose to <span className="font-semibold">{stalePoseHint.condition}</span>?
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              className="text-[11px] px-2 py-1 bg-amber-500 hover:bg-amber-400 text-gray-900 rounded font-medium"
+              onClick={handleRePoseToRefined}
+            >
+              Re-pose
+            </button>
+            <button
+              className="text-[11px] px-2 py-1 text-amber-200/80 hover:text-amber-100"
+              onClick={() => setStalePoseHint(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       <HypothesisChatPanel
         hypothesis={selectedHypothesisForChat}
         isOpen={hypothesisChatOpen}
         onClose={() => setHypothesisChatOpen(false)}
         onPoseCommand={applyPoseCommand}
+        onRefinedHypothesisCommit={handleRefinedHypothesisCommit}
         subjectiveHistory={subjectiveHistoryInput}
         skeletonData={{
           posture: modelConfig,

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { X, Send, ToggleLeft, ToggleRight, Move3D, Loader2, Sparkles, Stethoscope, Link2, ClipboardCheck, HeartPulse, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Send, ToggleLeft, ToggleRight, Move3D, Loader2, Sparkles, Stethoscope, Link2, ClipboardCheck, HeartPulse, AlertTriangle, ChevronDown, ChevronRight, Wand2, Replace, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,16 @@ interface ChatMessage {
   isInitialSummary?: boolean;
 }
 
+export interface RefinedHypothesisSuggestion {
+  condition: string;
+  confidenceSuggestion: number;
+  rationale: string;
+  keyFindings: string[];
+  distinguishingFeatures: string[];
+  changedFromOriginal: string;
+  sameAsOriginal: boolean;
+}
+
 interface HypothesisChatPanelProps {
   hypothesis: HypothesisData | null;
   isOpen: boolean;
@@ -39,6 +49,11 @@ interface HypothesisChatPanelProps {
     forces: Array<{ label: string; totalForce?: number; status: string }>;
     muscles: Array<{ name: string; status: string; activation: number }>;
   };
+  onRefinedHypothesisCommit?: (
+    refined: RefinedHypothesisSuggestion,
+    action: "replace" | "add",
+    originalId: string,
+  ) => void;
 }
 
 const SECTION_DEFS = [
@@ -333,6 +348,7 @@ export default function HypothesisChatPanel({
   onPoseCommand,
   subjectiveHistory,
   skeletonData,
+  onRefinedHypothesisCommit,
 }: HypothesisChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -341,6 +357,9 @@ export default function HypothesisChatPanel({
   const [includeSkeletonData, setIncludeSkeletonData] = useState(true);
   const [isPosing, setIsPosing] = useState(false);
   const [isInitialStream, setIsInitialStream] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
+  const [refinedCard, setRefinedCard] = useState<RefinedHypothesisSuggestion | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const prevHypothesisIdRef = useRef<string | null>(null);
@@ -434,7 +453,11 @@ export default function HypothesisChatPanel({
                     setStreamingContent(accumulated);
                     break;
                   case "poseCommand":
-                    onPoseCommand(data.data);
+                    onPoseCommand({
+                      ...data.data,
+                      __hypothesisId: hyp.id,
+                      __hypothesisCondition: hyp.condition,
+                    });
                     break;
                   case "error":
                     toast({ title: "Error", description: data.data, variant: "destructive" });
@@ -484,6 +507,54 @@ export default function HypothesisChatPanel({
     await streamRequest(hypothesis, updatedMessages);
   }, [inputValue, hypothesis, isStreaming, messages, streamRequest]);
 
+  const handleRefineFromDiscussion = useCallback(async () => {
+    if (!hypothesis || isStreaming || isRefining) return;
+    setRefineError(null);
+    setRefinedCard(null);
+    setIsRefining(true);
+    try {
+      const response = await fetch("/api/physiogpt/hypothesis-chat/refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hypothesis: {
+            condition: hypothesis.condition,
+            confidence: hypothesis.confidence,
+            supportingEvidence: hypothesis.supportingEvidence,
+            rulingOutFactors: hypothesis.rulingOutFactors,
+            structuredContext: hypothesis.structuredContext || undefined,
+          },
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          subjectiveHistory,
+          skeletonData: includeSkeletonData ? skeletonData : undefined,
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(json?.error || "Failed to refine hypothesis");
+      }
+      if (!json?.refined) {
+        throw new Error("No refinement returned");
+      }
+      setRefinedCard(json.refined as RefinedHypothesisSuggestion);
+    } catch (err: any) {
+      setRefineError(err?.message || "Could not refine hypothesis");
+    } finally {
+      setIsRefining(false);
+    }
+  }, [hypothesis, isStreaming, isRefining, messages, subjectiveHistory, includeSkeletonData, skeletonData]);
+
+  const handleAcceptRefined = useCallback((action: "replace" | "add") => {
+    if (!hypothesis || !refinedCard) return;
+    onRefinedHypothesisCommit?.(refinedCard, action, hypothesis.id);
+    toast({
+      title: action === "replace" ? "Hypothesis replaced" : "Refined hypothesis added",
+      description: refinedCard.condition,
+    });
+    setRefinedCard(null);
+    setRefineError(null);
+  }, [hypothesis, refinedCard, onRefinedHypothesisCommit, toast]);
+
   const handlePoseToHypothesis = useCallback(async () => {
     if (!hypothesis || isStreaming) return;
     setIsPosing(true);
@@ -509,6 +580,9 @@ export default function HypothesisChatPanel({
   const initialSummaryMsg = messages.find(m => m.isInitialSummary && m.role === "assistant");
   const followUpMessages = messages.filter(m => !m.isInitialSummary);
   const hasFollowUps = followUpMessages.length > 0;
+  const followUpUserCount = followUpMessages.filter(m => m.role === "user").length;
+  const followUpAssistantCount = followUpMessages.filter(m => m.role === "assistant").length;
+  const canRefine = followUpUserCount >= 1 && followUpAssistantCount >= 1 && !!onRefinedHypothesisCommit;
 
   return (
     <div className="fixed right-0 top-0 h-full w-[420px] bg-gray-900/95 backdrop-blur-xl border-l border-gray-700/50 z-50 flex flex-col shadow-2xl animate-in slide-in-from-right-5 duration-300">
@@ -546,6 +620,19 @@ export default function HypothesisChatPanel({
             {isPosing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Move3D className="h-3 w-3" />}
             Pose to Hypothesis
           </Button>
+          {canRefine && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs border-purple-500/30 text-purple-300 hover:bg-purple-500/10 gap-1"
+              onClick={handleRefineFromDiscussion}
+              disabled={isStreaming || isRefining}
+              title="Summarise the discussion into a refined working hypothesis"
+            >
+              {isRefining ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+              Refine from discussion
+            </Button>
+          )}
         </div>
 
         {hypothesis.supportingEvidence.length > 0 && (
@@ -558,6 +645,97 @@ export default function HypothesisChatPanel({
           </div>
         )}
       </div>
+
+      {(refinedCard || refineError || isRefining) && (
+        <div className="flex-shrink-0 border-b border-gray-700/50 p-3 bg-purple-950/20">
+          {isRefining && !refinedCard && (
+            <div className="flex items-center gap-2 text-xs text-purple-300">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Summarising the discussion into a refined hypothesis...
+            </div>
+          )}
+          {refineError && !isRefining && (
+            <div className="text-xs text-red-300 flex items-start gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-medium">Couldn't refine</div>
+                <div className="text-red-300/80">{refineError}</div>
+                <button
+                  className="mt-1 underline text-red-200 hover:text-white"
+                  onClick={() => { setRefineError(null); handleRefineFromDiscussion(); }}
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          )}
+          {refinedCard && !isRefining && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Wand2 className="h-3.5 w-3.5 text-purple-300" />
+                <span className="text-xs font-semibold text-purple-200">Refined hypothesis</span>
+                <span className="ml-auto"><ConfidenceBadge confidence={refinedCard.confidenceSuggestion} /></span>
+              </div>
+              <div className="text-sm font-semibold text-gray-100">{refinedCard.condition}</div>
+              {refinedCard.sameAsOriginal ? (
+                <div className="text-[11px] text-amber-300/90 italic">
+                  Discussion confirmed the original — replacing or adding will simply update confidence and findings.
+                </div>
+              ) : (
+                <div className="text-[11px] text-purple-200/90 italic">{refinedCard.changedFromOriginal}</div>
+              )}
+              <div className="text-xs text-gray-200 leading-relaxed">{refinedCard.rationale}</div>
+              {refinedCard.keyFindings.length > 0 && (
+                <div className="space-y-0.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-300/80">Key findings from discussion</div>
+                  <ul className="text-[11px] text-gray-200 space-y-0.5">
+                    {refinedCard.keyFindings.map((f, i) => (
+                      <li key={i} className="pl-2 border-l-2 border-purple-500/40">{f}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {refinedCard.distinguishingFeatures.length > 0 && (
+                <div className="space-y-0.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-300/80">How this differs</div>
+                  <ul className="text-[11px] text-gray-200 space-y-0.5">
+                    {refinedCard.distinguishingFeatures.map((f, i) => (
+                      <li key={i} className="pl-2 border-l-2 border-amber-500/40">{f}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="flex items-center gap-1.5 pt-1">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-purple-600 hover:bg-purple-500 text-white gap-1"
+                  onClick={() => handleAcceptRefined("replace")}
+                >
+                  <Replace className="h-3 w-3" /> Replace original
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 gap-1"
+                  onClick={() => handleAcceptRefined("add")}
+                  disabled={refinedCard.sameAsOriginal}
+                  title={refinedCard.sameAsOriginal ? "Same as original — adding would duplicate" : "Add as a new hypothesis alongside the original"}
+                >
+                  <Plus className="h-3 w-3" /> Add as new
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs text-gray-400 hover:text-gray-200 gap-1 ml-auto"
+                  onClick={() => { setRefinedCard(null); setRefineError(null); }}
+                >
+                  <Trash2 className="h-3 w-3" /> Discard
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-1">
         {messages.length === 0 && !streamingContent && !isStreaming && (

@@ -10310,6 +10310,108 @@ Guidelines:
     }
   });
 
+  app.post("/api/physiogpt/hypothesis-chat/refine", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { hypothesis, messages, subjectiveHistory, skeletonData } = req.body || {};
+      if (!hypothesis || !hypothesis.condition) {
+        return res.status(400).json({ error: "Original hypothesis is required" });
+      }
+      if (!Array.isArray(messages) || messages.length < 2) {
+        return res.status(400).json({ error: "A discussion transcript is required to refine" });
+      }
+
+      const { z } = await import("zod");
+      const RefinedSchema = z.object({
+        condition: z.string().min(2).max(160),
+        confidenceSuggestion: z.coerce.number().min(0).max(100),
+        rationale: z.string().min(5).max(600),
+        keyFindings: z.array(z.string().min(2).max(280)).min(2).max(8),
+        distinguishingFeatures: z.array(z.string().min(2).max(280)).max(8).default([]),
+        changedFromOriginal: z.string().min(3).max(400),
+        sameAsOriginal: z.boolean().optional().default(false),
+      });
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const transcript = (messages as Array<{ role: string; content: string }>)
+        .filter(m => m && typeof m.content === "string" && m.content.trim().length > 0)
+        .map(m => `${m.role === "user" ? "Clinician" : "Assistant"}: ${m.content.trim()}`)
+        .join("\n\n");
+
+      const evidenceList = Array.isArray(hypothesis.supportingEvidence) ? hypothesis.supportingEvidence : [];
+      const ruleOutList = Array.isArray(hypothesis.rulingOutFactors) ? hypothesis.rulingOutFactors : [];
+
+      const skeletonSummary = skeletonData ? [
+        skeletonData.painMarkers?.length ? `Pain markers: ${skeletonData.painMarkers.slice(0,8).map((p: any) => `${p.anatomicalLabel || p.label || p.nearestBone} (${p.type || 'pain'} ${p.severity ?? ''})`).join('; ')}` : '',
+        skeletonData.forces?.length ? `Forces: ${skeletonData.forces.slice(0,6).map((f: any) => `${f.label}=${f.status}`).join('; ')}` : '',
+        skeletonData.muscles?.length ? `Muscle status: ${skeletonData.muscles.slice(0,8).map((m: any) => `${m.name}=${m.status}`).join('; ')}` : '',
+      ].filter(Boolean).join('\n') : '';
+
+      const systemPrompt = `You are a senior physiotherapy diagnostician. The clinician has been discussing a working hypothesis with an AI assistant. Your job: read the transcript and decide whether the discussion has refined, redirected, or confirmed the original hypothesis. Return ONLY a single JSON object with these exact keys:
+{
+  "condition": "the most likely condition name AFTER the discussion (may be the same as original if no shift occurred)",
+  "confidenceSuggestion": "integer 0-100 representing your post-discussion confidence",
+  "rationale": "one or two sentence clinical rationale grounded in what was discussed",
+  "keyFindings": ["3-6 short bullets of findings from the transcript that support this refined view"],
+  "distinguishingFeatures": ["0-5 short bullets describing how this differs from the original hypothesis (empty array if same)"],
+  "changedFromOriginal": "one short sentence summarising what changed (or 'No change — discussion confirmed original')",
+  "sameAsOriginal": true/false
+}
+Rules: Stay grounded in the transcript and clinical context — do not invent findings. If the discussion did not meaningfully shift the diagnosis, set sameAsOriginal=true and keep the original condition name. Use everyday physio terminology. Return JSON only.`;
+
+      const userPrompt = `ORIGINAL HYPOTHESIS
+Condition: ${hypothesis.condition}
+Confidence: ${hypothesis.confidence ?? '—'}%
+Supporting evidence: ${evidenceList.length ? evidenceList.join(' | ') : 'none recorded'}
+Ruling-out factors: ${ruleOutList.length ? ruleOutList.join(' | ') : 'none recorded'}
+${hypothesis.structuredContext ? `Structured context: ${JSON.stringify(hypothesis.structuredContext)}` : ''}
+
+${subjectiveHistory ? `SUBJECTIVE HISTORY\n${subjectiveHistory}\n\n` : ''}${skeletonSummary ? `CURRENT SKELETON SNAPSHOT\n${skeletonSummary}\n\n` : ''}DISCUSSION TRANSCRIPT
+${transcript}
+
+Now produce the refined hypothesis JSON.`;
+
+      const completion = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        max_tokens: 900,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || "{}";
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return res.status(502).json({ error: "AI returned malformed JSON" });
+      }
+
+      const validated = RefinedSchema.safeParse(parsed);
+      if (!validated.success) {
+        console.error("Refine hypothesis validation error:", validated.error.flatten());
+        return res.status(502).json({ error: "AI response did not match expected schema" });
+      }
+
+      const data = validated.data;
+      data.confidenceSuggestion = Math.round(data.confidenceSuggestion);
+      const sameByName = data.condition.trim().toLowerCase() === String(hypothesis.condition).trim().toLowerCase();
+      data.sameAsOriginal = data.sameAsOriginal || sameByName;
+
+      res.json({ refined: data });
+    } catch (error: any) {
+      console.error("Hypothesis refine error:", error?.message || error);
+      const status = error?.status === 429 ? 429 : 500;
+      res.status(status).json({ error: error?.status === 429 ? "AI quota exceeded — try again shortly." : "Unable to refine hypothesis" });
+    }
+  });
+
   app.get("/api/physiogpt/conversations", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const conversations = await physioGptService.getUserConversations(req.user!.id);

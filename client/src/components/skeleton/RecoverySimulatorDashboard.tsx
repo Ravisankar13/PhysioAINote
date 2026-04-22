@@ -270,6 +270,17 @@ function mapItemToPhaseIndex(
   return Math.min(Math.max(0, currentIdx), phaseCount - 1);
 }
 
+/** Build a deterministic stableId for a Case-Specific plan item so it
+ *  can be promoted into the session-wide customExercises /
+ *  customTechniques arrays AND scheduled as an Intervention on the
+ *  active branch without losing identity across re-renders. The "cs_"
+ *  prefix lets the dashboard cheaply detect which items were sourced
+ *  from the AI case-specific plan vs. authored elsewhere. */
+function caseItemStableId(phaseId: string, kind: 'ex' | 'mt', idx: number, name: string): string {
+  const s = (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+  return `cs_${phaseId}_${kind}_${idx}_${s || 'item'}`;
+}
+
 /** Condition-aware goal headline per stage for the acute-tissue-healing
  *  archetype — preserved verbatim so existing cases (rotator cuff tear, ACL,
  *  ankle sprain, post-surgical, muscle strain) render unchanged. Other
@@ -737,6 +748,25 @@ export default function RecoverySimulatorDashboard({
     () => buildCustomTreatmentProfiles(customExercises, customTechniques),
     [customExercises, customTechniques],
   );
+
+  /** stableIds of case-specific exercises/techniques that have already
+   *  been promoted into the session-wide custom arrays (and therefore
+   *  also exist as bars on the recovery timeline). Drives the
+   *  "Add" → "On timeline" toggle on the case-specific phase items. */
+  const addedCaseExStableIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const ex of customExercises ?? []) {
+      if (ex.stableId && ex.stableId.startsWith('cs_')) s.add(ex.stableId);
+    }
+    return s;
+  }, [customExercises]);
+  const addedCaseMtStableIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const mt of customTechniques ?? []) {
+      if (mt.stableId && mt.stableId.startsWith('cs_')) s.add(mt.stableId);
+    }
+    return s;
+  }, [customTechniques]);
   const treatmentLookup = useMemo(() => {
     if (customProfiles.length === 0) return TREATMENT_BY_ID;
     const m = new Map(TREATMENT_BY_ID);
@@ -1651,6 +1681,130 @@ export default function RecoverySimulatorDashboard({
       return next;
     });
   }, [phaseRanges, activeBranchId, autoHandledStageIds, archetype, activeBranch.interventions, input.patientAdherence, input.totalWeeks, buildScheduleProposal]);
+
+  // ─── Auto-promote AI Case-Specific plan items into Gantt bars ──────
+  // Mirrors the stage-recommended auto-promote above, but for the
+  // techniques + exercises returned by the AI Case-Specific Treatment
+  // Plan inside each phase card. Each item is materialised as:
+  //   1. A CustomExerciseInput / CustomManualTechniqueInput on the
+  //      session-wide custom arrays (so the engine consumes its
+  //      synthesized profile via buildCustomTreatmentProfiles), AND
+  //   2. An Intervention on the active branch anchored inside the
+  //      matching stage's window — so it appears as a draggable Gantt
+  //      bar and bends the recovery curve like every other treatment.
+  // Idempotency: once a case item has been auto-promoted (or detected
+  // as pre-existing) it is locked in `autoHandledCaseItems` so
+  // removing its bar via the on-chart controls does NOT silently
+  // re-add it. The per-item "+ Add" / section "Add all" buttons remain
+  // available as a fallback / re-add path after removal.
+  const [autoHandledCaseItems, setAutoHandledCaseItems] = useState<Map<string, Set<string>>>(new Map());
+
+  useEffect(() => {
+    if (!caseSpecificPlan || phaseRanges.length === 0) return;
+    if (!onAddCustomExercises && !onAddCustomTechniques) return;
+    const handled = autoHandledCaseItems.get(activeBranchId) ?? new Set<string>();
+    const newlyHandled = new Set<string>();
+    const newExercises: CustomExerciseInput[] = [];
+    const newTechniques: CustomManualTechniqueInput[] = [];
+    const newInterventions: Intervention[] = [];
+    const branchTreatmentIds = new Set<string>(activeBranch.interventions.map(iv => iv.treatmentId));
+    const existingExStable = new Set<string>(
+      (customExercises ?? []).map(ex => ex.stableId).filter((s): s is string => !!s),
+    );
+    const existingMtStable = new Set<string>(
+      (customTechniques ?? []).map(mt => mt.stableId).filter((s): s is string => !!s),
+    );
+    const horizon = input.totalWeeks ?? 24;
+    const rangeByStageId = new Map(phaseRanges.map(r => [r.stage.id, r]));
+    for (const ph of caseSpecificPlan.phases) {
+      const r = rangeByStageId.get(ph.phase_id);
+      if (!r) continue;
+      const rawStart = r.reached ? r.start : r.expectedStart;
+      const rawEnd = r.reached ? r.end : r.expectedEnd;
+      const sIdx = Math.max(0, Math.min(horizon - 1, rawStart));
+      const eIdx = Math.min(horizon, Math.max(sIdx + 1, Math.min(horizon, rawEnd)));
+      if (onAddCustomExercises) {
+        ph.exercises.forEach((item, i) => {
+          const stableId = caseItemStableId(ph.phase_id, 'ex', i, item.name);
+          const csKey = `ex::${stableId}`;
+          if (handled.has(csKey)) return;
+          if (existingExStable.has(stableId)) { newlyHandled.add(csKey); return; }
+          const ex: CustomExerciseInput = {
+            name: item.name,
+            clinicalTarget: item.target,
+            dosage: { frequency: item.dosage },
+            progressionStages: item.progression ? [{ stage: 1, name: item.progression }] : undefined,
+            phaseIndex: r.stageIndex,
+            phaseLabel: r.stage.name,
+            userAuthored: false,
+            stableId,
+          };
+          const treatmentId = buildCustomExerciseId(ex, 0);
+          if (branchTreatmentIds.has(treatmentId)) { newlyHandled.add(csKey); return; }
+          newExercises.push(ex);
+          newInterventions.push({
+            id: `i_cs_${activeBranchId}_${stableId}`,
+            treatmentId,
+            startWeek: sIdx,
+            endWeek: eIdx,
+            doseMultiplier: 1,
+            adherence: input.patientAdherence,
+            scheduleSource: 'ai',
+            scheduleRationale: `auto:case:${ph.phase_id}`,
+          });
+          newlyHandled.add(csKey);
+        });
+      }
+      if (onAddCustomTechniques) {
+        ph.techniques.forEach((item, i) => {
+          const stableId = caseItemStableId(ph.phase_id, 'mt', i, item.name);
+          const csKey = `mt::${stableId}`;
+          if (handled.has(csKey)) return;
+          if (existingMtStable.has(stableId)) { newlyHandled.add(csKey); return; }
+          const mt: CustomManualTechniqueInput = {
+            name: item.name,
+            clinicalTarget: item.target,
+            dosage: { frequency: item.dosage, duration: item.dosage },
+            progressionStages: item.progression ? [{ stage: 1, name: item.progression }] : undefined,
+            phaseIndex: r.stageIndex,
+            phaseLabel: r.stage.name,
+            userAuthored: false,
+            stableId,
+          };
+          const treatmentId = buildCustomTechniqueId(mt, 0);
+          if (branchTreatmentIds.has(treatmentId)) { newlyHandled.add(csKey); return; }
+          newTechniques.push(mt);
+          newInterventions.push({
+            id: `i_cs_${activeBranchId}_${stableId}`,
+            treatmentId,
+            startWeek: sIdx,
+            endWeek: eIdx,
+            doseMultiplier: 1,
+            adherence: input.patientAdherence,
+            scheduleSource: 'ai',
+            scheduleRationale: `auto:case:${ph.phase_id}`,
+          });
+          newlyHandled.add(csKey);
+        });
+      }
+    }
+    if (newlyHandled.size === 0) return;
+    if (newExercises.length > 0 && onAddCustomExercises) onAddCustomExercises(newExercises);
+    if (newTechniques.length > 0 && onAddCustomTechniques) onAddCustomTechniques(newTechniques);
+    if (newInterventions.length > 0) {
+      setBranches(prev => prev.map(b =>
+        b.id !== activeBranchId ? b : { ...b, interventions: [...b.interventions, ...newInterventions] },
+      ));
+    }
+    setAutoHandledCaseItems(prev => {
+      const next = new Map(prev);
+      const merged = new Set<string>(prev.get(activeBranchId) ?? []);
+      newlyHandled.forEach(id => merged.add(id));
+      next.set(activeBranchId, merged);
+      return next;
+    });
+  }, [caseSpecificPlan, phaseRanges, activeBranchId, autoHandledCaseItems, customExercises, customTechniques,
+      activeBranch.interventions, input.patientAdherence, input.totalWeeks, onAddCustomExercises, onAddCustomTechniques]);
 
   // Compute scenario A vs B comparison summary lines from end-of-period deltas
   // Map the current scrub week onto the phase whose [start, end) range
@@ -2617,6 +2771,63 @@ export default function RecoverySimulatorDashboard({
                         // dosage + per-finding rationale.
                         const csPhase: CaseSpecificPhasePlan | null =
                           caseSpecificPlan?.phases.find((ph: CaseSpecificPhasePlan) => ph.phase_id === p.id) ?? null;
+
+                        // Phase window used as the default start/end for
+                        // Case-Specific items promoted onto the timeline.
+                        // Falls back to the soft expected window when the
+                        // phase has not been reached by the simulation yet.
+                        const csPhaseStart = r.reached ? r.start : r.expectedStart;
+                        const csPhaseEnd = Math.max(csPhaseStart + 1, r.reached ? r.end : r.expectedEnd);
+
+                        const addCaseExerciseToTimeline = (item: CaseSpecificTreatmentItem, idx: number) => {
+                          const stableId = caseItemStableId(p.id, 'ex', idx, item.name);
+                          if (addedCaseExStableIds.has(stableId)) return;
+                          const ex: CustomExerciseInput = {
+                            name: item.name,
+                            clinicalTarget: item.target,
+                            dosage: { frequency: item.dosage },
+                            progressionStages: item.progression
+                              ? [{ stage: 1, name: item.progression }]
+                              : undefined,
+                            phaseIndex: r.stageIndex,
+                            phaseLabel: p.name,
+                            userAuthored: false,
+                            stableId,
+                          };
+                          onAddCustomExercises?.([ex]);
+                          addInterventionToActiveBranch(
+                            buildCustomExerciseId(ex, 0),
+                            csPhaseStart,
+                            csPhaseEnd,
+                          );
+                        };
+                        const addCaseTechniqueToTimeline = (item: CaseSpecificTreatmentItem, idx: number) => {
+                          const stableId = caseItemStableId(p.id, 'mt', idx, item.name);
+                          if (addedCaseMtStableIds.has(stableId)) return;
+                          const mt: CustomManualTechniqueInput = {
+                            name: item.name,
+                            clinicalTarget: item.target,
+                            dosage: { frequency: item.dosage, duration: item.dosage },
+                            progressionStages: item.progression
+                              ? [{ stage: 1, name: item.progression }]
+                              : undefined,
+                            phaseIndex: r.stageIndex,
+                            phaseLabel: p.name,
+                            userAuthored: false,
+                            stableId,
+                          };
+                          onAddCustomTechniques?.([mt]);
+                          addInterventionToActiveBranch(
+                            buildCustomTechniqueId(mt, 0),
+                            csPhaseStart,
+                            csPhaseEnd,
+                          );
+                        };
+
+                        const csTechniquesAllAdded = !!csPhase && csPhase.techniques.length > 0
+                          && csPhase.techniques.every((it, i) => addedCaseMtStableIds.has(caseItemStableId(p.id, 'mt', i, it.name)));
+                        const csExercisesAllAdded = !!csPhase && csPhase.exercises.length > 0
+                          && csPhase.exercises.every((it, i) => addedCaseExStableIds.has(caseItemStableId(p.id, 'ex', i, it.name)));
                         type CombinedTreatment =
                           | { kind: 'baseline'; label: string }
                           | { kind: 'session-ex'; label: string }
@@ -2703,15 +2914,55 @@ export default function RecoverySimulatorDashboard({
                           i: number,
                           kind: 'case-mt' | 'case-ex',
                         ) => {
-                          const tone = kind === 'case-ex' ? 'text-violet-200' : 'text-cyan-200';
-                          const testid = kind === 'case-ex'
+                          const isEx = kind === 'case-ex';
+                          const tone = isEx ? 'text-violet-200' : 'text-cyan-200';
+                          const testid = isEx
                             ? `phase-rx-case-ex-${p.id}-${i}`
                             : `phase-rx-case-mt-${p.id}-${i}`;
+                          const stableId = caseItemStableId(p.id, isEx ? 'ex' : 'mt', i, item.name);
+                          const isAdded = isEx
+                            ? addedCaseExStableIds.has(stableId)
+                            : addedCaseMtStableIds.has(stableId);
+                          const canAdd = isEx ? !!onAddCustomExercises : !!onAddCustomTechniques;
+                          // Surface the bar's CURRENT scheduled window
+                          // (from the active branch's intervention) so the
+                          // tooltip stays in sync after drag / resize.
+                          // Falls back to the original phase window when
+                          // no matching intervention is found.
+                          const csTreatmentId = isEx
+                            ? `custom_ex_s_${stableId}`
+                            : `custom_mt_s_${stableId}`;
+                          const liveIv = activeBranch.interventions.find(iv => iv.treatmentId === csTreatmentId);
+                          const liveStart = liveIv?.startWeek ?? csPhaseStart;
+                          const liveEnd = liveIv?.endWeek ?? csPhaseEnd;
                           return (
                             <li key={`${kind}-${i}`} className={`text-[10px] flex flex-col gap-0.5 ${tone}`} data-testid={testid}>
                               <div className="flex items-start gap-1">
                                 <span className="opacity-60 mt-0.5">•</span>
-                                <span className="font-semibold leading-snug">{item.name}</span>
+                                <span className="font-semibold leading-snug flex-1">{item.name}</span>
+                                {canAdd && (
+                                  isAdded ? (
+                                    <span
+                                      className="text-[8px] text-emerald-300 inline-flex items-center gap-0.5 shrink-0 mt-0.5"
+                                      data-testid={`${testid}-added`}
+                                      title={`Already on the recovery timeline (wk ${liveStart}–${liveEnd})`}
+                                    >
+                                      <CheckCircle2 className="h-2.5 w-2.5" />On timeline
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => isEx
+                                        ? addCaseExerciseToTimeline(item, i)
+                                        : addCaseTechniqueToTimeline(item, i)}
+                                      className="text-[8px] px-1 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5 shrink-0 mt-0.5"
+                                      data-testid={`${testid}-add`}
+                                      title={`Add to recovery timeline at wk ${csPhaseStart}–${csPhaseEnd} (drag/resize after)`}
+                                    >
+                                      <Plus className="h-2.5 w-2.5" />Add
+                                    </button>
+                                  )
+                                )}
                               </div>
                               {(item.dosage || item.target) && (
                                 <div className="text-[9px] text-gray-300 leading-snug pl-3">
@@ -2742,8 +2993,30 @@ export default function RecoverySimulatorDashboard({
                                 returned items for it. */}
                             {csPhase && csPhase.techniques.length > 0 && (
                               <div className="mt-0.5" data-testid={`phase-case-techniques-${p.id}`}>
-                                <div className="text-[8px] uppercase tracking-wide text-cyan-400/80 font-semibold mb-0.5">
-                                  Techniques
+                                <div className="flex items-center justify-between gap-1 mb-0.5">
+                                  <div className="text-[8px] uppercase tracking-wide text-cyan-400/80 font-semibold">
+                                    Techniques
+                                  </div>
+                                  {onAddCustomTechniques && (
+                                    csTechniquesAllAdded ? (
+                                      <span
+                                        className="text-[8px] text-emerald-300 inline-flex items-center gap-0.5"
+                                        data-testid={`phase-case-techniques-all-added-${p.id}`}
+                                      >
+                                        <CheckCircle2 className="h-2.5 w-2.5" />All on timeline
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => csPhase.techniques.forEach((it, i) => addCaseTechniqueToTimeline(it, i))}
+                                        className="text-[8px] px-1 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
+                                        data-testid={`phase-case-techniques-add-all-${p.id}`}
+                                        title={`Add all techniques to recovery timeline at wk ${csPhaseStart}–${csPhaseEnd}`}
+                                      >
+                                        <Plus className="h-2.5 w-2.5" />Add all to timeline
+                                      </button>
+                                    )
+                                  )}
                                 </div>
                                 <ul className="space-y-0.5">
                                   {csPhase.techniques.map((it, i) => renderCaseItem(it, i, 'case-mt'))}
@@ -2752,8 +3025,30 @@ export default function RecoverySimulatorDashboard({
                             )}
                             {csPhase && csPhase.exercises.length > 0 && (
                               <div className="mt-0.5" data-testid={`phase-case-exercises-${p.id}`}>
-                                <div className="text-[8px] uppercase tracking-wide text-violet-400/80 font-semibold mb-0.5">
-                                  Exercises
+                                <div className="flex items-center justify-between gap-1 mb-0.5">
+                                  <div className="text-[8px] uppercase tracking-wide text-violet-400/80 font-semibold">
+                                    Exercises
+                                  </div>
+                                  {onAddCustomExercises && (
+                                    csExercisesAllAdded ? (
+                                      <span
+                                        className="text-[8px] text-emerald-300 inline-flex items-center gap-0.5"
+                                        data-testid={`phase-case-exercises-all-added-${p.id}`}
+                                      >
+                                        <CheckCircle2 className="h-2.5 w-2.5" />All on timeline
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => csPhase.exercises.forEach((it, i) => addCaseExerciseToTimeline(it, i))}
+                                        className="text-[8px] px-1 py-0.5 rounded bg-emerald-700/30 hover:bg-emerald-600/40 text-emerald-200 inline-flex items-center gap-0.5"
+                                        data-testid={`phase-case-exercises-add-all-${p.id}`}
+                                        title={`Add all exercises to recovery timeline at wk ${csPhaseStart}–${csPhaseEnd}`}
+                                      >
+                                        <Plus className="h-2.5 w-2.5" />Add all to timeline
+                                      </button>
+                                    )
+                                  )}
                                 </div>
                                 <ul className="space-y-0.5">
                                   {csPhase.exercises.map((it, i) => renderCaseItem(it, i, 'case-ex'))}

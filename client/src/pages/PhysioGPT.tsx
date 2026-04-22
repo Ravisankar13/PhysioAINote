@@ -5817,11 +5817,19 @@ ${ddxList}`;
   }, [showUnifiedChainPanel, tensionTabActive, hasManualTensions, baseMuscleTensions.tensions, activeChainIds, painAffectedChainIds, painDriverChainIds, showPropagation, propagationDeltas]);
 
   const chainMuscleHighlights = useMemo<{ groups: string[]; colors: Record<string, string> }>(() => {
-    if (!fascialChainVizProp || activeChainIds.length === 0) return { groups: [], colors: {} };
+    if (!fascialChainVizProp) return { groups: [], colors: {} };
+    const orderedChainIds: string[] = [];
+    const chainSeen = new Set<string>();
+    for (const id of [...activeChainIds, ...painAffectedChainIds, ...painDriverChainIds]) {
+      if (chainSeen.has(id)) continue;
+      chainSeen.add(id);
+      orderedChainIds.push(id);
+    }
+    if (orderedChainIds.length === 0) return { groups: [], colors: {} };
     const groups: string[] = [];
     const colors: Record<string, string> = {};
     const seen = new Set<string>();
-    for (const chainId of activeChainIds) {
+    for (const chainId of orderedChainIds) {
       const chain = MYOFASCIAL_CHAINS.find(c => c.id === chainId);
       if (!chain) continue;
       for (const link of chain.links) {
@@ -5832,7 +5840,24 @@ ${ddxList}`;
       }
     }
     return { groups, colors };
-  }, [fascialChainVizProp, activeChainIds]);
+  }, [fascialChainVizProp, activeChainIds, painAffectedChainIds, painDriverChainIds]);
+
+  const mergedHighlightMuscleGroups = useMemo<string[] | undefined>(() => {
+    const merged: string[] = [];
+    const seen = new Set<string>();
+    for (const g of biomechanicalMuscleHighlights) {
+      if (!seen.has(g)) { seen.add(g); merged.push(g); }
+    }
+    for (const g of chainMuscleHighlights.groups) {
+      if (!seen.has(g)) { seen.add(g); merged.push(g); }
+    }
+    return merged.length > 0 ? merged : undefined;
+  }, [biomechanicalMuscleHighlights, chainMuscleHighlights]);
+
+  const mergedMuscleHighlightColors = useMemo<Record<string, string> | undefined>(() => {
+    const merged: Record<string, string> = { ...chainMuscleHighlights.colors, ...muscleHighlightColors };
+    return Object.keys(merged).length > 0 ? merged : undefined;
+  }, [chainMuscleHighlights, muscleHighlightColors]);
 
   const handleChainNodeClick = useCallback((data: { chainId: string; muscleId: string; chainName: string }) => {
     setSelectedChainNode(prev => prev?.muscleId === data.muscleId && prev?.chainId === data.chainId ? null : data);
@@ -6341,21 +6366,8 @@ ${ddxList}`;
               onMuscleGroupClick={(groupId, screenX, screenY) => {
                 setClickedMusclePopup(prev => prev?.groupId === groupId ? null : { groupId, screenX, screenY });
               }}
-              highlightMuscleGroups={(() => {
-                const merged: string[] = [];
-                const seen = new Set<string>();
-                for (const g of biomechanicalMuscleHighlights) {
-                  if (!seen.has(g)) { seen.add(g); merged.push(g); }
-                }
-                for (const g of chainMuscleHighlights.groups) {
-                  if (!seen.has(g)) { seen.add(g); merged.push(g); }
-                }
-                return merged.length > 0 ? merged : undefined;
-              })()}
-              muscleHighlightColors={(() => {
-                const merged: Record<string, string> = { ...chainMuscleHighlights.colors, ...muscleHighlightColors };
-                return Object.keys(merged).length > 0 ? merged : undefined;
-              })()}
+              highlightMuscleGroups={mergedHighlightMuscleGroups}
+              muscleHighlightColors={mergedMuscleHighlightColors}
               animationState={animationState}
               onAnimationProgress={handleAnimationProgress}
               animationConstraints={animationConstraints}

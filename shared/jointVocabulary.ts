@@ -145,6 +145,61 @@ export type JointVocabRange = ReturnType<typeof getPropertyRange>;
  * AnatomicalRegion identifiers (snake_case) used by the 3D viewer's pain marker
  * system. Provocation movements declare expectedProvocationSites against these.
  */
+export interface ProvocationKeyframe {
+  time: number;
+  value: number;
+}
+
+export interface ProvocationJointTimeline {
+  joint: string;
+  property: string;
+  keyframes: ProvocationKeyframe[];
+}
+
+export interface ExpectedProvocationSite {
+  region: string;
+  label: string;
+  severity?: number;
+}
+
+export type ProvocationSide = "left" | "right" | "bilateral" | "n/a";
+
+export interface DiagnosisProvocationMovement {
+  id: string;
+  name: string;
+  description: string;
+  duration: number;
+  loop: boolean;
+  side?: ProvocationSide;
+  setupPosture?: string;
+  holdAtPeakMs?: number;
+  joints: ProvocationJointTimeline[];
+  expectedProvocationSites?: ExpectedProvocationSite[];
+  clinicalRationale?: string;
+  positiveFinding?: string;
+}
+
+export interface ProvocationContextPainMarker {
+  region?: string;
+  anatomicalLabel?: string;
+  symptomType?: string;
+  severity?: number;
+  description?: string;
+}
+
+export interface ProvocationComposeRequest {
+  hypothesisId: string;
+  condition: string;
+  supportingEvidence?: string[];
+  rulingOutFactors?: string[];
+  region?: string;
+  painMarkers?: ProvocationContextPainMarker[];
+}
+
+export interface ProvocationComposeResponse {
+  movements: DiagnosisProvocationMovement[];
+}
+
 export const ANATOMICAL_REGIONS = [
   "full_body",
   "lumbar_spine",

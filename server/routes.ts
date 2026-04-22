@@ -44,6 +44,7 @@ import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 import { generateAISuggestions, applySuggestionToSoap, generateEnhancedDifferentials, type EnhancedDifferential, type DifferentialAnalysisResult } from "./services/aiSuggestionsService";
 import { ResearchService } from "./services/researchService";
 
+import type { ProvocationContextPainMarker } from "@shared/jointVocabulary";
 import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes, savedSkeletonConfigurations, physioGptConversations } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -10421,11 +10422,13 @@ Now produce the refined hypothesis JSON.`;
       if (!condition || typeof condition !== "string") {
         return res.status(400).json({ error: "condition is required" });
       }
-      const sanitizedMarkers = Array.isArray(painMarkers)
-        ? painMarkers
-            .filter((m: any) => m && typeof m === "object")
+      const isMarkerLike = (v: unknown): v is Record<string, unknown> =>
+        !!v && typeof v === "object" && !Array.isArray(v);
+      const sanitizedMarkers: ProvocationContextPainMarker[] | undefined = Array.isArray(painMarkers)
+        ? (painMarkers as unknown[])
+            .filter(isMarkerLike)
             .slice(0, 24)
-            .map((m: any) => ({
+            .map((m) => ({
               region: typeof m.region === "string" ? m.region : undefined,
               anatomicalLabel: typeof m.anatomicalLabel === "string" ? m.anatomicalLabel : undefined,
               symptomType: typeof m.symptomType === "string" ? m.symptomType : undefined,

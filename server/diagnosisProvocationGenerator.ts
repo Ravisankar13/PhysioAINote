@@ -15,6 +15,13 @@ import {
   JOINT_VOCABULARY,
   ANATOMICAL_REGIONS,
   type AnatomicalRegionId,
+  type DiagnosisProvocationMovement,
+  type ExpectedProvocationSite,
+  type ProvocationContextPainMarker as SharedProvocationContextPainMarker,
+  type ProvocationComposeRequest,
+  type ProvocationJointTimeline,
+  type ProvocationKeyframe,
+  type ProvocationSide,
 } from "../shared/jointVocabulary";
 
 export const PROVOCATION_VOCAB = JOINT_VOCABULARY;
@@ -65,43 +72,10 @@ const MovementSchema = z.object({
   positiveFinding: z.string().min(5).max(400).optional(),
 });
 
-export interface ExpectedProvocationSite {
-  region: AnatomicalRegionId;
-  label: string;
-  severity?: number;
-}
-
-export interface ProvocationMovement {
-  id: string;
-  name: string;
-  description: string;
-  duration: number;
-  loop: boolean;
-  side?: "left" | "right" | "bilateral" | "n/a";
-  setupPosture?: string;
-  holdAtPeakMs?: number;
-  joints: { joint: string; property: string; keyframes: { time: number; value: number }[] }[];
-  expectedProvocationSites?: ExpectedProvocationSite[];
-  clinicalRationale?: string;
-  positiveFinding?: string;
-}
-
-export interface ProvocationContextPainMarker {
-  region?: string;
-  anatomicalLabel?: string;
-  symptomType?: string;
-  severity?: number;
-  description?: string;
-}
-
-export interface ProvocationInput {
-  hypothesisId: string;
-  condition: string;
-  supportingEvidence?: string[];
-  rulingOutFactors?: string[];
-  region?: string;
-  painMarkers?: ProvocationContextPainMarker[];
-}
+export type ProvocationMovement = DiagnosisProvocationMovement;
+export type ProvocationContextPainMarker = SharedProvocationContextPainMarker;
+export type ProvocationInput = ProvocationComposeRequest;
+export type { ExpectedProvocationSite };
 
 function clamp(v: number, min: number, max: number): number {
   if (!Number.isFinite(v)) return min;
@@ -110,30 +84,48 @@ function clamp(v: number, min: number, max: number): number {
 
 const REGION_SET = new Set<string>(ANATOMICAL_REGIONS);
 
+function isObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+interface RepairedMovement {
+  name: string;
+  description: string;
+  duration: number;
+  loop: boolean;
+  side?: ProvocationSide;
+  setupPosture?: string;
+  holdAtPeakMs?: number;
+  joints: ProvocationJointTimeline[];
+  expectedProvocationSites?: ExpectedProvocationSite[];
+  clinicalRationale?: string;
+  positiveFinding?: string;
+}
+
 /** Repair-first pre-processor: clamps numeric fields, drops unknown joints
  *  and properties, sorts/pads keyframes. Operates on the raw object so the
  *  Zod schema only sees already-normalized data. */
-function repairRawMovement(raw: any): any | null {
-  if (!raw || typeof raw !== "object") return null;
-  const jointsRaw = Array.isArray(raw.joints) ? raw.joints : [];
+function repairRawMovement(raw: unknown): RepairedMovement | null {
+  if (!isObject(raw)) return null;
+  const jointsRaw: unknown[] = Array.isArray(raw.joints) ? raw.joints : [];
 
-  const cleanJoints: any[] = [];
+  const cleanJoints: ProvocationJointTimeline[] = [];
   for (const t of jointsRaw) {
-    if (!t || typeof t !== "object") continue;
-    const jointName = String(t.joint || "");
-    const propName = String(t.property || "");
+    if (!isObject(t)) continue;
+    const jointName = String(t.joint ?? "");
+    const propName = String(t.property ?? "");
     const jointDef = JOINT_VOCABULARY[jointName];
     if (!jointDef) continue;
     const propDef = jointDef.properties[propName];
     if (!propDef) continue;
-    const kfRaw = Array.isArray(t.keyframes) ? t.keyframes : [];
-    const kfClean = kfRaw
-      .filter((k: any) => k && typeof k === "object")
-      .map((k: any) => ({
+    const kfRaw: unknown[] = Array.isArray(t.keyframes) ? t.keyframes : [];
+    const kfClean: ProvocationKeyframe[] = kfRaw
+      .filter(isObject)
+      .map((k) => ({
         time: clamp(Number(k.time), 0, 1),
         value: clamp(Number(k.value), propDef.min, propDef.max),
       }))
-      .sort((a: any, b: any) => a.time - b.time);
+      .sort((a, b) => a.time - b.time);
     if (kfClean.length === 0) continue;
     if (kfClean[0].time > 0) kfClean.unshift({ time: 0, value: 0 });
     if (kfClean[kfClean.length - 1].time < 1) {
@@ -146,46 +138,52 @@ function repairRawMovement(raw: any): any | null {
   }
   if (cleanJoints.length === 0) return null;
 
-  const sitesRaw = Array.isArray(raw.expectedProvocationSites) ? raw.expectedProvocationSites : [];
-  const cleanSites = sitesRaw
-    .filter((s: any) => s && typeof s === "object" && REGION_SET.has(String(s.region)))
+  const sitesRaw: unknown[] = Array.isArray(raw.expectedProvocationSites)
+    ? raw.expectedProvocationSites
+    : [];
+  const cleanSites: ExpectedProvocationSite[] = sitesRaw
+    .filter(isObject)
+    .filter((s) => REGION_SET.has(String(s.region)))
     .slice(0, 5)
-    .map((s: any) => ({
+    .map((s) => ({
       region: String(s.region),
-      label: String(s.label || s.region).slice(0, 80),
+      label: String(s.label ?? s.region).slice(0, 80),
       severity:
         typeof s.severity === "number" && Number.isFinite(s.severity)
           ? clamp(s.severity, 0, 10)
           : undefined,
     }));
 
-  const sideRaw = String(raw.side || "").toLowerCase();
-  const side =
+  const sideRaw = String(raw.side ?? "").toLowerCase();
+  const side: ProvocationSide | undefined =
     sideRaw === "left" || sideRaw === "right" || sideRaw === "bilateral" || sideRaw === "n/a"
-      ? sideRaw
+      ? (sideRaw as ProvocationSide)
       : undefined;
 
   return {
-    name: String(raw.name || "Unnamed test").slice(0, 120),
-    description: String(raw.description || "Diagnostic provocation").slice(0, 400),
+    name: String(raw.name ?? "Unnamed test").slice(0, 120),
+    description: String(raw.description ?? "Diagnostic provocation").slice(0, 400),
     duration: clamp(Number(raw.duration ?? 4000), 1500, 8000),
     loop: !!raw.loop,
     side,
-    setupPosture: raw.setupPosture ? String(raw.setupPosture).slice(0, 280) : undefined,
+    setupPosture: typeof raw.setupPosture === "string" ? raw.setupPosture.slice(0, 280) : undefined,
     holdAtPeakMs:
       typeof raw.holdAtPeakMs === "number" && Number.isFinite(raw.holdAtPeakMs)
         ? clamp(raw.holdAtPeakMs, 0, 5000)
         : undefined,
     joints: cleanJoints.slice(0, 8),
     expectedProvocationSites: cleanSites.length > 0 ? cleanSites : undefined,
-    clinicalRationale: raw.clinicalRationale ? String(raw.clinicalRationale).slice(0, 500) : undefined,
-    positiveFinding: raw.positiveFinding ? String(raw.positiveFinding).slice(0, 400) : undefined,
+    clinicalRationale:
+      typeof raw.clinicalRationale === "string" ? raw.clinicalRationale.slice(0, 500) : undefined,
+    positiveFinding:
+      typeof raw.positiveFinding === "string" ? raw.positiveFinding.slice(0, 400) : undefined,
   };
 }
 
-function sanitize(raw: any, hypothesisId: string): ProvocationMovement[] {
+function sanitize(raw: unknown, hypothesisId: string): ProvocationMovement[] {
   const result: ProvocationMovement[] = [];
-  const movementsRaw = Array.isArray(raw?.movements) ? raw.movements : [];
+  const movementsRaw: unknown[] =
+    isObject(raw) && Array.isArray(raw.movements) ? raw.movements : [];
 
   for (const m of movementsRaw.slice(0, 6)) {
     const repaired = repairRawMovement(m);

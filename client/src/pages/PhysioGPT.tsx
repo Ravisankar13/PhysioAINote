@@ -91,6 +91,11 @@ import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState, AnimationConstraint } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
+import type {
+  DiagnosisProvocationMovement,
+  ProvocationComposeResponse,
+  ProvocationContextPainMarker,
+} from "@shared/jointVocabulary";
 import type { CompensationResult } from "@/lib/jointConstraints";
 import { type FocusedRegion, FOCUSED_REGIONS } from "@/lib/focusedRegions";
 import { type FocusedCameraResult } from "@/components/skeleton/FocusedCameraCapture";
@@ -572,7 +577,6 @@ export default function PhysioGPT() {
   const [chatPanelOpen, setChatPanelOpen] = useState(true);
   const [hypothesisChatOpen, setHypothesisChatOpen] = useState(false);
   const [selectedHypothesisForChat, setSelectedHypothesisForChat] = useState<HypothesisData | null>(null);
-  const [provocationRefreshKey, setProvocationRefreshKey] = useState(0);
   const [lastRefinedCommit, setLastRefinedCommit] = useState<{ id: string; condition: string; supportingEvidence: string[]; rulingOutFactors: string[] } | null>(null);
   const [testBenchOpen, setTestBenchOpen] = useState(false);
   const [testBenchHypothesis, setTestBenchHypothesis] = useState<BenchHypothesisInput | null>(null);
@@ -3273,13 +3277,11 @@ ${ddxList}`;
     data: provocationData,
     isFetching: provocationLoading,
     error: provocationError,
-    refetch: refetchProvocations,
-  } = useQuery<{ movements: any[] }>({
+  } = useQuery<ProvocationComposeResponse>({
     queryKey: [
       "/api/diagnosis-provocations/compose",
       provocationHypothesis?.id,
       provocationHypothesis?.condition,
-      provocationRefreshKey,
     ],
     enabled: provocationQueryEnabled,
     staleTime: 5 * 60 * 1000,
@@ -3307,33 +3309,25 @@ ${ddxList}`;
       return res.json();
     },
   });
-  const provocationMovements = useMemo(() => {
-    const list = Array.isArray(provocationData?.movements) ? provocationData.movements : [];
-    return list.map((m: any) => ({
-      id: m.id,
-      name: m.name,
-      description: m.description,
-      duration: m.duration,
-      loop: !!m.loop,
-      joints: m.joints,
-      side: m.side,
-      setupPosture: m.setupPosture,
-      holdAtPeakMs: m.holdAtPeakMs,
-      expectedProvocationSites: m.expectedProvocationSites,
-      clinicalRationale: m.clinicalRationale,
-      positiveFinding: m.positiveFinding,
-    }));
+  const provocationMovements: DiagnosisProvocationMovement[] = useMemo(() => {
+    return Array.isArray(provocationData?.movements) ? provocationData.movements : [];
   }, [provocationData]);
   const handleRegenerateProvocations = useCallback(() => {
-    setProvocationRefreshKey(k => k + 1);
-  }, []);
+    if (!provocationHypothesis) return;
+    queryClient.invalidateQueries({
+      queryKey: [
+        "/api/diagnosis-provocations/compose",
+        provocationHypothesis.id,
+        provocationHypothesis.condition,
+      ],
+    });
+  }, [provocationHypothesis, queryClient]);
 
-  const provocationMarkerContext = useMemo(() => {
+  const provocationMarkerContext: ProvocationContextPainMarker[] = useMemo(() => {
     return painMarkers
       .filter(m => !m.id.startsWith("prov-flash-"))
       .slice(0, 24)
       .map(m => ({
-        region: (m as any).region,
         anatomicalLabel: m.anatomicalLabel,
         symptomType: m.symptomType,
         severity: m.severity,
@@ -3370,7 +3364,7 @@ ${ddxList}`;
       return;
     }
 
-    const transient: PainMarker[] = sites.flatMap((site: { region: string; label: string; severity?: number }, idx: number) => {
+    const transient: PainMarker[] = sites.flatMap((site, idx) => {
       const region = site.region as AnatomicalRegion;
       const bones = REGION_BONE_MAPPING[region];
       const nearestBone = bones && bones.length > 0 ? bones[0] : undefined;

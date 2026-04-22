@@ -320,7 +320,7 @@ Compose 3–6 diagnostic provocation movements specific to this condition. Bias 
   });
 
   const raw = completion.choices[0]?.message?.content || "{}";
-  let parsed: any;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
@@ -328,8 +328,10 @@ Compose 3–6 diagnostic provocation movements specific to this condition. Bias 
   }
 
   const movements = sanitize(parsed, input.hypothesisId);
-  if (movements.length === 0) {
-    throw new Error("No valid provocation movements could be composed");
+  if (movements.length < 3) {
+    throw new Error(
+      `Provocation composition produced only ${movements.length} valid movement(s); need at least 3.`,
+    );
   }
   return movements;
 }

@@ -3250,11 +3250,14 @@ ${ddxList}`;
   }, []);
 
   /**
-   * Trigger order (highest priority first):
-   *   1. The most recently refine-committed hypothesis (clinician just confirmed it)
-   *   2. The top-confidence hypothesis with status === "confirmed"
-   *   3. The hypothesis the clinician explicitly opened a chat about (manual fallback)
-   * Confidence gate: ≥60% to avoid composing tests for low-confidence guesses.
+   * Trigger contract (per task spec): only confirmed or refine-committed
+   * hypotheses cause provocation composition. Chat-selected hypotheses are
+   * intentionally NOT a trigger — clinicians may open chats on speculative
+   * differentials and we don't want to spend AI credits on those.
+   * Priority:
+   *   1. Most recent refine-commit (clinician just promoted/replaced).
+   *   2. Top-confidence hypothesis with status === "confirmed".
+   * Confidence gate: ≥60%.
    */
   const provocationHypothesis = useMemo<{ id: string; condition: string; supportingEvidence?: string[]; rulingOutFactors?: string[] } | null>(() => {
     if (lastRefinedCommit) return lastRefinedCommit;
@@ -3266,12 +3269,8 @@ ${ddxList}`;
       const h = confirmed[0];
       return { id: h.id, condition: h.condition, supportingEvidence: h.supportingEvidence, rulingOutFactors: h.rulingOutFactors };
     }
-    if (selectedHypothesisForChat && selectedHypothesisForChat.confidence >= 60) {
-      const h = selectedHypothesisForChat;
-      return { id: h.id, condition: h.condition, supportingEvidence: h.supportingEvidence, rulingOutFactors: h.rulingOutFactors };
-    }
     return null;
-  }, [lastRefinedCommit, clinicalReasoningData?.hypotheses, selectedHypothesisForChat]);
+  }, [lastRefinedCommit, clinicalReasoningData?.hypotheses]);
   const provocationQueryEnabled = !!provocationHypothesis && !!provocationHypothesis.id && !!provocationHypothesis.condition;
   const {
     data: provocationData,

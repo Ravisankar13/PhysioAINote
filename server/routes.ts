@@ -10446,14 +10446,19 @@ Now produce the refined hypothesis JSON.`;
         painMarkers: sanitizedMarkers,
       });
       res.json({ movements });
-    } catch (error: any) {
-      console.error("Compose provocation error:", error?.message || error);
-      const status = error?.status === 429 ? 429 : 500;
+    } catch (error) {
+      const errStatus =
+        error && typeof error === "object" && "status" in error && typeof (error as { status: unknown }).status === "number"
+          ? (error as { status: number }).status
+          : undefined;
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error("Compose provocation error:", errMessage);
+      const status = errStatus === 429 ? 429 : 500;
       res.status(status).json({
         error:
-          error?.status === 429
+          errStatus === 429
             ? "AI quota exceeded — try again shortly."
-            : error?.message || "Unable to compose provocation movements",
+            : errMessage || "Unable to compose provocation movements",
       });
     }
   });

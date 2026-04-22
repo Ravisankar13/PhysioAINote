@@ -104,6 +104,7 @@ const MODALITY_META: Record<PlanCartModality, { label: string; icon: typeof Dumb
   manual_therapy_custom: { label: "Custom Manual Therapy", icon: Sparkles, color: "text-rose-200", bg: "bg-rose-500/15", border: "border-rose-500/30" },
   electrophysical: { label: "Electrophysical", icon: Zap, color: "text-teal-300", bg: "bg-teal-500/15", border: "border-teal-500/30" },
   adjunct: { label: "Adjunct Rx", icon: Leaf, color: "text-emerald-300", bg: "bg-emerald-500/15", border: "border-emerald-500/30" },
+  lifestyle: { label: "Lifestyle & Adjunct Rx", icon: Activity, color: "text-amber-300", bg: "bg-amber-500/15", border: "border-amber-500/30" },
 };
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

@@ -182,6 +182,7 @@ function MyPlanTabButton({ active, onClick }: { active: boolean; onClick: () => 
   );
 }
 const AdjunctTherapiesEngineTab = lazy(() => import("@/components/skeleton/AdjunctTherapiesEngineTab"));
+const LifestyleAdjunctEngineTab = lazy(() => import("@/components/skeleton/LifestyleAdjunctEngineTab"));
 const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/UnifiedBiomechanicsPanel"));
 const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
@@ -668,7 +669,7 @@ export default function PhysioGPT() {
   const [timelinePlaybackState, setTimelinePlaybackState] = useState<PlaybackSyncState | null>(null);
   const [conditionPhases, setConditionPhases] = useState<ConditionPhaseInfo[] | null>(null);
   const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
-  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'adjunctRx' | 'patientEd' | 'myPlan'>('mechanism');
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'adjunctRx' | 'lifestyleRx' | 'patientEd' | 'myPlan'>('mechanism');
   // Lifted Electro Rx state so the Recovery Simulator phase cards can read
   // the latest plan without re-fetching, and so phase-card "Generate" CTAs
   // can pre-fill the Electro tab and auto-run the engine.
@@ -9879,6 +9880,14 @@ ${ddxList}`;
                       Adjunct Rx
                     </button>
                     <button
+                      onClick={() => { setMechanismActiveTab('lifestyleRx'); setManualTherapyAnnotations(null); }}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'lifestyleRx' ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                      data-testid="tab-lifestyle-rx"
+                    >
+                      <Activity className="h-3 w-3" />
+                      Lifestyle
+                    </button>
+                    <button
                       onClick={() => { setMechanismActiveTab('patientEd'); setManualTherapyAnnotations(null); }}
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'patientEd' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
@@ -10025,6 +10034,21 @@ ${ddxList}`;
                       recoveryPhase={extractionResult?.duration || undefined}
                       irritability={extractionResult?.irritability || undefined}
                     />
+                  )}
+                  {mechanismActiveTab === 'lifestyleRx' && (
+                    <Suspense fallback={<LazyPanelFallback />}>
+                      <LifestyleAdjunctEngineTab
+                        mechanismAnalysis={mechanismAnalysisResult}
+                        painMarkers={painMarkers.map(pm => ({
+                          label: pm.anatomicalLabel || pm.nearestBone,
+                          severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                          type: pm.type,
+                        }))}
+                        diagnosis={extractionResult?.mainComplaint || undefined}
+                        recoveryPhase={extractionResult?.duration || undefined}
+                        irritability={extractionResult?.irritability || undefined}
+                      />
+                    </Suspense>
                   )}
                   {mechanismActiveTab === 'patientEd' && (
                     <PatientEducationEngineTab

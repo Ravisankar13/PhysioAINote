@@ -74,6 +74,7 @@ import {
 } from "@/lib/naturalRecoveryDriverModel";
 import { matchModalitiesForPhase, dosingOneLiner } from "@/lib/electroPhaseMatcher";
 import type { ElectrophysicalPlan } from "@/components/skeleton/ElectrophysicalEngineTab";
+import TreatmentTimelinePanel from "@/components/skeleton/TreatmentTimelinePanel";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
 import {
   getArchetypeForCondition,
@@ -323,6 +324,7 @@ function MiniChart({
   showWeekLabel = true,
   axisUnit = 'WEEK',
   markers,
+  onWeekAddClick,
 }: {
   series: { label: string; color: string; values: number[]; dash?: string }[];
   scrubWeek?: number;
@@ -331,6 +333,11 @@ function MiniChart({
   height?: number;
   showGrid?: boolean;
   showWeekLabel?: boolean;
+  /** Optional secondary click handler — fired with the resolved week when
+   *  the chart is clicked. Used by the Treatment Timeline Builder to open
+   *  the intervention palette directly from a chart click while preserving
+   *  the existing scrub behaviour. */
+  onWeekAddClick?: (week: number) => void;
   /** Label unit shown on x-axis ticks and the scrub cursor. Set to
    *  'CHECKPOINT' for purely criterion-gated archetypes; default 'WEEK'
    *  preserves the legacy display for time-gated and hybrid archetypes. */
@@ -353,12 +360,13 @@ function MiniChart({
   const path = (vals: number[]) => vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${xFor(i).toFixed(1)},${yFor(v).toFixed(1)}`).join(' ');
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!onScrub) return;
+    if (!onScrub && !onWeekAddClick) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const relX = (e.clientX - rect.left) * (width / rect.width);
     const wf = (relX - padding.left) / cw;
     const wk = Math.round(Math.max(0, Math.min(totalWeeks, wf * totalWeeks)));
-    onScrub(wk);
+    if (onScrub) onScrub(wk);
+    if (onWeekAddClick) onWeekAddClick(wk);
   };
 
   const weekTicks = Array.from({ length: 5 }, (_, i) => Math.round((i / 4) * totalWeeks));
@@ -644,6 +652,7 @@ export default function RecoverySimulatorDashboard({
   // baseline to the active projection's trajectory.
   const [goalMode] = useState<GoalMode>('fastest_function');
   const [showInterventionEditor, setShowInterventionEditor] = useState(false);
+  const [timelinePaletteWeek, setTimelinePaletteWeek] = useState<number | null>(null);
   const [showRemoveTreatment, setShowRemoveTreatment] = useState(false);
   const [showLoadAdjust, setShowLoadAdjust] = useState(false);
   const [loadAdjustPercent, setLoadAdjustPercent] = useState(20);
@@ -1924,6 +1933,7 @@ export default function RecoverySimulatorDashboard({
                     onScrub={setScrubWeek}
                     height={240}
                     axisUnit={axisUnit}
+                    onWeekAddClick={(wk) => setTimelinePaletteWeek(wk)}
                     markers={
                       usingNaturalChart && naturalDriverModel
                         ? [
@@ -2081,6 +2091,21 @@ export default function RecoverySimulatorDashboard({
                     </div>
                   </div>
                 )}
+
+                <TreatmentTimelinePanel
+                  branch={activeBranch}
+                  totalWeeks={displayTotalWeeks}
+                  scrubWeek={scrubWeek}
+                  treatmentLookup={treatmentLookup}
+                  customProfiles={customProfiles}
+                  paletteOpenAtWeek={timelinePaletteWeek}
+                  onClosePalette={() => setTimelinePaletteWeek(null)}
+                  onOpenPaletteAt={(wk) => setTimelinePaletteWeek(wk)}
+                  onAddIntervention={(tid, wk) => addInterventionToActiveBranch(tid, wk)}
+                  onRemoveIntervention={(id) => removeInterventionFromActive(id)}
+                  onUpdateInterventionWeek={(id, wk) => updateInterventionSchedule(id, { startWeek: wk })}
+                  conditionLabel={conditionLabel}
+                />
               </>
             ) : (
               <div className="flex-1 min-h-[240px] rounded overflow-hidden border border-gray-800/60 bg-black relative" data-testid="dashboard-skeleton-slot">

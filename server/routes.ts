@@ -22797,7 +22797,7 @@ If there are existing notes, seamlessly integrate the new content while maintain
   // ===== Treatment Plan Orchestrator (Task #185) =====
   const planCartItemSchema = z.object({
     id: z.string().min(1),
-    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct']),
+    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct', 'lifestyle']),
     name: z.string().min(1),
     targetStructure: z.string().optional(),
     targetFinding: z.string().optional(),
@@ -22830,14 +22830,14 @@ If there are existing notes, seamlessly integrate the new content while maintain
     order: z.number().int().min(1),
     itemId: z.string(),
     itemName: z.string(),
-    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct']),
+    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct', 'lifestyle']),
     durationMinutes: z.number().min(1).max(90),
     rationale: z.string().min(1),
   });
   const frequencySchema = z.object({
     itemId: z.string(),
     itemName: z.string(),
-    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct']),
+    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct', 'lifestyle']),
     sessionsPerWeek: z.number().min(1).max(14),
     setting: z.string().transform(s => {
       const v = String(s).toLowerCase().trim();
@@ -22989,6 +22989,129 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
     } catch (err) {
       console.error('[treatment-plan/orchestrate] error:', err);
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to orchestrate plan' });
+    }
+  });
+
+  // ===== Treatment Timeline Review (Task #193) =====
+  // Scores each scheduled intervention as help / neutral / hinder for the
+  // patient and flags conflicts. Filters returned IDs against submitted
+  // set so the model can never invent items.
+  const timelineReviewItemSchema = z.object({
+    id: z.string().min(1),
+    treatmentId: z.string().min(1),
+    name: z.string().min(1),
+    startWeek: z.number().int().min(0).max(104),
+    endWeek: z.number().int().min(0).max(104).optional(),
+    sessionsPerWeek: z.number().min(0).max(14).optional(),
+    doseMultiplier: z.number().min(0).max(5).optional(),
+    rationale: z.string().optional(),
+  });
+
+  const timelineReviewBodySchema = z.object({
+    items: z.array(timelineReviewItemSchema).min(1).max(40),
+    context: z.object({
+      conditionLabel: z.string().optional(),
+      totalWeeks: z.number().int().min(1).max(104).optional(),
+      irritability: z.string().optional(),
+      stage: z.string().optional(),
+    }).default({}),
+  });
+
+  const timelineVerdictSchema = z.object({
+    itemId: z.string(),
+    verdict: z.enum(['help', 'neutral', 'hinder']),
+    score: z.number().min(-100).max(100),
+    reasoning: z.string().min(1),
+  });
+  const timelineConflictSchema = z.object({
+    severity: z.enum(['info', 'warning', 'critical']),
+    description: z.string().min(1),
+    involvedItemIds: z.array(z.string()),
+  });
+  const timelineReviewResponseSchema = z.object({
+    summary: z.string().min(1),
+    verdicts: z.array(timelineVerdictSchema),
+    conflicts: z.array(timelineConflictSchema),
+  });
+
+  app.post('/api/treatment-timeline/review', async (req: Request, res: Response) => {
+    try {
+      const parse = timelineReviewBodySchema.safeParse(req.body);
+      if (!parse.success) {
+        return res.status(400).json({ error: 'Invalid request', details: parse.error.format() });
+      }
+      const { items, context } = parse.data;
+
+      const ctxLines: string[] = [];
+      if (context.conditionLabel) ctxLines.push(`Condition: ${context.conditionLabel}`);
+      if (context.totalWeeks) ctxLines.push(`Plan horizon: ${context.totalWeeks} weeks`);
+      if (context.irritability) ctxLines.push(`Irritability: ${context.irritability}`);
+      if (context.stage) ctxLines.push(`Recovery stage: ${context.stage}`);
+
+      const itemsForPrompt = items.map(it => ({
+        id: it.id,
+        treatmentId: it.treatmentId,
+        name: it.name,
+        startWeek: it.startWeek,
+        endWeek: it.endWeek ?? null,
+        sessionsPerWeek: it.sessionsPerWeek ?? null,
+        doseMultiplier: it.doseMultiplier ?? 1,
+        rationale: it.rationale ?? '',
+      }));
+
+      const systemPrompt = `You are a senior physiotherapist reviewing a clinician's draft treatment timeline.
+
+For EACH submitted intervention return a verdict: "help" (likely accelerates recovery for THIS case), "neutral" (acceptable but not strongly indicated), or "hinder" (likely to slow recovery, provoke symptoms, or duplicate another item). Provide a 1-sentence reasoning and a numeric score (-100..100).
+
+Then identify conflicts across items: contradictory modalities at the same week, dose stacking, contraindications for the condition stage, ordering errors (e.g., heavy loading scheduled before pain modulation in highly irritable cases), or missing essentials.
+
+Only reference itemId values that were submitted. Do NOT invent IDs.
+
+Return STRICT JSON only.`;
+
+      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none)'}\n\nProposed timeline (${items.length} items):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON: { summary (string, 2-3 sentences), verdicts (array of {itemId, verdict, score, reasoning}), conflicts (array of {severity: "info"|"warning"|"critical", description, involvedItemIds[]}) }.`;
+
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const completion = await aiClient.chat.completions.create({
+        model: 'gpt-4o',
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+        max_tokens: 2200,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || '{}';
+      let parsedJson: unknown;
+      try {
+        parsedJson = JSON.parse(raw);
+      } catch {
+        return res.status(502).json({ error: 'AI returned invalid JSON' });
+      }
+
+      const reviewParse = timelineReviewResponseSchema.safeParse(parsedJson);
+      if (!reviewParse.success) {
+        return res.status(502).json({ error: 'AI review failed validation', details: reviewParse.error.format() });
+      }
+
+      const validIds = new Set(items.map(i => i.id));
+      const filtered = {
+        summary: reviewParse.data.summary,
+        verdicts: reviewParse.data.verdicts.filter(v => validIds.has(v.itemId)),
+        conflicts: reviewParse.data.conflicts
+          .map(c => ({ ...c, involvedItemIds: c.involvedItemIds.filter(id => validIds.has(id)) }))
+          .filter(c => c.involvedItemIds.length > 0 || c.severity !== 'info'),
+      };
+
+      res.json({ ...filtered, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('[treatment-timeline/review] error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to review timeline' });
     }
   });
 

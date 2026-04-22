@@ -7,7 +7,8 @@ export type PlanCartModality =
   | "manual_therapy"
   | "manual_therapy_custom"
   | "electrophysical"
-  | "adjunct";
+  | "adjunct"
+  | "lifestyle";
 
 export interface PlanCartItem {
   id: string;

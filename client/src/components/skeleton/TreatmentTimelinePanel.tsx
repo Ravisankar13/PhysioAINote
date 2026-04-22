@@ -237,14 +237,13 @@ export default function TreatmentTimelinePanel({
     }
     setAiStarterLoading(true);
     try {
-      const res = await apiRequest('POST', '/api/treatment-plan/orchestrate', {
+      const data = await apiRequest('/api/treatment-plan/orchestrate', 'POST', {
         items: cartItems,
         clinicalContext: {
           topHypothesis: conditionLabel,
           primaryRegion: conditionLabel,
         },
       });
-      const data = await res.json();
       if (replace && onClearInterventions) {
         onClearInterventions();
       }
@@ -304,14 +303,13 @@ export default function TreatmentTimelinePanel({
           rationale: t?.description,
         };
       });
-      const res = await apiRequest('POST', '/api/treatment-timeline/review', {
+      const data = (await apiRequest('/api/treatment-timeline/review', 'POST', {
         items,
         context: {
           conditionLabel,
           totalWeeks,
         },
-      });
-      const data = (await res.json()) as TimelineReviewResponse;
+      })) as TimelineReviewResponse;
       setReview(data);
       setConflictsOpen(true);
     } catch (err) {

@@ -1526,8 +1526,17 @@ export default function RecoverySimulatorDashboard({
       // dropped on the branch — so the simulation curve always reflects
       // what the boxes display, and dragging/resizing/removing a bar
       // immediately re-bends the chart through the existing engine loop.
+      // Interval-overlap classification: a bar belongs to this stage's
+      // box whenever its [startWeek, endWeek] interval overlaps the
+      // stage window — so dragging or resizing a bar (especially an
+      // end-resize that extends across a phase boundary) immediately
+      // re-classifies it on the right phase card.
       const scheduled = activeBranch.interventions
-        .filter(i => i.startWeek >= sIdx && i.startWeek <= eIdx)
+        .filter(i => {
+          const ivStart = i.startWeek;
+          const ivEnd = (typeof i.endWeek === 'number' && i.endWeek >= ivStart) ? i.endWeek : ivStart;
+          return ivStart <= eIdx && ivEnd >= sIdx;
+        })
         .map(i => {
           const t = treatmentLookup.get(i.treatmentId);
           const stageFit = t ? stageFitForTreatment(stage, t.healingStageMultiplier, t.name) : 1;
@@ -1571,35 +1580,39 @@ export default function RecoverySimulatorDashboard({
     //   - Pre-existing user / cart / AI interventions in the same window
     //     no longer block stage recommendations from being promoted —
     //     recommendations are independent canonical items.
+    // Global canonicalization: a treatment recommended for multiple
+    // stages becomes ONE bar, deterministically placed on the earliest
+    // (lowest-index) stage where it fits. We track every treatmentId
+    // already canonicalized on the branch (regardless of source), and
+    // every treatmentId we plan to add in this pass.
     const handled = autoHandledStageIds.get(activeBranchId) ?? new Set<string>();
     const newlyHandled = new Set<string>();
     const toAdd: Intervention[] = [];
-    // Treatments already on the branch (any source) — we never duplicate
-    // the same treatmentId in the same stage window, regardless of how
-    // it got there.
+    const branchTreatmentIds = new Set<string>(activeBranch.interventions.map(iv => iv.treatmentId));
+    const planningTreatmentIds = new Set<string>();
     const horizon = input.totalWeeks ?? 24;
     for (const r of phaseRanges) {
       const stage = r.stage;
-      const sIdx = Math.max(0, Math.min(horizon, r.expectedStart));
-      const eIdx = Math.max(sIdx + 1, Math.min(horizon, r.expectedEnd));
+      // Match the phase-box window strategy exactly: reached stages use
+      // the engine's actual span, unreached stages use the expected
+      // biological corridor. This guarantees auto-promoted bars land in
+      // the same stage's box that classifies them.
+      const rawStart = r.reached ? r.start : r.expectedStart;
+      const rawEnd = r.reached ? r.end : r.expectedEnd;
+      const sIdx = Math.max(0, Math.min(horizon, rawStart));
+      const eIdx = Math.max(sIdx + 1, Math.min(horizon, rawEnd));
       const recs = TREATMENT_LIBRARY
         .filter(t => stageFitForTreatment(stage, t.healingStageMultiplier, t.name) >= 1.1)
         .slice(0, 3);
       for (const t of recs) {
         const recKey = `${stage.id}::${t.id}`;
         if (handled.has(recKey)) continue; // explicitly removed or already promoted
-        // Inherited auto-promotion on this branch (clones inherit the
-        // tagged interventions from the parent). Mark the rec handled
-        // so we don't double-add, but don't re-promote.
-        const inheritedRec = activeBranch.interventions.some(iv =>
-          iv.scheduleRationale === `auto:phase:${stage.id}` && iv.treatmentId === t.id);
-        // Same treatmentId already exists in this stage window from any
-        // other source (Plan Cart, AI orchestrator, manual). Treat the
-        // recommendation as already covered — no duplicate bar — but
-        // lock the rec so we don't keep retrying.
-        const sameTreatmentInWindow = activeBranch.interventions.some(iv =>
-          iv.treatmentId === t.id && iv.startWeek >= sIdx && iv.startWeek <= eIdx);
-        if (inheritedRec || sameTreatmentInWindow) {
+        // Cross-stage canonicalization: this treatmentId already lives
+        // on the branch from a previous pass (auto, user, cart, or AI)
+        // OR is being added by an earlier stage in this same pass.
+        // Either way, only one bar exists for it — mark THIS rec
+        // handled so we don't re-add and don't keep retrying.
+        if (branchTreatmentIds.has(t.id) || planningTreatmentIds.has(t.id)) {
           newlyHandled.add(recKey);
           continue;
         }
@@ -1618,6 +1631,7 @@ export default function RecoverySimulatorDashboard({
           scheduleSource: 'default',
           scheduleRationale: `auto:phase:${stage.id}`,
         });
+        planningTreatmentIds.add(t.id);
         newlyHandled.add(recKey);
       }
     }

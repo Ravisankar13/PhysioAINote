@@ -1563,39 +1563,46 @@ export default function RecoverySimulatorDashboard({
 
   useEffect(() => {
     if (!archetype || phaseRanges.length === 0) return;
+    // Per-recommendation handled state: each entry is a `<stageId>::<treatmentId>`
+    // pair. Tracking at this granularity (rather than per-stage) means:
+    //   - Removing one auto-promoted bar locks ONLY that recommendation,
+    //     so the other stage recommendations remain present and can be
+    //     materialised on the next render if they're still missing.
+    //   - Pre-existing user / cart / AI interventions in the same window
+    //     no longer block stage recommendations from being promoted —
+    //     recommendations are independent canonical items.
     const handled = autoHandledStageIds.get(activeBranchId) ?? new Set<string>();
     const newlyHandled = new Set<string>();
     const toAdd: Intervention[] = [];
-    // Track treatmentIds we've placed in this pass to dedupe across
-    // stages — if the same treatment fits multiple stages we only drop
-    // a single canonical bar (placed on the earliest-fitting stage).
-    const placedTreatmentIds = new Set<string>(
-      activeBranch.interventions
-        .filter(iv => iv.scheduleRationale?.startsWith('auto:phase:'))
-        .map(iv => iv.treatmentId),
-    );
+    // Treatments already on the branch (any source) — we never duplicate
+    // the same treatmentId in the same stage window, regardless of how
+    // it got there.
     const horizon = input.totalWeeks ?? 24;
     for (const r of phaseRanges) {
       const stage = r.stage;
-      if (handled.has(stage.id)) continue;
-      // Detect inherited auto-promotions on this branch (e.g. clones).
-      const inheritedHere = activeBranch.interventions.some(iv =>
-        iv.scheduleRationale === `auto:phase:${stage.id}`);
-      // Detect any user / cart / AI intervention already covering this
-      // stage's window — if there's already coverage we don't add more.
       const sIdx = Math.max(0, Math.min(horizon, r.expectedStart));
       const eIdx = Math.max(sIdx + 1, Math.min(horizon, r.expectedEnd));
-      const existingCoverage = activeBranch.interventions.some(iv =>
-        iv.startWeek >= sIdx && iv.startWeek <= eIdx);
-      if (inheritedHere || existingCoverage) {
-        newlyHandled.add(stage.id);
-        continue;
-      }
       const recs = TREATMENT_LIBRARY
         .filter(t => stageFitForTreatment(stage, t.healingStageMultiplier, t.name) >= 1.1)
-        .filter(t => !placedTreatmentIds.has(t.id))
         .slice(0, 3);
       for (const t of recs) {
+        const recKey = `${stage.id}::${t.id}`;
+        if (handled.has(recKey)) continue; // explicitly removed or already promoted
+        // Inherited auto-promotion on this branch (clones inherit the
+        // tagged interventions from the parent). Mark the rec handled
+        // so we don't double-add, but don't re-promote.
+        const inheritedRec = activeBranch.interventions.some(iv =>
+          iv.scheduleRationale === `auto:phase:${stage.id}` && iv.treatmentId === t.id);
+        // Same treatmentId already exists in this stage window from any
+        // other source (Plan Cart, AI orchestrator, manual). Treat the
+        // recommendation as already covered — no duplicate bar — but
+        // lock the rec so we don't keep retrying.
+        const sameTreatmentInWindow = activeBranch.interventions.some(iv =>
+          iv.treatmentId === t.id && iv.startWeek >= sIdx && iv.startWeek <= eIdx);
+        if (inheritedRec || sameTreatmentInWindow) {
+          newlyHandled.add(recKey);
+          continue;
+        }
         const proposal = buildScheduleProposal(t.id, sIdx);
         toAdd.push({
           id: `i_auto_${activeBranchId}_${stage.id}_${t.id}`,
@@ -1611,9 +1618,8 @@ export default function RecoverySimulatorDashboard({
           scheduleSource: 'default',
           scheduleRationale: `auto:phase:${stage.id}`,
         });
-        placedTreatmentIds.add(t.id);
+        newlyHandled.add(recKey);
       }
-      newlyHandled.add(stage.id);
     }
     if (newlyHandled.size === 0) return;
     if (toAdd.length > 0) {

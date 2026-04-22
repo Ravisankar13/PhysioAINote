@@ -23027,6 +23027,10 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
     severity: z.enum(['info', 'warning', 'critical']),
     description: z.string().min(1),
     involvedItemIds: z.array(z.string()),
+    suggestedReschedule: z.array(z.object({
+      itemId: z.string(),
+      newStartWeek: z.number().int().min(0).max(104),
+    })).optional().default([]),
   });
   const timelineReviewResponseSchema = z.object({
     summary: z.string().min(1),
@@ -23069,7 +23073,7 @@ Only reference itemId values that were submitted. Do NOT invent IDs.
 
 Return STRICT JSON only.`;
 
-      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none)'}\n\nProposed timeline (${items.length} items):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON: { summary (string, 2-3 sentences), verdicts (array of {itemId, verdict, score, reasoning}), conflicts (array of {severity: "info"|"warning"|"critical", description, involvedItemIds[]}) }.`;
+      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none)'}\n\nProposed timeline (${items.length} items):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON: { summary (string, 2-3 sentences), verdicts (array of {itemId, verdict, score, reasoning}), conflicts (array of {severity: "info"|"warning"|"critical", description, involvedItemIds[], suggestedReschedule (optional array of {itemId, newStartWeek}) — only include when a clear week-shift would resolve the conflict (e.g., move heavy loading from week 1 to week 4)}) }.`;
 
       const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
@@ -23104,7 +23108,11 @@ Return STRICT JSON only.`;
         summary: reviewParse.data.summary,
         verdicts: reviewParse.data.verdicts.filter(v => validIds.has(v.itemId)),
         conflicts: reviewParse.data.conflicts
-          .map(c => ({ ...c, involvedItemIds: c.involvedItemIds.filter(id => validIds.has(id)) }))
+          .map(c => ({
+            ...c,
+            involvedItemIds: c.involvedItemIds.filter(id => validIds.has(id)),
+            suggestedReschedule: (c.suggestedReschedule ?? []).filter(s => validIds.has(s.itemId)),
+          }))
           .filter(c => c.involvedItemIds.length > 0 || c.severity !== 'info'),
       };
 

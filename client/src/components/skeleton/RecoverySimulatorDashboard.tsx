@@ -2104,6 +2104,8 @@ export default function RecoverySimulatorDashboard({
                   onAddIntervention={(tid, wk) => addInterventionToActiveBranch(tid, wk)}
                   onRemoveIntervention={(id) => removeInterventionFromActive(id)}
                   onUpdateInterventionWeek={(id, wk) => updateInterventionSchedule(id, { startWeek: wk })}
+                  onResizeIntervention={(id, wk) => updateInterventionSchedule(id, { endWeek: wk })}
+                  onClearInterventions={() => activeBranch.interventions.forEach(iv => removeInterventionFromActive(iv.id))}
                   conditionLabel={conditionLabel}
                 />
               </>

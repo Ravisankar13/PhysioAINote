@@ -145,7 +145,7 @@ export const LIFESTYLE_SECTIONS: LifestyleSection[] = [
         rationale: 'Modulates inflammatory pain to enable active rehab; not for chronic non-inflammatory pain.',
         contraindications: 'GI ulceration, anticoagulation, renal/cardiac disease, pregnancy 3rd trimester',
         evidenceGrade: 'A',
-        mapsToTreatmentId: 'electrophysical',
+        mapsToTreatmentId: 'rest_offload',
       },
       {
         id: 'topical_nsaid',
@@ -154,7 +154,7 @@ export const LIFESTYLE_SECTIONS: LifestyleSection[] = [
         dosage: 'Per prescriber · 2–4 weeks',
         rationale: 'Lower systemic exposure than oral; useful in OA and superficial tendinopathy.',
         evidenceGrade: 'A',
-        mapsToTreatmentId: 'electrophysical',
+        mapsToTreatmentId: 'rest_offload',
       },
       {
         id: 'analgesia_simple',
@@ -163,7 +163,7 @@ export const LIFESTYLE_SECTIONS: LifestyleSection[] = [
         dosage: 'Per prescriber',
         rationale: 'Supports adherence by reducing pain-driven avoidance; modest effect size alone.',
         evidenceGrade: 'B',
-        mapsToTreatmentId: 'electrophysical',
+        mapsToTreatmentId: 'rest_offload',
       },
     ],
   },
@@ -325,7 +325,7 @@ export function lifestyleTreatmentIdFor(itemId: string): string | undefined {
   return undefined;
 }
 
-function LifestyleItemRow({ item, sectionId }: { item: LifestyleItem; sectionId: string }) {
+function LifestyleItemRow({ item, sectionId, suggested = false }: { item: LifestyleItem; sectionId: string; suggested?: boolean }) {
   const cartItem: PlanCartItem = {
     id: makeCartId('lifestyle', item.id),
     modality: 'lifestyle',
@@ -344,6 +344,9 @@ function LifestyleItemRow({ item, sectionId }: { item: LifestyleItem; sectionId:
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-medium text-gray-100">{item.name}</span>
+            {suggested && (
+              <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-500/30 text-amber-100" title="Suggested for this case">★ Suggested</span>
+            )}
             {item.evidenceGrade && (
               <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-500/20 text-amber-200">
                 Grade {item.evidenceGrade}
@@ -365,8 +368,9 @@ function LifestyleItemRow({ item, sectionId }: { item: LifestyleItem; sectionId:
   );
 }
 
-function LifestyleSectionCard({ section }: { section: LifestyleSection }) {
-  const [open, setOpen] = useState(true);
+function LifestyleSectionCard({ section, suggestedIds }: { section: LifestyleSection; suggestedIds: Set<string> }) {
+  const suggestedCount = section.items.filter(it => suggestedIds.has(it.id)).length;
+  const [open, setOpen] = useState(suggestedCount > 0);
   const Icon = section.icon;
   return (
     <div className={`border ${section.color.border} ${section.color.bg} rounded-lg overflow-hidden`}>
@@ -377,6 +381,11 @@ function LifestyleSectionCard({ section }: { section: LifestyleSection }) {
       >
         <Icon className={`h-3.5 w-3.5 ${section.color.text} shrink-0`} />
         <span className={`text-[11px] font-semibold ${section.color.text} flex-1`}>{section.title}</span>
+        {suggestedCount > 0 && (
+          <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-amber-500/30 text-amber-100 border border-amber-400/40" title="Items suggested for this case">
+            ★ {suggestedCount}
+          </span>
+        )}
         <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${section.color.chip}`}>
           {section.items.length} items
         </span>
@@ -385,13 +394,83 @@ function LifestyleSectionCard({ section }: { section: LifestyleSection }) {
       {open && (
         <div className="px-2 pb-2 space-y-1.5 border-t border-gray-700/30 pt-1.5">
           <div className="text-[9px] text-gray-400 italic">{section.blurb}</div>
-          {section.items.map(it => (
-            <LifestyleItemRow key={it.id} item={it} sectionId={section.id} />
-          ))}
+          {section.items
+            .slice()
+            .sort((a, b) => Number(suggestedIds.has(b.id)) - Number(suggestedIds.has(a.id)))
+            .map(it => (
+              <div key={it.id} className={suggestedIds.has(it.id) ? 'ring-1 ring-amber-400/40 rounded' : ''}>
+                <LifestyleItemRow item={it} sectionId={section.id} suggested={suggestedIds.has(it.id)} />
+              </div>
+            ))}
         </div>
       )}
     </div>
   );
+}
+
+/** Lightweight condition-aware filter: returns the set of lifestyle item IDs
+ *  that should be highlighted for the current case based on diagnosis,
+ *  recovery phase and irritability. Mirrors the suggestion filtering used
+ *  elsewhere in the engine tabs. */
+function suggestedItemIdsFor(
+  diagnosis?: string,
+  recoveryPhase?: string,
+  irritability?: string,
+): Set<string> {
+  const out = new Set<string>();
+  const dx = (diagnosis ?? '').toLowerCase();
+  const phase = (recoveryPhase ?? '').toLowerCase();
+  const irr = (irritability ?? '').toLowerCase();
+
+  // Acute / high irritability → off-load, NSAID, sleep, flare plan
+  if (phase.includes('acute') || phase.includes('protect') || irr.includes('high')) {
+    out.add('micro_breaks');
+    out.add('walking_aid');
+    out.add('brace_supportive');
+    out.add('taping_kt');
+    out.add('nsaid_short_course');
+    out.add('topical_nsaid');
+    out.add('analgesia_simple');
+    out.add('flare_plan');
+    out.add('sleep_position');
+    out.add('heat_cold');
+  }
+
+  // Sub-acute / progressing → pacing, education, ergonomics
+  if (phase.includes('sub') || phase.includes('progress') || phase.includes('repair')) {
+    out.add('pacing_quota');
+    out.add('activity_substitution');
+    out.add('pne_session');
+    out.add('condition_explainer');
+    out.add('workstation_setup');
+    out.add('lifting_technique');
+  }
+
+  // Chronic / remodel → self-management, sleep routine, return-to-task ergonomics
+  if (phase.includes('chronic') || phase.includes('remodel') || phase.includes('return')) {
+    out.add('symptom_diary');
+    out.add('self_release');
+    out.add('sleep_routine');
+    out.add('sleep_referral');
+    out.add('tool_modification');
+    out.add('pne_session');
+  }
+
+  // Diagnosis-keyed picks (small, evidence-aligned overrides)
+  const dxRules: Array<[RegExp, string[]]> = [
+    [/(low back|lumbar|spine|disc|stenosis)/, ['lifting_technique', 'workstation_setup', 'pne_session', 'pacing_quota']],
+    [/(neck|cervical|whiplash)/, ['workstation_setup', 'sleep_position', 'pne_session']],
+    [/(tendinop|tendin|achilles|patell|rotator)/, ['pacing_quota', 'topical_nsaid', 'activity_substitution']],
+    [/(osteoarthrit|oa|knee oa|hip oa)/, ['walking_aid', 'topical_nsaid', 'pacing_quota', 'lifting_technique']],
+    [/(post-?op|surger|reconstruct|replacement|arthroplast)/, ['brace_supportive', 'walking_aid', 'sleep_position', 'analgesia_simple']],
+    [/(headache|migraine|tmj)/, ['sleep_routine', 'workstation_setup']],
+    [/(shoulder|impinge|frozen)/, ['taping_kt', 'sleep_position', 'pne_session']],
+  ];
+  for (const [rx, ids] of dxRules) {
+    if (rx.test(dx)) for (const id of ids) out.add(id);
+  }
+
+  return out;
 }
 
 export default function LifestyleAdjunctEngineTab({
@@ -409,12 +488,22 @@ export default function LifestyleAdjunctEngineTab({
     return parts;
   }, [diagnosis, recoveryPhase, irritability]);
 
+  const suggestedIds = useMemo(
+    () => suggestedItemIdsFor(diagnosis, recoveryPhase, irritability),
+    [diagnosis, recoveryPhase, irritability],
+  );
+
   return (
     <div className="space-y-2">
       <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2">
         <div className="flex items-center gap-1.5 mb-1">
           <ClipboardList className="h-3.5 w-3.5 text-amber-300" />
           <span className="text-[11px] font-semibold text-amber-200">Lifestyle & Adjunct Rx</span>
+          {suggestedIds.size > 0 && (
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-amber-500/30 text-amber-100 border border-amber-400/40">
+              ★ {suggestedIds.size} suggested
+            </span>
+          )}
         </div>
         <div className="text-[9px] text-gray-300 leading-snug">
           Bundled non-prescription levers that move the recovery curve: pacing, bracing, NSAID referral,
@@ -426,7 +515,7 @@ export default function LifestyleAdjunctEngineTab({
         )}
       </div>
       {LIFESTYLE_SECTIONS.map(sec => (
-        <LifestyleSectionCard key={sec.id} section={sec} />
+        <LifestyleSectionCard key={sec.id} section={sec} suggestedIds={suggestedIds} />
       ))}
     </div>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,7 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { apiRequest } from '@/lib/queryClient';
-import { usePlanCart } from '@/lib/planCart';
+import { usePlanCart, type PlanCartModality, type PlanCartItem } from '@/lib/planCart';
 import {
   TREATMENT_LIBRARY,
   type Intervention,
@@ -45,6 +45,31 @@ function cartModalityToTreatmentId(modality: string, cartItemId: string): string
   }
 }
 
+const CART_MODALITY_GROUPS: Array<{ id: PlanCartModality | 'exercise_all' | 'manual_all'; label: string; match: (m: PlanCartModality) => boolean }> = [
+  { id: 'exercise_all', label: 'Exercises', match: m => m === 'exercise' || m === 'exercise_custom' },
+  { id: 'manual_all', label: 'Manual Therapy', match: m => m === 'manual_therapy' || m === 'manual_therapy_custom' },
+  { id: 'electrophysical', label: 'Electrophysical', match: m => m === 'electrophysical' },
+  { id: 'adjunct', label: 'Adjunct Rx', match: m => m === 'adjunct' },
+  { id: 'lifestyle', label: 'Lifestyle & Adjunct Rx', match: m => m === 'lifestyle' },
+];
+
+/** Color a Gantt bar by the engine's treatment modality. */
+function modalityBarStyle(modality: TreatmentEffectProfile['modality'] | undefined, verdict?: 'help' | 'neutral' | 'hinder'): string {
+  if (verdict === 'hinder') return 'bg-red-700/80 border-red-500';
+  if (verdict === 'help') return 'bg-emerald-700/80 border-emerald-500';
+  switch (modality) {
+    case 'manual': return 'bg-orange-700/80 border-orange-500';
+    case 'exercise': return 'bg-blue-700/80 border-blue-500';
+    case 'electrophysical': return 'bg-fuchsia-700/80 border-fuchsia-500';
+    case 'education': return 'bg-violet-700/80 border-violet-500';
+    case 'load': return 'bg-emerald-700/80 border-emerald-500';
+    case 'rest': return 'bg-amber-700/80 border-amber-500';
+    case 'taping': return 'bg-cyan-700/80 border-cyan-500';
+    case 'medication': return 'bg-rose-700/80 border-rose-500';
+    default: return 'bg-cyan-700/80 border-cyan-500';
+  }
+}
+
 export interface TimelineReviewVerdict {
   itemId: string;
   verdict: 'help' | 'neutral' | 'hinder';
@@ -52,10 +77,16 @@ export interface TimelineReviewVerdict {
   reasoning: string;
 }
 
+export interface TimelineRescheduleSuggestion {
+  itemId: string;
+  newStartWeek: number;
+}
+
 export interface TimelineReviewConflict {
   severity: 'info' | 'warning' | 'critical';
   description: string;
   involvedItemIds: string[];
+  suggestedReschedule?: TimelineRescheduleSuggestion[];
 }
 
 export interface TimelineReviewResponse {
@@ -77,6 +108,8 @@ interface Props {
   onAddIntervention: (treatmentId: string, startWeek: number) => void;
   onRemoveIntervention: (interventionId: string) => void;
   onUpdateInterventionWeek: (interventionId: string, startWeek: number) => void;
+  onResizeIntervention?: (interventionId: string, endWeek: number) => void;
+  onClearInterventions?: () => void;
   onSetWeeksHorizon?: (weeks: number) => void;
   conditionLabel?: string;
 }
@@ -105,6 +138,8 @@ export default function TreatmentTimelinePanel({
   onAddIntervention,
   onRemoveIntervention,
   onUpdateInterventionWeek,
+  onResizeIntervention,
+  onClearInterventions,
   conditionLabel,
 }: Props) {
   const { items: cartItems } = usePlanCart();
@@ -114,16 +149,35 @@ export default function TreatmentTimelinePanel({
   const [review, setReview] = useState<TimelineReviewResponse | null>(null);
   const [conflictsOpen, setConflictsOpen] = useState(true);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [resizingId, setResizingId] = useState<string | null>(null);
+  const [confirmStarter, setConfirmStarter] = useState(false);
+  const rowRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
   const interventions = branch.interventions;
-
-  const weekColWidth = useMemo(() => 100 / Math.max(1, totalWeeks), [totalWeeks]);
 
   const verdictById = useMemo(() => {
     const m = new Map<string, TimelineReviewVerdict>();
     for (const v of review?.verdicts ?? []) m.set(v.itemId, v);
     return m;
   }, [review]);
+
+  /** Build per-week tick array for the "+ at week N" quick-add row. */
+  const weekTicks = useMemo(() => {
+    // Show every Nth so we never crowd: target ~12 ticks
+    const stride = Math.max(1, Math.round(totalWeeks / 12));
+    const out: number[] = [];
+    for (let w = 0; w <= totalWeeks; w += stride) out.push(w);
+    if (out[out.length - 1] !== totalWeeks) out.push(totalWeeks);
+    return out;
+  }, [totalWeeks]);
+
+  /** Group cart items by 5 modality buckets. */
+  const groupedCart = useMemo(() => {
+    return CART_MODALITY_GROUPS.map(g => ({
+      ...g,
+      items: cartItems.filter(ci => g.match(ci.modality)),
+    })).filter(g => g.items.length > 0);
+  }, [cartItems]);
 
   /** Given a click x in the gantt area, return the week. */
   const weekFromX = useCallback((rect: DOMRect, clientX: number) => {
@@ -132,7 +186,7 @@ export default function TreatmentTimelinePanel({
   }, [totalWeeks]);
 
   const handleEmptyClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (draggingId) return;
+    if (draggingId || resizingId) return;
     const target = e.currentTarget as HTMLDivElement;
     const wk = weekFromX(target.getBoundingClientRect(), e.clientX);
     onOpenPaletteAt(wk);
@@ -149,8 +203,34 @@ export default function TreatmentTimelinePanel({
     setDraggingId(null);
   };
 
-  const generateStarter = useCallback(async () => {
+  /** Right-edge resize via mouse — uses the row rect to compute the new endWeek. */
+  const beginResize = (e: React.MouseEvent, id: string) => {
+    if (!onResizeIntervention) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setResizingId(id);
+    const rowEl = rowRefs.current.get(id);
+    if (!rowEl) return;
+    const onMove = (mv: MouseEvent) => {
+      const rect = rowEl.getBoundingClientRect();
+      const wk = weekFromX(rect, mv.clientX);
+      const iv = interventions.find(x => x.id === id);
+      if (!iv) return;
+      const minEnd = iv.startWeek + 1;
+      onResizeIntervention(id, Math.max(minEnd, wk));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setResizingId(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const doGenerateStarter = useCallback(async (replace: boolean) => {
     setAiError(null);
+    setConfirmStarter(false);
     if (cartItems.length === 0) {
       setAiError('Add items to your plan from the engine tabs first.');
       return;
@@ -165,8 +245,9 @@ export default function TreatmentTimelinePanel({
         },
       });
       const data = await res.json();
-      // Convert phases → interventions starting at each phase week.
-      // Phases are sequential; estimate cumulative start week from durationWeeks.
+      if (replace && onClearInterventions) {
+        onClearInterventions();
+      }
       let cursor = 0;
       const phases: Array<{ itemIds: string[]; durationWeeks: string | number }> = data.phases ?? [];
       for (const ph of phases) {
@@ -182,7 +263,6 @@ export default function TreatmentTimelinePanel({
         cursor = Math.min(totalWeeks, cursor + Math.max(1, dur));
       }
       if (phases.length === 0) {
-        // Fallback: drop everything at week 0
         for (const ci of cartItems) {
           onAddIntervention(cartModalityToTreatmentId(ci.modality, ci.id), 0);
         }
@@ -192,7 +272,16 @@ export default function TreatmentTimelinePanel({
     } finally {
       setAiStarterLoading(false);
     }
-  }, [cartItems, onAddIntervention, conditionLabel, totalWeeks]);
+  }, [cartItems, onAddIntervention, onClearInterventions, conditionLabel, totalWeeks]);
+
+  const onClickGenerateStarter = useCallback(() => {
+    setAiError(null);
+    if (interventions.length > 0) {
+      setConfirmStarter(true);
+    } else {
+      void doGenerateStarter(false);
+    }
+  }, [interventions.length, doGenerateStarter]);
 
   const reviewPlan = useCallback(async () => {
     setAiError(null);
@@ -232,6 +321,10 @@ export default function TreatmentTimelinePanel({
     }
   }, [interventions, treatmentLookup, conditionLabel, totalWeeks]);
 
+  const applyReschedule = (suggestions: TimelineRescheduleSuggestion[]) => {
+    for (const s of suggestions) onUpdateInterventionWeek(s.itemId, s.newStartWeek);
+  };
+
   return (
     <div className="rounded-lg border border-cyan-700/40 bg-cyan-950/15 p-2.5 mt-3" data-testid="treatment-timeline-panel">
       <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
@@ -246,13 +339,13 @@ export default function TreatmentTimelinePanel({
           <Button
             size="sm"
             className="h-6 text-[10px] bg-violet-700 hover:bg-violet-600 text-white"
-            onClick={generateStarter}
+            onClick={onClickGenerateStarter}
             disabled={aiStarterLoading || cartItems.length === 0}
-            title={cartItems.length === 0 ? 'Add items to My Plan first' : 'Generate AI starter plan from current cart items'}
+            title={cartItems.length === 0 ? 'Add items to My Plan first' : interventions.length > 0 ? 'Regenerate AI starter plan (will replace current timeline)' : 'Generate AI starter plan from My Plan'}
             data-testid="btn-ai-starter"
           >
             {aiStarterLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
-            AI starter
+            {interventions.length > 0 ? 'AI regenerate' : 'AI starter'}
           </Button>
           <Button
             size="sm"
@@ -274,19 +367,35 @@ export default function TreatmentTimelinePanel({
         </div>
       )}
 
-      {/* Week ruler */}
-      <div className="relative mt-1 mb-1 select-none">
-        <div className="flex text-[8px] text-gray-400">
-          {Array.from({ length: totalWeeks + 1 }, (_, i) => i).filter(i => i % Math.max(1, Math.round(totalWeeks / 12)) === 0 || i === totalWeeks).map(i => (
-            <span
-              key={i}
-              className="absolute"
-              style={{ left: `${(i / Math.max(1, totalWeeks)) * 100}%`, transform: 'translateX(-50%)' }}
+      {confirmStarter && (
+        <div className="mb-2 text-[10px] text-amber-100 bg-amber-950/40 border border-amber-700/60 rounded px-2 py-1.5 flex items-center gap-2 flex-wrap" data-testid="starter-confirm">
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-300 shrink-0" />
+          <span className="flex-1">Replace the current {interventions.length} intervention{interventions.length === 1 ? '' : 's'} with an AI-generated starter plan from My Plan?</span>
+          <Button size="sm" className="h-5 text-[9px] bg-amber-700 hover:bg-amber-600 text-white" onClick={() => doGenerateStarter(true)} data-testid="btn-confirm-starter">
+            Replace
+          </Button>
+          <Button size="sm" variant="outline" className="h-5 text-[9px] border-gray-600 text-gray-200" onClick={() => setConfirmStarter(false)} data-testid="btn-cancel-starter">
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {/* Quick-add row: per-week "+ Add at week N" affordances */}
+      <div className="relative mt-1 mb-1.5 select-none">
+        <div className="text-[8px] text-gray-500 uppercase tracking-wide mb-0.5">+ Add at week</div>
+        <div className="relative h-5">
+          {weekTicks.map(w => (
+            <button
+              key={w}
+              onClick={(e) => { e.stopPropagation(); onOpenPaletteAt(w); }}
+              className="absolute top-0 -translate-x-1/2 h-5 px-1 rounded text-[9px] text-cyan-200 bg-cyan-900/40 hover:bg-cyan-700/70 border border-cyan-700/40 flex items-center"
+              style={{ left: `${(w / Math.max(1, totalWeeks)) * 100}%` }}
+              title={`Add at week ${w}`}
+              data-testid={`btn-week-add-${w}`}
             >
-              w{i}
-            </span>
+              <Plus className="h-2.5 w-2.5" />w{w}
+            </button>
           ))}
-          <span className="invisible">w0</span>
         </div>
       </div>
 
@@ -315,6 +424,7 @@ export default function TreatmentTimelinePanel({
           return (
             <div
               key={iv.id}
+              ref={el => { rowRefs.current.set(iv.id, el); }}
               className="relative h-7 rounded border border-gray-700/50 bg-gray-900/50 cursor-pointer hover:bg-gray-900/70"
               onClick={handleEmptyClick}
               onDragOver={handleRowDragOver}
@@ -333,7 +443,7 @@ export default function TreatmentTimelinePanel({
                 onDragStart={(e) => { e.stopPropagation(); handleBarDragStart(iv.id); }}
                 onDragEnd={handleBarDragEnd}
                 onClick={e => e.stopPropagation()}
-                className={`absolute top-0.5 bottom-0.5 rounded px-1 flex items-center gap-1 text-[10px] text-white shadow ${verdict?.verdict === 'hinder' ? 'bg-red-700/80 border border-red-500' : verdict?.verdict === 'help' ? 'bg-emerald-700/80 border border-emerald-500' : 'bg-cyan-700/80 border border-cyan-500'}`}
+                className={`absolute top-0.5 bottom-0.5 rounded pl-1 pr-3 flex items-center gap-1 text-[10px] text-white shadow border ${modalityBarStyle(t?.modality, verdict?.verdict)}`}
                 style={{ left: `${left}%`, width: `${width}%` }}
                 title={`${t?.name ?? iv.treatmentId} · w${start}–w${end}${verdict ? ` · AI: ${verdict.verdict} (${verdict.reasoning})` : ''}`}
               >
@@ -351,6 +461,16 @@ export default function TreatmentTimelinePanel({
                 >
                   <Trash2 className="h-2.5 w-2.5" />
                 </button>
+                {/* Right-edge resize handle */}
+                {onResizeIntervention && (
+                  <div
+                    onMouseDown={(e) => beginResize(e, iv.id)}
+                    onClick={e => e.stopPropagation()}
+                    className="absolute top-0 right-0 h-full w-2 cursor-ew-resize bg-white/20 hover:bg-white/50 rounded-r"
+                    title="Drag right edge to resize duration"
+                    data-testid={`timeline-resize-${iv.id}`}
+                  />
+                )}
               </div>
             </div>
           );
@@ -358,7 +478,7 @@ export default function TreatmentTimelinePanel({
       </div>
 
       <div className="mt-1 text-[9px] text-gray-400">
-        Click an empty area to drop an intervention at that week · drag a bar to reschedule
+        Click an empty area or a "+ wN" button to add · drag a bar to reschedule · drag the right edge to resize
       </div>
 
       {/* Palette popover */}
@@ -368,30 +488,38 @@ export default function TreatmentTimelinePanel({
           onClick={onClosePalette}
           data-testid="timeline-palette"
         >
-          <div className="bg-gray-900 border border-cyan-700/40 rounded-lg p-3 w-[460px] max-w-[92vw] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-gray-900 border border-cyan-700/40 rounded-lg p-3 w-[480px] max-w-[92vw] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm font-semibold text-white">Drop intervention @ week {paletteOpenAtWeek}</div>
               <button onClick={onClosePalette} className="text-gray-400 hover:text-white"><X className="h-4 w-4" /></button>
             </div>
-            {cartItems.length > 0 && (
-              <>
-                <div className="text-[10px] text-violet-200 mb-1 flex items-center gap-1"><Sparkles className="h-3 w-3" />From My Plan ({cartItems.length})</div>
-                <div className="grid grid-cols-1 gap-1 mb-3">
-                  {cartItems.map(ci => (
-                    <button
-                      key={ci.id}
-                      onClick={() => {
-                        onAddIntervention(cartModalityToTreatmentId(ci.modality, ci.id), paletteOpenAtWeek);
-                        onClosePalette();
-                      }}
-                      className="text-left text-[10px] px-2 py-1 rounded bg-violet-950/40 hover:bg-violet-900/60 text-violet-100 border border-violet-700/40"
-                      data-testid={`palette-cart-${ci.id}`}
-                    >
-                      + <span className="font-semibold">{ci.modality}</span> · {ci.name}
-                    </button>
-                  ))}
+            {groupedCart.length > 0 && (
+              <div className="mb-3 space-y-2">
+                <div className="text-[10px] text-violet-200 flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />From My Plan ({cartItems.length})
                 </div>
-              </>
+                {groupedCart.map(g => (
+                  <div key={String(g.id)} data-testid={`palette-group-${g.id}`}>
+                    <div className="text-[9px] uppercase tracking-wide text-violet-300/80 mb-0.5">{g.label} · {g.items.length}</div>
+                    <div className="grid grid-cols-1 gap-1">
+                      {g.items.map((ci: PlanCartItem) => (
+                        <button
+                          key={ci.id}
+                          onClick={() => {
+                            onAddIntervention(cartModalityToTreatmentId(ci.modality, ci.id), paletteOpenAtWeek);
+                            onClosePalette();
+                          }}
+                          className="text-left text-[10px] px-2 py-1 rounded bg-violet-950/40 hover:bg-violet-900/60 text-violet-100 border border-violet-700/40"
+                          data-testid={`palette-cart-${ci.id}`}
+                        >
+                          + {ci.name}
+                          {ci.dosage && <span className="text-[8px] text-violet-300/80 ml-1">· {ci.dosage}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
             <div className="text-[10px] text-gray-400 mb-1">Treatment library</div>
             <div className="grid grid-cols-2 gap-1 mb-3">
@@ -448,17 +576,44 @@ export default function TreatmentTimelinePanel({
                 <AlertTriangle className="h-3 w-3" />
                 {review.conflicts.length} conflict{review.conflicts.length > 1 ? 's' : ''} flagged
               </button>
-              {conflictsOpen && review.conflicts.map((c, idx) => (
-                <div key={idx} className={`rounded border px-2 py-1 text-[10px] ${SEVERITY_STYLE[c.severity]}`} data-testid={`timeline-conflict-${idx}`}>
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <span className="font-semibold uppercase tracking-wide text-[8px]">{c.severity}</span>
-                    {c.involvedItemIds.length > 0 && (
-                      <span className="text-[8px] opacity-80">· {c.involvedItemIds.length} item{c.involvedItemIds.length > 1 ? 's' : ''}</span>
+              {conflictsOpen && review.conflicts.map((c, idx) => {
+                const fixes = (c.suggestedReschedule ?? []).filter(s =>
+                  interventions.some(iv => iv.id === s.itemId)
+                );
+                return (
+                  <div key={idx} className={`rounded border px-2 py-1 text-[10px] ${SEVERITY_STYLE[c.severity]}`} data-testid={`timeline-conflict-${idx}`}>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="font-semibold uppercase tracking-wide text-[8px]">{c.severity}</span>
+                      {c.involvedItemIds.length > 0 && (
+                        <span className="text-[8px] opacity-80">· {c.involvedItemIds.length} item{c.involvedItemIds.length > 1 ? 's' : ''}</span>
+                      )}
+                    </div>
+                    <div>{c.description}</div>
+                    {fixes.length > 0 && (
+                      <div className="mt-1 flex items-center gap-2 flex-wrap">
+                        <span className="text-[9px] opacity-90">Suggested fix:</span>
+                        {fixes.map((f, fi) => {
+                          const iv = interventions.find(x => x.id === f.itemId);
+                          const name = iv ? (treatmentLookup.get(iv.treatmentId)?.name ?? iv.treatmentId) : f.itemId;
+                          return (
+                            <span key={fi} className="text-[9px] opacity-90">
+                              {name}: w{iv?.startWeek ?? '?'} → w{f.newStartWeek}
+                            </span>
+                          );
+                        })}
+                        <Button
+                          size="sm"
+                          className="h-5 text-[9px] bg-emerald-700 hover:bg-emerald-600 text-white"
+                          onClick={() => applyReschedule(fixes)}
+                          data-testid={`timeline-apply-fix-${idx}`}
+                        >
+                          Apply reschedule
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  <div>{c.description}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
           {review.verdicts.some(v => v.verdict === 'hinder') && (
@@ -472,3 +627,5 @@ export default function TreatmentTimelinePanel({
     </div>
   );
 }
+
+export type { Intervention };

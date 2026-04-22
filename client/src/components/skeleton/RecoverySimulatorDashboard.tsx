@@ -1599,8 +1599,10 @@ export default function RecoverySimulatorDashboard({
       // the same stage's box that classifies them.
       const rawStart = r.reached ? r.start : r.expectedStart;
       const rawEnd = r.reached ? r.end : r.expectedEnd;
-      const sIdx = Math.max(0, Math.min(horizon, rawStart));
-      const eIdx = Math.max(sIdx + 1, Math.min(horizon, rawEnd));
+      // Clamp sIdx to horizon-1 first so that sIdx+1 (the minimum
+      // valid eIdx) cannot overshoot horizon.
+      const sIdx = Math.max(0, Math.min(horizon - 1, rawStart));
+      const eIdx = Math.min(horizon, Math.max(sIdx + 1, Math.min(horizon, rawEnd)));
       const recs = TREATMENT_LIBRARY
         .filter(t => stageFitForTreatment(stage, t.healingStageMultiplier, t.name) >= 1.1)
         .slice(0, 3);

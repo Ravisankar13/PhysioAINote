@@ -573,6 +573,7 @@ export default function PhysioGPT() {
   const [hypothesisChatOpen, setHypothesisChatOpen] = useState(false);
   const [selectedHypothesisForChat, setSelectedHypothesisForChat] = useState<HypothesisData | null>(null);
   const [provocationRefreshKey, setProvocationRefreshKey] = useState(0);
+  const [lastRefinedCommit, setLastRefinedCommit] = useState<{ id: string; condition: string; supportingEvidence: string[]; rulingOutFactors: string[] } | null>(null);
   const [testBenchOpen, setTestBenchOpen] = useState(false);
   const [testBenchHypothesis, setTestBenchHypothesis] = useState<BenchHypothesisInput | null>(null);
   const benchSnapshotRef = useRef<{
@@ -3235,9 +3236,38 @@ ${ddxList}`;
     if (action === "replace" && lastPosedHypothesisRef.current?.id === originalId) {
       setStalePoseHint({ replacedFromId: originalId, newId: promotedId, condition: promotedCondition });
     }
+
+    setLastRefinedCommit({
+      id: promotedId,
+      condition: promotedCondition,
+      supportingEvidence: [...supportingFromFindings, supportingFromRationale],
+      rulingOutFactors: [],
+    });
   }, []);
 
-  const provocationHypothesis = selectedHypothesisForChat;
+  /**
+   * Trigger order (highest priority first):
+   *   1. The most recently refine-committed hypothesis (clinician just confirmed it)
+   *   2. The top-confidence hypothesis with status === "confirmed"
+   *   3. The hypothesis the clinician explicitly opened a chat about (manual fallback)
+   * Confidence gate: ≥60% to avoid composing tests for low-confidence guesses.
+   */
+  const provocationHypothesis = useMemo<{ id: string; condition: string; supportingEvidence?: string[]; rulingOutFactors?: string[] } | null>(() => {
+    if (lastRefinedCommit) return lastRefinedCommit;
+    const hyps = clinicalReasoningData?.hypotheses ?? [];
+    const confirmed = hyps
+      .filter(h => h.status === "confirmed" && h.confidence >= 60)
+      .sort((a, b) => b.confidence - a.confidence);
+    if (confirmed.length > 0) {
+      const h = confirmed[0];
+      return { id: h.id, condition: h.condition, supportingEvidence: h.supportingEvidence, rulingOutFactors: h.rulingOutFactors };
+    }
+    if (selectedHypothesisForChat && selectedHypothesisForChat.confidence >= 60) {
+      const h = selectedHypothesisForChat;
+      return { id: h.id, condition: h.condition, supportingEvidence: h.supportingEvidence, rulingOutFactors: h.rulingOutFactors };
+    }
+    return null;
+  }, [lastRefinedCommit, clinicalReasoningData?.hypotheses, selectedHypothesisForChat]);
   const provocationQueryEnabled = !!provocationHypothesis && !!provocationHypothesis.id && !!provocationHypothesis.condition;
   const {
     data: provocationData,
@@ -3284,6 +3314,10 @@ ${ddxList}`;
       duration: m.duration,
       loop: !!m.loop,
       joints: m.joints,
+      side: m.side,
+      setupPosture: m.setupPosture,
+      holdAtPeakMs: m.holdAtPeakMs,
+      expectedProvocationSites: m.expectedProvocationSites,
       clinicalRationale: m.clinicalRationale,
       positiveFinding: m.positiveFinding,
     }));

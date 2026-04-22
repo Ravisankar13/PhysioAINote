@@ -1,3 +1,7 @@
+import { JOINT_VOCABULARY as SHARED_JOINT_VOCABULARY } from "@shared/jointVocabulary";
+
+export { JOINT_VOCABULARY } from "@shared/jointVocabulary";
+
 export interface JointKeyframe {
   time: number;
   value: number;
@@ -55,6 +59,15 @@ export interface JointLimits {
   };
 }
 
+/**
+ * Engine-wide joint limits. The engine super-set is broader than the shared
+ * safe vocabulary (`@shared/jointVocabulary`) — it includes engine-only
+ * properties (`pelvis.drop`, `pelvis.zShift`, `scapula.posteriorTilt`, etc.)
+ * and a wider visual range (e.g. shoulder flexion -180..180 vs the AI-safe
+ * -60..180). Both are kept in sync at module load by `assertSharedVocabIsSubset`
+ * which throws in development if the shared safe vocab ever exceeds these
+ * engine limits.
+ */
 export const DEFAULT_JOINT_LIMITS: JointLimits = {
   leftHip: {
     flexion: { min: -30, max: 140 },
@@ -144,6 +157,37 @@ export const DEFAULT_JOINT_LIMITS: JointLimits = {
     lateralFlexion: { min: -45, max: 45 },
   },
 };
+
+/**
+ * Throws in development if the shared safe vocabulary references a joint or
+ * property that doesn't exist in DEFAULT_JOINT_LIMITS, or specifies a range
+ * that exceeds engine limits. Catches drift between the AI vocabulary and
+ * the engine vocabulary at load time.
+ */
+function assertSharedVocabIsSubset(): void {
+  for (const [joint, def] of Object.entries(SHARED_JOINT_VOCABULARY)) {
+    const engine = DEFAULT_JOINT_LIMITS[joint];
+    if (!engine) {
+      console.warn(`[jointVocabulary] shared joint "${joint}" missing from DEFAULT_JOINT_LIMITS`);
+      continue;
+    }
+    for (const [prop, range] of Object.entries(def.properties)) {
+      const engRange = engine[prop];
+      if (!engRange) {
+        console.warn(`[jointVocabulary] shared "${joint}.${prop}" missing from engine limits`);
+        continue;
+      }
+      if (range.min < engRange.min || range.max > engRange.max) {
+        console.warn(
+          `[jointVocabulary] shared "${joint}.${prop}" (${range.min}..${range.max}) exceeds engine (${engRange.min}..${engRange.max})`,
+        );
+      }
+    }
+  }
+}
+if (typeof window !== "undefined" && import.meta.env.DEV) {
+  assertSharedVocabIsSubset();
+}
 
 export function applyJointConstraints(
   value: number, 

@@ -2,138 +2,26 @@
  * Diagnosis-Driven Provocation Movement Composer
  *
  * Composes diagnosis-specific provocation tests as keyframe animations FROM SCRATCH
- * using the InteractiveSkeleton's existing joint+property vocabulary. The AI is
- * constrained to only the joints/properties listed in PROVOCATION_VOCAB and to the
- * safe degree ranges per property. Unknown keys are dropped, values are clamped,
- * and timelines are normalized so the MovementPlayer can play them directly.
+ * using the shared joint+property vocabulary. The AI is constrained to the joints
+ * and degree ranges in JOINT_VOCABULARY. The sanitizer is REPAIR-FIRST: it
+ * normalizes raw AI output (clamps times, clamps values, drops unknown joints
+ * and properties, sorts and pads keyframes, normalizes durations) BEFORE Zod
+ * validation, so a single out-of-range value never discards a whole movement.
  */
 
 import OpenAI from "openai";
 import { z } from "zod";
+import {
+  JOINT_VOCABULARY,
+  ANATOMICAL_REGIONS,
+  type AnatomicalRegionId,
+} from "../shared/jointVocabulary";
 
-export const PROVOCATION_VOCAB: Record<
-  string,
-  { properties: Record<string, { min: number; max: number }> }
-> = {
-  leftHip: {
-    properties: {
-      flexion: { min: -30, max: 140 },
-      extension: { min: 0, max: 30 },
-      abduction: { min: -30, max: 45 },
-      adduction: { min: 0, max: 30 },
-      internalRotation: { min: -45, max: 45 },
-      externalRotation: { min: 0, max: 45 },
-    },
-  },
-  rightHip: {
-    properties: {
-      flexion: { min: -30, max: 140 },
-      extension: { min: 0, max: 30 },
-      abduction: { min: -30, max: 45 },
-      adduction: { min: 0, max: 30 },
-      internalRotation: { min: -45, max: 45 },
-      externalRotation: { min: 0, max: 45 },
-    },
-  },
-  leftKnee: { properties: { flexion: { min: 0, max: 140 }, varus: { min: -20, max: 20 } } },
-  rightKnee: { properties: { flexion: { min: 0, max: 140 }, varus: { min: -20, max: 20 } } },
-  leftAnkle: {
-    properties: {
-      dorsiflexion: { min: 0, max: 30 },
-      plantarflexion: { min: 0, max: 50 },
-      inversion: { min: 0, max: 35 },
-      eversion: { min: 0, max: 25 },
-    },
-  },
-  rightAnkle: {
-    properties: {
-      dorsiflexion: { min: 0, max: 30 },
-      plantarflexion: { min: 0, max: 50 },
-      inversion: { min: 0, max: 35 },
-      eversion: { min: 0, max: 25 },
-    },
-  },
-  leftShoulder: {
-    properties: {
-      flexion: { min: -60, max: 180 },
-      abduction: { min: 0, max: 180 },
-      internalRotation: { min: -90, max: 90 },
-      externalRotation: { min: 0, max: 90 },
-    },
-  },
-  rightShoulder: {
-    properties: {
-      flexion: { min: -60, max: 180 },
-      abduction: { min: 0, max: 180 },
-      internalRotation: { min: -90, max: 90 },
-      externalRotation: { min: 0, max: 90 },
-    },
-  },
-  leftElbow: {
-    properties: { flexion: { min: 0, max: 150 }, pronation: { min: -90, max: 90 } },
-  },
-  rightElbow: {
-    properties: { flexion: { min: 0, max: 150 }, pronation: { min: -90, max: 90 } },
-  },
-  leftWrist: {
-    properties: { flexion: { min: -80, max: 80 }, deviation: { min: -30, max: 30 } },
-  },
-  rightWrist: {
-    properties: { flexion: { min: -80, max: 80 }, deviation: { min: -30, max: 30 } },
-  },
-  leftScapula: {
-    properties: {
-      protraction: { min: 0, max: 30 },
-      retraction: { min: 0, max: 30 },
-      elevation: { min: 0, max: 30 },
-      depression: { min: 0, max: 15 },
-      upwardRotation: { min: 0, max: 60 },
-      downwardRotation: { min: 0, max: 30 },
-    },
-  },
-  rightScapula: {
-    properties: {
-      protraction: { min: 0, max: 30 },
-      retraction: { min: 0, max: 30 },
-      elevation: { min: 0, max: 30 },
-      depression: { min: 0, max: 15 },
-      upwardRotation: { min: 0, max: 60 },
-      downwardRotation: { min: 0, max: 30 },
-    },
-  },
-  spine: {
-    properties: {
-      flexion: { min: -30, max: 90 },
-      lumbarLordosis: { min: -70, max: 90 },
-      thoracicKyphosis: { min: -50, max: 50 },
-      thoracicRotation: { min: -45, max: 45 },
-      lumbarRotation: { min: -30, max: 30 },
-      lateralFlexion: { min: -45, max: 45 },
-      cervicalLordosis: { min: -60, max: 75 },
-      cervicalRotation: { min: -80, max: 80 },
-      cervicalLateralFlexion: { min: -45, max: 45 },
-    },
-  },
-  neck: {
-    properties: {
-      flexion: { min: 0, max: 60 },
-      extension: { min: 0, max: 75 },
-      rotation: { min: -80, max: 80 },
-      lateralFlexion: { min: -45, max: 45 },
-    },
-  },
-  pelvis: {
-    properties: {
-      tilt: { min: -30, max: 30 },
-      obliquity: { min: -20, max: 20 },
-      rotation: { min: -45, max: 45 },
-    },
-  },
-};
+export const PROVOCATION_VOCAB = JOINT_VOCABULARY;
 
 function buildVocabText(): string {
   const lines: string[] = [];
-  for (const [joint, def] of Object.entries(PROVOCATION_VOCAB)) {
+  for (const [joint, def] of Object.entries(JOINT_VOCABULARY)) {
     const props = Object.entries(def.properties)
       .map(([p, r]) => `${p}(${r.min}..${r.max}°)`)
       .join(", ");
@@ -142,26 +30,46 @@ function buildVocabText(): string {
   return lines.join("\n");
 }
 
+function buildRegionText(): string {
+  return ANATOMICAL_REGIONS.join(", ");
+}
+
 const KeyframeSchema = z.object({
-  time: z.number().min(0).max(1),
-  value: z.number().min(-200).max(200),
+  time: z.number(),
+  value: z.number(),
 });
 
 const TimelineSchema = z.object({
   joint: z.string(),
   property: z.string(),
-  keyframes: z.array(KeyframeSchema).min(2).max(8),
+  keyframes: z.array(KeyframeSchema).min(2),
+});
+
+const ExpectedSiteSchema = z.object({
+  region: z.string(),
+  label: z.string(),
+  severity: z.number().optional(),
 });
 
 const MovementSchema = z.object({
-  name: z.string().min(2).max(80),
-  description: z.string().min(5).max(280),
-  duration: z.number().min(1500).max(8000),
-  loop: z.boolean().optional().default(false),
-  joints: z.array(TimelineSchema).min(1).max(8),
-  clinicalRationale: z.string().min(5).max(400).optional(),
-  positiveFinding: z.string().min(5).max(280).optional(),
+  name: z.string().min(2).max(120),
+  description: z.string().min(5).max(400),
+  duration: z.number(),
+  loop: z.boolean().optional(),
+  side: z.enum(["left", "right", "bilateral", "n/a"]).optional(),
+  setupPosture: z.string().max(280).optional(),
+  holdAtPeakMs: z.number().optional(),
+  joints: z.array(TimelineSchema).min(1),
+  expectedProvocationSites: z.array(ExpectedSiteSchema).optional(),
+  clinicalRationale: z.string().min(5).max(500).optional(),
+  positiveFinding: z.string().min(5).max(400).optional(),
 });
+
+export interface ExpectedProvocationSite {
+  region: AnatomicalRegionId;
+  label: string;
+  severity?: number;
+}
 
 export interface ProvocationMovement {
   id: string;
@@ -169,7 +77,11 @@ export interface ProvocationMovement {
   description: string;
   duration: number;
   loop: boolean;
+  side?: "left" | "right" | "bilateral" | "n/a";
+  setupPosture?: string;
+  holdAtPeakMs?: number;
   joints: { joint: string; property: string; keyframes: { time: number; value: number }[] }[];
+  expectedProvocationSites?: ExpectedProvocationSite[];
   clinicalRationale?: string;
   positiveFinding?: string;
 }
@@ -182,62 +94,114 @@ export interface ProvocationInput {
 }
 
 function clamp(v: number, min: number, max: number): number {
+  if (!Number.isFinite(v)) return min;
   return Math.max(min, Math.min(max, v));
+}
+
+const REGION_SET = new Set<string>(ANATOMICAL_REGIONS);
+
+/** Repair-first pre-processor: clamps numeric fields, drops unknown joints
+ *  and properties, sorts/pads keyframes. Operates on the raw object so the
+ *  Zod schema only sees already-normalized data. */
+function repairRawMovement(raw: any): any | null {
+  if (!raw || typeof raw !== "object") return null;
+  const jointsRaw = Array.isArray(raw.joints) ? raw.joints : [];
+
+  const cleanJoints: any[] = [];
+  for (const t of jointsRaw) {
+    if (!t || typeof t !== "object") continue;
+    const jointName = String(t.joint || "");
+    const propName = String(t.property || "");
+    const jointDef = JOINT_VOCABULARY[jointName];
+    if (!jointDef) continue;
+    const propDef = jointDef.properties[propName];
+    if (!propDef) continue;
+    const kfRaw = Array.isArray(t.keyframes) ? t.keyframes : [];
+    const kfClean = kfRaw
+      .filter((k: any) => k && typeof k === "object")
+      .map((k: any) => ({
+        time: clamp(Number(k.time), 0, 1),
+        value: clamp(Number(k.value), propDef.min, propDef.max),
+      }))
+      .sort((a: any, b: any) => a.time - b.time);
+    if (kfClean.length === 0) continue;
+    if (kfClean[0].time > 0) kfClean.unshift({ time: 0, value: 0 });
+    if (kfClean[kfClean.length - 1].time < 1) {
+      kfClean.push({ time: 1, value: kfClean[kfClean.length - 1].value });
+    }
+    if (kfClean.length < 2) {
+      kfClean.push({ time: 1, value: kfClean[0].value });
+    }
+    cleanJoints.push({ joint: jointName, property: propName, keyframes: kfClean.slice(0, 8) });
+  }
+  if (cleanJoints.length === 0) return null;
+
+  const sitesRaw = Array.isArray(raw.expectedProvocationSites) ? raw.expectedProvocationSites : [];
+  const cleanSites = sitesRaw
+    .filter((s: any) => s && typeof s === "object" && REGION_SET.has(String(s.region)))
+    .slice(0, 5)
+    .map((s: any) => ({
+      region: String(s.region),
+      label: String(s.label || s.region).slice(0, 80),
+      severity:
+        typeof s.severity === "number" && Number.isFinite(s.severity)
+          ? clamp(s.severity, 0, 10)
+          : undefined,
+    }));
+
+  const sideRaw = String(raw.side || "").toLowerCase();
+  const side =
+    sideRaw === "left" || sideRaw === "right" || sideRaw === "bilateral" || sideRaw === "n/a"
+      ? sideRaw
+      : undefined;
+
+  return {
+    name: String(raw.name || "Unnamed test").slice(0, 120),
+    description: String(raw.description || "Diagnostic provocation").slice(0, 400),
+    duration: clamp(Number(raw.duration ?? 4000), 1500, 8000),
+    loop: !!raw.loop,
+    side,
+    setupPosture: raw.setupPosture ? String(raw.setupPosture).slice(0, 280) : undefined,
+    holdAtPeakMs:
+      typeof raw.holdAtPeakMs === "number" && Number.isFinite(raw.holdAtPeakMs)
+        ? clamp(raw.holdAtPeakMs, 0, 5000)
+        : undefined,
+    joints: cleanJoints.slice(0, 8),
+    expectedProvocationSites: cleanSites.length > 0 ? cleanSites : undefined,
+    clinicalRationale: raw.clinicalRationale ? String(raw.clinicalRationale).slice(0, 500) : undefined,
+    positiveFinding: raw.positiveFinding ? String(raw.positiveFinding).slice(0, 400) : undefined,
+  };
 }
 
 function sanitize(raw: any, hypothesisId: string): ProvocationMovement[] {
   const result: ProvocationMovement[] = [];
   const movementsRaw = Array.isArray(raw?.movements) ? raw.movements : [];
 
-  movementsRaw.slice(0, 3).forEach((m: any, idx: number) => {
-    const parsed = MovementSchema.safeParse(m);
+  for (const m of movementsRaw.slice(0, 6)) {
+    const repaired = repairRawMovement(m);
+    if (!repaired) continue;
+    const parsed = MovementSchema.safeParse(repaired);
     if (!parsed.success) {
       console.warn("[Provocation] dropped invalid movement:", parsed.error.flatten());
-      return;
+      continue;
     }
     const data = parsed.data;
-
-    const cleanJoints = data.joints
-      .map((t) => {
-        const jointDef = PROVOCATION_VOCAB[t.joint];
-        if (!jointDef) {
-          console.warn(`[Provocation] dropped unknown joint: ${t.joint}`);
-          return null;
-        }
-        const propDef = jointDef.properties[t.property];
-        if (!propDef) {
-          console.warn(`[Provocation] dropped unknown property: ${t.joint}.${t.property}`);
-          return null;
-        }
-        const sortedKf = [...t.keyframes]
-          .sort((a, b) => a.time - b.time)
-          .map((kf) => ({
-            time: clamp(kf.time, 0, 1),
-            value: clamp(kf.value, propDef.min, propDef.max),
-          }));
-        if (sortedKf[0].time > 0) {
-          sortedKf.unshift({ time: 0, value: 0 });
-        }
-        if (sortedKf[sortedKf.length - 1].time < 1) {
-          sortedKf.push({ time: 1, value: sortedKf[sortedKf.length - 1].value });
-        }
-        return { joint: t.joint, property: t.property, keyframes: sortedKf };
-      })
-      .filter((t): t is NonNullable<typeof t> => t !== null);
-
-    if (cleanJoints.length === 0) return;
-
     result.push({
-      id: `prov-${hypothesisId}-${idx}`,
+      id: `prov-${hypothesisId}-${result.length}`,
       name: data.name,
       description: data.description,
-      duration: Math.round(clamp(data.duration, 1500, 8000)),
+      duration: Math.round(data.duration),
       loop: false,
-      joints: cleanJoints,
+      side: data.side,
+      setupPosture: data.setupPosture,
+      holdAtPeakMs:
+        typeof data.holdAtPeakMs === "number" ? Math.round(data.holdAtPeakMs) : undefined,
+      joints: data.joints,
+      expectedProvocationSites: data.expectedProvocationSites as ExpectedProvocationSite[] | undefined,
       clinicalRationale: data.clinicalRationale,
       positiveFinding: data.positiveFinding,
     });
-  });
+  }
 
   return result;
 }
@@ -251,6 +215,7 @@ export async function composeProvocationMovements(
   const client = new OpenAI({ apiKey, baseURL });
 
   const vocab = buildVocabText();
+  const regions = buildRegionText();
   const evidence = input.supportingEvidence?.length
     ? input.supportingEvidence.join("; ")
     : "none recorded";
@@ -265,6 +230,9 @@ You compose movements ENTIRELY FROM SCRATCH — there is no library to choose fr
 JOINT/PROPERTY VOCABULARY (with safe degree ranges):
 ${vocab}
 
+ANATOMICAL REGIONS (for expectedProvocationSites — use exact snake_case ids):
+${regions}
+
 OUTPUT JSON ONLY in this exact shape:
 {
   "movements": [
@@ -273,10 +241,16 @@ OUTPUT JSON ONLY in this exact shape:
       "description": "Shoulder flexed to 90°, elbow bent 90°, then forced internal rotation",
       "duration": 4000,
       "loop": false,
+      "side": "right",
+      "setupPosture": "Patient seated, examiner stabilises scapula",
+      "holdAtPeakMs": 1500,
       "joints": [
         { "joint": "rightShoulder", "property": "flexion", "keyframes": [ {"time":0,"value":0}, {"time":0.4,"value":90}, {"time":1,"value":90} ] },
         { "joint": "rightElbow", "property": "flexion", "keyframes": [ {"time":0,"value":0}, {"time":0.4,"value":90}, {"time":1,"value":90} ] },
         { "joint": "rightShoulder", "property": "internalRotation", "keyframes": [ {"time":0,"value":0}, {"time":0.4,"value":0}, {"time":0.8,"value":70}, {"time":1,"value":70} ] }
+      ],
+      "expectedProvocationSites": [
+        { "region": "right_shoulder", "label": "Anterior subacromial pain", "severity": 6 }
       ],
       "clinicalRationale": "Internal rotation in 90° flexion drives the greater tubercle under the coracoacromial arch.",
       "positiveFinding": "Sharp anterior shoulder pain at end-range internal rotation."
@@ -285,26 +259,29 @@ OUTPUT JSON ONLY in this exact shape:
 }
 
 RULES:
-- 1 to 3 provocation movements per hypothesis. Pick the most diagnostic.
+- 3 to 6 provocation movements per hypothesis. Pick the most diagnostic. Order from most to least specific.
 - duration: 2000–6000 ms typical (max 8000). Each test is one set-up-and-hold cycle.
 - keyframes: 2–6 per timeline. \`time\` is 0..1 (fraction of duration). The skeleton interpolates smoothly between keyframes; combine multiple joint timelines so the body clearly performs the manoeuvre (set-up phase → end-range → hold).
 - All values must stay within the safe degree ranges shown above. Use realistic clinical end-range positions (Hawkins-Kennedy ≈ 90° shoulder flexion + 90° elbow flexion + 60–80° internal rotation; FABER ≈ 45° hip flexion + 30° abduction + 30° external rotation with knee flexed; Slump ≈ spine flexion 60° + neck flexion 40° + knee flexion → extension 0°).
+- side: "left", "right", "bilateral", or "n/a" — derive from the hypothesis evidence; default "right" if unclear.
+- setupPosture: short patient-position description (sitting, supine, prone, side-lying, etc.).
+- holdAtPeakMs: 0–5000 ms hold at end-range (the clinician keeps pressure on while watching for symptoms). 0 if no sustained hold.
+- expectedProvocationSites: 1–3 anatomical regions where a positive test typically reproduces symptoms. Use ONLY the snake_case region ids listed above. severity is 0–10 expected pain rating.
 - name: short clinical test name. description: 1–2 sentence physical description. clinicalRationale: why this discriminates this hypothesis. positiveFinding: what a positive test looks/feels like.
-- Use the side ("left" / "right") implied by the hypothesis evidence. If side is unknown, default to right.
-- Do NOT invent joints or properties. Only use the vocabulary above. Do NOT include extra fields.`;
+- Do NOT invent joints, properties, or regions. Do NOT include extra fields.`;
 
   const userPrompt = `WORKING HYPOTHESIS
 Condition: ${input.condition}
 Supporting evidence: ${evidence}
 Ruling-out factors: ${ruling}
 
-Compose 1–3 diagnostic provocation movements specific to this condition. Return JSON only.`;
+Compose 3–6 diagnostic provocation movements specific to this condition. Return JSON only.`;
 
   const completion = await client.chat.completions.create({
     model: "gpt-4o",
     response_format: { type: "json_object" },
     temperature: 0.3,
-    max_tokens: 1800,
+    max_tokens: 2400,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },

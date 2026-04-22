@@ -40,9 +40,19 @@ function mapToCompensationNames(animJoint: string, animMovement: string): { join
   return { joint: jointMap[animJoint] || animJoint, movement: mapMovement(animMovement) };
 }
 
+export interface DiagnosisExpectedSite {
+  region: string;
+  label: string;
+  severity?: number;
+}
+
 export interface DiagnosisProvocationMovement extends MovementSequence {
   clinicalRationale?: string;
   positiveFinding?: string;
+  side?: "left" | "right" | "bilateral" | "n/a";
+  setupPosture?: string;
+  holdAtPeakMs?: number;
+  expectedProvocationSites?: DiagnosisExpectedSite[];
 }
 
 interface MovementPlayerProps {
@@ -373,6 +383,50 @@ export default function MovementPlayer({ animationState, onAnimationStateChange,
                             <div className="text-[9px] text-amber-300/80 mt-1 leading-snug">
                               <span className="text-amber-400/90 font-medium">Positive: </span>
                               {movement.positiveFinding}
+                            </div>
+                          )}
+                          {(movement.side || movement.setupPosture || (movement.holdAtPeakMs ?? 0) > 0) && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {movement.side && movement.side !== "n/a" && (
+                                <span className="text-[8.5px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/25 uppercase tracking-wider font-medium">
+                                  {movement.side}
+                                </span>
+                              )}
+                              {movement.setupPosture && (
+                                <span className="text-[8.5px] px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300 border border-gray-600/40">
+                                  {movement.setupPosture}
+                                </span>
+                              )}
+                              {(movement.holdAtPeakMs ?? 0) > 0 && (
+                                <span className="text-[8.5px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/25 font-mono">
+                                  hold {Math.round((movement.holdAtPeakMs ?? 0) / 100) / 10}s
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {movement.expectedProvocationSites && movement.expectedProvocationSites.length > 0 && (
+                            <div className="mt-1.5">
+                              <div className="text-[8.5px] text-rose-400/80 uppercase tracking-wider font-medium mb-0.5">
+                                Watch for symptoms at:
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {movement.expectedProvocationSites.map((s, i) => (
+                                  <span
+                                    key={`${s.region}-${i}`}
+                                    className={`text-[8.5px] px-1.5 py-0.5 rounded border font-medium transition-all ${
+                                      isActive && animationState.isPlaying
+                                        ? "bg-rose-500/30 text-rose-200 border-rose-400/60 animate-pulse"
+                                        : "bg-rose-500/10 text-rose-300 border-rose-500/30"
+                                    }`}
+                                    title={`${s.region}${s.severity != null ? ` · expected severity ${s.severity}/10` : ""}`}
+                                  >
+                                    {s.label}
+                                    {s.severity != null && (
+                                      <span className="ml-1 opacity-70">{s.severity}/10</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>

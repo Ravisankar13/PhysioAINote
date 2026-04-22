@@ -932,7 +932,7 @@ export default function RecoverySimulatorDashboard({
   }, [customExercises, customTechniques, input.acuity, input.irritability, input.conditionSeverity,
       input.workDemand, input.sportDemand, input.patientAdherence, conditionContext]);
 
-  const addInterventionToActiveBranch = useCallback((treatmentId: string, startWeek: number) => {
+  const addInterventionToActiveBranch = useCallback((treatmentId: string, startWeek: number, endWeek?: number) => {
     interventionIdCounterRef.current += 1;
     const seq = interventionIdCounterRef.current;
     const uid = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
@@ -949,10 +949,10 @@ export default function RecoverySimulatorDashboard({
         adherence: input.patientAdherence,
         sessionsPerWeek: proposal?.sessionsPerWeek,
         cadenceWeeks: proposal?.cadenceWeeks,
-        endWeek: proposal?.endWeek,
+        endWeek: endWeek ?? proposal?.endWeek,
         taperWeeks: proposal?.taperWeeks,
         taperFinalDose: proposal?.taperFinalDose,
-        scheduleSource: proposal ? 'ai' : 'default',
+        scheduleSource: endWeek != null ? 'ai' : (proposal ? 'ai' : 'default'),
         scheduleRationale: proposal?.rationale,
       }],
     }));
@@ -2101,10 +2101,11 @@ export default function RecoverySimulatorDashboard({
                   paletteOpenAtWeek={timelinePaletteWeek}
                   onClosePalette={() => setTimelinePaletteWeek(null)}
                   onOpenPaletteAt={(wk) => setTimelinePaletteWeek(wk)}
-                  onAddIntervention={(tid, wk) => addInterventionToActiveBranch(tid, wk)}
+                  onAddIntervention={(tid, wk, endWk) => addInterventionToActiveBranch(tid, wk, endWk)}
                   onRemoveIntervention={(id) => removeInterventionFromActive(id)}
                   onUpdateInterventionWeek={(id, wk) => updateInterventionSchedule(id, { startWeek: wk })}
                   onResizeIntervention={(id, wk) => updateInterventionSchedule(id, { endWeek: wk })}
+                  onResizeInterventionStart={(id, wk) => updateInterventionSchedule(id, { startWeek: wk })}
                   onClearInterventions={() => activeBranch.interventions.forEach(iv => removeInterventionFromActive(iv.id))}
                   conditionLabel={conditionLabel}
                 />

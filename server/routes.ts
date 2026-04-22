@@ -23021,12 +23021,12 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
     itemId: z.string(),
     verdict: z.enum(['help', 'neutral', 'hinder']),
     score: z.number().min(-100).max(100),
-    reasoning: z.string().min(1),
+    rationale: z.string().min(1),
   });
   const timelineConflictSchema = z.object({
     severity: z.enum(['info', 'warning', 'critical']),
-    description: z.string().min(1),
-    involvedItemIds: z.array(z.string()),
+    summary: z.string().min(1),
+    interventionIds: z.array(z.string()),
     suggestedReschedule: z.array(z.object({
       itemId: z.string(),
       newStartWeek: z.number().int().min(0).max(104),
@@ -23065,7 +23065,7 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
 
       const systemPrompt = `You are a senior physiotherapist reviewing a clinician's draft treatment timeline.
 
-For EACH submitted intervention return a verdict: "help" (likely accelerates recovery for THIS case), "neutral" (acceptable but not strongly indicated), or "hinder" (likely to slow recovery, provoke symptoms, or duplicate another item). Provide a 1-sentence reasoning and a numeric score (-100..100).
+For EACH submitted intervention return a verdict: "help" (likely accelerates recovery for THIS case), "neutral" (acceptable but not strongly indicated), or "hinder" (likely to slow recovery, provoke symptoms, or duplicate another item). Provide a 1-sentence rationale and a numeric score (-100..100).
 
 Then identify conflicts across items: contradictory modalities at the same week, dose stacking, contraindications for the condition stage, ordering errors (e.g., heavy loading scheduled before pain modulation in highly irritable cases), or missing essentials.
 
@@ -23073,7 +23073,7 @@ Only reference itemId values that were submitted. Do NOT invent IDs.
 
 Return STRICT JSON only.`;
 
-      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none)'}\n\nProposed timeline (${items.length} items):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON: { summary (string, 2-3 sentences), verdicts (array of {itemId, verdict, score, reasoning}), conflicts (array of {severity: "info"|"warning"|"critical", description, involvedItemIds[], suggestedReschedule (optional array of {itemId, newStartWeek}) — only include when a clear week-shift would resolve the conflict (e.g., move heavy loading from week 1 to week 4)}) }.`;
+      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none)'}\n\nProposed timeline (${items.length} items):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON: { summary (string, 2-3 sentences overall plan summary), verdicts (array of {itemId, verdict, score, rationale}), conflicts (array of {severity: "info"|"warning"|"critical", summary (1-sentence conflict description), interventionIds[], suggestedReschedule (optional array of {itemId, newStartWeek}) — only include when a clear week-shift would resolve the conflict (e.g., move heavy loading from week 1 to week 4)}) }.`;
 
       const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
@@ -23110,10 +23110,10 @@ Return STRICT JSON only.`;
         conflicts: reviewParse.data.conflicts
           .map(c => ({
             ...c,
-            involvedItemIds: c.involvedItemIds.filter(id => validIds.has(id)),
+            interventionIds: c.interventionIds.filter(id => validIds.has(id)),
             suggestedReschedule: (c.suggestedReschedule ?? []).filter(s => validIds.has(s.itemId)),
           }))
-          .filter(c => c.involvedItemIds.length > 0 || c.severity !== 'info'),
+          .filter(c => c.interventionIds.length > 0 || c.severity !== 'info'),
       };
 
       res.json({ ...filtered, generatedAt: new Date().toISOString() });

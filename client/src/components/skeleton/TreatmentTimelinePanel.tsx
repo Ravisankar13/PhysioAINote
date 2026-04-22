@@ -74,7 +74,7 @@ export interface TimelineReviewVerdict {
   itemId: string;
   verdict: 'help' | 'neutral' | 'hinder';
   score: number;
-  reasoning: string;
+  rationale: string;
 }
 
 export interface TimelineRescheduleSuggestion {
@@ -84,8 +84,8 @@ export interface TimelineRescheduleSuggestion {
 
 export interface TimelineReviewConflict {
   severity: 'info' | 'warning' | 'critical';
-  description: string;
-  involvedItemIds: string[];
+  summary: string;
+  interventionIds: string[];
   suggestedReschedule?: TimelineRescheduleSuggestion[];
 }
 
@@ -105,10 +105,11 @@ interface Props {
   paletteOpenAtWeek: number | null;
   onClosePalette: () => void;
   onOpenPaletteAt: (week: number) => void;
-  onAddIntervention: (treatmentId: string, startWeek: number) => void;
+  onAddIntervention: (treatmentId: string, startWeek: number, endWeek?: number) => void;
   onRemoveIntervention: (interventionId: string) => void;
   onUpdateInterventionWeek: (interventionId: string, startWeek: number) => void;
   onResizeIntervention?: (interventionId: string, endWeek: number) => void;
+  onResizeInterventionStart?: (interventionId: string, startWeek: number) => void;
   onClearInterventions?: () => void;
   onSetWeeksHorizon?: (weeks: number) => void;
   conditionLabel?: string;
@@ -139,6 +140,7 @@ export default function TreatmentTimelinePanel({
   onRemoveIntervention,
   onUpdateInterventionWeek,
   onResizeIntervention,
+  onResizeInterventionStart,
   onClearInterventions,
   conditionLabel,
 }: Props) {
@@ -203,9 +205,11 @@ export default function TreatmentTimelinePanel({
     setDraggingId(null);
   };
 
-  /** Right-edge resize via mouse — uses the row rect to compute the new endWeek. */
-  const beginResize = (e: React.MouseEvent, id: string) => {
-    if (!onResizeIntervention) return;
+  /** Edge resize via mouse — `edge: 'left'` shortens/extends the start week,
+   *  `edge: 'right'` shortens/extends the end week. */
+  const beginResize = (e: React.MouseEvent, id: string, edge: 'left' | 'right') => {
+    if (edge === 'right' && !onResizeIntervention) return;
+    if (edge === 'left' && !onResizeInterventionStart) return;
     e.stopPropagation();
     e.preventDefault();
     setResizingId(id);
@@ -216,8 +220,13 @@ export default function TreatmentTimelinePanel({
       const wk = weekFromX(rect, mv.clientX);
       const iv = interventions.find(x => x.id === id);
       if (!iv) return;
-      const minEnd = iv.startWeek + 1;
-      onResizeIntervention(id, Math.max(minEnd, wk));
+      if (edge === 'right') {
+        const minEnd = iv.startWeek + 1;
+        onResizeIntervention!(id, Math.max(minEnd, wk));
+      } else {
+        const maxStart = (iv.endWeek ?? iv.startWeek + 1) - 1;
+        onResizeInterventionStart!(id, Math.max(0, Math.min(maxStart, wk)));
+      }
     };
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
@@ -253,13 +262,16 @@ export default function TreatmentTimelinePanel({
         const dur = typeof ph.durationWeeks === 'number'
           ? ph.durationWeeks
           : parseInt(String(ph.durationWeeks).match(/\d+/)?.[0] ?? '4', 10);
+        const phaseEnd = Math.min(totalWeeks, cursor + Math.max(1, dur));
         for (const itemId of ph.itemIds) {
           const cartItem = cartItems.find(c => c.id === itemId);
           if (!cartItem) continue;
           const tid = cartModalityToTreatmentId(cartItem.modality, cartItem.id);
-          onAddIntervention(tid, cursor);
+          // Pass the AI-derived phase end so each intervention gets a real
+          // startWeek + endWeek window (not just a cursor placement).
+          onAddIntervention(tid, cursor, phaseEnd);
         }
-        cursor = Math.min(totalWeeks, cursor + Math.max(1, dur));
+        cursor = phaseEnd;
       }
       if (phases.length === 0) {
         for (const ci of cartItems) {
@@ -441,10 +453,21 @@ export default function TreatmentTimelinePanel({
                 onDragStart={(e) => { e.stopPropagation(); handleBarDragStart(iv.id); }}
                 onDragEnd={handleBarDragEnd}
                 onClick={e => e.stopPropagation()}
-                className={`absolute top-0.5 bottom-0.5 rounded pl-1 pr-3 flex items-center gap-1 text-[10px] text-white shadow border ${modalityBarStyle(t?.modality, verdict?.verdict)}`}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onRemoveIntervention(iv.id); }}
+                className={`absolute top-0.5 bottom-0.5 rounded pl-3 pr-3 flex items-center gap-1 text-[10px] text-white shadow border ${modalityBarStyle(t?.modality, verdict?.verdict)}`}
                 style={{ left: `${left}%`, width: `${width}%` }}
-                title={`${t?.name ?? iv.treatmentId} · w${start}–w${end}${verdict ? ` · AI: ${verdict.verdict} (${verdict.reasoning})` : ''}`}
+                title={`${t?.name ?? iv.treatmentId} · w${start}–w${end}${verdict ? ` · AI: ${verdict.verdict} (${verdict.rationale})` : ''}\nRight-click to remove · drag edges to resize`}
               >
+                {/* Left-edge resize handle */}
+                {onResizeInterventionStart && (
+                  <div
+                    onMouseDown={(e) => beginResize(e, iv.id, 'left')}
+                    onClick={e => e.stopPropagation()}
+                    className="absolute top-0 left-0 h-full w-2 cursor-ew-resize bg-white/20 hover:bg-white/50 rounded-l"
+                    title="Drag left edge to change start week"
+                    data-testid={`timeline-resize-start-${iv.id}`}
+                  />
+                )}
                 <span className="truncate flex-1">{t?.name ?? iv.treatmentId}</span>
                 {verdict && (
                   <span className={`text-[8px] px-1 rounded border ${VERDICT_STYLE[verdict.verdict].chip}`}>
@@ -454,7 +477,7 @@ export default function TreatmentTimelinePanel({
                 <button
                   onClick={(e) => { e.stopPropagation(); onRemoveIntervention(iv.id); }}
                   className="text-white/70 hover:text-white"
-                  title="Remove"
+                  title="Remove (or right-click bar)"
                   data-testid={`timeline-remove-${iv.id}`}
                 >
                   <Trash2 className="h-2.5 w-2.5" />
@@ -462,7 +485,7 @@ export default function TreatmentTimelinePanel({
                 {/* Right-edge resize handle */}
                 {onResizeIntervention && (
                   <div
-                    onMouseDown={(e) => beginResize(e, iv.id)}
+                    onMouseDown={(e) => beginResize(e, iv.id, 'right')}
                     onClick={e => e.stopPropagation()}
                     className="absolute top-0 right-0 h-full w-2 cursor-ew-resize bg-white/20 hover:bg-white/50 rounded-r"
                     title="Drag right edge to resize duration"
@@ -476,7 +499,7 @@ export default function TreatmentTimelinePanel({
       </div>
 
       <div className="mt-1 text-[9px] text-gray-400">
-        Click an empty area or a "+ wN" button to add · drag a bar to reschedule · drag the right edge to resize
+        Click an empty area or a "+ wN" button to add · drag a bar to reschedule · drag either edge to resize · right-click a bar to remove
       </div>
 
       {/* Palette popover */}
@@ -582,11 +605,11 @@ export default function TreatmentTimelinePanel({
                   <div key={idx} className={`rounded border px-2 py-1 text-[10px] ${SEVERITY_STYLE[c.severity]}`} data-testid={`timeline-conflict-${idx}`}>
                     <div className="flex items-center gap-1 mb-0.5">
                       <span className="font-semibold uppercase tracking-wide text-[8px]">{c.severity}</span>
-                      {c.involvedItemIds.length > 0 && (
-                        <span className="text-[8px] opacity-80">· {c.involvedItemIds.length} item{c.involvedItemIds.length > 1 ? 's' : ''}</span>
+                      {c.interventionIds.length > 0 && (
+                        <span className="text-[8px] opacity-80">· {c.interventionIds.length} item{c.interventionIds.length > 1 ? 's' : ''}</span>
                       )}
                     </div>
-                    <div>{c.description}</div>
+                    <div>{c.summary}</div>
                     {fixes.length > 0 && (
                       <div className="mt-1 flex items-center gap-2 flex-wrap">
                         <span className="text-[9px] opacity-90">Suggested fix:</span>

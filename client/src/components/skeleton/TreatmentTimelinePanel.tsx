@@ -163,13 +163,10 @@ export default function TreatmentTimelinePanel({
     return m;
   }, [review]);
 
-  /** Build per-week tick array for the "+ at week N" quick-add row. */
+  /** Per-week quick-add row: one button per week column (w0..wN inclusive). */
   const weekTicks = useMemo(() => {
-    // Show every Nth so we never crowd: target ~12 ticks
-    const stride = Math.max(1, Math.round(totalWeeks / 12));
     const out: number[] = [];
-    for (let w = 0; w <= totalWeeks; w += stride) out.push(w);
-    if (out[out.length - 1] !== totalWeeks) out.push(totalWeeks);
+    for (let w = 0; w <= totalWeeks; w += 1) out.push(w);
     return out;
   }, [totalWeeks]);
 
@@ -394,18 +391,22 @@ export default function TreatmentTimelinePanel({
       <div className="relative mt-1 mb-1.5 select-none">
         <div className="text-[8px] text-gray-500 uppercase tracking-wide mb-0.5">+ Add at week</div>
         <div className="relative h-5">
-          {weekTicks.map(w => (
-            <button
-              key={w}
-              onClick={(e) => { e.stopPropagation(); onOpenPaletteAt(w); }}
-              className="absolute top-0 -translate-x-1/2 h-5 px-1 rounded text-[9px] text-cyan-200 bg-cyan-900/40 hover:bg-cyan-700/70 border border-cyan-700/40 flex items-center"
-              style={{ left: `${(w / Math.max(1, totalWeeks)) * 100}%` }}
-              title={`Add at week ${w}`}
-              data-testid={`btn-week-add-${w}`}
-            >
-              <Plus className="h-2.5 w-2.5" />w{w}
-            </button>
-          ))}
+          {weekTicks.map(w => {
+            const labelStride = Math.max(1, Math.round(totalWeeks / 12));
+            const showLabel = w % labelStride === 0 || w === totalWeeks;
+            return (
+              <button
+                key={w}
+                onClick={(e) => { e.stopPropagation(); onOpenPaletteAt(w); }}
+                className="absolute top-0 -translate-x-1/2 h-5 px-0.5 rounded text-[8px] text-cyan-200 bg-cyan-900/40 hover:bg-cyan-700/70 border border-cyan-700/40 flex items-center"
+                style={{ left: `${(w / Math.max(1, totalWeeks)) * 100}%` }}
+                title={`Add at week ${w}`}
+                data-testid={`btn-week-add-${w}`}
+              >
+                <Plus className="h-2 w-2" />{showLabel && <span className="ml-0.5">w{w}</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 

@@ -2103,9 +2103,34 @@ export default function RecoverySimulatorDashboard({
                   onOpenPaletteAt={(wk) => setTimelinePaletteWeek(wk)}
                   onAddIntervention={(tid, wk, endWk) => addInterventionToActiveBranch(tid, wk, endWk)}
                   onRemoveIntervention={(id) => removeInterventionFromActive(id)}
-                  onUpdateInterventionWeek={(id, wk) => updateInterventionSchedule(id, { startWeek: wk })}
-                  onResizeIntervention={(id, wk) => updateInterventionSchedule(id, { endWeek: wk })}
-                  onResizeInterventionStart={(id, wk) => updateInterventionSchedule(id, { startWeek: wk })}
+                  onUpdateInterventionWeek={(id, wk) => {
+                    // Bar drag = move the WHOLE window: shift endWeek by the same delta
+                    // so duration is preserved, clamped to the simulator horizon.
+                    const iv = activeBranch.interventions.find(x => x.id === id);
+                    if (!iv) return;
+                    const horizon = input.totalWeeks ?? 24;
+                    const newStart = Math.max(0, Math.min(horizon - 1, wk));
+                    if (iv.endWeek != null) {
+                      const dur = Math.max(1, iv.endWeek - iv.startWeek);
+                      const newEnd = Math.min(horizon, newStart + dur);
+                      updateInterventionSchedule(id, { startWeek: newStart, endWeek: newEnd });
+                    } else {
+                      updateInterventionSchedule(id, { startWeek: newStart });
+                    }
+                  }}
+                  onResizeIntervention={(id, wk) => {
+                    const iv = activeBranch.interventions.find(x => x.id === id);
+                    if (!iv) return;
+                    const horizon = input.totalWeeks ?? 24;
+                    const minEnd = iv.startWeek + 1;
+                    updateInterventionSchedule(id, { endWeek: Math.min(horizon, Math.max(minEnd, wk)) });
+                  }}
+                  onResizeInterventionStart={(id, wk) => {
+                    const iv = activeBranch.interventions.find(x => x.id === id);
+                    if (!iv) return;
+                    const maxStart = iv.endWeek != null ? iv.endWeek - 1 : wk;
+                    updateInterventionSchedule(id, { startWeek: Math.max(0, Math.min(maxStart, wk)) });
+                  }}
                   onClearInterventions={() => activeBranch.interventions.forEach(iv => removeInterventionFromActive(iv.id))}
                   conditionLabel={conditionLabel}
                 />

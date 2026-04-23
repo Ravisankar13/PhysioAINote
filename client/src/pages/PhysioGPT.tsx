@@ -138,7 +138,7 @@ import { generateMechanismTreatments } from "@/lib/mechanismTreatmentEngine";
 import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
-import { aggregateTissueIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
+import { aggregateTissueIntelligence, filterInflammationIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
 import { computeSlingAnalysis, getSlingBonePathway, SLING_ACTIVATION_BASELINE, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
@@ -4951,17 +4951,28 @@ ${ddxList}`;
     return map;
   }, [compromisedTissues, slingTissueRisks, hudForceAnalysis, chainIntegrityScores, modelConfig, painMarkers, compensatedOverrides, scarMarkers, adhesionBands]);
 
+  const inflammationIntelligenceMap = useMemo(() => {
+    const list = filterInflammationIntelligence(Array.from(tissueIntelligenceMap.values()), 6);
+    const map = new Map<string, TissueIntelligence>();
+    for (const r of list) map.set(`${r.tissueType}:${r.tissueId}`, r);
+    return map;
+  }, [tissueIntelligenceMap]);
+
   const hubCompromisedTissues = useMemo(() => {
     const map = new Map<string, CompromisedTissue>();
-    for (const ct of mergedCompromisedTissues) {
-      map.set(`${ct.tissue_type}:${ct.tissue_id}`, ct);
+    for (const ct of compromisedTissues) {
+      const key = `${ct.tissue_type}:${ct.tissue_id}`;
+      const existing = map.get(key);
+      if (!existing || ct.severity > existing.severity) {
+        map.set(key, ct);
+      }
     }
-    for (const intel of Array.from(tissueIntelligenceMap.values())) {
+    for (const intel of Array.from(inflammationIntelligenceMap.values())) {
       const key = `${intel.tissueType}:${intel.tissueId}`;
       const existing = map.get(key);
       const sev = Math.max(0, Math.min(1, intel.severity ?? 0));
       const conf: 'confirmed' | 'predicted' = intel.confidence === 'high' ? 'confirmed' : 'predicted';
-      const rationale = intel.rationale || (intel.evidence[0]?.note ?? 'Multi-engine detection');
+      const rationale = intel.rationale || (intel.evidence[0]?.note ?? 'Clinical inflammation');
       if (!existing) {
         map.set(key, {
           tissue_type: intel.tissueType as CompromisedTissue['tissue_type'],
@@ -4974,8 +4985,8 @@ ${ddxList}`;
         map.set(key, { ...existing, severity: sev });
       }
     }
-    return Array.from(map.values()).sort((a, b) => b.severity - a.severity);
-  }, [mergedCompromisedTissues, tissueIntelligenceMap]);
+    return Array.from(map.values()).sort((a, b) => b.severity - a.severity).slice(0, 6);
+  }, [compromisedTissues, inflammationIntelligenceMap]);
 
   const [causalChainTissueId, setCausalChainTissueId] = useState<string | null>(null);
   const handleTissueCausalChainSelect = useCallback((tissueId: string) => {
@@ -5052,13 +5063,10 @@ ${ddxList}`;
       Object.keys(compensatedOverrides || {}).length > 0;
     if (!hasClinicalInput) return out;
     const seen = new Set<string>();
-    for (const intel of Array.from(tissueIntelligenceMap.values())) {
-      const overload = intel.capacityDemand?.overloadRatio ?? 0;
+    for (const intel of Array.from(inflammationIntelligenceMap.values())) {
       const sev = intel.severity ?? 0;
-      if (overload < 0.85 || sev < 0.55) continue;
-      const sources = new Set((intel.evidence || []).map(e => e.source));
-      const onlyChain = sources.size === 1 && sources.has('fascial_chain');
-      if (onlyChain) continue;
+      if (sev < 0.25) continue;
+      const overload = intel.capacityDemand?.overloadRatio ?? 0;
       const stress = Math.max(overload, sev);
       let color = 0x84cc16;
       if (stress >= 1.0) color = 0xef4444;
@@ -5073,7 +5081,7 @@ ${ddxList}`;
       }
     }
     return out;
-  }, [tissueIntelligenceMap, tissueViewMode, painMarkers, compromisedTissues, scarMarkers, adhesionBands, compensatedOverrides]);
+  }, [inflammationIntelligenceMap, tissueViewMode, painMarkers, compromisedTissues, scarMarkers, adhesionBands, compensatedOverrides]);
 
   const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
   useEffect(() => {
@@ -9881,7 +9889,7 @@ ${ddxList}`;
                     }))}
                     musclePathologyData={compensatedOverrides}
                     clinicallyAffectedNerves={clinicallyAffectedNerves}
-                    tissueIntelligenceMap={tissueIntelligenceMap}
+                    tissueIntelligenceMap={inflammationIntelligenceMap}
                     onSelectCausalChain={handleTissueCausalChainSelect}
                   />
                   {tissueDisambiguationEntries.length > 1 && (

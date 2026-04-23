@@ -781,6 +781,28 @@ export function getOverloadColor(overloadRatio: number): string {
   return '#3b82f6';
 }
 
+export const INFLAMMATION_EVIDENCE_SOURCES: ReadonlySet<EvidenceSource> = new Set<EvidenceSource>([
+  'ai_parse',
+  'pain_marker',
+  'muscle_pathology',
+  'scar_tissue',
+  'neural_inhibition',
+]);
+
+export function filterInflammationIntelligence(
+  intelligence: TissueIntelligence[],
+  maxCount = 6
+): TissueIntelligence[] {
+  const filtered: TissueIntelligence[] = [];
+  for (const item of intelligence) {
+    const inflammationEvidence = item.evidence.filter(e => INFLAMMATION_EVIDENCE_SOURCES.has(e.source));
+    if (inflammationEvidence.length === 0) continue;
+    filtered.push({ ...item, evidence: inflammationEvidence });
+  }
+  filtered.sort((a, b) => b.severity - a.severity);
+  return filtered.slice(0, maxCount);
+}
+
 export const EVIDENCE_SOURCE_LABELS: Record<EvidenceSource, string> = {
   ai_parse: 'Clinical AI',
   biomechanics: 'Biomechanics',

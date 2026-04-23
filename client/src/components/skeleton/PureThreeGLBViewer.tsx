@@ -16,6 +16,7 @@ import { MUSCLE_BONE_POSITIONS, type MyofascialChain } from '@/lib/myofascialCha
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES } from '@/lib/scarTissueMapping';
 import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
+import { DOF_SPECS } from '@/components/skeleton/JointAngleEditor';
 
 interface JointConfig {
   flexion?: number;
@@ -2120,6 +2121,154 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'Scapula_R': { configKey: 'rightShoulder.abduction', label: 'R Shoulder Abduction', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
 };
 
+// Per-joint movement (DOF) arrows shown around the selected joint dot.
+// `direction` is the world-space vector along which the distal segment moves
+// when the underlying configKey value increases (assuming the model is in an
+// upright T-pose facing +Z, with +X to the model's left, +Y up).
+// `scale: -1` flips that — used when one DOF spec covers both directions
+// of motion (e.g. signed abduction range from -45..45).
+//
+// Limits/labels are NOT defined here — they are sourced at runtime from the
+// canonical DOF_SPECS registry exported by JointAngleEditor, and arrows whose
+// `configKey` is not present in the registry are filtered out. This guarantees
+// arrow ranges, sidebar editor ranges, and engine constraints can never drift.
+interface MovementArrowDef {
+  configKey: string;
+  label: string;
+  direction: [number, number, number];
+  sensitivity: number;
+  scale?: number;
+}
+
+// Index DOF_SPECS by id for O(1) lookup of canonical limits/labels.
+const DOF_LIMIT_INDEX: Map<string, { min: number; max: number; label: string }> = (() => {
+  const m = new Map<string, { min: number; max: number; label: string }>();
+  for (const spec of DOF_SPECS) {
+    m.set(spec.id, { min: spec.min, max: spec.max, label: spec.label });
+  }
+  return m;
+})();
+
+const JOINT_MOVEMENT_DEFS: Record<string, MovementArrowDef[]> = {
+  // Hip: signed abduction (-45..45) and signed internalRotation (-45..45) are
+  // each a single DOF — the second arrow uses scale: -1 to drive the same key
+  // in the opposite direction. flexion and extension are SEPARATE DOFs.
+  leftHip: [
+    { configKey: 'leftHip.flexion',          label: 'Flex', direction: [0, 0, 1],         sensitivity: 0.5 },
+    { configKey: 'leftHip.extension',        label: 'Ext',  direction: [0, 0, -1],        sensitivity: 0.5 },
+    { configKey: 'leftHip.abduction',        label: 'Abd',  direction: [-1, 0, 0],        sensitivity: 0.5 },
+    { configKey: 'leftHip.abduction',        label: 'Add',  direction: [1, 0, 0],         sensitivity: 0.5, scale: -1 },
+    { configKey: 'leftHip.internalRotation', label: 'IR',   direction: [0.7, -0.5, 0.3],  sensitivity: 0.5 },
+    { configKey: 'leftHip.internalRotation', label: 'ER',   direction: [-0.7, -0.5, 0.3], sensitivity: 0.5, scale: -1 },
+  ],
+  rightHip: [
+    { configKey: 'rightHip.flexion',          label: 'Flex', direction: [0, 0, 1],         sensitivity: 0.5 },
+    { configKey: 'rightHip.extension',        label: 'Ext',  direction: [0, 0, -1],        sensitivity: 0.5 },
+    { configKey: 'rightHip.abduction',        label: 'Abd',  direction: [1, 0, 0],         sensitivity: 0.5 },
+    { configKey: 'rightHip.abduction',        label: 'Add',  direction: [-1, 0, 0],        sensitivity: 0.5, scale: -1 },
+    { configKey: 'rightHip.internalRotation', label: 'IR',   direction: [-0.7, -0.5, 0.3], sensitivity: 0.5 },
+    { configKey: 'rightHip.internalRotation', label: 'ER',   direction: [0.7, -0.5, 0.3],  sensitivity: 0.5, scale: -1 },
+  ],
+  // Knee: only 'flexion' DOF in the registry (range -10..140 covers
+  // recurvatum). The Ext arrow simply drags the same DOF in reverse.
+  leftKnee: [
+    { configKey: 'leftKnee.flexion', label: 'Flex', direction: [0, 0, -1], sensitivity: 0.6 },
+    { configKey: 'leftKnee.flexion', label: 'Ext',  direction: [0, 0, 1],  sensitivity: 0.6, scale: -1 },
+  ],
+  rightKnee: [
+    { configKey: 'rightKnee.flexion', label: 'Flex', direction: [0, 0, -1], sensitivity: 0.6 },
+    { configKey: 'rightKnee.flexion', label: 'Ext',  direction: [0, 0, 1],  sensitivity: 0.6, scale: -1 },
+  ],
+  // Ankle: dorsi/plantar and inversion/eversion are SEPARATE DOFs in the
+  // registry (each unsigned 0..max).
+  leftAnkle: [
+    { configKey: 'leftAnkle.dorsiflexion',   label: 'DF',  direction: [0, 0.5, 1],  sensitivity: 0.4 },
+    { configKey: 'leftAnkle.plantarflexion', label: 'PF',  direction: [0, -0.5, 1], sensitivity: 0.4 },
+    { configKey: 'leftAnkle.inversion',      label: 'Inv', direction: [1, 0, 0],    sensitivity: 0.4 },
+    { configKey: 'leftAnkle.eversion',       label: 'Ev',  direction: [-1, 0, 0],   sensitivity: 0.4 },
+  ],
+  rightAnkle: [
+    { configKey: 'rightAnkle.dorsiflexion',   label: 'DF',  direction: [0, 0.5, 1],  sensitivity: 0.4 },
+    { configKey: 'rightAnkle.plantarflexion', label: 'PF',  direction: [0, -0.5, 1], sensitivity: 0.4 },
+    { configKey: 'rightAnkle.inversion',      label: 'Inv', direction: [-1, 0, 0],   sensitivity: 0.4 },
+    { configKey: 'rightAnkle.eversion',       label: 'Ev',  direction: [1, 0, 0],    sensitivity: 0.4 },
+  ],
+  // Shoulder: flexion (-180..180) and abduction (-180..180) are each signed
+  // single DOFs. IR and ER are SEPARATE DOFs. The DOF model has no horizontal
+  // ab/adduction key, so no H.Abd/H.Add arrows are exposed.
+  leftShoulder: [
+    { configKey: 'leftShoulder.flexion',          label: 'Flex', direction: [0, 0, 1],         sensitivity: 0.7 },
+    { configKey: 'leftShoulder.flexion',          label: 'Ext',  direction: [0, 0, -1],        sensitivity: 0.7, scale: -1 },
+    { configKey: 'leftShoulder.abduction',        label: 'Abd',  direction: [-1, 0, 0],        sensitivity: 0.7 },
+    { configKey: 'leftShoulder.abduction',        label: 'Add',  direction: [1, 0, 0],         sensitivity: 0.7, scale: -1 },
+    { configKey: 'leftShoulder.internalRotation', label: 'IR',   direction: [0.6, -0.5, 0.6],  sensitivity: 0.5 },
+    { configKey: 'leftShoulder.externalRotation', label: 'ER',   direction: [-0.6, -0.5, 0.6], sensitivity: 0.5 },
+  ],
+  rightShoulder: [
+    { configKey: 'rightShoulder.flexion',          label: 'Flex', direction: [0, 0, 1],         sensitivity: 0.7 },
+    { configKey: 'rightShoulder.flexion',          label: 'Ext',  direction: [0, 0, -1],        sensitivity: 0.7, scale: -1 },
+    { configKey: 'rightShoulder.abduction',        label: 'Abd',  direction: [1, 0, 0],         sensitivity: 0.7 },
+    { configKey: 'rightShoulder.abduction',        label: 'Add',  direction: [-1, 0, 0],        sensitivity: 0.7, scale: -1 },
+    { configKey: 'rightShoulder.internalRotation', label: 'IR',   direction: [-0.6, -0.5, 0.6], sensitivity: 0.5 },
+    { configKey: 'rightShoulder.externalRotation', label: 'ER',   direction: [0.6, -0.5, 0.6],  sensitivity: 0.5 },
+  ],
+  // Elbow: only flexion (0..145) and signed pronation (-90..90) DOFs.
+  leftElbow: [
+    { configKey: 'leftElbow.flexion',   label: 'Flex', direction: [0, 0, 1],  sensitivity: 0.5 },
+    { configKey: 'leftElbow.flexion',   label: 'Ext',  direction: [0, 0, -1], sensitivity: 0.5, scale: -1 },
+    { configKey: 'leftElbow.pronation', label: 'Pro',  direction: [1, 0, 0],  sensitivity: 0.4 },
+    { configKey: 'leftElbow.pronation', label: 'Sup',  direction: [-1, 0, 0], sensitivity: 0.4, scale: -1 },
+  ],
+  rightElbow: [
+    { configKey: 'rightElbow.flexion',   label: 'Flex', direction: [0, 0, 1],  sensitivity: 0.5 },
+    { configKey: 'rightElbow.flexion',   label: 'Ext',  direction: [0, 0, -1], sensitivity: 0.5, scale: -1 },
+    { configKey: 'rightElbow.pronation', label: 'Pro',  direction: [-1, 0, 0], sensitivity: 0.4 },
+    { configKey: 'rightElbow.pronation', label: 'Sup',  direction: [1, 0, 0],  sensitivity: 0.4, scale: -1 },
+  ],
+  leftWrist: [
+    { configKey: 'leftWrist.flexion',   label: 'Flex', direction: [0, 0, 1],  sensitivity: 0.4 },
+    { configKey: 'leftWrist.flexion',   label: 'Ext',  direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+    { configKey: 'leftWrist.deviation', label: 'Rad',  direction: [-1, 0, 0], sensitivity: 0.3 },
+    { configKey: 'leftWrist.deviation', label: 'Uln',  direction: [1, 0, 0],  sensitivity: 0.3, scale: -1 },
+  ],
+  rightWrist: [
+    { configKey: 'rightWrist.flexion',   label: 'Flex', direction: [0, 0, 1],  sensitivity: 0.4 },
+    { configKey: 'rightWrist.flexion',   label: 'Ext',  direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+    { configKey: 'rightWrist.deviation', label: 'Rad',  direction: [1, 0, 0],  sensitivity: 0.3 },
+    { configKey: 'rightWrist.deviation', label: 'Uln',  direction: [-1, 0, 0], sensitivity: 0.3, scale: -1 },
+  ],
+  pelvis: [
+    { configKey: 'pelvis.tilt',      label: 'AntTilt',  direction: [0, 0, 1],      sensitivity: 0.3 },
+    { configKey: 'pelvis.tilt',      label: 'PostTilt', direction: [0, 0, -1],     sensitivity: 0.3, scale: -1 },
+    { configKey: 'pelvis.obliquity', label: 'Obl L',    direction: [-1, 0, 0],     sensitivity: 0.3 },
+    { configKey: 'pelvis.obliquity', label: 'Obl R',    direction: [1, 0, 0],      sensitivity: 0.3, scale: -1 },
+    { configKey: 'pelvis.rotation',  label: 'Rot L',    direction: [-0.7, 0, 0.7], sensitivity: 0.3 },
+    { configKey: 'pelvis.rotation',  label: 'Rot R',    direction: [0.7, 0, 0.7],  sensitivity: 0.3, scale: -1 },
+  ],
+  // Spine: only DOFs that exist in the canonical registry are exposed.
+  // (No spine.lateralFlexion key — see DOF_SPECS — so no LatFx arrows.)
+  spine: [
+    { configKey: 'spine.lumbarLordosis',   label: 'Flex',  direction: [0, 0, 1],  sensitivity: 0.3, scale: -1 },
+    { configKey: 'spine.lumbarLordosis',   label: 'Ext',   direction: [0, 0, -1], sensitivity: 0.3 },
+    { configKey: 'spine.thoracicRotation', label: 'Rot L', direction: [-1, 0, 0], sensitivity: 0.4 },
+    { configKey: 'spine.thoracicRotation', label: 'Rot R', direction: [1, 0, 0],  sensitivity: 0.4, scale: -1 },
+  ],
+  neck: [
+    { configKey: 'neck.flexion',        label: 'Flex',    direction: [0, 0, 1],      sensitivity: 0.3 },
+    { configKey: 'neck.extension',      label: 'Ext',     direction: [0, 0, -1],     sensitivity: 0.3 },
+    { configKey: 'neck.rotation',       label: 'Rot L',   direction: [-1, 0, 0],     sensitivity: 0.4 },
+    { configKey: 'neck.rotation',       label: 'Rot R',   direction: [1, 0, 0],      sensitivity: 0.4, scale: -1 },
+    { configKey: 'neck.lateralFlexion', label: 'LatFx L', direction: [-0.6, 0.6, 0], sensitivity: 0.3 },
+    { configKey: 'neck.lateralFlexion', label: 'LatFx R', direction: [0.6, 0.6, 0],  sensitivity: 0.3, scale: -1 },
+  ],
+};
+
+function getJointKeyFromBone(boneName: string): string | null {
+  const cfg = POSE_BONE_MAP[boneName];
+  if (!cfg) return null;
+  return cfg.configKey.split('.')[0];
+}
+
 export default function PureThreeGLBViewer({ 
   modelPath = '/models/rigged-skeleton.glb',
   modelConfig,
@@ -2300,15 +2449,17 @@ export default function PureThreeGLBViewer({
   modelConfigRef.current = modelConfig;
   const [poseModeTooltip, setPoseModeTooltip] = useState<{ x: number; y: number; label: string; value: string } | null>(null);
   const poseDragRef = useRef<{
-    boneName: string;
     configKey: string;
     startX: number;
     startY: number;
     startValue: number;
-    axis: 'x' | 'y' | 'z';
+    screenDirX: number;
+    screenDirY: number;
     scale: number;
     sensitivity: number;
     label: string;
+    min: number;
+    max: number;
   } | null>(null);
   const poseSelectedBoneRef = useRef<string | null>(null);
   const poseHighlightMeshRef = useRef<THREE.Mesh | null>(null);
@@ -5021,6 +5172,11 @@ export default function PureThreeGLBViewer({
     let hoveredBone: string | null = null;
     let hoverGlow: THREE.Mesh | null = null;
     let selectedGlow: THREE.Mesh | null = null;
+    let selectedJointKey: string | null = null;
+    let selectedAnchorBoneName: string | null = null;
+    let arrowsGroup: THREE.Group | null = null;
+    let arrowPickMeshes: { mesh: THREE.Mesh; def: MovementArrowDef; dirWorld: THREE.Vector3 }[] = [];
+    let hoveredArrowIdx: number = -1;
 
     const cachedMeshes: THREE.Mesh[] = [];
     model.traverse((child) => {
@@ -5119,41 +5275,224 @@ export default function PureThreeGLBViewer({
       return groupObj?.[prop] ?? 0;
     };
 
+    // Arrow gizmo helpers --------------------------------------------------
+    const ARROW_LENGTH = 0.18;
+    const ARROW_BASE_OFFSET = 0.06;
+    const ARROW_BASE_COLOR = 0x33ddff;
+    const ARROW_HOVER_COLOR = 0xffe066;
+
+    const labelTexCache = new Map<string, THREE.CanvasTexture>();
+    const createLabelSprite = (text: string): THREE.Sprite => {
+      let tex = labelTexCache.get(text);
+      if (!tex) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d')!;
+        ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.fillStyle = '#ccffff';
+        ctx.strokeText(text, 64, 32);
+        ctx.fillText(text, 64, 32);
+        tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        labelTexCache.set(text, tex);
+      }
+      const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.09, 0.045, 1);
+      sprite.renderOrder = 1003;
+      return sprite;
+    };
+
+    const createArrow = (def: MovementArrowDef): { group: THREE.Group; pickMesh: THREE.Mesh; visualMats: THREE.MeshBasicMaterial[]; dirNorm: THREE.Vector3 } => {
+      const group = new THREE.Group();
+      const dir = new THREE.Vector3(def.direction[0], def.direction[1], def.direction[2]).normalize();
+
+      const shaftMat = new THREE.MeshBasicMaterial({ color: ARROW_BASE_COLOR, transparent: true, opacity: 0.85, depthTest: false });
+      const headMat = new THREE.MeshBasicMaterial({ color: ARROW_BASE_COLOR, transparent: true, opacity: 0.95, depthTest: false });
+
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, ARROW_LENGTH * 0.7, 8), shaftMat);
+      shaft.position.y = ARROW_BASE_OFFSET + ARROW_LENGTH * 0.35;
+      shaft.renderOrder = 1002;
+      group.add(shaft);
+
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.022, ARROW_LENGTH * 0.3, 12), headMat);
+      head.position.y = ARROW_BASE_OFFSET + ARROW_LENGTH * 0.85;
+      head.renderOrder = 1002;
+      group.add(head);
+
+      // Invisible pick proxy (larger cylinder) for forgiving hit-testing
+      const pickMat = new THREE.MeshBasicMaterial({ visible: false, depthTest: false });
+      const pickMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, ARROW_LENGTH + ARROW_BASE_OFFSET, 6), pickMat);
+      pickMesh.position.y = ARROW_BASE_OFFSET + ARROW_LENGTH * 0.5;
+      pickMesh.renderOrder = 1002;
+      group.add(pickMesh);
+
+      // Label sprite at the tip
+      const sprite = createLabelSprite(def.label);
+      sprite.position.y = ARROW_BASE_OFFSET + ARROW_LENGTH + 0.04;
+      group.add(sprite);
+
+      // Default geometry points along +Y; rotate group so +Y aligns with dir
+      const up = new THREE.Vector3(0, 1, 0);
+      const quat = new THREE.Quaternion();
+      const dotUp = up.dot(dir);
+      if (dotUp < -0.9999) {
+        // Opposite direction: rotate 180° around X
+        quat.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+      } else {
+        quat.setFromUnitVectors(up, dir);
+      }
+      group.quaternion.copy(quat);
+
+      return { group, pickMesh, visualMats: [shaftMat, headMat], dirNorm: dir };
+    };
+
+    const disposeArrows = () => {
+      if (arrowsGroup) {
+        arrowsGroup.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (m.geometry) m.geometry.dispose();
+          const mat = (m as THREE.Mesh).material;
+          if (mat) {
+            if (Array.isArray(mat)) mat.forEach((mm) => mm.dispose());
+            else (mat as THREE.Material).dispose();
+          }
+        });
+        scene.remove(arrowsGroup);
+        arrowsGroup = null;
+      }
+      arrowPickMeshes = [];
+      hoveredArrowIdx = -1;
+    };
+
+    const buildArrowsForJoint = (jointKey: string, anchorWorldPos: THREE.Vector3) => {
+      disposeArrows();
+      const allDefs = JOINT_MOVEMENT_DEFS[jointKey];
+      if (!allDefs || allDefs.length === 0) return;
+      // Drop arrows whose configKey is not in the canonical DOF registry —
+      // this prevents UI controls from claiming to drive movements that the
+      // model/sidebar do not actually expose.
+      const defs = allDefs.filter((d) => DOF_LIMIT_INDEX.has(d.configKey));
+      if (defs.length === 0) return;
+      const grp = new THREE.Group();
+      grp.position.copy(anchorWorldPos);
+      scene.add(grp);
+      arrowsGroup = grp;
+      defs.forEach((def, idx) => {
+        const arr = createArrow(def);
+        arr.pickMesh.userData.movementDef = def;
+        arr.pickMesh.userData.dirNorm = arr.dirNorm;
+        arr.pickMesh.userData.visualMats = arr.visualMats;
+        arr.pickMesh.userData.arrowIdx = idx;
+        grp.add(arr.group);
+        arrowPickMeshes.push({ mesh: arr.pickMesh, def, dirWorld: arr.dirNorm.clone() });
+      });
+    };
+
+    const setArrowColor = (idx: number, color: number) => {
+      if (idx < 0 || idx >= arrowPickMeshes.length) return;
+      const mats = arrowPickMeshes[idx].mesh.userData.visualMats as THREE.MeshBasicMaterial[];
+      mats?.forEach((m) => m.color.setHex(color));
+    };
+
+    const findArrowFromRaycast = (ndc: THREE.Vector2): number => {
+      if (arrowPickMeshes.length === 0) return -1;
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const meshes = arrowPickMeshes.map((a) => a.mesh);
+      const hits = raycasterRef.current.intersectObjects(meshes, false);
+      if (hits.length === 0) return -1;
+      return (hits[0].object.userData.arrowIdx as number) ?? -1;
+    };
+
+    const computeScreenDir = (anchorWorld: THREE.Vector3, dirWorld: THREE.Vector3): { x: number; y: number } => {
+      const a = anchorWorld.clone().project(camera);
+      const b = anchorWorld.clone().add(dirWorld).project(camera);
+      const rect = domElement.getBoundingClientRect();
+      const ax = (a.x + 1) * 0.5 * rect.width;
+      const ay = (1 - (a.y + 1) * 0.5) * rect.height;
+      const bx = (b.x + 1) * 0.5 * rect.width;
+      const by = (1 - (b.y + 1) * 0.5) * rect.height;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      return { x: dx / len, y: dy / len };
+    };
+
+    const selectJoint = (boneName: string) => {
+      const jointKey = getJointKeyFromBone(boneName);
+      if (!jointKey) return;
+      removeGlow(selectedGlow);
+      selectedGlow = createGlowSphere(boneName, 0x00ff88, 0.7);
+      selectedAnchorBoneName = boneName;
+      selectedJointKey = jointKey;
+      poseSelectedBoneRef.current = boneName;
+      poseHighlightMeshRef.current = selectedGlow;
+      const wp = new THREE.Vector3();
+      bones[boneName]?.getWorldPosition(wp);
+      buildArrowsForJoint(jointKey, wp);
+    };
+
     const onMouseMove = (e: MouseEvent) => {
       if (!enablePoseModeRef.current) return;
 
+      // Active arrow drag
       if (poseDragRef.current) {
         const dx = e.clientX - poseDragRef.current.startX;
         const dy = e.clientY - poseDragRef.current.startY;
-        const useVertical = poseDragRef.current.axis === 'x';
-        const rawDelta = useVertical ? -dy : dx;
-        const dragDistance = rawDelta * poseDragRef.current.scale * poseDragRef.current.sensitivity;
-        const cfg = POSE_BONE_MAP[poseDragRef.current.boneName];
-        if (!cfg) return;
-        let newValue = poseDragRef.current.startValue + dragDistance;
-        newValue = Math.max(cfg.minValue, Math.min(cfg.maxValue, Math.round(newValue)));
-        onModelConfigChangeRef.current?.(cfg.configKey, newValue);
+        const along = dx * poseDragRef.current.screenDirX + dy * poseDragRef.current.screenDirY;
+        const delta = along * poseDragRef.current.sensitivity * poseDragRef.current.scale;
+        // Re-read canonical limits each frame so any registry update
+        // immediately applies — no chance of arrow ranges drifting.
+        const lim = DOF_LIMIT_INDEX.get(poseDragRef.current.configKey);
+        const lo = lim ? lim.min : poseDragRef.current.min;
+        const hi = lim ? lim.max : poseDragRef.current.max;
+        let newValue = poseDragRef.current.startValue + delta;
+        newValue = Math.max(lo, Math.min(hi, Math.round(newValue)));
+        onModelConfigChangeRef.current?.(poseDragRef.current.configKey, newValue);
 
         const rect = domElement.getBoundingClientRect();
         setPoseModeTooltip({
           x: e.clientX - rect.left,
           y: e.clientY - rect.top - 40,
-          label: cfg.label,
+          label: poseDragRef.current.label,
           value: `${newValue}°`,
         });
-
-        if (selectedGlow) {
-          const bone = bones[poseDragRef.current.boneName];
-          if (bone) {
-            const wp = new THREE.Vector3();
-            bone.getWorldPosition(wp);
-            selectedGlow.position.copy(wp);
-          }
-        }
         return;
       }
 
       const ndc = getMouseNDC(e);
+
+      // First check arrow hover (when a joint is selected)
+      if (selectedJointKey) {
+        const arrowIdx = findArrowFromRaycast(ndc);
+        if (arrowIdx !== hoveredArrowIdx) {
+          if (hoveredArrowIdx >= 0) setArrowColor(hoveredArrowIdx, ARROW_BASE_COLOR);
+          if (arrowIdx >= 0) setArrowColor(arrowIdx, ARROW_HOVER_COLOR);
+          hoveredArrowIdx = arrowIdx;
+        }
+        if (arrowIdx >= 0) {
+          const a = arrowPickMeshes[arrowIdx];
+          const val = getCurrentValue(a.def.configKey);
+          const rect = domElement.getBoundingClientRect();
+          setPoseModeTooltip({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top - 40,
+            label: a.def.label,
+            value: `${val}°`,
+          });
+          domElement.style.cursor = 'grab';
+          // Clear hover-bone glow if any
+          if (hoverGlow) { removeGlow(hoverGlow); hoverGlow = null; hoveredBone = null; }
+          return;
+        }
+      }
+
+      // Otherwise hover a bone for joint selection
       const boneName = findBoneFromRaycast(ndc);
 
       if (boneName !== hoveredBone) {
@@ -5161,21 +5500,20 @@ export default function PureThreeGLBViewer({
         hoverGlow = null;
         hoveredBone = boneName;
 
-        if (boneName && POSE_BONE_MAP[boneName] && boneName !== poseSelectedBoneRef.current) {
+        if (boneName && POSE_BONE_MAP[boneName] && boneName !== selectedAnchorBoneName) {
           hoverGlow = createGlowSphere(boneName, 0x66ffcc, 0.4);
-          domElement.style.cursor = 'grab';
-          const cfg = POSE_BONE_MAP[boneName];
-          const val = getCurrentValue(cfg.configKey);
+          domElement.style.cursor = 'pointer';
+          const jointKey = getJointKeyFromBone(boneName);
           const rect = domElement.getBoundingClientRect();
           setPoseModeTooltip({
             x: e.clientX - rect.left,
             y: e.clientY - rect.top - 40,
-            label: cfg.label,
-            value: `${val}°`,
+            label: jointKey || POSE_BONE_MAP[boneName].label,
+            value: 'Click to select',
           });
         } else {
           domElement.style.cursor = '';
-          setPoseModeTooltip(null);
+          if (!selectedJointKey) setPoseModeTooltip(null);
         }
       }
     };
@@ -5183,63 +5521,95 @@ export default function PureThreeGLBViewer({
     const onMouseDown = (e: MouseEvent) => {
       if (!enablePoseModeRef.current || e.button !== 0) return;
       const ndc = getMouseNDC(e);
+
+      // Arrow drag takes priority when a joint is selected
+      if (selectedJointKey) {
+        const arrowIdx = findArrowFromRaycast(ndc);
+        if (arrowIdx >= 0 && selectedAnchorBoneName) {
+          const a = arrowPickMeshes[arrowIdx];
+          const anchor = new THREE.Vector3();
+          bones[selectedAnchorBoneName]?.getWorldPosition(anchor);
+          const screenDir = computeScreenDir(anchor, a.dirWorld);
+          const startValue = getCurrentValue(a.def.configKey);
+          const lim = DOF_LIMIT_INDEX.get(a.def.configKey);
+          poseDragRef.current = {
+            configKey: a.def.configKey,
+            startX: e.clientX,
+            startY: e.clientY,
+            startValue,
+            screenDirX: screenDir.x,
+            screenDirY: screenDir.y,
+            scale: a.def.scale ?? 1,
+            sensitivity: a.def.sensitivity,
+            label: a.def.label,
+            min: lim ? lim.min : -180,
+            max: lim ? lim.max : 180,
+          };
+          controls.enabled = false;
+          domElement.style.cursor = 'grabbing';
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+
+      // Otherwise: select a joint (no immediate drag)
       const boneName = findBoneFromRaycast(ndc);
-      if (!boneName || !POSE_BONE_MAP[boneName]) return;
-
-      const cfg = POSE_BONE_MAP[boneName];
-      const currentVal = getCurrentValue(cfg.configKey);
-
-      removeGlow(selectedGlow);
-      selectedGlow = createGlowSphere(boneName, 0x00ff88, 0.7);
-      poseSelectedBoneRef.current = boneName;
-      poseHighlightMeshRef.current = selectedGlow;
-
-      poseDragRef.current = {
-        boneName,
-        configKey: cfg.configKey,
-        startX: e.clientX,
-        startY: e.clientY,
-        startValue: currentVal,
-        axis: cfg.axis,
-        scale: cfg.scale,
-        sensitivity: cfg.sensitivity,
-        label: cfg.label,
-      };
-
-      controls.enabled = false;
-      domElement.style.cursor = 'grabbing';
-      e.preventDefault();
-      e.stopPropagation();
+      if (boneName && POSE_BONE_MAP[boneName]) {
+        selectJoint(boneName);
+        // clear hover glow now that this bone is selected
+        if (hoverGlow) { removeGlow(hoverGlow); hoverGlow = null; hoveredBone = null; }
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
 
-    const onMouseUp = (e: MouseEvent) => {
+    const onMouseUp = (_e: MouseEvent) => {
       if (poseDragRef.current) {
         poseDragRef.current = null;
         controls.enabled = true;
         domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
-        setPoseModeTooltip(null);
       }
     };
 
     const onDblClick = (e: MouseEvent) => {
       if (!enablePoseModeRef.current) return;
       const ndc = getMouseNDC(e);
+      // Reset the DOF associated with a hovered arrow, if any
+      if (selectedJointKey) {
+        const arrowIdx = findArrowFromRaycast(ndc);
+        if (arrowIdx >= 0) {
+          const a = arrowPickMeshes[arrowIdx];
+          onModelConfigChangeRef.current?.(a.def.configKey, 0);
+          setPoseModeTooltip(null);
+          return;
+        }
+      }
+      // Otherwise, double-click on empty area / non-arrow deselects the joint
       const boneName = findBoneFromRaycast(ndc);
-      if (!boneName || !POSE_BONE_MAP[boneName]) return;
-      const cfg = POSE_BONE_MAP[boneName];
-      onModelConfigChangeRef.current?.(cfg.configKey, 0);
-      setPoseModeTooltip(null);
+      if (!boneName || !POSE_BONE_MAP[boneName]) {
+        // Deselect
+        removeGlow(selectedGlow);
+        selectedGlow = null;
+        disposeArrows();
+        selectedJointKey = null;
+        selectedAnchorBoneName = null;
+        poseSelectedBoneRef.current = null;
+        poseHighlightMeshRef.current = null;
+        setPoseModeTooltip(null);
+      }
     };
 
     const poseGlowAnimFrame = { current: 0 };
     const animateGlows = () => {
       poseGlowAnimFrame.current = requestAnimationFrame(animateGlows);
       const wp = new THREE.Vector3();
-      if (selectedGlow && poseSelectedBoneRef.current) {
-        const bone = bones[poseSelectedBoneRef.current];
+      if (selectedGlow && selectedAnchorBoneName) {
+        const bone = bones[selectedAnchorBoneName];
         if (bone) {
           bone.getWorldPosition(wp);
           selectedGlow.position.copy(wp);
+          if (arrowsGroup) arrowsGroup.position.copy(wp);
         }
       }
       if (hoverGlow && hoveredBone) {
@@ -5265,9 +5635,14 @@ export default function PureThreeGLBViewer({
       domElement.removeEventListener('dblclick', onDblClick);
       removeGlow(hoverGlow);
       removeGlow(selectedGlow);
+      disposeArrows();
+      labelTexCache.forEach((t) => t.dispose());
+      labelTexCache.clear();
       hoverGlow = null;
       selectedGlow = null;
       hoveredBone = null;
+      selectedJointKey = null;
+      selectedAnchorBoneName = null;
       poseSelectedBoneRef.current = null;
       poseHighlightMeshRef.current = null;
       poseDragRef.current = null;

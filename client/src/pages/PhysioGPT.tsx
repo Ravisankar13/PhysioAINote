@@ -5075,9 +5075,10 @@ ${ddxList}`;
       if ((intel.severity ?? 0) < 0.25) continue;
       const overlay = tissueIntelligenceToOverlayHighlight(intel);
       overlays.push(overlay);
-      // If this tissue has no catalogue recipe, also emit per-bone glow so we keep at
-      // least the previous-style visibility for uncatalogued tissues.
-      if (!overlay.isDeep && (intel.bones?.length ?? 0) > 0) {
+      // Only emit fallback bone-glow when this tissue has no catalogue recipe — catalogued
+      // tissues render as procedural overlays in place and must not also light surrounding
+      // bones.
+      if (!overlay.hasRecipe && (intel.bones?.length ?? 0) > 0) {
         const palette = paletteForState(overlay.healingStage, overlay.irritability, overlay.severity);
         for (const bone of intel.bones) {
           if (seenBones.has(bone)) continue;

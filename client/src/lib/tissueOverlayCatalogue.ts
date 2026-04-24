@@ -203,6 +203,7 @@ export interface TissueOverlayHighlight {
   healingStage: HealingStage;
   irritability: Irritability;
   isDeep: boolean;
+  hasRecipe: boolean;
 }
 
 export function tissueIntelligenceToOverlayHighlight(intel: TissueIntelligence): TissueOverlayHighlight {
@@ -216,6 +217,7 @@ export function tissueIntelligenceToOverlayHighlight(intel: TissueIntelligence):
     healingStage: intel.state.healingStage,
     irritability: intel.state.irritability,
     isDeep: !!recipe?.isDeep,
+    hasRecipe: !!recipe,
   };
 }
 

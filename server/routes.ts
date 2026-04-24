@@ -8576,10 +8576,6 @@ EPA CATALOG — choose only from these 6 categories
 - EMTT (Extracorporeal Magnetotransduction Therapy): frequency, intensity, pulses, applicator, time
 - HILT may also be considered Advanced when used at high energy densities
 
-OPTIONAL ADJUNCTS THAT CAN APPEAR INSIDE EPA CARDS (only if directly augmenting an EPA modality, e.g. machine-driven traction or pneumatic compression):
-- Mechanical Traction (cervical / lumbar): force, hold/rest, angle, time
-- Pneumatic Compression: pressure (mmHg), inflation/deflation cycle, time
-
 ==========================================================
 EXCLUDED — these are NOT EPAs and MUST NOT appear in any modality you recommend (they belong to the Adjunct Therapies engine):
 - Dry Needling
@@ -8587,8 +8583,8 @@ EXCLUDED — these are NOT EPAs and MUST NOT appear in any modality you recommen
 - Electroacupuncture
 - Cupping / Vacuum Therapy
 - Gua Sha
-- IASTM (instrument-assisted soft tissue mobilization)
-- Massage gun / percussive massage devices used for soft-tissue release
+- Mechanical Traction (cervical / lumbar)
+- Pneumatic Compression
 ==========================================================
 
 CLINICAL REASONING RULES:
@@ -8796,7 +8792,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       // non-EPA technique (these belong in the Adjunct Therapies engine).
       // This protects the UI from a stray AI response leaking non-EPA items
       // into EPA cards even though the prompt explicitly forbids them.
-      const NON_EPA_REGEX = /\b(dry\s*needl|acupunctur|electroacupunctur|cupping|gua\s*sha)\b/i;
+      const NON_EPA_REGEX = /\b(dry\s*needl|acupunctur|electroacupunctur|cupping|gua\s*sha|mechanical\s+traction|pneumatic\s+compression)\b/i;
       const ACU_LIKE_TENS_EXCEPTION = /\b(tens|nerve\s*stim|electrical\s*stim)\b.*acupuncture[-\s]?like|acupuncture[-\s]?like\b.*\b(tens|mode|stim)\b/i;
       const isNonEpa = (name: string) =>
         NON_EPA_REGEX.test(name) && !ACU_LIKE_TENS_EXCEPTION.test(name);

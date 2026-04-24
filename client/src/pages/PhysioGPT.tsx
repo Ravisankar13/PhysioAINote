@@ -139,6 +139,7 @@ import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
 import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 import { aggregateTissueIntelligence, filterInflammationIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
+import { tissueIntelligenceToOverlayHighlight, paletteForState } from "@/lib/tissueOverlayCatalogue";
 import { computeSlingAnalysis, getSlingBonePathway, SLING_ACTIVATION_BASELINE, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
@@ -5052,35 +5053,22 @@ ${ddxList}`;
     return out;
   }, [causalChainTissueId, tissueIntelligenceMap]);
 
-  const tissueOverloadHighlights = useMemo(() => {
-    const out: Array<{ boneName: string; color: number; intensity: number; glowSize?: number }> = [];
-    if (!tissueViewMode || tissueViewMode === 'muscle') return out;
+  // Tissue-specific highlight set (replaces the legacy "inflammation cloud").
+  // Kept as the same gating as before — only emit when in a tissue view mode (non-muscle)
+  // and at least one clinical input exists. Each entry carries enough state for the
+  // 3D viewer to draw tissue-anchored procedural geometry and for the side legend.
+  const tissueIntelligenceHighlights = useMemo(() => {
+    if (!tissueViewMode || tissueViewMode === 'muscle') return [] as ReturnType<typeof tissueIntelligenceToOverlayHighlight>[];
     const hasClinicalInput =
       painMarkers.length > 0 ||
       compromisedTissues.length > 0 ||
       scarMarkers.length > 0 ||
       adhesionBands.length > 0 ||
       Object.keys(compensatedOverrides || {}).length > 0;
-    if (!hasClinicalInput) return out;
-    const seen = new Set<string>();
-    for (const intel of Array.from(inflammationIntelligenceMap.values())) {
-      const sev = intel.severity ?? 0;
-      if (sev < 0.25) continue;
-      const overload = intel.capacityDemand?.overloadRatio ?? 0;
-      const stress = Math.max(overload, sev);
-      let color = 0x84cc16;
-      if (stress >= 1.0) color = 0xef4444;
-      else if (stress >= 0.8) color = 0xf97316;
-      else if (stress >= 0.6) color = 0xeab308;
-      const intensity = 0.35 + Math.min(0.55, stress * 0.55);
-      const glowSize = 1.05 + Math.min(0.6, stress * 0.5);
-      for (const bone of intel.bones || []) {
-        if (seen.has(bone)) continue;
-        seen.add(bone);
-        out.push({ boneName: bone, color, intensity, glowSize });
-      }
-    }
-    return out;
+    if (!hasClinicalInput) return [];
+    return Array.from(inflammationIntelligenceMap.values())
+      .filter(intel => (intel.severity ?? 0) >= 0.25)
+      .map(tissueIntelligenceToOverlayHighlight);
   }, [inflammationIntelligenceMap, tissueViewMode, painMarkers, compromisedTissues, scarMarkers, adhesionBands, compensatedOverrides]);
 
   const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
@@ -6398,15 +6386,15 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || tissueOverloadHighlights.length > 0 || causalChainHighlights.length > 0 ? [
+              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || causalChainHighlights.length > 0 ? [
                 ...(chainHighlightBones || []),
                 ...muscleOverrideHighlights,
                 ...influenceHighlights,
                 ...visualizationBoneHighlights,
                 ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
-                ...tissueOverloadHighlights,
                 ...causalChainHighlights,
               ] : undefined}
+              tissueIntelligenceHighlights={tissueIntelligenceHighlights.length > 0 ? tissueIntelligenceHighlights : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
               painMarkers={painMarkers}

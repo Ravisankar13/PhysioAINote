@@ -14,6 +14,7 @@ import { type MuscleStatesMap, getMuscleColor } from '@/lib/muscleBiomechanicsEn
 import { getEnvironmentPreset, type EnvironmentPreset } from '@/lib/environmentPresets';
 import { MUSCLE_BONE_POSITIONS, type MyofascialChain } from '@/lib/myofascialChains';
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES } from '@/lib/scarTissueMapping';
+import { TISSUE_ANCHOR_CATALOGUE, paletteForState, SUPERFICIAL_MUSCLE_PATTERNS } from '@/lib/tissueOverlayCatalogue';
 import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 import { DOF_SPECS } from '@/components/skeleton/JointAngleEditor';
@@ -1685,6 +1686,16 @@ interface PureThreeGLBViewerProps {
     intensity: number;
     label: string;
   }>;
+  tissueIntelligenceHighlights?: Array<{
+    tissueId: string;
+    tissueType: 'tendon' | 'joint' | 'nerve' | 'fascia';
+    label: string;
+    bones: string[];
+    severity: number;
+    healingStage: 'acute' | 'subacute' | 'chronic' | 'degenerative' | 'baseline';
+    irritability: 'low' | 'moderate' | 'high';
+    isDeep: boolean;
+  }>;
   slingPathwayVisualization?: {
     enabled: boolean;
     activeSlingId: string | null;
@@ -2337,6 +2348,7 @@ export default function PureThreeGLBViewer({
   tissueViewOverlay,
   onTissueBoneClick,
   biomechanicsFaultHighlights,
+  tissueIntelligenceHighlights,
   slingPathwayVisualization,
   onSlingLabelClick,
   onModelLoadProgress,
@@ -2376,6 +2388,8 @@ export default function PureThreeGLBViewer({
   const biomechanicalHighlightRef = useRef<{ mesh: THREE.Mesh; origMaterial: THREE.Material; wasVisible: boolean }[]>([]);
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const chainHighlightOverlaysRef = useRef<THREE.Mesh[]>([]);
+  const tissueOverlayGroupRef = useRef<THREE.Group | null>(null);
+  const tissueFadedMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; origMaterial: THREE.Material | THREE.Material[] }>>([]);
   const fascialChainGroupRef = useRef<THREE.Group | null>(null);
   const slingPathwayGroupRef = useRef<THREE.Group | null>(null);
   const slingLabelSpritesRef = useRef<THREE.Sprite[]>([]);
@@ -3036,6 +3050,244 @@ export default function PureThreeGLBViewer({
     pulseFrameId = requestAnimationFrame(animatePulse);
     return () => cancelAnimationFrame(pulseFrameId);
   }, [highlightBoneNames, biomechanicsFaultHighlights]);
+
+  // Tissue-specific procedural overlays — replaces the generic "inflammation cloud".
+  // Renders tissue-anchored geometry (tubes for tendons/ligaments, polylines for nerves,
+  // rings for joints/labrum/menisci, spheres for focal points, sheets for fascia/retinacula)
+  // and fades superficial muscles when a deep tissue is highlighted.
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene, model } = sceneRef.current;
+
+    const cleanupGroup = tissueOverlayGroupRef.current;
+    if (cleanupGroup) {
+      cleanupGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+          child.geometry?.dispose();
+          if (child.material instanceof THREE.Material) child.material.dispose();
+        }
+        if (child instanceof THREE.Sprite) {
+          child.material.map?.dispose();
+          child.material.dispose();
+        }
+      });
+      scene.remove(cleanupGroup);
+      tissueOverlayGroupRef.current = null;
+    }
+    for (const entry of tissueFadedMaterialsRef.current) {
+      const cur = entry.mesh.material;
+      entry.mesh.material = entry.origMaterial;
+      if (cur && cur !== entry.origMaterial) {
+        if (Array.isArray(cur)) cur.forEach(m => m.dispose());
+        else (cur as THREE.Material).dispose();
+      }
+    }
+    tissueFadedMaterialsRef.current = [];
+
+    if (!tissueIntelligenceHighlights || tissueIntelligenceHighlights.length === 0 || !model) return;
+
+    model.updateMatrixWorld(true);
+    const bRef = bonesRef.current;
+    const overlayGroup = new THREE.Group();
+    overlayGroup.name = '__tissue_overlay_group';
+    overlayGroup.renderOrder = 990;
+    scene.add(overlayGroup);
+    tissueOverlayGroupRef.current = overlayGroup;
+
+    const worldOf = (boneName: string, offset?: [number, number, number]): THREE.Vector3 | null => {
+      const b = bRef[boneName];
+      if (!b) return null;
+      const v = new THREE.Vector3();
+      b.getWorldPosition(v);
+      if (offset) v.add(new THREE.Vector3(offset[0], offset[1], offset[2]));
+      return v;
+    };
+
+    const buildLabelSprite = (text: string, color: number): THREE.Sprite | null => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      const css = '#' + color.toString(16).padStart(6, '0');
+      ctx.fillStyle = 'rgba(15,15,25,0.85)';
+      ctx.beginPath(); ctx.roundRect(4, 4, 248, 56, 10); ctx.fill();
+      ctx.strokeStyle = css; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(4, 4, 248, 56, 10); ctx.stroke();
+      ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const short = text.length > 26 ? text.slice(0, 24) + '…' : text;
+      ctx.fillText(short, 128, 32);
+      const tex = new THREE.CanvasTexture(canvas); tex.needsUpdate = true;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(0.14, 0.035, 1);
+      sp.renderOrder = 999;
+      return sp;
+    };
+
+    let anyDeep = false;
+
+    for (const h of tissueIntelligenceHighlights) {
+      if (h.isDeep) anyDeep = true;
+      const recipe = TISSUE_ANCHOR_CATALOGUE[h.tissueId];
+      const palette = paletteForState(h.healingStage, h.irritability, h.severity);
+      const color = palette.color;
+      const opacity = palette.opacity;
+      const emissive = palette.emissive;
+
+      const matFactory = () => new THREE.MeshStandardMaterial({
+        color, emissive: new THREE.Color(color), emissiveIntensity: emissive,
+        transparent: true, opacity, depthWrite: false, depthTest: true,
+        roughness: 0.4, metalness: 0.1,
+      });
+
+      let anchorPos: THREE.Vector3 | null = null;
+      const built: THREE.Object3D[] = [];
+
+      if (recipe) {
+        const s = recipe.shape;
+        if (s.kind === 'tube_between') {
+          const a = worldOf(s.from, s.fromOffset);
+          const b = worldOf(s.to, s.toOffset);
+          if (a && b) {
+            const dir = new THREE.Vector3().subVectors(b, a);
+            const len = dir.length();
+            if (len > 1e-4) {
+              const geo = new THREE.CylinderGeometry(s.radius, s.radius, len, 12, 1, true);
+              const mesh = new THREE.Mesh(geo, matFactory());
+              const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+              mesh.position.copy(mid);
+              mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+              built.push(mesh);
+              anchorPos = mid;
+            }
+          }
+        } else if (s.kind === 'polyline') {
+          const pts: THREE.Vector3[] = [];
+          for (const bn of s.bones) {
+            const p = worldOf(bn, s.offset);
+            if (p) pts.push(p);
+          }
+          if (pts.length >= 2) {
+            for (let i = 0; i < pts.length - 1; i++) {
+              const a = pts[i]; const b = pts[i + 1];
+              const dir = new THREE.Vector3().subVectors(b, a);
+              const len = dir.length();
+              if (len < 1e-4) continue;
+              const geo = new THREE.CylinderGeometry(s.thickness, s.thickness, len, 8, 1, true);
+              const mesh = new THREE.Mesh(geo, matFactory());
+              const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+              mesh.position.copy(mid);
+              mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+              built.push(mesh);
+            }
+            anchorPos = pts[Math.floor(pts.length / 2)];
+          }
+        } else if (s.kind === 'ring') {
+          const c = worldOf(s.at, s.offset);
+          if (c) {
+            const geo = new THREE.TorusGeometry(s.radius, s.thickness, 10, 32);
+            const mesh = new THREE.Mesh(geo, matFactory());
+            mesh.position.copy(c);
+            if (s.axis === 'x') mesh.rotation.y = Math.PI / 2;
+            else if (s.axis === 'z') mesh.rotation.x = Math.PI / 2;
+            built.push(mesh);
+            anchorPos = c;
+          }
+        } else if (s.kind === 'sphere_at') {
+          const c = worldOf(s.at, s.offset);
+          if (c) {
+            const geo = new THREE.SphereGeometry(s.radius, 16, 12);
+            const mesh = new THREE.Mesh(geo, matFactory());
+            mesh.position.copy(c);
+            built.push(mesh);
+            anchorPos = c;
+          }
+        } else if (s.kind === 'sheet') {
+          const a = worldOf(s.from, s.offset);
+          const b = worldOf(s.to, s.offset);
+          if (a && b) {
+            const dir = new THREE.Vector3().subVectors(b, a);
+            const len = dir.length();
+            if (len > 1e-4) {
+              const geo = new THREE.PlaneGeometry(s.width, len);
+              const mat = matFactory(); mat.side = THREE.DoubleSide;
+              const mesh = new THREE.Mesh(geo, mat);
+              const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+              mesh.position.copy(mid);
+              mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+              built.push(mesh);
+              anchorPos = mid;
+            }
+          }
+        } else if (s.kind === 'crescent') {
+          const c = worldOf(s.at, undefined);
+          if (c) {
+            const arc = s.arc ?? Math.PI;
+            const geo = new THREE.TorusGeometry(s.radius, s.thickness, 10, 24, arc);
+            const mesh = new THREE.Mesh(geo, matFactory());
+            mesh.position.copy(c);
+            if (s.axis === 'x') mesh.rotation.y = Math.PI / 2;
+            else if (s.axis === 'z') mesh.rotation.x = Math.PI / 2;
+            built.push(mesh);
+            anchorPos = c;
+          }
+        }
+      }
+
+      // Fallback: if we don't have a catalogue recipe (or it failed to build), draw a labelled
+      // generic band at the nearest available bone in `bones[]`. This satisfies the spec's
+      // "fallback = labelled generic band on nearest joint".
+      if (built.length === 0) {
+        for (const bn of h.bones) {
+          const c = worldOf(bn);
+          if (c) {
+            const geo = new THREE.TorusGeometry(0.045, 0.006, 8, 24);
+            const mesh = new THREE.Mesh(geo, matFactory());
+            mesh.position.copy(c);
+            built.push(mesh);
+            anchorPos = c;
+            break;
+          }
+        }
+      }
+
+      for (const obj of built) {
+        obj.userData.tissueId = h.tissueId;
+        obj.renderOrder = 990;
+        overlayGroup.add(obj);
+      }
+
+      if (anchorPos) {
+        const sprite = buildLabelSprite(`${h.label} · ${palette.stageLabel}`, color);
+        if (sprite) {
+          sprite.position.copy(anchorPos).add(new THREE.Vector3(0, 0.06, 0));
+          overlayGroup.add(sprite);
+        }
+      }
+    }
+
+    // Auto deep-tissue fade — when any highlighted tissue is deep, drop superficial muscle
+    // groups to ~0.25 opacity so the deep structures aren't occluded.
+    if (anyDeep && splitMuscleGroupsRef.current.size > 0) {
+      for (const [groupId, group] of Array.from(splitMuscleGroupsRef.current.entries())) {
+        const isSuperficial = SUPERFICIAL_MUSCLE_PATTERNS.some(p => groupId.toLowerCase().includes(p));
+        if (!isSuperficial) continue;
+        for (const mesh of group.meshes) {
+          if (!(mesh instanceof THREE.Mesh)) continue;
+          const orig = mesh.material;
+          if (Array.isArray(orig)) continue;
+          const cloned = (orig as THREE.MeshStandardMaterial).clone();
+          cloned.transparent = true;
+          cloned.opacity = 0.25;
+          cloned.depthWrite = false;
+          cloned.needsUpdate = true;
+          tissueFadedMaterialsRef.current.push({ mesh, origMaterial: orig });
+          mesh.material = cloned;
+        }
+      }
+    }
+  }, [tissueIntelligenceHighlights]);
 
   useEffect(() => {
     if (!sceneRef.current) return;

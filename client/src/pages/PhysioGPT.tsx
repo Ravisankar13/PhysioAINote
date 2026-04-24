@@ -671,7 +671,7 @@ export default function PhysioGPT() {
   const [conditionPhases, setConditionPhases] = useState<ConditionPhaseInfo[] | null>(null);
   const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
   const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'adjunctRx' | 'lifestyleRx' | 'patientEd' | 'myPlan'>('mechanism');
-  // Lifted Electro Rx state so the Recovery Simulator phase cards can read
+  // Lifted Electrophysical Agents (EPA) state so the Recovery Simulator phase cards can read
   // the latest plan without re-fetching, and so phase-card "Generate" CTAs
   // can pre-fill the Electro tab and auto-run the engine.
   const [electroPlan, setElectroPlan] = useState<import('@/components/skeleton/ElectrophysicalEngineTab').ElectrophysicalPlan | null>(null);

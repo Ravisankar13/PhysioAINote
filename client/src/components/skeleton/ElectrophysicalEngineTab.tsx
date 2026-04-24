@@ -247,6 +247,44 @@ const EVIDENCE_STRENGTH_STYLES: Record<EpaEvidenceStrength, { label: string; bg:
   weak:     { label: 'Weak',     bg: 'bg-amber-500/20',   text: 'text-amber-300' },
 };
 
+/**
+ * Deterministic fallbacks so legacy / partial responses still render the
+ * full 4-dimension reasoning chips required by Task #223.
+ */
+function inferMechanism(modalityName: string, groupHint?: string): EpaMechanism {
+  const s = `${modalityName} ${groupHint ?? ''}`.toLowerCase();
+  if (/(shockwave|ultrasound|acoustic|eswt|vibration)/.test(s)) return 'acoustic';
+  if (/(laser|lllt|hilt|light|infrared|photon|led|photo)/.test(s)) return 'photonic';
+  if (/(diatherm|pemf|magnetic|electromagnet|microwave|shortwave)/.test(s)) return 'electromagnetic';
+  if (/(radiofreq|tecar|inductotherm|capacitive|rf\b)/.test(s)) return 'radiofrequency';
+  if (/(hot\s*pack|cold|ice|cryo|contrast|paraffin|fluidotherapy|moist\s*heat|thermal)/.test(s)) return 'thermal';
+  return 'electrical';
+}
+function inferTargetTissue(modality: ModalityItem): EpaTargetTissue {
+  const s = `${modality.modality} ${modality.targetStructure ?? ''} ${modality.targetFinding ?? ''}`.toLowerCase();
+  if (/(tendon|tendinop|achilles|patellar\s+tend|rotator\s+cuff)/.test(s)) return 'tendon';
+  if (/(nerve|radicul|neuropath|neuralgia|sciatic)/.test(s)) return 'nerve';
+  if (/(bone|fracture|stress\s+fx|osteo(?!arthr))/.test(s)) return 'bone';
+  if (/(joint|capsul|arthr|synovi)/.test(s)) return 'joint';
+  if (/(skin|fascia|scar|adhesion|wound)/.test(s)) return 'skin_fascia';
+  return 'muscle';
+}
+function inferDesiredEffect(modality: ModalityItem, groupHint?: string): EpaDesiredEffect {
+  const s = `${modality.modality} ${modality.expectedPhysiologicalEffect ?? ''} ${groupHint ?? ''}`.toLowerCase();
+  if (/(pain|analges|antinocicep|gate)/.test(s)) return 'pain_reduction';
+  if (/(swelling|edema|inflamm|effusion)/.test(s)) return 'swelling_reduction';
+  if (/(activation|recruit|motor|nmes|russian|strength)/.test(s)) return 'muscle_activation';
+  if (/(extensibility|stretch|mobility|flexibility|range|rom)/.test(s)) return 'tissue_extensibility';
+  if (/(bone\s+healing|osteogen|fracture\s+heal)/.test(s)) return 'bone_healing';
+  return 'healing_stimulation';
+}
+function inferEvidenceStrength(modality: ModalityItem): EpaEvidenceStrength {
+  if (modality.evidenceGrade === 'A') return 'strong';
+  if (modality.evidenceGrade === 'B') return 'moderate';
+  if (modality.evidenceGrade === 'C') return 'weak';
+  return 'moderate';
+}
+
 function formatDosing(d?: EpaDosing): Array<{ label: string; value: string }> {
   if (!d) return [];
   const out: Array<{ label: string; value: string }> = [];
@@ -375,7 +413,7 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; b
 
 const DEFAULT_COLORS = { bg: 'bg-teal-500/10', border: 'border-teal-500/30', text: 'text-teal-300', badge: 'bg-teal-500/20 text-teal-300' };
 
-function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality: ModalityItem; index: number; evidence?: EvidenceForModality; evidenceLoading: boolean }) {
+function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint }: { modality: ModalityItem; index: number; evidence?: EvidenceForModality; evidenceLoading: boolean; groupHint?: string }) {
   const [expanded, setExpanded] = useState(false);
   const isNotAdvised = !!modality.notAdvisedReason;
   const conditionGrade = modality.evidenceGrade ? CONDITION_GRADE_STYLES[modality.evidenceGrade] : null;
@@ -397,10 +435,18 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
     evidenceStrength: modality.evidenceStrength,
     dosing: modality.dosing,
   };
-  const mechStyle = modality.mechanism ? MECHANISM_STYLES[modality.mechanism] : null;
-  const tissueLabel = modality.targetTissue ? TISSUE_LABELS[modality.targetTissue] : null;
-  const effectLabel = modality.desiredEffect ? EFFECT_LABELS[modality.desiredEffect] : null;
-  const strengthStyle = modality.evidenceStrength ? EVIDENCE_STRENGTH_STYLES[modality.evidenceStrength] : null;
+  // Always render the 4 dimension chips. When the AI response (or a legacy
+  // cached card) is missing a dimension, derive it deterministically from
+  // modality name / target structure / group context so clinicians never
+  // see a half-populated reasoning row (Task #223).
+  const mechanism = modality.mechanism ?? inferMechanism(modality.modality, groupHint);
+  const targetTissue = modality.targetTissue ?? inferTargetTissue(modality);
+  const desiredEffect = modality.desiredEffect ?? inferDesiredEffect(modality, groupHint);
+  const evidenceStrength = modality.evidenceStrength ?? inferEvidenceStrength(modality);
+  const mechStyle = MECHANISM_STYLES[mechanism];
+  const tissueLabel = TISSUE_LABELS[targetTissue];
+  const effectLabel = EFFECT_LABELS[desiredEffect];
+  const strengthStyle = EVIDENCE_STRENGTH_STYLES[evidenceStrength];
   const dosingFields = formatDosing(modality.dosing);
 
   return (
@@ -451,26 +497,26 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
               <span className="truncate">{modality.targetFinding}</span>
             </div>
           )}
-          {(mechStyle || tissueLabel || effectLabel || strengthStyle) && (
+          {(
             <div className="flex gap-1 mt-1 flex-wrap" data-testid={`epa-dimension-chips-${index}`}>
-              {mechStyle && (
-                <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${mechStyle.bg} ${mechStyle.text} border border-current/20`} title="Mechanism">
-                  ⚙ {mechStyle.label}
+              {(
+                <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${mechStyle.bg} ${mechStyle.text} border border-current/20`} title={modality.mechanism ? 'Mechanism' : 'Mechanism (inferred)'}>
+                  ⚙ {mechStyle.label}{!modality.mechanism && '*'}
                 </span>
               )}
-              {tissueLabel && (
-                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30" title="Target tissue">
-                  🎯 {tissueLabel}
+              {(
+                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30" title={modality.targetTissue ? 'Target tissue' : 'Target tissue (inferred)'}>
+                  🎯 {tissueLabel}{!modality.targetTissue && '*'}
                 </span>
               )}
-              {effectLabel && (
-                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30" title="Desired effect">
-                  ✦ {effectLabel}
+              {(
+                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30" title={modality.desiredEffect ? 'Desired effect' : 'Desired effect (inferred)'}>
+                  ✦ {effectLabel}{!modality.desiredEffect && '*'}
                 </span>
               )}
-              {strengthStyle && (
-                <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${strengthStyle.bg} ${strengthStyle.text} border border-current/20`} title="Evidence strength">
-                  📊 {strengthStyle.label}
+              {(
+                <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${strengthStyle.bg} ${strengthStyle.text} border border-current/20`} title={modality.evidenceStrength ? 'Evidence strength' : 'Evidence strength (inferred)'}>
+                  📊 {strengthStyle.label}{!modality.evidenceStrength && '*'}
                 </span>
               )}
             </div>
@@ -1391,6 +1437,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
                     index={i}
                     evidence={evidenceMap[modalityKey(group.groupId, i)]}
                     evidenceLoading={evidenceLoading}
+                    groupHint={`${group.groupId} ${group.goalTitle || ''}`}
                   />
                 ))}
               </div>

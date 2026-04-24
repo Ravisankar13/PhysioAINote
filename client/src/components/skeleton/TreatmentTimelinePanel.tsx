@@ -48,7 +48,7 @@ function cartModalityToTreatmentId(modality: string, cartItemId: string): string
 const CART_MODALITY_GROUPS: Array<{ id: PlanCartModality | 'exercise_all' | 'manual_all'; label: string; match: (m: PlanCartModality) => boolean }> = [
   { id: 'exercise_all', label: 'Exercises', match: m => m === 'exercise' || m === 'exercise_custom' },
   { id: 'manual_all', label: 'Manual Therapy', match: m => m === 'manual_therapy' || m === 'manual_therapy_custom' },
-  { id: 'electrophysical', label: 'Electrophysical', match: m => m === 'electrophysical' },
+  { id: 'electrophysical', label: 'Electrophysical Agents', match: m => m === 'electrophysical' },
   { id: 'adjunct', label: 'Adjunct Rx', match: m => m === 'adjunct' },
   { id: 'lifestyle', label: 'Lifestyle & Adjunct Rx', match: m => m === 'lifestyle' },
 ];

@@ -196,14 +196,14 @@ interface Props {
    *  column — used by PhysioGPT to host the Natural Timeline panel
    *  (with Q&A UX) so it sits alongside the recovery curves. */
   naturalTimelineSlot?: React.ReactNode;
-  /** Latest electrophysical-agents plan from the Electro Rx tab. When
+  /** Latest electrophysical-agents plan from the Electrophysical Agents (EPA) tab. When
    *  present, each phase card shows the 1–3 modalities best fitted to
    *  that phase (stage + primary goal + evidence grade). */
   electrophysicalPlan?: ElectrophysicalPlan | null;
-  /** Switch the surrounding workspace to the Electro Rx tab so the
+  /** Switch the surrounding workspace to the Electrophysical Agents (EPA) tab so the
    *  clinician can see the full modality plan. */
   onOpenElectroTab?: () => void;
-  /** Generate an electrophysical plan pre-filled with the phase's
+  /** Generate an electrophysical agents (EPA) plan pre-filled with the phase's
    *  condition + stage. Surfaced inline on every phase card when no
    *  plan exists yet. */
   onGenerateElectroPlanForPhase?: (req: { condition: string; stage: 'acute' | 'subacute' | 'chronic'; phaseLabel: string }) => void;
@@ -517,7 +517,7 @@ function PhaseElectroBlock({
       >
         <div className="flex items-center gap-1 text-teal-300/80 min-w-0">
           <Waves className="h-3 w-3 shrink-0" />
-          <span className="truncate">No electrophysical plan yet for this case.</span>
+          <span className="truncate">No Electrophysical Agents plan yet for this case.</span>
         </div>
         {onGenerateElectroPlanForPhase && (
           <button
@@ -529,9 +529,9 @@ function PhaseElectroBlock({
             })}
             className="shrink-0 text-[10px] py-1 px-1.5 rounded border border-teal-600/50 bg-teal-950/40 hover:bg-teal-900/50 text-teal-200 inline-flex items-center gap-1"
             data-testid={`phase-electro-generate-${phaseId}`}
-            title={`Generate electrophysical plan for ${conditionLabel || 'this case'} (${inferredStage})`}
+            title={`Generate Electrophysical Agents (EPA) plan for ${conditionLabel || 'this case'} (${inferredStage})`}
           >
-            <Sparkles className="h-2.5 w-2.5" />Generate electrophysical plan
+            <Sparkles className="h-2.5 w-2.5" />Generate Electrophysical Agents plan
           </button>
         )}
       </div>
@@ -569,7 +569,7 @@ function PhaseElectroBlock({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-teal-400/80 font-semibold">
-          <Waves className="h-3 w-3" />Electrophysical agents for this phase
+          <Waves className="h-3 w-3" />Electrophysical Agents (EPA) for this phase
         </div>
         {onOpenElectroTab && (
           <button
@@ -3109,12 +3109,12 @@ export default function RecoverySimulatorDashboard({
                               )}
                             </div>
 
-                            {/* Per-phase Electrophysical agents block:
-                                surfaces 1–3 modalities from the Electro Rx
+                            {/* Per-phase Electrophysical Agents (EPA) block:
+                                surfaces 1–3 modalities from the Electrophysical Agents (EPA)
                                 plan that best fit THIS phase (stage label +
                                 primary goal + evidence grade), so the
                                 clinician does not need to flip back to the
-                                Electro Rx tab. When no plan exists yet,
+                                Electrophysical Agents (EPA) tab. When no plan exists yet,
                                 shows an inline "Generate" CTA pre-filled
                                 with the phase's condition + stage. */}
                             <PhaseElectroBlock

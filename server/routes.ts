@@ -8797,13 +8797,16 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       // This protects the UI from a stray AI response leaking non-EPA items
       // into EPA cards even though the prompt explicitly forbids them.
       const NON_EPA_REGEX = /\b(dry\s*needl|acupunctur|electroacupunctur|cupping|gua\s*sha|iastm|instrument[-\s]?assisted\s+soft\s+tissue|massage\s*gun|percussive\s+massage)\b/i;
+      const ACU_LIKE_TENS_EXCEPTION = /\b(tens|nerve\s*stim|electrical\s*stim)\b.*acupuncture[-\s]?like|acupuncture[-\s]?like\b.*\b(tens|mode|stim)\b/i;
+      const isNonEpa = (name: string) =>
+        NON_EPA_REGEX.test(name) && !ACU_LIKE_TENS_EXCEPTION.test(name);
       const GRADE_TO_STRENGTH: Record<string, 'strong' | 'moderate' | 'weak'> = { A: 'strong', B: 'moderate', C: 'weak' };
       const normalized = {
         ...validated.data,
         modalityGroups: validated.data.modalityGroups.map(g => ({
           ...g,
           modalities: g.modalities
-            .filter(m => !NON_EPA_REGEX.test(m.modality))
+            .filter(m => !isNonEpa(m.modality))
             .map(m => {
               // Backfill evidenceStrength from legacy evidenceGrade if missing.
               const evidenceStrength = m.evidenceStrength

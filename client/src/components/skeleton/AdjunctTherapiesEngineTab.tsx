@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { Leaf, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Loader2, Info, ShieldAlert, Sparkles, Award, Stethoscope, BookOpen, ExternalLink } from 'lucide-react';
+import { useState, useCallback, useRef, type ComponentType } from 'react';
+import { Leaf, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Loader2, Info, ShieldAlert, Sparkles, Award, Stethoscope, BookOpen, ExternalLink, Syringe, Hand, Flame, CircleDot, Wind, Waves, Snowflake, Tag, Zap, Activity, Heart, Brain, Sprout, Droplets, Apple, Footprints, Pipette } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { AddToPlanButton, makeCartId } from '@/lib/planCart';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
@@ -72,17 +72,85 @@ interface AdjunctTherapiesEngineTabProps {
   irritability?: string;
 }
 
-const CATEGORY_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-  'Acupuncture': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300', badge: 'bg-emerald-500/20 text-emerald-300' },
-  'Tui Na': { bg: 'bg-lime-500/10', border: 'border-lime-500/30', text: 'text-lime-300', badge: 'bg-lime-500/20 text-lime-300' },
-  'Bowen Therapy': { bg: 'bg-teal-500/10', border: 'border-teal-500/30', text: 'text-teal-300', badge: 'bg-teal-500/20 text-teal-300' },
-  'Cupping Therapy': { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-300', badge: 'bg-orange-500/20 text-orange-300' },
-  'Moxibustion': { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-300', badge: 'bg-amber-500/20 text-amber-300' },
-  'Myofascial Release Adjuncts': { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', text: 'text-fuchsia-300', badge: 'bg-fuchsia-500/20 text-fuchsia-300' },
-  'Other Adjuncts': { bg: 'bg-slate-500/10', border: 'border-slate-500/30', text: 'text-slate-300', badge: 'bg-slate-500/20 text-slate-300' },
+type CategoryStyle = { bg: string; border: string; text: string; badge: string; icon: ComponentType<{ className?: string }>; group: string; groupOrder: number };
+
+const CATEGORY_GROUP_ORDER: Record<string, number> = {
+  'Needle / Pressure-Point': 1,
+  'East Asian Bodywork': 2,
+  'Western Bodywork': 3,
+  'Physical Adjuncts': 4,
+  'Movement & Mind-Body': 5,
+  'Lifestyle & Education': 6,
+  'Other': 7,
 };
 
-const DEFAULT_COLORS = { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300', badge: 'bg-emerald-500/20 text-emerald-300' };
+const CATEGORY_COLORS: Record<string, CategoryStyle> = {
+  'Acupuncture': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300', badge: 'bg-emerald-500/20 text-emerald-300', icon: Syringe, group: 'Needle / Pressure-Point', groupOrder: 1 },
+  'Dry Needling': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-200', badge: 'bg-emerald-500/20 text-emerald-200', icon: Pipette, group: 'Needle / Pressure-Point', groupOrder: 1 },
+  'Acupressure / Shiatsu': { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300', badge: 'bg-green-500/20 text-green-300', icon: CircleDot, group: 'Needle / Pressure-Point', groupOrder: 1 },
+  'Reflexology': { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300', badge: 'bg-green-500/20 text-green-300', icon: Footprints, group: 'Needle / Pressure-Point', groupOrder: 1 },
+
+  'Tui Na': { bg: 'bg-lime-500/10', border: 'border-lime-500/30', text: 'text-lime-300', badge: 'bg-lime-500/20 text-lime-300', icon: Hand, group: 'East Asian Bodywork', groupOrder: 2 },
+  'Gua Sha': { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-300', badge: 'bg-rose-500/20 text-rose-300', icon: Tag, group: 'East Asian Bodywork', groupOrder: 2 },
+  'Cupping Therapy': { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-300', badge: 'bg-orange-500/20 text-orange-300', icon: CircleDot, group: 'East Asian Bodywork', groupOrder: 2 },
+  'Moxibustion': { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-300', badge: 'bg-amber-500/20 text-amber-300', icon: Flame, group: 'East Asian Bodywork', groupOrder: 2 },
+  'Thai Therapeutic Massage': { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-300', badge: 'bg-yellow-500/20 text-yellow-300', icon: Hand, group: 'East Asian Bodywork', groupOrder: 2 },
+
+  'Bowen Therapy': { bg: 'bg-teal-500/10', border: 'border-teal-500/30', text: 'text-teal-300', badge: 'bg-teal-500/20 text-teal-300', icon: Hand, group: 'Western Bodywork', groupOrder: 3 },
+  'Myofascial Release Adjuncts': { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', text: 'text-fuchsia-300', badge: 'bg-fuchsia-500/20 text-fuchsia-300', icon: Hand, group: 'Western Bodywork', groupOrder: 3 },
+  'Instrument-Assisted Soft Tissue Mobilisation': { bg: 'bg-pink-500/10', border: 'border-pink-500/30', text: 'text-pink-300', badge: 'bg-pink-500/20 text-pink-300', icon: Tag, group: 'Western Bodywork', groupOrder: 3 },
+  'Craniosacral Therapy': { bg: 'bg-violet-500/10', border: 'border-violet-500/30', text: 'text-violet-300', badge: 'bg-violet-500/20 text-violet-300', icon: Brain, group: 'Western Bodywork', groupOrder: 3 },
+  'Lymphatic Drainage': { bg: 'bg-sky-500/10', border: 'border-sky-500/30', text: 'text-sky-300', badge: 'bg-sky-500/20 text-sky-300', icon: Droplets, group: 'Western Bodywork', groupOrder: 3 },
+
+  'Kinesiotaping': { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-300', badge: 'bg-cyan-500/20 text-cyan-300', icon: Tag, group: 'Physical Adjuncts', groupOrder: 4 },
+  'Cold Laser / Photobiomodulation': { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-300', badge: 'bg-red-500/20 text-red-300', icon: Zap, group: 'Physical Adjuncts', groupOrder: 4 },
+  'Hydrotherapy / Aquatic Therapy': { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300', badge: 'bg-blue-500/20 text-blue-300', icon: Waves, group: 'Physical Adjuncts', groupOrder: 4 },
+  'Thermotherapy / Cryotherapy Adjuncts': { bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', text: 'text-indigo-300', badge: 'bg-indigo-500/20 text-indigo-300', icon: Snowflake, group: 'Physical Adjuncts', groupOrder: 4 },
+
+  'Yoga Therapy': { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-300', badge: 'bg-purple-500/20 text-purple-300', icon: Sprout, group: 'Movement & Mind-Body', groupOrder: 5 },
+  'Pilates-Based Adjuncts': { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-300', badge: 'bg-purple-500/20 text-purple-300', icon: Activity, group: 'Movement & Mind-Body', groupOrder: 5 },
+  'Alexander Technique': { bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', text: 'text-indigo-300', badge: 'bg-indigo-500/20 text-indigo-300', icon: Activity, group: 'Movement & Mind-Body', groupOrder: 5 },
+  'Feldenkrais Method': { bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', text: 'text-indigo-300', badge: 'bg-indigo-500/20 text-indigo-300', icon: Activity, group: 'Movement & Mind-Body', groupOrder: 5 },
+  'Tai Chi / Qigong': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300', badge: 'bg-emerald-500/20 text-emerald-300', icon: Wind, group: 'Movement & Mind-Body', groupOrder: 5 },
+  'Breathwork': { bg: 'bg-sky-500/10', border: 'border-sky-500/30', text: 'text-sky-300', badge: 'bg-sky-500/20 text-sky-300', icon: Wind, group: 'Movement & Mind-Body', groupOrder: 5 },
+  'Mindfulness / Relaxation Training': { bg: 'bg-violet-500/10', border: 'border-violet-500/30', text: 'text-violet-300', badge: 'bg-violet-500/20 text-violet-300', icon: Brain, group: 'Movement & Mind-Body', groupOrder: 5 },
+
+  'Nutrition / Anti-Inflammatory Guidance': { bg: 'bg-lime-500/10', border: 'border-lime-500/30', text: 'text-lime-300', badge: 'bg-lime-500/20 text-lime-300', icon: Apple, group: 'Lifestyle & Education', groupOrder: 6 },
+  'Sleep Hygiene Adjuncts': { bg: 'bg-slate-500/10', border: 'border-slate-500/30', text: 'text-slate-300', badge: 'bg-slate-500/20 text-slate-300', icon: Brain, group: 'Lifestyle & Education', groupOrder: 6 },
+  'Herbal / Topical Adjuncts': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300', badge: 'bg-emerald-500/20 text-emerald-300', icon: Leaf, group: 'Lifestyle & Education', groupOrder: 6 },
+  'Aromatherapy': { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-300', badge: 'bg-rose-500/20 text-rose-300', icon: Sprout, group: 'Lifestyle & Education', groupOrder: 6 },
+  'Energy-Based Therapies': { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', text: 'text-fuchsia-300', badge: 'bg-fuchsia-500/20 text-fuchsia-300', icon: Heart, group: 'Lifestyle & Education', groupOrder: 6 },
+
+  'Other Adjuncts': { bg: 'bg-slate-500/10', border: 'border-slate-500/30', text: 'text-slate-300', badge: 'bg-slate-500/20 text-slate-300', icon: Sparkles, group: 'Other', groupOrder: 7 },
+  'Other Evidence-Informed Adjuncts': { bg: 'bg-slate-500/10', border: 'border-slate-500/30', text: 'text-slate-300', badge: 'bg-slate-500/20 text-slate-300', icon: Sparkles, group: 'Other', groupOrder: 7 },
+};
+
+const DEFAULT_COLORS: CategoryStyle = { bg: 'bg-slate-500/10', border: 'border-slate-500/30', text: 'text-slate-300', badge: 'bg-slate-500/20 text-slate-300', icon: Leaf, group: 'Other', groupOrder: 7 };
+
+function resolveCategoryStyle(category: string): CategoryStyle {
+  if (CATEGORY_COLORS[category]) return CATEGORY_COLORS[category];
+  const lower = (category || '').toLowerCase();
+  for (const [key, style] of Object.entries(CATEGORY_COLORS)) {
+    if (lower.includes(key.toLowerCase()) || key.toLowerCase().includes(lower)) return style;
+  }
+  return DEFAULT_COLORS;
+}
+
+function isReferralRequired(referralGuidance: string | undefined, category: string): boolean {
+  const text = (referralGuidance || '').toLowerCase();
+  if (text.includes('referral required') || text.includes('refer out') || text.includes('refer to') || text.includes('outside scope') || text.includes('not within')) {
+    return true;
+  }
+  const referralCategories = new Set([
+    'Acupuncture', 'Dry Needling', 'Tui Na', 'Bowen Therapy', 'Cupping Therapy',
+    'Moxibustion', 'Gua Sha', 'Thai Therapeutic Massage', 'Craniosacral Therapy',
+    'Reflexology', 'Acupressure / Shiatsu', 'Alexander Technique', 'Feldenkrais Method',
+    'Yoga Therapy', 'Pilates-Based Adjuncts', 'Tai Chi / Qigong', 'Energy-Based Therapies',
+    'Aromatherapy', 'Nutrition / Anti-Inflammatory Guidance', 'Herbal / Topical Adjuncts',
+    'Mindfulness / Relaxation Training',
+  ]);
+  return referralCategories.has(category);
+}
 
 const EVIDENCE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   A: { bg: 'bg-green-500/20', text: 'text-green-300', label: 'Strong' },
@@ -219,12 +287,13 @@ function RecommendationEvidenceSection({ evidence, loading }: { evidence?: Evide
   );
 }
 
-function RecommendationCard({ rec, index, evidence, evidenceLoading }: { rec: AdjunctRecommendation; index: number; evidence?: EvidenceForRecommendation; evidenceLoading: boolean }) {
+function RecommendationCard({ rec, index, evidence, evidenceLoading, therapyCategory }: { rec: AdjunctRecommendation; index: number; evidence?: EvidenceForRecommendation; evidenceLoading: boolean; therapyCategory: string }) {
   const [expanded, setExpanded] = useState(false);
   const liveGrade = evidence?.overallGrade;
   const displayGrade = liveGrade || rec.evidenceLevel;
   const evGrade = EVIDENCE_STYLES[displayGrade] || EVIDENCE_STYLES.C;
   const hasContra = rec.contraindications && !['none', 'none identified', ''].includes(rec.contraindications.trim().toLowerCase());
+  const referralRequired = isReferralRequired(rec.referralGuidance, therapyCategory);
 
   return (
     <div className="border border-gray-600/30 rounded bg-gray-800/40">
@@ -257,6 +326,12 @@ function RecommendationCard({ rec, index, evidence, evidenceLoading }: { rec: Ad
                 safety
               </span>
             )}
+            {referralRequired && (
+              <span className="text-[8px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 inline-flex items-center gap-0.5" title="Outside physiotherapy scope — referral to a qualified practitioner required">
+                <Stethoscope className="h-2 w-2" />
+                refer out
+              </span>
+            )}
           </div>
           {rec.targetFinding && (
             <div className="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1">
@@ -269,12 +344,14 @@ function RecommendationCard({ rec, index, evidence, evidenceLoading }: { rec: Ad
             <AddToPlanButton
               size="xs"
               item={{
-                id: makeCartId('adjunct', rec.therapyName),
+                id: makeCartId('adjunct', `${therapyCategory}-${rec.therapyName}`),
                 modality: 'adjunct',
-                name: rec.therapyName,
+                name: referralRequired ? `[Refer out] ${rec.therapyName}` : rec.therapyName,
+                category: therapyCategory,
                 targetStructure: rec.targetStructure,
                 targetFinding: rec.targetFinding,
                 dosage: rec.techniqueDetails,
+                parameters: rec.referralGuidance,
                 rationale: rec.clinicalRationale,
                 contraindications: rec.contraindications,
                 evidenceGrade: typeof displayGrade === 'string' ? displayGrade : undefined,
@@ -540,7 +617,7 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
         <Leaf className="h-8 w-8 text-emerald-400/60 mb-3" />
         <div className="text-[11px] text-gray-300 mb-1">Adjunct Natural Therapies</div>
         <div className="text-[9px] text-gray-500 mb-4 text-center max-w-[280px]">
-          Generate evidence-informed adjunct therapy suggestions (Acupuncture, Tui Na, Bowen, Cupping, Moxibustion, Myofascial Release) tailored to this patient's condition, irritability and recovery phase.
+          Generate evidence-informed adjunct therapy suggestions across needle/pressure-point work, East Asian and Western bodywork, physical adjuncts (laser, taping, hydrotherapy), movement &amp; mind-body methods, and lifestyle/education — tailored to this patient's condition, irritability and recovery phase.
         </div>
         <button onClick={generatePlan} className="px-4 py-2 text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-lg hover:bg-emerald-500/30 transition-colors flex items-center gap-2">
           <Sparkles className="h-3.5 w-3.5" />
@@ -609,47 +686,76 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
         </button>
       </div>
 
-      {plan.therapyGroups.map(group => {
-        const colors = CATEGORY_COLORS[group.therapyCategory] ?? DEFAULT_COLORS;
-        const isExpanded = expandedGroups.has(group.groupId);
-
-        return (
-          <div key={group.groupId} className={`border ${colors.border} rounded-lg overflow-hidden`}>
-            <button
-              onClick={() => toggleGroup(group.groupId)}
-              className={`w-full flex items-center gap-2 p-2 text-left ${colors.bg} hover:brightness-110 transition-all`}
-            >
-              <Leaf className={`h-3.5 w-3.5 ${colors.text} shrink-0`} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[11px] font-medium ${colors.text}`}>{group.therapyCategory}</span>
-                  <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${colors.badge}`}>
-                    P{group.priority} · {group.recommendations.length} rec
-                  </span>
+      {(() => {
+        const sortedGroups = [...plan.therapyGroups].sort((a, b) => {
+          const sa = resolveCategoryStyle(a.therapyCategory);
+          const sb = resolveCategoryStyle(b.therapyCategory);
+          const oa = CATEGORY_GROUP_ORDER[sa.group] ?? sa.groupOrder;
+          const ob = CATEGORY_GROUP_ORDER[sb.group] ?? sb.groupOrder;
+          if (oa !== ob) return oa - ob;
+          if (a.priority !== b.priority) return a.priority - b.priority;
+          return a.therapyCategory.localeCompare(b.therapyCategory);
+        });
+        let lastGroupHeader: string | null = null;
+        return sortedGroups.map(group => {
+          const colors = resolveCategoryStyle(group.therapyCategory);
+          const Icon = colors.icon;
+          const isExpanded = expandedGroups.has(group.groupId);
+          const showGroupHeader = colors.group !== lastGroupHeader;
+          lastGroupHeader = colors.group;
+          return (
+            <div key={group.groupId}>
+              {showGroupHeader && (
+                <div className="flex items-center gap-1.5 mt-2 mb-1 px-1">
+                  <div className="h-px flex-1 bg-gray-700/50" />
+                  <span className="text-[8px] uppercase tracking-wider text-gray-500 font-medium">{colors.group}</span>
+                  <div className="h-px flex-1 bg-gray-700/50" />
                 </div>
-                <div className="text-[9px] text-gray-400 mt-0.5 truncate">{group.categoryDescription}</div>
+              )}
+              <div className={`border ${colors.border} rounded-lg overflow-hidden`}>
+                <button
+                  onClick={() => toggleGroup(group.groupId)}
+                  className={`w-full flex items-center gap-2 p-2 text-left ${colors.bg} hover:brightness-110 transition-all`}
+                >
+                  <Icon className={`h-3.5 w-3.5 ${colors.text} shrink-0`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[11px] font-medium ${colors.text}`}>{group.therapyCategory}</span>
+                      <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${colors.badge}`}>
+                        P{group.priority} · {group.recommendations.length} rec
+                      </span>
+                      {!CATEGORY_COLORS[group.therapyCategory] && (
+                        <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-gray-700/40 text-gray-400 border border-gray-600/30" title="Category not in default catalog — generic styling applied">
+                          new category
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-0.5 truncate">{group.categoryDescription}</div>
+                  </div>
+                  {isExpanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0" />}
+                </button>
+                {isExpanded && (
+                  <div className="p-2 space-y-1.5">
+                    {group.recommendations.map((rec, i) => {
+                      const key = recommendationKey(group.groupId, i);
+                      return (
+                        <RecommendationCard
+                          key={`${group.groupId}-${i}`}
+                          rec={rec}
+                          index={i}
+                          evidence={evidenceMap[key]}
+                          evidenceLoading={evidenceLoading}
+                          therapyCategory={group.therapyCategory}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              {isExpanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0" />}
-            </button>
-            {isExpanded && (
-              <div className="p-2 space-y-1.5">
-                {group.recommendations.map((rec, i) => {
-                  const key = recommendationKey(group.groupId, i);
-                  return (
-                    <RecommendationCard
-                      key={`${group.groupId}-${i}`}
-                      rec={rec}
-                      index={i}
-                      evidence={evidenceMap[key]}
-                      evidenceLoading={evidenceLoading}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
+            </div>
+          );
+        });
+      })()}
 
       {(plan.overallRationale || plan.safetyConsiderations) && (
         <div className="border border-gray-600/30 rounded-lg overflow-hidden">

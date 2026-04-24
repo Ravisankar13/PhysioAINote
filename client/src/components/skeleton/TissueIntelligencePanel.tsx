@@ -58,11 +58,12 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
   return <div className="text-[10px] text-muted-foreground italic">{children}</div>;
 }
 
-function DescriptorChip({ label }: { label: string }) {
+function DescriptorChip({ label, source }: { label: string; source: string }) {
   return (
     <span
       className="text-[9px] px-1.5 h-4 rounded-full bg-muted/60 text-foreground/80 border border-border/60 capitalize inline-flex items-center"
       data-testid={`descriptor-${label}`}
+      title={`Pain descriptor · Source: ${source}`}
     >
       {label}
     </span>
@@ -135,12 +136,22 @@ function CollapsibleSection({
   );
 }
 
-function PainBehaviorSections({ pb, label }: { pb?: PainBehavior; label: string }) {
+function PainBehaviorSections({ pb, label, evidence }: { pb?: PainBehavior; label: string; evidence: TissueEvidence[] }) {
   const hasCandidates = !!pb && pb.candidates.length > 0;
   const hasDescriptors = !!pb && pb.descriptors.length > 0;
   const hasAggravators = !!pb && pb.aggravators.length > 0;
   const hasEasers = !!pb && pb.easers.length > 0;
   const hasBehaviour = !!pb && (pb.sin !== 'low' || pb.diurnal !== 'unknown' || pb.latency !== 'unknown');
+
+  const findSource = (kw: string): string => {
+    const hit = evidence.find(e => e.note.toLowerCase().includes(kw.toLowerCase()));
+    return EVIDENCE_SOURCE_LABELS[hit?.source ?? 'pain_behavior_default'];
+  };
+  const descriptorsSource = findSource('descriptor');
+  const sinSource = EVIDENCE_SOURCE_LABELS['biomechanics'];
+  const diurnalSource = findSource('24-hour pattern');
+  const latencySource = findSource('Onset latency');
+  const easerSource = findSource('Easer:');
 
   return (
     <>
@@ -158,8 +169,8 @@ function PainBehaviorSections({ pb, label }: { pb?: PainBehavior; label: string 
           <EmptyHint>Primary candidate: {label}. No source-backed generators yet — not yet observed.</EmptyHint>
         )}
         {hasDescriptors ? (
-          <div className="flex flex-wrap gap-1 pt-1" title="Pain descriptors. Source visible in Evidence accordion.">
-            {pb!.descriptors.map(d => <DescriptorChip key={d} label={d} />)}
+          <div className="flex flex-wrap gap-1 pt-1">
+            {pb!.descriptors.map(d => <DescriptorChip key={d} label={d} source={descriptorsSource} />)}
           </div>
         ) : (
           <EmptyHint>Descriptors not yet observed.</EmptyHint>
@@ -174,17 +185,20 @@ function PainBehaviorSections({ pb, label }: { pb?: PainBehavior; label: string 
       >
         {hasBehaviour ? (
           <div className="grid grid-cols-3 gap-1.5">
-            <div className="rounded border border-border/40 bg-muted/30 p-1.5">
+            <div className="rounded border border-border/40 bg-muted/30 p-1.5" title={`Severity-Irritability-Nature · Source: ${sinSource}`}>
               <div className="text-[9px] text-muted-foreground">SIN</div>
               <div className="text-[10px] font-semibold capitalize" style={{ color: SIN_COLOR[pb!.sin] }}>{pb!.sin}</div>
+              <div className="text-[8px] text-muted-foreground/70 truncate">[{sinSource}]</div>
             </div>
-            <div className="rounded border border-border/40 bg-muted/30 p-1.5">
+            <div className="rounded border border-border/40 bg-muted/30 p-1.5" title={`24h pattern · Source: ${diurnalSource}`}>
               <div className="text-[9px] text-muted-foreground">24h pattern</div>
               <div className="text-[10px] font-medium leading-tight">{DIURNAL_LABELS[pb!.diurnal]}</div>
+              <div className="text-[8px] text-muted-foreground/70 truncate">[{diurnalSource}]</div>
             </div>
-            <div className="rounded border border-border/40 bg-muted/30 p-1.5">
+            <div className="rounded border border-border/40 bg-muted/30 p-1.5" title={`Onset latency · Source: ${latencySource}`}>
               <div className="text-[9px] text-muted-foreground">Onset</div>
               <div className="text-[10px] font-medium leading-tight">{LATENCY_LABELS[pb!.latency]}</div>
+              <div className="text-[8px] text-muted-foreground/70 truncate">[{latencySource}]</div>
             </div>
           </div>
         ) : (
@@ -210,7 +224,7 @@ function PainBehaviorSections({ pb, label }: { pb?: PainBehavior; label: string 
             <div className="text-[9px] text-muted-foreground mb-0.5" title="Eases this tissue. Source visible in Evidence accordion.">Easers</div>
             <div className="flex flex-wrap gap-1">
               {pb!.easers.map((e, i) => (
-                <span key={i} className="text-[9px] px-1.5 h-4 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 inline-flex items-center" title="Source: Behaviour Defaults">
+                <span key={i} className="text-[9px] px-1.5 h-4 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 inline-flex items-center" title={`Easer · Source: ${easerSource}`}>
                   {e}
                 </span>
               ))}
@@ -423,7 +437,7 @@ export default function TissueIntelligencePanel({ intelligence, onSelectCausalCh
         )}
       </div>
 
-      <PainBehaviorSections pb={i.painBehavior} label={i.label} />
+      <PainBehaviorSections pb={i.painBehavior} label={i.label} evidence={i.evidence} />
 
       {(i.compensation.upstream.length > 0 || i.compensation.downstream.length > 0) && (
         <>

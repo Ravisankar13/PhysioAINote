@@ -1699,7 +1699,7 @@ interface PureThreeGLBViewerProps {
     irritability: 'low' | 'moderate' | 'high';
     isDeep: boolean;
     aggravators?: Array<{
-      kind: 'movement' | 'posture' | 'load' | 'time';
+      kind: 'position' | 'movement' | 'load' | 'environment';
       label: string;
       boneAnchor?: string;
       predicate?:

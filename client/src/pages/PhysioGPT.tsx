@@ -4450,7 +4450,13 @@ ${ddxList}`;
       patientState: patientForceState,
       comAccelMagN: comAccelMps2,
     });
-  }, [baseHudForceAnalysis, bodyWeightKg, patientForceState, forceTimeMetrics, isScrubbing, scrubPlaybackMs]);
+    // NOTE: do NOT depend on `forceTimeMetrics` here — it would create a
+    // feedback loop (push augmented frame → subscribe fires →
+    // setForceTimeMetrics → re-memo → push again at ~60Hz even when no
+    // genuine motion frame arrived). The augment helper reads
+    // `forceTimeBuffer.getLatestComAccelMag()` / `getComAccelMagAtActive()`
+    // directly, so it's already in sync without needing metrics in deps.
+  }, [baseHudForceAnalysis, bodyWeightKg, patientForceState, isScrubbing, scrubPlaybackMs]);
 
   // ─── Time-aware force buffer push ────────────────────────────────────
   // Capture every recompute of the AUGMENTED analysis (chain-axial +

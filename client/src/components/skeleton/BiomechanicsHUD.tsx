@@ -404,7 +404,7 @@ export default function BiomechanicsHUD({
             onClick={c.onClick}
             className={`relative w-[52px] h-[52px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${isPulsing ? 'ring-2 ring-white/70' : c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
             style={isPulsing ? { animation: 'hud-pulse 0.3s ease-in-out 2' } : undefined}
-            title={c.label}
+            title={c.tooltip ?? c.label}
             data-testid={`hud-circle-${c.id}`}
             data-pulsing={isPulsing ? 'true' : 'false'}
             data-direction={dir ?? 'none'}

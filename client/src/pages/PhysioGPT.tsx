@@ -6404,12 +6404,13 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || causalChainHighlights.length > 0 ? [
+              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || tissueOverloadHighlights.length > 0 || causalChainHighlights.length > 0 ? [
                 ...(chainHighlightBones || []),
                 ...muscleOverrideHighlights,
                 ...influenceHighlights,
                 ...visualizationBoneHighlights,
                 ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
+                ...tissueOverloadHighlights,
                 ...causalChainHighlights,
               ] : undefined}
               tissueIntelligenceHighlights={tissueIntelligenceHighlights.length > 0 ? tissueIntelligenceHighlights : undefined}

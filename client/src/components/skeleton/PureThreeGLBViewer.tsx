@@ -3151,115 +3151,96 @@ export default function PureThreeGLBViewer({
       let anchorPos: THREE.Vector3 | null = null;
       const built: THREE.Object3D[] = [];
 
-      // Each primitive registers an updater so its world transform tracks the live bone
-      // positions every frame (skeleton may animate via pose mode / IK / squat). Geometry
-      // is built once; only position/rotation are recomputed per frame.
+      // Each primitive registers an updater so its transform tracks live bone positions
+      // every frame. Geometry is built once; only position/rotation/scale are updated.
       const updaters = tissueOverlayUpdatersRef.current;
       let labelAnchorFn: (() => THREE.Vector3 | null) | null = null;
+
+      const addTubeBetween = (from: string, to: string, radius: number, fromOff?: [number, number, number], toOff?: [number, number, number], asSheet?: number) => {
+        const a0 = worldOf(from, fromOff); const b0 = worldOf(to, toOff);
+        if (!a0 || !b0 || a0.distanceTo(b0) < 1e-4) return null;
+        const geo = asSheet
+          ? new THREE.PlaneGeometry(asSheet, 1)
+          : new THREE.CylinderGeometry(radius, radius, 1, 12, 1, true);
+        const mat = matFactory();
+        if (asSheet) mat.side = THREE.DoubleSide;
+        const mesh = new THREE.Mesh(geo, mat);
+        const update = () => {
+          const a = worldOf(from, fromOff); const b = worldOf(to, toOff);
+          if (!a || !b) { mesh.visible = false; return; }
+          const dir = new THREE.Vector3().subVectors(b, a); const len = dir.length();
+          if (len < 1e-4) { mesh.visible = false; return; }
+          mesh.visible = true;
+          mesh.position.copy(a).add(b).multiplyScalar(0.5);
+          mesh.scale.set(1, len, 1);
+          mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        };
+        update(); updaters.push(update);
+        built.push(mesh);
+        return new THREE.Vector3().addVectors(a0, b0).multiplyScalar(0.5);
+      };
+
+      const addAtBone = (bone: string, offset: [number, number, number] | undefined, mesh: THREE.Mesh) => {
+        const c0 = worldOf(bone, offset);
+        if (!c0) return null;
+        const update = () => {
+          const c = worldOf(bone, offset);
+          if (!c) { mesh.visible = false; return; }
+          mesh.visible = true; mesh.position.copy(c);
+        };
+        update(); updaters.push(update);
+        built.push(mesh);
+        return c0;
+      };
 
       if (recipe) {
         const s = recipe.shape;
         if (s.kind === 'tube_between') {
-          const a0 = worldOf(s.from, s.fromOffset);
-          const b0 = worldOf(s.to, s.toOffset);
-          if (a0 && b0) {
-            const len0 = a0.distanceTo(b0);
-            if (len0 > 1e-4) {
-              const geo = new THREE.CylinderGeometry(s.radius, s.radius, 1, 12, 1, true);
-              const mesh = new THREE.Mesh(geo, matFactory());
-              built.push(mesh);
-              const update = () => {
-                const a = worldOf(s.from, s.fromOffset); const b = worldOf(s.to, s.toOffset);
-                if (!a || !b) { mesh.visible = false; return; }
-                const dir = new THREE.Vector3().subVectors(b, a); const len = dir.length();
-                if (len < 1e-4) { mesh.visible = false; return; }
-                mesh.visible = true;
-                mesh.position.copy(a).add(b).multiplyScalar(0.5);
-                mesh.scale.set(1, len, 1);
-                mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-              };
-              update(); updaters.push(update);
-              labelAnchorFn = () => { const a = worldOf(s.from, s.fromOffset); const b = worldOf(s.to, s.toOffset); return (a && b) ? a.clone().add(b).multiplyScalar(0.5) : null; };
-              anchorPos = labelAnchorFn();
-            }
-          }
-        } else if (s.kind === 'polyline' || s.kind === 'sheet') {
-          const isSheet = s.kind === 'sheet';
-          const segPairs: Array<{ from: string; to: string; offset?: [number, number, number] }> = [];
-          if (isSheet) {
-            segPairs.push({ from: (s as Extract<typeof s, { kind: 'sheet' }>).from, to: (s as Extract<typeof s, { kind: 'sheet' }>).to, offset: s.offset });
-          } else {
-            const pl = s as Extract<typeof s, { kind: 'polyline' }>;
-            for (let i = 0; i < pl.bones.length - 1; i++) segPairs.push({ from: pl.bones[i], to: pl.bones[i + 1], offset: pl.offset });
-          }
-          const thickness = isSheet ? (s as Extract<typeof s, { kind: 'sheet' }>).width : (s as Extract<typeof s, { kind: 'polyline' }>).thickness;
-          for (const seg of segPairs) {
-            const a0 = worldOf(seg.from, seg.offset); const b0 = worldOf(seg.to, seg.offset);
-            if (!a0 || !b0) continue;
-            if (a0.distanceTo(b0) < 1e-4) continue;
-            const geo = isSheet ? new THREE.PlaneGeometry(thickness, 1) : new THREE.CylinderGeometry(thickness, thickness, 1, 8, 1, true);
-            const mat = matFactory();
-            if (isSheet) mat.side = THREE.DoubleSide;
-            const mesh = new THREE.Mesh(geo, mat);
-            built.push(mesh);
-            const update = () => {
-              const a = worldOf(seg.from, seg.offset); const b = worldOf(seg.to, seg.offset);
-              if (!a || !b) { mesh.visible = false; return; }
-              const dir = new THREE.Vector3().subVectors(b, a); const len = dir.length();
-              if (len < 1e-4) { mesh.visible = false; return; }
-              mesh.visible = true;
-              mesh.position.copy(a).add(b).multiplyScalar(0.5);
-              mesh.scale.set(1, len, 1);
-              mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+          const mid = addTubeBetween(s.from, s.to, s.radius, s.fromOffset, s.toOffset);
+          if (mid) {
+            anchorPos = mid;
+            labelAnchorFn = () => {
+              const a = worldOf(s.from, s.fromOffset); const b = worldOf(s.to, s.toOffset);
+              return (a && b) ? a.clone().add(b).multiplyScalar(0.5) : null;
             };
-            update(); updaters.push(update);
           }
-          // anchor the label at the geometric mid-bone of the polyline
-          const allBones = isSheet ? [(s as any).from, (s as any).to] : (s as Extract<typeof s, { kind: 'polyline' }>).bones;
-          const midBone = allBones[Math.floor(allBones.length / 2)];
+        } else if (s.kind === 'polyline') {
+          for (let i = 0; i < s.bones.length - 1; i++) {
+            addTubeBetween(s.bones[i], s.bones[i + 1], s.thickness, s.offset, s.offset);
+          }
+          const midBone = s.bones[Math.floor(s.bones.length / 2)];
           labelAnchorFn = () => worldOf(midBone, s.offset);
           anchorPos = labelAnchorFn();
+        } else if (s.kind === 'sheet') {
+          const mid = addTubeBetween(s.from, s.to, 0, s.offset, s.offset, s.width);
+          if (mid) {
+            anchorPos = mid;
+            labelAnchorFn = () => {
+              const a = worldOf(s.from, s.offset); const b = worldOf(s.to, s.offset);
+              return (a && b) ? a.clone().add(b).multiplyScalar(0.5) : null;
+            };
+          }
         } else if (s.kind === 'ring' || s.kind === 'crescent') {
-          const c0 = worldOf(s.at, (s as any).offset);
-          if (c0) {
-            const isCrescent = s.kind === 'crescent';
-            const arc = isCrescent ? ((s as Extract<typeof s, { kind: 'crescent' }>).arc ?? Math.PI) : Math.PI * 2;
-            const geo = new THREE.TorusGeometry(s.radius, s.thickness, 10, isCrescent ? 24 : 32, arc);
-            const mesh = new THREE.Mesh(geo, matFactory());
-            if (s.axis === 'x') mesh.rotation.y = Math.PI / 2;
-            else if (s.axis === 'z') mesh.rotation.x = Math.PI / 2;
-            built.push(mesh);
-            const update = () => {
-              const c = worldOf(s.at, (s as any).offset);
-              if (!c) { mesh.visible = false; return; }
-              mesh.visible = true; mesh.position.copy(c);
-            };
-            update(); updaters.push(update);
-            labelAnchorFn = () => worldOf(s.at, (s as any).offset);
-            anchorPos = c0;
-          }
+          const isCrescent = s.kind === 'crescent';
+          const arc = isCrescent ? (s.arc ?? Math.PI) : Math.PI * 2;
+          const ringOffset = s.kind === 'ring' ? s.offset : undefined;
+          const geo = new THREE.TorusGeometry(s.radius, s.thickness, 10, isCrescent ? 24 : 32, arc);
+          const mesh = new THREE.Mesh(geo, matFactory());
+          if (s.axis === 'x') mesh.rotation.y = Math.PI / 2;
+          else if (s.axis === 'z') mesh.rotation.x = Math.PI / 2;
+          const c0 = addAtBone(s.at, ringOffset, mesh);
+          if (c0) { anchorPos = c0; labelAnchorFn = () => worldOf(s.at, ringOffset); }
         } else if (s.kind === 'sphere_at') {
-          const c0 = worldOf(s.at, s.offset);
-          if (c0) {
-            const geo = new THREE.SphereGeometry(s.radius, 16, 12);
-            const mesh = new THREE.Mesh(geo, matFactory());
-            built.push(mesh);
-            const update = () => {
-              const c = worldOf(s.at, s.offset);
-              if (!c) { mesh.visible = false; return; }
-              mesh.visible = true; mesh.position.copy(c);
-            };
-            update(); updaters.push(update);
-            labelAnchorFn = () => worldOf(s.at, s.offset);
-            anchorPos = c0;
-          }
+          const geo = new THREE.SphereGeometry(s.radius, 16, 12);
+          const mesh = new THREE.Mesh(geo, matFactory());
+          const c0 = addAtBone(s.at, s.offset, mesh);
+          if (c0) { anchorPos = c0; labelAnchorFn = () => worldOf(s.at, s.offset); }
         }
       }
 
-      // Fallback: when there's no catalogue recipe (or it built nothing), drop a labelled
-      // generic ring on the first available bone — and ALSO emit a bone-glow entry through
-      // the existing highlightBoneNames pipeline (handled in PhysioGPT) so we never lose
-      // visibility for tissues that aren't in the anchor catalogue yet.
+      // Fallback: no catalogue recipe (or none built). Drop a labelled generic ring on the
+      // first available bone. PhysioGPT additionally emits a bone-glow entry through the
+      // highlightBoneNames pipeline so visibility never regresses for catalogue gaps.
       if (built.length === 0) {
         for (const bn of h.bones) {
           const c0 = worldOf(bn);

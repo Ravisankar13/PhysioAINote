@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import { buildPatientContextSig } from "@/lib/patientContextSig";
 import type {
   NaturalTimelineRequestContext,
   NaturalTimelineResult,
   NaturalTimelineQA,
+  PatientContextPayload,
 } from "@shared/schema";
 
 interface Args {
@@ -16,13 +18,21 @@ interface Args {
    *  trigger a new AI request. The full context is still POSTed; the
    *  signature only controls when to refetch. */
   signature?: string | null;
+  /** Optional AI-curated patient-context payload. Forwarded into the
+   *  AI as `patient_context` so the natural-history verdict reflects
+   *  THIS patient (e.g. diabetes shifts frozen-shoulder timeline). */
+  patientContext?: PatientContextPayload;
 }
 
-export function useNaturalTimeline({ context, enabled = true, signature }: Args) {
+export function useNaturalTimeline({ context, enabled = true, signature, patientContext }: Args) {
   const [result, setResult] = useState<NaturalTimelineResult | null>(null);
   const [qaHistory, setQaHistory] = useState<NaturalTimelineQA[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** PatientContext signature that the *current* `result` was generated
+   *  with. Lets consumers tell whether the displayed timeline already
+   *  reflects the latest clinician-supplied context, or is mid-refresh. */
+  const [appliedPatientContextSig, setAppliedPatientContextSig] = useState<string>('');
   const lastSigRef = useRef<string | null>(null);
   const inFlightRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<number | null>(null);
@@ -31,6 +41,16 @@ export function useNaturalTimeline({ context, enabled = true, signature }: Args)
   // context object identity (which changes every render).
   const contextRef = useRef<NaturalTimelineRequestContext | null>(context);
   contextRef.current = context;
+  // Patient context lives in a ref + signature pair: the ref ensures
+  // each POST sends the freshest answers, and changes to the patient
+  // context are folded into the dedup signature below so the hook
+  // refetches when the clinician edits / regenerates context.
+  const patientContextRef = useRef<PatientContextPayload | undefined>(patientContext);
+  patientContextRef.current = patientContext;
+  const patientContextSig = useMemo(
+    () => buildPatientContextSig(patientContext),
+    [patientContext],
+  );
 
   // Fall back to JSON.stringify of the context only when no explicit
   // signature is supplied (preserves the legacy behaviour for callers
@@ -39,7 +59,13 @@ export function useNaturalTimeline({ context, enabled = true, signature }: Args)
     () => (signature !== undefined ? null : context ? JSON.stringify(context) : null),
     [signature, context],
   );
-  const effectiveSig = signature !== undefined ? signature : fallbackSig;
+  const baseSig = signature !== undefined ? signature : fallbackSig;
+  // Fold patient-context changes into the effective dedup signature so
+  // the hook refetches when the clinician edits / regenerates context.
+  const effectiveSig = useMemo(
+    () => (baseSig === null ? null : `${baseSig}::pc=${patientContextSig}`),
+    [baseSig, patientContextSig],
+  );
 
   const fetchTimeline = useCallback(async (ctx: NaturalTimelineRequestContext, qa: NaturalTimelineQA[]) => {
     if (inFlightRef.current) inFlightRef.current.abort();
@@ -48,15 +74,19 @@ export function useNaturalTimeline({ context, enabled = true, signature }: Args)
     setLoading(true);
     setError(null);
     try {
+      const pc = patientContextRef.current;
+      const pcPayload = pc && ((pc.free_form ?? '').trim() || (pc.answers && pc.answers.length > 0)) ? pc : undefined;
       const r = await apiRequest("/api/clinical-text/natural-timeline", "POST", {
         context: ctx,
         qa_history: qa,
+        patient_context: pcPayload,
       });
       if (!ac.signal.aborted) {
         setResult(r as NaturalTimelineResult);
         // Replace Q&A history only on success, so prior answers stay
         // visible while a refresh is in flight.
         setQaHistory(qa);
+        setAppliedPatientContextSig(buildPatientContextSig(pcPayload));
       }
     } catch (e) {
       if (!ac.signal.aborted) {
@@ -129,5 +159,7 @@ export function useNaturalTimeline({ context, enabled = true, signature }: Args)
     error,
     answerQuestion,
     refresh,
+    appliedPatientContextSig,
+    currentPatientContextSig: patientContextSig,
   };
 }

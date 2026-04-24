@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import { buildPatientContextSig } from "@/lib/patientContextSig";
 import type {
   CaseSpecificTreatmentPlan,
   CaseSpecificTreatmentPlanRequest,
   NaturalTimelineQA,
   NaturalTimelineRequestContext,
   NaturalTimelineResult,
+  PatientContextPayload,
 } from "@shared/schema";
 
 interface Args {
@@ -22,6 +24,11 @@ interface Args {
    *  refetch. Mirrors the natural-timeline hook so live skeleton drift
    *  cannot retrigger an AI fetch. */
   signature?: string | null;
+  /** Optional AI-curated patient-context payload. Forwarded into the
+   *  AI as `patient_context` so the case-specific prescription is
+   *  personalised (dosage, contraindication-safe technique selection,
+   *  adherence-friendly modalities). */
+  patientContext?: PatientContextPayload;
 }
 
 export function useCaseSpecificPlan({
@@ -33,10 +40,15 @@ export function useCaseSpecificPlan({
   qaHistory,
   enabled = true,
   signature,
+  patientContext,
 }: Args) {
   const [result, setResult] = useState<CaseSpecificTreatmentPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** PatientContext signature that the *current* `result` was generated
+   *  with. Lets consumers tell whether the displayed plan already
+   *  reflects the latest clinician-supplied context, or is mid-refresh. */
+  const [appliedPatientContextSig, setAppliedPatientContextSig] = useState<string>('');
   const lastSigRef = useRef<string | null>(null);
   const inFlightRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<number | null>(null);
@@ -50,12 +62,19 @@ export function useCaseSpecificPlan({
   const qaRef = useRef(qaHistory ?? []);
   const archIdRef = useRef(archetypeId);
   const condRef = useRef(conditionLabel);
+  const patientContextRef = useRef<PatientContextPayload | undefined>(patientContext);
   ctxRef.current = context;
   ntRef.current = naturalTimeline;
   phasesRef.current = phases;
   qaRef.current = qaHistory ?? [];
   archIdRef.current = archetypeId;
   condRef.current = conditionLabel;
+  patientContextRef.current = patientContext;
+
+  const patientContextSig = useMemo(
+    () => buildPatientContextSig(patientContext),
+    [patientContext],
+  );
 
   const fallbackSig = useMemo(
     () => (signature !== undefined
@@ -65,7 +84,11 @@ export function useCaseSpecificPlan({
         : null),
     [signature, context, naturalTimeline, phases],
   );
-  const effectiveSig = signature !== undefined ? signature : fallbackSig;
+  const baseSig = signature !== undefined ? signature : fallbackSig;
+  const effectiveSig = useMemo(
+    () => (baseSig === null ? null : `${baseSig}::pc=${patientContextSig}`),
+    [baseSig, patientContextSig],
+  );
 
   const fetchPlan = useCallback(async () => {
     const ctx = ctxRef.current;
@@ -78,6 +101,8 @@ export function useCaseSpecificPlan({
     setLoading(true);
     setError(null);
     try {
+      const pc = patientContextRef.current;
+      const pcPayload = pc && ((pc.free_form ?? '').trim() || (pc.answers && pc.answers.length > 0)) ? pc : undefined;
       const body: CaseSpecificTreatmentPlanRequest = {
         context: ctx,
         natural_timeline: nt,
@@ -85,9 +110,13 @@ export function useCaseSpecificPlan({
         archetype_id: archIdRef.current,
         condition_label: condRef.current,
         qa_history: qaRef.current,
+        patient_context: pcPayload,
       };
       const r = await apiRequest("/api/clinical-text/case-specific-treatment-plan", "POST", body);
-      if (!ac.signal.aborted) setResult(r as CaseSpecificTreatmentPlan);
+      if (!ac.signal.aborted) {
+        setResult(r as CaseSpecificTreatmentPlan);
+        setAppliedPatientContextSig(buildPatientContextSig(pcPayload));
+      }
     } catch (e) {
       if (!ac.signal.aborted) {
         setError(e instanceof Error ? e.message : "Failed to fetch case-specific treatment plan");
@@ -124,5 +153,12 @@ export function useCaseSpecificPlan({
     void fetchPlan();
   }, [fetchPlan]);
 
-  return { result, loading, error, refresh };
+  return {
+    result,
+    loading,
+    error,
+    refresh,
+    appliedPatientContextSig,
+    currentPatientContextSig: patientContextSig,
+  };
 }

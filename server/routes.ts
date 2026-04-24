@@ -339,6 +339,93 @@ const upload = multer({
   }
 });
 
+/** Zod shape validation for the AI-driven patient-context payload.
+ *  Caps string lengths to defend against runaway prompt injection.
+ *  We validate the *envelope* here (free_form + an array of unknowns);
+ *  individual answer rows are validated row-by-row inside
+ *  formatPatientContextBlock so a single malformed row is dropped
+ *  silently rather than discarding the whole context payload. */
+const patientContextAnswerSchema = z.object({
+  prompt_id: z.string().max(200).optional(),
+  prompt: z.string().max(500).optional(),
+  answer: z.string().max(2000).optional(),
+  rationale: z.string().max(500).optional(),
+  category: z.string().max(64).optional(),
+});
+const patientContextPayloadSchema = z.object({
+  free_form: z.string().max(4000).optional(),
+  answers: z.array(z.unknown()).max(50).optional(),
+}).strip();
+
+/** Format an AI-driven patient-context payload into a system-prompt
+ *  block so any downstream endpoint (prediction, natural timeline,
+ *  case-specific plan) can quote the clinician's answers verbatim
+ *  when reasoning about THIS patient. Returns an empty string when no
+ *  meaningful context was supplied so we don't waste tokens. */
+function formatPatientContextBlock(
+  raw: unknown,
+  opts: { instruction?: string } = {},
+): string {
+  // Treat null/undefined/empty as "no context" without warning — that
+  // is the steady-state for any pre-prediction request.
+  if (raw === null || raw === undefined) return '';
+  const parsed = patientContextPayloadSchema.safeParse(raw);
+  if (!parsed.success) {
+    // Log a single-line diagnostic so malformed patient_context drops
+    // are visible in production logs (ops/debugging) instead of being
+    // entirely silent — but never throw, since context is optional and
+    // we must keep the downstream AI request working.
+    console.warn(
+      '[patient_context] dropped malformed payload:',
+      parsed.error.issues.slice(0, 3).map(i => `${i.path.join('.') || '<root>'}: ${i.message}`).join('; '),
+    );
+    return '';
+  }
+  const pc = parsed.data;
+  const freeForm = (pc.free_form ?? '').trim();
+  let droppedRows = 0;
+  const answers = (pc.answers ?? [])
+    .map(rawRow => {
+      const row = patientContextAnswerSchema.safeParse(rawRow);
+      if (!row.success) {
+        droppedRows += 1;
+        return null;
+      }
+      return {
+        prompt: (row.data.prompt ?? '').trim(),
+        answer: (row.data.answer ?? '').trim(),
+        rationale: (row.data.rationale ?? '').trim(),
+        category: (row.data.category ?? '').trim(),
+      };
+    })
+    .filter((a): a is { prompt: string; answer: string; rationale: string; category: string } =>
+      !!a && !!a.prompt && !!a.answer);
+  if (droppedRows > 0) {
+    console.warn(`[patient_context] dropped ${droppedRows} malformed answer row(s)`);
+  }
+  if (!freeForm && answers.length === 0) return '';
+  const lines: string[] = [];
+  lines.push('\n\n--- PATIENT CONTEXT (clinician-supplied, AI-curated) ---');
+  if (answers.length > 0) {
+    for (const a of answers) {
+      const cat = a.category ? ` [${a.category}]` : '';
+      lines.push(`Q${cat}: ${a.prompt}`);
+      lines.push(`A: ${a.answer}`);
+      if (a.rationale) lines.push(`Why this matters: ${a.rationale}`);
+      lines.push('');
+    }
+  }
+  if (freeForm) {
+    lines.push('Free-form clinician notes about this patient:');
+    lines.push(freeForm);
+  }
+  lines.push('--- END PATIENT CONTEXT ---');
+  if (opts.instruction) {
+    lines.push(opts.instruction);
+  }
+  return lines.join('\n');
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoints for deployment verification (must be early in route registration)
   app.get('/health', (req: Request, res: Response) => {
@@ -13434,7 +13521,7 @@ Important:
   
   app.post('/api/clinical-text/parse', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { text, context } = req.body;
+      const { text, context, patient_context } = req.body;
       if (!text || typeof text !== 'string' || text.trim().length < 3) {
         return res.status(400).json({ error: 'Clinical description text is required (minimum 3 characters)' });
       }
@@ -13453,6 +13540,12 @@ Important:
           qaContext.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n') +
           '\n--- END FOLLOW-UP ANSWERS ---\n\nUse these answers to REFINE your predictions. Reduce follow_up_questions to only those still unanswered. Increase confidence for findings confirmed by the answers.';
       }
+
+      const patientContextBlock = formatPatientContextBlock(patient_context, {
+        instruction:
+          'IMPORTANT: Re-run your prediction WITH this patient in mind. Adjust findings, confidence, postural drivers, and red flags so they reflect THIS patient (e.g. add diabetes-related stiffness for frozen shoulder + diabetic, raise red-flag screening if they are on steroids or anticoagulants, downgrade aggressive loading if they are deconditioned).',
+      });
+      if (patientContextBlock) contextBlock += patientContextBlock;
 
       const response = await replitOpenai.chat.completions.create({
         model: "gpt-4o",
@@ -13557,7 +13650,7 @@ EXAMPLES of good predictions:
 
   app.post('/api/clinical-text/natural-timeline', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { context, qa_history } = req.body ?? {};
+      const { context, qa_history, patient_context } = req.body ?? {};
       if (!context || typeof context !== 'object') {
         return res.status(400).json({ error: 'Clinical context is required' });
       }
@@ -13576,6 +13669,10 @@ EXAMPLES of good predictions:
           qaHistory.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n') +
           '\n--- END PATIENT FACTORS ---\n\nUse these answers to refine the natural timeline. REMOVE any follow_up_questions that are now answered. Increase confidence_percent. Adjust per-finding healing classes, weeks-to-resolution, residual deficit, chronicity and recurrence risk based on what the answers reveal.';
       }
+      qaBlock += formatPatientContextBlock(patient_context, {
+        instruction:
+          'Treat the PATIENT CONTEXT above as authoritative biopsychosocial modifiers. They MUST shift per-finding healing class, weeks-to-resolution, residual deficit, chronicity and recurrence risk versus a generic patient. Suppress any follow_up_question whose answer is already in the patient context.',
+      });
 
       const response = await replitOpenai.chat.completions.create({
         model: 'gpt-4o',
@@ -13711,7 +13808,7 @@ Generate 3-6 follow-up questions when major modifiers are unknown; emit FEWER as
 
   app.post('/api/clinical-text/case-specific-treatment-plan', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { context, natural_timeline, phases, archetype_id, condition_label, qa_history } = req.body ?? {};
+      const { context, natural_timeline, phases, archetype_id, condition_label, qa_history, patient_context } = req.body ?? {};
       if (!context || typeof context !== 'object') {
         return res.status(400).json({ error: 'Clinical context is required' });
       }
@@ -13732,11 +13829,15 @@ Generate 3-6 follow-up questions when major modifiers are unknown; emit FEWER as
       const ctxJson = JSON.stringify(context, null, 2);
       const ntJson = JSON.stringify(natural_timeline, null, 2);
       const phasesJson = JSON.stringify(phases, null, 2);
-      const qaBlock = qaHistory.length > 0
+      let qaBlock = qaHistory.length > 0
         ? '\n\n--- PATIENT FACTORS PROVIDED ---\n' +
           qaHistory.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n') +
           '\n--- END PATIENT FACTORS ---\n'
         : '';
+      qaBlock += formatPatientContextBlock(patient_context, {
+        instruction:
+          'The PATIENT CONTEXT block above MUST personalise the prescription. Adjust dosage (e.g. lighter loads if deconditioned), pick contraindication-safe techniques (e.g. avoid aggressive thrust if anticoagulated), and prefer modalities the patient can actually adhere to (e.g. home-based if no clinic access). Mention the relevant context in each phase rationale when it changed your choice.',
+      });
 
       const response = await replitOpenai.chat.completions.create({
         model: 'gpt-4o',
@@ -13861,6 +13962,130 @@ ${ntJson}${qaBlock}`,
       console.error('Error generating case-specific treatment plan:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
       res.status(500).json({ error: 'Failed to generate case-specific treatment plan', details: message });
+    }
+  });
+
+  /**
+   * POST /api/patient-context/prompts
+   *
+   * Given a clinician's prediction text + the AI-extracted clinical
+   * summary / findings, generate 3-6 condition-specific patient-context
+   * prompts the clinician should answer to make the prediction, natural
+   * timeline, treatment plan and recovery sim genuinely personalised
+   * (e.g. diabetes for frozen shoulder, anticoagulants for spinal
+   * mobilisation, smoker for tendinopathy).
+   */
+  app.post('/api/patient-context/prompts', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { description, clinical_summary, pain_markers, compromised_tissues, region_highlights } = req.body ?? {};
+      if ((!description || typeof description !== 'string' || description.trim().length < 3) &&
+          (!clinical_summary || typeof clinical_summary !== 'string')) {
+        return res.status(400).json({ error: 'Clinical description or summary is required' });
+      }
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const findingsBlock = JSON.stringify({
+        pain_markers: Array.isArray(pain_markers) ? pain_markers.slice(0, 12) : [],
+        compromised_tissues: Array.isArray(compromised_tissues) ? compromised_tissues.slice(0, 12) : [],
+        region_highlights: Array.isArray(region_highlights) ? region_highlights.slice(0, 12) : [],
+      }, null, 2);
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a senior physiotherapist generating CONDITION-SPECIFIC patient-context questions.
+
+The clinician has just submitted a clinical picture. Your job is to ask 3-6 short, high-yield questions whose answers WOULD MEANINGFULLY CHANGE the prediction, natural-history timeline, treatment plan, or recovery simulation FOR THIS condition.
+
+Rules:
+1. Each question MUST be condition-specific. For frozen shoulder, ask about diabetes / thyroid / recent immobilisation. For Achilles tendinopathy, ask about fluoroquinolones / running mileage / footwear. For low back pain with leg symptoms, ask about night pain / saddle anaesthesia / steroid use. For post-op cases, ask about exact date and surgical protocol.
+2. Each question MUST have a "rationale" the clinician can read (one sentence — why this changes the case).
+3. Use one of these categories per prompt: "healing_time", "red_flag", "exercise_dosing", "contraindication", "compensation", "lifestyle". Choose the best fit.
+4. If the answer space is small / categorical (yes/no, frequency bands, severity bands), include "options" as a short array of 2-5 strings — the UI will render them as quick-select chips. Otherwise OMIT options so the clinician types freely.
+5. Ask about ACTIONABLE patient factors (comorbidities, medications, prior episodes, occupational load, sport demands, sleep, smoking, mental-health load, prior imaging/surgery). Do NOT re-ask anything obviously already in the description.
+6. Return AT MOST 6 prompts. Quality over quantity.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "prompts": [
+    {
+      "id": "stable-slug-string",
+      "prompt": "Question text the clinician sees",
+      "rationale": "One sentence on why this question changes the case",
+      "category": "healing_time" | "red_flag" | "exercise_dosing" | "contraindication" | "compensation" | "lifestyle",
+      "options": ["..."]   // OMIT entirely for free-text answers
+    }
+  ]
+}`,
+          },
+          {
+            role: 'user',
+            content: `Clinician's prediction text:
+"""
+${(description || '').toString().slice(0, 4000)}
+"""
+
+AI-extracted clinical summary:
+"""
+${(clinical_summary || '').toString().slice(0, 2000)}
+"""
+
+Structured findings:
+${findingsBlock}
+
+Generate the 3-6 highest-yield condition-specific patient-context prompts now.`,
+          },
+        ],
+        temperature: 0.4,
+        response_format: { type: 'json_object' },
+      });
+
+      const raw = response.choices?.[0]?.message?.content || '{}';
+      let parsed: any = {};
+      try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+      const allowedCategories = new Set(['healing_time', 'red_flag', 'exercise_dosing', 'contraindication', 'compensation', 'lifestyle', 'other']);
+      // Slug is deterministic — derived from the prompt text (or model-supplied id) — so
+      // re-generations produce the same id for the same question, maximising answer
+      // carryover. We never fall back to a random suffix.
+      const slug = (s: string, idx: number) =>
+        s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48)
+        || `prompt_${idx + 1}`;
+      const seen = new Set<string>();
+      const prompts = Array.isArray(parsed.prompts) ? parsed.prompts.slice(0, 6).map((p: any, idx: number) => {
+        const promptText = typeof p?.prompt === 'string' ? p.prompt.trim() : '';
+        if (!promptText) return null;
+        let id = typeof p?.id === 'string' && p.id.trim() ? slug(p.id, idx) : slug(promptText, idx);
+        if (seen.has(id)) id = `${id}_${idx}`;
+        seen.add(id);
+        const category = typeof p?.category === 'string' && allowedCategories.has(p.category) ? p.category : 'other';
+        const rationale = typeof p?.rationale === 'string' ? p.rationale.trim() : '';
+        const options = Array.isArray(p?.options)
+          ? p.options.map((o: any) => typeof o === 'string' ? o.trim() : '').filter(Boolean).slice(0, 5)
+          : undefined;
+        return {
+          id,
+          prompt: promptText,
+          rationale,
+          category,
+          ...(options && options.length > 0 ? { options } : {}),
+        };
+      }).filter(Boolean) : [];
+
+      res.json({
+        prompts,
+        generated_at: new Date().toISOString(),
+      });
+    } catch (error: unknown) {
+      console.error('Error generating patient-context prompts:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate patient-context prompts', details: message });
     }
   });
 

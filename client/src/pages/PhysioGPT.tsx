@@ -137,6 +137,15 @@ import { forceTimeBuffer, type ForceTimeMetrics, subscribeForceBuffer, augmentFo
 import type { PatientState } from "@/lib/forceCitations";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 import { type ClinicalParseResult, type CompromisedTissue, type ClinicalTextInputHandle, type FollowUpQuestion } from "@/components/skeleton/ClinicalTextInput";
+import {
+  PatientContextPanel,
+  EMPTY_PATIENT_CONTEXT_STATE,
+  buildPatientContextPayload,
+  patientContextHasContent,
+  type PatientContextState,
+} from "@/components/skeleton/PatientContextPanel";
+import { buildPatientContextSig, predictionFingerprintFor } from "@/lib/patientContextSig";
+import { PatientContextStatusBadge } from "@/components/skeleton/PatientContextStatusBadge";
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import { generateMechanismTreatments } from "@/lib/mechanismTreatmentEngine";
 import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
@@ -685,6 +694,33 @@ export default function PhysioGPT() {
   const [electroPlan, setElectroPlan] = useState<import('@/components/skeleton/ElectrophysicalEngineTab').ElectrophysicalPlan | null>(null);
   const [electroPrefill, setElectroPrefill] = useState<{ condition: string; stage: 'acute' | 'subacute' | 'chronic'; nonce: number } | null>(null);
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
+  // Latest clinical-text parse result, retained at page level so the
+  // Patient Context panel can fingerprint the prediction (for stale
+  // detection) and the AI prompt-generation request can quote the
+  // findings the parse produced. Distinct from `clinicalTextAppliedRef`
+  // which only tracks what was applied to the skeleton.
+  const [lastClinicalParseResult, setLastClinicalParseResult] = useState<ClinicalParseResult | null>(null);
+  // AI-driven Patient Context state — session-level only (intentionally
+  // not persisted across reloads, per task spec).
+  const [patientContextState, setPatientContextState] = useState<PatientContextState>(EMPTY_PATIENT_CONTEXT_STATE);
+  const patientContextPayload = useMemo(
+    () => buildPatientContextPayload(patientContextState),
+    [patientContextState],
+  );
+  const hasPatientContext = useMemo(
+    () => patientContextHasContent(patientContextState),
+    [patientContextState],
+  );
+  /** True when the prompts were generated against an older prediction
+   *  text — mirrored to the downstream panel header badges so the
+   *  clinician sees the "regenerate prompts" hint everywhere, not only
+   *  on the Patient Context card. */
+  const patientContextPromptsStale = useMemo(() => {
+    if (!patientContextState.predictionFingerprint) return false;
+    const live = predictionFingerprintFor(lastClinicalParseResult);
+    if (!live) return false;
+    return live !== patientContextState.predictionFingerprint;
+  }, [patientContextState.predictionFingerprint, lastClinicalParseResult]);
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
@@ -824,6 +860,10 @@ export default function PhysioGPT() {
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const clinicalTextInputRef = useRef<ClinicalTextInputHandle>(null);
+  /** Scroll target for the Patient Context panel — used by the
+   *  "No patient context" badge on downstream AI panels so the
+   *  clinician can jump straight to filling in answers. */
+  const patientContextSectionRef = useRef<HTMLDivElement | null>(null);
   const pendingFollowUpQuestionsRef = useRef<FollowUpQuestion[]>([]);
   const voiceAutoSubmitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -1419,6 +1459,10 @@ export default function PhysioGPT() {
   } | null>(null);
 
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
+    // Retain the latest parse for the Patient Context panel (used for
+    // stale-fingerprint comparison + condition-specific prompt
+    // generation).
+    setLastClinicalParseResult(result);
     const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightLabels: string[] } = {
       markerIds: [], muscleIds: [], deviationKeys: [], highlightLabels: [],
     };
@@ -1637,6 +1681,11 @@ export default function PhysioGPT() {
 
     clinicalTextAppliedRef.current = null;
     setHasClinicalTextData(false);
+    // Drop the lifted parse + patient-context state — clearing the
+    // skeleton means we no longer have a prediction the prompts apply
+    // to.
+    setLastClinicalParseResult(null);
+    setPatientContextState(EMPTY_PATIENT_CONTEXT_STATE);
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
@@ -4866,6 +4915,7 @@ ${ddxList}`;
     context: naturalTimelineRequestContext,
     enabled: showRecoverySim,
     signature: naturalTimelineSignature,
+    patientContext: patientContextPayload,
   });
 
   /** Resolve the same archetype the dashboard will render so the
@@ -4916,7 +4966,96 @@ ${ddxList}`;
     qaHistory: naturalTimeline.qaHistory,
     enabled: showRecoverySim && !!naturalTimeline.result && recoverySimPhases.length > 0,
     signature: caseSpecificPlanSignature,
+    patientContext: patientContextPayload,
   });
+
+  /** Derive a downstream patient-context status for each AI panel.
+   *  - "absent"   : prediction exists but the clinician hasn't supplied
+   *                 any patient context yet (non-blocking accuracy hint).
+   *  - "updating" : the clinician has context, but the panel is mid-
+   *                 refresh OR the displayed result was generated with
+   *                 a different (stale) context signature.
+   *  - "applied"  : the displayed result already reflects the latest
+   *                 patient context. */
+  const patientContextAnsweredCount = patientContextPayload.answers.length;
+  const naturalTimelinePcStatus = useMemo<"absent" | "updating" | "applied">(() => {
+    if (!hasPatientContext) return "absent";
+    if (naturalTimeline.loading) return "updating";
+    if (naturalTimeline.appliedPatientContextSig !== naturalTimeline.currentPatientContextSig) return "updating";
+    if (!naturalTimeline.result) return "updating";
+    return "applied";
+  }, [
+    hasPatientContext,
+    naturalTimeline.loading,
+    naturalTimeline.result,
+    naturalTimeline.appliedPatientContextSig,
+    naturalTimeline.currentPatientContextSig,
+  ]);
+  const caseSpecificPlanPcStatus = useMemo<"absent" | "updating" | "applied">(() => {
+    if (!hasPatientContext) return "absent";
+    if (caseSpecificPlan.loading) return "updating";
+    if (caseSpecificPlan.appliedPatientContextSig !== caseSpecificPlan.currentPatientContextSig) return "updating";
+    if (!caseSpecificPlan.result) return "updating";
+    return "applied";
+  }, [
+    hasPatientContext,
+    caseSpecificPlan.loading,
+    caseSpecificPlan.result,
+    caseSpecificPlan.appliedPatientContextSig,
+    caseSpecificPlan.currentPatientContextSig,
+  ]);
+  /** The recovery-simulation chip rolls up both downstream calls — if
+   *  EITHER is still mid-refresh we show "updating" so the clinician
+   *  knows the simulation isn't yet a complete reflection of the new
+   *  context. */
+  const recoverySimPcStatus = useMemo<"absent" | "updating" | "applied">(() => {
+    if (!hasPatientContext) return "absent";
+    if (naturalTimelinePcStatus === "updating" || caseSpecificPlanPcStatus === "updating") return "updating";
+    return "applied";
+  }, [hasPatientContext, naturalTimelinePcStatus, caseSpecificPlanPcStatus]);
+
+  /** When the patient-context payload changes, debounce-fire an
+   *  incremental parse so the PREDICTION refreshes alongside the
+   *  natural-timeline / case-specific-plan / recovery-sim hooks (which
+   *  already auto-refire via their dedup signature). This makes the
+   *  "submit / update context" experience consistent across all four
+   *  AI surfaces — no manual button required.
+   *
+   *  We only fire when:
+   *    - a prediction has actually been made (a parse result exists), AND
+   *    - the patient-context payload signature genuinely changed
+   *      (prevents auto-fire on initial mount or empty -> empty churn). */
+  const patientContextSig = useMemo(
+    () => buildPatientContextSig(patientContextPayload),
+    [patientContextPayload],
+  );
+  const lastAppliedPcSigRef = useRef<string>('');
+  const pcAutoApplyTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    // When the case is cleared (no parse result), reset the applied-sig
+    // ref so the next case doesn't inherit a stale signature and trigger
+    // an unnecessary incremental parse on first context entry.
+    if (!lastClinicalParseResult) {
+      lastAppliedPcSigRef.current = '';
+      if (pcAutoApplyTimerRef.current) {
+        window.clearTimeout(pcAutoApplyTimerRef.current);
+        pcAutoApplyTimerRef.current = null;
+      }
+      return;
+    }
+    if (lastAppliedPcSigRef.current === patientContextSig) return;
+    if (pcAutoApplyTimerRef.current) window.clearTimeout(pcAutoApplyTimerRef.current);
+    pcAutoApplyTimerRef.current = window.setTimeout(() => {
+      lastAppliedPcSigRef.current = patientContextSig;
+      clinicalTextInputRef.current?.triggerIncrementalParse();
+    }, 900);
+    return () => {
+      if (pcAutoApplyTimerRef.current) {
+        window.clearTimeout(pcAutoApplyTimerRef.current);
+        pcAutoApplyTimerRef.current = null;
+      }
+    };
+  }, [patientContextSig, lastClinicalParseResult]);
 
   const clinicalPlan = useMemo<ClinicalPlanResult | null>(() => {
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
@@ -10650,6 +10789,21 @@ ${ddxList}`;
                   caseSpecificPlanLoading={caseSpecificPlan.loading}
                   caseSpecificPlanError={caseSpecificPlan.error ?? null}
                   onRetryCaseSpecificPlan={caseSpecificPlan.refresh}
+                  patientContextBadge={lastClinicalParseResult ? (
+                    <PatientContextStatusBadge
+                      status={recoverySimPcStatus}
+                      answeredCount={patientContextAnsweredCount}
+                      surfaceLabel="Recovery simulation"
+                      promptsStale={patientContextPromptsStale}
+                      onAddContextClick={() => {
+                        setShowRecoverySim(false);
+                        setTimeout(() => {
+                          patientContextSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 200);
+                      }}
+                      size="sm"
+                    />
+                  ) : null}
                   electrophysicalPlan={electroPlan}
                   onOpenElectroTab={() => { setShowInjuryMechanism(true); setMechanismActiveTab('electroRx'); }}
                   onGenerateElectroPlanForPhase={(req) => {
@@ -10728,6 +10882,20 @@ ${ddxList}`;
                         error={naturalTimeline.error}
                         hasContext={!!naturalTimelineRequestContext}
                         onAnswer={naturalTimeline.answerQuestion}
+                        patientContextBadge={lastClinicalParseResult ? (
+                          <PatientContextStatusBadge
+                            status={naturalTimelinePcStatus}
+                            answeredCount={patientContextAnsweredCount}
+                            surfaceLabel="Natural timeline"
+                            promptsStale={patientContextPromptsStale}
+                            onAddContextClick={() => {
+                              setShowRecoverySim(false);
+                              setTimeout(() => {
+                                patientContextSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }, 200);
+                            }}
+                          />
+                        ) : null}
                       />
                     </Suspense>
                   }
@@ -12094,6 +12262,7 @@ ${ddxList}`;
           voiceText={isRecording ? (liveTranscript + (interimTranscript ? ` ${interimTranscript}` : '')).trim() : undefined}
           isVoiceActive={isRecording}
           onFollowUpQuestionsChange={handleVoiceFollowUpQuestionsChange}
+          patientContext={patientContextPayload}
           chainIntegrityScores={(() => {
             const integrity = hudChainIntegrity;
             if (!integrity || integrity.size === 0) return undefined;
@@ -12108,6 +12277,30 @@ ${ddxList}`;
           })()}
         />
         </Suspense>
+        {/* AI-driven Patient Context — appears under the Clinical
+            Prediction box once a prediction has been generated, asks
+            condition-specific questions, and pipes the merged answers
+            into the prediction re-run, the natural-history timeline,
+            the case-specific treatment plan and the recovery sim. */}
+        {lastClinicalParseResult && (
+          <div ref={patientContextSectionRef} className="mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
+            <PatientContextPanel
+              parseResult={lastClinicalParseResult}
+              state={patientContextState}
+              onChange={setPatientContextState}
+              onApply={() => {
+                // Re-run the prediction with the latest patient
+                // context. The natural-timeline and case-specific
+                // plan hooks pick up patient-context changes via
+                // their own signature so they refresh automatically.
+                // (A debounced auto-apply also fires whenever the PC
+                // payload changes, so this manual button is only an
+                // "apply now" shortcut.)
+                clinicalTextInputRef.current?.triggerIncrementalParse();
+              }}
+            />
+          </div>
+        )}
         {hasClinicalTextData && (
           <div className="flex gap-1.5 mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
             <Button

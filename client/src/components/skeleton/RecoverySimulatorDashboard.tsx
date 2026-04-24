@@ -196,6 +196,11 @@ interface Props {
    *  column — used by PhysioGPT to host the Natural Timeline panel
    *  (with Q&A UX) so it sits alongside the recovery curves. */
   naturalTimelineSlot?: React.ReactNode;
+  /** Optional patient-context status chip (rendered in the dashboard
+   *  header). Tells the clinician whether the recovery simulation +
+   *  case-specific plan reflect their latest patient context, are
+   *  mid-refresh, or could be improved by adding context. */
+  patientContextBadge?: React.ReactNode;
   /** Latest electrophysical-agents plan from the Electrophysical Agents (EPA) tab. When
    *  present, each phase card shows the 1–3 modalities best fitted to
    *  that phase (stage + primary goal + evidence grade). */
@@ -647,6 +652,7 @@ export default function RecoverySimulatorDashboard({
   onRetryCaseSpecificPlan,
   naturalTimelineLoading,
   naturalTimelineSlot,
+  patientContextBadge,
   electrophysicalPlan,
   onOpenElectroTab,
   onGenerateElectroPlanForPhase,
@@ -1986,6 +1992,11 @@ export default function RecoverySimulatorDashboard({
           </div>
           {conditionTag && (
             <Badge className="bg-violet-700/40 text-violet-200 border-violet-600/40 text-[10px] uppercase tracking-wide">{conditionTag}</Badge>
+          )}
+          {patientContextBadge && (
+            <div className="ml-1 flex items-center" data-testid="recovery-sim-patient-context-badge">
+              {patientContextBadge}
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2">

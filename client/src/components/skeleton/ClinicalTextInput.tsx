@@ -92,6 +92,11 @@ interface ClinicalTextInputProps {
   voiceText?: string;
   isVoiceActive?: boolean;
   onFollowUpQuestionsChange?: (questions: FollowUpQuestion[]) => void;
+  /** Merged patient-context payload (free-form notes + AI-curated
+   *  prompt answers). When supplied it is forwarded as `patient_context`
+   *  in every parse / re-parse POST so the AI re-runs the prediction
+   *  with this patient in mind. */
+  patientContext?: import("@shared/schema").PatientContextPayload;
 }
 
 const EXAMPLE_DESCRIPTIONS = [
@@ -102,7 +107,7 @@ const EXAMPLE_DESCRIPTIONS = [
   "Elderly patient with lumbar spinal stenosis and kyphosis",
 ];
 
-const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputProps>(function ClinicalTextInput({ onParseResult, onClearFindings, disabled, chainIntegrityScores, forceAnalysis, voiceText, isVoiceActive, onFollowUpQuestionsChange }, ref) {
+const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputProps>(function ClinicalTextInput({ onParseResult, onClearFindings, disabled, chainIntegrityScores, forceAnalysis, voiceText, isVoiceActive, onFollowUpQuestionsChange, patientContext }, ref) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<ClinicalParseResult | null>(null);
@@ -116,6 +121,12 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const originalTextRef = useRef("");
+  // Latest patient context lives in a ref so doParseRequest (wrapped in
+  // useCallback) always picks up the freshest answers without changing
+  // its identity — which would otherwise re-trigger every effect that
+  // closes over it.
+  const patientContextRef = useRef<typeof patientContext>(patientContext);
+  patientContextRef.current = patientContext;
   const { toast } = useToast();
 
   useEffect(() => {
@@ -139,9 +150,12 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
   const doParseRequest = useCallback(async (inputText: string, context: QAEntry[]) => {
     setLoading(true);
     try {
+      const pc = patientContextRef.current;
+      const pcPayload = pc && (pc.free_form?.trim() || (pc.answers && pc.answers.length > 0)) ? pc : undefined;
       const result: ClinicalParseResult = await apiRequest("/api/clinical-text/parse", "POST", {
         text: inputText.trim(),
         context: context.length > 0 ? context : undefined,
+        patient_context: pcPayload,
       });
       result.original_description = originalTextRef.current || inputText.trim();
       setLastResult(result);

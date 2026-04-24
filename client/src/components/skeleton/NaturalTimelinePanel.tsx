@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Activity, ChevronDown, ChevronUp, HelpCircle, Loader2, MessageCircle, Sparkles, TrendingDown, TrendingUp, Minus, AlertTriangle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { NaturalTimelineResult, NaturalTimelineQA, NaturalTimelineHealingClass } from "@shared/schema";
@@ -10,6 +10,10 @@ interface Props {
   error: string | null;
   hasContext: boolean;
   onAnswer: (questionId: string, answer: string) => void;
+  /** Optional patient-context status chip (rendered next to the
+   *  "Refreshing…" indicator) so the clinician can tell whether the
+   *  displayed verdict already reflects their latest patient context. */
+  patientContextBadge?: ReactNode;
 }
 
 const HEALING_META: Record<NaturalTimelineHealingClass, { label: string; tone: string; Icon: typeof TrendingUp }> = {
@@ -19,7 +23,7 @@ const HEALING_META: Record<NaturalTimelineHealingClass, { label: string; tone: s
   worsens: { label: "Worsens", tone: "text-red-300 bg-red-900/30 border-red-700/50", Icon: TrendingDown },
 };
 
-export default function NaturalTimelinePanel({ result, qaHistory, loading, error, hasContext, onAnswer }: Props) {
+export default function NaturalTimelinePanel({ result, qaHistory, loading, error, hasContext, onAnswer, patientContextBadge }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState("");
@@ -43,6 +47,7 @@ export default function NaturalTimelinePanel({ result, qaHistory, loading, error
           )}
         </div>
         <div className="flex items-center gap-2">
+          {patientContextBadge}
           {loading && result && (
             <span className="text-[9px] text-violet-300 italic" data-testid="natural-timeline-refreshing">Refreshing…</span>
           )}

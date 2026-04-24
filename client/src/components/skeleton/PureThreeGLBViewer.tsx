@@ -3101,13 +3101,26 @@ export default function PureThreeGLBViewer({
     scene.add(overlayGroup);
     tissueOverlayGroupRef.current = overlayGroup;
 
+    // Resolve a bone's world position, applying any offset in the bone's LOCAL frame
+    // (so offsets follow the bone's rotation as the skeleton animates rather than
+    // drifting along world axes).
     const worldOf = (boneName: string, offset?: [number, number, number]): THREE.Vector3 | null => {
       const b = bRef[boneName];
       if (!b) return null;
-      const v = new THREE.Vector3();
-      b.getWorldPosition(v);
-      if (offset) v.add(new THREE.Vector3(offset[0], offset[1], offset[2]));
-      return v;
+      if (!offset) {
+        const v = new THREE.Vector3();
+        b.getWorldPosition(v);
+        return v;
+      }
+      const local = new THREE.Vector3(offset[0], offset[1], offset[2]);
+      return b.localToWorld(local);
+    };
+    const worldQuatOf = (boneName: string): THREE.Quaternion | null => {
+      const b = bRef[boneName];
+      if (!b) return null;
+      const q = new THREE.Quaternion();
+      b.getWorldQuaternion(q);
+      return q;
     };
 
     const buildLabelSprite = (text: string, color: number): THREE.Sprite | null => {
@@ -3180,13 +3193,20 @@ export default function PureThreeGLBViewer({
         return new THREE.Vector3().addVectors(a0, b0).multiplyScalar(0.5);
       };
 
+      // Single-bone primitives (rings/spheres). The mesh's local rotation (from axis hints)
+      // is captured once and re-applied on top of the bone's world quaternion every frame
+      // so the ring stays oriented relative to the moving bone.
       const addAtBone = (bone: string, offset: [number, number, number] | undefined, mesh: THREE.Mesh) => {
         const c0 = worldOf(bone, offset);
         if (!c0) return null;
+        const localRot = mesh.quaternion.clone();
         const update = () => {
           const c = worldOf(bone, offset);
           if (!c) { mesh.visible = false; return; }
-          mesh.visible = true; mesh.position.copy(c);
+          mesh.visible = true;
+          mesh.position.copy(c);
+          const q = worldQuatOf(bone);
+          if (q) mesh.quaternion.copy(q).multiply(localRot);
         };
         update(); updaters.push(update);
         built.push(mesh);
@@ -3308,6 +3328,37 @@ export default function PureThreeGLBViewer({
         }
       }
     }
+    return () => {
+      if (tissueOverlayRafRef.current != null) {
+        cancelAnimationFrame(tissueOverlayRafRef.current);
+        tissueOverlayRafRef.current = null;
+      }
+      tissueOverlayUpdatersRef.current = [];
+      const grp = tissueOverlayGroupRef.current;
+      if (grp) {
+        grp.traverse((child) => {
+          if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+            child.geometry?.dispose();
+            if (child.material instanceof THREE.Material) child.material.dispose();
+          }
+          if (child instanceof THREE.Sprite) {
+            child.material.map?.dispose();
+            child.material.dispose();
+          }
+        });
+        scene.remove(grp);
+        tissueOverlayGroupRef.current = null;
+      }
+      for (const entry of tissueFadedMaterialsRef.current) {
+        const cur = entry.mesh.material;
+        entry.mesh.material = entry.origMaterial;
+        if (cur && cur !== entry.origMaterial) {
+          if (Array.isArray(cur)) cur.forEach(m => m.dispose());
+          else (cur as THREE.Material).dispose();
+        }
+      }
+      tissueFadedMaterialsRef.current = [];
+    };
   }, [tissueIntelligenceHighlights]);
 
   useEffect(() => {

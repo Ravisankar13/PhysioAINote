@@ -5059,35 +5059,18 @@ ${ddxList}`;
   // in the viewer (`tissueIntelligenceHighlights`); tissues without a recipe still emit a
   // bone-glow entry through the existing `highlightBoneNames` pipeline so we never lose
   // visibility for catalogue gaps.
-  const { tissueIntelligenceHighlights, tissueOverloadHighlights } = useMemo(() => {
-    const overlays: ReturnType<typeof tissueIntelligenceToOverlayHighlight>[] = [];
-    const fallbackGlow: Array<{ boneName: string; color: number; intensity: number; glowSize?: number }> = [];
-    if (!tissueViewMode || tissueViewMode === 'muscle') return { tissueIntelligenceHighlights: overlays, tissueOverloadHighlights: fallbackGlow };
+  const tissueIntelligenceHighlights = useMemo(() => {
+    if (!tissueViewMode || tissueViewMode === 'muscle') return [] as ReturnType<typeof tissueIntelligenceToOverlayHighlight>[];
     const hasClinicalInput =
       painMarkers.length > 0 ||
       compromisedTissues.length > 0 ||
       scarMarkers.length > 0 ||
       adhesionBands.length > 0 ||
       Object.keys(compensatedOverrides || {}).length > 0;
-    if (!hasClinicalInput) return { tissueIntelligenceHighlights: overlays, tissueOverloadHighlights: fallbackGlow };
-    const seenBones = new Set<string>();
-    for (const intel of Array.from(inflammationIntelligenceMap.values())) {
-      if ((intel.severity ?? 0) < 0.25) continue;
-      const overlay = tissueIntelligenceToOverlayHighlight(intel);
-      overlays.push(overlay);
-      // Only emit fallback bone-glow when this tissue has no catalogue recipe — catalogued
-      // tissues render as procedural overlays in place and must not also light surrounding
-      // bones.
-      if (!overlay.hasRecipe && (intel.bones?.length ?? 0) > 0) {
-        const palette = paletteForState(overlay.healingStage, overlay.irritability, overlay.severity);
-        for (const bone of intel.bones) {
-          if (seenBones.has(bone)) continue;
-          seenBones.add(bone);
-          fallbackGlow.push({ boneName: bone, color: palette.color, intensity: 0.35 + Math.min(0.55, overlay.severity * 0.55), glowSize: 1.05 + Math.min(0.6, overlay.severity * 0.5) });
-        }
-      }
-    }
-    return { tissueIntelligenceHighlights: overlays, tissueOverloadHighlights: fallbackGlow };
+    if (!hasClinicalInput) return [];
+    return Array.from(inflammationIntelligenceMap.values())
+      .filter(intel => (intel.severity ?? 0) >= 0.25)
+      .map(tissueIntelligenceToOverlayHighlight);
   }, [inflammationIntelligenceMap, tissueViewMode, painMarkers, compromisedTissues, scarMarkers, adhesionBands, compensatedOverrides]);
 
   const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
@@ -6405,13 +6388,12 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || tissueOverloadHighlights.length > 0 || causalChainHighlights.length > 0 ? [
+              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || causalChainHighlights.length > 0 ? [
                 ...(chainHighlightBones || []),
                 ...muscleOverrideHighlights,
                 ...influenceHighlights,
                 ...visualizationBoneHighlights,
                 ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
-                ...tissueOverloadHighlights,
                 ...causalChainHighlights,
               ] : undefined}
               tissueIntelligenceHighlights={tissueIntelligenceHighlights.length > 0 ? tissueIntelligenceHighlights : undefined}

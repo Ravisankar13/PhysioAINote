@@ -5053,12 +5053,10 @@ ${ddxList}`;
     return out;
   }, [causalChainTissueId, tissueIntelligenceMap]);
 
-  // Tissue-specific highlight set (replaces the legacy "inflammation cloud").
-  // Same gating as before — only emit when in a non-muscle tissue view and at least one
-  // clinical input exists. Tissues with a catalogue anchor render as procedural geometry
-  // in the viewer (`tissueIntelligenceHighlights`); tissues without a recipe still emit a
-  // bone-glow entry through the existing `highlightBoneNames` pipeline so we never lose
-  // visibility for catalogue gaps.
+  // Tissue-specific highlight set (replaces the legacy "inflammation cloud"). Only emits
+  // when in a non-muscle tissue view and at least one clinical input exists. The viewer
+  // renders catalogued tissues as procedural geometry and falls back to a labelled generic
+  // ring on the first available bone for tissues without a catalogue recipe.
   const tissueIntelligenceHighlights = useMemo(() => {
     if (!tissueViewMode || tissueViewMode === 'muscle') return [] as ReturnType<typeof tissueIntelligenceToOverlayHighlight>[];
     const hasClinicalInput =

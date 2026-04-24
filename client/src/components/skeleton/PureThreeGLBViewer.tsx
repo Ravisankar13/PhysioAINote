@@ -2358,6 +2358,10 @@ export default function PureThreeGLBViewer({
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
+  // Bumps when the GLB model finishes loading so dependent effects (e.g. tissue overlays)
+  // re-run once bones become available — guarantees first-load rendering when highlights
+  // were already provided before the model was ready.
+  const [modelReadyTick, setModelReadyTick] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [loadProgress, setLoadProgress] = useState(0);
   const [hoverData, setHoverData] = useState<HoverData | null>(null);
@@ -3359,7 +3363,7 @@ export default function PureThreeGLBViewer({
       }
       tissueFadedMaterialsRef.current = [];
     };
-  }, [tissueIntelligenceHighlights]);
+  }, [tissueIntelligenceHighlights, modelReadyTick]);
 
   useEffect(() => {
     if (!sceneRef.current) return;
@@ -6362,6 +6366,7 @@ export default function PureThreeGLBViewer({
             }
             
             setStatus('ready');
+            setModelReadyTick(t => t + 1);
             onModelReady?.();
             
             if (initialDPR < window.devicePixelRatio && !isLowMemDevice) {

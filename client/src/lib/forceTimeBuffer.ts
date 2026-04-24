@@ -7,6 +7,7 @@
 // every motion source that pushes a new modelConfig also lands a snapshot here.
 
 import type { ForceAnalysisResult, JointSurfaceForce } from './posturalForceEngine';
+import { getStatusForJointForce, jointMassAboveFraction, type PatientState } from './forceCitations';
 
 export type ForceSource = 'movement_player' | 'camera' | 'manual';
 
@@ -128,8 +129,17 @@ class ForceTimeBufferImpl {
   private cfg: BufferConfig = { ...DEFAULT_CFG };
   private listeners = new Set<() => void>();
   private playbackTime: number | null = null;
+  private patientState: PatientState = 'default';
   /** Snapshot of the most recent metrics, recomputed lazily. */
   private metricsCache: { sig: number; value: ForceTimeMetrics } | null = null;
+
+  /** Patient state — drives threshold-band coloring in `getMetrics`. */
+  setPatientState(s: PatientState) {
+    if (this.patientState === s) return;
+    this.patientState = s;
+    this.invalidate();
+  }
+  getPatientState(): PatientState { return this.patientState; }
 
   configure(cfg: Partial<BufferConfig>) {
     this.cfg = { ...this.cfg, ...cfg };
@@ -223,6 +233,58 @@ class ForceTimeBufferImpl {
       if (dt < bestDt) { best = s; bestDt = dt; }
     }
     return best;
+  }
+
+  /**
+   * Reconstruct a ForceAnalysisResult-shaped object from the scrub snapshot
+   * so the live HUD can show forces from any past frame instead of the live
+   * engine output. Returns null when not scrubbing or when the buffer is empty.
+   */
+  getScrubbedAnalysis(): ForceAnalysisResult | null {
+    if (this.playbackTime == null) return null;
+    const snap = this.getActiveSnapshot();
+    if (!snap) return null;
+    const joints: JointSurfaceForce[] = Object.entries(snap.forces).map(
+      ([id, f]) => ({
+        id,
+        label: f.label,
+        category: f.category,
+        boneName: f.boneName,
+        compression: f.compression,
+        tension: f.tension,
+        shear: f.shear,
+        totalForce: f.totalForce,
+        status: f.status,
+        clinical: '',
+        enabled: true,
+      } as JointSurfaceForce),
+    );
+    const totalLoad = joints.reduce((acc, j) => acc + (j.totalForce ?? 0), 0);
+    return {
+      joints,
+      totalLoad,
+      totalBodyCOM: { x: snap.com.x, y: snap.com.y, z: 0 },
+      groundReactionForce: { left: 0.5, right: 0.5 },
+      timestamp: snap.t,
+    } as unknown as ForceAnalysisResult;
+  }
+
+  /**
+   * Most recent COM acceleration magnitude (m/s², proxy units → metres
+   * applied via the same 0.7 scale used in `computeImpact`). Used by the
+   * dynamics-augmentation step in `hudForceAnalysis`.
+   */
+  getLatestComAccelMag(): number {
+    if (this.snapshots.length < 3) return 0;
+    const c = this.snapshots[this.snapshots.length - 1];
+    const b = this.snapshots[this.snapshots.length - 2];
+    const a = this.snapshots[this.snapshots.length - 3];
+    const dt1 = (b.t - a.t) / 1000;
+    const dt2 = (c.t - b.t) / 1000;
+    if (dt1 <= 0 || dt2 <= 0) return 0;
+    const ax = ((c.com.x - 2 * b.com.x + a.com.x) / ((dt1 + dt2) / 2) ** 2) * 0.7;
+    const ay = ((c.com.y - 2 * b.com.y + a.com.y) / ((dt1 + dt2) / 2) ** 2) * 0.7;
+    return Math.hypot(ax, ay);
   }
 
   /** Reactive subscribe — returns unsubscribe. */
@@ -491,3 +553,52 @@ export function subscribeForceBuffer(cb: () => void) {
 export function getForceBufferSnapshot() {
   return forceTimeBuffer.list();
 }
+
+/**
+ * Augment a ForceAnalysisResult with the time-aware dynamics layer:
+ *   - Add the inertial component (m·a × massAboveFraction) to compression /
+ *     totalForce per joint when the patient is moving (COM accelerating).
+ *   - Reclassify each joint's status using the patient-state-aware threshold
+ *     table (post-op / osteoporotic / pediatric / athlete / default).
+ *
+ * Returns a *new* analysis (mutates a deep copy) so consumers reading through
+ * the same memoized base see consistent values.
+ */
+export function augmentForceAnalysisDynamics(
+  base: ForceAnalysisResult | { joints: JointSurfaceForce[]; totalLoad: number } | null | undefined,
+  opts: { bodyWeightKg: number; patientState: PatientState; comAccelMagN?: number },
+): ForceAnalysisResult {
+  if (!base || !base.joints || base.joints.length === 0) {
+    return (base ?? { joints: [], totalLoad: 0 }) as ForceAnalysisResult;
+  }
+  const aMag = opts.comAccelMagN ?? forceTimeBuffer.getLatestComAccelMag();
+  const bw = opts.bodyWeightKg;
+  // Only augment if there's measurable acceleration (skip static poses).
+  const augmentInertia = aMag > 0.05 && bw > 0;
+
+  // Shallow-clone joints (status/numeric fields are primitive — safe).
+  const joints = base.joints.map((j) => {
+    const massAbove = jointMassAboveFraction(j.id) * bw;
+    const inertialN = augmentInertia ? massAbove * aMag : 0;
+    // Express inertial in body-weight multiples so units stay consistent
+    // with the engine's existing compression / totalForce convention.
+    const inertialBw = bw > 0 ? inertialN / (bw * G) : 0;
+    const compression = j.compression + inertialBw;
+    const totalForce = j.totalForce + inertialBw;
+    const totalForceN = totalForce * bw * G;
+    const status = getStatusForJointForce(j.id, totalForceN, opts.patientState, {
+      bwMultiple: Math.max(compression, j.tension ?? 0),
+    });
+    return { ...j, compression, totalForce, status, inertialN, inertialBw } as JointSurfaceForce & { inertialN: number; inertialBw: number };
+  });
+  const totalLoad = joints.reduce((acc, j) => acc + (j.totalForce ?? 0), 0);
+  return {
+    ...(base as ForceAnalysisResult),
+    joints,
+    // totalLoad is preserved on the lightweight `{ joints, totalLoad }` shape
+    // used by the empty-fallback path. ForceAnalysisResult itself doesn't
+    // declare it, but downstream callers read it defensively, so we keep it.
+    totalLoad,
+  } as unknown as ForceAnalysisResult;
+}
+

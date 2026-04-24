@@ -203,7 +203,7 @@ export default function ForceTimePanel({
         <div className="flex items-center justify-between mb-1.5">
           <div className="text-[10px] text-gray-400 uppercase tracking-wider">Linked-segment chain</div>
           <button
-            onClick={() => setOpenCitation(CITATIONS.de_leva_1996)}
+            onClick={() => setOpenCitation(CITATIONS.de_leva)}
             className="text-gray-500 hover:text-amber-300"
             title="de Leva (1996) segment masses"
           >

@@ -293,3 +293,56 @@ export function colorForForce(forceN: number, band: ThresholdBand): '#22c55e' | 
   if (forceN <= band.warnN) return '#eab308';
   return '#ef4444';
 }
+
+/**
+ * Map an absolute force (Newtons) at a given joint to the legacy 4-band status
+ * using the patient-state-aware threshold table. Joints without a matching
+ * category fall back to the engine's body-weight bands (caller passes them in).
+ */
+export function getStatusForJointForce(
+  jointId: string,
+  forceN: number,
+  state: PatientState,
+  fallbackByBwMultiple?: { bwMultiple: number },
+): 'low' | 'moderate' | 'high' | 'very_high' {
+  const band = getThresholdsFor(jointId, state);
+  if (band) {
+    if (forceN <= band.safeN * 0.5) return 'low';
+    if (forceN <= band.safeN) return 'moderate';
+    if (forceN <= band.warnN) return 'high';
+    return 'very_high';
+  }
+  // No category match: keep engine bands (BW multiples) so we don't
+  // silently downgrade joints we don't have thresholds for yet.
+  if (!fallbackByBwMultiple) return 'low';
+  const bw = fallbackByBwMultiple.bwMultiple;
+  if (bw < 0.8) return 'low';
+  if (bw < 1.5) return 'moderate';
+  if (bw < 3.0) return 'high';
+  return 'very_high';
+}
+
+/**
+ * Approximate fraction of body mass *above* a given joint, used by linked-
+ * segment propagation and inertial m·a augmentation. Values are de Leva (1996)
+ * cumulative segment fractions.
+ */
+export function jointMassAboveFraction(jointId: string): number {
+  const cat = categorizeJointId(jointId);
+  switch (cat) {
+    case 'lumbar_disc': return 0.567;       // trunk + head + arms above L5
+    case 'hip':         return 0.678;       // body minus both lower limbs
+    case 'knee':        return 0.422;       // ~half of body minus shank+foot
+    case 'patellofemoral': return 0.422;
+    case 'shoulder':    return 0.0497;      // single upper limb
+    case 'si':          return 0.567;       // similar to lumbar
+    default: break;
+  }
+  // Fallback by id heuristic.
+  if (/cervical|c0c1|c1c2|c\dc\d/.test(jointId)) return 0.0668;            // head + neck above C-spine
+  if (/thoracic|t\d/.test(jointId))               return 0.45;             // mid-trunk above
+  if (/talocrural|subtalar|^left_ankle|^right_ankle/.test(jointId)) return 0.971; // body minus feet
+  if (/elbow|wrist|carpal/.test(jointId))         return 0.025;            // forearm + hand
+  return 0.5;
+}
+

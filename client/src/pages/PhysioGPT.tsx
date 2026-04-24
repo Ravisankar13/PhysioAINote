@@ -133,7 +133,7 @@ import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPai
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import ForceTimePanel from "@/components/skeleton/ForceTimePanel";
 import GRFOverlay from "@/components/skeleton/GRFOverlay";
-import { forceTimeBuffer, type ForceTimeMetrics, subscribeForceBuffer } from "@/lib/forceTimeBuffer";
+import { forceTimeBuffer, type ForceTimeMetrics, subscribeForceBuffer, augmentForceAnalysisDynamics } from "@/lib/forceTimeBuffer";
 import type { PatientState } from "@/lib/forceCitations";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 import { type ClinicalParseResult, type CompromisedTissue, type ClinicalTextInputHandle, type FollowUpQuestion } from "@/components/skeleton/ClinicalTextInput";
@@ -4386,8 +4386,25 @@ ${ddxList}`;
     return scores;
   }, [effectiveModelConfig, showUnifiedChainPanel, compensatedOverrides, crossMuscleEffects, liteMode, computeStage]);
 
-  const hudForceAnalysis = useMemo(() => {
+  // Live-updating signal for scrub state (rebuilds hudForceAnalysis when the
+  // user pauses the timeline and drags). The actual playback time is read
+  // synchronously from `forceTimeBuffer` so the engine output stays consistent
+  // with what the buffer is reporting.
+  const scrubPlaybackMs = forceTimeMetrics ? forceTimeBuffer.getPlaybackTime() : null;
+  const isScrubbing = scrubPlaybackMs != null;
+
+  /**
+   * Base (un-augmented) force analysis — comes either from the live engine
+   * or, while the user is scrubbing the time buffer, from the buffered frame
+   * at the playback time. This is what gets pushed back into the buffer so
+   * we never feed augmented values back into the dynamics layer (no loop).
+   */
+  const baseHudForceAnalysis = useMemo(() => {
     if (computeStage < 2) return { joints: [], totalLoad: 0 };
+    if (isScrubbing) {
+      const scrubbed = forceTimeBuffer.getScrubbedAnalysis();
+      if (scrubbed) return scrubbed;
+    }
     const hasActiveSimulation = whatIfSimulatedConfig && whatIfScenarios.length > 0;
     const base = (forceMode && forceAnalysis && !hasActiveSimulation)
       ? forceAnalysis
@@ -4409,25 +4426,54 @@ ${ddxList}`;
       return adjusted;
     }
     return base;
-  }, [finalModelConfig, forceMode, forceAnalysis, whatIfScenarios, whatIfSimulatedConfig, computeStage]);
+  }, [finalModelConfig, forceMode, forceAnalysis, whatIfScenarios, whatIfSimulatedConfig, computeStage, isScrubbing, scrubPlaybackMs]);
+
+  /**
+   * Dynamics-augmented force analysis consumed by every downstream surface
+   * (HUD, mechanism analysis, panels, overlays). Adds the inertial m·a per
+   * joint via `jointMassAboveFraction` (linked-segment chain), and reclassifies
+   * `status` using the patient-state-aware threshold table so the HUD colors
+   * respect post-op / osteoporotic / pediatric / athlete bands.
+   */
+  const hudForceAnalysis = useMemo(() => {
+    if (!baseHudForceAnalysis || !baseHudForceAnalysis.joints?.length) return baseHudForceAnalysis;
+    return augmentForceAnalysisDynamics(baseHudForceAnalysis, {
+      bodyWeightKg,
+      patientState: patientForceState,
+      // Use the buffer-derived inertial peak instead of the raw |a| so the
+      // HUD reflects the same impact figure the panel headlines show.
+      comAccelMagN: forceTimeMetrics?.impact?.inertialN
+        ? (forceTimeMetrics.impact.inertialN / Math.max(1, bodyWeightKg))
+        : undefined,
+    });
+  }, [baseHudForceAnalysis, bodyWeightKg, patientForceState, forceTimeMetrics]);
 
   // ─── Time-aware force buffer push ────────────────────────────────────
-  // Capture every recompute of hudForceAnalysis so cumulative dose / rate of
+  // Capture every recompute of the BASE analysis so cumulative dose / rate of
   // loading / impact metrics are accumulated regardless of source (Movement
   // Player, live phone camera, manual sliders all flow into finalModelConfig).
+  // While scrubbing, do NOT push — we'd be writing past frames as if they
+  // were live and corrupting the timeline.
   useEffect(() => {
-    if (!hudForceAnalysis || !hudForceAnalysis.joints || hudForceAnalysis.joints.length === 0) return;
+    if (forceTimeBuffer.getPlaybackTime() != null) return;
+    if (!baseHudForceAnalysis || !baseHudForceAnalysis.joints || baseHudForceAnalysis.joints.length === 0) return;
     const source: 'movement_player' | 'camera' | 'manual' =
       animationState.isPlaying ? 'movement_player'
       : cameraPoseActive ? 'camera'
       : 'manual';
     forceTimeBuffer.push({
-      result: hudForceAnalysis,
+      result: baseHudForceAnalysis as any,
       bodyWeightKg,
       source,
       movementId: animationState.currentMovement ?? null,
     });
-  }, [hudForceAnalysis, bodyWeightKg, animationState.isPlaying, animationState.currentMovement, cameraPoseActive]);
+  }, [baseHudForceAnalysis, bodyWeightKg, animationState.isPlaying, animationState.currentMovement, cameraPoseActive]);
+
+  // Push patient state into the buffer so threshold / band lookups inside
+  // `getMetrics()` use the same context as the HUD.
+  useEffect(() => {
+    forceTimeBuffer.setPatientState(patientForceState);
+  }, [patientForceState]);
 
   // Subscribe React state to buffer-derived metrics (used by HUD circle + panel).
   useEffect(() => {

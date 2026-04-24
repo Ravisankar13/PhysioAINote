@@ -14,9 +14,6 @@ export interface TissueAnchorRecipe {
   displayName?: string;
 }
 
-const L = (s: string) => s as string;
-const R = (s: string) => s as string;
-
 function pair(idBase: string, recipe: (side: 'L' | 'R') => TissueAnchorRecipe): Record<string, TissueAnchorRecipe> {
   return {
     [`${idBase}_l`]: recipe('L'),

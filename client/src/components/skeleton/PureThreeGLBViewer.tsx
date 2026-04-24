@@ -2390,6 +2390,8 @@ export default function PureThreeGLBViewer({
   const chainHighlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const tissueOverlayGroupRef = useRef<THREE.Group | null>(null);
   const tissueFadedMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; origMaterial: THREE.Material | THREE.Material[] }>>([]);
+  const tissueOverlayUpdatersRef = useRef<Array<() => void>>([]);
+  const tissueOverlayRafRef = useRef<number | null>(null);
   const fascialChainGroupRef = useRef<THREE.Group | null>(null);
   const slingPathwayGroupRef = useRef<THREE.Group | null>(null);
   const slingLabelSpritesRef = useRef<THREE.Sprite[]>([]);
@@ -3083,6 +3085,11 @@ export default function PureThreeGLBViewer({
       }
     }
     tissueFadedMaterialsRef.current = [];
+    tissueOverlayUpdatersRef.current = [];
+    if (tissueOverlayRafRef.current != null) {
+      cancelAnimationFrame(tissueOverlayRafRef.current);
+      tissueOverlayRafRef.current = null;
+    }
 
     if (!tissueIntelligenceHighlights || tissueIntelligenceHighlights.length === 0 || !model) return;
 
@@ -3144,111 +3151,131 @@ export default function PureThreeGLBViewer({
       let anchorPos: THREE.Vector3 | null = null;
       const built: THREE.Object3D[] = [];
 
+      // Each primitive registers an updater so its world transform tracks the live bone
+      // positions every frame (skeleton may animate via pose mode / IK / squat). Geometry
+      // is built once; only position/rotation are recomputed per frame.
+      const updaters = tissueOverlayUpdatersRef.current;
+      let labelAnchorFn: (() => THREE.Vector3 | null) | null = null;
+
       if (recipe) {
         const s = recipe.shape;
         if (s.kind === 'tube_between') {
-          const a = worldOf(s.from, s.fromOffset);
-          const b = worldOf(s.to, s.toOffset);
-          if (a && b) {
-            const dir = new THREE.Vector3().subVectors(b, a);
-            const len = dir.length();
-            if (len > 1e-4) {
-              const geo = new THREE.CylinderGeometry(s.radius, s.radius, len, 12, 1, true);
+          const a0 = worldOf(s.from, s.fromOffset);
+          const b0 = worldOf(s.to, s.toOffset);
+          if (a0 && b0) {
+            const len0 = a0.distanceTo(b0);
+            if (len0 > 1e-4) {
+              const geo = new THREE.CylinderGeometry(s.radius, s.radius, 1, 12, 1, true);
               const mesh = new THREE.Mesh(geo, matFactory());
-              const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
-              mesh.position.copy(mid);
-              mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
               built.push(mesh);
-              anchorPos = mid;
+              const update = () => {
+                const a = worldOf(s.from, s.fromOffset); const b = worldOf(s.to, s.toOffset);
+                if (!a || !b) { mesh.visible = false; return; }
+                const dir = new THREE.Vector3().subVectors(b, a); const len = dir.length();
+                if (len < 1e-4) { mesh.visible = false; return; }
+                mesh.visible = true;
+                mesh.position.copy(a).add(b).multiplyScalar(0.5);
+                mesh.scale.set(1, len, 1);
+                mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+              };
+              update(); updaters.push(update);
+              labelAnchorFn = () => { const a = worldOf(s.from, s.fromOffset); const b = worldOf(s.to, s.toOffset); return (a && b) ? a.clone().add(b).multiplyScalar(0.5) : null; };
+              anchorPos = labelAnchorFn();
             }
           }
-        } else if (s.kind === 'polyline') {
-          const pts: THREE.Vector3[] = [];
-          for (const bn of s.bones) {
-            const p = worldOf(bn, s.offset);
-            if (p) pts.push(p);
+        } else if (s.kind === 'polyline' || s.kind === 'sheet') {
+          const isSheet = s.kind === 'sheet';
+          const segPairs: Array<{ from: string; to: string; offset?: [number, number, number] }> = [];
+          if (isSheet) {
+            segPairs.push({ from: (s as Extract<typeof s, { kind: 'sheet' }>).from, to: (s as Extract<typeof s, { kind: 'sheet' }>).to, offset: s.offset });
+          } else {
+            const pl = s as Extract<typeof s, { kind: 'polyline' }>;
+            for (let i = 0; i < pl.bones.length - 1; i++) segPairs.push({ from: pl.bones[i], to: pl.bones[i + 1], offset: pl.offset });
           }
-          if (pts.length >= 2) {
-            for (let i = 0; i < pts.length - 1; i++) {
-              const a = pts[i]; const b = pts[i + 1];
-              const dir = new THREE.Vector3().subVectors(b, a);
-              const len = dir.length();
-              if (len < 1e-4) continue;
-              const geo = new THREE.CylinderGeometry(s.thickness, s.thickness, len, 8, 1, true);
-              const mesh = new THREE.Mesh(geo, matFactory());
-              const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
-              mesh.position.copy(mid);
+          const thickness = isSheet ? (s as Extract<typeof s, { kind: 'sheet' }>).width : (s as Extract<typeof s, { kind: 'polyline' }>).thickness;
+          for (const seg of segPairs) {
+            const a0 = worldOf(seg.from, seg.offset); const b0 = worldOf(seg.to, seg.offset);
+            if (!a0 || !b0) continue;
+            if (a0.distanceTo(b0) < 1e-4) continue;
+            const geo = isSheet ? new THREE.PlaneGeometry(thickness, 1) : new THREE.CylinderGeometry(thickness, thickness, 1, 8, 1, true);
+            const mat = matFactory();
+            if (isSheet) mat.side = THREE.DoubleSide;
+            const mesh = new THREE.Mesh(geo, mat);
+            built.push(mesh);
+            const update = () => {
+              const a = worldOf(seg.from, seg.offset); const b = worldOf(seg.to, seg.offset);
+              if (!a || !b) { mesh.visible = false; return; }
+              const dir = new THREE.Vector3().subVectors(b, a); const len = dir.length();
+              if (len < 1e-4) { mesh.visible = false; return; }
+              mesh.visible = true;
+              mesh.position.copy(a).add(b).multiplyScalar(0.5);
+              mesh.scale.set(1, len, 1);
               mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-              built.push(mesh);
-            }
-            anchorPos = pts[Math.floor(pts.length / 2)];
+            };
+            update(); updaters.push(update);
           }
-        } else if (s.kind === 'ring') {
-          const c = worldOf(s.at, s.offset);
-          if (c) {
-            const geo = new THREE.TorusGeometry(s.radius, s.thickness, 10, 32);
+          // anchor the label at the geometric mid-bone of the polyline
+          const allBones = isSheet ? [(s as any).from, (s as any).to] : (s as Extract<typeof s, { kind: 'polyline' }>).bones;
+          const midBone = allBones[Math.floor(allBones.length / 2)];
+          labelAnchorFn = () => worldOf(midBone, s.offset);
+          anchorPos = labelAnchorFn();
+        } else if (s.kind === 'ring' || s.kind === 'crescent') {
+          const c0 = worldOf(s.at, (s as any).offset);
+          if (c0) {
+            const isCrescent = s.kind === 'crescent';
+            const arc = isCrescent ? ((s as Extract<typeof s, { kind: 'crescent' }>).arc ?? Math.PI) : Math.PI * 2;
+            const geo = new THREE.TorusGeometry(s.radius, s.thickness, 10, isCrescent ? 24 : 32, arc);
             const mesh = new THREE.Mesh(geo, matFactory());
-            mesh.position.copy(c);
             if (s.axis === 'x') mesh.rotation.y = Math.PI / 2;
             else if (s.axis === 'z') mesh.rotation.x = Math.PI / 2;
             built.push(mesh);
-            anchorPos = c;
+            const update = () => {
+              const c = worldOf(s.at, (s as any).offset);
+              if (!c) { mesh.visible = false; return; }
+              mesh.visible = true; mesh.position.copy(c);
+            };
+            update(); updaters.push(update);
+            labelAnchorFn = () => worldOf(s.at, (s as any).offset);
+            anchorPos = c0;
           }
         } else if (s.kind === 'sphere_at') {
-          const c = worldOf(s.at, s.offset);
-          if (c) {
+          const c0 = worldOf(s.at, s.offset);
+          if (c0) {
             const geo = new THREE.SphereGeometry(s.radius, 16, 12);
             const mesh = new THREE.Mesh(geo, matFactory());
-            mesh.position.copy(c);
             built.push(mesh);
-            anchorPos = c;
-          }
-        } else if (s.kind === 'sheet') {
-          const a = worldOf(s.from, s.offset);
-          const b = worldOf(s.to, s.offset);
-          if (a && b) {
-            const dir = new THREE.Vector3().subVectors(b, a);
-            const len = dir.length();
-            if (len > 1e-4) {
-              const geo = new THREE.PlaneGeometry(s.width, len);
-              const mat = matFactory(); mat.side = THREE.DoubleSide;
-              const mesh = new THREE.Mesh(geo, mat);
-              const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
-              mesh.position.copy(mid);
-              mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-              built.push(mesh);
-              anchorPos = mid;
-            }
-          }
-        } else if (s.kind === 'crescent') {
-          const c = worldOf(s.at, undefined);
-          if (c) {
-            const arc = s.arc ?? Math.PI;
-            const geo = new THREE.TorusGeometry(s.radius, s.thickness, 10, 24, arc);
-            const mesh = new THREE.Mesh(geo, matFactory());
-            mesh.position.copy(c);
-            if (s.axis === 'x') mesh.rotation.y = Math.PI / 2;
-            else if (s.axis === 'z') mesh.rotation.x = Math.PI / 2;
-            built.push(mesh);
-            anchorPos = c;
+            const update = () => {
+              const c = worldOf(s.at, s.offset);
+              if (!c) { mesh.visible = false; return; }
+              mesh.visible = true; mesh.position.copy(c);
+            };
+            update(); updaters.push(update);
+            labelAnchorFn = () => worldOf(s.at, s.offset);
+            anchorPos = c0;
           }
         }
       }
 
-      // Fallback: if we don't have a catalogue recipe (or it failed to build), draw a labelled
-      // generic band at the nearest available bone in `bones[]`. This satisfies the spec's
-      // "fallback = labelled generic band on nearest joint".
+      // Fallback: when there's no catalogue recipe (or it built nothing), drop a labelled
+      // generic ring on the first available bone — and ALSO emit a bone-glow entry through
+      // the existing highlightBoneNames pipeline (handled in PhysioGPT) so we never lose
+      // visibility for tissues that aren't in the anchor catalogue yet.
       if (built.length === 0) {
         for (const bn of h.bones) {
-          const c = worldOf(bn);
-          if (c) {
-            const geo = new THREE.TorusGeometry(0.045, 0.006, 8, 24);
-            const mesh = new THREE.Mesh(geo, matFactory());
-            mesh.position.copy(c);
-            built.push(mesh);
-            anchorPos = c;
-            break;
-          }
+          const c0 = worldOf(bn);
+          if (!c0) continue;
+          const geo = new THREE.TorusGeometry(0.045, 0.006, 8, 24);
+          const mesh = new THREE.Mesh(geo, matFactory());
+          built.push(mesh);
+          const update = () => {
+            const c = worldOf(bn);
+            if (!c) { mesh.visible = false; return; }
+            mesh.visible = true; mesh.position.copy(c);
+          };
+          update(); updaters.push(update);
+          labelAnchorFn = () => worldOf(bn);
+          anchorPos = c0;
+          break;
         }
       }
 
@@ -3258,14 +3285,27 @@ export default function PureThreeGLBViewer({
         overlayGroup.add(obj);
       }
 
-      if (anchorPos) {
+      if (anchorPos && labelAnchorFn) {
         const sprite = buildLabelSprite(`${h.label} · ${palette.stageLabel}`, color);
         if (sprite) {
           sprite.position.copy(anchorPos).add(new THREE.Vector3(0, 0.06, 0));
           overlayGroup.add(sprite);
+          const lf = labelAnchorFn;
+          const upd = () => { const p = lf(); if (p) sprite.position.copy(p).add(new THREE.Vector3(0, 0.06, 0)); };
+          updaters.push(upd);
         }
       }
     }
+
+    // Per-frame transform updater — keeps every primitive glued to its bone(s) as the
+    // skeleton animates. Geometry is built once above; this loop only updates position,
+    // rotation and y-scale (length) for tube/sheet primitives.
+    const tick = () => {
+      const updaters = tissueOverlayUpdatersRef.current;
+      for (let i = 0; i < updaters.length; i++) updaters[i]();
+      tissueOverlayRafRef.current = requestAnimationFrame(tick);
+    };
+    tissueOverlayRafRef.current = requestAnimationFrame(tick);
 
     // Auto deep-tissue fade — when any highlighted tissue is deep, drop superficial muscle
     // groups to ~0.25 opacity so the deep structures aren't occluded.

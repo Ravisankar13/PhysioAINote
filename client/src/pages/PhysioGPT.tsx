@@ -4470,8 +4470,35 @@ ${ddxList}`;
       bodyWeightKg,
       source,
       movementId: animationState.currentMovement ?? null,
+      // Capture the playhead so scrub-back can seek the Movement Player
+      // back to the same frame and the 3D skeleton mirrors the HUD.
+      movementProgress: animationState.isPlaying ? animationState.progress : null,
     });
-  }, [baseHudForceAnalysis, bodyWeightKg, animationState.isPlaying, animationState.currentMovement, cameraPoseActive]);
+  }, [baseHudForceAnalysis, bodyWeightKg, animationState.isPlaying, animationState.currentMovement, animationState.progress, cameraPoseActive]);
+
+  // ─── Scrub-back seeks the Movement Player ────────────────────────────
+  // When the clinician pauses and scrubs the time buffer, look up the active
+  // snapshot. If it has a captured movement playhead, pause the Movement
+  // Player and seek it to the same `progress` so the 3D skeleton renders the
+  // pose that produced the scrubbed forces. This is what makes the HUD and
+  // the skeleton time-consistent during scrub-back.
+  useEffect(() => {
+    if (!isScrubbing) return;
+    const snap = forceTimeBuffer.getActiveSnapshot();
+    if (!snap || !snap.movementId || snap.movementProgress == null) return;
+    if (
+      animationState.isPlaying ||
+      animationState.currentMovement !== snap.movementId ||
+      Math.abs((animationState.progress ?? 0) - snap.movementProgress) > 0.001
+    ) {
+      setAnimationState({
+        isPlaying: false,
+        currentMovement: snap.movementId,
+        progress: snap.movementProgress,
+        speed: animationState.speed,
+      });
+    }
+  }, [isScrubbing, scrubPlaybackMs]);
 
   // Push patient state into the buffer so threshold / band lookups inside
   // `getMetrics()` use the same context as the HUD.

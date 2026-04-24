@@ -42,8 +42,25 @@ export default function GRFOverlay({ positions, bodyWeightKg, width, height, vis
   }, []);
 
   if (!visible) return null;
-  const history = forceTimeBuffer.list();
-  if (history.length < 2) return null;
+  const fullHistory = forceTimeBuffer.list();
+  if (fullHistory.length < 2) return null;
+  // Scrub-aware: when the user is scrubbing the buffer, slice the history
+  // around the active snapshot so the GRF arrow + base-of-support polygon
+  // visualize the *scrubbed* frame instead of the live tail. computeGRF
+  // uses the last three frames of `history`, so we hand it a 3-frame window
+  // ending at the scrubbed frame.
+  let history = fullHistory;
+  if (forceTimeBuffer.getPlaybackTime() != null) {
+    const active = forceTimeBuffer.getActiveSnapshot();
+    if (active) {
+      const idx = fullHistory.indexOf(active);
+      if (idx >= 0) {
+        const start = Math.max(0, idx - 2);
+        history = fullHistory.slice(start, idx + 1);
+        if (history.length < 2) return null;
+      }
+    }
+  }
 
   const leftFoot = findFoot(positions, FOOT_BONE_LEFT);
   const rightFoot = findFoot(positions, FOOT_BONE_RIGHT);

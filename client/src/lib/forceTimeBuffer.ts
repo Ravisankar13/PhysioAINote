@@ -7,7 +7,8 @@
 // every motion source that pushes a new modelConfig also lands a snapshot here.
 
 import type { ForceAnalysisResult, JointSurfaceForce } from './posturalForceEngine';
-import { getStatusForJointForce, getThresholdsFor, jointMassAboveFraction, type PatientState } from './forceCitations';
+import { getStatusForJointForce, getThresholdsFor, jointMassAboveFraction, categorizeJointId, type PatientState } from './forceCitations';
+import { propagateLinkedSegments } from './grfVector';
 
 export type ForceSource = 'movement_player' | 'camera' | 'manual';
 
@@ -37,6 +38,12 @@ export interface ForceFrameSnapshot {
   source: ForceSource;
   /** Optional movement / sequence id (Movement Player). */
   movementId?: string | null;
+  /**
+   * Movement Player playhead progress (0..1) at capture time. Used by the
+   * scrub-back UI to seek the Movement Player back to the same frame so the
+   * 3D skeleton mirrors the HUD when the clinician scrubs the timeline.
+   */
+  movementProgress?: number | null;
 }
 
 export interface JointTimeMetric {
@@ -157,6 +164,7 @@ class ForceTimeBufferImpl {
     bodyWeightKg: number;
     source: ForceSource;
     movementId?: string | null;
+    movementProgress?: number | null;
     footScreen?: ForceFrameSnapshot['footScreen'];
     t?: number;
   }) {
@@ -186,6 +194,7 @@ class ForceTimeBufferImpl {
       footScreen: input.footScreen,
       source: input.source,
       movementId: input.movementId ?? null,
+      movementProgress: input.movementProgress ?? null,
     };
     this.snapshots.push(snap);
     this.evict();
@@ -611,23 +620,73 @@ export function augmentForceAnalysisDynamics(
   // Only augment if there's measurable acceleration (skip static poses).
   const augmentInertia = aMag > 0.05 && bw > 0;
 
+  // ─── Linked-segment chain Newton-Euler walk ───────────────────────────
+  // Replace the per-joint isolated solve for chain joints with the
+  // bottom-up chain axial force (gravity + inertial m·a, summed over all
+  // segments above). Paired joints share the load 50/50 so a single knee
+  // sees half of the bilateral chain axial. This is what the reviewer means
+  // by "joint forces reflect what arrives from below". Joints that are not
+  // part of the lower-extremity chain (shoulder, elbow, wrist) keep the
+  // existing engine value plus the per-joint inertial m·a.
+  const chainLevels = bw > 0
+    ? propagateLinkedSegments(bw, augmentInertia ? bw * aMag : 0)
+    : [];
+  // Chain levels are returned foot → head (index 0 = Foot, 1 = Shank, ...)
+  const chainAxialN: Record<string, number> = {};
+  for (const lvl of chainLevels) chainAxialN[lvl.name] = lvl.axialN;
+  // Map joint category → (chain level whose mass-above ≈ load felt by joint)
+  // and whether the joint is paired (shares chain load 50/50).
+  const CHAIN_MAP: Record<string, { level: string; paired: boolean }> = {
+    knee:           { level: 'Shank',  paired: true  },
+    patellofemoral: { level: 'Shank',  paired: true  },
+    hip:            { level: 'Thigh',  paired: true  },
+    si:             { level: 'Pelvis', paired: true  },
+    lumbar_disc:    { level: 'Pelvis', paired: false }, // single midline column
+  };
+
   // Shallow-clone joints (status/numeric fields are primitive — safe).
   const joints: JointSurfaceForce[] = base.joints.map((j) => {
-    const massAbove = jointMassAboveFraction(j.id) * bw;
-    const inertialN = augmentInertia ? massAbove * aMag : 0;
-    // Express inertial in body-weight multiples so units stay consistent
-    // with the engine's existing compression / totalForce convention.
-    const inertialBw = bw > 0 ? inertialN / (bw * G) : 0;
-    const compression = j.compression + inertialBw;
-    const totalForce = j.totalForce + inertialBw;
+    const cat = categorizeJointId(j.id);
+    const chainEntry = cat ? CHAIN_MAP[cat] : undefined;
+
+    let inertialN = 0;
+    let inertialBw = 0;
+    let compression = j.compression;
+    let totalForce = j.totalForce;
+    let chainN = 0;
+    let chainBw = 0;
+
+    if (chainEntry && chainAxialN[chainEntry.level] != null && bw > 0) {
+      // Chain replacement: compression becomes the chain axial force at this
+      // level, halved for paired joints. The chain already includes both
+      // gravity and inertial contributions, so we don't add inertial again.
+      chainN = chainAxialN[chainEntry.level] / (chainEntry.paired ? 2 : 1);
+      chainBw = chainN / (bw * G);
+      compression = chainBw;
+      totalForce = chainBw + (j.tension ?? 0) + (j.shear ?? 0);
+      // Inertial component for surfacing in HUD (separate from compression
+      // so callers can show "X N gravity / Y N impact" breakouts).
+      const massAbove = jointMassAboveFraction(j.id) * bw;
+      inertialN = augmentInertia ? massAbove * aMag : 0;
+      inertialBw = inertialN / (bw * G);
+    } else {
+      // Off-chain joint (shoulder, elbow, wrist, etc.): keep engine value
+      // and add per-joint inertial m·a using de Leva mass-above fraction.
+      const massAbove = jointMassAboveFraction(j.id) * bw;
+      inertialN = augmentInertia ? massAbove * aMag : 0;
+      inertialBw = bw > 0 ? inertialN / (bw * G) : 0;
+      compression = j.compression + inertialBw;
+      totalForce = j.totalForce + inertialBw;
+    }
+
     const totalForceN = totalForce * bw * G;
     const status = getStatusForJointForce(j.id, totalForceN, opts.patientState, {
       bwMultiple: Math.max(compression, j.tension ?? 0),
     });
-    // `inertialN` / `inertialBw` are tucked under the JointSurfaceForce index
-    // signature `[key: string]: any` so they're available to consumers that
-    // know to look for them, without breaking the declared interface.
-    return { ...j, compression, totalForce, status, inertialN, inertialBw };
+    // `inertialN` / `inertialBw` / `chainN` ride the JointSurfaceForce index
+    // signature `[key: string]: any` so they're available to consumers
+    // (HUD, panel) that know to look for them.
+    return { ...j, compression, totalForce, status, inertialN, inertialBw, chainN, chainBw };
   });
   return {
     ...base,

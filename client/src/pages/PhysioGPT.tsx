@@ -131,6 +131,10 @@ import { classifyPainMechanism } from "@/lib/neurologyMap";
 import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJointMobilizationTargets, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol, type PainMarkerSimple } from "@/lib/treatmentPriorityEngine";
 import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPainEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
+import ForceTimePanel from "@/components/skeleton/ForceTimePanel";
+import GRFOverlay from "@/components/skeleton/GRFOverlay";
+import { forceTimeBuffer, type ForceTimeMetrics, subscribeForceBuffer } from "@/lib/forceTimeBuffer";
+import type { PatientState } from "@/lib/forceCitations";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 import { type ClinicalParseResult, type CompromisedTissue, type ClinicalTextInputHandle, type FollowUpQuestion } from "@/components/skeleton/ClinicalTextInput";
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
@@ -614,6 +618,10 @@ export default function PhysioGPT() {
   const [painMarkers, setPainMarkers] = useState<PainMarker[]>([]);
   const [painMarkerMode, setPainMarkerMode] = useState(false);
   const [forceMode, setForceMode] = useState(false);
+  const [showForceTimePanel, setShowForceTimePanel] = useState(false);
+  const [patientForceState, setPatientForceState] = useState<PatientState>('default');
+  const [forceTimeMetrics, setForceTimeMetrics] = useState<ForceTimeMetrics | null>(null);
+  const [grfOverlayEnabled, setGrfOverlayEnabled] = useState(true);
   const [selectedForceJoint, setSelectedForceJoint] = useState<string | null>(null);
   const [bodyWeightKg, setBodyWeightKg] = useState(70);
   const [enabledForceJoints, setEnabledForceJoints] = useState<Set<string>>(new Set());
@@ -4402,6 +4410,32 @@ ${ddxList}`;
     }
     return base;
   }, [finalModelConfig, forceMode, forceAnalysis, whatIfScenarios, whatIfSimulatedConfig, computeStage]);
+
+  // ─── Time-aware force buffer push ────────────────────────────────────
+  // Capture every recompute of hudForceAnalysis so cumulative dose / rate of
+  // loading / impact metrics are accumulated regardless of source (Movement
+  // Player, live phone camera, manual sliders all flow into finalModelConfig).
+  useEffect(() => {
+    if (!hudForceAnalysis || !hudForceAnalysis.joints || hudForceAnalysis.joints.length === 0) return;
+    const source: 'movement_player' | 'camera' | 'manual' =
+      animationState.isPlaying ? 'movement_player'
+      : cameraPoseActive ? 'camera'
+      : 'manual';
+    forceTimeBuffer.push({
+      result: hudForceAnalysis,
+      bodyWeightKg,
+      source,
+      movementId: animationState.currentMovement ?? null,
+    });
+  }, [hudForceAnalysis, bodyWeightKg, animationState.isPlaying, animationState.currentMovement, cameraPoseActive]);
+
+  // Subscribe React state to buffer-derived metrics (used by HUD circle + panel).
+  useEffect(() => {
+    setForceTimeMetrics(forceTimeBuffer.getMetrics());
+    return subscribeForceBuffer(() => {
+      setForceTimeMetrics(forceTimeBuffer.getMetrics());
+    });
+  }, []);
 
   const mechanismAnalysisResult = useMemo(() => {
     if (!showInjuryMechanism) return null;
@@ -10655,6 +10689,25 @@ ${ddxList}`;
               onOpenSlings={() => { setRightPanelTab('slings'); }}
               onOpenBiomechanics={() => { setRightPanelTab('biomechanics'); }}
               onToggleTissueView={() => { setTissueViewMode(prev => prev ? null : 'tendon'); }}
+              timeMetrics={forceTimeMetrics}
+              onOpenForceTime={() => setShowForceTimePanel(true)}
+            />
+
+            {showForceTimePanel && (
+              <ForceTimePanel
+                patientState={patientForceState}
+                onPatientStateChange={setPatientForceState}
+                onClose={() => setShowForceTimePanel(false)}
+                onScrub={() => {/* scrub-back is local to the buffer */}}
+              />
+            )}
+
+            <GRFOverlay
+              positions={boneScreenPositionsRef.current}
+              bodyWeightKg={bodyWeightKg}
+              width={skeletonContainerSize.width}
+              height={skeletonContainerSize.height}
+              visible={grfOverlayEnabled && (forceMode || cameraPoseActive || animationState.isPlaying)}
             />
 
             {(liveTreatmentPriorities.targets.length > 0 || predictedPainSpots.length > 0) && (

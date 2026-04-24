@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown } from 'lucide-react';
+import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown, Clock } from 'lucide-react';
 import type { ForceAnalysisResult, WeightDistribution } from '@/lib/posturalForceEngine';
 import { computeMuscleBalanceRatios, type MuscleAnalysisResult } from '@/lib/muscleBiomechanicsEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 import type { BiomechanicsOutput } from '@/lib/unifiedBiomechanicsEngine';
+import type { ForceTimeMetrics } from '@/lib/forceTimeBuffer';
 
 interface ChainIntegrityEntry {
   score: number;
@@ -27,6 +28,8 @@ interface BiomechanicsHUDProps {
   onOpenSlings: () => void;
   onOpenBiomechanics: () => void;
   onToggleTissueView: () => void;
+  timeMetrics?: ForceTimeMetrics | null;
+  onOpenForceTime?: () => void;
 }
 
 function getForceColor(status: string): string {
@@ -79,6 +82,8 @@ export default function BiomechanicsHUD({
   onOpenSlings,
   onOpenBiomechanics,
   onToggleTissueView,
+  timeMetrics,
+  onOpenForceTime,
 }: BiomechanicsHUDProps) {
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
   const [directions, setDirections] = useState<Record<string, 'up' | 'down' | null>>({});
@@ -304,6 +309,35 @@ export default function BiomechanicsHUD({
       valueColor: syndromeCount > 0 ? '#ef4444' : imbalanceCount > 0 ? '#f97316' : '#22c55e',
       onClick: onOpenMuscleOverlay,
     },
+    ...(onOpenForceTime ? [{
+      id: 'time',
+      icon: Clock,
+      color: 'text-amber-300',
+      bgColor: 'bg-amber-300/15',
+      ringColor: 'ring-amber-300/30',
+      label: 'Time',
+      value: (() => {
+        if (!timeMetrics || timeMetrics.frameCount < 2) return '—';
+        const worstAsym = timeMetrics.asymmetry.reduce((mx, a) => Math.max(mx, a.indexPct), 0);
+        const peakImpact = timeMetrics.impact.peakInertialN;
+        if (peakImpact > 0) {
+          if (peakImpact >= 1000) return `${(peakImpact / 1000).toFixed(1)}kN`;
+          return `${Math.round(peakImpact)}N`;
+        }
+        if (worstAsym > 5) return `${worstAsym.toFixed(0)}%Δ`;
+        return 'live';
+      })(),
+      valueColor: (() => {
+        if (!timeMetrics || timeMetrics.frameCount < 2) return '#6b7280';
+        const worstAsym = timeMetrics.asymmetry.reduce((mx, a) => Math.max(mx, a.indexPct), 0);
+        const share = timeMetrics.impact.impactShare;
+        if (worstAsym > 20 || share > 0.4) return '#ef4444';
+        if (worstAsym > 10 || share > 0.2) return '#f97316';
+        if (worstAsym > 5 || share > 0.1) return '#eab308';
+        return '#22c55e';
+      })(),
+      onClick: onOpenForceTime,
+    }] : []),
     {
       id: 'weight',
       icon: Scale,

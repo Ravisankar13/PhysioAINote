@@ -54,6 +54,11 @@ export interface PlanExercise {
   slingTarget?: string;
   targetStructure?: string;
   mobilisationGrade?: string;
+  // Optimal Loading Engine annotations (Task #231) — present only when
+  // the engine is the dosage source of truth for this exercise.
+  optimalLoad?: import('@shared/schema').OptimalLoadPrescription;
+  loadingProjection?: import('@shared/schema').OptimalLoadPrescription[];
+  swapNotice?: { from: string; reason: string };
 }
 
 export interface PlanPhase {
@@ -86,12 +91,31 @@ export interface TreatmentPlanResult {
   stageBasis: string;
   topHypothesis: string;
   timestamp: string;
+  // Optimal Loading Engine handshake (Task #231)
+  loadingPlan?: import('@shared/schema').TendinopathyLoadingPlan;
+  loadingEngine?: {
+    applicable: boolean;
+    reason?: string;
+    site?: import('@shared/schema').TendinopathySite;
+  };
+  /** Server-computed diff against the previously-stored plan. */
+  loadingDiff?: import('@shared/schema').LoadingPlanDiff;
 }
+
+export type LoadingOverridePayload =
+  Pick<import('@shared/schema').OptimalLoadPrescription, 'exerciseId' | 'weekIndex'>
+  & Partial<import('@shared/schema').OptimalLoadPrescription>;
 
 interface PlanTabProps {
   data: TreatmentPlanResult | null;
   isLoading: boolean;
   onTargetRegionClick?: (regions: string[]) => void;
+  /** Recompute now — clinician explicit trigger. */
+  onLoadingRecalculate?: () => void;
+  /** Persist a clinician override and trigger a recompute. */
+  onLoadingOverride?: (override: LoadingOverridePayload) => void;
+  /** Clear an override line. */
+  onLoadingClearOverride?: (exerciseId: string, weekIndex: number) => void;
 }
 
 const PHASE_COLORS = [
@@ -113,9 +137,86 @@ const GRADE_COLOR: Record<string, string> = {
   Expert: 'bg-gray-500/20 text-gray-400',
 };
 
-function ExerciseCard({ exercise, onTargetClick }: { exercise: PlanExercise; onTargetClick?: (regions: string[]) => void }) {
+const CONFIDENCE_LABELS: Record<NonNullable<PlanExercise['optimalLoad']>['confidence'], string> = {
+  rct_supported: 'RCT-supported',
+  protocol_supported: 'Protocol-supported',
+  expert_consensus: 'Expert consensus',
+  extrapolation: 'Extrapolated',
+};
+
+const CONFIDENCE_COLORS: Record<NonNullable<PlanExercise['optimalLoad']>['confidence'], string> = {
+  rct_supported: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  protocol_supported: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+  expert_consensus: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  extrapolation: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+};
+
+function LoadingDoseEditor({
+  optimalLoad,
+  onSave,
+  onClear,
+  onClose,
+}: {
+  optimalLoad: NonNullable<PlanExercise['optimalLoad']>;
+  onSave: (override: LoadingOverridePayload) => void;
+  onClear?: () => void;
+  onClose: () => void;
+}) {
+  const [sets, setSets] = useState<number>(optimalLoad.sets);
+  const [reps, setReps] = useState<string>(optimalLoad.reps);
+  const [days, setDays] = useState<number>(optimalLoad.daysPerWeek);
+  const [pain, setPain] = useState<number>(optimalLoad.painCeilingNrs);
+  return (
+    <div className="rounded-md p-2 bg-slate-900/50 border border-slate-600/30 space-y-1.5" data-testid={`editor-loading-override-${optimalLoad.exerciseId}`}>
+      <div className="grid grid-cols-2 gap-1.5 text-[9px]">
+        <label className="flex flex-col gap-0.5">
+          <span className="text-slate-400">Sets</span>
+          <input type="number" min={1} max={10} value={sets} onChange={e => setSets(Number(e.target.value) || 1)} className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-100" data-testid={`input-override-sets-${optimalLoad.exerciseId}`} />
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-slate-400">Reps</span>
+          <input value={reps} onChange={e => setReps(e.target.value)} className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-100" data-testid={`input-override-reps-${optimalLoad.exerciseId}`} />
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-slate-400">Days/wk</span>
+          <input type="number" min={1} max={7} value={days} onChange={e => setDays(Number(e.target.value) || 1)} className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-100" data-testid={`input-override-days-${optimalLoad.exerciseId}`} />
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-slate-400">Pain ceiling NRS</span>
+          <input type="number" min={0} max={10} value={pain} onChange={e => setPain(Number(e.target.value) || 0)} className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-100" data-testid={`input-override-pain-${optimalLoad.exerciseId}`} />
+        </label>
+      </div>
+      <div className="flex items-center justify-end gap-1">
+        {onClear && (
+          <button onClick={onClear} className="px-2 py-0.5 text-[9px] bg-red-900/30 text-red-300 border border-red-700/30 rounded hover:bg-red-900/60" data-testid={`button-clear-override-${optimalLoad.exerciseId}`}>Clear override</button>
+        )}
+        <button onClick={onClose} className="px-2 py-0.5 text-[9px] bg-slate-800 text-slate-300 border border-slate-700 rounded hover:bg-slate-700">Cancel</button>
+        <button
+          onClick={() => onSave({ exerciseId: optimalLoad.exerciseId, weekIndex: optimalLoad.weekIndex, sets, reps, daysPerWeek: days, painCeilingNrs: pain })}
+          className="px-2 py-0.5 text-[9px] bg-emerald-900/40 text-emerald-200 border border-emerald-700/40 rounded hover:bg-emerald-900/60"
+          data-testid={`button-save-override-${optimalLoad.exerciseId}`}
+        >Save & recompute</button>
+      </div>
+    </div>
+  );
+}
+
+function ExerciseCard({
+  exercise,
+  onTargetClick,
+  onLoadingOverride,
+  onLoadingClearOverride,
+}: {
+  exercise: PlanExercise;
+  onTargetClick?: (regions: string[]) => void;
+  onLoadingOverride?: (override: LoadingOverridePayload) => void;
+  onLoadingClearOverride?: (exerciseId: string, weekIndex: number) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [editingOverride, setEditingOverride] = useState(false);
+  const [showProjection, setShowProjection] = useState(false);
   const isManual = exercise.category === 'manual_therapy' || exercise.category === 'modality';
+  const ol = exercise.optimalLoad;
 
   const handleClick = () => {
     const willExpand = !expanded;
@@ -182,6 +283,92 @@ function ExerciseCard({ exercise, onTargetClick }: { exercise: PlanExercise; onT
             </div>
           </div>
 
+          {exercise.swapNotice && (
+            <div className="rounded p-2 bg-purple-500/5 border border-purple-500/20" data-testid={`swap-notice-${exercise.id}`}>
+              <p className="text-[8px] text-purple-300 uppercase tracking-wider font-semibold mb-0.5">Engine swap</p>
+              <p className="text-[9px] text-gray-300">Replaces <span className="text-purple-300">"{exercise.swapNotice.from}"</span></p>
+              <p className="text-[9px] text-gray-500 mt-0.5">{exercise.swapNotice.reason}</p>
+            </div>
+          )}
+
+          {ol && (
+            <div className="rounded p-2 bg-cyan-500/5 border border-cyan-500/20 space-y-1.5" data-testid={`why-dose-${exercise.id}`}>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1">
+                  <Sparkles className="h-2.5 w-2.5 text-cyan-300" />
+                  <p className="text-[8px] text-cyan-300 uppercase tracking-wider font-semibold">Why this dose</p>
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ${CONFIDENCE_COLORS[ol.confidence]}`} data-testid={`confidence-band-${exercise.id}`}>
+                    {CONFIDENCE_LABELS[ol.confidence]} · Tier {ol.evidenceTier}
+                  </span>
+                  {ol.isOverride && (
+                    <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30" data-testid={`override-pill-${exercise.id}`}>
+                      Clinician override
+                    </span>
+                  )}
+                </div>
+              </div>
+              <p className="text-[9px] text-gray-300 leading-relaxed">{ol.rationale}</p>
+              {ol.factorContributions.length > 0 && (
+                <div className="space-y-0.5">
+                  <p className="text-[8px] text-gray-500 uppercase tracking-wider">Factor contributions</p>
+                  {ol.factorContributions.map((fc, i) => (
+                    <div key={i} className="text-[9px] text-gray-400">
+                      <span className="text-cyan-300">{fc.factor}</span>: <span className="text-gray-300">{fc.effect}</span>
+                      {fc.rationale && <span className="text-gray-500"> — {fc.rationale}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {onLoadingOverride && !editingOverride && (
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditingOverride(true); }}
+                    className="px-2 py-0.5 text-[9px] bg-cyan-900/30 text-cyan-200 border border-cyan-700/30 rounded hover:bg-cyan-900/60"
+                    data-testid={`button-edit-override-${exercise.id}`}
+                  >
+                    Edit dose
+                  </button>
+                </div>
+              )}
+              {editingOverride && onLoadingOverride && (
+                <LoadingDoseEditor
+                  optimalLoad={ol}
+                  onSave={(o) => { onLoadingOverride(o); setEditingOverride(false); }}
+                  onClear={ol.isOverride && onLoadingClearOverride
+                    ? () => { onLoadingClearOverride(ol.exerciseId, ol.weekIndex); setEditingOverride(false); }
+                    : undefined}
+                  onClose={() => setEditingOverride(false)}
+                />
+              )}
+            </div>
+          )}
+
+          {ol && exercise.loadingProjection && exercise.loadingProjection.length > 0 && (
+            <div className="rounded p-2 bg-slate-900/40 border border-slate-700/30" data-testid={`projection-${exercise.id}`}>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowProjection(v => !v); }}
+                className="w-full flex items-center justify-between text-[8px] text-slate-300 uppercase tracking-wider font-semibold"
+              >
+                <span>Projected weeks ({exercise.loadingProjection.length})</span>
+                {showProjection ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </button>
+              {showProjection && (
+                <div className="mt-1 space-y-0.5">
+                  {exercise.loadingProjection.map((p, i) => (
+                    <div key={i} className="text-[9px] text-gray-400 flex items-center justify-between gap-2">
+                      <span className="text-slate-200">Wk {p.weekIndex + 1}</span>
+                      <span className="text-gray-300">{p.sets}×{p.reps}</span>
+                      <span className="text-gray-400">{p.intensity.label}</span>
+                      <span className="text-amber-300">NRS ≤ {p.painCeilingNrs}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {exercise.equipment.length > 0 && (
             <div>
               <p className="text-[8px] text-gray-500 uppercase tracking-wider">Equipment</p>
@@ -238,7 +425,19 @@ function ExerciseCard({ exercise, onTargetClick }: { exercise: PlanExercise; onT
   );
 }
 
-function PhaseCard({ phase, idx, onTargetClick }: { phase: PlanPhase; idx: number; onTargetClick?: (regions: string[]) => void }) {
+function PhaseCard({
+  phase,
+  idx,
+  onTargetClick,
+  onLoadingOverride,
+  onLoadingClearOverride,
+}: {
+  phase: PlanPhase;
+  idx: number;
+  onTargetClick?: (regions: string[]) => void;
+  onLoadingOverride?: (override: LoadingOverridePayload) => void;
+  onLoadingClearOverride?: (exerciseId: string, weekIndex: number) => void;
+}) {
   const [expanded, setExpanded] = useState(idx === 0);
   const colorSet = PHASE_COLORS[idx % PHASE_COLORS.length];
   const accent = PHASE_ACCENT[idx % PHASE_ACCENT.length];
@@ -293,7 +492,7 @@ function PhaseCard({ phase, idx, onTargetClick }: { phase: PlanPhase; idx: numbe
               </p>
               <div className="space-y-1.5">
                 {phase.manualTherapy.map(ex => (
-                  <ExerciseCard key={ex.id} exercise={ex} onTargetClick={onTargetClick} />
+                  <ExerciseCard key={ex.id} exercise={ex} onTargetClick={onTargetClick} onLoadingOverride={onLoadingOverride} onLoadingClearOverride={onLoadingClearOverride} />
                 ))}
               </div>
             </div>
@@ -306,7 +505,7 @@ function PhaseCard({ phase, idx, onTargetClick }: { phase: PlanPhase; idx: numbe
               </p>
               <div className="space-y-1.5">
                 {phase.exercises.map(ex => (
-                  <ExerciseCard key={ex.id} exercise={ex} onTargetClick={onTargetClick} />
+                  <ExerciseCard key={ex.id} exercise={ex} onTargetClick={onTargetClick} onLoadingOverride={onLoadingOverride} onLoadingClearOverride={onLoadingClearOverride} />
                 ))}
               </div>
             </div>
@@ -338,8 +537,17 @@ function PhaseCard({ phase, idx, onTargetClick }: { phase: PlanPhase; idx: numbe
   );
 }
 
-export default function PlanTab({ data, isLoading, onTargetRegionClick }: PlanTabProps) {
+export default function PlanTab({
+  data,
+  isLoading,
+  onTargetRegionClick,
+  onLoadingRecalculate,
+  onLoadingOverride,
+  onLoadingClearOverride,
+}: PlanTabProps) {
   const [constraintsExpanded, setConstraintsExpanded] = useState(false);
+  const [diffDismissed, setDiffDismissed] = useState<string | null>(null);
+  const [projectionExpanded, setProjectionExpanded] = useState(false);
 
   if (isLoading) {
     return (
@@ -366,6 +574,131 @@ export default function PlanTab({ data, isLoading, onTargetRegionClick }: PlanTa
 
   return (
     <div className="space-y-3 pb-4">
+      {data.loadingEngine && !data.loadingEngine.applicable && data.loadingEngine.reason && (
+        <div
+          className="flex items-start gap-1.5 text-[10px] bg-slate-900/40 border border-slate-700/40 rounded px-2 py-1.5 text-slate-200"
+          data-testid="banner-plan-loading-engine-not-applicable"
+        >
+          <Shield className="h-3 w-3 text-slate-300 mt-0.5 shrink-0" />
+          <span>{data.loadingEngine.reason}</span>
+        </div>
+      )}
+      {data.loadingEngine?.applicable && (
+        <div
+          className="flex items-center justify-between gap-2 text-[10px] bg-emerald-950/30 border border-emerald-700/30 rounded px-2 py-1 text-emerald-200"
+          data-testid="banner-plan-loading-engine-active"
+        >
+          <div className="flex items-center gap-1.5">
+            <Zap className="h-3 w-3 text-emerald-300" />
+            <span>
+              Optimal Loading Engine active{data.loadingEngine.site ? ` · ${data.loadingEngine.site.replace(/_/g, ' ')} tendinopathy` : ''}{data.loadingPlan?.recoveryPhaseLabel ? ` · ${data.loadingPlan.recoveryPhaseLabel}` : ''}{data.loadingPlan?.irritability ? ` · ${data.loadingPlan.irritability} irritability` : ''}
+            </span>
+          </div>
+          {onLoadingRecalculate && (
+            <button
+              onClick={onLoadingRecalculate}
+              className="px-2 py-0.5 text-[9px] bg-emerald-900/40 text-emerald-100 border border-emerald-700/40 rounded hover:bg-emerald-900/70"
+              data-testid="button-plan-loading-recalculate"
+            >
+              Recalculate now
+            </button>
+          )}
+        </div>
+      )}
+
+      {data.loadingDiff && data.loadingDiff.changes.length > 0 && data.loadingDiff.afterHash !== diffDismissed && (
+        <div className="rounded p-2 bg-amber-950/30 border border-amber-700/40" data-testid="banner-plan-loading-diff">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="h-3 w-3 text-amber-300" />
+              <span className="text-[10px] font-semibold text-amber-200">
+                Loading plan recomputed — {data.loadingDiff.changes.length} change{data.loadingDiff.changes.length === 1 ? '' : 's'}
+              </span>
+              <span className="text-[9px] text-amber-300/70">({data.loadingDiff.triggerReason})</span>
+            </div>
+            <button
+              onClick={() => setDiffDismissed(data.loadingDiff!.afterHash)}
+              className="text-[9px] text-amber-300/70 hover:text-amber-100"
+              data-testid="button-plan-loading-diff-dismiss"
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="space-y-0.5 max-h-40 overflow-y-auto">
+            {data.loadingDiff.changes.map((c, i) => (
+              <div key={i} className="text-[9px] text-amber-100/90">
+                <span className="text-amber-300">{c.exerciseName}</span>
+                <span className="text-amber-300/70"> · wk {c.weekIndex + 1} · {c.field}</span>
+                : <span className="line-through text-amber-300/50">{c.before}</span> → <span className="text-amber-50">{c.after}</span>
+                <span className="text-amber-300/60"> — {c.reason}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {data.loadingPlan && data.loadingPlan.applicability === 'tendinopathy' && (
+        <div className="rounded-lg border border-cyan-700/30 bg-cyan-950/20 p-2.5" data-testid="panel-plan-loading">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-cyan-300" />
+              <span className="text-[10px] font-semibold text-cyan-200 uppercase tracking-wider">Optimal Loading Engine</span>
+            </div>
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-500/30">
+              Commit {data.loadingPlan.commitWindowWeeks} wk · Horizon {data.loadingPlan.horizonWeeks} wk
+            </span>
+          </div>
+          <p className="text-[9px] text-gray-300 leading-relaxed mb-1.5">{data.loadingPlan.planRationale}</p>
+          {data.loadingPlan.committed.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[8px] text-gray-500 uppercase tracking-wider">Committed window (weeks 1–{data.loadingPlan.commitWindowWeeks})</p>
+              {data.loadingPlan.committed.map(p => (
+                <div key={p.id} className="rounded bg-cyan-900/20 border border-cyan-700/20 px-2 py-1 flex items-center justify-between gap-2 flex-wrap" data-testid={`committed-line-${p.exerciseId}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] text-cyan-100 truncate">{p.exerciseName}</p>
+                    <p className="text-[8px] text-gray-400">Wk {p.weekIndex + 1} · {p.sets}×{p.reps} · {p.intensity.label} · {p.daysPerWeek}×/wk · NRS ≤ {p.painCeilingNrs}</p>
+                  </div>
+                  <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ${CONFIDENCE_COLORS[p.confidence]}`}>
+                    {CONFIDENCE_LABELS[p.confidence]}
+                  </span>
+                  {p.isOverride && (
+                    <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">override</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {data.loadingPlan.projected.length > 0 && (
+            <div className="mt-2">
+              <button
+                onClick={() => setProjectionExpanded(v => !v)}
+                className="w-full flex items-center justify-between text-[8px] text-gray-400 uppercase tracking-wider font-semibold py-1"
+                data-testid="button-plan-loading-projection-toggle"
+              >
+                <span>Projected weeks ({data.loadingPlan.projected.length})</span>
+                {projectionExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </button>
+              {projectionExpanded && (
+                <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                  {data.loadingPlan.projected.map(p => (
+                    <div key={p.id} className="text-[9px] text-gray-300 flex items-center justify-between gap-2 px-2 py-0.5 bg-slate-900/30 rounded">
+                      <span className="text-slate-200 w-10 shrink-0">Wk {p.weekIndex + 1}</span>
+                      <span className="flex-1 truncate text-gray-300">{p.exerciseName}</span>
+                      <span className="text-gray-400 text-[8px]">{p.sets}×{p.reps} · {p.intensity.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {data.loadingPlan.recomputeTriggers.length > 0 && (
+            <div className="mt-2 pt-1.5 border-t border-cyan-800/30">
+              <p className="text-[8px] text-gray-500 uppercase tracking-wider mb-0.5">Auto-recompute when</p>
+              <p className="text-[9px] text-gray-400">{data.loadingPlan.recomputeTriggers.join(' · ')}</p>
+            </div>
+          )}
+        </div>
+      )}
       <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2.5">
         <div className="flex items-center gap-1.5 mb-1.5">
           <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
@@ -400,7 +733,14 @@ export default function PlanTab({ data, isLoading, onTargetRegionClick }: PlanTa
       </div>
 
       {data.phases.map((phase, idx) => (
-        <PhaseCard key={phase.id} phase={phase} idx={idx} onTargetClick={onTargetRegionClick} />
+        <PhaseCard
+          key={phase.id}
+          phase={phase}
+          idx={idx}
+          onTargetClick={onTargetRegionClick}
+          onLoadingOverride={onLoadingOverride}
+          onLoadingClearOverride={onLoadingClearOverride}
+        />
       ))}
 
       {data.constraints.length > 0 && (

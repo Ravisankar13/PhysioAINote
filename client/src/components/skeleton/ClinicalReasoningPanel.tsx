@@ -45,7 +45,7 @@ import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
 import StructuredReasoningTab, { type StructuredReasoningResult, type ReasoningHypothesis as StructuredHypothesis } from "./StructuredReasoningTab";
 import DecisionTab, { type TreatmentDecisionResult } from "./DecisionTab";
-import PlanTab, { type TreatmentPlanResult } from "./PlanTab";
+import PlanTab, { type TreatmentPlanResult, type LoadingOverridePayload } from "./PlanTab";
 
 export interface EvidenceReference {
   title: string;
@@ -268,6 +268,9 @@ interface ClinicalReasoningPanelProps {
   planData?: TreatmentPlanResult | null;
   planLoading?: boolean;
   onPlanTargetClick?: (regions: string[]) => void;
+  onPlanLoadingRecalculate?: () => void;
+  onPlanLoadingOverride?: (override: LoadingOverridePayload) => void;
+  onPlanLoadingClearOverride?: (exerciseId: string, weekIndex: number) => void;
   evidenceData?: EvidenceEngineResult | null;
   evidenceLoading?: boolean;
   onEvidenceQuery?: () => void;
@@ -491,6 +494,9 @@ export default function ClinicalReasoningPanel({
   planData,
   planLoading,
   onPlanTargetClick,
+  onPlanLoadingRecalculate,
+  onPlanLoadingOverride,
+  onPlanLoadingClearOverride,
   evidenceData,
   evidenceLoading,
   onEvidenceQuery,
@@ -1295,6 +1301,9 @@ export default function ClinicalReasoningPanel({
               data={planData ?? null}
               isLoading={planLoading ?? false}
               onTargetRegionClick={onPlanTargetClick}
+              onLoadingRecalculate={onPlanLoadingRecalculate}
+              onLoadingOverride={onPlanLoadingOverride}
+              onLoadingClearOverride={onPlanLoadingClearOverride}
             />
           ) : activeTab === 'decision' ? (
             <DecisionTab

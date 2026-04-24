@@ -6559,6 +6559,206 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/loading-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+      const { buildTendinopathyLoadingPlan, diffPlans } = await import("./services/tendinopathyLoadingEngine");
+
+      const loadingRequestSchema = z.object({
+        conditionName: z.string().min(1),
+        site: z.enum(['achilles', 'patellar', 'gluteal', 'proximal_hamstring', 'rotator_cuff', 'lateral_elbow', 'medial_elbow']).optional(),
+        patientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }),
+        }),
+        proposedExercises: z.array(z.object({
+          exerciseId: z.string(),
+          exerciseName: z.string(),
+          category: z.string().optional(),
+          bodyParts: z.array(z.string()).optional(),
+          baseSets: z.number().optional(),
+          baseReps: z.string().optional(),
+        })).default([]),
+        overrides: z.array(z.object({
+          exerciseId: z.string(),
+          weekIndex: z.number(),
+          sets: z.number().optional(),
+          reps: z.string().optional(),
+          intensity: z.object({
+            value: z.union([z.number(), z.string()]),
+            unit: z.enum(['%1RM', '%MVC', 'RIR', 'pain_monitored', 'isometric_hold', 'bodyweight']),
+            label: z.string(),
+          }).optional(),
+          tempo: z.object({ eccentricSec: z.number(), isometricSec: z.number(), concentricSec: z.number() }).optional(),
+          daysPerWeek: z.number().optional(),
+          frequencyPerDay: z.number().optional(),
+          painCeilingNrs: z.number().optional(),
+          progression: z.object({ trigger: z.string(), nextStep: z.string(), reviewAfterSessions: z.number() }).optional(),
+          overrideAuthorId: z.string().optional(),
+          overrideAt: z.string().optional(),
+        })).optional(),
+        previousPlan: z.any().optional(),
+        previousPlanHash: z.string().optional(),
+        recomputeReason: z.string().optional(),
+        commitWindowWeeks: z.union([z.literal(1), z.literal(2)]).optional(),
+        horizonWeeks: z.number().optional(),
+      });
+
+      const parsed = loadingRequestSchema.parse(req.body);
+      const { previousPlan, recomputeReason, ...engineReq } = parsed as typeof parsed & { previousPlan?: unknown; recomputeReason?: string };
+      const response = buildTendinopathyLoadingPlan(engineReq as Parameters<typeof buildTendinopathyLoadingPlan>[0]);
+
+      if (previousPlan && response.plan.applicability === 'tendinopathy') {
+        try {
+          response.diff = diffPlans(previousPlan as Parameters<typeof diffPlans>[0], response.plan, recomputeReason ?? 'Manual recompute');
+        } catch (e) {
+          // ignore diff errors — diff is non-critical
+        }
+      }
+
+      res.json(response);
+    } catch (error: unknown) {
+      console.error("Loading engine generate error:", error);
+      const msg = error instanceof Error ? error.message : "Failed to generate loading plan";
+      res.status(400).json({ error: msg });
+    }
+  });
+
+  // -------- Loading Engine context store endpoints (Task #231) --------
+  // Backend persistence for the Optimal Loading Engine clinician workflow:
+  // structured patient factors + per-(exerciseId, weekIndex) overrides.
+  // Replaces fragile localStorage so overrides persist across recomputes,
+  // page reloads, and devices for the same authenticated clinician.
+  app.get("/api/loading-context/:conditionName", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { getLoadingContext } = await import("./services/loadingContextStore");
+      const userId = req.user!.id;
+      const sessionPrescriptionNum = req.query.sessionPrescriptionNum ? Number(req.query.sessionPrescriptionNum) : undefined;
+      const ctx = getLoadingContext(userId, req.params.conditionName, sessionPrescriptionNum);
+      res.json(ctx);
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to load context" });
+    }
+  });
+
+  app.put("/api/loading-context/:conditionName", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+      const { setLoadingPatientFactors } = await import("./services/loadingContextStore");
+      const schema = z.object({
+        sessionPrescriptionNum: z.number().optional(),
+        patientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }).default({}),
+        }),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid body", details: parsed.error.format() });
+      const userId = req.user!.id;
+      setLoadingPatientFactors(userId, req.params.conditionName, parsed.data.sessionPrescriptionNum, parsed.data.patientFactors);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to save factors" });
+    }
+  });
+
+  app.put("/api/loading-context/:conditionName/overrides", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+      const { upsertLoadingOverride } = await import("./services/loadingContextStore");
+      const schema = z.object({
+        sessionPrescriptionNum: z.number().optional(),
+        override: z.object({
+          exerciseId: z.string(),
+          weekIndex: z.number(),
+          sets: z.number().optional(),
+          reps: z.string().optional(),
+          intensity: z.object({
+            value: z.union([z.number(), z.string()]),
+            unit: z.enum(['%1RM', '%MVC', 'RIR', 'pain_monitored', 'isometric_hold', 'bodyweight']),
+            label: z.string(),
+          }).optional(),
+          tempo: z.object({ eccentricSec: z.number(), isometricSec: z.number(), concentricSec: z.number() }).optional(),
+          daysPerWeek: z.number().optional(),
+          painCeilingNrs: z.number().optional(),
+        }),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid body", details: parsed.error.format() });
+      const userId = req.user!.id;
+      const saved = upsertLoadingOverride(userId, req.params.conditionName, parsed.data.sessionPrescriptionNum, parsed.data.override);
+      res.json({ ok: true, override: saved });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to save override" });
+    }
+  });
+
+  app.delete("/api/loading-context/:conditionName/overrides/:exerciseId/:weekIndex", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { deleteLoadingOverride } = await import("./services/loadingContextStore");
+      const userId = req.user!.id;
+      const sessionPrescriptionNum = req.query.sessionPrescriptionNum ? Number(req.query.sessionPrescriptionNum) : undefined;
+      const ok = deleteLoadingOverride(userId, req.params.conditionName, sessionPrescriptionNum, req.params.exerciseId, Number(req.params.weekIndex));
+      res.json({ ok });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to delete override" });
+    }
+  });
+
   app.post("/api/treatment-plan/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { z } = await import("zod");
@@ -6647,6 +6847,42 @@ GUIDELINES:
             })).optional(),
           })).optional(),
         }).optional(),
+        // Loading-engine inputs (Task #231) — when conditionName resolves
+        // to a tendinopathy site, the loading engine becomes the dosage
+        // source of truth for exercises in every phase of the plan.
+        conditionName: z.string().optional(),
+        sessionPrescriptionNum: z.number().optional(),
+        loadingPatientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }).default({}),
+        }).optional(),
       });
 
       const parsed = treatmentPlanInputSchema.safeParse(req.body);
@@ -6655,7 +6891,119 @@ GUIDELINES:
       }
 
       const result = generateTreatmentPlan(parsed.data);
-      res.json(result);
+
+      // -------- Loading Engine handshake (Task #231) --------
+      // Replace dosages within phases with engine-prescribed loads, so
+      // PlanTab presents the loading engine as the single dosage source
+      // of truth for tendinopathy patients.
+      let augmentedResult: typeof result & {
+        loadingPlan?: import('@shared/schema').TendinopathyLoadingPlan;
+        loadingEngine?: { applicable: boolean; reason?: string; site?: import('@shared/schema').TendinopathySite };
+      } = result;
+      if (parsed.data.conditionName) {
+        const { detectTendinopathySite, negotiateLoadingPlan, pickFallbackAlternative, diffPlans } = await import("./services/tendinopathyLoadingEngine");
+        const { getLoadingContext, getLastLoadingPlan, setLastLoadingPlan, setLoadingPatientFactors } = await import("./services/loadingContextStore");
+        const site = detectTendinopathySite(parsed.data.conditionName);
+        if (!site) {
+          augmentedResult = {
+            ...result,
+            loadingEngine: {
+              applicable: false,
+              reason: `Optimal Loading Engine isn't applicable to "${parsed.data.conditionName}" — load modulation isn't the primary lever for this condition. Standard treatment-plan dosing applies.`,
+            },
+          };
+        } else {
+          // Tendinopathy → engine is the single source of truth.
+          // No silent fallback: any failure here surfaces as an explicit
+          // 502 so clinicians never see generic dosing labelled as
+          // engine-prescribed.
+          try {
+            const persisted = getLoadingContext(req.user!.id, parsed.data.conditionName, parsed.data.sessionPrescriptionNum);
+            // Persist incoming factors so the next recompute sees them.
+            if (parsed.data.loadingPatientFactors) {
+              setLoadingPatientFactors(req.user!.id, parsed.data.conditionName, parsed.data.sessionPrescriptionNum, parsed.data.loadingPatientFactors);
+            }
+            const factors = parsed.data.loadingPatientFactors ?? persisted.patientFactors ?? { history: {} };
+            // Flatten exercises across all phases for negotiation.
+            const flat: Array<{ p: number; e: number; ex: typeof result.phases[number]['exercises'][number] }> = [];
+            result.phases.forEach((ph, pi) => ph.exercises.forEach((ex, ei) => flat.push({ p: pi, e: ei, ex })));
+            const proposed = flat.map((row, i) => ({
+              exerciseId: row.ex.id || `tp_${i}_${(row.ex.name || 'unnamed').toLowerCase().replace(/\W+/g, '_').slice(0, 40)}`,
+              exerciseName: row.ex.name,
+              category: row.ex.category,
+              bodyParts: row.ex.targetRegions,
+              baseSets: row.ex.sets,
+              baseReps: row.ex.reps,
+            }));
+            const negotiated = await negotiateLoadingPlan({
+              conditionName: parsed.data.conditionName,
+              site,
+              patientFactors: factors,
+              proposedExercises: proposed,
+              overrides: persisted.overrides,
+              commitWindowWeeks: 1,
+              horizonWeeks: 10,
+            }, async (swap) => pickFallbackAlternative(site, swap));
+
+            if (negotiated.plan.applicability === 'tendinopathy') {
+              const byEx = new Map(negotiated.plan.committed.map(p => [p.exerciseId, p]));
+              const swapByIndex = new Map(negotiated.swapLog.map(s => [s.index, s]));
+              const phasesAug = result.phases.map(ph => ({ ...ph, exercises: ph.exercises.map(ex => ({ ...ex })) }));
+              flat.forEach((row, i) => {
+                const finalEx = negotiated.finalExercises[i];
+                const exId = finalEx?.exerciseId ?? proposed[i].exerciseId;
+                const opt = byEx.get(exId);
+                const swap = swapByIndex.get(i);
+                const target = phasesAug[row.p].exercises[row.e] as typeof phasesAug[number]['exercises'][number] & {
+                  optimalLoad?: import('@shared/schema').OptimalLoadPrescription;
+                  swapNotice?: { from: string; reason: string };
+                };
+                if (swap) {
+                  target.name = finalEx.exerciseName;
+                  target.id = exId;
+                  target.swapNotice = { from: swap.from.exerciseName, reason: swap.reason };
+                  target.rationale = `Swapped from "${swap.from.exerciseName}" to "${finalEx.exerciseName}" by the Optimal Loading Engine because: ${swap.reason}`;
+                }
+                if (opt) {
+                  target.sets = opt.sets;
+                  target.reps = opt.reps;
+                  target.frequency = `${opt.daysPerWeek}×/wk${opt.frequencyPerDay && opt.frequencyPerDay > 1 ? ` × ${opt.frequencyPerDay}/day` : ''}`;
+                  target.intensity = opt.intensity.label;
+                  target.painCeiling = `NRS ≤ ${opt.painCeilingNrs}/10`;
+                  target.optimalLoad = opt;
+                }
+              });
+              // Server-side diff against the previously-stored plan.
+              const prev = getLastLoadingPlan(req.user!.id, parsed.data.conditionName, parsed.data.sessionPrescriptionNum) ?? null;
+              const loadingDiff = diffPlans(prev, negotiated.plan, prev ? 'Loading inputs changed' : 'Initial plan');
+              setLastLoadingPlan(req.user!.id, parsed.data.conditionName, parsed.data.sessionPrescriptionNum, negotiated.plan);
+              augmentedResult = {
+                ...result,
+                phases: phasesAug,
+                loadingPlan: negotiated.plan,
+                loadingEngine: { applicable: true, site },
+                loadingDiff,
+              } as typeof augmentedResult & { loadingDiff?: import('@shared/schema').LoadingPlanDiff };
+            } else {
+              // Engine ran but produced a non-tendinopathy plan — explicit
+              // failure for a tendinopathy condition. No silent fallback.
+              return res.status(502).json({
+                error: 'loading_engine_failed',
+                site,
+                message: `Optimal Loading Engine could not produce a tendinopathy plan for "${parsed.data.conditionName}". Resolve missing patient factors and retry, or override the prescription manually.`,
+              });
+            }
+          } catch (e) {
+            console.error("Loading engine handshake failed in /treatment-plan/generate:", e);
+            return res.status(502).json({
+              error: 'loading_engine_failed',
+              site,
+              message: e instanceof Error ? e.message : 'Optimal Loading Engine threw an unexpected error.',
+            });
+          }
+        }
+      }
+      res.json(augmentedResult);
     } catch (error: any) {
       console.error("Treatment plan generator error:", error);
       res.status(500).json({ error: "Failed to generate treatment plan" });
@@ -6720,6 +7068,56 @@ GUIDELINES:
           dysfunction: z.string().optional(),
           clinical: z.string().optional(),
         })).optional().default([]),
+        // Loading-engine inputs (Task #231) — optional; when conditionName
+        // resolves to a tendinopathy, the loading engine becomes the
+        // dosage source of truth for the generated plan.
+        conditionName: z.string().optional(),
+        sessionPrescriptionNum: z.number().optional(),
+        loadingPatientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }).default({}),
+        }).optional(),
+        loadingOverrides: z.array(z.object({
+          exerciseId: z.string(),
+          weekIndex: z.number(),
+          sets: z.number().optional(),
+          reps: z.string().optional(),
+          intensity: z.object({
+            value: z.union([z.number(), z.string()]),
+            unit: z.enum(['%1RM', '%MVC', 'RIR', 'pain_monitored', 'isometric_hold', 'bodyweight']),
+            label: z.string(),
+          }).optional(),
+          tempo: z.object({ eccentricSec: z.number(), isometricSec: z.number(), concentricSec: z.number() }).optional(),
+          daysPerWeek: z.number().optional(),
+          painCeilingNrs: z.number().optional(),
+        })).optional(),
       });
 
       const parsed = exerciseInputSchema.safeParse(req.body);
@@ -6898,7 +7296,130 @@ Based on this clinical data, generate a comprehensive, prioritized exercise pres
           validationErrors: validated.error.format(),
         });
       }
-      res.json(validated.data);
+
+      // -------- Loading Engine handshake (Task #231) --------
+      // Make the loading engine the dosage source of truth for tendinopathy
+      // patients in the main prescription pipeline as well, not just custom.
+      let loadingPlan: import("@shared/schema").TendinopathyLoadingPlan | undefined;
+      let loadingEngineMeta: { applicable: boolean; reason?: string; site?: import("@shared/schema").TendinopathySite } | undefined;
+      let exerciseGroups = validated.data.exerciseGroups as Array<typeof validated.data.exerciseGroups[number] & {
+        exercises: Array<typeof validated.data.exerciseGroups[number]['exercises'][number] & {
+          exerciseId?: string;
+          optimalLoad?: import("@shared/schema").OptimalLoadPrescription;
+          loadingProjection?: import("@shared/schema").OptimalLoadPrescription[];
+          swapNotice?: { from: string; reason: string };
+        }>;
+      }>;
+
+      let loadingDiff: import("@shared/schema").LoadingPlanDiff | undefined;
+      if (data.conditionName) {
+        const { detectTendinopathySite, negotiateLoadingPlan, pickFallbackAlternative, diffPlans } = await import("./services/tendinopathyLoadingEngine");
+        const { getLoadingContext, getLastLoadingPlan, setLastLoadingPlan, setLoadingPatientFactors, upsertLoadingOverride } = await import("./services/loadingContextStore");
+        const site = detectTendinopathySite(data.conditionName);
+        if (!site) {
+          loadingEngineMeta = {
+            applicable: false,
+            reason: `Optimal Loading Engine isn't applicable to "${data.conditionName}" — load modulation isn't the primary lever for this condition. Standard exercise prescription applies.`,
+          };
+        } else {
+          // Tendinopathy → engine is single source of truth. Failures
+          // surface as 502; no silent generic-dose fallback.
+          try {
+            // Persist incoming factors + overrides into the durable store.
+            if (data.loadingPatientFactors) {
+              setLoadingPatientFactors(req.user!.id, data.conditionName, data.sessionPrescriptionNum, data.loadingPatientFactors);
+            }
+            if (Array.isArray(data.loadingOverrides)) {
+              for (const o of data.loadingOverrides) upsertLoadingOverride(req.user!.id, data.conditionName, data.sessionPrescriptionNum, o);
+            }
+            const persisted = getLoadingContext(req.user!.id, data.conditionName, data.sessionPrescriptionNum);
+            const factors = data.loadingPatientFactors ?? persisted.patientFactors ?? { history: {} };
+            // Flatten exercises across groups so the engine sees the full plan,
+            // tracking (groupIdx, exerciseIdx) so we can write results back.
+            const flat: Array<{ g: number; e: number; ex: typeof exerciseGroups[number]['exercises'][number] }> = [];
+            exerciseGroups.forEach((g, gi) => g.exercises.forEach((ex, ei) => flat.push({ g: gi, e: ei, ex })));
+            const proposed = flat.map((row, i) => ({
+              exerciseId: `gen_${i}_${(row.ex.name || 'unnamed').toLowerCase().replace(/\W+/g, '_').slice(0, 40)}`,
+              exerciseName: row.ex.name,
+              category: row.ex.targetStructure,
+              bodyParts: row.ex.targetStructure ? [row.ex.targetStructure] : undefined,
+              baseSets: parseInt(row.ex.sets, 10) || undefined,
+              baseReps: row.ex.reps,
+            }));
+            const negotiated = await negotiateLoadingPlan({
+              conditionName: data.conditionName,
+              site,
+              patientFactors: factors,
+              proposedExercises: proposed,
+              overrides: persisted.overrides,
+              commitWindowWeeks: 1,
+              horizonWeeks: 10,
+            }, async (swap) => pickFallbackAlternative(site, swap));
+
+            if (negotiated.plan.applicability === 'tendinopathy') {
+              loadingPlan = negotiated.plan;
+              loadingEngineMeta = { applicable: true, site };
+
+              const byEx = new Map<string, import("@shared/schema").OptimalLoadPrescription>();
+              const projByEx = new Map<string, import("@shared/schema").OptimalLoadPrescription[]>();
+              for (const p of loadingPlan.committed) byEx.set(p.exerciseId, p);
+              for (const p of loadingPlan.projected) {
+                if (!projByEx.has(p.exerciseId)) projByEx.set(p.exerciseId, []);
+                projByEx.get(p.exerciseId)!.push(p);
+              }
+              const swapByIndex = new Map(negotiated.swapLog.map(s => [s.index, s]));
+
+              flat.forEach((row, i) => {
+                const finalEx = negotiated.finalExercises[i];
+                const exId = finalEx?.exerciseId ?? proposed[i].exerciseId;
+                const opt = byEx.get(exId);
+                const swap = swapByIndex.get(i);
+                const target = exerciseGroups[row.g].exercises[row.e];
+                if (swap) {
+                  // Swap-safe semantics: replace identity AND blank
+                  // execution-specific text inherited from the original
+                  // exercise so clinicians don't see mismatched details.
+                  target.name = finalEx.exerciseName;
+                  target.exerciseId = exId;
+                  target.swapNotice = { from: swap.from.exerciseName, reason: swap.reason };
+                  target.loadGuidance = 'Refer to "Why this dose" — engine-prescribed load.';
+                  target.rationale = `Swapped from "${swap.from.exerciseName}" to "${finalEx.exerciseName}" because: ${swap.reason}`;
+                  target.progression = 'Progression governed by Optimal Loading Engine projection (see weeks 2–10).';
+                  target.contraindications = target.contraindications || 'See engine pain ceiling.';
+                } else {
+                  target.exerciseId = exId;
+                }
+                if (opt) {
+                  target.sets = String(opt.sets);
+                  target.reps = opt.reps;
+                  target.tempo = `${opt.tempo.eccentricSec}-${opt.tempo.isometricSec}-${opt.tempo.concentricSec}`;
+                  target.optimalLoad = opt;
+                  target.loadingProjection = projByEx.get(exId) ?? [];
+                }
+              });
+
+              const prev = getLastLoadingPlan(req.user!.id, data.conditionName, data.sessionPrescriptionNum) ?? null;
+              loadingDiff = diffPlans(prev, negotiated.plan, prev ? 'Loading inputs changed' : 'Initial plan');
+              setLastLoadingPlan(req.user!.id, data.conditionName, data.sessionPrescriptionNum, negotiated.plan);
+            } else {
+              return res.status(502).json({
+                error: 'loading_engine_failed',
+                site,
+                message: `Optimal Loading Engine could not produce a tendinopathy plan for "${data.conditionName}". Resolve missing patient factors and retry, or override the prescription manually.`,
+              });
+            }
+          } catch (e) {
+            console.error("Loading engine handshake failed in /exercise-engine/generate:", e);
+            return res.status(502).json({
+              error: 'loading_engine_failed',
+              site,
+              message: e instanceof Error ? e.message : 'Optimal Loading Engine threw an unexpected error.',
+            });
+          }
+        }
+      }
+
+      res.json({ ...validated.data, exerciseGroups, loadingPlan, loadingEngine: loadingEngineMeta, loadingDiff });
     } catch (error: unknown) {
       console.error("Exercise engine generation error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -6972,6 +7493,54 @@ Based on this clinical data, generate a comprehensive, prioritized exercise pres
           clinical: z.string().optional(),
         })).optional().default([]),
         goalTargets: z.string().optional().default(""),
+        // ---- Loading Engine (Task #231) handshake inputs ----
+        conditionName: z.string().optional(),
+        sessionPrescriptionNum: z.number().optional(),
+        loadingPatientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }).default({}),
+        }).optional(),
+        loadingOverrides: z.array(z.object({
+          exerciseId: z.string(),
+          weekIndex: z.number(),
+          sets: z.number().optional(),
+          reps: z.string().optional(),
+          intensity: z.object({
+            value: z.union([z.number(), z.string()]),
+            unit: z.enum(['%1RM', '%MVC', 'RIR', 'pain_monitored', 'isometric_hold', 'bodyweight']),
+            label: z.string(),
+          }).optional(),
+          tempo: z.object({ eccentricSec: z.number(), isometricSec: z.number(), concentricSec: z.number() }).optional(),
+          daysPerWeek: z.number().optional(),
+          painCeilingNrs: z.number().optional(),
+        })).optional(),
       });
 
       const parsed = customExerciseInputSchema.safeParse(req.body);
@@ -7197,7 +7766,137 @@ Based on this clinical data, DESIGN novel biomechanical exercises from first pri
           validationErrors: validated.error.format(),
         });
       }
-      res.json(validated.data);
+
+      // -------- Loading Engine handshake (Task #231) --------
+      let loadingPlan: import("@shared/schema").TendinopathyLoadingPlan | undefined;
+      let loadingEngineMeta: { applicable: boolean; reason?: string; site?: import("@shared/schema").TendinopathySite } | undefined;
+      let loadingDiff: import("@shared/schema").LoadingPlanDiff | undefined;
+      let exercisesWithLoad = validated.data.customExercises as Array<
+        typeof validated.data.customExercises[number] & {
+          exerciseId?: string;
+          optimalLoad?: import("@shared/schema").OptimalLoadPrescription;
+          loadingProjection?: import("@shared/schema").OptimalLoadPrescription[];
+        }
+      >;
+      if (data.conditionName) {
+        const { detectTendinopathySite, negotiateLoadingPlan, pickFallbackAlternative, diffPlans } = await import("./services/tendinopathyLoadingEngine");
+        const { getLoadingContext, getLastLoadingPlan, setLastLoadingPlan, setLoadingPatientFactors, upsertLoadingOverride } = await import("./services/loadingContextStore");
+        const site = detectTendinopathySite(data.conditionName);
+        if (!site) {
+          loadingEngineMeta = {
+            applicable: false,
+            reason: `Optimal Loading Engine isn't applicable to "${data.conditionName}" — load modulation isn't the primary lever for this condition. Standard exercise prescription applies.`,
+          };
+        } else {
+          // Tendinopathy → engine is single source of truth. Failures
+          // surface as 502; no silent generic-dose fallback.
+          try {
+            if (data.loadingPatientFactors) {
+              setLoadingPatientFactors(req.user!.id, data.conditionName, data.sessionPrescriptionNum, data.loadingPatientFactors);
+            }
+            if (Array.isArray(data.loadingOverrides)) {
+              for (const o of data.loadingOverrides) upsertLoadingOverride(req.user!.id, data.conditionName, data.sessionPrescriptionNum, o);
+            }
+            const persisted = getLoadingContext(req.user!.id, data.conditionName, data.sessionPrescriptionNum);
+            const factors = data.loadingPatientFactors ?? persisted.patientFactors ?? { history: {} };
+            const proposed = exercisesWithLoad.map((ex, i) => ({
+              exerciseId: `ex_${i}_${(ex.name || 'unnamed').toLowerCase().replace(/\W+/g, '_').slice(0, 40)}`,
+              exerciseName: ex.name,
+              category: ex.targetSystem,
+              bodyParts: ex.clinicalTarget ? [ex.clinicalTarget] : undefined,
+              baseSets: parseInt(ex.dosage.sets, 10) || undefined,
+              baseReps: ex.dosage.reps,
+            }));
+            const negotiated = await negotiateLoadingPlan({
+              conditionName: data.conditionName,
+              site,
+              patientFactors: factors,
+              proposedExercises: proposed,
+              overrides: persisted.overrides,
+              commitWindowWeeks: 1,
+              horizonWeeks: 10,
+            }, async (swap) => pickFallbackAlternative(site, swap));
+            if (negotiated.plan.applicability !== 'tendinopathy') {
+              return res.status(502).json({
+                error: 'loading_engine_failed',
+                site,
+                message: `Optimal Loading Engine could not produce a tendinopathy plan for "${data.conditionName}". Resolve missing patient factors and retry, or override the prescription manually.`,
+              });
+            }
+            loadingPlan = negotiated.plan;
+            loadingEngineMeta = { applicable: true, site };
+            const prev = getLastLoadingPlan(req.user!.id, data.conditionName, data.sessionPrescriptionNum) ?? null;
+            loadingDiff = diffPlans(prev, negotiated.plan, prev ? 'Loading inputs changed' : 'Initial plan');
+            setLastLoadingPlan(req.user!.id, data.conditionName, data.sessionPrescriptionNum, negotiated.plan);
+            {
+              const byEx = new Map<string, import("@shared/schema").OptimalLoadPrescription>();
+              const projByEx = new Map<string, import("@shared/schema").OptimalLoadPrescription[]>();
+              for (const p of loadingPlan.committed) byEx.set(p.exerciseId, p);
+              for (const p of loadingPlan.projected) {
+                if (!projByEx.has(p.exerciseId)) projByEx.set(p.exerciseId, []);
+                projByEx.get(p.exerciseId)!.push(p);
+              }
+              const swapByIndex = new Map(negotiated.swapLog.map(s => [s.index, s]));
+              exercisesWithLoad = exercisesWithLoad.map((ex, i) => {
+                const finalEx = negotiated.finalExercises[i];
+                const exId = finalEx?.exerciseId ?? proposed[i].exerciseId;
+                const opt = byEx.get(exId);
+                const swap = swapByIndex.get(i);
+                // Swap-safe semantics: when the engine replaces an exercise,
+                // also blank execution-specific text inherited from the
+                // original (movementInstructions, activationPattern,
+                // designRationale, progressions, equipmentNeeded) so the card
+                // does not present mismatched identity vs execution details.
+                const base = swap
+                  ? {
+                      ...ex,
+                      name: finalEx.exerciseName,
+                      exerciseId: exId,
+                      swapNotice: { from: swap.from.exerciseName, reason: swap.reason },
+                      movementInstructions: [
+                        `Replaces "${swap.from.exerciseName}".`,
+                        `Reason: ${swap.reason}`,
+                        `Refer to the "Why this dose" section for engine-prescribed loading parameters.`,
+                      ],
+                      activationPattern: [],
+                      designRationale: `Swapped from "${swap.from.exerciseName}" to "${finalEx.exerciseName}" by the Optimal Loading Engine because: ${swap.reason}`,
+                      progressionPath: 'Progression governed by Optimal Loading Engine projection (weeks 2–10).',
+                      equipmentNeeded: [],
+                    }
+                  : { ...ex, exerciseId: exId };
+                if (!opt) return base;
+                return {
+                  ...base,
+                  dosage: {
+                    ...ex.dosage,
+                    sets: String(opt.sets),
+                    reps: opt.reps,
+                    tempo: `${opt.tempo.eccentricSec}-${opt.tempo.isometricSec}-${opt.tempo.concentricSec}`,
+                    frequency: `${opt.daysPerWeek}×/wk${opt.frequencyPerDay && opt.frequencyPerDay > 1 ? ` × ${opt.frequencyPerDay}/day` : ''}`,
+                  },
+                  optimalLoad: opt,
+                  loadingProjection: projByEx.get(exId) ?? [],
+                };
+              });
+            }
+          } catch (e) {
+            console.error("Loading engine handshake failed in /design-custom:", e);
+            return res.status(502).json({
+              error: 'loading_engine_failed',
+              site,
+              message: e instanceof Error ? e.message : 'Optimal Loading Engine threw an unexpected error.',
+            });
+          }
+        }
+      }
+
+      res.json({
+        ...validated.data,
+        customExercises: exercisesWithLoad,
+        loadingPlan,
+        loadingEngine: loadingEngineMeta,
+        loadingDiff,
+      });
     } catch (error: unknown) {
       console.error("Custom exercise design error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";

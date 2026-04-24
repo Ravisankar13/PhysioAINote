@@ -808,6 +808,9 @@ export default function PhysioGPT() {
   const [treatmentDecisionLoading, setTreatmentDecisionLoading] = useState(false);
   const [treatmentPlanData, setTreatmentPlanData] = useState<TreatmentPlanResult | null>(null);
   const [treatmentPlanLoading, setTreatmentPlanLoading] = useState(false);
+  // Bumped to force a re-fetch of /api/treatment-plan/generate after a
+  // clinician override or explicit "Recalculate now" — Optimal Loading Engine.
+  const [treatmentPlanReloadKey, setTreatmentPlanReloadKey] = useState(0);
   const [customExerciseResult, setCustomExerciseResult] = useState<import("@/components/skeleton/ExerciseEngineTab").CustomExerciseResult | null>(null);
   const [customManualTherapyResult, setCustomManualTherapyResult] = useState<import("@/components/skeleton/ManualTherapyEngineTab").CustomManualTherapyResult | null>(null);
   const [activeGoalProfile, setActiveGoalProfile] = useState<import("@/lib/goalStateEngine").RecoveryGoalProfile | null>(null);
@@ -2234,6 +2237,47 @@ ${ddxList}`;
     setVisualizationBoneHighlights(boneHighlights);
   }, [BIOMECHANICAL_REGION_TO_MUSCLES, REGION_TO_BONE_NAMES]);
 
+  // Optimal Loading Engine — clinician-facing handlers (Task #231).
+  // Persist override → bump reload key → /api/treatment-plan/generate refetches
+  // and the engine handshake re-runs with the new override applied.
+  const handlePlanLoadingRecalculate = useCallback(() => {
+    setTreatmentPlanReloadKey(k => k + 1);
+  }, []);
+
+  const handlePlanLoadingOverride = useCallback(async (
+    override: import('@/components/skeleton/PlanTab').LoadingOverridePayload,
+  ) => {
+    const condition = extractionResult?.mainComplaint;
+    if (!condition) return;
+    try {
+      await apiRequest(`/api/loading-context/${encodeURIComponent(condition)}/overrides`, 'PUT', {
+        override,
+        sessionPrescriptionNum: sessionPrescriptionNum ?? undefined,
+      });
+      setTreatmentPlanReloadKey(k => k + 1);
+    } catch (e) {
+      console.error('Failed to save loading override:', e);
+    }
+  }, [extractionResult?.mainComplaint, sessionPrescriptionNum]);
+
+  const handlePlanLoadingClearOverride = useCallback(async (
+    exerciseId: string,
+    weekIndex: number,
+  ) => {
+    const condition = extractionResult?.mainComplaint;
+    if (!condition) return;
+    try {
+      const qs = sessionPrescriptionNum != null ? `?sessionPrescriptionNum=${sessionPrescriptionNum}` : '';
+      await apiRequest(
+        `/api/loading-context/${encodeURIComponent(condition)}/overrides/${encodeURIComponent(exerciseId)}/${weekIndex}${qs}`,
+        'DELETE',
+      );
+      setTreatmentPlanReloadKey(k => k + 1);
+    } catch (e) {
+      console.error('Failed to clear loading override:', e);
+    }
+  }, [extractionResult?.mainComplaint, sessionPrescriptionNum]);
+
   const handleEvidenceQuery = useCallback(() => {
     if (evidenceAbortRef.current) {
       evidenceAbortRef.current.abort();
@@ -2522,6 +2566,48 @@ ${ddxList}`;
       extractionContext: extractionResult ?? undefined,
       biomechanicsContext: planBioCtx,
       slingContext: planSlingCtx,
+      // Loading-engine handshake (Task #231): when the condition is a
+      // tendinopathy, the plan endpoint will replace exercise dosages with
+      // engine-prescribed loads.
+      conditionName: extractionResult?.mainComplaint ?? undefined,
+      sessionPrescriptionNum: sessionPrescriptionNum ?? undefined,
+      loadingPatientFactors: extractionResult ? (() => {
+        const er = extractionResult;
+        const corpus = [er.priorTreatment ?? '', ...(er.relevantHistory ?? [])].join(' \n ').toLowerCase();
+        const has = (re: RegExp) => re.test(corpus);
+        const sexRaw = (er.patientSex ?? '').toLowerCase();
+        const sex: 'male' | 'female' | 'other' | undefined =
+          sexRaw.startsWith('m') ? 'male' :
+          sexRaw.startsWith('f') ? 'female' :
+          sexRaw ? 'other' : undefined;
+        return {
+          age: er.patientAge ? Number(er.patientAge) : undefined,
+          irritability: (er.irritability as 'low' | 'moderate' | 'high' | undefined) ?? undefined,
+          recoveryPhase: er.duration === 'acute' ? 'reactive' as const :
+            er.duration === 'subacute' ? 'disrepair' as const :
+            (er.duration === 'chronic' || er.duration === 'recurrent') ? 'remodelling' as const : undefined,
+          history: {
+            medicationFlags: {
+              statins: has(/\bstatin|atorvastatin|simvastatin|rosuvastatin|pravastatin/),
+              fluoroquinolones: has(/\bfluoroquinolone|ciprofloxacin|levofloxacin|moxifloxacin|ofloxacin/),
+              corticosteroids: has(/\bcorticosteroid|prednisolone|prednisone|dexamethasone|methylprednisolone|cortisone|hydrocortisone/),
+              aromataseInhibitors: has(/\baromatase inhibitor|anastrozole|letrozole|exemestane/),
+            },
+            metabolicConditions: {
+              diabetes: has(/\bdiabetes|t1dm|t2dm|hba1c|insulin\b/),
+              thyroid: has(/\bhypothyroid|hyperthyroid|thyroid\b/),
+              hypercholesterolaemia: has(/\bcholesterol|hyperlipid|dyslipid/),
+              obesity: has(/\bobese|obesity|bmi\s*[34][0-9]/),
+            },
+            hormonalStatus: sex ? { sex, onHrt: has(/\bhrt\b|hormone replacement|oestrogen|estrogen replac/) } : undefined,
+            priorInjurySameSite: has(/\bprior\b|previous|recurr|reinjur|history of/),
+            trainingHistory: {
+              deconditioned: has(/\bdecondition|sedentary|inactive|bed rest/),
+              recentLoadSpikePct: has(/\bspike|sudden increase|ramped up|load spike/) ? 30 : undefined,
+            },
+          },
+        };
+      })() : undefined,
     };
     fetch('/api/treatment-plan/generate', {
       method: 'POST',
@@ -2535,7 +2621,7 @@ ${ddxList}`;
       .catch(err => { if (err.name !== 'AbortError') console.error('Treatment plan error:', err); })
       .finally(() => { if (!abortController.signal.aborted) setTreatmentPlanLoading(false); });
     return () => abortController.abort();
-  }, [treatmentDecisionData, JSON.stringify(painMarkers.map(pm => ({ r: pm.anatomicalLabel || pm.nearestBone, t: pm.type }))), modelConfig?.spine?.thoracicKyphosis, modelConfig?.spine?.forwardHead, modelConfig?.pelvis?.tilt]);
+  }, [treatmentDecisionData, JSON.stringify(painMarkers.map(pm => ({ r: pm.anatomicalLabel || pm.nearestBone, t: pm.type }))), modelConfig?.spine?.thoracicKyphosis, modelConfig?.spine?.forwardHead, modelConfig?.pelvis?.tilt, treatmentPlanReloadKey]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;
@@ -10344,6 +10430,62 @@ ${ddxList}`;
                       pendingGenerate={pendingExerciseGenerate}
                       onGenerateStarted={handleExerciseGenerateStarted}
                       onGenerateComplete={handleExerciseGenerateComplete}
+                      conditionName={extractionResult?.mainComplaint ?? undefined}
+                      loadingPatientFactors={(() => {
+                        // Derive a richer loadingPatientFactors object from
+                        // the clinical extraction by keyword-scanning the
+                        // free-text history fields. Lets the engine personalise
+                        // for medications, comorbidities, hormonal status,
+                        // prior injury and training history without forcing
+                        // the clinician to re-enter data.
+                        const er = extractionResult;
+                        if (!er) return undefined;
+                        const corpus = [er.priorTreatment ?? '', ...(er.relevantHistory ?? [])].join(' \n ').toLowerCase();
+                        const has = (re: RegExp) => re.test(corpus);
+                        const sexRaw = (er.patientSex ?? '').toLowerCase();
+                        const sex: 'male' | 'female' | 'other' | undefined =
+                          sexRaw.startsWith('m') ? 'male' :
+                          sexRaw.startsWith('f') ? 'female' :
+                          sexRaw ? 'other' : undefined;
+                        const phaseFromDuration: 'reactive' | 'disrepair' | 'remodelling' | 'return_to_sport' | undefined =
+                          er.duration === 'acute' ? 'reactive' :
+                          er.duration === 'subacute' ? 'disrepair' :
+                          er.duration === 'chronic' ? 'remodelling' :
+                          er.duration === 'recurrent' ? 'remodelling' : undefined;
+                        return {
+                          age: er.patientAge ? Number(er.patientAge) : undefined,
+                          irritability: (er.irritability as 'low' | 'moderate' | 'high' | undefined) ?? undefined,
+                          recoveryPhase: phaseFromDuration,
+                          history: {
+                            medicationFlags: {
+                              statins: has(/\bstatin|atorvastatin|simvastatin|rosuvastatin|pravastatin/),
+                              fluoroquinolones: has(/\bfluoroquinolone|ciprofloxacin|levofloxacin|moxifloxacin|ofloxacin/),
+                              corticosteroids: has(/\bcorticosteroid|prednisolone|prednisone|dexamethasone|methylprednisolone|cortisone|hydrocortisone/),
+                              aromataseInhibitors: has(/\baromatase inhibitor|anastrozole|letrozole|exemestane/),
+                            },
+                            metabolicConditions: {
+                              diabetes: has(/\bdiabetes|t1dm|t2dm|hba1c|insulin\b/),
+                              thyroid: has(/\bhypothyroid|hyperthyroid|thyroid\b/),
+                              hypercholesterolaemia: has(/\bcholesterol|hypercholesterol|hyperlipid|dyslipid/),
+                              obesity: has(/\bobese|obesity|bmi\s*[34][0-9]/),
+                            },
+                            hormonalStatus: sex ? {
+                              sex,
+                              menopauseStatus: has(/\bpostmenopaus|post-menopaus/) ? 'postmenopausal' :
+                                               has(/\bperimenopaus|peri-menopaus/) ? 'perimenopausal' :
+                                               has(/\bpremenopaus|pre-menopaus/) ? 'premenopausal' :
+                                               (sex === 'female' && er.patientAge && er.patientAge >= 50) ? 'postmenopausal' :
+                                               (sex === 'female' && er.patientAge && er.patientAge < 45) ? 'premenopausal' : undefined,
+                              onHrt: has(/\bhrt\b|hormone replacement|oestrogen|estrogen replac/),
+                            } : undefined,
+                            priorInjurySameSite: has(/\bprior\b|previous|recurr|reinjur|history of/),
+                            trainingHistory: {
+                              deconditioned: has(/\bdecondition|sedentary|inactive|bed rest/),
+                              recentLoadSpikePct: has(/\bspike|sudden increase|ramped up|load spike/) ? 30 : undefined,
+                            },
+                          },
+                        };
+                      })()}
                     />
                   )}
                   {mechanismActiveTab === 'manualRx' && (
@@ -12401,6 +12543,9 @@ ${ddxList}`;
         planData={treatmentPlanData}
         planLoading={treatmentPlanLoading}
         onPlanTargetClick={handleDecisionTargetClick}
+        onPlanLoadingRecalculate={handlePlanLoadingRecalculate}
+        onPlanLoadingOverride={handlePlanLoadingOverride}
+        onPlanLoadingClearOverride={handlePlanLoadingClearOverride}
         evidenceData={evidenceEngineResult}
         evidenceLoading={evidenceLoading}
         onEvidenceQuery={handleEvidenceQuery}

@@ -5623,3 +5623,212 @@ export interface PatientContextPromptsResult {
   prompts: PatientContextPrompt[];
   generated_at: string;
 }
+
+// =============================================================================
+// Optimal Loading Engine — Tendinopathy (Task #231)
+// =============================================================================
+
+/** Tendinopathy sites supported by the Optimal Loading Engine v1. */
+export type TendinopathySite =
+  | 'achilles'
+  | 'patellar'
+  | 'gluteal'
+  | 'proximal_hamstring'
+  | 'rotator_cuff'
+  | 'lateral_elbow'
+  | 'medial_elbow';
+
+export type LoadingEngineApplicability = 'tendinopathy' | 'not_applicable';
+
+/** Loading-relevant clinical history fields gathered into Patient Context. */
+export interface LoadingRelevantHistory {
+  /** Free-text list of current medications. */
+  medications?: string[];
+  /** Flagged drug classes that affect tendon loading. Computed if not provided. */
+  medicationFlags?: {
+    statins?: boolean;
+    fluoroquinolones?: boolean;
+    corticosteroids?: boolean;
+    aromataseInhibitors?: boolean;
+  };
+  /** Metabolic conditions affecting tendon recovery. */
+  metabolicConditions?: {
+    diabetes?: boolean;
+    thyroid?: boolean;
+    hypercholesterolaemia?: boolean;
+    obesity?: boolean;
+  };
+  /** Hormonal / menopause status. */
+  hormonalStatus?: {
+    sex?: 'male' | 'female' | 'other';
+    menopauseStatus?: 'premenopausal' | 'perimenopausal' | 'postmenopausal' | 'na';
+    onHrt?: boolean;
+  };
+  /** Prior injury at the SAME site (true = recurrence risk). */
+  priorInjurySameSite?: boolean;
+  /** Recent training / loading history. */
+  trainingHistory?: {
+    weeklyLoadingHours?: number;
+    recentLoadSpikePct?: number; // % increase week-on-week
+    deconditioned?: boolean;
+  };
+}
+
+export interface LoadingPatientFactors {
+  age?: number;
+  history: LoadingRelevantHistory;
+  /** Current irritability (low / moderate / high). */
+  irritability?: 'low' | 'moderate' | 'high';
+  /** Current recovery phase (Cook staging or similar). */
+  recoveryPhase?: 'reactive' | 'disrepair' | 'remodelling' | 'return_to_sport';
+}
+
+export type LoadingIntensityUnit = '%1RM' | '%MVC' | 'RIR' | 'pain_monitored' | 'isometric_hold' | 'bodyweight';
+
+export type LoadingConfidenceBand =
+  | 'rct_supported'      // direct RCT evidence for this dose at this site
+  | 'protocol_supported' // established protocol (Alfredson, Silbernagel, HSR) extrapolated to this presentation
+  | 'expert_consensus'   // consensus / clinical reasoning, limited primary evidence
+  | 'extrapolation';     // extrapolated from related conditions
+
+export type LoadingEvidenceTier = 'A' | 'B' | 'C' | 'Expert';
+
+export interface LoadingTempo {
+  eccentricSec: number;
+  isometricSec: number;
+  concentricSec: number;
+}
+
+export interface LoadingProgressionRule {
+  trigger: string;
+  nextStep: string;
+  reviewAfterSessions: number;
+}
+
+export interface LoadingFactorContribution {
+  factor: string;
+  effect: string;
+  rationale: string;
+}
+
+/**
+ * One precise dose for one exercise for a specific week (or per day if the
+ * exercise is prescribed daily).
+ */
+export interface OptimalLoadPrescription {
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  weekIndex: number; // 0 = current week (committed)
+  daysPerWeek: number;
+  intensity: {
+    value: number | string;
+    unit: LoadingIntensityUnit;
+    label: string;
+  };
+  sets: number;
+  reps: string; // e.g. "6-8" or "30s hold"
+  tempo: LoadingTempo;
+  frequencyPerDay?: number;
+  painCeilingNrs: number; // 0-10 NRS allowed during/after exercise
+  progression: LoadingProgressionRule;
+  confidence: LoadingConfidenceBand;
+  evidenceTier: LoadingEvidenceTier;
+  factorContributions: LoadingFactorContribution[];
+  rationale: string;
+  /** True when a clinician override has set this line; sticks across recomputes. */
+  isOverride: boolean;
+  overrideAuthorId?: string;
+  overrideAt?: string;
+  /** True for the rolling-commit window (weeks 0-1); false for the projection. */
+  isCommitted: boolean;
+}
+
+export interface TendinopathySwapRequest {
+  /** Index of the exercise in the proposed list that needs replacement. */
+  proposedExerciseIndex: number;
+  proposedExerciseId: string;
+  proposedExerciseName: string;
+  reason: string;
+  preferredCategory: 'isometric' | 'isotonic' | 'eccentric' | 'energy_storage' | 'mobility';
+  preferredBodyParts: string[];
+}
+
+export interface TendinopathyLoadingPlan {
+  applicability: LoadingEngineApplicability;
+  /** Human-readable single-line message when not applicable. */
+  notApplicableMessage?: string;
+  /** Recommended primary intervention name when not applicable. */
+  notApplicableSuggestedFocus?: string;
+  /** Site detected from condition text (when applicable). */
+  site?: TendinopathySite;
+  siteLabel?: string;
+  recoveryPhase?: 'reactive' | 'disrepair' | 'remodelling' | 'return_to_sport';
+  recoveryPhaseLabel?: string;
+  irritability?: 'low' | 'moderate' | 'high';
+  /** Committed prescriptions (weeks 0–1). */
+  committed: OptimalLoadPrescription[];
+  /** Tentative projection (weeks 2–11 typical). */
+  projected: OptimalLoadPrescription[];
+  /** Committed window length in weeks (1 or 2). */
+  commitWindowWeeks: number;
+  /** Total horizon in weeks. */
+  horizonWeeks: number;
+  /** Swap requests the prescription engine should honour. */
+  swapRequests: TendinopathySwapRequest[];
+  /** High-level rationale for the whole plan. */
+  planRationale: string;
+  /** Cumulative explainability string (for AI handoff). */
+  explainabilitySummary: string;
+  /** Triggers that will auto-recompute. */
+  recomputeTriggers: string[];
+  generatedAt: string;
+  /** Hash of inputs — used to detect what changed since last compute. */
+  inputsHash: string;
+}
+
+export interface LoadingPlanDiffEntry {
+  exerciseId: string;
+  exerciseName: string;
+  weekIndex: number;
+  field: 'intensity' | 'sets' | 'reps' | 'tempo' | 'frequency' | 'pain_ceiling' | 'progression';
+  before: string;
+  after: string;
+  reason: string;
+}
+
+export interface LoadingPlanDiff {
+  changes: LoadingPlanDiffEntry[];
+  triggerReason: string;
+  beforeHash: string;
+  afterHash: string;
+  computedAt: string;
+}
+
+export interface TendinopathyLoadingRequest {
+  conditionName: string;
+  /** Optional explicit site (overrides condition-text detection). */
+  site?: TendinopathySite;
+  patientFactors: LoadingPatientFactors;
+  /** Exercises proposed by the AI Prescription engine. */
+  proposedExercises: Array<{
+    exerciseId: string;
+    exerciseName: string;
+    category?: string;
+    bodyParts?: string[];
+    /** Best-guess base dose from the prescription engine (informational only). */
+    baseSets?: number;
+    baseReps?: string;
+  }>;
+  /** Existing clinician overrides to preserve. */
+  overrides?: Array<Pick<OptimalLoadPrescription, 'exerciseId' | 'weekIndex'> & Partial<OptimalLoadPrescription>>;
+  /** Previous plan hash — for diff computation server-side. */
+  previousPlanHash?: string;
+  commitWindowWeeks?: 1 | 2;
+  horizonWeeks?: number; // default 10
+}
+
+export interface TendinopathyLoadingResponse {
+  plan: TendinopathyLoadingPlan;
+  diff?: LoadingPlanDiff;
+}

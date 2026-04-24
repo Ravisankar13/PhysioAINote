@@ -32,6 +32,9 @@ interface BiomechanicsHUDProps {
   timeMetrics?: ForceTimeMetrics | null;
   onOpenForceTime?: () => void;
   patientForceState?: PatientState;
+  /** Live patient body weight (kg). Used to dual-label tooltip values in
+   * both BW multiples and Newtons so units stay consistent. */
+  bodyWeightKg?: number;
 }
 
 function getForceColor(status: string): string {
@@ -87,6 +90,7 @@ export default function BiomechanicsHUD({
   timeMetrics,
   onOpenForceTime,
   patientForceState,
+  bodyWeightKg = 70,
 }: BiomechanicsHUDProps) {
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
   const [directions, setDirections] = useState<Record<string, 'up' | 'down' | null>>({});
@@ -298,12 +302,23 @@ export default function BiomechanicsHUD({
         const bw = topJoint.totalForce;
         const bwLow = bw * 0.93;
         const bwHigh = bw * 1.07;
+        // Body weight in Newtons (g = 9.81) so every value can be shown in
+        // both BW multiples and N (clinicians read both).
+        const bwN = (bodyWeightKg > 0 ? bodyWeightKg : 70) * 9.81;
+        const peakN = bw * bwN;
+        const lowN = bwLow * bwN;
+        const highN = bwHigh * bwN;
+        const fmt = (b: number, n: number) => `${b.toFixed(2)} BW (${Math.round(n)} N)`;
         const lines: string[] = [
-          `Peak: ${abbreviateJoint(topJoint.label)} ${bw.toFixed(2)} BW`,
-          `Confidence ±7% (de Leva 1996): ${bwLow.toFixed(2)}–${bwHigh.toFixed(2)} BW`,
+          `Peak: ${abbreviateJoint(topJoint.label)} ${fmt(bw, peakN)}`,
+          `Confidence ±7% (de Leva 1996): ${fmt(bwLow, lowN)} – ${fmt(bwHigh, highN)}`,
         ];
         if (band) {
-          lines.push(`Safe < ${band.safeN.toFixed(0)} N · Warn ${band.warnN.toFixed(0)} N — ${band.note}`);
+          const safeBw = band.safeN / bwN;
+          const warnBw = band.warnN / bwN;
+          lines.push(
+            `Safe < ${fmt(safeBw, band.safeN)} · Warn ${fmt(warnBw, band.warnN)} — ${band.note}`
+          );
         }
         if (cit) {
           lines.push(`Source: ${cit.authors} (${cit.year}). ${cit.title}. ${cit.source}`);

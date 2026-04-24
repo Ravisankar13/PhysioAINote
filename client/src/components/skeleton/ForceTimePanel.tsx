@@ -16,6 +16,9 @@ export interface ForceTimePanelProps {
   onPatientStateChange: (state: PatientState) => void;
   onClose: () => void;
   onScrub: (relMs: number | null) => void;
+  /** Live patient body weight; used so linked-segment Newton values reflect
+   * the actual patient instead of a 70 kg textbook default. */
+  bodyWeightKg?: number;
 }
 
 const STATES: PatientState[] = ['default', 'post_op', 'osteoporotic', 'pediatric', 'athlete'];
@@ -38,6 +41,7 @@ export default function ForceTimePanel({
   onPatientStateChange,
   onClose,
   onScrub,
+  bodyWeightKg = 70,
 }: ForceTimePanelProps) {
   const [tick, setTick] = useState(0);
   const [scrubValue, setScrubValue] = useState<number | null>(null);
@@ -62,8 +66,8 @@ export default function ForceTimePanel({
     (mx, a) => (mx == null || a.indexPct > mx.indexPct ? a : mx), null,
   );
   const linkedSegments = useMemo(
-    () => propagateLinkedSegments(70, m.impact.inertialN),
-    [m.impact.inertialN],
+    () => propagateLinkedSegments(bodyWeightKg, m.impact.inertialN),
+    [bodyWeightKg, m.impact.inertialN],
   );
 
   const handleScrub = (val: number) => {
@@ -335,6 +339,17 @@ export default function ForceTimePanel({
                   left: `${m.bufferLengthMs > 0 ? (m.impact.peakInertialAtMs / m.bufferLengthMs) * 100 : 0}%`,
                 }}
                 title={`Peak impact @ ${formatMs(m.impact.peakInertialAtMs)}`}
+              />
+            )}
+            {/* Peak rate-of-loading marker (parity with peak force / impact) */}
+            {peakRateJoint && peakRateJoint.peakRateAtMs > 0 && m.bufferLengthMs > 0 && (
+              <div
+                className="absolute -top-1 -bottom-1 w-[2px] bg-fuchsia-500/90 pointer-events-none"
+                style={{
+                  left: `${(peakRateJoint.peakRateAtMs / m.bufferLengthMs) * 100}%`,
+                }}
+                title={`Peak rate of loading: ${peakRateJoint.label} ${Math.round(peakRate)} N/s @ ${formatMs(peakRateJoint.peakRateAtMs)}`}
+                data-testid="ftp-peak-rate-marker"
               />
             )}
             {playbackRel != null && (

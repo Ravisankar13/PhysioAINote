@@ -10778,6 +10778,7 @@ ${ddxList}`;
               timeMetrics={forceTimeMetrics}
               onOpenForceTime={() => setShowForceTimePanel(true)}
               patientForceState={patientForceState}
+              bodyWeightKg={bodyWeightKg}
             />
 
             {showForceTimePanel && (
@@ -10786,6 +10787,7 @@ ${ddxList}`;
                 onPatientStateChange={setPatientForceState}
                 onClose={() => setShowForceTimePanel(false)}
                 onScrub={() => {/* scrub-back is local to the buffer */}}
+                bodyWeightKg={bodyWeightKg}
               />
             )}
 

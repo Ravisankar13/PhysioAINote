@@ -8796,7 +8796,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       // non-EPA technique (these belong in the Adjunct Therapies engine).
       // This protects the UI from a stray AI response leaking non-EPA items
       // into EPA cards even though the prompt explicitly forbids them.
-      const NON_EPA_REGEX = /\b(dry\s*needl|acupunctur|electroacupunctur|cupping|gua\s*sha|iastm|instrument[-\s]?assisted\s+soft\s+tissue|massage\s*gun|percussive\s+massage)\b/i;
+      const NON_EPA_REGEX = /\b(dry\s*needl|acupunctur|electroacupunctur|cupping|gua\s*sha)\b/i;
       const ACU_LIKE_TENS_EXCEPTION = /\b(tens|nerve\s*stim|electrical\s*stim)\b.*acupuncture[-\s]?like|acupuncture[-\s]?like\b.*\b(tens|mode|stim)\b/i;
       const isNonEpa = (name: string) =>
         NON_EPA_REGEX.test(name) && !ACU_LIKE_TENS_EXCEPTION.test(name);

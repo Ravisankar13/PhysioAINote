@@ -211,7 +211,6 @@ interface ModalityItem {
   stageAppropriateness?: string;
   citations?: Citation[];
   notAdvisedReason?: string;
-  // EPA 4-dimension reasoning + structured dosing (Task #223)
   mechanism?: EpaMechanism;
   targetTissue?: EpaTargetTissue;
   desiredEffect?: EpaDesiredEffect;
@@ -248,8 +247,8 @@ const EVIDENCE_STRENGTH_STYLES: Record<EpaEvidenceStrength, { label: string; bg:
 };
 
 /**
- * Deterministic fallbacks so legacy / partial responses still render the
- * full 4-dimension reasoning chips required by Task #223.
+ * Deterministic fallbacks so legacy or partial responses still render the
+ * full 4-dimension EPA reasoning chips.
  */
 function inferMechanism(modalityName: string, groupHint?: string): EpaMechanism {
   const s = `${modalityName} ${groupHint ?? ''}`.toLowerCase();
@@ -417,6 +416,17 @@ function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint }:
   const [expanded, setExpanded] = useState(false);
   const isNotAdvised = !!modality.notAdvisedReason;
   const conditionGrade = modality.evidenceGrade ? CONDITION_GRADE_STYLES[modality.evidenceGrade] : null;
+  // Resolve the 4 reasoning dimensions once. When a field is missing from
+  // the AI response, infer it deterministically from modality name + group
+  // context so chips, cart entries, and downstream consumers all agree.
+  const mechanism = modality.mechanism ?? inferMechanism(modality.modality, groupHint);
+  const targetTissue = modality.targetTissue ?? inferTargetTissue(modality);
+  const desiredEffect = modality.desiredEffect ?? inferDesiredEffect(modality, groupHint);
+  const evidenceStrength = modality.evidenceStrength ?? inferEvidenceStrength(modality);
+  const mechStyle = MECHANISM_STYLES[mechanism];
+  const tissueLabel = TISSUE_LABELS[targetTissue];
+  const effectLabel = EFFECT_LABELS[desiredEffect];
+  const strengthStyle = EVIDENCE_STRENGTH_STYLES[evidenceStrength];
   const cartItem = {
     id: makeCartId('electrophysical', modality.modality),
     modality: 'electrophysical' as const,
@@ -429,24 +439,12 @@ function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint }:
     contraindications: modality.contraindications,
     evidenceGrade: modality.evidenceGrade,
     patientPosition: modality.patientPosition,
-    mechanism: modality.mechanism,
-    targetTissue: modality.targetTissue,
-    desiredEffect: modality.desiredEffect,
-    evidenceStrength: modality.evidenceStrength,
+    mechanism,
+    targetTissue,
+    desiredEffect,
+    evidenceStrength,
     dosing: modality.dosing,
   };
-  // Always render the 4 dimension chips. When the AI response (or a legacy
-  // cached card) is missing a dimension, derive it deterministically from
-  // modality name / target structure / group context so clinicians never
-  // see a half-populated reasoning row (Task #223).
-  const mechanism = modality.mechanism ?? inferMechanism(modality.modality, groupHint);
-  const targetTissue = modality.targetTissue ?? inferTargetTissue(modality);
-  const desiredEffect = modality.desiredEffect ?? inferDesiredEffect(modality, groupHint);
-  const evidenceStrength = modality.evidenceStrength ?? inferEvidenceStrength(modality);
-  const mechStyle = MECHANISM_STYLES[mechanism];
-  const tissueLabel = TISSUE_LABELS[targetTissue];
-  const effectLabel = EFFECT_LABELS[desiredEffect];
-  const strengthStyle = EVIDENCE_STRENGTH_STYLES[evidenceStrength];
   const dosingFields = formatDosing(modality.dosing);
 
   return (
@@ -497,30 +495,20 @@ function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint }:
               <span className="truncate">{modality.targetFinding}</span>
             </div>
           )}
-          {(
-            <div className="flex gap-1 mt-1 flex-wrap" data-testid={`epa-dimension-chips-${index}`}>
-              {(
-                <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${mechStyle.bg} ${mechStyle.text} border border-current/20`} title={modality.mechanism ? 'Mechanism' : 'Mechanism (inferred)'}>
-                  ⚙ {mechStyle.label}{!modality.mechanism && '*'}
-                </span>
-              )}
-              {(
-                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30" title={modality.targetTissue ? 'Target tissue' : 'Target tissue (inferred)'}>
-                  🎯 {tissueLabel}{!modality.targetTissue && '*'}
-                </span>
-              )}
-              {(
-                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30" title={modality.desiredEffect ? 'Desired effect' : 'Desired effect (inferred)'}>
-                  ✦ {effectLabel}{!modality.desiredEffect && '*'}
-                </span>
-              )}
-              {(
-                <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${strengthStyle.bg} ${strengthStyle.text} border border-current/20`} title={modality.evidenceStrength ? 'Evidence strength' : 'Evidence strength (inferred)'}>
-                  📊 {strengthStyle.label}{!modality.evidenceStrength && '*'}
-                </span>
-              )}
-            </div>
-          )}
+          <div className="flex gap-1 mt-1 flex-wrap" data-testid={`epa-dimension-chips-${index}`}>
+            <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${mechStyle.bg} ${mechStyle.text} border border-current/20`} title={modality.mechanism ? 'Mechanism' : 'Mechanism (inferred)'}>
+              ⚙ {mechStyle.label}{!modality.mechanism && '*'}
+            </span>
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30" title={modality.targetTissue ? 'Target tissue' : 'Target tissue (inferred)'}>
+              🎯 {tissueLabel}{!modality.targetTissue && '*'}
+            </span>
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30" title={modality.desiredEffect ? 'Desired effect' : 'Desired effect (inferred)'}>
+              ✦ {effectLabel}{!modality.desiredEffect && '*'}
+            </span>
+            <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${strengthStyle.bg} ${strengthStyle.text} border border-current/20`} title={modality.evidenceStrength ? 'Evidence strength' : 'Evidence strength (inferred)'}>
+              📊 {strengthStyle.label}{!modality.evidenceStrength && '*'}
+            </span>
+          </div>
           {!isNotAdvised && (
             <div className="flex gap-2 mt-1 text-[9px] flex-wrap items-center">
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300 truncate max-w-[180px]">{modality.parameters || '?'}</span>
@@ -1272,7 +1260,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
           <Zap className="h-8 w-8 text-teal-400/60 mb-2" />
           <div className="text-[11px] text-gray-300 mb-1">Start with a diagnosis</div>
           <div className="text-[9px] text-gray-500 max-w-[280px]">
-            Type a condition above (e.g. "Achilles tendinopathy") to generate a research-backed electrophysical plan, or place pain markers and run a mechanism analysis first.
+            Type a condition above (e.g. "Achilles tendinopathy") to generate a research-backed Electrophysical Agents (EPA) plan, or place pain markers and run a mechanism analysis first.
           </div>
         </div>
       </div>
@@ -1283,7 +1271,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     return (
       <div className="flex flex-col items-center justify-center py-10">
         <Loader2 className="h-6 w-6 text-teal-400 animate-spin mb-3" />
-        <div className="text-[11px] text-gray-300 mb-1">Generating electrophysical agents plan...</div>
+        <div className="text-[11px] text-gray-300 mb-1">Generating Electrophysical Agents (EPA) plan...</div>
         <div className="text-[9px] text-gray-500">AI is selecting optimal modalities based on tissue states and clinical findings</div>
       </div>
     );
@@ -1293,7 +1281,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     return (
       <div className="flex flex-col items-center justify-center py-6 px-4">
         <AlertTriangle className="h-6 w-6 text-red-400 mb-2" />
-        <div className="text-[11px] text-red-300 mb-2">Failed to generate electrophysical plan</div>
+        <div className="text-[11px] text-red-300 mb-2">Failed to generate Electrophysical Agents plan</div>
         <div className="text-[9px] text-gray-400 mb-3">{error}</div>
         <button onClick={() => { void generatePlan(); }} className="px-3 py-1.5 text-[10px] bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded hover:bg-teal-500/30 transition-colors">
           Try Again
@@ -1312,12 +1300,12 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
           <div className="text-[11px] text-gray-300 mb-1">AI Electrophysical Agents Prescription</div>
           <div className="text-[9px] text-gray-500 mb-4 text-center max-w-[260px]">
             {condition
-              ? `Generate a research-backed electrophysical plan for "${condition}" with condition-specific dosages and citations.`
-              : 'Generate a targeted electrophysical modality plan based on mechanism analysis, tissue irritability, and clinical findings — or type a condition above for a research-backed, diagnosis-specific plan.'}
+              ? `Generate a research-backed Electrophysical Agents (EPA) plan for "${condition}" with condition-specific dosages and citations.`
+              : 'Generate a targeted Electrophysical Agents (EPA) plan based on mechanism analysis, tissue irritability, and clinical findings — or type a condition above for a research-backed, diagnosis-specific plan.'}
           </div>
           <button onClick={() => { void generatePlan(); }} className="px-4 py-2 text-[11px] font-medium bg-teal-500/20 text-teal-300 border border-teal-500/40 rounded-lg hover:bg-teal-500/30 transition-colors flex items-center gap-2" data-testid="button-generate-electro-plan">
             <Zap className="h-3.5 w-3.5" />
-            {condition ? `Generate plan for ${condition}` : 'Generate Electrophysical Plan'}
+            {condition ? `Generate plan for ${condition}` : 'Generate Electrophysical Agents Plan'}
           </button>
         </div>
       </div>

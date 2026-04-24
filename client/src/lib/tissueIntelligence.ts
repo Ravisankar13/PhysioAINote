@@ -1216,6 +1216,16 @@ function derivePainBehavior(
       note: `Behaviour profile defaults applied for ${label} (${tissueType})`,
     });
   }
+  // SIN provenance: derived from severity/irritability/painProb (biomechanics + AI parse).
+  const sinSourceForEvidence: EvidenceSource =
+    evidence.find(e => e.source === 'biomechanics')?.source
+    ?? evidence.find(e => e.source === 'ai_parse')?.source
+    ?? 'biomechanics';
+  newEvidence.push({ contribution: 0,
+    source: sinSourceForEvidence,
+    weight: 0.35,
+    note: `SIN level computed as ${deriveSin(severity, irritability, painProb)} from severity ${severity.toFixed(2)}, irritability ${irritability}, pain probability ${Math.round(painProb)}%`,
+  });
   for (const c of candidates) {
     if (c.source === 'pain_behavior_default') {
       newEvidence.push({ contribution: 0,

@@ -148,7 +148,7 @@ function PainBehaviorSections({ pb, label, evidence }: { pb?: PainBehavior; labe
     return EVIDENCE_SOURCE_LABELS[hit?.source ?? 'pain_behavior_default'];
   };
   const descriptorsSource = findSource('descriptor');
-  const sinSource = EVIDENCE_SOURCE_LABELS['biomechanics'];
+  const sinSource = findSource('SIN level computed');
   const diurnalSource = findSource('24-hour pattern');
   const latencySource = findSource('Onset latency');
   const easerSource = findSource('Easer:');

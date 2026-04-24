@@ -3458,12 +3458,15 @@ export default function PureThreeGLBViewer({
       if (v1.lengthSq() < 1e-6 || v2.lengthSq() < 1e-6) return null;
       return THREE.MathUtils.radToDeg(v1.angleTo(v2));
     };
-    const verticalAngle = (from: string, to: string): number | null => {
+    // Deviation (in degrees) of the from->to bone vector from world up.
+    // For an upright skeleton, Root_M->Spine1_M and Neck_M->Head_M point up, so
+    // neutral posture returns ~0° and any tilt/lean grows the value.
+    const verticalDeviation = (from: string, to: string): number | null => {
       const A = worldPos(from); const B = worldPos(to);
       if (!A || !B) return null;
       const dir = B.clone().sub(A);
       if (dir.lengthSq() < 1e-6) return null;
-      return THREE.MathUtils.radToDeg(dir.angleTo(new THREE.Vector3(0, -1, 0)));
+      return THREE.MathUtils.radToDeg(dir.angleTo(new THREE.Vector3(0, 1, 0)));
     };
 
     const evalPredicate = (
@@ -3494,13 +3497,13 @@ export default function PureThreeGLBViewer({
           return a != null && (180 - a) > p.threshold;
         }
         case 'spineExtensionAbove': {
-          // Use forward/back tilt of upper trunk relative to vertical
-          const tilt = verticalAngle('Root_M', 'Spine1_M');
-          // Tilt ≈ 0 upright; extension causes posterior lean → tilt grows toward back
+          // Trunk deviation from upright (lumbar facet load grows with extension/lean)
+          const tilt = verticalDeviation('Root_M', 'Spine1_M');
           return tilt != null && tilt > p.threshold;
         }
         case 'forwardHeadAbove': {
-          const a = verticalAngle('Neck_M', 'Head_M');
+          // Head-vector deviation from upright; neutral ≈ 0, forward-head grows
+          const a = verticalDeviation('Neck_M', 'Head_M');
           return a != null && a > p.threshold;
         }
       }

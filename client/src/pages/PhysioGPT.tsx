@@ -133,7 +133,7 @@ import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPai
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
 import ForceTimePanel from "@/components/skeleton/ForceTimePanel";
 import GRFOverlay from "@/components/skeleton/GRFOverlay";
-import { forceTimeBuffer, type ForceTimeMetrics, subscribeForceBuffer, augmentForceAnalysisDynamics } from "@/lib/forceTimeBuffer";
+import { forceTimeBuffer, type ForceTimeMetrics, subscribeForceBuffer, augmentForceAnalysisDynamics, EMPTY_FORCE_RESULT } from "@/lib/forceTimeBuffer";
 import type { PatientState } from "@/lib/forceCitations";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 import { type ClinicalParseResult, type CompromisedTissue, type ClinicalTextInputHandle, type FollowUpQuestion } from "@/components/skeleton/ClinicalTextInput";
@@ -4399,8 +4399,8 @@ ${ddxList}`;
    * at the playback time. This is what gets pushed back into the buffer so
    * we never feed augmented values back into the dynamics layer (no loop).
    */
-  const baseHudForceAnalysis = useMemo(() => {
-    if (computeStage < 2) return { joints: [], totalLoad: 0 };
+  const baseHudForceAnalysis = useMemo<ForceAnalysisResult>(() => {
+    if (computeStage < 2) return EMPTY_FORCE_RESULT;
     if (isScrubbing) {
       const scrubbed = forceTimeBuffer.getScrubbedAnalysis();
       if (scrubbed) return scrubbed;
@@ -4435,18 +4435,22 @@ ${ddxList}`;
    * `status` using the patient-state-aware threshold table so the HUD colors
    * respect post-op / osteoporotic / pediatric / athlete bands.
    */
-  const hudForceAnalysis = useMemo(() => {
+  const hudForceAnalysis = useMemo<ForceAnalysisResult>(() => {
     if (!baseHudForceAnalysis || !baseHudForceAnalysis.joints?.length) return baseHudForceAnalysis;
+    // Frame-accurate inertial during scrub: read the centred 2nd-derivative
+    // |a| at the active scrubbed frame so the augmentation reflects the
+    // selected timestamp, not the live-engine global peak. In live mode we
+    // let the augment helper read `getLatestComAccelMag()` itself by passing
+    // `undefined`, which keeps the HUD synced with the live impact reading.
+    const comAccelMps2 = isScrubbing
+      ? forceTimeBuffer.getComAccelMagAtActive()
+      : undefined;
     return augmentForceAnalysisDynamics(baseHudForceAnalysis, {
       bodyWeightKg,
       patientState: patientForceState,
-      // Use the buffer-derived inertial peak instead of the raw |a| so the
-      // HUD reflects the same impact figure the panel headlines show.
-      comAccelMagN: forceTimeMetrics?.impact?.inertialN
-        ? (forceTimeMetrics.impact.inertialN / Math.max(1, bodyWeightKg))
-        : undefined,
+      comAccelMagN: comAccelMps2,
     });
-  }, [baseHudForceAnalysis, bodyWeightKg, patientForceState, forceTimeMetrics]);
+  }, [baseHudForceAnalysis, bodyWeightKg, patientForceState, forceTimeMetrics, isScrubbing, scrubPlaybackMs]);
 
   // ─── Time-aware force buffer push ────────────────────────────────────
   // Capture every recompute of the BASE analysis so cumulative dose / rate of
@@ -4462,7 +4466,7 @@ ${ddxList}`;
       : cameraPoseActive ? 'camera'
       : 'manual';
     forceTimeBuffer.push({
-      result: baseHudForceAnalysis as any,
+      result: baseHudForceAnalysis,
       bodyWeightKg,
       source,
       movementId: animationState.currentMovement ?? null,

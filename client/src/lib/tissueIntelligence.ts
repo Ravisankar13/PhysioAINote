@@ -43,6 +43,8 @@ export type PainLatency = 'immediate' | 'within_minutes' | 'next_day' | 'unknown
 
 export type SinLevel = 'low' | 'moderate' | 'high';
 
+export type AggravatorKind = 'position' | 'movement' | 'load' | 'environment';
+
 export type AggravatorPredicate =
   | { kind: 'shoulderAbductionAbove'; side: 'L' | 'R'; threshold: number }
   | { kind: 'kneeFlexionAbove'; side: 'L' | 'R'; threshold: number }
@@ -54,7 +56,7 @@ export type AggravatorPredicate =
   | { kind: 'always' };
 
 export interface AggravatorEntry {
-  kind: 'movement' | 'posture' | 'load' | 'time';
+  kind: AggravatorKind;
   label: string;
   boneAnchor?: string;
   predicate?: AggravatorPredicate;
@@ -65,6 +67,7 @@ export interface CandidateGenerator {
   label: string;
   probability: number; // 0..1
   rationale: string;
+  source: EvidenceSource;
 }
 
 export interface PainBehavior {
@@ -794,7 +797,7 @@ export function aggregateTissueIntelligence(input: AggregatorInput): TissueIntel
       ?? 'Evidence-driven tissue compromise detected';
 
     const evidenceText = data.evidence.map(e => e.note).concat(data.rationales).join(' ');
-    const painBehavior = derivePainBehavior(
+    const { painBehavior, evidence: pbEvidence } = derivePainBehavior(
       tissueType,
       tissueId,
       meta.label,
@@ -805,6 +808,7 @@ export function aggregateTissueIntelligence(input: AggregatorInput): TissueIntel
       data.evidence,
       evidenceText
     );
+    const mergedEvidence = data.evidence.concat(pbEvidence);
 
     results.push({
       tissueId,
@@ -824,7 +828,7 @@ export function aggregateTissueIntelligence(input: AggregatorInput): TissueIntel
       capacityDemand: { capacity, demand: Math.round(demand), overloadRatio: Math.round(overloadRatio * 100) / 100 },
       structuralFunctional,
       neural,
-      evidence: data.evidence,
+      evidence: mergedEvidence,
       painBehavior,
     });
   }
@@ -927,16 +931,17 @@ function sideOf(tissueId: string): 'L' | 'R' | null {
   return null;
 }
 
-interface PainBehaviorDefault {
-  candidates?: CandidateGenerator[];
+type DefaultAggravator = Omit<AggravatorEntry, 'source'>;
+interface PainBehaviorDefaultRaw {
+  candidates?: Array<Omit<CandidateGenerator, 'source'>>;
   descriptors?: PainDescriptor[];
   diurnal?: DiurnalPattern;
   latency?: PainLatency;
   easers?: string[];
-  aggravators?: AggravatorEntry[];
+  aggravators?: DefaultAggravator[];
 }
 
-function buildDefault(tissueType: TissueType, tissueId: string, bones: string[]): PainBehaviorDefault {
+function buildDefault(tissueType: TissueType, tissueId: string, bones: string[]): PainBehaviorDefaultRaw {
   const side = sideOf(tissueId);
   const anchor = bones[0];
 
@@ -949,8 +954,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
         latency: 'within_minutes',
         easers: ['Heel raise (low load)', 'Eccentric calf loading', 'Heat before activity'],
         aggravators: [
-          { kind: 'movement', label: 'Push-off / running', boneAnchor: `Ankle_${side}`, predicate: { kind: 'kneeFlexionAbove', side, threshold: 30 }, source: 'pain_behavior_default' },
-          { kind: 'load', label: 'Hill walking, sprinting', boneAnchor: `Ankle_${side}`, source: 'pain_behavior_default' },
+          { kind: 'movement', label: 'Push-off / running', boneAnchor: `Ankle_${side}`, predicate: { kind: 'kneeFlexionAbove', side, threshold: 30 } },
+          { kind: 'load', label: 'Hill walking, sprinting', boneAnchor: `Ankle_${side}` },
         ],
       };
     }
@@ -961,8 +966,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
         latency: 'immediate',
         easers: ['Isometric quad holds', 'Load reduction', 'Patellar tendon strap'],
         aggravators: [
-          { kind: 'movement', label: 'Deep knee bend / squat', boneAnchor: `Knee_${side}`, predicate: { kind: 'kneeFlexionAbove', side, threshold: 60 }, source: 'pain_behavior_default' },
-          { kind: 'load', label: 'Jumping, decel landing', boneAnchor: `Knee_${side}`, source: 'pain_behavior_default' },
+          { kind: 'movement', label: 'Deep knee bend / squat', boneAnchor: `Knee_${side}`, predicate: { kind: 'kneeFlexionAbove', side, threshold: 60 } },
+          { kind: 'load', label: 'Jumping, decel landing', boneAnchor: `Knee_${side}` },
         ],
       };
     }
@@ -973,8 +978,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
         latency: 'immediate',
         easers: ['Scapular setting', 'Avoid overhead reach', 'Isometric ER at side'],
         aggravators: [
-          { kind: 'movement', label: 'Arm above 60° abduction', boneAnchor: `Shoulder_${side}`, predicate: { kind: 'shoulderAbductionAbove', side, threshold: 60 }, source: 'pain_behavior_default' },
-          { kind: 'movement', label: 'Reaching overhead / behind back', boneAnchor: `Shoulder_${side}`, source: 'pain_behavior_default' },
+          { kind: 'movement', label: 'Arm above 60° abduction', boneAnchor: `Shoulder_${side}`, predicate: { kind: 'shoulderAbductionAbove', side, threshold: 60 } },
+          { kind: 'movement', label: 'Reaching overhead / behind back', boneAnchor: `Shoulder_${side}` },
         ],
       };
     }
@@ -985,8 +990,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
         latency: 'immediate',
         easers: ['Side-lying with pillow', 'Avoid crossing legs', 'Isometric abduction'],
         aggravators: [
-          { kind: 'posture', label: 'Single-leg stance / hip drop', boneAnchor: `Hip_${side}`, source: 'pain_behavior_default' },
-          { kind: 'movement', label: 'Stair climbing', boneAnchor: `Hip_${side}`, predicate: { kind: 'hipFlexionAbove', side, threshold: 60 }, source: 'pain_behavior_default' },
+          { kind: 'position', label: 'Single-leg stance / hip drop', boneAnchor: `Hip_${side}` },
+          { kind: 'movement', label: 'Stair climbing', boneAnchor: `Hip_${side}`, predicate: { kind: 'hipFlexionAbove', side, threshold: 60 } },
         ],
       };
     }
@@ -1001,8 +1006,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
         latency: 'within_minutes',
         easers: ['Gentle hip ROM', 'Pool walking', 'Weight management'],
         aggravators: [
-          { kind: 'movement', label: 'Deep hip flexion (sit-to-stand)', boneAnchor: `Hip_${side}`, predicate: { kind: 'hipFlexionAbove', side, threshold: 90 }, source: 'pain_behavior_default' },
-          { kind: 'movement', label: 'Pivot / rotation through hip', boneAnchor: `Hip_${side}`, source: 'pain_behavior_default' },
+          { kind: 'movement', label: 'Deep hip flexion (sit-to-stand)', boneAnchor: `Hip_${side}`, predicate: { kind: 'hipFlexionAbove', side, threshold: 90 } },
+          { kind: 'movement', label: 'Pivot / rotation through hip', boneAnchor: `Hip_${side}` },
         ],
       };
     }
@@ -1013,8 +1018,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
         latency: 'within_minutes',
         easers: ['Quad activation', 'Cycling (low resistance)', 'Heat'],
         aggravators: [
-          { kind: 'movement', label: 'Stairs / squatting', boneAnchor: `Knee_${side}`, predicate: { kind: 'kneeFlexionAbove', side, threshold: 60 }, source: 'pain_behavior_default' },
-          { kind: 'time', label: 'Prolonged sitting (theatre sign)', boneAnchor: `Knee_${side}`, source: 'pain_behavior_default' },
+          { kind: 'movement', label: 'Stairs / squatting', boneAnchor: `Knee_${side}`, predicate: { kind: 'kneeFlexionAbove', side, threshold: 60 } },
+          { kind: 'environment', label: 'Prolonged sitting (theatre sign)', boneAnchor: `Knee_${side}` },
         ],
       };
     }
@@ -1025,8 +1030,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
         latency: 'immediate',
         easers: ['Lumbar flexion (knee to chest)', 'Quadruped rocking', 'Avoid prolonged extension'],
         aggravators: [
-          { kind: 'movement', label: 'Lumbar extension / arching', boneAnchor: 'Spine1_M', predicate: { kind: 'spineExtensionAbove', threshold: 15 }, source: 'pain_behavior_default' },
-          { kind: 'posture', label: 'Standing posture (anterior tilt)', boneAnchor: 'Root_M', source: 'pain_behavior_default' },
+          { kind: 'movement', label: 'Lumbar extension / arching', boneAnchor: 'Spine1_M', predicate: { kind: 'spineExtensionAbove', threshold: 15 } },
+          { kind: 'position', label: 'Standing posture (anterior tilt)', boneAnchor: 'Root_M' },
         ],
       };
     }
@@ -1037,8 +1042,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
         latency: 'immediate',
         easers: ['Chin tucks', 'Postural reset', 'Heat to upper traps'],
         aggravators: [
-          { kind: 'posture', label: 'Forward head posture', boneAnchor: 'Neck_M', predicate: { kind: 'forwardHeadAbove', threshold: 15 }, source: 'pain_behavior_default' },
-          { kind: 'movement', label: 'Cervical extension / overhead look', boneAnchor: 'Neck_M', source: 'pain_behavior_default' },
+          { kind: 'position', label: 'Forward head posture', boneAnchor: 'Neck_M', predicate: { kind: 'forwardHeadAbove', threshold: 15 } },
+          { kind: 'movement', label: 'Cervical extension / overhead look', boneAnchor: 'Neck_M' },
         ],
       };
     }
@@ -1049,8 +1054,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
         latency: 'immediate',
         easers: ['SI belt', 'Glute med activation', 'Avoid asymmetric loading'],
         aggravators: [
-          { kind: 'posture', label: 'Single-leg stance', boneAnchor: `Hip_${side}`, source: 'pain_behavior_default' },
-          { kind: 'movement', label: 'Rolling in bed / step-up', boneAnchor: `Hip_${side}`, source: 'pain_behavior_default' },
+          { kind: 'position', label: 'Single-leg stance', boneAnchor: `Hip_${side}` },
+          { kind: 'movement', label: 'Rolling in bed / step-up', boneAnchor: `Hip_${side}` },
         ],
       };
     }
@@ -1064,8 +1069,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
       latency: 'immediate',
       easers: ['Neural slider (no tension)', 'Position of comfort', 'Off-load posture'],
       aggravators: [
-        { kind: 'posture', label: 'Sustained nerve tension posture', boneAnchor: anchor, source: 'pain_behavior_default' },
-        { kind: 'movement', label: 'End-range stretch into nerve path', boneAnchor: anchor, source: 'pain_behavior_default' },
+        { kind: 'position', label: 'Sustained nerve tension posture', boneAnchor: anchor },
+        { kind: 'movement', label: 'End-range stretch into nerve path', boneAnchor: anchor },
       ],
     };
   }
@@ -1078,8 +1083,8 @@ function buildDefault(tissueType: TissueType, tissueId: string, bones: string[])
       latency: 'within_minutes',
       easers: ['Slow sustained stretch', 'Foam rolling', 'Heat + movement integration'],
       aggravators: [
-        { kind: 'posture', label: 'Sustained loaded posture', boneAnchor: anchor, source: 'pain_behavior_default' },
-        { kind: 'movement', label: 'Multi-plane chain loading', boneAnchor: anchor, source: 'pain_behavior_default' },
+        { kind: 'position', label: 'Sustained loaded posture', boneAnchor: anchor },
+        { kind: 'movement', label: 'Multi-plane chain loading', boneAnchor: anchor },
       ],
     };
   }
@@ -1096,40 +1101,50 @@ function buildCandidates(
 ): CandidateGenerator[] {
   const list: CandidateGenerator[] = [];
   const primaryProb = clamp(painProb / 100, 0, 0.95);
+  const primarySource: EvidenceSource = evidence[0]?.source ?? 'pain_behavior_default';
   list.push({
     label,
     probability: primaryProb,
-    rationale: evidence[0]?.note ?? 'Primary candidate from current evidence',
+    rationale: evidence[0]?.note ?? 'Primary candidate from current tissue evidence',
+    source: primarySource,
   });
+
+  const def = (l: string, p: number, r: string): CandidateGenerator =>
+    ({ label: l, probability: primaryProb * p, rationale: r, source: 'pain_behavior_default' });
 
   if (tissueType === 'tendon') {
     if (tissueId.startsWith('patellar_')) {
-      list.push({ label: 'Fat pad impingement', probability: primaryProb * 0.45, rationale: 'Common co-driver in anterior knee pain' });
-      list.push({ label: 'Quadriceps tendinopathy', probability: primaryProb * 0.35, rationale: 'Adjacent extensor mechanism strain' });
+      list.push(def('Fat pad impingement', 0.45, 'Common co-driver in anterior knee pain'));
+      list.push(def('Quadriceps tendinopathy', 0.35, 'Adjacent extensor mechanism strain'));
     } else if (tissueId.startsWith('achilles_')) {
-      list.push({ label: 'Plantar fascia overload', probability: primaryProb * 0.4, rationale: 'Push-off chain co-loads plantar fascia' });
+      list.push(def('Plantar fascia overload', 0.4, 'Push-off chain co-loads plantar fascia'));
     } else if (tissueId.startsWith('supraspinatus_')) {
-      list.push({ label: 'Subacromial bursa', probability: primaryProb * 0.55, rationale: 'Co-located inflammatory generator' });
-      list.push({ label: 'Long head of biceps tendon', probability: primaryProb * 0.4, rationale: 'Frequent secondary involvement' });
+      list.push(def('Subacromial bursa', 0.55, 'Co-located inflammatory generator'));
+      list.push(def('Long head of biceps tendon', 0.4, 'Frequent secondary involvement'));
     }
   } else if (tissueType === 'joint') {
     if (tissueId.startsWith('hip_')) {
-      list.push({ label: 'Acetabular labrum', probability: primaryProb * 0.5, rationale: 'Catching-type pain with rotation' });
-      list.push({ label: 'Hip flexor strain', probability: primaryProb * 0.35, rationale: 'Anterior groin co-driver' });
+      list.push(def('Acetabular labrum', 0.5, 'Catching-type pain with rotation'));
+      list.push(def('Hip flexor strain', 0.35, 'Anterior groin co-driver'));
     } else if (tissueId.startsWith('tibiofemoral_')) {
-      list.push({ label: 'Patellofemoral joint', probability: primaryProb * 0.5, rationale: 'Anterior compartment co-driver' });
-      list.push({ label: 'Meniscal degeneration', probability: primaryProb * 0.4, rationale: 'Joint-line tenderness pattern' });
+      list.push(def('Patellofemoral joint', 0.5, 'Anterior compartment co-driver'));
+      list.push(def('Meniscal degeneration', 0.4, 'Joint-line tenderness pattern'));
     } else if (tissueId === 'facet_lumbar') {
-      list.push({ label: 'Multifidus inhibition', probability: primaryProb * 0.5, rationale: 'Functional driver of facet load' });
-      list.push({ label: 'Disc-related pain', probability: primaryProb * 0.35, rationale: 'Adjacent segment overlap possible' });
+      list.push(def('Multifidus inhibition', 0.5, 'Functional driver of facet load'));
+      list.push(def('Disc-related pain', 0.35, 'Adjacent segment overlap possible'));
     }
   } else if (tissueType === 'nerve') {
-    list.push({ label: 'Nerve root irritation', probability: primaryProb * 0.7, rationale: 'Proximal compression often co-exists' });
+    list.push(def('Nerve root irritation', 0.7, 'Proximal compression often co-exists'));
   } else if (tissueType === 'fascia') {
-    list.push({ label: 'Trigger point referral', probability: primaryProb * 0.55, rationale: 'Myofascial driver in tense chain' });
+    list.push(def('Trigger point referral', 0.55, 'Myofascial driver in tense chain'));
   }
 
-  return list.sort((a, b) => b.probability - a.probability).slice(0, 4);
+  return list.sort((a, b) => b.probability - a.probability).slice(0, 3);
+}
+
+interface DerivedPainBehavior {
+  painBehavior: PainBehavior;
+  evidence: TissueEvidence[];
 }
 
 function derivePainBehavior(
@@ -1142,29 +1157,99 @@ function derivePainBehavior(
   painProb: number,
   evidence: TissueEvidence[],
   evidenceText: string
-): PainBehavior {
-  const def = buildDefault(tissueType, tissueId, bones);
+): DerivedPainBehavior {
+  const raw = buildDefault(tissueType, tissueId, bones);
   const observedDescriptors = extractDescriptors(evidenceText);
   const observedDiurnal = detectDiurnal(evidenceText);
   const observedLatency = detectLatency(evidenceText);
 
+  const usedDefault =
+    observedDescriptors.length === 0 ||
+    observedDiurnal === 'unknown' ||
+    observedLatency === 'unknown' ||
+    (raw.aggravators?.length ?? 0) > 0 ||
+    (raw.easers?.length ?? 0) > 0;
+
   const descriptors = observedDescriptors.length > 0
     ? observedDescriptors
-    : (def.descriptors ?? []);
+    : (raw.descriptors ?? []);
   const diurnal: DiurnalPattern = observedDiurnal !== 'unknown'
     ? observedDiurnal
-    : (def.diurnal ?? 'unknown');
+    : (raw.diurnal ?? 'unknown');
   const latency: PainLatency = observedLatency !== 'unknown'
     ? observedLatency
-    : (def.latency ?? 'unknown');
+    : (raw.latency ?? 'unknown');
+
+  const aggravators: AggravatorEntry[] = (raw.aggravators ?? []).map(a => ({
+    ...a,
+    source: 'pain_behavior_default' as EvidenceSource,
+  }));
+  const candidates = buildCandidates(tissueType, tissueId, label, painProb, evidence);
+
+  // Build provenance: every rendered chip/row links back to a TissueEvidence row.
+  const newEvidence: TissueEvidence[] = [];
+  if (observedDescriptors.length > 0) {
+    newEvidence.push({ contribution: 0,
+      source: 'pain_marker',
+      weight: 0.4,
+      note: `Pain descriptors extracted from clinical text: ${observedDescriptors.join(', ')}`,
+    });
+  }
+  if (observedDiurnal !== 'unknown') {
+    newEvidence.push({ contribution: 0,
+      source: 'pain_marker',
+      weight: 0.3,
+      note: `24-hour pattern detected from clinical text: ${observedDiurnal.replace(/_/g, ' ')}`,
+    });
+  }
+  if (observedLatency !== 'unknown') {
+    newEvidence.push({ contribution: 0,
+      source: 'pain_marker',
+      weight: 0.3,
+      note: `Onset latency detected from clinical text: ${observedLatency.replace(/_/g, ' ')}`,
+    });
+  }
+  if (usedDefault) {
+    newEvidence.push({ contribution: 0,
+      source: 'pain_behavior_default',
+      weight: 0.25,
+      note: `Behaviour profile defaults applied for ${label} (${tissueType})`,
+    });
+  }
+  for (const c of candidates) {
+    if (c.source === 'pain_behavior_default') {
+      newEvidence.push({ contribution: 0,
+        source: 'pain_behavior_default',
+        weight: 0.2,
+        note: `Candidate generator co-driver: ${c.label} — ${c.rationale}`,
+      });
+    }
+  }
+  for (const ag of aggravators) {
+    newEvidence.push({ contribution: 0,
+      source: ag.source,
+      weight: 0.2,
+      note: `Aggravator (${ag.kind}): ${ag.label}${ag.predicate && ag.predicate.kind !== 'always' ? ` — pose predicate ${ag.predicate.kind}` : ''}`,
+    });
+  }
+  for (const e of (raw.easers ?? [])) {
+    newEvidence.push({ contribution: 0,
+      source: 'pain_behavior_default',
+      weight: 0.15,
+      note: `Easer: ${e}`,
+    });
+  }
 
   return {
-    candidates: buildCandidates(tissueType, tissueId, label, painProb, evidence),
-    descriptors,
-    diurnal,
-    latency,
-    sin: deriveSin(severity, irritability, painProb),
-    easers: def.easers ?? [],
-    aggravators: def.aggravators ?? [],
+    painBehavior: {
+      candidates,
+      descriptors,
+      diurnal,
+      latency,
+      sin: deriveSin(severity, irritability, painProb),
+      easers: raw.easers ?? [],
+      aggravators,
+    },
+    evidence: newEvidence,
   };
 }

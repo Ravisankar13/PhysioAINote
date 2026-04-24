@@ -49,9 +49,9 @@ const LATENCY_LABELS: Record<PainLatency, string> = {
 
 const AGGRAVATOR_KIND_COLOR: Record<AggravatorEntry['kind'], string> = {
   movement: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
-  posture: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  position: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
   load: 'bg-red-500/15 text-red-300 border-red-500/30',
-  time: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+  environment: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
 };
 
 function EmptyHint({ children }: { children: React.ReactNode }) {
@@ -72,10 +72,14 @@ function DescriptorChip({ label }: { label: string }) {
 function CandidateRow({ c }: { c: CandidateGenerator }) {
   const pct = Math.round(c.probability * 100);
   const color = pct >= 60 ? '#ef4444' : pct >= 35 ? '#f59e0b' : '#94a3b8';
+  const tip = `${c.rationale} · Source: ${EVIDENCE_SOURCE_LABELS[c.source]}`;
   return (
-    <div className="flex items-start gap-2 py-0.5" title={c.rationale}>
+    <div className="flex items-start gap-2 py-0.5" title={tip}>
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] text-foreground/90 truncate">{c.label}</div>
+        <div className="text-[10px] text-foreground/90 truncate flex items-center gap-1">
+          <span className="truncate">{c.label}</span>
+          <span className="text-[8px] text-muted-foreground/70 shrink-0">[{EVIDENCE_SOURCE_LABELS[c.source]}]</span>
+        </div>
         <div className="h-1 rounded-full bg-muted overflow-hidden mt-0.5">
           <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
         </div>
@@ -104,78 +108,118 @@ function AggravatorChip({ ag }: { ag: AggravatorEntry }) {
   );
 }
 
+function CollapsibleSection({
+  title,
+  tooltip,
+  children,
+  defaultOpen = true,
+  testId,
+}: {
+  title: string;
+  tooltip?: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  testId?: string;
+}) {
+  return (
+    <details open={defaultOpen} className="group" data-testid={testId}>
+      <summary
+        className="flex items-center justify-between cursor-pointer select-none list-none text-[10px] font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground"
+        title={tooltip}
+      >
+        <span>{title}</span>
+        <span className="text-muted-foreground transition-transform group-open:rotate-90">›</span>
+      </summary>
+      <div className="space-y-1.5 mt-1.5">{children}</div>
+    </details>
+  );
+}
+
 function PainBehaviorSections({ pb, label }: { pb?: PainBehavior; label: string }) {
+  const hasCandidates = !!pb && pb.candidates.length > 0;
+  const hasDescriptors = !!pb && pb.descriptors.length > 0;
+  const hasAggravators = !!pb && pb.aggravators.length > 0;
+  const hasEasers = !!pb && pb.easers.length > 0;
+  const hasBehaviour = !!pb && (pb.sin !== 'low' || pb.diurnal !== 'unknown' || pb.latency !== 'unknown');
+
   return (
     <>
       <Separator />
-      <div className="space-y-1.5">
-        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide" title="Ranked candidate pain generators">
-          What hurts
-        </div>
-        {pb && pb.candidates.length > 0 ? (
+      <CollapsibleSection
+        title="What hurts"
+        tooltip="Ranked candidate pain generators with provenance. All items appear in the Evidence accordion."
+        testId="section-what-hurts"
+      >
+        {hasCandidates ? (
           <div className="space-y-1">
-            {pb.candidates.map((c, i) => <CandidateRow key={i} c={c} />)}
+            {pb!.candidates.map((c, i) => <CandidateRow key={i} c={c} />)}
           </div>
         ) : (
-          <EmptyHint>Primary candidate: {label}. No additional generators ranked yet.</EmptyHint>
+          <EmptyHint>Primary candidate: {label}. No source-backed generators yet — not yet observed.</EmptyHint>
         )}
-        {pb && pb.descriptors.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1" title="Pain descriptors observed in clinical text + tissue defaults">
-            {pb.descriptors.map(d => <DescriptorChip key={d} label={d} />)}
+        {hasDescriptors ? (
+          <div className="flex flex-wrap gap-1 pt-1" title="Pain descriptors. Source visible in Evidence accordion.">
+            {pb!.descriptors.map(d => <DescriptorChip key={d} label={d} />)}
           </div>
+        ) : (
+          <EmptyHint>Descriptors not yet observed.</EmptyHint>
         )}
-      </div>
+      </CollapsibleSection>
 
       <Separator />
-      <div className="space-y-1.5">
-        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide" title="Severity, irritability, nature + 24h pattern + onset latency">
-          How it behaves
-        </div>
-        {pb ? (
+      <CollapsibleSection
+        title="How it behaves"
+        tooltip="Severity-irritability-nature, 24h pattern, and onset latency."
+        testId="section-how-it-behaves"
+      >
+        {hasBehaviour ? (
           <div className="grid grid-cols-3 gap-1.5">
             <div className="rounded border border-border/40 bg-muted/30 p-1.5">
               <div className="text-[9px] text-muted-foreground">SIN</div>
-              <div className="text-[10px] font-semibold capitalize" style={{ color: SIN_COLOR[pb.sin] }}>{pb.sin}</div>
+              <div className="text-[10px] font-semibold capitalize" style={{ color: SIN_COLOR[pb!.sin] }}>{pb!.sin}</div>
             </div>
             <div className="rounded border border-border/40 bg-muted/30 p-1.5">
               <div className="text-[9px] text-muted-foreground">24h pattern</div>
-              <div className="text-[10px] font-medium leading-tight">{DIURNAL_LABELS[pb.diurnal]}</div>
+              <div className="text-[10px] font-medium leading-tight">{DIURNAL_LABELS[pb!.diurnal]}</div>
             </div>
             <div className="rounded border border-border/40 bg-muted/30 p-1.5">
               <div className="text-[9px] text-muted-foreground">Onset</div>
-              <div className="text-[10px] font-medium leading-tight">{LATENCY_LABELS[pb.latency]}</div>
+              <div className="text-[10px] font-medium leading-tight">{LATENCY_LABELS[pb!.latency]}</div>
             </div>
           </div>
         ) : (
           <EmptyHint>Behaviour not yet observed.</EmptyHint>
         )}
-      </div>
+      </CollapsibleSection>
 
       <Separator />
-      <div className="space-y-1.5">
-        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide" title="Pose / load / time / posture that aggravate this tissue. Predicate-bearing chips (●) flash a pip on the 3D model when matched.">
-          When it's triggered
-        </div>
-        {pb && pb.aggravators.length > 0 ? (
+      <CollapsibleSection
+        title="When it's triggered"
+        tooltip="Position / movement / load / environment triggers. Predicate chips (●) flash a pip on the 3D model when the current pose matches."
+        testId="section-when-triggered"
+      >
+        {hasAggravators ? (
           <div className="flex flex-wrap gap-1">
-            {pb.aggravators.map((ag, i) => <AggravatorChip key={i} ag={ag} />)}
+            {pb!.aggravators.map((ag, i) => <AggravatorChip key={i} ag={ag} />)}
           </div>
         ) : (
           <EmptyHint>No aggravators identified yet.</EmptyHint>
         )}
-        {pb && pb.easers.length > 0 && (
+        {hasEasers ? (
           <div className="pt-1">
-            <div className="text-[9px] text-muted-foreground mb-0.5" title="Eases this tissue">Easers</div>
+            <div className="text-[9px] text-muted-foreground mb-0.5" title="Eases this tissue. Source visible in Evidence accordion.">Easers</div>
             <div className="flex flex-wrap gap-1">
-              {pb.easers.map((e, i) => (
-                <span key={i} className="text-[9px] px-1.5 h-4 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 inline-flex items-center">
+              {pb!.easers.map((e, i) => (
+                <span key={i} className="text-[9px] px-1.5 h-4 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 inline-flex items-center" title="Source: Behaviour Defaults">
                   {e}
                 </span>
               ))}
             </div>
           </div>
+        ) : (
+          <EmptyHint>Easers not yet observed.</EmptyHint>
         )}
-      </div>
+      </CollapsibleSection>
     </>
   );
 }

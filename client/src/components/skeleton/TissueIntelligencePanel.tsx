@@ -93,6 +93,7 @@ function CandidateRow({ c }: { c: CandidateGenerator }) {
 function AggravatorChip({ ag }: { ag: AggravatorEntry }) {
   const cls = AGGRAVATOR_KIND_COLOR[ag.kind] ?? AGGRAVATOR_KIND_COLOR.movement;
   const titleParts: string[] = [`Source: ${EVIDENCE_SOURCE_LABELS[ag.source]}`];
+  if (ag.boneAnchor) titleParts.push(`Anchor: ${ag.boneAnchor}`);
   if (ag.predicate && ag.predicate.kind !== 'always') {
     titleParts.push(`Triggers when current pose matches: ${ag.predicate.kind} (${'threshold' in ag.predicate ? ag.predicate.threshold + '°' : ''})`);
   }
@@ -104,6 +105,7 @@ function AggravatorChip({ ag }: { ag: AggravatorEntry }) {
     >
       <span className="opacity-70">{ag.kind}:</span>
       <span className="normal-case">{ag.label}</span>
+      {ag.boneAnchor && <span className="opacity-50 normal-case">@{ag.boneAnchor}</span>}
       {ag.predicate && ag.predicate.kind !== 'always' && <span className="opacity-70">●</span>}
     </span>
   );

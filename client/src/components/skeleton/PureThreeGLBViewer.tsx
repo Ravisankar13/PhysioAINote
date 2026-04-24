@@ -3512,11 +3512,16 @@ export default function PureThreeGLBViewer({
     for (const h of tissueIntelligenceHighlights) {
       if (!h.aggravators) continue;
       const palette = paletteForState(h.healingStage, h.irritability, h.severity);
+      // Scale pip size + max-opacity by irritability so high-irritability tissues
+      // produce more visually obvious triggers.
+      const irrScale = h.irritability === 'high' ? 1.6 : h.irritability === 'moderate' ? 1.2 : 1.0;
+      const pipRadius = 0.018 * irrScale;
+      const opacityCap = Math.min(1, 0.55 + (h.irritability === 'high' ? 0.4 : h.irritability === 'moderate' ? 0.25 : 0.1));
       for (const ag of h.aggravators) {
         if (!ag.predicate || !ag.boneAnchor) continue;
         const anchorPos0 = worldPos(ag.boneAnchor);
         if (!anchorPos0) continue;
-        const geo = new THREE.SphereGeometry(0.018, 12, 10);
+        const geo = new THREE.SphereGeometry(pipRadius, 12, 10);
         const mat = new THREE.MeshBasicMaterial({
           color: palette.color,
           transparent: true,
@@ -3529,6 +3534,7 @@ export default function PureThreeGLBViewer({
         pip.position.copy(anchorPos0).add(new THREE.Vector3(0, 0.04, 0));
         pip.userData.tissueId = h.tissueId;
         pip.userData.aggravator = ag.label;
+        pip.userData.opacityCap = opacityCap;
         overlayGroup.add(pip);
         const anchorBone = ag.boneAnchor;
         const predicate = ag.predicate;
@@ -3552,7 +3558,8 @@ export default function PureThreeGLBViewer({
         const pos = worldPos(e.anchor);
         if (pos) e.mesh.position.copy(pos).add(new THREE.Vector3(0, 0.04, 0));
         const active = e.evaluate();
-        e.mat.opacity = active ? flash : 0;
+        const cap = (e.mesh.userData.opacityCap as number | undefined) ?? 1;
+        e.mat.opacity = active ? flash * cap : 0;
         e.mesh.visible = active;
       }
       tissueOverlayRafRef.current = requestAnimationFrame(tick);

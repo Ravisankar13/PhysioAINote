@@ -141,7 +141,9 @@ function PainBehaviorSections({ pb, label, evidence }: { pb?: PainBehavior; labe
   const hasDescriptors = !!pb && pb.descriptors.length > 0;
   const hasAggravators = !!pb && pb.aggravators.length > 0;
   const hasEasers = !!pb && pb.easers.length > 0;
-  const hasBehaviour = !!pb && (pb.sin !== 'low' || pb.diurnal !== 'unknown' || pb.latency !== 'unknown');
+  // SIN is always derivable, so the behaviour grid always renders when we have a
+  // painBehavior at all. Diurnal/latency cards still display "unknown" labels gracefully.
+  const hasBehaviour = !!pb;
 
   const findSource = (kw: string): string => {
     const hit = evidence.find(e => e.note.toLowerCase().includes(kw.toLowerCase()));

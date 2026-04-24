@@ -179,6 +179,21 @@ interface Citation {
   url?: string;
 }
 
+type EpaMechanism = 'electrical' | 'acoustic' | 'thermal' | 'photonic' | 'electromagnetic' | 'radiofrequency';
+type EpaTargetTissue = 'muscle' | 'tendon' | 'nerve' | 'bone' | 'joint' | 'skin_fascia';
+type EpaDesiredEffect = 'pain_reduction' | 'healing_stimulation' | 'muscle_activation' | 'swelling_reduction' | 'tissue_extensibility' | 'bone_healing';
+type EpaEvidenceStrength = 'strong' | 'moderate' | 'weak';
+
+interface EpaDosing {
+  intensity?: string;
+  frequency_hz?: number;
+  pulse_width_us?: number;
+  duration_min?: number;
+  sessions_per_week?: number;
+  total_sessions?: number;
+  placement?: string;
+}
+
 interface ModalityItem {
   modality: string;
   targetStructure: string;
@@ -196,6 +211,53 @@ interface ModalityItem {
   stageAppropriateness?: string;
   citations?: Citation[];
   notAdvisedReason?: string;
+  // EPA 4-dimension reasoning + structured dosing (Task #223)
+  mechanism?: EpaMechanism;
+  targetTissue?: EpaTargetTissue;
+  desiredEffect?: EpaDesiredEffect;
+  evidenceStrength?: EpaEvidenceStrength;
+  dosing?: EpaDosing;
+}
+
+const MECHANISM_STYLES: Record<EpaMechanism, { label: string; bg: string; text: string }> = {
+  electrical:      { label: 'Electrical',      bg: 'bg-yellow-500/15',  text: 'text-yellow-300' },
+  acoustic:        { label: 'Acoustic',        bg: 'bg-cyan-500/15',    text: 'text-cyan-300' },
+  thermal:         { label: 'Thermal',         bg: 'bg-orange-500/15',  text: 'text-orange-300' },
+  photonic:        { label: 'Photonic',        bg: 'bg-fuchsia-500/15', text: 'text-fuchsia-300' },
+  electromagnetic: { label: 'Electromagnetic', bg: 'bg-violet-500/15',  text: 'text-violet-300' },
+  radiofrequency:  { label: 'Radiofrequency',  bg: 'bg-pink-500/15',    text: 'text-pink-300' },
+};
+
+const TISSUE_LABELS: Record<EpaTargetTissue, string> = {
+  muscle: 'Muscle', tendon: 'Tendon', nerve: 'Nerve', bone: 'Bone', joint: 'Joint', skin_fascia: 'Skin / Fascia',
+};
+
+const EFFECT_LABELS: Record<EpaDesiredEffect, string> = {
+  pain_reduction: 'Pain ↓',
+  healing_stimulation: 'Healing ↑',
+  muscle_activation: 'Activation ↑',
+  swelling_reduction: 'Swelling ↓',
+  tissue_extensibility: 'Extensibility ↑',
+  bone_healing: 'Bone healing ↑',
+};
+
+const EVIDENCE_STRENGTH_STYLES: Record<EpaEvidenceStrength, { label: string; bg: string; text: string }> = {
+  strong:   { label: 'Strong',   bg: 'bg-emerald-500/20', text: 'text-emerald-300' },
+  moderate: { label: 'Moderate', bg: 'bg-sky-500/20',     text: 'text-sky-300' },
+  weak:     { label: 'Weak',     bg: 'bg-amber-500/20',   text: 'text-amber-300' },
+};
+
+function formatDosing(d?: EpaDosing): Array<{ label: string; value: string }> {
+  if (!d) return [];
+  const out: Array<{ label: string; value: string }> = [];
+  if (d.intensity) out.push({ label: 'Intensity', value: d.intensity });
+  if (d.frequency_hz != null) out.push({ label: 'Freq', value: `${d.frequency_hz} Hz` });
+  if (d.pulse_width_us != null) out.push({ label: 'PW', value: `${d.pulse_width_us} µs` });
+  if (d.duration_min != null) out.push({ label: 'Time', value: `${d.duration_min} min` });
+  if (d.sessions_per_week != null) out.push({ label: '/ wk', value: `${d.sessions_per_week}` });
+  if (d.total_sessions != null) out.push({ label: 'Total', value: `${d.total_sessions}` });
+  if (d.placement) out.push({ label: 'Placement', value: d.placement });
+  return out;
 }
 
 interface ModalityGroup {
@@ -329,7 +391,17 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
     contraindications: modality.contraindications,
     evidenceGrade: modality.evidenceGrade,
     patientPosition: modality.patientPosition,
+    mechanism: modality.mechanism,
+    targetTissue: modality.targetTissue,
+    desiredEffect: modality.desiredEffect,
+    evidenceStrength: modality.evidenceStrength,
+    dosing: modality.dosing,
   };
+  const mechStyle = modality.mechanism ? MECHANISM_STYLES[modality.mechanism] : null;
+  const tissueLabel = modality.targetTissue ? TISSUE_LABELS[modality.targetTissue] : null;
+  const effectLabel = modality.desiredEffect ? EFFECT_LABELS[modality.desiredEffect] : null;
+  const strengthStyle = modality.evidenceStrength ? EVIDENCE_STRENGTH_STYLES[modality.evidenceStrength] : null;
+  const dosingFields = formatDosing(modality.dosing);
 
   return (
     <div className={`border rounded ${isNotAdvised ? 'border-red-500/40 bg-red-500/5' : 'border-gray-600/30 bg-gray-800/40'}`}>
@@ -379,6 +451,30 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
               <span className="truncate">{modality.targetFinding}</span>
             </div>
           )}
+          {(mechStyle || tissueLabel || effectLabel || strengthStyle) && (
+            <div className="flex gap-1 mt-1 flex-wrap" data-testid={`epa-dimension-chips-${index}`}>
+              {mechStyle && (
+                <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${mechStyle.bg} ${mechStyle.text} border border-current/20`} title="Mechanism">
+                  ⚙ {mechStyle.label}
+                </span>
+              )}
+              {tissueLabel && (
+                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30" title="Target tissue">
+                  🎯 {tissueLabel}
+                </span>
+              )}
+              {effectLabel && (
+                <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30" title="Desired effect">
+                  ✦ {effectLabel}
+                </span>
+              )}
+              {strengthStyle && (
+                <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${strengthStyle.bg} ${strengthStyle.text} border border-current/20`} title="Evidence strength">
+                  📊 {strengthStyle.label}
+                </span>
+              )}
+            </div>
+          )}
           {!isNotAdvised && (
             <div className="flex gap-2 mt-1 text-[9px] flex-wrap items-center">
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300 truncate max-w-[180px]">{modality.parameters || '?'}</span>
@@ -397,9 +493,25 @@ function ModalityCard({ modality, index, evidence, evidenceLoading }: { modality
             <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider">Target Structure</div>
             <div className="text-[10px] text-gray-300">{modality.targetStructure}</div>
           </div>
+          {!isNotAdvised && dosingFields.length > 0 && (
+            <div className="border border-teal-500/30 rounded bg-teal-500/5 p-1.5">
+              <div className="text-[9px] font-medium text-teal-300 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Zap className="h-2.5 w-2.5" />
+                Dosing
+              </div>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                {dosingFields.map((f, fi) => (
+                  <div key={fi} className="flex items-baseline gap-1 text-[10px]">
+                    <span className="text-gray-500 uppercase tracking-wider text-[8px] shrink-0">{f.label}</span>
+                    <span className="text-gray-200 font-mono truncate">{f.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {!isNotAdvised && (
             <div>
-              <div className="text-[9px] font-medium text-teal-400/80 uppercase tracking-wider">Parameters</div>
+              <div className="text-[9px] font-medium text-teal-400/80 uppercase tracking-wider">Parameters (notes)</div>
               <div className="text-[10px] text-gray-300">{modality.parameters}</div>
             </div>
           )}

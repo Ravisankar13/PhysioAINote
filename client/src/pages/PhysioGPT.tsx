@@ -9986,7 +9986,7 @@ ${ddxList}`;
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'electroRx' ? 'bg-teal-500/30 text-teal-300 border border-teal-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       <Zap className="h-3 w-3" />
-                      Electro Rx
+                      Electrophysical Agents
                     </button>
                     <button
                       onClick={() => { setMechanismActiveTab('adjunctRx'); setManualTherapyAnnotations(null); }}
@@ -11993,7 +11993,7 @@ ${ddxList}`;
               onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('electroRx'); }}
             >
               <Zap className="h-3 w-3 mr-1" />
-              Electro Rx
+              Electrophysical Agents
             </Button>
             <Button
               variant="secondary"

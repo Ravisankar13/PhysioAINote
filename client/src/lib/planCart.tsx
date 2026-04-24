@@ -23,6 +23,22 @@ export interface PlanCartItem {
   parameters?: string;
   patientPosition?: string;
   category?: string;
+  // Electrophysical Agents (EPA) structured fields — populated by the EPA
+  // engine card so My Plan and downstream consumers can read the full
+  // 4-dimension reasoning + structured dosing without re-parsing free text.
+  mechanism?: 'electrical' | 'acoustic' | 'thermal' | 'photonic' | 'electromagnetic' | 'radiofrequency';
+  targetTissue?: 'muscle' | 'tendon' | 'nerve' | 'bone' | 'joint' | 'skin_fascia';
+  desiredEffect?: 'pain_reduction' | 'healing_stimulation' | 'muscle_activation' | 'swelling_reduction' | 'tissue_extensibility' | 'bone_healing';
+  evidenceStrength?: 'strong' | 'moderate' | 'weak';
+  dosing?: {
+    intensity?: string;
+    frequency_hz?: number;
+    pulse_width_us?: number;
+    duration_min?: number;
+    sessions_per_week?: number;
+    total_sessions?: number;
+    placement?: string;
+  };
 }
 
 interface PlanCartContextValue {

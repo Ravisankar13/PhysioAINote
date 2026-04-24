@@ -102,7 +102,7 @@ const MODALITY_META: Record<PlanCartModality, { label: string; icon: typeof Dumb
   exercise_custom: { label: "Custom Exercise", icon: Sparkles, color: "text-cyan-300", bg: "bg-cyan-500/15", border: "border-cyan-500/30" },
   manual_therapy: { label: "Manual Therapy", icon: Hand, color: "text-rose-300", bg: "bg-rose-500/15", border: "border-rose-500/30" },
   manual_therapy_custom: { label: "Custom Manual Therapy", icon: Sparkles, color: "text-rose-200", bg: "bg-rose-500/15", border: "border-rose-500/30" },
-  electrophysical: { label: "Electrophysical", icon: Zap, color: "text-teal-300", bg: "bg-teal-500/15", border: "border-teal-500/30" },
+  electrophysical: { label: "Electrophysical Agents", icon: Zap, color: "text-teal-300", bg: "bg-teal-500/15", border: "border-teal-500/30" },
   adjunct: { label: "Adjunct Rx", icon: Leaf, color: "text-emerald-300", bg: "bg-emerald-500/15", border: "border-emerald-500/30" },
   lifestyle: { label: "Lifestyle & Adjunct Rx", icon: Activity, color: "text-amber-300", bg: "bg-amber-500/15", border: "border-amber-500/30" },
 };
@@ -386,7 +386,7 @@ export default function MyPlanPanel({ clinicalContext }: MyPlanPanelProps) {
         </div>
         <p className="text-xs text-gray-300 mb-1">Your plan is empty</p>
         <p className="text-[10px] text-gray-500 leading-relaxed max-w-xs">
-          Open Exercise, Manual Rx, Electro Rx, or Adjunct Rx, generate items, then click <span className="text-cyan-300 font-medium">+ Add to Plan</span> on any item to bring it in.
+          Open Exercise, Manual Rx, Electrophysical Agents, or Adjunct Rx, generate items, then click <span className="text-cyan-300 font-medium">+ Add to Plan</span> on any item to bring it in.
         </p>
       </div>
     );

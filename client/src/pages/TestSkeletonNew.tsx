@@ -42,7 +42,7 @@ import ClinicalIntakePanel, { ClinicalIntakeData } from "@/components/skeleton/C
 import ClinicalAssessmentResults from "@/components/skeleton/ClinicalAssessmentResults";
 import { MovementPatternRecognizer, MovementAnalysisResult } from "@/lib/movementPatternRecognition";
 import { StaticPostureAnalyzer } from "@/lib/staticPostureAnalyzer";
-import JointAngleEditor from "@/components/skeleton/JointAngleEditor";
+import JointAngleEditor, { type BoneMorphologyId } from "@/components/skeleton/JointAngleEditor";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 
@@ -251,6 +251,10 @@ export default function TestSkeletonNew() {
     elbows: false,
   });
   const [bilateralMirror, setBilateralMirror] = useState(false);
+  // Shared bone-morphology selection (Task #212): keeps the 3D viewer's
+  // pose-mode bone selection in sync with the JointAngleEditor sidebar so
+  // selecting in either surface mirrors in the other.
+  const [selectedBoneMorphology, setSelectedBoneMorphology] = useState<BoneMorphologyId | null>(null);
   const [advancedSlidersOpen, setAdvancedSlidersOpen] = useState(false);
 
   const [animationState, setAnimationState] = useState<AnimationState>({
@@ -1838,6 +1842,8 @@ export default function TestSkeletonNew() {
                     modelConfig={effectiveModelConfig} 
                     className="w-full h-full"
                     animationState={animationState}
+                    selectedBoneSegmentId={selectedBoneMorphology}
+                    onSelectedBoneSegmentChange={setSelectedBoneMorphology}
                     onAnimationFrame={handleAnimationFrame}
                     biomechanicsData={biomechanicsData}
                     muscleVisibility={muscleVisibility}
@@ -3094,6 +3100,8 @@ export default function TestSkeletonNew() {
           }}
           bilateralLink={bilateralMirror}
           onBilateralLinkChange={setBilateralMirror}
+          selectedBone={selectedBoneMorphology}
+          onSelectedBoneChange={setSelectedBoneMorphology}
           focusJoint={(() => {
             if (!zoomToRegion) return null;
             const m: Record<string, string> = {

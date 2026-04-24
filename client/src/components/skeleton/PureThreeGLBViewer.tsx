@@ -1640,6 +1640,9 @@ interface PureThreeGLBViewerProps {
   selectedRomJointId?: string | null;
   enablePoseMode?: boolean;
   onModelConfigChange?: (path: string, value: number) => void;
+  /** Externally controlled bone-segment selection (Task #212). When provided, the viewer mirrors this selection and emits changes via onSelectedBoneSegmentChange. */
+  selectedBoneSegmentId?: BoneSegmentId | null;
+  onSelectedBoneSegmentChange?: (id: BoneSegmentId | null) => void;
   enableZoomTool?: boolean;
   onLandmarkSelect?: (landmark: { label: string; boneName: string; position: { x: number; y: number; z: number } }) => void;
   forceOverlay?: { id: string; label: string; boneName: string; compression: number; tension: number; shear: number; totalForce: number; status: 'low' | 'moderate' | 'high' | 'very_high'; clinical: string }[] | null;
@@ -2274,6 +2277,107 @@ const JOINT_MOVEMENT_DEFS: Record<string, MovementArrowDef[]> = {
   ],
 };
 
+// Bone-segment morphology controls (Task #212).
+// Anchored to the midpoint of the long bone, these arrows drive the
+// "structural" DOFs that describe bone shape (anteversion / torsion)
+// or limb alignment (genu varum/valgum, coxa vara/valga). They live in
+// a separate registry from JOINT_MOVEMENT_DEFS so bone-morphology arrows
+// never collide with joint-movement arrows for the adjacent joint.
+export type BoneSegmentId =
+  | 'leftFemur'  | 'rightFemur'
+  | 'leftTibia'  | 'rightTibia'
+  | 'leftHumerus' | 'rightHumerus';
+
+export interface BoneSegmentSpec {
+  id: BoneSegmentId;
+  label: string;
+  side: 'L' | 'R';
+  proximalBone: string;
+  distalBone: string;
+  /** GLB bone names that resolve to this segment when the user clicks. */
+  pickBones: string[];
+  morphology: MovementArrowDef[];
+}
+
+export const BONE_SEGMENT_SPECS: BoneSegmentSpec[] = [
+  {
+    id: 'leftFemur', label: 'L Femur', side: 'L',
+    proximalBone: 'Hip_L', distalBone: 'Knee_L',
+    pickBones: ['Hip_L', 'HipPart1_L'],
+    morphology: [
+      { configKey: 'leftHip.anteversion',    label: 'Antev', direction: [0, 0, 1],  sensitivity: 0.4 },
+      { configKey: 'leftHip.anteversion',    label: 'Retro', direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+      { configKey: 'leftHip.neckShaftAngle', label: 'Valga', direction: [-1, 0, 0], sensitivity: 0.4 },
+      { configKey: 'leftHip.neckShaftAngle', label: 'Vara',  direction: [1, 0, 0],  sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'rightFemur', label: 'R Femur', side: 'R',
+    proximalBone: 'Hip_R', distalBone: 'Knee_R',
+    pickBones: ['Hip_R', 'HipPart1_R'],
+    morphology: [
+      { configKey: 'rightHip.anteversion',    label: 'Antev', direction: [0, 0, 1],  sensitivity: 0.4 },
+      { configKey: 'rightHip.anteversion',    label: 'Retro', direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+      { configKey: 'rightHip.neckShaftAngle', label: 'Valga', direction: [1, 0, 0],  sensitivity: 0.4 },
+      { configKey: 'rightHip.neckShaftAngle', label: 'Vara',  direction: [-1, 0, 0], sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'leftTibia', label: 'L Tibia', side: 'L',
+    proximalBone: 'Knee_L', distalBone: 'Ankle_L',
+    pickBones: ['Knee_L'],
+    morphology: [
+      { configKey: 'leftKnee.tibialTorsion', label: 'ExtTor', direction: [0, 0, 1],  sensitivity: 0.4 },
+      { configKey: 'leftKnee.tibialTorsion', label: 'IntTor', direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+      { configKey: 'leftKnee.varus',         label: 'Valgus', direction: [-1, 0, 0], sensitivity: 0.4 },
+      { configKey: 'leftKnee.varus',         label: 'Varus',  direction: [1, 0, 0],  sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'rightTibia', label: 'R Tibia', side: 'R',
+    proximalBone: 'Knee_R', distalBone: 'Ankle_R',
+    pickBones: ['Knee_R'],
+    morphology: [
+      { configKey: 'rightKnee.tibialTorsion', label: 'ExtTor', direction: [0, 0, 1],  sensitivity: 0.4 },
+      { configKey: 'rightKnee.tibialTorsion', label: 'IntTor', direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+      { configKey: 'rightKnee.varus',         label: 'Valgus', direction: [1, 0, 0],  sensitivity: 0.4 },
+      { configKey: 'rightKnee.varus',         label: 'Varus',  direction: [-1, 0, 0], sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'leftHumerus', label: 'L Humerus', side: 'L',
+    proximalBone: 'Shoulder_L', distalBone: 'Elbow_L',
+    pickBones: ['Shoulder_L', 'ShoulderPart1_L'],
+    morphology: [
+      { configKey: 'leftShoulder.retroversion', label: 'Retro', direction: [0, 0, -1], sensitivity: 0.4 },
+      { configKey: 'leftShoulder.retroversion', label: 'Antev', direction: [0, 0, 1],  sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'rightHumerus', label: 'R Humerus', side: 'R',
+    proximalBone: 'Shoulder_R', distalBone: 'Elbow_R',
+    pickBones: ['Shoulder_R', 'ShoulderPart1_R'],
+    morphology: [
+      { configKey: 'rightShoulder.retroversion', label: 'Retro', direction: [0, 0, -1], sensitivity: 0.4 },
+      { configKey: 'rightShoulder.retroversion', label: 'Antev', direction: [0, 0, 1],  sensitivity: 0.4, scale: -1 },
+    ],
+  },
+];
+
+const BONE_SEGMENT_BY_PICK_BONE: Record<string, BoneSegmentSpec> = (() => {
+  const m: Record<string, BoneSegmentSpec> = {};
+  for (const spec of BONE_SEGMENT_SPECS) {
+    for (const b of spec.pickBones) m[b] = spec;
+  }
+  return m;
+})();
+
+const BONE_SEGMENT_BY_ID: Record<BoneSegmentId, BoneSegmentSpec> = (() => {
+  const m = {} as Record<BoneSegmentId, BoneSegmentSpec>;
+  for (const spec of BONE_SEGMENT_SPECS) m[spec.id] = spec;
+  return m;
+})();
+
 function getJointKeyFromBone(boneName: string): string | null {
   const cfg = POSE_BONE_MAP[boneName];
   if (!cfg) return null;
@@ -2322,6 +2426,8 @@ export default function PureThreeGLBViewer({
   selectedRomJointId = null,
   enablePoseMode = false,
   onModelConfigChange,
+  selectedBoneSegmentId: selectedBoneSegmentIdProp,
+  onSelectedBoneSegmentChange,
   enableZoomTool = false,
   onLandmarkSelect,
   forceOverlay = null,
@@ -2465,6 +2571,17 @@ export default function PureThreeGLBViewer({
   enablePoseModeRef.current = enablePoseMode;
   const onModelConfigChangeRef = useRef(onModelConfigChange);
   onModelConfigChangeRef.current = onModelConfigChange;
+  // External bone-segment selection wiring (Task #212). The pose-mode
+  // useEffect reads from selectedBoneSegmentExternalRef each frame so the
+  // 3D selection tracks an externally-controlled value (e.g. from
+  // JointAngleEditor's bone chips), and reports back via the change ref.
+  const selectedBoneSegmentExternalRef = useRef<BoneSegmentId | null | undefined>(selectedBoneSegmentIdProp);
+  selectedBoneSegmentExternalRef.current = selectedBoneSegmentIdProp;
+  const onSelectedBoneSegmentChangeRef = useRef(onSelectedBoneSegmentChange);
+  onSelectedBoneSegmentChangeRef.current = onSelectedBoneSegmentChange;
+  // Set inside the pose-mode useEffect so a prop-driven effect can call it
+  // without re-mounting the whole pose-mode setup.
+  const applyExternalBoneSelectionRef = useRef<((next: BoneSegmentId | null | undefined) => void) | null>(null);
   const modelConfigRef = useRef(modelConfig);
   modelConfigRef.current = modelConfig;
   const [poseModeTooltip, setPoseModeTooltip] = useState<{ x: number; y: number; label: string; value: string } | null>(null);
@@ -5505,6 +5622,14 @@ export default function PureThreeGLBViewer({
     let arrowsGroup: THREE.Group | null = null;
     let arrowPickMeshes: { mesh: THREE.Mesh; def: MovementArrowDef; dirWorld: THREE.Vector3 }[] = [];
     let hoveredArrowIdx: number = -1;
+    // Bone-segment selection (Task #212): orthogonal to joint selection — at
+    // most one of (selectedJointKey, selectedBoneSegmentId) is set at a time.
+    let selectedBoneSegmentId: BoneSegmentId | null = null;
+    let isShiftHeld = false;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') isShiftHeld = true; };
+    const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') isShiftHeld = false; };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
 
     const cachedMeshes: THREE.Mesh[] = [];
     model.traverse((child) => {
@@ -5717,6 +5842,7 @@ export default function PureThreeGLBViewer({
         arr.pickMesh.userData.dirNorm = arr.dirNorm;
         arr.pickMesh.userData.visualMats = arr.visualMats;
         arr.pickMesh.userData.arrowIdx = idx;
+        arr.pickMesh.userData.baseColor = ARROW_BASE_COLOR;
         grp.add(arr.group);
         arrowPickMeshes.push({ mesh: arr.pickMesh, def, dirWorld: arr.dirNorm.clone() });
       });
@@ -5726,6 +5852,11 @@ export default function PureThreeGLBViewer({
       if (idx < 0 || idx >= arrowPickMeshes.length) return;
       const mats = arrowPickMeshes[idx].mesh.userData.visualMats as THREE.MeshBasicMaterial[];
       mats?.forEach((m) => m.color.setHex(color));
+    };
+    const restoreArrowColor = (idx: number) => {
+      if (idx < 0 || idx >= arrowPickMeshes.length) return;
+      const base = (arrowPickMeshes[idx].mesh.userData.baseColor as number) ?? ARROW_BASE_COLOR;
+      setArrowColor(idx, base);
     };
 
     const findArrowFromRaycast = (ndc: THREE.Vector2): number => {
@@ -5754,15 +5885,150 @@ export default function PureThreeGLBViewer({
     const selectJoint = (boneName: string) => {
       const jointKey = getJointKeyFromBone(boneName);
       if (!jointKey) return;
+      const hadBoneSelection = !!selectedBoneSegmentId;
       removeGlow(selectedGlow);
       selectedGlow = createGlowSphere(boneName, 0x00ff88, 0.7);
       selectedAnchorBoneName = boneName;
       selectedJointKey = jointKey;
+      selectedBoneSegmentId = null;
       poseSelectedBoneRef.current = boneName;
       poseHighlightMeshRef.current = selectedGlow;
       const wp = new THREE.Vector3();
       bones[boneName]?.getWorldPosition(wp);
       buildArrowsForJoint(jointKey, wp);
+      // Notify any external bone-selection consumer that the bone slot is now
+      // empty. Without this, a parent-controlled selection would re-apply on
+      // the next sync tick and clobber the joint we just selected.
+      if (hadBoneSelection) onSelectedBoneSegmentChangeRef.current?.(null);
+    };
+
+    // --- Bone-segment selection (Task #212) ---------------------------------
+    const computeBoneSegmentAnchor = (spec: BoneSegmentSpec): THREE.Vector3 | null => {
+      const a = bones[spec.proximalBone];
+      const b = bones[spec.distalBone];
+      if (!a || !b) return null;
+      const pa = new THREE.Vector3();
+      const pb = new THREE.Vector3();
+      a.getWorldPosition(pa);
+      b.getWorldPosition(pb);
+      return pa.add(pb).multiplyScalar(0.5);
+    };
+
+    const buildArrowsForBoneSegment = (spec: BoneSegmentSpec) => {
+      disposeArrows();
+      const anchor = computeBoneSegmentAnchor(spec);
+      if (!anchor) return;
+      const defs = spec.morphology.filter((d) => DOF_LIMIT_INDEX.has(d.configKey));
+      if (defs.length === 0) return;
+      const grp = new THREE.Group();
+      grp.position.copy(anchor);
+      scene.add(grp);
+      arrowsGroup = grp;
+      defs.forEach((def, idx) => {
+        const arr = createArrow(def);
+        arr.pickMesh.userData.movementDef = def;
+        arr.pickMesh.userData.dirNorm = arr.dirNorm;
+        arr.pickMesh.userData.visualMats = arr.visualMats;
+        arr.pickMesh.userData.arrowIdx = idx;
+        // Tint morphology arrows blue to differentiate from joint-movement (cyan) arrows
+        const morphColor = 0x6699ff;
+        arr.pickMesh.userData.baseColor = morphColor;
+        arr.visualMats.forEach((m) => m.color.setHex(morphColor));
+        grp.add(arr.group);
+        arrowPickMeshes.push({ mesh: arr.pickMesh, def, dirWorld: arr.dirNorm.clone() });
+      });
+    };
+
+    const selectBoneSegment = (spec: BoneSegmentSpec, opts?: { silent?: boolean }) => {
+      // Clear any joint selection so the two interactions don't overlap.
+      removeGlow(selectedGlow);
+      selectedGlow = null;
+      selectedJointKey = null;
+      selectedAnchorBoneName = null;
+      poseSelectedBoneRef.current = null;
+      poseHighlightMeshRef.current = null;
+      disposeArrows();
+
+      selectedBoneSegmentId = spec.id;
+      const anchor = computeBoneSegmentAnchor(spec);
+      if (anchor) {
+        const geo = new THREE.SphereGeometry(0.05, 16, 16);
+        const mat = new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.7, depthTest: false });
+        selectedGlow = new THREE.Mesh(geo, mat);
+        selectedGlow.renderOrder = 1001;
+        selectedGlow.position.copy(anchor);
+        scene.add(selectedGlow);
+        poseHighlightMeshRef.current = selectedGlow;
+      }
+      buildArrowsForBoneSegment(spec);
+      if (!opts?.silent) onSelectedBoneSegmentChangeRef.current?.(spec.id);
+    };
+
+    const clearBoneSegmentSelection = (opts?: { silent?: boolean }) => {
+      removeGlow(selectedGlow);
+      selectedGlow = null;
+      disposeArrows();
+      selectedBoneSegmentId = null;
+      poseHighlightMeshRef.current = null;
+      if (!opts?.silent) onSelectedBoneSegmentChangeRef.current?.(null);
+    };
+
+    /** Resolve the bone-segment under the cursor, or null. */
+    const findBoneSegmentFromRaycast = (ndc: THREE.Vector2): BoneSegmentSpec | null => {
+      // Match the clicked bone shaft to a registered pick-bone in
+      // BONE_SEGMENT_BY_PICK_BONE. We pick the pick-bone closest to the hit
+      // point (or the nearest model-plane projection if no mesh hit).
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const hits = raycasterRef.current.intersectObjects(cachedMeshes, true);
+      const refPoint = new THREE.Vector3();
+      if (hits.length > 0) {
+        refPoint.copy(hits[0].point);
+      } else {
+        const modelCenter = new THREE.Vector3();
+        const box = new THREE.Box3().setFromObject(model);
+        box.getCenter(modelCenter);
+        const cameraDir = new THREE.Vector3();
+        camera.getWorldDirection(cameraDir);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+          cameraDir.clone().negate(),
+          modelCenter
+        );
+        if (!raycasterRef.current.ray.intersectPlane(plane, refPoint)) return null;
+      }
+      const wp = new THREE.Vector3();
+      let bestSpec: BoneSegmentSpec | null = null;
+      let bestDist = Infinity;
+      // 1) Prefer the registered pick-bone closest to the hit. This honors
+      //    BONE_SEGMENT_BY_PICK_BONE so the clicked shaft drives the result.
+      for (const pickBoneName of Object.keys(BONE_SEGMENT_BY_PICK_BONE)) {
+        const bone = bones[pickBoneName];
+        if (!bone) continue;
+        bone.getWorldPosition(wp);
+        const d = refPoint.distanceTo(wp);
+        if (d < bestDist) {
+          bestDist = d;
+          bestSpec = BONE_SEGMENT_BY_PICK_BONE[pickBoneName];
+        }
+      }
+      if (bestSpec && bestDist <= MAX_BONE_DISTANCE) return bestSpec;
+      // 2) Fallback: nearest segment midpoint (covers segments whose
+      //    pick-bones aren't present in this rig).
+      bestSpec = null;
+      bestDist = Infinity;
+      for (const spec of BONE_SEGMENT_SPECS) {
+        const a = bones[spec.proximalBone];
+        const b = bones[spec.distalBone];
+        if (!a || !b) continue;
+        const pa = new THREE.Vector3(); a.getWorldPosition(pa);
+        const pb = new THREE.Vector3(); b.getWorldPosition(pb);
+        wp.copy(pa).add(pb).multiplyScalar(0.5);
+        const d = refPoint.distanceTo(wp);
+        if (d < bestDist) {
+          bestDist = d;
+          bestSpec = spec;
+        }
+      }
+      return bestDist <= MAX_BONE_DISTANCE ? bestSpec : null;
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -5795,11 +6061,11 @@ export default function PureThreeGLBViewer({
 
       const ndc = getMouseNDC(e);
 
-      // First check arrow hover (when a joint is selected)
-      if (selectedJointKey) {
+      // First check arrow hover (when a joint OR bone-segment is selected)
+      if (selectedJointKey || selectedBoneSegmentId) {
         const arrowIdx = findArrowFromRaycast(ndc);
         if (arrowIdx !== hoveredArrowIdx) {
-          if (hoveredArrowIdx >= 0) setArrowColor(hoveredArrowIdx, ARROW_BASE_COLOR);
+          if (hoveredArrowIdx >= 0) restoreArrowColor(hoveredArrowIdx);
           if (arrowIdx >= 0) setArrowColor(arrowIdx, ARROW_HOVER_COLOR);
           hoveredArrowIdx = arrowIdx;
         }
@@ -5818,6 +6084,41 @@ export default function PureThreeGLBViewer({
           if (hoverGlow) { removeGlow(hoverGlow); hoverGlow = null; hoveredBone = null; }
           return;
         }
+      }
+
+      // Bone-segment hover when Shift is held: highlight the segment that
+      // would be selected and show a "Shift-click for bone" hint.
+      if (isShiftHeld) {
+        const segSpec = findBoneSegmentFromRaycast(ndc);
+        const hoverKey = segSpec ? `seg:${segSpec.id}` : null;
+        if (hoverKey !== hoveredBone) {
+          removeGlow(hoverGlow);
+          hoverGlow = null;
+          hoveredBone = hoverKey;
+          if (segSpec) {
+            const anchor = computeBoneSegmentAnchor(segSpec);
+            if (anchor) {
+              const geo = new THREE.SphereGeometry(0.04, 16, 16);
+              const mat = new THREE.MeshBasicMaterial({ color: 0x88bbff, transparent: true, opacity: 0.45, depthTest: false });
+              hoverGlow = new THREE.Mesh(geo, mat);
+              hoverGlow.renderOrder = 1001;
+              hoverGlow.position.copy(anchor);
+              scene.add(hoverGlow);
+            }
+            domElement.style.cursor = 'pointer';
+            const rect = domElement.getBoundingClientRect();
+            setPoseModeTooltip({
+              x: e.clientX - rect.left,
+              y: e.clientY - rect.top - 40,
+              label: segSpec.label,
+              value: 'Shift-click: bone',
+            });
+          } else {
+            domElement.style.cursor = '';
+            if (!selectedJointKey && !selectedBoneSegmentId) setPoseModeTooltip(null);
+          }
+        }
+        return;
       }
 
       // Otherwise hover a bone for joint selection
@@ -5841,7 +6142,7 @@ export default function PureThreeGLBViewer({
           });
         } else {
           domElement.style.cursor = '';
-          if (!selectedJointKey) setPoseModeTooltip(null);
+          if (!selectedJointKey && !selectedBoneSegmentId) setPoseModeTooltip(null);
         }
       }
     };
@@ -5850,13 +6151,19 @@ export default function PureThreeGLBViewer({
       if (!enablePoseModeRef.current || e.button !== 0) return;
       const ndc = getMouseNDC(e);
 
-      // Arrow drag takes priority when a joint is selected
-      if (selectedJointKey) {
+      // Arrow drag takes priority when either a joint or bone-segment is selected
+      if (selectedJointKey || selectedBoneSegmentId) {
         const arrowIdx = findArrowFromRaycast(ndc);
-        if (arrowIdx >= 0 && selectedAnchorBoneName) {
+        if (arrowIdx >= 0) {
           const a = arrowPickMeshes[arrowIdx];
           const anchor = new THREE.Vector3();
-          bones[selectedAnchorBoneName]?.getWorldPosition(anchor);
+          if (selectedBoneSegmentId) {
+            const spec = BONE_SEGMENT_BY_ID[selectedBoneSegmentId];
+            const segAnchor = spec ? computeBoneSegmentAnchor(spec) : null;
+            if (segAnchor) anchor.copy(segAnchor);
+          } else if (selectedAnchorBoneName) {
+            bones[selectedAnchorBoneName]?.getWorldPosition(anchor);
+          }
           const screenDir = computeScreenDir(anchor, a.dirWorld);
           const startValue = getCurrentValue(a.def.configKey);
           const lim = DOF_LIMIT_INDEX.get(a.def.configKey);
@@ -5879,6 +6186,18 @@ export default function PureThreeGLBViewer({
           e.stopPropagation();
           return;
         }
+      }
+
+      // Shift+click selects a bone segment instead of a joint.
+      if (isShiftHeld) {
+        const segSpec = findBoneSegmentFromRaycast(ndc);
+        if (segSpec) {
+          selectBoneSegment(segSpec);
+          if (hoverGlow) { removeGlow(hoverGlow); hoverGlow = null; hoveredBone = null; }
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        return;
       }
 
       // Otherwise: select a joint (no immediate drag)
@@ -5904,7 +6223,7 @@ export default function PureThreeGLBViewer({
       if (!enablePoseModeRef.current) return;
       const ndc = getMouseNDC(e);
       // Reset the DOF associated with a hovered arrow, if any
-      if (selectedJointKey) {
+      if (selectedJointKey || selectedBoneSegmentId) {
         const arrowIdx = findArrowFromRaycast(ndc);
         if (arrowIdx >= 0) {
           const a = arrowPickMeshes[arrowIdx];
@@ -5913,20 +6232,40 @@ export default function PureThreeGLBViewer({
           return;
         }
       }
-      // Otherwise, double-click on empty area / non-arrow deselects the joint
+      // Otherwise, double-click on empty area / non-arrow deselects the joint or bone
       const boneName = findBoneFromRaycast(ndc);
       if (!boneName || !POSE_BONE_MAP[boneName]) {
-        // Deselect
+        // Deselect (and notify any external bone-selection consumer).
+        const hadBoneSelection = !!selectedBoneSegmentId;
         removeGlow(selectedGlow);
         selectedGlow = null;
         disposeArrows();
         selectedJointKey = null;
         selectedAnchorBoneName = null;
+        selectedBoneSegmentId = null;
         poseSelectedBoneRef.current = null;
         poseHighlightMeshRef.current = null;
         setPoseModeTooltip(null);
+        if (hadBoneSelection) onSelectedBoneSegmentChangeRef.current?.(null);
       }
     };
+
+    /** Apply an externally-controlled bone-segment selection. */
+    const applyExternalBoneSelection = (next: BoneSegmentId | null | undefined) => {
+      if (next === undefined) return; // uncontrolled
+      if (next === selectedBoneSegmentId) return;
+      if (next === null) {
+        clearBoneSegmentSelection({ silent: true });
+        return;
+      }
+      const spec = BONE_SEGMENT_BY_ID[next];
+      if (spec) selectBoneSegment(spec, { silent: true });
+    };
+    // Sync once on mount in case parent already passed a selection.
+    applyExternalBoneSelection(selectedBoneSegmentExternalRef.current);
+    // Expose the applier so the prop-driven useEffect below can call it
+    // whenever selectedBoneSegmentIdProp changes — no polling required.
+    applyExternalBoneSelectionRef.current = applyExternalBoneSelection;
 
     const poseGlowAnimFrame = { current: 0 };
     const animateGlows = () => {
@@ -5939,12 +6278,27 @@ export default function PureThreeGLBViewer({
           selectedGlow.position.copy(wp);
           if (arrowsGroup) arrowsGroup.position.copy(wp);
         }
+      } else if (selectedGlow && selectedBoneSegmentId) {
+        // Track the bone-segment midpoint as the underlying skeleton moves.
+        const spec = BONE_SEGMENT_BY_ID[selectedBoneSegmentId];
+        const segAnchor = spec ? computeBoneSegmentAnchor(spec) : null;
+        if (segAnchor) {
+          selectedGlow.position.copy(segAnchor);
+          if (arrowsGroup) arrowsGroup.position.copy(segAnchor);
+        }
       }
       if (hoverGlow && hoveredBone) {
-        const bone = bones[hoveredBone];
-        if (bone) {
-          bone.getWorldPosition(wp);
-          hoverGlow.position.copy(wp);
+        if (hoveredBone.startsWith('seg:')) {
+          const segId = hoveredBone.slice(4) as BoneSegmentId;
+          const spec = BONE_SEGMENT_BY_ID[segId];
+          const a = spec ? computeBoneSegmentAnchor(spec) : null;
+          if (a) hoverGlow.position.copy(a);
+        } else {
+          const bone = bones[hoveredBone];
+          if (bone) {
+            bone.getWorldPosition(wp);
+            hoverGlow.position.copy(wp);
+          }
         }
       }
     };
@@ -5957,10 +6311,13 @@ export default function PureThreeGLBViewer({
 
     return () => {
       cancelAnimationFrame(poseGlowAnimFrame.current);
+      applyExternalBoneSelectionRef.current = null;
       domElement.removeEventListener('mousemove', onMouseMove);
       domElement.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
       domElement.removeEventListener('dblclick', onDblClick);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
       removeGlow(hoverGlow);
       removeGlow(selectedGlow);
       disposeArrows();
@@ -5971,6 +6328,7 @@ export default function PureThreeGLBViewer({
       hoveredBone = null;
       selectedJointKey = null;
       selectedAnchorBoneName = null;
+      selectedBoneSegmentId = null;
       poseSelectedBoneRef.current = null;
       poseHighlightMeshRef.current = null;
       poseDragRef.current = null;
@@ -5979,6 +6337,13 @@ export default function PureThreeGLBViewer({
       setPoseModeTooltip(null);
     };
   }, [enablePoseMode, status]);
+
+  // Prop-driven external bone-selection sync (Task #212). Runs whenever the
+  // controlled selection prop changes; the inner pose-mode effect installs
+  // applyExternalBoneSelectionRef.current while it's mounted.
+  useEffect(() => {
+    applyExternalBoneSelectionRef.current?.(selectedBoneSegmentIdProp);
+  }, [selectedBoneSegmentIdProp]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -9100,6 +9465,15 @@ export default function PureThreeGLBViewer({
             );
           })}
         </>
+      )}
+      {/* Pose mode hint: how to select bones vs joints (Task #212) */}
+      {enablePoseMode && (
+        <div
+          className="absolute top-2 left-2 z-10 pointer-events-none px-2 py-1 rounded-md bg-slate-900/80 backdrop-blur text-[10px] text-emerald-100 border border-emerald-500/30 shadow"
+          data-testid="pose-mode-hint"
+        >
+          <div><span className="text-emerald-300">Click</span> joint dot · <span className="text-blue-300">Shift+Click</span> bone shaft</div>
+        </div>
       )}
       {/* Pose mode tooltip */}
       {poseModeTooltip && enablePoseMode && (

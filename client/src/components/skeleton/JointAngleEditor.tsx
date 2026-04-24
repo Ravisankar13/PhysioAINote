@@ -140,6 +140,41 @@ export type ModelConfigLike = {
   readonly [joint: string]: { readonly [property: string]: number | undefined } | undefined | unknown;
 };
 
+// --- Bone-morphology registry (Task #212) -----------------------------------
+// Maps each long bone (femur, tibia, humerus) to the structural DOFs that
+// describe its shape or its alignment with the adjacent segment. The DOF ids
+// reference DOF_SPECS above so range/units/labels remain canonical.
+export type BoneMorphologyId =
+  | 'leftFemur'  | 'rightFemur'
+  | 'leftTibia'  | 'rightTibia'
+  | 'leftHumerus' | 'rightHumerus';
+
+export interface BoneMorphologyEntry {
+  id: BoneMorphologyId;
+  label: string;
+  side: 'L' | 'R';
+  pairId: BoneMorphologyId;
+  /** Joint key the bone hangs off (used for "Open in viewer" jumps). */
+  joint: string;
+  /** Ordered DOF_SPECS ids exposed as morphology controls. */
+  dofIds: string[];
+}
+
+export const BONE_MORPHOLOGY_REGISTRY: BoneMorphologyEntry[] = [
+  { id: 'leftFemur',  label: 'L Femur',  side: 'L', pairId: 'rightFemur',   joint: 'leftHip',
+    dofIds: ['leftHip.anteversion', 'leftHip.neckShaftAngle'] },
+  { id: 'rightFemur', label: 'R Femur', side: 'R', pairId: 'leftFemur',     joint: 'rightHip',
+    dofIds: ['rightHip.anteversion', 'rightHip.neckShaftAngle'] },
+  { id: 'leftTibia',  label: 'L Tibia',  side: 'L', pairId: 'rightTibia',    joint: 'leftKnee',
+    dofIds: ['leftKnee.tibialTorsion', 'leftKnee.varus'] },
+  { id: 'rightTibia', label: 'R Tibia', side: 'R', pairId: 'leftTibia',     joint: 'rightKnee',
+    dofIds: ['rightKnee.tibialTorsion', 'rightKnee.varus'] },
+  { id: 'leftHumerus',  label: 'L Humerus',  side: 'L', pairId: 'rightHumerus', joint: 'leftShoulder',
+    dofIds: ['leftShoulder.retroversion'] },
+  { id: 'rightHumerus', label: 'R Humerus', side: 'R', pairId: 'leftHumerus',  joint: 'rightShoulder',
+    dofIds: ['rightShoulder.retroversion'] },
+];
+
 interface Props {
   modelConfig: ModelConfigLike;
   onAngleChange: (joint: string, property: string, value: number) => void;
@@ -150,6 +185,10 @@ interface Props {
   focusDofId?: string | null;
   /** External signal to focus a joint group (jumps the editor tab + scrolls to the joint section). */
   focusJoint?: string | null;
+  /** Currently selected bone for the "Bone Morphology" panel; if omitted, the editor manages it internally. */
+  selectedBone?: BoneMorphologyId | null;
+  /** Notified whenever the bone-morphology selection changes. */
+  onSelectedBoneChange?: (bone: BoneMorphologyId | null) => void;
 }
 
 interface RowProps {
@@ -347,11 +386,27 @@ export default function JointAngleEditor({
   onBilateralLinkChange,
   focusDofId,
   focusJoint,
+  selectedBone: selectedBoneProp,
+  onSelectedBoneChange,
 }: Props) {
   const [search, setSearch] = useState('');
   const [activeGroup, setActiveGroup] = useState<DofGroup>('lower');
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
   const [selectedJoint, setSelectedJoint] = useState<string | null>(null);
+  const [selectedBoneInternal, setSelectedBoneInternal] = useState<BoneMorphologyId | null>(null);
+  const selectedBone = selectedBoneProp !== undefined ? selectedBoneProp : selectedBoneInternal;
+  const setSelectedBone = useCallback((b: BoneMorphologyId | null) => {
+    if (selectedBoneProp === undefined) setSelectedBoneInternal(b);
+    onSelectedBoneChange?.(b);
+  }, [selectedBoneProp, onSelectedBoneChange]);
+  const selectedBoneEntry = useMemo(
+    () => (selectedBone ? BONE_MORPHOLOGY_REGISTRY.find(e => e.id === selectedBone) ?? null : null),
+    [selectedBone],
+  );
+  const selectedBoneSpecs = useMemo(
+    () => (selectedBoneEntry ? selectedBoneEntry.dofIds.map(id => DOF_SPECS.find(d => d.id === id)).filter((d): d is DofSpec => !!d) : []),
+    [selectedBoneEntry],
+  );
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const registerRef = useCallback((id: string, el: HTMLDivElement | null) => {
     rowRefs.current[id] = el;
@@ -554,6 +609,83 @@ export default function JointAngleEditor({
         </div>
       </CardHeader>
       <CardContent className="pt-0">
+        {/* Bone Morphology section (Task #212) — structural shape of long bones,
+            kept distinct from per-joint movement DOFs above. */}
+        <div className="mb-3 pb-2 border-b" data-testid="bone-morphology-section">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[11px] font-semibold flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
+              Bone Morphology
+            </div>
+            {selectedBone && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-5 px-1.5 text-[10px]"
+                onClick={() => setSelectedBone(null)}
+                data-testid="btn-clear-bone-morphology"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1" data-testid="bone-morphology-chips">
+            {BONE_MORPHOLOGY_REGISTRY.map(b => (
+              <Button
+                key={b.id}
+                size="sm"
+                variant={selectedBone === b.id ? 'default' : 'outline'}
+                className="h-6 px-2 text-[10px]"
+                onClick={() => setSelectedBone(selectedBone === b.id ? null : b.id)}
+                data-testid={`chip-bone-${b.id}`}
+              >
+                {b.label}
+              </Button>
+            ))}
+          </div>
+          {selectedBoneEntry && selectedBoneSpecs.length > 0 && (
+            <div
+              className="mt-2 p-2 rounded-md border border-blue-500/40 bg-blue-500/5"
+              data-testid="bone-morphology-panel"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[11px] font-semibold">
+                  {selectedBoneEntry.label}
+                  <span className="text-[10px] font-normal text-muted-foreground ml-1">
+                    · {selectedBoneSpecs.length} param{selectedBoneSpecs.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                {onJumpToJoint && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 px-1.5 text-[10px]"
+                    onClick={() => onJumpToJoint(selectedBoneEntry.joint)}
+                    data-testid="btn-jump-to-bone"
+                  >
+                    Open
+                  </Button>
+                )}
+              </div>
+              <div className="space-y-1">
+                {selectedBoneSpecs.map(spec => (
+                  <EditorRow
+                    key={spec.id}
+                    spec={spec}
+                    value={getValue(spec)}
+                    pairValue={getPairValue(spec)}
+                    onChange={(v) => handleChange(spec, v)}
+                    onJumpToJoint={onJumpToJoint}
+                    bilateralLink={bilateralLink}
+                    isFocused={focusedRowId === spec.id}
+                    registerRef={registerRef}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Joint picker chips - 1-click access to any joint's DOFs */}
         <div className="flex flex-wrap gap-1 mb-3 pb-2 border-b" data-testid="joint-picker">
           <Button

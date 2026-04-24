@@ -4453,20 +4453,23 @@ ${ddxList}`;
   }, [baseHudForceAnalysis, bodyWeightKg, patientForceState, forceTimeMetrics, isScrubbing, scrubPlaybackMs]);
 
   // ─── Time-aware force buffer push ────────────────────────────────────
-  // Capture every recompute of the BASE analysis so cumulative dose / rate of
-  // loading / impact metrics are accumulated regardless of source (Movement
-  // Player, live phone camera, manual sliders all flow into finalModelConfig).
-  // While scrubbing, do NOT push — we'd be writing past frames as if they
-  // were live and corrupting the timeline.
+  // Capture every recompute of the AUGMENTED analysis (chain-axial +
+  // inertial m·a + patient-state status) so cumulative dose, rate of
+  // loading, asymmetry, and peak markers are all derived from the same
+  // canonical force model the HUD shows. Pushing the *augmented* result
+  // (not the raw engine output) is what makes the trust + time layers
+  // share one source of truth across Movement Player, phone camera, and
+  // manual sliders. While scrubbing, do NOT push — we'd be writing past
+  // frames as if they were live and corrupting the timeline.
   useEffect(() => {
     if (forceTimeBuffer.getPlaybackTime() != null) return;
-    if (!baseHudForceAnalysis || !baseHudForceAnalysis.joints || baseHudForceAnalysis.joints.length === 0) return;
+    if (!hudForceAnalysis || !hudForceAnalysis.joints || hudForceAnalysis.joints.length === 0) return;
     const source: 'movement_player' | 'camera' | 'manual' =
       animationState.isPlaying ? 'movement_player'
       : cameraPoseActive ? 'camera'
       : 'manual';
     forceTimeBuffer.push({
-      result: baseHudForceAnalysis,
+      result: hudForceAnalysis,
       bodyWeightKg,
       source,
       movementId: animationState.currentMovement ?? null,
@@ -4474,7 +4477,7 @@ ${ddxList}`;
       // back to the same frame and the 3D skeleton mirrors the HUD.
       movementProgress: animationState.isPlaying ? animationState.progress : null,
     });
-  }, [baseHudForceAnalysis, bodyWeightKg, animationState.isPlaying, animationState.currentMovement, animationState.progress, cameraPoseActive]);
+  }, [hudForceAnalysis, bodyWeightKg, animationState.isPlaying, animationState.currentMovement, animationState.progress, cameraPoseActive]);
 
   // ─── Scrub-back seeks the Movement Player ────────────────────────────
   // When the clinician pauses and scrubs the time buffer, look up the active
@@ -10768,6 +10771,7 @@ ${ddxList}`;
               onToggleTissueView={() => { setTissueViewMode(prev => prev ? null : 'tendon'); }}
               timeMetrics={forceTimeMetrics}
               onOpenForceTime={() => setShowForceTimePanel(true)}
+              patientForceState={patientForceState}
             />
 
             {showForceTimePanel && (

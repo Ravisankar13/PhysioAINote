@@ -5,6 +5,7 @@ import { computeMuscleBalanceRatios, type MuscleAnalysisResult } from '@/lib/mus
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 import type { BiomechanicsOutput } from '@/lib/unifiedBiomechanicsEngine';
 import type { ForceTimeMetrics } from '@/lib/forceTimeBuffer';
+import { citationFor, getThresholdsFor, type PatientState } from '@/lib/forceCitations';
 
 interface ChainIntegrityEntry {
   score: number;
@@ -30,6 +31,7 @@ interface BiomechanicsHUDProps {
   onToggleTissueView: () => void;
   timeMetrics?: ForceTimeMetrics | null;
   onOpenForceTime?: () => void;
+  patientForceState?: PatientState;
 }
 
 function getForceColor(status: string): string {
@@ -84,6 +86,7 @@ export default function BiomechanicsHUD({
   onToggleTissueView,
   timeMetrics,
   onOpenForceTime,
+  patientForceState,
 }: BiomechanicsHUDProps) {
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
   const [directions, setDirections] = useState<Record<string, 'up' | 'down' | null>>({});
@@ -231,6 +234,7 @@ export default function BiomechanicsHUD({
     value: string;
     valueColor: string;
     onClick: () => void;
+    tooltip?: string;
   }> = [
     {
       id: 'controls',
@@ -285,6 +289,27 @@ export default function BiomechanicsHUD({
       label: 'Forces',
       value: topJoint ? `${abbreviateJoint(topJoint.label)} ${(topJoint.totalForce * 100).toFixed(0)}%` : '--',
       valueColor: topJoint ? getForceColor(topJoint.status) : '#6b7280',
+      // Inline citation + ±7% anthropometric confidence band so every HUD
+      // force readout carries provenance (the trust-layer requirement).
+      tooltip: (() => {
+        if (!topJoint) return 'Forces';
+        const cit = citationFor(topJoint.id);
+        const band = patientForceState ? getThresholdsFor(topJoint.id, patientForceState) : null;
+        const bw = topJoint.totalForce;
+        const bwLow = bw * 0.93;
+        const bwHigh = bw * 1.07;
+        const lines: string[] = [
+          `Peak: ${abbreviateJoint(topJoint.label)} ${bw.toFixed(2)} BW`,
+          `Confidence ±7% (de Leva 1996): ${bwLow.toFixed(2)}–${bwHigh.toFixed(2)} BW`,
+        ];
+        if (band) {
+          lines.push(`Safe < ${band.safeN.toFixed(0)} N · Warn ${band.warnN.toFixed(0)} N — ${band.note}`);
+        }
+        if (cit) {
+          lines.push(`Source: ${cit.authors} (${cit.year}). ${cit.title}. ${cit.source}`);
+        }
+        return lines.join('\n');
+      })(),
       onClick: onOpenForceOverlay,
     },
     {

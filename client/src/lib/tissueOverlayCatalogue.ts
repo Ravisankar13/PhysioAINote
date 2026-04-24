@@ -204,6 +204,7 @@ export interface TissueOverlayHighlight {
   irritability: Irritability;
   isDeep: boolean;
   hasRecipe: boolean;
+  aggravators?: import('@/lib/tissueIntelligence').AggravatorEntry[];
 }
 
 export function tissueIntelligenceToOverlayHighlight(intel: TissueIntelligence): TissueOverlayHighlight {
@@ -218,6 +219,7 @@ export function tissueIntelligenceToOverlayHighlight(intel: TissueIntelligence):
     irritability: intel.state.irritability,
     isDeep: !!recipe?.isDeep,
     hasRecipe: !!recipe,
+    aggravators: intel.painBehavior?.aggravators,
   };
 }
 

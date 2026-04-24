@@ -1698,6 +1698,20 @@ interface PureThreeGLBViewerProps {
     healingStage: 'acute' | 'subacute' | 'chronic' | 'degenerative' | 'baseline';
     irritability: 'low' | 'moderate' | 'high';
     isDeep: boolean;
+    aggravators?: Array<{
+      kind: 'movement' | 'posture' | 'load' | 'time';
+      label: string;
+      boneAnchor?: string;
+      predicate?:
+        | { kind: 'shoulderAbductionAbove'; side: 'L' | 'R'; threshold: number }
+        | { kind: 'kneeFlexionAbove'; side: 'L' | 'R'; threshold: number }
+        | { kind: 'kneeFlexionBelow'; side: 'L' | 'R'; threshold: number }
+        | { kind: 'hipFlexionAbove'; side: 'L' | 'R'; threshold: number }
+        | { kind: 'spineFlexionAbove'; threshold: number }
+        | { kind: 'spineExtensionAbove'; threshold: number }
+        | { kind: 'forwardHeadAbove'; threshold: number }
+        | { kind: 'always' };
+    }>;
   }>;
   slingPathwayVisualization?: {
     enabled: boolean;
@@ -3419,12 +3433,125 @@ export default function PureThreeGLBViewer({
       }
     }
 
+    // Trigger pips — small flashing spheres that appear on bones whose current pose
+    // matches an aggravator predicate, so the user can SEE which scenarios the
+    // highlighted tissue would dislike.
+    type PipEntry = {
+      mesh: THREE.Mesh;
+      mat: THREE.MeshBasicMaterial;
+      anchor: string;
+      evaluate: () => boolean;
+    };
+    const pipEntries: PipEntry[] = [];
+
+    const worldPos = (boneName: string): THREE.Vector3 | null => {
+      const b = bRef[boneName];
+      if (!b) return null;
+      const v = new THREE.Vector3();
+      b.getWorldPosition(v);
+      return v;
+    };
+    const angleAtVertex = (a: string, b: string, c: string): number | null => {
+      const A = worldPos(a); const B = worldPos(b); const C = worldPos(c);
+      if (!A || !B || !C) return null;
+      const v1 = A.clone().sub(B); const v2 = C.clone().sub(B);
+      if (v1.lengthSq() < 1e-6 || v2.lengthSq() < 1e-6) return null;
+      return THREE.MathUtils.radToDeg(v1.angleTo(v2));
+    };
+    const verticalAngle = (from: string, to: string): number | null => {
+      const A = worldPos(from); const B = worldPos(to);
+      if (!A || !B) return null;
+      const dir = B.clone().sub(A);
+      if (dir.lengthSq() < 1e-6) return null;
+      return THREE.MathUtils.radToDeg(dir.angleTo(new THREE.Vector3(0, -1, 0)));
+    };
+
+    const evalPredicate = (
+      p: NonNullable<NonNullable<typeof tissueIntelligenceHighlights>[number]['aggravators']>[number]['predicate']
+    ): boolean => {
+      if (!p) return false;
+      switch (p.kind) {
+        case 'always': return true;
+        case 'shoulderAbductionAbove': {
+          const a = angleAtVertex(`Hip_${p.side}`, `Shoulder_${p.side}`, `Elbow_${p.side}`);
+          return a != null && a > p.threshold;
+        }
+        case 'kneeFlexionAbove': {
+          const a = angleAtVertex(`Hip_${p.side}`, `Knee_${p.side}`, `Ankle_${p.side}`);
+          return a != null && (180 - a) > p.threshold;
+        }
+        case 'kneeFlexionBelow': {
+          const a = angleAtVertex(`Hip_${p.side}`, `Knee_${p.side}`, `Ankle_${p.side}`);
+          return a != null && (180 - a) < p.threshold;
+        }
+        case 'hipFlexionAbove': {
+          const a = angleAtVertex('Spine1_M', `Hip_${p.side}`, `Knee_${p.side}`);
+          return a != null && (180 - a) > p.threshold;
+        }
+        case 'spineFlexionAbove': {
+          const a = angleAtVertex('Root_M', 'Spine1_M', 'Neck_M');
+          // At rest a ≈ 180; flexion forward decreases it.
+          return a != null && (180 - a) > p.threshold;
+        }
+        case 'spineExtensionAbove': {
+          // Use forward/back tilt of upper trunk relative to vertical
+          const tilt = verticalAngle('Root_M', 'Spine1_M');
+          // Tilt ≈ 0 upright; extension causes posterior lean → tilt grows toward back
+          return tilt != null && tilt > p.threshold;
+        }
+        case 'forwardHeadAbove': {
+          const a = verticalAngle('Neck_M', 'Head_M');
+          return a != null && a > p.threshold;
+        }
+      }
+    };
+
+    for (const h of tissueIntelligenceHighlights) {
+      if (!h.aggravators) continue;
+      const palette = paletteForState(h.healingStage, h.irritability, h.severity);
+      for (const ag of h.aggravators) {
+        if (!ag.predicate || !ag.boneAnchor) continue;
+        const anchorPos0 = worldPos(ag.boneAnchor);
+        if (!anchorPos0) continue;
+        const geo = new THREE.SphereGeometry(0.018, 12, 10);
+        const mat = new THREE.MeshBasicMaterial({
+          color: palette.color,
+          transparent: true,
+          opacity: 0,
+          depthTest: false,
+          depthWrite: false,
+        });
+        const pip = new THREE.Mesh(geo, mat);
+        pip.renderOrder = 998;
+        pip.position.copy(anchorPos0).add(new THREE.Vector3(0, 0.04, 0));
+        pip.userData.tissueId = h.tissueId;
+        pip.userData.aggravator = ag.label;
+        overlayGroup.add(pip);
+        const anchorBone = ag.boneAnchor;
+        const predicate = ag.predicate;
+        pipEntries.push({
+          mesh: pip,
+          mat,
+          anchor: anchorBone,
+          evaluate: () => evalPredicate(predicate),
+        });
+      }
+    }
+
     // Per-frame transform updater — keeps every primitive glued to its bone(s) as the
-    // skeleton animates. Geometry is built once above; this loop only updates position,
-    // rotation and y-scale (length) for tube/sheet primitives.
+    // skeleton animates, and flashes trigger pips whose predicate currently matches.
     const tick = () => {
       const updaters = tissueOverlayUpdatersRef.current;
       for (let i = 0; i < updaters.length; i++) updaters[i]();
+      const tNow = performance.now();
+      const flash = 0.55 + 0.45 * Math.sin(tNow * 0.012);
+      for (const e of pipEntries) {
+        const pos = worldPos(e.anchor);
+        if (pos) e.mesh.position.copy(pos).add(new THREE.Vector3(0, 0.04, 0));
+        const active = e.evaluate();
+        e.mat.opacity = active ? flash : 0;
+        e.mesh.visible = active;
+      }
       tissueOverlayRafRef.current = requestAnimationFrame(tick);
     };
     tissueOverlayRafRef.current = requestAnimationFrame(tick);

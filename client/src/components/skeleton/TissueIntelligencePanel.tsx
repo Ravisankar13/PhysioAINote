@@ -20,9 +20,165 @@ import {
 import {
   type TissueIntelligence,
   type TissueEvidence,
+  type PainBehavior,
+  type AggravatorEntry,
+  type CandidateGenerator,
+  type DiurnalPattern,
+  type PainLatency,
   EVIDENCE_SOURCE_LABELS,
   getOverloadColor,
 } from '@/lib/tissueIntelligence';
+
+const SIN_COLOR = { low: '#22c55e', moderate: '#f59e0b', high: '#ef4444' };
+
+const DIURNAL_LABELS: Record<DiurnalPattern, string> = {
+  morning_stiffness: 'Morning stiffness',
+  end_of_day: 'Worsens through the day',
+  night_pain: 'Night pain',
+  constant: 'Constant',
+  activity_dependent: 'Activity-dependent',
+  unknown: 'Pattern not yet known',
+};
+
+const LATENCY_LABELS: Record<PainLatency, string> = {
+  immediate: 'Immediate onset',
+  within_minutes: 'Within minutes',
+  next_day: 'Delayed (next day)',
+  unknown: 'Latency unknown',
+};
+
+const AGGRAVATOR_KIND_COLOR: Record<AggravatorEntry['kind'], string> = {
+  movement: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+  posture: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  load: 'bg-red-500/15 text-red-300 border-red-500/30',
+  time: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+};
+
+function EmptyHint({ children }: { children: React.ReactNode }) {
+  return <div className="text-[10px] text-muted-foreground italic">{children}</div>;
+}
+
+function DescriptorChip({ label }: { label: string }) {
+  return (
+    <span
+      className="text-[9px] px-1.5 h-4 rounded-full bg-muted/60 text-foreground/80 border border-border/60 capitalize inline-flex items-center"
+      data-testid={`descriptor-${label}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function CandidateRow({ c }: { c: CandidateGenerator }) {
+  const pct = Math.round(c.probability * 100);
+  const color = pct >= 60 ? '#ef4444' : pct >= 35 ? '#f59e0b' : '#94a3b8';
+  return (
+    <div className="flex items-start gap-2 py-0.5" title={c.rationale}>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] text-foreground/90 truncate">{c.label}</div>
+        <div className="h-1 rounded-full bg-muted overflow-hidden mt-0.5">
+          <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+        </div>
+      </div>
+      <span className="font-mono text-[9px] mt-0.5" style={{ color }}>{pct}%</span>
+    </div>
+  );
+}
+
+function AggravatorChip({ ag }: { ag: AggravatorEntry }) {
+  const cls = AGGRAVATOR_KIND_COLOR[ag.kind] ?? AGGRAVATOR_KIND_COLOR.movement;
+  const titleParts: string[] = [`Source: ${EVIDENCE_SOURCE_LABELS[ag.source]}`];
+  if (ag.predicate && ag.predicate.kind !== 'always') {
+    titleParts.push(`Triggers when current pose matches: ${ag.predicate.kind} (${'threshold' in ag.predicate ? ag.predicate.threshold + '°' : ''})`);
+  }
+  return (
+    <span
+      className={`text-[9px] px-1.5 h-4 rounded-full border inline-flex items-center gap-1 capitalize ${cls}`}
+      title={titleParts.join(' · ')}
+      data-testid={`aggravator-${ag.label}`}
+    >
+      <span className="opacity-70">{ag.kind}:</span>
+      <span className="normal-case">{ag.label}</span>
+      {ag.predicate && ag.predicate.kind !== 'always' && <span className="opacity-70">●</span>}
+    </span>
+  );
+}
+
+function PainBehaviorSections({ pb, label }: { pb?: PainBehavior; label: string }) {
+  return (
+    <>
+      <Separator />
+      <div className="space-y-1.5">
+        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide" title="Ranked candidate pain generators">
+          What hurts
+        </div>
+        {pb && pb.candidates.length > 0 ? (
+          <div className="space-y-1">
+            {pb.candidates.map((c, i) => <CandidateRow key={i} c={c} />)}
+          </div>
+        ) : (
+          <EmptyHint>Primary candidate: {label}. No additional generators ranked yet.</EmptyHint>
+        )}
+        {pb && pb.descriptors.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1" title="Pain descriptors observed in clinical text + tissue defaults">
+            {pb.descriptors.map(d => <DescriptorChip key={d} label={d} />)}
+          </div>
+        )}
+      </div>
+
+      <Separator />
+      <div className="space-y-1.5">
+        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide" title="Severity, irritability, nature + 24h pattern + onset latency">
+          How it behaves
+        </div>
+        {pb ? (
+          <div className="grid grid-cols-3 gap-1.5">
+            <div className="rounded border border-border/40 bg-muted/30 p-1.5">
+              <div className="text-[9px] text-muted-foreground">SIN</div>
+              <div className="text-[10px] font-semibold capitalize" style={{ color: SIN_COLOR[pb.sin] }}>{pb.sin}</div>
+            </div>
+            <div className="rounded border border-border/40 bg-muted/30 p-1.5">
+              <div className="text-[9px] text-muted-foreground">24h pattern</div>
+              <div className="text-[10px] font-medium leading-tight">{DIURNAL_LABELS[pb.diurnal]}</div>
+            </div>
+            <div className="rounded border border-border/40 bg-muted/30 p-1.5">
+              <div className="text-[9px] text-muted-foreground">Onset</div>
+              <div className="text-[10px] font-medium leading-tight">{LATENCY_LABELS[pb.latency]}</div>
+            </div>
+          </div>
+        ) : (
+          <EmptyHint>Behaviour not yet observed.</EmptyHint>
+        )}
+      </div>
+
+      <Separator />
+      <div className="space-y-1.5">
+        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide" title="Pose / load / time / posture that aggravate this tissue. Predicate-bearing chips (●) flash a pip on the 3D model when matched.">
+          When it's triggered
+        </div>
+        {pb && pb.aggravators.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {pb.aggravators.map((ag, i) => <AggravatorChip key={i} ag={ag} />)}
+          </div>
+        ) : (
+          <EmptyHint>No aggravators identified yet.</EmptyHint>
+        )}
+        {pb && pb.easers.length > 0 && (
+          <div className="pt-1">
+            <div className="text-[9px] text-muted-foreground mb-0.5" title="Eases this tissue">Easers</div>
+            <div className="flex flex-wrap gap-1">
+              {pb.easers.map((e, i) => (
+                <span key={i} className="text-[9px] px-1.5 h-4 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 inline-flex items-center">
+                  {e}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
 interface TissueIntelligencePanelProps {
   intelligence: TissueIntelligence;
@@ -222,6 +378,8 @@ export default function TissueIntelligencePanel({ intelligence, onSelectCausalCh
           </div>
         )}
       </div>
+
+      <PainBehaviorSections pb={i.painBehavior} label={i.label} />
 
       {(i.compensation.upstream.length > 0 || i.compensation.downstream.length > 0) && (
         <>

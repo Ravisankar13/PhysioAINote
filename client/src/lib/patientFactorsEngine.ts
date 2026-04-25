@@ -313,25 +313,25 @@ export function computePatientModifiers(factors: PatientFactors, conditionProfil
     healingRate *= 0.75;
     recurrenceRisk *= 1.3;
     riskFlags.push("Chronic condition — central sensitization risk, longer recovery expected");
-    breakdown.push({ factor: "Chronicity", effect: "Chronic — prolonged recovery", multiplier: 0.75, direction: 'helping', targetMetric: 'multiple' });
+    breakdown.push({ factor: "Chronicity", effect: "Chronic — prolonged recovery", multiplier: 0.75, direction: 'hurting', targetMetric: 'multiple' });
   } else if (factors.chronicity === "recurrent") {
     recurrenceRisk *= 1.4;
-    breakdown.push({ factor: "Chronicity", effect: "Recurrent — high re-injury risk", multiplier: 0.85, direction: 'helping', targetMetric: 'multiple' });
+    breakdown.push({ factor: "Chronicity", effect: "Recurrent — high re-injury risk", multiplier: 0.85, direction: 'hurting', targetMetric: 'multiple' });
     healingRate *= 0.85;
   } else if (factors.chronicity === "acute") {
     positiveFactors.push("Acute presentation — better prognosis");
-    breakdown.push({ factor: "Chronicity", effect: "Acute — good prognosis", multiplier: 1.05, direction: 'hurting', targetMetric: 'multiple' });
+    breakdown.push({ factor: "Chronicity", effect: "Acute — good prognosis", multiplier: 1.05, direction: 'helping', targetMetric: 'multiple' });
     healingRate *= 1.05;
   }
 
   if (factors.irritability === "high") {
     painSensitivity *= 1.3;
-    breakdown.push({ factor: "Irritability", effect: "High — careful dosing needed", multiplier: 0.85, direction: 'helping', targetMetric: 'multiple' });
+    breakdown.push({ factor: "Irritability", effect: "High — careful dosing needed", multiplier: 0.85, direction: 'hurting', targetMetric: 'multiple' });
     healingRate *= 0.85;
     riskFlags.push("High irritability — risk of flare-up with aggressive treatment");
   } else if (factors.irritability === "low") {
     positiveFactors.push("Low irritability — tolerates treatment well");
-    breakdown.push({ factor: "Irritability", effect: "Low — good tolerance", multiplier: 1.05, direction: 'hurting', targetMetric: 'multiple' });
+    breakdown.push({ factor: "Irritability", effect: "Low — good tolerance", multiplier: 1.05, direction: 'helping', targetMetric: 'multiple' });
     healingRate *= 1.05;
   }
 
@@ -350,21 +350,21 @@ export function computePatientModifiers(factors: PatientFactors, conditionProfil
     healingRate *= 0.8;
     painSensitivity *= 1.2;
     riskFlags.push("Poor sleep — impaired recovery, heightened pain sensitivity");
-    breakdown.push({ factor: "Sleep quality", effect: "Poor — impaired recovery", multiplier: 0.8, direction: 'helping', targetMetric: 'multiple' });
+    breakdown.push({ factor: "Sleep quality", effect: "Poor — impaired recovery", multiplier: 0.8, direction: 'hurting', targetMetric: 'multiple' });
   } else if (factors.sleepQuality === "fair") {
     healingRate *= 0.9;
-    breakdown.push({ factor: "Sleep quality", effect: "Fair — suboptimal recovery", multiplier: 0.9, direction: 'helping', targetMetric: 'multiple' });
+    breakdown.push({ factor: "Sleep quality", effect: "Fair — suboptimal recovery", multiplier: 0.9, direction: 'hurting', targetMetric: 'multiple' });
   }
 
   if (factors.activityLevel === "sedentary") {
     healingRate *= 0.85;
     recurrenceRisk *= 1.2;
     riskFlags.push("Sedentary lifestyle — deconditioning risk");
-    breakdown.push({ factor: "Activity level", effect: "Sedentary — deconditioning", multiplier: 0.85, direction: 'helping', targetMetric: 'multiple' });
+    breakdown.push({ factor: "Activity level", effect: "Sedentary — deconditioning", multiplier: 0.85, direction: 'hurting', targetMetric: 'multiple' });
   } else if (factors.activityLevel === "athletic") {
     healingRate *= 1.1;
     positiveFactors.push("Athletic — higher baseline fitness");
-    breakdown.push({ factor: "Activity level", effect: "Athletic — faster recovery", multiplier: 1.1, direction: 'hurting', targetMetric: 'multiple' });
+    breakdown.push({ factor: "Activity level", effect: "Athletic — faster recovery", multiplier: 1.1, direction: 'helping', targetMetric: 'multiple' });
   }
 
   if (factors.compliance < 50) {
@@ -569,6 +569,21 @@ export function computePatientModifiers(factors: PatientFactors, conditionProfil
   if (factors.sportSurface === "hard") {
     recurrenceRisk *= 1.1;
     breakdown.push({ factor: "Hard sport surface", effect: "Higher impact loading per step", multiplier: 0.95, direction: 'hurting', targetMetric: 'recurrenceRisk' });
+  }
+
+  // Sport position is captured for clinical context (e.g., "goalkeeper",
+  // "midfielder", "pitcher") but is too sport- and discipline-specific
+  // to map to a single coefficient in this generic engine. We surface
+  // it as an informational row so the audit trail reflects that it was
+  // considered but did not modify any model state variable.
+  if (factors.sportPosition && factors.sportPosition.trim().length > 0) {
+    breakdown.push({
+      factor: "Sport position",
+      effect: `${factors.sportPosition.trim()} — context only (no generic coefficient)`,
+      multiplier: 1.0,
+      direction: 'informational',
+      targetMetric: 'none',
+    });
   }
 
   const overallRecovery = Math.max(0.3, Math.min(1.5,

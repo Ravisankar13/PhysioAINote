@@ -608,7 +608,14 @@ export default function PatientFactorsForm({
 /** Count fields where the user has overridden the auto-populated value. */
 export function countFactorOverrides(current: PatientFactors, autoDetected: PatientFactors): number {
   let n = 0;
+  // Must include every editable field surfaced in the form so the
+  // "edited" badge is accurate. Includes the four pre-existing core
+  // fields exposed in this form (diabetes / smoking / previousEpisodes
+  // / sleepQuality) plus all five new structured groups.
   const keys: (keyof PatientFactors)[] = [
+    // Pre-existing core fields surfaced in the form
+    "diabetes", "smoking", "previousEpisodes", "sleepQuality",
+    // Group 1–5 structured fields
     "menopausalStatus", "bmiNumeric", "timeSinceLastEpisodeMonths", "priorSurgeryArea",
     "keyImagingFindings", "sleepHours", "proteinIntake", "dailyStepsBand", "trainingAgeYears",
     "kinesiophobia", "painCatastrophizing", "selfEfficacy", "perceivedStress", "socialSupport",

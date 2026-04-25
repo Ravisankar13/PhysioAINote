@@ -2270,35 +2270,57 @@ export default function RecoverySimulatorDashboard({
                       </div>
                     </div>
                     <div className="space-y-1">
-                      {[...patientModifiers.modifierBreakdown]
-                        .sort((a, b) => Math.abs(b.multiplier - 1) - Math.abs(a.multiplier - 1))
-                        .slice(0, 5)
-                        .map((row, i) => {
-                          const delta = row.multiplier - 1;
-                          const helping = delta > 0
-                            ? row.factor.toLowerCase().includes('healing') || row.factor.toLowerCase().includes('compliance') || row.factor.toLowerCase().includes('tissue') || row.factor.toLowerCase().includes('support') || row.factor.toLowerCase().includes('efficacy')
-                            : !(row.factor.toLowerCase().includes('healing') || row.factor.toLowerCase().includes('compliance') || row.factor.toLowerCase().includes('tissue') || row.factor.toLowerCase().includes('support') || row.factor.toLowerCase().includes('efficacy'));
-                          const arrow = delta > 0 ? '▲' : delta < 0 ? '▼' : '·';
-                          const color = helping ? 'text-emerald-300' : delta === 0 ? 'text-gray-400' : 'text-red-300';
-                          const pct = Math.round(Math.abs(delta) * 100);
-                          return (
-                            <div key={`${row.factor}-${i}`} className="flex items-start justify-between gap-2 text-[10px] leading-snug" data-testid={`affecting-row-${i}`}>
-                              <div className="flex-1 min-w-0">
-                                <span className="text-amber-100 font-semibold">{row.factor}</span>
-                                <span className="text-gray-400"> · {row.effect}</span>
+                      {(() => {
+                        // Top contributors must reflect *actual* applied
+                        // model effects, not just any row in the audit
+                        // trail. Informational-only rows (`direction:
+                        // 'informational'`) are excluded from this top-N
+                        // because they describe a factor whose multiplier
+                        // is shown for transparency but is not applied
+                        // to any model state variable.
+                        const ranked = patientModifiers.modifierBreakdown
+                          .filter(r => r.direction !== 'informational')
+                          .sort((a, b) => Math.abs(b.multiplier - 1) - Math.abs(a.multiplier - 1));
+                        const informationalCount = patientModifiers.modifierBreakdown.length - ranked.length;
+                        return (
+                          <>
+                            {ranked.slice(0, 5).map((row, i) => {
+                              const delta = row.multiplier - 1;
+                              const helping = row.direction === 'helping';
+                              // Direction-aware arrow: green up for helping,
+                              // red down for hurting, regardless of which
+                              // way the multiplier moved (e.g., a 0.85
+                              // recurrenceRisk multiplier is helping).
+                              const arrow = helping ? '▲' : '▼';
+                              const color = helping ? 'text-emerald-300' : 'text-red-300';
+                              const pct = Math.round(Math.abs(delta) * 100);
+                              return (
+                                <div key={`${row.factor}-${i}`} className="flex items-start justify-between gap-2 text-[10px] leading-snug" data-testid={`affecting-row-${i}`}>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-amber-100 font-semibold">{row.factor}</span>
+                                    <span className="text-gray-400"> · {row.effect}</span>
+                                  </div>
+                                  <span className={`shrink-0 font-mono ${color}`} title={`Multiplier ×${row.multiplier.toFixed(2)} on ${row.targetMetric === 'multiple' ? 'multiple metrics' : row.targetMetric}`}>
+                                    {arrow} {pct}%
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            {(ranked.length > 5 || informationalCount > 0) && (
+                              <div className="mt-1 text-[9px] text-gray-500 italic">
+                                {ranked.length > 5 && (
+                                  <>+{ranked.length - 5} more applied factor{ranked.length - 5 === 1 ? '' : 's'} (smaller effect)</>
+                                )}
+                                {ranked.length > 5 && informationalCount > 0 && ' · '}
+                                {informationalCount > 0 && (
+                                  <>{informationalCount} informational row{informationalCount === 1 ? '' : 's'}</>
+                                )}
                               </div>
-                              <span className={`shrink-0 font-mono ${color}`} title={`Multiplier ×${row.multiplier.toFixed(2)}`}>
-                                {arrow} {pct}%
-                              </span>
-                            </div>
-                          );
-                        })}
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
-                    {patientModifiers.modifierBreakdown.length > 5 && (
-                      <div className="mt-1 text-[9px] text-gray-500 italic">
-                        +{patientModifiers.modifierBreakdown.length - 5} more factor{patientModifiers.modifierBreakdown.length - 5 === 1 ? '' : 's'} (smaller effect)
-                      </div>
-                    )}
                   </div>
                 )}
 

@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Zap, Activity, Sparkles, ArrowRight, Clock, ShieldAlert, Crosshair, Home, MessageSquare, Send, RotateCcw } from 'lucide-react';
+import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Zap, Activity, Sparkles, ArrowRight, Clock, ShieldAlert, Crosshair, Home, MessageSquare, Send, RotateCcw, Link2 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { AddToPlanButton, makeCartId } from '@/lib/planCart';
+import { matchRecommendationsForItem, sortByDriverRole, type SlingDrivenRecommendation } from '@/lib/slingDriverAnalysis';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 import type { ScarMarker, AdhesionBand } from '@/lib/scarTissueMapping';
@@ -96,6 +97,10 @@ interface ManualTherapyEngineTabProps {
   mechanismAnalysis: InjuryMechanismResult | null;
   slingAnalysis: SlingAnalysisResult | null;
   painMarkers: PainMarkerInput[];
+  /** Sling-driven recommendations (Task #235) — optional. Matching cards
+   *  show a "Sling-driven · <name>" chip and calm-compensatory items are
+   *  demoted in the manual therapy list. */
+  slingDrivenRecommendations?: SlingDrivenRecommendation[];
   scarMarkers?: ScarMarker[];
   adhesionBands?: AdhesionBand[];
   musclePathologies?: MusclePathologyInput[];
@@ -455,7 +460,7 @@ function CustomTechniqueCard({ technique, index, isSelected, onSelect }: { techn
   );
 }
 
-function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: number }) {
+function TechniqueCard({ technique, index, slingMatch }: { technique: TechniqueItem; index: number; slingMatch?: SlingDrivenRecommendation }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -478,6 +483,22 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
             {technique.patientPosition && (
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Pos: {technique.patientPosition}</span>
             )}
+            {slingMatch && (
+              <span
+                className={`px-1.5 py-0.5 rounded border flex items-center gap-0.5 text-[8.5px] ${
+                  slingMatch.role === 'restore'
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
+                    : slingMatch.role === 'address-driver'
+                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
+                      : 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                }`}
+                title={slingMatch.rationale}
+                data-testid={`sling-chip-${technique.technique}`}
+              >
+                <Link2 className="h-2 w-2" />
+                Sling-driven · {slingMatch.slingLabel}
+              </span>
+            )}
             <AddToPlanButton
               size="xs"
               item={{
@@ -490,6 +511,8 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
                 rationale: technique.rationale,
                 contraindications: technique.contraindications,
                 patientPosition: technique.patientPosition,
+                slingTag: slingMatch?.slingLabel,
+                slingRole: slingMatch?.role,
               }}
             />
           </div>
@@ -532,7 +555,7 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
   );
 }
 
-export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete }: ManualTherapyEngineTabProps) {
+export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete }: ManualTherapyEngineTabProps) {
   const [plan, setPlan] = useState<ManualTherapyPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1278,14 +1301,27 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
               const ctxForMt = effectiveCtx;
               const maxGradeNum = ctxForMt ? parseGradeNum(ctxForMt.mtGradeGuidance.maxGrade) : 99;
 
-              const filtered = ctxForMt && ctxForMt.contraindications.length > 0
+              const filteredRaw = ctxForMt && ctxForMt.contraindications.length > 0
                 ? group.techniques.filter(tech =>
                     !ctxForMt.contraindications.some(c =>
                       tech.technique.toLowerCase().includes(c.toLowerCase()) ||
                       (tech.contraindications && tech.contraindications.toLowerCase().includes(c.toLowerCase()))
                     ))
                 : group.techniques;
-              const excluded = group.techniques.length - filtered.length;
+              const excluded = group.techniques.length - filteredRaw.length;
+              // Annotate with sling-driven matches (Task #235). For manual
+              // therapy we demote calm-compensatory items to the bottom while
+              // keeping the relative order of address-driver / restore intact.
+              const annotated = filteredRaw.map(tech => ({
+                tech,
+                slingMatch: matchRecommendationsForItem(
+                  tech.technique,
+                  tech.targetStructure,
+                  slingDrivenRecommendations ?? [],
+                  'manual_therapy',
+                ),
+              }));
+              const filtered = sortByDriverRole(annotated, a => a.slingMatch?.role);
               return (
                 <div className="p-2 space-y-1.5">
                   {excluded > 0 && (
@@ -1294,7 +1330,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
                       {excluded} technique{excluded > 1 ? 's' : ''} excluded (contraindicated)
                     </div>
                   )}
-                  {filtered.map((tech, i) => {
+                  {filtered.map(({ tech, slingMatch }, i) => {
                     const matchingGap = ctxForMt?.goalGaps.find(g =>
                       tech.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
                       tech.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
@@ -1322,7 +1358,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
                             <span className="text-[7px] text-amber-400">{gradeWarning}</span>
                           </div>
                         )}
-                        <TechniqueCard technique={tech} index={i} />
+                        <TechniqueCard technique={tech} index={i} slingMatch={slingMatch} />
                       </div>
                     );
                   })}

@@ -8,10 +8,12 @@ import {
   Construction,
   GraduationCap,
   Lightbulb,
+  Link2,
   Pill,
   Shield,
 } from 'lucide-react';
 import { AddToPlanButton, makeCartId, type PlanCartItem } from '@/lib/planCart';
+import { matchRecommendationsForItem, type SlingDrivenRecommendation } from '@/lib/slingDriverAnalysis';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 
 interface PainMarkerInput {
@@ -26,6 +28,10 @@ interface LifestyleAdjunctEngineTabProps {
   diagnosis?: string;
   recoveryPhase?: string;
   irritability?: string;
+  /** Sling-driven recommendations (Task #235) — optional. Matching items
+   *  show a "Sling-driven · <name>" chip and propagate slingTag/slingRole
+   *  into the Plan Cart. */
+  slingDrivenRecommendations?: SlingDrivenRecommendation[];
 }
 
 /**
@@ -325,7 +331,7 @@ export function lifestyleTreatmentIdFor(itemId: string): string | undefined {
   return undefined;
 }
 
-function LifestyleItemRow({ item, sectionId, suggested = false }: { item: LifestyleItem; sectionId: string; suggested?: boolean }) {
+function LifestyleItemRow({ item, sectionId, suggested = false, slingMatch }: { item: LifestyleItem; sectionId: string; suggested?: boolean; slingMatch?: SlingDrivenRecommendation }) {
   const cartItem: PlanCartItem = {
     id: makeCartId('lifestyle', item.id),
     modality: 'lifestyle',
@@ -337,6 +343,8 @@ function LifestyleItemRow({ item, sectionId, suggested = false }: { item: Lifest
     contraindications: item.contraindications,
     evidenceGrade: item.evidenceGrade,
     category: sectionId,
+    slingTag: slingMatch?.slingLabel,
+    slingRole: slingMatch?.role,
   };
   return (
     <div className="border border-gray-700/40 bg-gray-800/30 rounded p-2">
@@ -346,6 +354,22 @@ function LifestyleItemRow({ item, sectionId, suggested = false }: { item: Lifest
             <span className="text-[11px] font-medium text-gray-100">{item.name}</span>
             {suggested && (
               <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-500/30 text-amber-100" title="Suggested for this case">★ Suggested</span>
+            )}
+            {slingMatch && (
+              <span
+                className={`text-[8px] font-semibold px-1 py-0.5 rounded border flex items-center gap-0.5 ${
+                  slingMatch.role === 'restore'
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
+                    : slingMatch.role === 'address-driver'
+                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
+                      : 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                }`}
+                title={slingMatch.rationale}
+                data-testid={`sling-chip-lifestyle-${item.id}`}
+              >
+                <Link2 className="h-2 w-2" />
+                Sling-driven · {slingMatch.slingLabel}
+              </span>
             )}
             {item.evidenceGrade && (
               <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-500/20 text-amber-200">
@@ -368,10 +392,19 @@ function LifestyleItemRow({ item, sectionId, suggested = false }: { item: Lifest
   );
 }
 
-function LifestyleSectionCard({ section, suggestedIds }: { section: LifestyleSection; suggestedIds: Set<string> }) {
+function LifestyleSectionCard({ section, suggestedIds, slingDrivenRecommendations }: { section: LifestyleSection; suggestedIds: Set<string>; slingDrivenRecommendations?: SlingDrivenRecommendation[] }) {
   const suggestedCount = section.items.filter(it => suggestedIds.has(it.id)).length;
   const [open, setOpen] = useState(suggestedCount > 0);
   const Icon = section.icon;
+  const itemSlingMatches = useMemo(() => {
+    const map = new Map<string, SlingDrivenRecommendation>();
+    if (!slingDrivenRecommendations || slingDrivenRecommendations.length === 0) return map;
+    for (const it of section.items) {
+      const m = matchRecommendationsForItem(it.name, it.description, slingDrivenRecommendations, 'lifestyle');
+      if (m) map.set(it.id, m);
+    }
+    return map;
+  }, [section.items, slingDrivenRecommendations]);
   return (
     <div className={`border ${section.color.border} ${section.color.bg} rounded-lg overflow-hidden`}>
       <button
@@ -396,10 +429,26 @@ function LifestyleSectionCard({ section, suggestedIds }: { section: LifestyleSec
           <div className="text-[9px] text-gray-400 italic">{section.blurb}</div>
           {section.items
             .slice()
-            .sort((a, b) => Number(suggestedIds.has(b.id)) - Number(suggestedIds.has(a.id)))
+            .sort((a, b) => {
+              // Sling-driven 'restore' / 'address-driver' rank above
+              // 'calm-compensatory' which ranks above unmatched. Within
+              // each sling tier, suggested items still rank ahead.
+              const ra = itemSlingMatches.get(a.id)?.role;
+              const rb = itemSlingMatches.get(b.id)?.role;
+              const score = (r?: string) =>
+                r === 'restore' || r === 'address-driver' ? 2 : r === 'calm-compensatory' ? 1 : 0;
+              const diff = score(rb) - score(ra);
+              if (diff !== 0) return diff;
+              return Number(suggestedIds.has(b.id)) - Number(suggestedIds.has(a.id));
+            })
             .map(it => (
               <div key={it.id} className={suggestedIds.has(it.id) ? 'ring-1 ring-amber-400/40 rounded' : ''}>
-                <LifestyleItemRow item={it} sectionId={section.id} suggested={suggestedIds.has(it.id)} />
+                <LifestyleItemRow
+                  item={it}
+                  sectionId={section.id}
+                  suggested={suggestedIds.has(it.id)}
+                  slingMatch={itemSlingMatches.get(it.id)}
+                />
               </div>
             ))}
         </div>
@@ -479,6 +528,7 @@ export default function LifestyleAdjunctEngineTab({
   diagnosis,
   recoveryPhase,
   irritability,
+  slingDrivenRecommendations,
 }: LifestyleAdjunctEngineTabProps) {
   const ctxParts = useMemo(() => {
     const parts: string[] = [];
@@ -515,7 +565,7 @@ export default function LifestyleAdjunctEngineTab({
         )}
       </div>
       {LIFESTYLE_SECTIONS.map(sec => (
-        <LifestyleSectionCard key={sec.id} section={sec} suggestedIds={suggestedIds} />
+        <LifestyleSectionCard key={sec.id} section={sec} suggestedIds={suggestedIds} slingDrivenRecommendations={slingDrivenRecommendations} />
       ))}
     </div>
   );

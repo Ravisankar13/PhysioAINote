@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
-import { Dumbbell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Sparkles, Zap, ArrowRight, Clock, Activity, ShieldAlert, Crosshair, Image, BarChart3 } from 'lucide-react';
+import { Dumbbell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Sparkles, Zap, ArrowRight, Clock, Activity, ShieldAlert, Crosshair, Image, BarChart3, Link2 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { AddToPlanButton, makeCartId } from '@/lib/planCart';
+import { matchRecommendationsForItem, sortByDriverRole, type SlingDrivenRecommendation } from '@/lib/slingDriverAnalysis';
 
 const ExerciseBodyDiagram = lazy(() => import('./ExerciseBodyDiagram'));
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
@@ -110,6 +111,10 @@ interface ExerciseEngineTabProps {
   mechanismAnalysis: InjuryMechanismResult | null;
   slingAnalysis: SlingAnalysisResult | null;
   painMarkers: PainMarkerInput[];
+  /** Sling-driven recommendations (Task #235) — optional. When supplied,
+   *  matching cards show a "Sling-driven · <name>" chip and the list is
+   *  reordered so restore items rank above calm-compensatory ones. */
+  slingDrivenRecommendations?: SlingDrivenRecommendation[];
   onCustomExerciseResult?: (result: CustomExerciseResult | null) => void;
   goalProfile?: RecoveryGoalProfile | null;
   clinicalState?: ClinicalStateInput | null;
@@ -160,7 +165,7 @@ const FOCUS_PRESETS = [
   { label: 'Compensation Offloading', value: 'offload compensating structures' },
 ];
 
-function ExerciseCard({ exercise, index, dosageScalingData }: { exercise: ExerciseItem; index: number; dosageScalingData?: DosageScaling | null }) {
+function ExerciseCard({ exercise, index, dosageScalingData, slingMatch }: { exercise: ExerciseItem; index: number; dosageScalingData?: DosageScaling | null; slingMatch?: SlingDrivenRecommendation }) {
   const [expanded, setExpanded] = useState(false);
 
   const displaySets = exercise.sets || '?';
@@ -189,6 +194,22 @@ function ExerciseCard({ exercise, index, dosageScalingData }: { exercise: Exerci
             {exercise.tempo && exercise.tempo !== 'controlled' && (
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Tempo: {exercise.tempo}</span>
             )}
+            {slingMatch && (
+              <span
+                className={`px-1.5 py-0.5 rounded border flex items-center gap-0.5 text-[8.5px] ${
+                  slingMatch.role === 'restore'
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
+                    : slingMatch.role === 'address-driver'
+                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
+                      : 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                }`}
+                title={slingMatch.rationale}
+                data-testid={`sling-chip-${exercise.name}`}
+              >
+                <Link2 className="h-2 w-2" />
+                Sling-driven · {slingMatch.slingLabel}
+              </span>
+            )}
             <AddToPlanButton
               size="xs"
               item={{
@@ -200,6 +221,8 @@ function ExerciseCard({ exercise, index, dosageScalingData }: { exercise: Exerci
                 dosage: scaled ? `${scaled.sets} × ${scaled.reps}` : `${displaySets} × ${displayReps}`,
                 rationale: exercise.rationale,
                 contraindications: exercise.contraindications,
+                slingTag: slingMatch?.slingLabel,
+                slingRole: slingMatch?.role,
               }}
             />
           </div>
@@ -947,7 +970,7 @@ function CustomExerciseCard({
   );
 }
 
-export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete, conditionName, loadingPatientFactors }: ExerciseEngineTabProps) {
+export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete, conditionName, loadingPatientFactors }: ExerciseEngineTabProps) {
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1653,14 +1676,26 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
             </button>
             {isExpanded && (() => {
               const ctxForFilter = effectiveCtx;
-              const filtered = ctxForFilter && ctxForFilter.contraindications.length > 0
+              const filteredRaw = ctxForFilter && ctxForFilter.contraindications.length > 0
                 ? group.exercises.filter(ex =>
                     !ctxForFilter.contraindications.some(c =>
                       ex.name.toLowerCase().includes(c.toLowerCase()) ||
                       (ex.contraindications && ex.contraindications.toLowerCase().includes(c.toLowerCase()))
                     ))
                 : group.exercises;
-              const excluded = group.exercises.length - filtered.length;
+              const excluded = group.exercises.length - filteredRaw.length;
+              // Annotate with sling-driven matches (Task #235) and reorder so
+              // restore items rank above calm-compensatory ones.
+              const annotated = filteredRaw.map(ex => ({
+                ex,
+                slingMatch: matchRecommendationsForItem(
+                  ex.name,
+                  ex.targetStructure,
+                  slingDrivenRecommendations ?? [],
+                  'exercise',
+                ),
+              }));
+              const filtered = sortByDriverRole(annotated, a => a.slingMatch?.role);
               return (
                 <div className="p-2 space-y-1.5">
                   {excluded > 0 && (
@@ -1669,7 +1704,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
                       {excluded} exercise{excluded > 1 ? 's' : ''} excluded (contraindicated)
                     </div>
                   )}
-                  {filtered.map((ex, i) => {
+                  {filtered.map(({ ex, slingMatch }, i) => {
                     const matchingGap = ctxForFilter?.goalGaps.find(g =>
                       ex.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
                       ex.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
@@ -1684,7 +1719,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
                             </span>
                           </div>
                         )}
-                        <ExerciseCard exercise={ex} index={i} dosageScalingData={effectiveCtx?.dosageScaling} />
+                        <ExerciseCard exercise={ex} index={i} dosageScalingData={effectiveCtx?.dosageScaling} slingMatch={slingMatch} />
                       </div>
                     );
                   })}

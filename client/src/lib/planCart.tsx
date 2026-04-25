@@ -39,6 +39,12 @@ export interface PlanCartItem {
     total_sessions?: number;
     placement?: string;
   };
+  // Sling driver-analysis tags (Task #235). Set when an item was added either
+  // (a) directly from the SlingAnalysisPanel "Plan from this analysis" CTA,
+  // or (b) from an engine tab whose card matched a slingDrivenRecommendation.
+  // Additive — existing items omit these without consequence.
+  slingTag?: string;
+  slingRole?: 'restore' | 'calm-compensatory' | 'address-driver';
 }
 
 interface PlanCartContextValue {

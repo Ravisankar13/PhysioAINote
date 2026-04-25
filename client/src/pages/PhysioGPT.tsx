@@ -154,6 +154,7 @@ import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type Joi
 import { aggregateTissueIntelligence, filterInflammationIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
 import { tissueIntelligenceToOverlayHighlight, paletteForState } from "@/lib/tissueOverlayCatalogue";
 import { computeSlingAnalysis, getSlingBonePathway, SLING_ACTIVATION_BASELINE, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
+import { runDriverAnalysis as runSlingDriverAnalysis } from "@/lib/slingDriverAnalysis";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
 
@@ -4719,6 +4720,23 @@ ${ddxList}`;
   }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computeStage, slingActivationOverrides]);
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
+
+  // Reverse-reasoning sling driver analysis (Task #235). Pure deterministic;
+  // shared between SlingAnalysisPanel and the engine tabs so both see the same
+  // hypotheses + sling-driven recommendations.
+  const slingDriverAnalysisResult = useMemo(() => {
+    return runSlingDriverAnalysis(
+      painMarkers.map(pm => ({
+        id: pm.id,
+        nearestBone: pm.nearestBone,
+        anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
+        severity: pm.severity,
+        type: pm.type,
+      })),
+      slingAnalysis,
+    );
+  }, [painMarkers, slingAnalysis]);
+  const slingDrivenRecommendations = slingDriverAnalysisResult.recommendations;
 
   const recoverySimConditionContext = useMemo<ConditionContext | null>(() => {
     if (!recoverySimHasClinicalInput && !extractionResult?.mainComplaint && !structuredReasoningData) return null;
@@ -10421,6 +10439,7 @@ ${ddxList}`;
                         severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                      slingDrivenRecommendations={slingDrivenRecommendations}
                       onCustomExerciseResult={setCustomExerciseResult}
                       goalProfile={activeGoalProfile}
                       clinicalState={exerciseMtClinicalState}
@@ -10497,6 +10516,7 @@ ${ddxList}`;
                         severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                      slingDrivenRecommendations={slingDrivenRecommendations}
                       scarMarkers={scarMarkers}
                       adhesionBands={adhesionBands}
                       musclePathologies={Object.entries(compensatedOverrides)
@@ -10530,6 +10550,7 @@ ${ddxList}`;
                         severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                      slingDrivenRecommendations={slingDrivenRecommendations}
                       onPlanChange={setElectroPlan}
                       initialCondition={electroPrefill?.condition}
                       initialStage={electroPrefill?.stage}
@@ -10564,6 +10585,7 @@ ${ddxList}`;
                         diagnosis={extractionResult?.mainComplaint || undefined}
                         recoveryPhase={extractionResult?.duration || undefined}
                         irritability={extractionResult?.irritability || undefined}
+                        slingDrivenRecommendations={slingDrivenRecommendations}
                       />
                     </Suspense>
                   )}
@@ -11885,6 +11907,14 @@ ${ddxList}`;
                   });
                 }}
                 onResetAllSlings={() => setSlingActivationOverrides({})}
+                painMarkers={painMarkers.map(pm => ({
+                  id: pm.id,
+                  nearestBone: pm.nearestBone,
+                  anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
+                  severity: pm.severity,
+                  type: pm.type,
+                }))}
+                driverAnalysis={slingDriverAnalysisResult}
               />
               </Suspense>
             </div>

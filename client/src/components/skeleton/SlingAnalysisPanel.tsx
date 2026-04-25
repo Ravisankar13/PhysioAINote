@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import {
   Activity, AlertTriangle, ArrowRight, ChevronDown, ChevronRight,
-  Eye, EyeOff, Gauge, GitBranch, RotateCcw, Shield, Stethoscope, Target, TrendingUp, Zap, Link2
+  Eye, EyeOff, Gauge, GitBranch, RotateCcw, Shield, Stethoscope, Target, TrendingUp, Zap, Link2,
+  Brain, Sparkles, ListChecks
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -16,6 +17,17 @@ import {
   SLING_ACTIVATION_MIN,
   SLING_ACTIVATION_MAX,
 } from '@/lib/slingEngine';
+import {
+  runDriverAnalysis,
+  type DriverAnalysisPainMarker,
+  type DriverAnalysisResult,
+  type SlingHypothesis,
+  type SlingDrivenRecommendation,
+  type DriverModality,
+  type DriverRole,
+} from '@/lib/slingDriverAnalysis';
+import SlingLoadFlowMap from './SlingLoadFlowMap';
+import { AddToPlanButton, makeCartId, type PlanCartItem, type PlanCartModality } from '@/lib/planCart';
 
 interface SlingAnalysisPanelProps {
   analysis: SlingAnalysisResult | null;
@@ -27,6 +39,51 @@ interface SlingAnalysisPanelProps {
   onSlingActivationChange?: (slingId: SlingId, value: number) => void;
   onResetSling?: (slingId: SlingId) => void;
   onResetAllSlings?: () => void;
+  /** Auto-placed pain markers from the 3D viewer. When non-empty the panel
+   *  surfaces the reverse driver-analysis section (Task #235). */
+  painMarkers?: DriverAnalysisPainMarker[];
+  /** Optional precomputed driver analysis (lets PhysioGPT share the result
+   *  with engine tabs). When omitted the panel computes its own. */
+  driverAnalysis?: DriverAnalysisResult | null;
+}
+
+const DRIVER_MODALITY_TO_CART: Record<DriverModality, PlanCartModality> = {
+  exercise: 'exercise',
+  manual_therapy: 'manual_therapy',
+  electrophysical: 'electrophysical',
+  lifestyle: 'lifestyle',
+};
+
+const ROLE_LABEL: Record<DriverRole, string> = {
+  'restore': 'Restore sling',
+  'address-driver': 'Address driver',
+  'calm-compensatory': 'Calm compensator',
+};
+
+const ROLE_COLOR: Record<DriverRole, string> = {
+  'restore': 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40',
+  'address-driver': 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40',
+  'calm-compensatory': 'bg-amber-500/20 text-amber-200 border-amber-500/40',
+};
+
+const CONFIDENCE_COLOR: Record<SlingHypothesis['confidence'], string> = {
+  high: 'bg-emerald-500/25 text-emerald-200 border-emerald-500/40',
+  moderate: 'bg-amber-500/20 text-amber-200 border-amber-500/40',
+  low: 'bg-slate-700/40 text-slate-300 border-slate-600/50',
+};
+
+function recToCartItem(rec: SlingDrivenRecommendation): PlanCartItem {
+  return {
+    id: makeCartId(DRIVER_MODALITY_TO_CART[rec.modality], `sling_${rec.slingId}_${rec.name}`),
+    modality: DRIVER_MODALITY_TO_CART[rec.modality],
+    name: rec.name,
+    targetStructure: rec.target,
+    targetFinding: `Sling-driven · ${rec.slingLabel}`,
+    dosage: rec.dosage,
+    rationale: rec.rationale,
+    slingTag: rec.slingLabel,
+    slingRole: rec.role,
+  };
 }
 
 function activationBandLabel(band: SlingActivationBand): string {
@@ -384,6 +441,185 @@ function SlingCard({
   );
 }
 
+function DriverAnalysisSection({ result }: { result: DriverAnalysisResult }) {
+  const [expanded, setExpanded] = useState(true);
+  if (!result.hasMarkers) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-700/50 bg-slate-900/30 p-2.5 text-[10px] text-slate-500" data-testid="sling-driver-empty">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Brain className="w-3.5 h-3.5 text-slate-500" />
+          <span className="text-[11px] text-slate-300 font-medium">Driver Analysis</span>
+        </div>
+        {result.fallbackNote ?? 'Place pain markers on the 3D skeleton to surface culpable-sling hypotheses.'}
+      </div>
+    );
+  }
+
+  if (result.hypotheses.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-amber-500/30 bg-amber-500/5 p-2.5 text-[10px] text-amber-200/80" data-testid="sling-driver-empty">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Brain className="w-3.5 h-3.5 text-amber-300" />
+          <span className="text-[11px] text-amber-200 font-medium">Driver Analysis</span>
+        </div>
+        {result.fallbackNote ?? 'No sling matched the marker pattern.'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-slate-900/80 to-cyan-950/30 p-2.5 space-y-2" data-testid="sling-driver-section">
+      <button
+        type="button"
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center gap-1.5 text-left"
+      >
+        <Brain className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+        <span className="text-[11px] text-cyan-100 font-semibold flex-1">
+          Driver Analysis · {result.markerCount} marker{result.markerCount === 1 ? '' : 's'}
+        </span>
+        <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-200 border border-cyan-500/40">
+          {result.hypotheses.length} hypothes{result.hypotheses.length === 1 ? 'is' : 'es'}
+        </span>
+        {expanded ? <ChevronDown className="w-3 h-3 text-cyan-300" /> : <ChevronRight className="w-3 h-3 text-cyan-300" />}
+      </button>
+      {expanded && (
+        <div className="space-y-2">
+          {result.hypotheses.slice(0, 3).map((h, idx) => (
+            <div
+              key={h.slingId}
+              className={`rounded border p-2 ${idx === 0 ? 'border-cyan-500/40 bg-cyan-500/5' : 'border-slate-700/40 bg-slate-900/40'}`}
+              data-testid={`sling-hypothesis-${h.slingId}`}
+            >
+              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: h.color }} />
+                <span className="text-[10px] font-semibold text-slate-100 flex-1 truncate">
+                  {idx === 0 ? '★ ' : `#${idx + 1} `}{h.slingLabel}
+                </span>
+                <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ${CONFIDENCE_COLOR[h.confidence]}`}>
+                  {h.confidence}
+                </span>
+                <span className="text-[8px] text-slate-400 tabular-nums">score {h.score}</span>
+              </div>
+              <div className="text-[9px] text-slate-300 mb-1">{h.rationale}</div>
+              <div className="grid grid-cols-2 gap-1.5 text-[9px]">
+                <div className="rounded bg-slate-800/50 border border-slate-700/30 p-1.5">
+                  <div className="text-emerald-300 mb-0.5 font-medium">Intended</div>
+                  <div className="text-slate-300 leading-snug">{h.intendedRole}</div>
+                </div>
+                <div className="rounded bg-slate-800/50 border border-slate-700/30 p-1.5">
+                  <div className="text-red-300 mb-0.5 font-medium">Actual</div>
+                  <div className="text-slate-300 leading-snug">{h.actualPattern}</div>
+                </div>
+              </div>
+              {h.supportingMarkers.length > 0 && (
+                <div className="mt-1 flex items-start gap-1 text-[9px]">
+                  <Target className="w-2.5 h-2.5 text-amber-300 mt-0.5 shrink-0" />
+                  <div className="text-slate-400">
+                    Supporting markers:{' '}
+                    {h.supportingMarkers.slice(0, 4).map((m, i) => (
+                      <span key={m.id}>
+                        <span className="text-slate-200">{m.label}</span>
+                        {i < Math.min(3, h.supportingMarkers.length - 1) ? ', ' : ''}
+                      </span>
+                    ))}
+                    {h.supportingMarkers.length > 4 && <span> +{h.supportingMarkers.length - 4} more</span>}
+                  </div>
+                </div>
+              )}
+              {h.differentiationTests.length > 0 && (
+                <div className="mt-1 flex items-start gap-1 text-[9px]">
+                  <Shield className="w-2.5 h-2.5 text-blue-300 mt-0.5 shrink-0" />
+                  <div className="text-slate-400">
+                    Differentiate with:{' '}
+                    {h.differentiationTests.slice(0, 3).map((t, i) => (
+                      <Badge key={i} variant="outline" className="text-[8px] px-1 py-0 mr-1 border-blue-500/30 text-blue-200">
+                        {t}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanFromAnalysisSection({ recommendations }: { recommendations: SlingDrivenRecommendation[] }) {
+  const [open, setOpen] = useState(false);
+  if (recommendations.length === 0) return null;
+
+  // Group by sling for readability.
+  const grouped = useMemo(() => {
+    const map = new Map<SlingId, { label: string; color: string; items: SlingDrivenRecommendation[] }>();
+    for (const r of recommendations) {
+      if (!map.has(r.slingId)) {
+        map.set(r.slingId, { label: r.slingLabel, color: r.slingColor, items: [] });
+      }
+      map.get(r.slingId)!.items.push(r);
+    }
+    return Array.from(map.entries());
+  }, [recommendations]);
+
+  return (
+    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 overflow-hidden" data-testid="sling-plan-from-analysis">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-1.5 p-2.5 text-left hover:bg-emerald-500/10 transition-colors"
+      >
+        <ListChecks className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+        <span className="text-[11px] font-semibold text-emerald-100 flex-1">
+          Plan from this analysis
+        </span>
+        <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-500/40">
+          {recommendations.length} item{recommendations.length === 1 ? '' : 's'}
+        </span>
+        {open ? <ChevronDown className="w-3 h-3 text-emerald-300" /> : <ChevronRight className="w-3 h-3 text-emerald-300" />}
+      </button>
+      {open && (
+        <div className="px-2.5 pb-2.5 pt-1 space-y-2 border-t border-emerald-500/20">
+          <div className="text-[9px] text-emerald-200/80 italic">
+            One-click drop into the Plan Cart — items are tagged with the driving sling and role.
+          </div>
+          {grouped.map(([sid, g]) => (
+            <div key={sid} className="rounded border border-slate-700/40 bg-slate-900/40 p-1.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                <span className="text-[10px] font-medium text-slate-200">{g.label}</span>
+              </div>
+              <div className="space-y-1">
+                {g.items.map(rec => (
+                  <div key={rec.id} className="flex items-start gap-1.5 p-1 rounded hover:bg-slate-800/40">
+                    <Sparkles className="w-2.5 h-2.5 text-emerald-300 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-[10px] text-slate-100">{rec.name}</span>
+                        <span className={`text-[8px] px-1 py-0 rounded-full border ${ROLE_COLOR[rec.role]}`}>
+                          {ROLE_LABEL[rec.role]}
+                        </span>
+                        <span className="text-[8px] text-slate-500 capitalize">· {rec.modality.replace('_', ' ')}</span>
+                      </div>
+                      <div className="text-[9px] text-slate-400 leading-snug">{rec.rationale}</div>
+                      {rec.dosage && (
+                        <div className="text-[8px] text-slate-500 mt-0.5">Dosage: {rec.dosage}</div>
+                      )}
+                    </div>
+                    <AddToPlanButton size="xs" item={recToCartItem(rec)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SlingAnalysisPanel({
   analysis,
   onSlingSelect,
@@ -394,6 +630,8 @@ export default function SlingAnalysisPanel({
   onSlingActivationChange,
   onResetSling,
   onResetAllSlings,
+  painMarkers,
+  driverAnalysis,
 }: SlingAnalysisPanelProps) {
   const hasModifiedActivations = useMemo(() => {
     if (!slingActivation) return false;
@@ -401,6 +639,14 @@ export default function SlingAnalysisPanel({
       v => v !== undefined && Math.round(v) !== SLING_ACTIVATION_BASELINE,
     );
   }, [slingActivation]);
+
+  // Reverse-reasoning driver analysis. Use the precomputed result when the
+  // host page passes one (so engine tabs read the same payload), otherwise
+  // compute locally from the markers + forward analysis.
+  const computedDriverAnalysis = useMemo(() => {
+    if (driverAnalysis !== undefined && driverAnalysis !== null) return driverAnalysis;
+    return runDriverAnalysis(painMarkers, analysis);
+  }, [driverAnalysis, painMarkers, analysis]);
 
   if (!analysis) {
     return (
@@ -441,6 +687,11 @@ export default function SlingAnalysisPanel({
             </button>
           )}
         </div>
+
+        <DriverAnalysisSection result={computedDriverAnalysis} />
+        {computedDriverAnalysis.topFlowGraph && (
+          <SlingLoadFlowMap graph={computedDriverAnalysis.topFlowGraph} />
+        )}
 
         <div className="p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
           <div className="flex items-center gap-2 mb-1.5">
@@ -497,6 +748,8 @@ export default function SlingAnalysisPanel({
             ))}
           </div>
         )}
+
+        <PlanFromAnalysisSection recommendations={computedDriverAnalysis.recommendations} />
       </div>
     </ScrollArea>
   );

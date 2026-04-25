@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award, Stethoscope, Sparkles, Ban, Save, Trash2, Pencil, BookmarkPlus } from 'lucide-react';
+import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award, Stethoscope, Sparkles, Ban, Save, Trash2, Pencil, BookmarkPlus, Link2 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { AddToPlanButton, makeCartId } from '@/lib/planCart';
+import { matchRecommendationsForItem, type SlingDrivenRecommendation } from '@/lib/slingDriverAnalysis';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
@@ -356,6 +357,10 @@ interface ElectrophysicalEngineTabProps {
   mechanismAnalysis: InjuryMechanismResult | null;
   slingAnalysis: SlingAnalysisResult | null;
   painMarkers: PainMarkerInput[];
+  /** Sling-driven recommendations (Task #235) — optional. Matching cards
+   *  show a "Sling-driven · <name>" chip and propagate slingTag/slingRole
+   *  into the Plan Cart. */
+  slingDrivenRecommendations?: SlingDrivenRecommendation[];
   /** Notifies parent whenever the local plan changes so other surfaces
    *  (e.g. Recovery Simulator phase cards) can read the latest
    *  electrophysical recommendations without re-fetching. */
@@ -412,7 +417,7 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; b
 
 const DEFAULT_COLORS = { bg: 'bg-teal-500/10', border: 'border-teal-500/30', text: 'text-teal-300', badge: 'bg-teal-500/20 text-teal-300' };
 
-function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint }: { modality: ModalityItem; index: number; evidence?: EvidenceForModality; evidenceLoading: boolean; groupHint?: string }) {
+function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint, slingMatch }: { modality: ModalityItem; index: number; evidence?: EvidenceForModality; evidenceLoading: boolean; groupHint?: string; slingMatch?: SlingDrivenRecommendation }) {
   const [expanded, setExpanded] = useState(false);
   const isNotAdvised = !!modality.notAdvisedReason;
   const conditionGrade = modality.evidenceGrade ? CONDITION_GRADE_STYLES[modality.evidenceGrade] : null;
@@ -444,6 +449,8 @@ function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint }:
     desiredEffect,
     evidenceStrength,
     dosing: modality.dosing,
+    slingTag: slingMatch?.slingLabel,
+    slingRole: slingMatch?.role,
   };
   const dosingFields = formatDosing(modality.dosing);
 
@@ -514,6 +521,22 @@ function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint }:
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300 truncate max-w-[180px]">{modality.parameters || '?'}</span>
               {modality.patientPosition && (
                 <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Pos: {modality.patientPosition}</span>
+              )}
+              {slingMatch && (
+                <span
+                  className={`px-1.5 py-0.5 rounded border flex items-center gap-0.5 text-[8.5px] ${
+                    slingMatch.role === 'restore'
+                      ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
+                      : slingMatch.role === 'address-driver'
+                        ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
+                        : 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                  }`}
+                  title={slingMatch.rationale}
+                  data-testid={`sling-chip-${modality.modality}`}
+                >
+                  <Link2 className="h-2 w-2" />
+                  Sling-driven · {slingMatch.slingLabel}
+                </span>
               )}
               <AddToPlanButton size="xs" item={cartItem} />
             </div>
@@ -687,7 +710,7 @@ function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint }:
   );
 }
 
-export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, onPlanChange, initialCondition, initialStage, autoGenerateNonce, autoGenerate, onAutoGenerateConsumed, patientId = null }: ElectrophysicalEngineTabProps) {
+export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, onPlanChange, initialCondition, initialStage, autoGenerateNonce, autoGenerate, onAutoGenerateConsumed, patientId = null }: ElectrophysicalEngineTabProps) {
   const [plan, setPlan] = useState<ElectrophysicalPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1426,6 +1449,12 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
                     evidence={evidenceMap[modalityKey(group.groupId, i)]}
                     evidenceLoading={evidenceLoading}
                     groupHint={`${group.groupId} ${group.goalTitle || ''}`}
+                    slingMatch={matchRecommendationsForItem(
+                      mod.modality,
+                      mod.targetStructure,
+                      slingDrivenRecommendations ?? [],
+                      'electrophysical',
+                    )}
                   />
                 ))}
               </div>

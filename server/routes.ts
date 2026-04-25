@@ -9753,6 +9753,55 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  // ─── Recovery Simulator weekly check-ins (Task #241) ────────────
+  // Stored per (caseId, week). Read-only by anyone authenticated for
+  // their own case workspace; the caseId is a free-form clinician-
+  // generated key (e.g. patient hash + condition slug). No cross-user
+  // ownership model in v1 — out-of-scope per the task brief.
+  app.get("/api/recovery-weekly-check-ins/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const rows = await storage.listRecoveryWeeklyCheckIns(caseId);
+      res.json(rows);
+    } catch (error: unknown) {
+      console.error("List recovery weekly check-ins error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to load check-ins", details: message });
+    }
+  });
+
+  app.post("/api/recovery-weekly-check-ins", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { insertRecoveryWeeklyCheckInSchema } = await import("@shared/schema");
+      const parsed = insertRecoveryWeeklyCheckInSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid check-in payload", details: parsed.error.flatten() });
+      }
+      const row = await storage.upsertRecoveryWeeklyCheckIn(parsed.data);
+      res.json(row);
+    } catch (error: unknown) {
+      console.error("Upsert recovery weekly check-in error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to save check-in", details: message });
+    }
+  });
+
+  app.delete("/api/recovery-weekly-check-ins/:caseId/:week", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      const week = Number(req.params.week);
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      if (!Number.isFinite(week) || week < 0) return res.status(400).json({ error: "Invalid week" });
+      await storage.deleteRecoveryWeeklyCheckIn(caseId, week);
+      res.json({ success: true });
+    } catch (error: unknown) {
+      console.error("Delete recovery weekly check-in error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to delete check-in", details: message });
+    }
+  });
+
   app.post("/api/adjunct-therapies-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const adjunctInputSchema = z.object({

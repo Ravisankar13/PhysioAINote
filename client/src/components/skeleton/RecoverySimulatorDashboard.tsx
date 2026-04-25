@@ -81,6 +81,12 @@ import {
 } from "@/lib/recoveryUncertainty";
 import type { ElectrophysicalPlan } from "@/components/skeleton/ElectrophysicalEngineTab";
 import TreatmentTimelinePanel from "@/components/skeleton/TreatmentTimelinePanel";
+import WeeklyCheckInPanel, {
+  toEngineCheckIns,
+  deriveTracking,
+  type WeeklyCheckInRecord,
+} from "@/components/skeleton/WeeklyCheckInPanel";
+import { useQuery } from "@tanstack/react-query";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
 import {
   getArchetypeForCondition,
@@ -372,8 +378,17 @@ function MiniChart({
   onWeekAddClick,
   uncertaintyHalfWidth,
   showBands = true,
+  baselineSeries,
+  checkInMarkers,
 }: {
   series: { label: string; color: string; values: number[]; dash?: string }[];
+  /** Task #241 — original (pre-checkin) projection rendered behind the
+   *  live series in a faded form, so clinicians can see how the live
+   *  curve has bent away from the original prediction. */
+  baselineSeries?: { color: string; values: number[] }[];
+  /** Task #241 — clinician check-in datapoints rendered as small
+   *  pulse circles on the chart. */
+  checkInMarkers?: { week: number; pain: number; flare?: boolean }[];
   scrubWeek?: number;
   totalWeeks: number;
   onScrub?: (w: number) => void;
@@ -503,9 +518,40 @@ function MiniChart({
         );
       })}
 
+      {/* Task #241 — faded original projection drawn behind the live
+          series so the clinician can see how check-in data has bent
+          the prediction away from the pre-checkin baseline. */}
+      {baselineSeries && baselineSeries.map((bs, i) => (
+        <path
+          key={`baseline-${i}`}
+          d={path(bs.values)}
+          fill="none"
+          stroke={bs.color}
+          strokeWidth={1.4}
+          strokeDasharray="2,3"
+          opacity={0.35}
+        />
+      ))}
+
       {series.map((s, i) => (
         <path key={i} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray={s.dash} />
       ))}
+
+      {/* Task #241 — actual logged pain values pinned on the chart so
+          the live curve visibly anchors through every check-in. */}
+      {checkInMarkers && checkInMarkers.map((m, i) => {
+        const x = xFor(Math.max(0, Math.min(totalWeeks, m.week)));
+        const y = yFor(Math.max(0, Math.min(100, m.pain)));
+        return (
+          <g key={`ckin-${i}-${m.week}`}>
+            <title>{`Logged check-in · week ${m.week} · pain ${m.pain}${m.flare ? ' · flare' : ''}`}</title>
+            <circle cx={x} cy={y} r={4} fill="#ef4444" stroke="#ffffff" strokeWidth={1.2} opacity={0.95} />
+            {m.flare && (
+              <circle cx={x} cy={y} r={7} fill="none" stroke="#fb923c" strokeWidth={1} opacity={0.85} />
+            )}
+          </g>
+        );
+      })}
 
       {scrubWeek != null && scrubReadouts.map((r, i) => {
         const cx = xFor(scrubWeek);
@@ -897,12 +943,80 @@ export default function RecoverySimulatorDashboard({
   }, [customProfiles]);
 
   const ctxForSim = conditionContext ?? undefined;
-  const projections = useMemo(
+
+  /** Task #241 — Deterministic per-case identifier so weekly check-ins
+   *  persist against the same case across reloads. We hash patient
+   *  name + condition (the only identity inputs available at this
+   *  level — the dashboard has no formal case entity). When neither is
+   *  present we leave it empty so the panel surfaces a "set patient
+   *  name & condition" hint instead of writing orphaned rows. */
+  const caseId = useMemo(() => {
+    const name = (patientName ?? '').trim().toLowerCase();
+    const cond = (conditionContext?.conditionId ?? conditionLabel ?? '').trim().toLowerCase();
+    if (!name && !cond) return '';
+    const slug = `${name || 'patient'}__${cond || 'condition'}`
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 64);
+    return slug;
+  }, [patientName, conditionContext, conditionLabel]);
+
+  /** Task #241 — Live check-ins fetched from the server. Empty array
+   *  while loading or when no caseId has been derived yet so all
+   *  downstream simulator calls remain pure pre-checkin baselines. */
+  const { data: weeklyCheckInRows = [] } = useQuery<WeeklyCheckInRecord[]>({
+    queryKey: ['/api/recovery-weekly-check-ins', caseId],
+    enabled: !!caseId,
+  });
+  const engineCheckIns = useMemo(
+    () => toEngineCheckIns(weeklyCheckInRows),
+    [weeklyCheckInRows],
+  );
+  const hasCheckIns = engineCheckIns.length > 0;
+
+  /** Original (pre-checkin) projections — drive the faded baseline
+   *  curve that sits behind the live curve. Only computed for the
+   *  active branch since that's the only curve we mirror live. */
+  const originalProjections = useMemo(
     () => branches.map(b => simulateBranch(input, b, 'usual_care', undefined, customProfiles, ctxForSim, aiNaturalTimeline ?? null)),
     [branches, input, customProfiles, ctxForSim, aiNaturalTimeline],
   );
+  /** Live (with-checkin) projections — only differ from original
+   *  projections once at least one check-in is logged. The check-in
+   *  array is intentionally passed unconditionally so every branch
+   *  stays in sync with the latest logged state. */
+  const projections = useMemo(
+    () => branches.map(b => simulateBranch(
+      input, b, 'usual_care', undefined, customProfiles, ctxForSim, aiNaturalTimeline ?? null, engineCheckIns,
+    )),
+    [branches, input, customProfiles, ctxForSim, aiNaturalTimeline, engineCheckIns],
+  );
   const activeBranch = useMemo(() => branches.find(b => b.id === activeBranchId) ?? branches[0], [branches, activeBranchId]);
   const activeProjection = useMemo(() => projections.find(p => p.branchId === activeBranchId) ?? projections[0], [projections, activeBranchId]);
+  const originalActiveProjection = useMemo(
+    () => originalProjections.find(p => p.branchId === activeBranchId) ?? originalProjections[0],
+    [originalProjections, activeBranchId],
+  );
+
+  /** Pre-checkin pain trajectory used by the tracking-status verdict
+   *  and the panel's "ahead / on / behind" chip. Always sourced from
+   *  the original (no-checkin) projection so the comparison is
+   *  apples-to-apples even after several check-ins have shifted the
+   *  live curve. */
+  const originalPainSeries = originalActiveProjection.timelines.symptoms.pain;
+  const trackingVerdict = useMemo(
+    () => deriveTracking(weeklyCheckInRows, originalPainSeries),
+    [weeklyCheckInRows, originalPainSeries],
+  );
+
+  /** Default prescribed-sessions count for the new check-in form —
+   *  derived from the active branch's interventions so the form
+   *  reflects the live plan instead of a hard-coded number. */
+  const defaultPrescribedPerWeek = useMemo(() => {
+    const total = (activeBranch?.interventions ?? [])
+      .reduce((sum, iv) => sum + Math.max(0, iv.sessionsPerWeek ?? 1), 0);
+    return Math.max(1, Math.round(total));
+  }, [activeBranch]);
   const baselines = useMemo(() => simulateNaturalHistoryBaselines(input, ctxForSim, aiNaturalTimeline ?? null), [input, ctxForSim, aiNaturalTimeline]);
 
   /** Skeleton-derived structural biases (Task #189). Recomputed live
@@ -2239,6 +2353,16 @@ export default function RecoverySimulatorDashboard({
             </div>
           </div>
 
+          {/* Task #241 — clinician weekly check-ins. Lives in the
+              left aside so it's always visible alongside the chart. */}
+          <WeeklyCheckInPanel
+            caseId={caseId}
+            totalWeeks={Math.max(1, input.totalWeeks)}
+            originalPainSeries={originalPainSeries}
+            defaultWeek={Math.max(1, scrubWeek || 1)}
+            defaultPrescribed={defaultPrescribedPerWeek}
+          />
+
           {!hasClinicalInput && (
             <div className="bg-amber-950/30 border border-amber-700/40 rounded p-2 text-[10px] text-amber-200">
               Add pain markers, scars, or muscle states to the 3D model so the simulation can animate your specific findings.
@@ -2362,6 +2486,29 @@ export default function RecoverySimulatorDashboard({
                     onWeekAddClick={(wk) => setTimelinePaletteWeek(wk)}
                     uncertaintyHalfWidth={animatedBandHalfWidth}
                     showBands={showBands}
+                    baselineSeries={
+                      // Task #241 — only paint the faded "original"
+                      // overlay once at least one check-in has bent
+                      // the live curve, and only on the plan view
+                      // (the natural-history view doesn't consume
+                      // check-ins so an overlay would be identical).
+                      hasCheckIns && !usingNaturalChart
+                        ? [
+                            { color: '#06b6d4', values: originalActiveProjection.timelines.function.walking },
+                            { color: '#22c55e', values: originalActiveProjection.timelines.capacity },
+                            { color: '#ef4444', values: originalActiveProjection.timelines.symptoms.pain },
+                          ]
+                        : undefined
+                    }
+                    checkInMarkers={
+                      hasCheckIns && !usingNaturalChart
+                        ? weeklyCheckInRows.map(c => ({
+                            week: c.week,
+                            pain: c.pain,
+                            flare: (c.flareSeverity ?? 0) > 0,
+                          }))
+                        : undefined
+                    }
                     markers={
                       usingNaturalChart && naturalDriverModel
                         ? [

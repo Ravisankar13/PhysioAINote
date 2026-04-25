@@ -170,6 +170,9 @@ import {
   electroConditionPresets,
   type ElectroConditionPreset,
   type InsertElectroConditionPreset,
+  recoveryWeeklyCheckIns,
+  type RecoveryWeeklyCheckIn,
+  type InsertRecoveryWeeklyCheckIn,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -765,6 +768,11 @@ export interface IStorage {
   renameElectroConditionPreset(id: number, name: string): Promise<ElectroConditionPreset>;
   touchElectroConditionPreset(id: number): Promise<void>;
   deleteElectroConditionPreset(id: number): Promise<void>;
+
+  // Recovery Simulator weekly check-ins (Task #241)
+  listRecoveryWeeklyCheckIns(caseId: string): Promise<RecoveryWeeklyCheckIn[]>;
+  upsertRecoveryWeeklyCheckIn(checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn>;
+  deleteRecoveryWeeklyCheckIn(caseId: string, week: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4970,6 +4978,56 @@ export class DatabaseStorage implements IStorage {
 
   async deleteElectroConditionPreset(id: number): Promise<void> {
     await db.delete(electroConditionPresets).where(eq(electroConditionPresets.id, id));
+  }
+
+  // ─── Recovery weekly check-ins (Task #241) ──────────────────────
+  async listRecoveryWeeklyCheckIns(caseId: string): Promise<RecoveryWeeklyCheckIn[]> {
+    return await db
+      .select()
+      .from(recoveryWeeklyCheckIns)
+      .where(eq(recoveryWeeklyCheckIns.caseId, caseId))
+      .orderBy(recoveryWeeklyCheckIns.week);
+  }
+
+  async upsertRecoveryWeeklyCheckIn(checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn> {
+    const sleepHoursValue =
+      checkIn.sleepHours === null || checkIn.sleepHours === undefined
+        ? null
+        : typeof checkIn.sleepHours === "number"
+        ? String(checkIn.sleepHours)
+        : checkIn.sleepHours;
+    const values = {
+      caseId: checkIn.caseId,
+      week: checkIn.week,
+      pain: checkIn.pain,
+      flareSeverity: checkIn.flareSeverity ?? null,
+      sessionsCompleted: checkIn.sessionsCompleted,
+      sessionsPrescribed: checkIn.sessionsPrescribed,
+      sleepHours: sleepHoursValue,
+      notes: checkIn.notes ?? null,
+    };
+    const [row] = await db
+      .insert(recoveryWeeklyCheckIns)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [recoveryWeeklyCheckIns.caseId, recoveryWeeklyCheckIns.week],
+        set: {
+          pain: values.pain,
+          flareSeverity: values.flareSeverity,
+          sessionsCompleted: values.sessionsCompleted,
+          sessionsPrescribed: values.sessionsPrescribed,
+          sleepHours: values.sleepHours,
+          notes: values.notes,
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async deleteRecoveryWeeklyCheckIn(caseId: string, week: number): Promise<void> {
+    await db
+      .delete(recoveryWeeklyCheckIns)
+      .where(and(eq(recoveryWeeklyCheckIns.caseId, caseId), eq(recoveryWeeklyCheckIns.week, week)));
   }
 }
 

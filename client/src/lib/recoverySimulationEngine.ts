@@ -1603,6 +1603,43 @@ interface SimContext {
    *  here and reused for every subsequent week so weeksSinceStop
    *  decays monotonically (instead of resetting to 0 each week). */
   phaseExitWeeks: Map<string, number>;
+  /** Task #241 — clinician-logged weekly check-ins keyed by week.
+   *  When a check-in exists for the current week the engine snaps
+   *  `state.pain`, `state.sleep` and applies a synthetic flare boost
+   *  using the same math as `branch.flareEvents`. Per-intervention
+   *  adherence is also derived from `sessionsCompleted/sessionsPrescribed`
+   *  and overrides the planned `intv.adherence` for that week (so
+   *  partial weeks bend the curve realistically). */
+  weeklyCheckInsByWeek?: Map<number, RecoveryWeeklyCheckIn>;
+}
+
+/** Task #241 — clinician-logged weekly check-in. The engine consumes
+ *  these (via the `history` arg on simulateBranch) to re-run the
+ *  projection from the most recent check-in week using actual logged
+ *  adherence + symptom values. Schema mirrors `recoveryWeeklyCheckIns`
+ *  in shared/schema.ts but is duplicated here so the engine has zero
+ *  server-only imports. */
+export interface RecoveryWeeklyCheckIn {
+  /** Simulation week number (0 = baseline / first check-in week is 1). */
+  week: number;
+  /** Pain (0-100). The engine snaps `state.pain` to this value at the
+   *  end of the week's tick — so the live curve passes through every
+   *  logged data point exactly. */
+  pain: number;
+  /** Optional flare severity (0-100). When > 0 the engine applies the
+   *  same boost as a `branch.flareEvents` entry (pain + swelling +
+   *  inflammation + irritability + flareRisk + loadTolerance hit). */
+  flareSeverity?: number | null;
+  /** Sessions actually completed this week. */
+  sessionsCompleted: number;
+  /** Sessions prescribed this week (denominator). */
+  sessionsPrescribed: number;
+  /** Reported sleep hours. Snapped to `state.sleep` (0-100 scale,
+   *  where 8h ≈ 100). Optional. */
+  sleepHours?: number | null;
+  /** Free-text clinician note. Not consumed by the engine — kept in
+   *  the type so the shared check-in record can flow through unchanged. */
+  notes?: string | null;
 }
 
 function applyTreatmentEffects(
@@ -1696,7 +1733,17 @@ function applyTreatmentEffects(
 
     const phaseMul = treatment.healingStageMultiplier?.[next.healingPhase] ?? 1;
     const adherenceRaw = ctx.branch.adherenceOverride !== undefined ? ctx.branch.adherenceOverride : intv.adherence;
-    const adherence = adherenceRaw > 1 ? adherenceRaw / 100 : adherenceRaw;
+    let adherence = adherenceRaw > 1 ? adherenceRaw / 100 : adherenceRaw;
+    // Task #241 — when a clinician check-in exists for this week,
+    // derive *actual* adherence from sessions completed vs prescribed
+    // and let it override the planned figure. Only applies when the
+    // patient was actually prescribed something (sessionsPrescribed > 0)
+    // so weeks logged as "rest" don't divide-by-zero.
+    const _ckIn = ctx.weeklyCheckInsByWeek?.get(week);
+    if (_ckIn && _ckIn.sessionsPrescribed > 0) {
+      const actualAdh = Math.max(0, Math.min(1.5, _ckIn.sessionsCompleted / _ckIn.sessionsPrescribed));
+      adherence = Math.min(1, actualAdh);
+    }
     const applicableDoseChanges = (ctx.branch.doseChanges ?? []).filter(d => d.interventionId === intv.id && d.week <= week).sort((a, b) => b.week - a.week);
     const effectiveDoseMultiplier = applicableDoseChanges[0]?.newDoseMultiplier ?? intv.doseMultiplier;
     if (applicableDoseChanges.length > 0 && applicableDoseChanges[0].week === week) {
@@ -1976,6 +2023,13 @@ export function simulateBranch(
   customProfiles?: TreatmentEffectProfile[] | null,
   conditionContext?: ConditionContext,
   aiNaturalTimeline?: AINaturalTimeline | null,
+  /** Task #241 — clinician-logged weekly check-ins (pain, flare,
+   *  sessions, sleep). When provided, the engine uses these actuals
+   *  to override planned adherence per-week and snap state.pain /
+   *  state.sleep to the logged values, then continues the projection
+   *  forward from the most recent check-in week. Pass an empty array
+   *  (or omit) to keep the legacy plan-only behaviour. */
+  weeklyCheckIns?: RecoveryWeeklyCheckIn[] | null,
 ): SimulationProjection {
   const states: RecoveryState[] = [];
   const allMarkers: InterventionMarker[] = [];
@@ -2004,7 +2058,14 @@ export function simulateBranch(
 
   const lookup = buildLookup(customProfiles);
   const profile = conditionContext ? tissueProfileForContext(conditionContext) : undefined;
-  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42, lookup, conditionContext, profile, aiNaturalTimeline: effectiveAI ?? undefined, phaseExitWeeks: new Map() };
+  // Task #241 — index check-ins by week for O(1) lookup inside the
+  // per-week loop. Only treatment branches consume check-ins; passive
+  // baseline branches keep the legacy plan-only behaviour so the
+  // "natural-history" curves remain unbiased reference lines.
+  const checkInsByWeek = !isBaselineBranch && weeklyCheckIns && weeklyCheckIns.length > 0
+    ? new Map(weeklyCheckIns.map(c => [c.week, c]))
+    : undefined;
+  const ctx: SimContext = { branch, baselineMode, input, noiseSeed: 42, lookup, conditionContext, profile, aiNaturalTimeline: effectiveAI ?? undefined, phaseExitWeeks: new Map(), weeklyCheckInsByWeek: checkInsByWeek };
 
   // For baseline (no-treatment / rest / usual-care / continued aggravation)
   // branches, the AI's predicted residual deficit defines a ceiling that
@@ -2022,6 +2083,31 @@ export function simulateBranch(
       state.romPercent = Math.min(state.romPercent, aiCeiling);
       state.strength = Math.min(state.strength, aiCeiling);
       state.workCapacity = Math.min(state.workCapacity, aiCeiling);
+    }
+    // Task #241 — once per-week treatment math is settled, snap the
+    // observable state values (pain, sleep) to the clinician-logged
+    // actuals and apply the synthetic flare boost. This guarantees the
+    // live curve passes exactly through every logged data point so
+    // clinicians see real history, not a mid-air re-prediction.
+    const ckIn = checkInsByWeek?.get(w);
+    if (ckIn) {
+      state.pain = clamp(ckIn.pain);
+      if (ckIn.sleepHours !== null && ckIn.sleepHours !== undefined) {
+        state.sleep = clamp((Math.max(0, Math.min(14, ckIn.sleepHours)) / 8) * 100);
+      }
+      const sev = ckIn.flareSeverity ?? 0;
+      if (sev > 0) {
+        // Identical math to the existing branch.flareEvents loop in
+        // applyTreatmentEffects so logged flares route through the
+        // same flare-risk pathway as planned ones.
+        state.pain = clamp(state.pain + sev);
+        state.swelling = clamp(state.swelling + sev * 0.6);
+        state.inflammation = clamp(state.inflammation + sev * 0.7);
+        state.irritability = clamp(state.irritability + sev * 0.5);
+        state.loadTolerance = clamp(state.loadTolerance - sev * 0.4);
+        state.flareRisk = clamp(state.flareRisk + sev * 0.3);
+        markers.push({ week: w, type: 'flare', label: `Logged flare (+${sev})` });
+      }
     }
     states.push({ ...state });
     allMarkers.push(...markers);

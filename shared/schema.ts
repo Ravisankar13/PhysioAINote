@@ -5832,3 +5832,42 @@ export interface TendinopathyLoadingResponse {
   plan: TendinopathyLoadingPlan;
   diff?: LoadingPlanDiff;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Task #241 — Weekly check-ins for the recovery simulator
+// ────────────────────────────────────────────────────────────────────
+// One row per (caseId, week). Captures the clinician-logged actuals
+// (pain, flare severity, sessions completed vs prescribed, sleep, free
+// text) so the simulator can re-run from the most recent check-in week
+// using real adherence/symptom values instead of the static plan.
+export const recoveryWeeklyCheckIns = pgTable("recovery_weekly_check_ins", {
+  id: serial("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  week: integer("week").notNull(),
+  pain: integer("pain").notNull(),
+  flareSeverity: integer("flare_severity"),
+  sessionsCompleted: integer("sessions_completed").notNull(),
+  sessionsPrescribed: integer("sessions_prescribed").notNull(),
+  sleepHours: numeric("sleep_hours"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  caseWeekUnique: uniqueIndex("recovery_weekly_check_ins_case_week_unique").on(t.caseId, t.week),
+}));
+
+export const insertRecoveryWeeklyCheckInSchema = createInsertSchema(recoveryWeeklyCheckIns).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  caseId: z.string().min(1).max(200),
+  week: z.number().int().min(0).max(520),
+  pain: z.number().int().min(0).max(100),
+  flareSeverity: z.number().int().min(0).max(100).nullable().optional(),
+  sessionsCompleted: z.number().int().min(0).max(100),
+  sessionsPrescribed: z.number().int().min(0).max(100),
+  sleepHours: z.union([z.number(), z.string()]).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export type InsertRecoveryWeeklyCheckIn = z.infer<typeof insertRecoveryWeeklyCheckInSchema>;
+export type RecoveryWeeklyCheckIn = typeof recoveryWeeklyCheckIns.$inferSelect;

@@ -492,7 +492,11 @@ function TechniqueCard({ technique, index, slingMatch }: { technique: TechniqueI
                       ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
                       : 'bg-amber-500/20 text-amber-200 border-amber-500/40'
                 }`}
-                title={slingMatch.rationale}
+                title={
+                  slingMatch.role === 'calm-compensatory'
+                    ? `⚠ Compensatory load — secondary intervention. Treat the ${slingMatch.slingLabel} driver first; manual work here will only briefly down-regulate the symptom.`
+                    : slingMatch.rationale
+                }
                 data-testid={`sling-chip-${technique.technique}`}
               >
                 <Link2 className="h-2 w-2" />
@@ -521,6 +525,19 @@ function TechniqueCard({ technique, index, slingMatch }: { technique: TechniqueI
       </button>
       {expanded && (
         <div className="px-2 pb-2 space-y-1.5 border-t border-gray-700/30 pt-1.5">
+          {slingMatch?.role === 'calm-compensatory' && (
+            <div
+              className="rounded border border-amber-500/40 bg-amber-500/10 p-1.5 flex items-start gap-1.5"
+              data-testid={`sling-compensatory-warning-${technique.technique}`}
+            >
+              <AlertTriangle className="h-3 w-3 text-amber-300 shrink-0 mt-0.5" />
+              <div className="text-[9.5px] text-amber-100 leading-snug">
+                <span className="font-semibold uppercase tracking-wide text-amber-200">Compensatory load · </span>
+                This technique calms tissue downstream of the {slingMatch.slingLabel} sling and is a <span className="font-semibold">secondary</span> intervention.
+                Treat the driving sling first; manual work here will only briefly down-regulate the symptom and the load will reroute back without addressing the source.
+              </div>
+            </div>
+          )}
           <div>
             <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider">Target Structure</div>
             <div className="text-[10px] text-gray-300">{technique.targetStructure}</div>

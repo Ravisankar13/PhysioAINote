@@ -130,6 +130,40 @@ function CartItemRow({ item, onRemove }: { item: PlanCartItem; onRemove: () => v
           {item.evidenceGrade && (
             <span className="text-[8px] px-1 rounded bg-black/30 text-amber-300">Grade {item.evidenceGrade}</span>
           )}
+          {item.slingTag && (
+            <span
+              className={`text-[8px] px-1 rounded border ${
+                item.slingRole === 'address-driver'
+                  ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/40'
+                  : item.slingRole === 'restore'
+                  ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40'
+                  : item.slingRole === 'calm-compensatory'
+                  ? 'bg-amber-500/15 text-amber-200 border-amber-500/40'
+                  : 'bg-cyan-500/15 text-cyan-200 border-cyan-500/40'
+              }`}
+              title={
+                item.slingRole === 'calm-compensatory'
+                  ? `Calm compensatory load on the ${item.slingTag} sling — secondary, not the driver.`
+                  : item.slingRole === 'restore'
+                  ? `Restore intended function of the ${item.slingTag} sling.`
+                  : item.slingRole === 'address-driver'
+                  ? `Addresses the driving sling: ${item.slingTag}.`
+                  : `Sling-driven · ${item.slingTag}`
+              }
+              data-testid={`cart-sling-tag-${item.id}`}
+            >
+              Sling · {item.slingTag}
+              {item.slingRole && (
+                <span className="ml-0.5 opacity-80">
+                  {item.slingRole === 'address-driver'
+                    ? ' (driver)'
+                    : item.slingRole === 'restore'
+                    ? ' (restore)'
+                    : ' (calm)'}
+                </span>
+              )}
+            </span>
+          )}
         </div>
       </div>
       <button

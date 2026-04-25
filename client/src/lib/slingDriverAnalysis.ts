@@ -728,15 +728,17 @@ function buildFlowGraph(
     // popover — the forward engine treats all nodes as peers.
     const roleInChain: FlowNode['roleInChain'] =
       i === 0 ? 'anchor' : i === nodeDefs.length - 1 ? 'endpoint' : 'transmitter';
-    // Activation %: blend the parent sling's activation with a small
-    // pinned-node bump so loaded links visibly read hotter than the rest
-    // of the chain in popovers. Capped at 100.
-    const slingActivationPct = Math.round(
-      Math.max(0, Math.min(100, hypothesis.activationScore * 100)),
-    );
-    const activationPct = Math.min(
-      100,
-      slingActivationPct + (pinned ? 15 : 0) + (i === 0 || i === nodeDefs.length - 1 ? 0 : -5),
+    // Activation %: forward engine reports activationScore on a 0–100 scale
+    // (see slingEngine narrative `${activationScore}%`). Use it directly,
+    // then add a small pinned-node bump so loaded links visibly read hotter
+    // than the rest of the chain in popovers. Bounded to [0, 100].
+    const slingActivationPct = Math.max(0, Math.min(100, Math.round(hypothesis.activationScore)));
+    const activationPct = Math.max(
+      0,
+      Math.min(
+        100,
+        slingActivationPct + (pinned ? 15 : 0) + (i === 0 || i === nodeDefs.length - 1 ? 0 : -5),
+      ),
     );
     // Evidence note: prefer the matching marker's anatomical label, fall
     // back to forward-engine clinical note where possible.

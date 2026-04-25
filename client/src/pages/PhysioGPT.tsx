@@ -800,6 +800,9 @@ export default function PhysioGPT() {
     const auto = autoDetectedPatientFactors;
     const overrides: Partial<PatientFactors> = {};
     const keys: (keyof PatientFactors)[] = [
+      // Pre-existing fields now exposed in the form
+      "diabetes", "smoking", "previousEpisodes", "sleepQuality",
+      // Group 1–5 structured fields
       "menopausalStatus", "bmiNumeric", "timeSinceLastEpisodeMonths", "priorSurgeryArea",
       "keyImagingFindings", "sleepHours", "proteinIntake", "dailyStepsBand", "trainingAgeYears",
       "kinesiophobia", "painCatastrophizing", "selfEfficacy", "perceivedStress", "socialSupport",
@@ -824,7 +827,17 @@ export default function PhysioGPT() {
   }, [effectivePatientFactors]);
 
   const derivedDrivers = useMemo(() => {
-    return derivePsychosocialAndOccupationalDrivers(effectivePatientFactors);
+    // The engine returns weighted contributors as {factor, weight}[]
+    // for traceability, but the downstream dashboard panel only needs
+    // human-readable strings — flatten here so the prop contract is
+    // a plain `string[]` and the chip tooltips render real labels.
+    const raw = derivePsychosocialAndOccupationalDrivers(effectivePatientFactors);
+    return {
+      fearAvoidance: raw.fearAvoidance,
+      workDemand: raw.workDemand,
+      fearAvoidanceContributors: raw.fearAvoidanceContributors.map(c => `${c.factor} (w${c.weight})`),
+      workDemandContributors: raw.workDemandContributors.map(c => `${c.factor} (+${c.weight})`),
+    };
   }, [effectivePatientFactors]);
 
   const patientFactorsOverrideCount = useMemo(() => {

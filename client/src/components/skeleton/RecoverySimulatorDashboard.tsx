@@ -2253,14 +2253,18 @@ export default function RecoverySimulatorDashboard({
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 text-[9px]">
+                        {/* Both workDemand and fearAvoidance live on the
+                            same 0–100 scale used by the simulator
+                            (`SimulationInput.workDemand` defaults to 50,
+                            `RecoveryState.fearAvoidance` is 0–100). */}
                         {derivedDrivers && derivedDrivers.workDemand !== null && (
                           <Badge className="bg-cyan-800/40 border-cyan-600/60 text-cyan-100 text-[9px]" title={`Derived from: ${derivedDrivers.workDemandContributors.join(', ') || 'occupational fields'}`}>
-                            workDemand {Math.round(derivedDrivers.workDemand * 100)}%
+                            workDemand {Math.round(derivedDrivers.workDemand)}/100
                           </Badge>
                         )}
                         {derivedDrivers && derivedDrivers.fearAvoidance !== null && (
                           <Badge className="bg-rose-800/40 border-rose-600/60 text-rose-100 text-[9px]" title={`Derived from: ${derivedDrivers.fearAvoidanceContributors.join(', ') || 'psychosocial fields'}`}>
-                            fearAvoidance {Math.round(derivedDrivers.fearAvoidance * 100)}%
+                            fearAvoidance {Math.round(derivedDrivers.fearAvoidance)}/100
                           </Badge>
                         )}
                       </div>

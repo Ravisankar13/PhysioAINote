@@ -15,6 +15,9 @@ import {
   type LiftingFrequency,
   type RepetitiveTaskExposure,
   type SportSurface,
+  type DiabetesStatus,
+  type SmokingStatus,
+  type SleepQuality,
   DEFAULT_PATIENT_FACTORS,
 } from "@/lib/patientFactorsEngine";
 
@@ -317,6 +320,31 @@ export default function PatientFactorsForm({
                   <div className="px-2 pb-2 pt-1 space-y-2">
                     {section.id === "comorbidities" && (
                       <>
+                        <FieldRow label="Diabetes" hint="type1: healing ×0.7 · type2: ×0.8">
+                          <Sel<DiabetesStatus>
+                            value={factors.diabetes}
+                            options={[
+                              { value: "none", label: "None" },
+                              { value: "prediabetic", label: "Prediabetic" },
+                              { value: "type2", label: "Type 2" },
+                              { value: "type1", label: "Type 1" },
+                            ]}
+                            onChange={(v) => set("diabetes", v)}
+                            testId="select-diabetes"
+                          />
+                        </FieldRow>
+                        <FieldRow label="Smoking status" hint="current: healing ×0.75, recurrence ×1.3">
+                          <Sel<SmokingStatus>
+                            value={factors.smoking}
+                            options={[
+                              { value: "never", label: "Never" },
+                              { value: "former", label: "Former" },
+                              { value: "current", label: "Current" },
+                            ]}
+                            onChange={(v) => set("smoking", v)}
+                            testId="select-smoking"
+                          />
+                        </FieldRow>
                         <FieldRow label="Menopausal status" hint="postmenopausal: healing & tissue ×0.92">
                           <Sel<MenopausalStatus>
                             value={factors.menopausalStatus}
@@ -355,6 +383,17 @@ export default function PatientFactorsForm({
 
                     {section.id === "tissue_history" && (
                       <>
+                        <FieldRow label="Prior episodes (count)" hint="≥3: recurrence ×1.5 · 1–2: ×1.2">
+                          <NumInput
+                            value={factors.previousEpisodes}
+                            onChange={(v) => set("previousEpisodes", v ?? 0)}
+                            placeholder="0"
+                            min={0}
+                            max={50}
+                            step={1}
+                            testId="input-previous-episodes"
+                          />
+                        </FieldRow>
                         <FieldRow label="Time since last episode (months)" hint="<3mo: tissue ×0.95, recurrence ×1.2">
                           <NumInput
                             value={factors.timeSinceLastEpisodeMonths}
@@ -391,6 +430,18 @@ export default function PatientFactorsForm({
 
                     {section.id === "sleep_nutrition" && (
                       <>
+                        <FieldRow label="Sleep quality" hint="poor: healing ×0.8, pain ×1.25">
+                          <Sel<SleepQuality>
+                            value={factors.sleepQuality}
+                            options={[
+                              { value: "good", label: "Good" },
+                              { value: "fair", label: "Fair" },
+                              { value: "poor", label: "Poor" },
+                            ]}
+                            onChange={(v) => set("sleepQuality", v)}
+                            testId="select-sleep-quality"
+                          />
+                        </FieldRow>
                         <FieldRow label="Sleep hours per night" hint="<6h: healing ×0.85, pain ×1.2">
                           <NumInput
                             value={factors.sleepHours}

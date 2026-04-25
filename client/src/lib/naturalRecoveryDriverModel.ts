@@ -241,13 +241,32 @@ export function computeStructuralBiases(
   // same ~5–30 band the legacy `count * 6` produced (so the rest of the
   // tuned curves are preserved). When vectors are absent we fall back
   // to the legacy count path verbatim.
+  //
+  // Task #238 — sling contribution now uses ONLY the relevant slings
+  // for the archetype. An isolated weak sling that isn't relevant to
+  // the diagnosis no longer drags down the natural-recovery driver.
+  // The worst (max severity) of the relevant slings drives the bias —
+  // matches the legacy aggregate semantic when no per-sling info is
+  // available (every sling is stamped to the aggregate).
   let comp = 0;
   const cSigs: string[] = [];
   const compCount = s.compensationCount ?? 0;
-  const sling = ctx?.slingWeakLinkSeverity ?? 0;
+  let sling = 0;
+  let slingLabel = 'sling weak-link';
+  if (ctx?.slingSeverities && ctx?.relevantSlings && ctx.relevantSlings.length > 0) {
+    for (const id of ctx.relevantSlings) {
+      const v = ctx.slingSeverities[id] ?? 0;
+      if (v > sling) {
+        sling = v;
+        slingLabel = `${id.replace(/_/g, ' ')} sling weak-link`;
+      }
+    }
+  } else {
+    sling = ctx?.slingWeakLinkSeverity ?? 0;
+  }
   const obliquity = abs(s.pelvis?.obliquity ?? 0);
   if (compCount > 0) { comp += compCount * 8; cSigs.push(`${compCount} compensation pattern${compCount > 1 ? 's' : ''}`); }
-  if (sling > 20) { comp += sling * 0.5; cSigs.push(`sling weak-link ${sling.toFixed(0)}`); }
+  if (sling > 20) { comp += sling * 0.5; cSigs.push(`${slingLabel} ${sling.toFixed(0)}`); }
 
   const vectors = s.jointLoadVectors;
   if (vectors && vectors.length > 0) {
@@ -587,6 +606,16 @@ function buildProjectionFromDrivers(
       sleep: 65,
       adherence: 1,
       slingFunction: clamp(50 + cap * 0.3),
+      // Natural-history projection: stamp every sling to the
+      // aggregate value so consumers that read per-sling data still
+      // get a sensible series. The aggregate stays exactly as before.
+      slingScores: {
+        posterior_oblique: clamp(50 + cap * 0.3),
+        anterior_oblique: clamp(50 + cap * 0.3),
+        lateral: clamp(50 + cap * 0.3),
+        deep_longitudinal: clamp(50 + cap * 0.3),
+        scapular_shoulder: clamp(50 + cap * 0.3),
+      },
       capacity: cap,
       demand: clamp(100 - lvc + 50),
     });

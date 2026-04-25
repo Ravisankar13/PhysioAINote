@@ -4902,26 +4902,34 @@ ${ddxList}`;
       }
     }
 
-    let slingSeverity = 0;
+    // Per-sling severity (0–100 each). Each sling contributes its
+    // own weak-link count + a small bump for status, plus its
+    // activation-override deviation from baseline. The aggregate is
+    // derived as the max across the per-sling values.
+    const slingSeverityById: Partial<Record<SlingId, number>> = {};
     if (slingAnalysis) {
-      const totalWeak = slingAnalysis.slings.reduce((sum, s) => sum + s.weakLinks.length, 0);
-      const dysCount = slingAnalysis.slings.filter(s => s.status === 'underperforming' || s.status === 'compensating').length;
-      slingSeverity = Math.min(100, totalWeak * 12 + dysCount * 10);
+      for (const s of slingAnalysis.slings) {
+        const dys = (s.status === 'underperforming' || s.status === 'compensating') ? 10 : 0;
+        slingSeverityById[s.slingId] = Math.min(100, s.weakLinks.length * 12 + dys);
+      }
     }
-
-    // Activation overrides represent clinician-set under-/over-active slings.
-    // Deviation from baseline (100%) loads the recovery model: under-active
-    // slings degrade force transfer (linear), over-active slings introduce
-    // tone-driven inefficiency (slightly weighted lower per percentage point).
     let activationDeficitLoad = 0;
-    for (const [, raw] of Object.entries(slingActivationOverrides)) {
+    for (const [id, raw] of Object.entries(slingActivationOverrides)) {
       if (raw === undefined) continue;
       const pct = Math.max(0, Math.min(200, raw));
       const dev = pct - SLING_ACTIVATION_BASELINE;
-      activationDeficitLoad += dev < 0 ? Math.abs(dev) : dev * 0.6;
+      const localLoad = dev < 0 ? Math.abs(dev) : dev * 0.6;
+      activationDeficitLoad += localLoad;
+      // Fold into the matching sling's severity so per-sling
+      // routing/gating reflects the override.
+      const slingId = id as SlingId;
+      const localAdd = Math.min(60, localLoad * 0.4);
+      slingSeverityById[slingId] = Math.min(100, (slingSeverityById[slingId] ?? 0) + localAdd);
     }
-    const activationSeverityAdd = Math.min(60, activationDeficitLoad * 0.4);
-    slingSeverity = Math.min(100, slingSeverity + activationSeverityAdd);
+    let slingSeverity = 0;
+    for (const v of Object.values(slingSeverityById)) {
+      if ((v ?? 0) > slingSeverity) slingSeverity = v ?? 0;
+    }
 
     const deviations = collectModelConfigDeviations(modelConfig);
     let deviationMag = 0;
@@ -4962,6 +4970,7 @@ ${ddxList}`;
       baselineMotorControl: baselineMotor,
       baselineCapacity: baselineCap,
       slingWeakLinkSeverity: slingSeverity,
+      slingSeverities: Object.keys(slingSeverityById).length > 0 ? slingSeverityById : null,
       ageYears: extractionResult?.patientAge ?? factors.age ?? null,
       patientHealingMult: mods.healingRateMultiplier,
       patientPainMult: mods.painSensitivityMultiplier,

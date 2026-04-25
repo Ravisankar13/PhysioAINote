@@ -2,8 +2,31 @@ import { resolveArchetypeId, type RecoveryArchetypeId } from './recoveryArchetyp
 import type { JointLoadVector, LoadComponent } from './posturalForceEngine';
 export type { JointLoadVector, LoadComponent, LoadTissue } from './posturalForceEngine';
 export { extractJointLoadVectors } from './posturalForceEngine';
+import type { SlingId } from './slingEngine';
 
 export type HealingPhase = 'inflammatory' | 'proliferative' | 'remodeling' | 'maturation';
+
+/** Canonical list of myofascial slings tracked by the recovery
+ *  simulator. Must stay in sync with `SlingId` exported from
+ *  `slingEngine.ts` (kept as a `import type` so the engine has no
+ *  runtime dependency on the heavier sling analysis module). */
+export const SLING_IDS: SlingId[] = [
+  'posterior_oblique',
+  'anterior_oblique',
+  'lateral',
+  'deep_longitudinal',
+  'scapular_shoulder',
+];
+
+export const SLING_LABELS: Record<SlingId, string> = {
+  posterior_oblique: 'Posterior Oblique',
+  anterior_oblique: 'Anterior Oblique',
+  lateral: 'Lateral',
+  deep_longitudinal: 'Deep Longitudinal',
+  scapular_shoulder: 'Scapular / Shoulder',
+};
+
+export type SlingScores = Record<SlingId, number>;
 
 export interface RecoveryState {
   week: number;
@@ -37,9 +60,29 @@ export interface RecoveryState {
   fearAvoidance: number;
   sleep: number;
   adherence: number;
+  /** Aggregate sling function score (0–100). Now DERIVED from
+   *  `slingScores` after every tick (mean across all five slings) so
+   *  legacy callers keep working unchanged. To target a specific
+   *  sling write into `slingScores`. */
   slingFunction: number;
+  /** Per-sling 0–100 scores tracked individually. Treatments tagged
+   *  with `slingTarget` write into the matched sling(s); untagged
+   *  treatments distribute across all slings (current behaviour). */
+  slingScores: SlingScores;
   capacity: number;
   demand: number;
+}
+
+export function emptySlingScores(fill = 60): SlingScores {
+  const out = {} as SlingScores;
+  for (const id of SLING_IDS) out[id] = fill;
+  return out;
+}
+
+export function aggregateSlingFunction(scores: SlingScores): number {
+  let sum = 0;
+  for (const id of SLING_IDS) sum += scores[id] ?? 0;
+  return sum / SLING_IDS.length;
 }
 
 export interface TreatmentGate {
@@ -49,6 +92,11 @@ export interface TreatmentGate {
   minHealingProgress?: number;
   minRomPercent?: number;
   minStrength?: number;
+  /** Optional per-sling thresholds. The treatment is considered
+   *  gated unless every named sling's current score meets the
+   *  threshold. Useful for sling-aware progressions like "POS ≥ 60
+   *  before plyometrics". */
+  minSlingScores?: Partial<Record<SlingId, number>>;
 }
 
 export interface TreatmentEffectProfile {
@@ -83,6 +131,11 @@ export interface TreatmentEffectProfile {
     reducesShear?: number;
     redirectsTo?: 'axial' | 'distributed';
   };
+  /** When set, any `slingFunction` value in `effects` is routed
+   *  exclusively to these named slings instead of being distributed
+   *  evenly across all five. The aggregate `slingFunction` falls out
+   *  for free as the mean of the per-sling scores. */
+  slingTarget?: SlingId | SlingId[];
   /** Sessions/week the profile's effect magnitudes were calibrated for.
    *  When an Intervention sets a different sessionsPerWeek, the engine
    *  scales the per-week dose by sqrt(sessions / defaultSessionsPerWeek)
@@ -335,6 +388,8 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     description: 'Restores coordinated function and reduces compensation.',
     defaultSessionsPerWeek: 4,
     loadModification: { redirectsTo: 'distributed', reducesShear: 0.3 },
+    // Untagged: distributes the slingFunction effect across all five
+    // slings equally — same behaviour the legacy aggregate score had.
   },
   {
     id: 'plyometric_rts',
@@ -1037,7 +1092,21 @@ export interface ConditionContext {
   baselineRomPercent: number;
   baselineMotorControl: number;
   baselineCapacity: number;
+  /** Aggregate sling weak-link severity (0–100). Now derived as the
+   *  MAX across `slingSeverities` so callers that pass per-sling
+   *  values automatically get a sensible aggregate; legacy callers
+   *  that only set the aggregate get every sling stamped to that
+   *  value. */
   slingWeakLinkSeverity: number;
+  /** Per-sling weak-link severity (0–100). Drives initial per-sling
+   *  scores and the natural-recovery compensation-burden bias. Always
+   *  populated (zero-filled when no sling analysis is available). */
+  slingSeverities: SlingScores;
+  /** Slings whose dysfunction is clinically relevant for this
+   *  archetype/diagnosis. The compensation-burden bias and phase
+   *  progression gates only consider these slings (an irrelevant
+   *  weak sling no longer drags down the curve). Always non-empty. */
+  relevantSlings: SlingId[];
   patientHealingMult: number;
   patientPainMult: number;
   patientRecurrenceMult: number;
@@ -1052,6 +1121,27 @@ export interface ConditionContext {
    *  treatments target specific load components. Optional — when absent,
    *  the engine falls back to the legacy `jointForceOverloadCount` path. */
   jointLoadVectors?: JointLoadVector[];
+}
+
+/** Slings that meaningfully gate recovery for each archetype. Used
+ *  by the natural-recovery compensation-burden bias (only relevant
+ *  slings count) and by phase-progression gates (passRunning /
+ *  passSport require relevant slings to meet threshold). */
+const ARCHETYPE_RELEVANT_SLINGS: Record<RecoveryArchetypeId, SlingId[]> = {
+  acute_tissue_healing: ['posterior_oblique', 'anterior_oblique', 'lateral', 'deep_longitudinal', 'scapular_shoulder'],
+  tendinopathy_load_capacity: ['posterior_oblique', 'lateral', 'deep_longitudinal'],
+  degenerative_oa: ['posterior_oblique', 'lateral', 'deep_longitudinal'],
+  mechanical_impingement: ['scapular_shoulder', 'posterior_oblique'],
+  frozen_shoulder: ['scapular_shoulder'],
+  radicular_neuropathic: ['deep_longitudinal', 'posterior_oblique'],
+  disc_centralisation: ['deep_longitudinal', 'posterior_oblique', 'lateral'],
+  bone_stress: ['lateral', 'deep_longitudinal'],
+  chronic_nociplastic: ['posterior_oblique', 'anterior_oblique', 'lateral', 'deep_longitudinal', 'scapular_shoulder'],
+  instability_hypermobility: ['posterior_oblique', 'anterior_oblique', 'lateral', 'deep_longitudinal', 'scapular_shoulder'],
+};
+
+export function relevantSlingsForArchetype(archetypeId: RecoveryArchetypeId): SlingId[] {
+  return ARCHETYPE_RELEVANT_SLINGS[archetypeId] ?? SLING_IDS;
 }
 
 export interface TissueHealingProfile {
@@ -1167,6 +1257,14 @@ export function buildConditionContext(args: {
   baselineMotorControl?: number | null;
   baselineCapacity?: number | null;
   slingWeakLinkSeverity?: number | null;
+  /** Per-sling weak-link severity (0–100). When provided, the
+   *  aggregate `slingWeakLinkSeverity` is derived as the max across
+   *  these values. When omitted, every sling is stamped to the
+   *  aggregate value (legacy parity). */
+  slingSeverities?: Partial<Record<SlingId, number>> | null;
+  /** Override the archetype-derived list of relevant slings. When
+   *  omitted, `relevantSlingsForArchetype(archetypeId)` is used. */
+  relevantSlings?: SlingId[] | null;
   patientHealingMult?: number;
   patientPainMult?: number;
   patientRecurrenceMult?: number;
@@ -1204,10 +1302,34 @@ export function buildConditionContext(args: {
     pmRaw.includes('myofas') || pmRaw.includes('nocicep') ? 'nociceptive' :
     pmRaw.includes('mixed') ? 'mixed' : 'unknown';
 
+  const archetypeId = resolveArchetypeId(cls.id, cls.label);
+  const relevantSlings = (args.relevantSlings && args.relevantSlings.length > 0)
+    ? args.relevantSlings
+    : relevantSlingsForArchetype(archetypeId);
+
+  // Build per-sling severities. Per-sling input wins; otherwise stamp
+  // the legacy aggregate value to every sling so existing callers see
+  // the same simulated curve as before.
+  const aggregateInput = args.slingWeakLinkSeverity ?? 0;
+  const slingSeverities = {} as SlingScores;
+  let aggregateDerived = 0;
+  for (const id of SLING_IDS) {
+    const v = args.slingSeverities?.[id];
+    const sev = (v === undefined || v === null) ? aggregateInput : Math.max(0, Math.min(100, v));
+    slingSeverities[id] = sev;
+    if (sev > aggregateDerived) aggregateDerived = sev;
+  }
+  // When no per-sling data was supplied, prefer the explicit aggregate
+  // (backward compatibility); otherwise the derived max from the
+  // per-sling map is the authoritative aggregate.
+  const slingWeakLinkSeverity = args.slingSeverities && Object.keys(args.slingSeverities).length > 0
+    ? aggregateDerived
+    : aggregateInput;
+
   return {
     conditionId: cls.id,
     conditionLabel: cls.label,
-    archetypeId: resolveArchetypeId(cls.id, cls.label),
+    archetypeId,
     primaryTissue: pickedTissue,
     tissueLoad,
     scarLoad,
@@ -1216,7 +1338,9 @@ export function buildConditionContext(args: {
     baselineRomPercent: args.currentRomPercent ?? 70,
     baselineMotorControl: args.baselineMotorControl ?? 60,
     baselineCapacity: args.baselineCapacity ?? 50,
-    slingWeakLinkSeverity: args.slingWeakLinkSeverity ?? 0,
+    slingWeakLinkSeverity,
+    slingSeverities,
+    relevantSlings,
     patientHealingMult: args.patientHealingMult ?? 1,
     patientPainMult: args.patientPainMult ?? 1,
     patientRecurrenceMult: args.patientRecurrenceMult ?? 1,
@@ -1267,6 +1391,22 @@ function defaultInitialState(input: SimulationInput, ctx?: ConditionContext): Re
   const scarPenalty = ctx ? ctx.scarLoad * 0.25 : 0;
   const tissueLoadPenalty = ctx ? ctx.tissueLoad * 0.15 : 0;
 
+  // Per-sling baseline scores: each sling starts at the legacy
+  // aggregate baseline minus its own severity penalty (vs the global
+  // worst-link penalty). This way an isolated weak sling pulls down
+  // only its own initial score, not the entire aggregate floor.
+  const slingScoresInit: SlingScores = (() => {
+    const out = {} as SlingScores;
+    for (const id of SLING_IDS) {
+      const sev = ctx ? ctx.slingSeverities[id] ?? 0 : 0;
+      out[id] = clamp(60 - sev * 0.3 - sev * 0.3); // baseline minus per-sling penalty
+    }
+    return out;
+  })();
+  const slingFunctionInit = ctx
+    ? aggregateSlingFunction(slingScoresInit)
+    : clamp(60 - sev * 0.3 - slingPenalty);
+
   return {
     week: 0,
     pain: clamp(50 + sev * 0.4 + painAdd),
@@ -1299,7 +1439,8 @@ function defaultInitialState(input: SimulationInput, ctx?: ConditionContext): Re
     fearAvoidance: clamp(30 + irr * 0.3 + fearBoost),
     sleep: 65,
     adherence: input.patientAdherence,
-    slingFunction: clamp(60 - sev * 0.3 - slingPenalty),
+    slingFunction: slingFunctionInit,
+    slingScores: slingScoresInit,
     capacity: baselineCap,
     demand: clamp((input.workDemand + input.sportDemand) / 2 + (ctx ? (o.initialDemandAdd ?? 0) : 0)),
     ...(input.initialState ?? {}),
@@ -1469,7 +1610,7 @@ function applyTreatmentEffects(
   ctx: SimContext,
   week: number,
 ): { newState: RecoveryState; markers: InterventionMarker[]; attribution: Map<string, number> } {
-  const next: RecoveryState = { ...state, week };
+  const next: RecoveryState = { ...state, week, slingScores: { ...state.slingScores } };
   const markers: InterventionMarker[] = [];
   const attribution = new Map<string, number>();
 
@@ -1595,6 +1736,14 @@ function applyTreatmentEffects(
       if (g.minHealingProgress !== undefined && state.healingProgress < g.minHealingProgress) gateFailures.push(`healing ${state.healingProgress.toFixed(0)}%<${g.minHealingProgress}%`);
       if (g.minRomPercent !== undefined && state.romPercent < g.minRomPercent) gateFailures.push(`ROM ${state.romPercent.toFixed(0)}%<${g.minRomPercent}%`);
       if (g.minStrength !== undefined && state.strength < g.minStrength) gateFailures.push(`strength ${state.strength.toFixed(0)}<${g.minStrength}`);
+      if (g.minSlingScores) {
+        for (const [slingId, threshold] of Object.entries(g.minSlingScores) as [SlingId, number][]) {
+          const cur = state.slingScores[slingId] ?? 0;
+          if (cur < threshold) {
+            gateFailures.push(`${SLING_LABELS[slingId]} sling ${cur.toFixed(0)}<${threshold}`);
+          }
+        }
+      }
       if (gateFailures.length > 0) gateBlocked = true;
     }
 
@@ -1627,8 +1776,27 @@ function applyTreatmentEffects(
       markers.push({ week, type: 'remove', label: `Stop ${treatment.name}`, treatmentId: treatment.id });
     }
 
+    // Resolve which slings to drive. When slingTarget is set, the
+    // treatment's `slingFunction` delta is routed exclusively to those
+    // slings. Otherwise it spreads evenly across all five (legacy
+    // behaviour, so untagged treatments keep producing the same
+    // aggregate curve).
+    const slingTargets: SlingId[] = treatment.slingTarget
+      ? (Array.isArray(treatment.slingTarget) ? treatment.slingTarget : [treatment.slingTarget])
+      : SLING_IDS;
+
     for (const [key, val] of Object.entries(treatment.effects)) {
       const k = key as keyof RecoveryState;
+      if (k === 'slingFunction') {
+        // Per-sling routing — slingFunction is recomputed below as the
+        // mean of slingScores so don't write the aggregate directly.
+        const perSling = (val * totalScale);
+        for (const id of slingTargets) {
+          next.slingScores[id] = clamp((next.slingScores[id] ?? 0) + perSling);
+        }
+        continue;
+      }
+      if (k === 'slingScores') continue; // never effected directly
       const cur = next[k];
       if (typeof cur === 'number') {
         (next as unknown as Record<string, number>)[k] = clamp(cur + val * totalScale);
@@ -1724,6 +1892,11 @@ function applyTreatmentEffects(
     }
   }
 
+  // Aggregate sling function is DERIVED from per-sling scores (mean
+  // across all five slings). Always recompute before any consumer
+  // (capacity, gates) reads it so the two views stay in lock-step.
+  next.slingFunction = aggregateSlingFunction(next.slingScores);
+
   const capCeilingPctOfFull = ctx.profile?.capacityCeiling ?? 100;
   const rawCap = 0.45 * next.loadTolerance + 0.25 * next.strength + 0.2 * next.motorControl + 0.1 * next.slingFunction;
   next.capacity = Math.min(capCeilingPctOfFull, clamp(rawCap));
@@ -1736,8 +1909,22 @@ function applyTreatmentEffects(
   const passWalking = next.inflammation < (50 + gateRelax) && next.pain < (70 + gateRelax);
   const passStairs = passWalking && next.walking >= (55 - gateRelax) && next.pain < (60 + gateRelax);
   const passSquat = next.pain < (55 + gateRelax) && next.romPercent >= (65 - gateRelax) && next.healingProgress >= 20;
-  const passRunning = next.pain < (40 + Math.max(0, gateRelax * 0.5)) && next.capacity >= (60 - gateRelax) && next.healingProgress >= 50 && next.romPercent >= (75 - gateRelax) && next.flareRisk < (45 + Math.max(0, gateRelax * 0.5)) && next.running >= 0;
-  const passSport = passRunning && next.running >= (55 - gateRelax) && next.capacity >= (75 - gateRelax) && next.healingProgress >= 70 && next.flareRisk < (35 + Math.max(0, gateRelax * 0.5)) && next.reinjuryRisk < 40;
+  // Relevant-sling gating — running/sport progressions only require
+  // the slings clinically relevant to the archetype (e.g. impingement
+  // doesn't gate on deep-longitudinal sling). Non-relevant weak
+  // slings no longer block progression.
+  const relevantSlings = ctx.conditionContext?.relevantSlings ?? SLING_IDS;
+  const minRelevantSling = relevantSlings.reduce((m, id) => Math.min(m, next.slingScores[id] ?? 100), 100);
+  const runSlingThresh = 55 - Math.max(0, gateRelax * 0.5);
+  const sportSlingThresh = 65 - Math.max(0, gateRelax * 0.5);
+  let weakestRelevantSling: SlingId | null = null;
+  let weakestRelevantSlingScore = 101;
+  for (const id of relevantSlings) {
+    const s = next.slingScores[id] ?? 0;
+    if (s < weakestRelevantSlingScore) { weakestRelevantSlingScore = s; weakestRelevantSling = id; }
+  }
+  const passRunning = next.pain < (40 + Math.max(0, gateRelax * 0.5)) && next.capacity >= (60 - gateRelax) && next.healingProgress >= 50 && next.romPercent >= (75 - gateRelax) && next.flareRisk < (45 + Math.max(0, gateRelax * 0.5)) && next.running >= 0 && minRelevantSling >= runSlingThresh;
+  const passSport = passRunning && next.running >= (55 - gateRelax) && next.capacity >= (75 - gateRelax) && next.healingProgress >= 70 && next.flareRisk < (35 + Math.max(0, gateRelax * 0.5)) && next.reinjuryRisk < 40 && minRelevantSling >= sportSlingThresh;
 
   const capRamp = ctx.profile?.capacityRampMult ?? 1;
   const romMult = ctx.profile?.romRecoveryMult ?? 1;
@@ -1756,10 +1943,16 @@ function applyTreatmentEffects(
   next.jointLoading = clamp(next.jointLoading - 0.5 * holdMultiplier);
 
   if (!passRunning && next.running > 60) {
-    markers.push({ week, type: 'adherence_drop', label: `Running progression held: gates not met (pain ${next.pain.toFixed(0)}/cap ${next.capacity.toFixed(0)}/flare ${next.flareRisk.toFixed(0)})` });
+    const slingNote = (weakestRelevantSling && weakestRelevantSlingScore < runSlingThresh)
+      ? `/${SLING_LABELS[weakestRelevantSling]} sling ${weakestRelevantSlingScore.toFixed(0)}<${runSlingThresh.toFixed(0)}`
+      : '';
+    markers.push({ week, type: 'adherence_drop', label: `Running progression held: gates not met (pain ${next.pain.toFixed(0)}/cap ${next.capacity.toFixed(0)}/flare ${next.flareRisk.toFixed(0)}${slingNote})` });
   }
   if (!passSport && next.sport > 70) {
-    markers.push({ week, type: 'adherence_drop', label: `Sport progression held: gates not met (cap ${next.capacity.toFixed(0)}/flare ${next.flareRisk.toFixed(0)})` });
+    const slingNote = (weakestRelevantSling && weakestRelevantSlingScore < sportSlingThresh)
+      ? `/${SLING_LABELS[weakestRelevantSling]} sling ${weakestRelevantSlingScore.toFixed(0)}<${sportSlingThresh.toFixed(0)}`
+      : '';
+    markers.push({ week, type: 'adherence_drop', label: `Sport progression held: gates not met (cap ${next.capacity.toFixed(0)}/flare ${next.flareRisk.toFixed(0)}${slingNote})` });
   }
   if (branchProgressionHold) {
     markers.push({ week, type: 'load_change', label: `Progression hold (until w${ctx.branch.progressionHoldUntilWeek})` });

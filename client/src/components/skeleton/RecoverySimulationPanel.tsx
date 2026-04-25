@@ -399,7 +399,14 @@ export default function RecoverySimulationPanel({ initialInput, conditionLabel, 
           ); })()}
           {conditionContext.scarLoad > 0 && <span><span className="text-purple-300 font-semibold">Scar:</span> {conditionContext.scarLoad.toFixed(0)}</span>}
           {conditionContext.tissueLoad > 0 && <span><span className="text-purple-300 font-semibold">Tissue load:</span> {conditionContext.tissueLoad.toFixed(0)}</span>}
-          {conditionContext.slingWeakLinkSeverity > 0 && <span><span className="text-purple-300 font-semibold">Sling:</span> {conditionContext.slingWeakLinkSeverity.toFixed(0)}</span>}
+          {conditionContext.slingWeakLinkSeverity > 0 && (
+            <span title={`Per-sling severity: ${(Object.entries(conditionContext.slingSeverities ?? {}) as [string, number][])
+              .filter(([, v]) => v > 0)
+              .map(([id, v]) => `${id.replace(/_/g, ' ')} ${v.toFixed(0)}`)
+              .join(', ')}\nRelevant: ${(conditionContext.relevantSlings ?? []).join(', ')}`}>
+              <span className="text-purple-300 font-semibold">Sling (worst):</span> {conditionContext.slingWeakLinkSeverity.toFixed(0)}
+            </span>
+          )}
           {conditionContext.ageYears !== null && <span><span className="text-purple-300 font-semibold">Age:</span> {conditionContext.ageYears}</span>}
           {conditionContext.patientHealingMult !== 1 && <span title="Patient-factor healing multiplier"><span className="text-purple-300 font-semibold">Heal×:</span> {conditionContext.patientHealingMult.toFixed(2)}</span>}
           {conditionContext.patientPainMult !== 1 && <span title="Patient-factor pain sensitivity multiplier"><span className="text-purple-300 font-semibold">Pain×:</span> {conditionContext.patientPainMult.toFixed(2)}</span>}

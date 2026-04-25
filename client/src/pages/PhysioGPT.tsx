@@ -203,7 +203,7 @@ const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSim
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
 const RecoverySimulationPanel = lazy(() => import("@/components/skeleton/RecoverySimulationPanel"));
 const RecoverySimulatorDashboard = lazy(() => import("@/components/skeleton/RecoverySimulatorDashboard"));
-import { buildConditionContext, buildCustomExerciseId, buildCustomTechniqueId, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput } from "@/lib/recoverySimulationEngine";
+import { buildConditionContext, buildCustomExerciseId, buildCustomTechniqueId, extractJointLoadVectors, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput, type JointLoadVector } from "@/lib/recoverySimulationEngine";
 import { buildPrescriptionContext } from "@/lib/prescriptionAdapterEngine";
 import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDashboard";
 import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers } from "@/lib/patientFactorsEngine";
@@ -4848,8 +4848,13 @@ ${ddxList}`;
       patientTissueQualityMult: mods.tissueQualityMultiplier,
       patientPhaseTimingMult: mods.phaseTimingMultiplier,
       patientRomCeiling: mods.romCeilingAdjustment,
+      // Task #239 — pipe per-joint load vectors into the ConditionContext
+      // so treatments declaring `loadModification` (rest_offload, taping_bracing,
+      // motor_control, manual_therapy, …) can target the actual dominant
+      // load components on the active skeleton.
+      jointLoadVectors: extractJointLoadVectors(hudForceAnalysis ?? null, { topN: 6 }),
     });
-  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, slingActivationOverrides, collectModelConfigDeviations]);
+  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, slingActivationOverrides, collectModelConfigDeviations, hudForceAnalysis]);
 
   const naturalTimelineRequestContext = useMemo<NaturalTimelineRequestContext | null>(() => {
     if (!showRecoverySim) return null;
@@ -11036,6 +11041,12 @@ ${ddxList}`;
                     jointForceOverloadCount: (hudForceAnalysis?.joints ?? []).filter(
                       (j: { status?: string }) => j.status === 'high' || j.status === 'very_high'
                     ).length,
+                    // Task #239 — full per-joint load vectors (compression /
+                    // shear / tension × magnitude) drive the vector-aware
+                    // compensation_burden bias, so two skeletons with the
+                    // same overload count but different load directions
+                    // produce different recovery curves.
+                    jointLoadVectors: extractJointLoadVectors(hudForceAnalysis ?? null, { topN: 6 }),
                   }}
                   naturalTimelineSlot={
                     <Suspense fallback={null}>

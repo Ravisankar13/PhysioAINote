@@ -2292,6 +2292,39 @@ export default function RecoverySimulatorDashboard({
                       ))}
                     </div>
 
+                    {/* Task #239 — Dominant joint loads. Surfaces the
+                        per-joint vector mix (compression / shear / tension)
+                        that drives the vector-aware compensation_burden
+                        bias and is the target of `loadModification`
+                        treatments. Hidden when no high-status joints. */}
+                    {(conditionContext?.jointLoadVectors ?? []).length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-[10px] uppercase tracking-wide text-amber-200 font-semibold mb-1.5">
+                          Dominant joint loads
+                        </div>
+                        <div className="flex flex-wrap gap-1.5" data-testid="joint-load-vectors">
+                          {(conditionContext!.jointLoadVectors ?? []).slice(0, 3).map(v => {
+                            const dominantColor =
+                              v.dominantComponent === 'shear' ? 'text-rose-300 border-rose-700/40 bg-rose-950/30' :
+                              v.dominantComponent === 'tension' ? 'text-violet-300 border-violet-700/40 bg-violet-950/30' :
+                              'text-amber-300 border-amber-700/40 bg-amber-950/30';
+                            return (
+                              <span
+                                key={v.jointId}
+                                className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono ${dominantColor}`}
+                                data-testid={`joint-load-${v.jointId}`}
+                                title={`compression ${v.components.compression.toFixed(2)} • shear ${v.components.shear.toFixed(2)} • tension ${v.components.tension.toFixed(2)} BW`}
+                              >
+                                <span className="font-semibold">{v.label}</span>
+                                <span className="opacity-80">— {v.dominantComponent}, {v.magnitudeBW.toFixed(1)}×BW</span>
+                                <span className="opacity-60">· {v.dominantTissue}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Structural-bias panel — biases not relevant to
                         the active diagnosis are shown but de-emphasised
                         (struck-through label + dimmed bar) so the user

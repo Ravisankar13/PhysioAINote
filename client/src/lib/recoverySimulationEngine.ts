@@ -1,4 +1,7 @@
 import { resolveArchetypeId, type RecoveryArchetypeId } from './recoveryArchetypes';
+import type { JointLoadVector, LoadComponent } from './posturalForceEngine';
+export type { JointLoadVector, LoadComponent, LoadTissue } from './posturalForceEngine';
+export { extractJointLoadVectors } from './posturalForceEngine';
 
 export type HealingPhase = 'inflammatory' | 'proliferative' | 'remodeling' | 'maturation';
 
@@ -63,6 +66,23 @@ export interface TreatmentEffectProfile {
   doseResponseSlope?: number;
   description?: string;
   gates?: TreatmentGate;
+  /** Task #239 — declares how this treatment modifies external joint loading.
+   *  Values are 0..1 *intent* magnitudes (1 = full intended effect at peak),
+   *  scaled by the same dose/ramp/phase math as `effects` and applied per
+   *  active joint load vector on the ConditionContext:
+   *   - `unloadsCompression` reduces compression-dominant vectors (disc, OA,
+   *     facet) → drops `jointLoading`, lifts `loadTolerance`.
+   *   - `reducesShear` reduces shear-dominant vectors (ligament, labral,
+   *     SI joint) → drops `jointLoading`, lowers `compensation`.
+   *   - `redirectsTo: 'axial'` sends shear → compression (e.g. bracing /
+   *     rigid taping that converts a torsional load into pure axial).
+   *   - `redirectsTo: 'distributed'` shares load across the kinetic chain
+   *     (e.g. motor-control retraining), reducing peak per-joint load. */
+  loadModification?: {
+    unloadsCompression?: number;
+    reducesShear?: number;
+    redirectsTo?: 'axial' | 'distributed';
+  };
   /** Sessions/week the profile's effect magnitudes were calibrated for.
    *  When an Intervention sets a different sessionsPerWeek, the engine
    *  scales the per-week dose by sqrt(sessions / defaultSessionsPerWeek)
@@ -251,6 +271,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     mistimingFlareRisk: 0,
     description: 'Acute offloading reduces inflammation and irritability; loses value in remodeling.',
     defaultSessionsPerWeek: 7,
+    loadModification: { unloadsCompression: 0.6, reducesShear: 0.4 },
   },
   {
     id: 'manual_therapy',
@@ -266,6 +287,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     mistimingFlareRisk: 8,
     description: 'Improves ROM and reduces stiffness; cautious in inflammatory phase.',
     defaultSessionsPerWeek: 2,
+    loadModification: { reducesShear: 0.25 },
   },
   {
     id: 'isometric_load',
@@ -312,6 +334,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     mistimingFlareRisk: 4,
     description: 'Restores coordinated function and reduces compensation.',
     defaultSessionsPerWeek: 4,
+    loadModification: { redirectsTo: 'distributed', reducesShear: 0.3 },
   },
   {
     id: 'plyometric_rts',
@@ -373,6 +396,7 @@ export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
     mistimingFlareRisk: 0,
     description: 'Short-term offloading and proprioception; remove as capacity returns.',
     defaultSessionsPerWeek: 7,
+    loadModification: { unloadsCompression: 0.4, redirectsTo: 'axial' },
   },
   {
     id: 'graded_load',
@@ -1021,6 +1045,13 @@ export interface ConditionContext {
   patientPhaseTimingMult: number;
   patientRomCeiling: number;
   ageYears: number | null;
+  /** Task #239 — compact ranked summary of which joints are taking the
+   *  brunt of current loading, what KIND of load dominates, and the most
+   *  likely tissue absorbing it. Drives vector-aware compensation_burden
+   *  math in `naturalRecoveryDriverModel.ts` and lets `loadModification`
+   *  treatments target specific load components. Optional — when absent,
+   *  the engine falls back to the legacy `jointForceOverloadCount` path. */
+  jointLoadVectors?: JointLoadVector[];
 }
 
 export interface TissueHealingProfile {
@@ -1143,6 +1174,7 @@ export function buildConditionContext(args: {
   patientPhaseTimingMult?: number;
   patientRomCeiling?: number;
   ageYears?: number | null;
+  jointLoadVectors?: JointLoadVector[];
 }): ConditionContext {
   const cls = classifyCondition(args.mainComplaint);
   let tissueLoad = 0;
@@ -1192,6 +1224,7 @@ export function buildConditionContext(args: {
     patientPhaseTimingMult: args.patientPhaseTimingMult ?? 1,
     patientRomCeiling: args.patientRomCeiling ?? 1,
     ageYears: args.ageYears ?? null,
+    jointLoadVectors: args.jointLoadVectors,
   };
 }
 
@@ -1599,6 +1632,57 @@ function applyTreatmentEffects(
       const cur = next[k];
       if (typeof cur === 'number') {
         (next as unknown as Record<string, number>)[k] = clamp(cur + val * totalScale);
+      }
+    }
+
+    // Task #239 — apply per-vector load modification *in addition* to the
+    // generic effect map. Effect is proportional to the magnitude (BW) of
+    // load components this treatment actually targets, so a compression-
+    // unloading brace barely moves the needle on a shear-dominant injury
+    // and vice versa. This is what makes two skeletons with the same
+    // overload count diverge under the same treatment plan.
+    const lm = treatment.loadModification;
+    const vectors = ctx.conditionContext?.jointLoadVectors;
+    if (lm && vectors && vectors.length > 0) {
+      let unloadDose = 0;     // body-weight equivalents of compression removed
+      let shearDose = 0;      // body-weight equivalents of shear removed
+      let redirectDose = 0;   // arbitrary distribution-quality units
+      for (const v of vectors) {
+        // Compression component is reduced by both explicit unload and
+        // axial redirection (axial redirection converts shear → axial,
+        // which the joint tolerates better → modeled as a small unload).
+        if (lm.unloadsCompression && v.components.compression > 0) {
+          unloadDose += v.components.compression * lm.unloadsCompression;
+        }
+        if (lm.reducesShear && v.components.shear > 0) {
+          shearDose += v.components.shear * lm.reducesShear;
+        }
+        if (lm.redirectsTo === 'axial' && v.components.shear > 0) {
+          // Bracing converts torsion to axial — counts as half-strength
+          // shear reduction with a small compression bump (axial load
+          // returns to the joint, just in a tolerable direction).
+          shearDose += v.components.shear * 0.5;
+        }
+        if (lm.redirectsTo === 'distributed') {
+          // Motor-control style redistribution sheds peak load across
+          // the chain — proportional to total magnitude, not component.
+          redirectDose += v.magnitudeBW * 0.4;
+        }
+      }
+      const lmScale = totalScale; // share dose/ramp/phase math with `effects`
+      if (unloadDose > 0) {
+        next.jointLoading = clamp(next.jointLoading - unloadDose * 1.2 * lmScale);
+        next.loadTolerance = clamp(next.loadTolerance + unloadDose * 0.6 * lmScale);
+      }
+      if (shearDose > 0) {
+        next.jointLoading = clamp(next.jointLoading - shearDose * 1.5 * lmScale);
+        next.compensation = clamp(next.compensation - shearDose * 0.8 * lmScale);
+        next.asymmetry = clamp(next.asymmetry - shearDose * 0.4 * lmScale);
+      }
+      if (redirectDose > 0) {
+        next.jointLoading = clamp(next.jointLoading - redirectDose * 0.8 * lmScale);
+        next.movementQuality = clamp(next.movementQuality + redirectDose * 0.5 * lmScale);
+        next.compensation = clamp(next.compensation - redirectDose * 0.3 * lmScale);
       }
     }
 

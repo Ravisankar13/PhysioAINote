@@ -950,3 +950,131 @@ export function computeWeightDistribution(config: any, bodyWeightKg: number): We
     clinical,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Joint load vectors (Task #239)
+// ---------------------------------------------------------------------------
+// Compact, downstream-friendly summary of which joints are taking the brunt
+// of the current posture/movement, what KIND of load dominates (compression /
+// shear / tension), and which tissue most likely absorbs that load. The
+// recovery sim and natural-driver bias model consume these so two skeletons
+// with the same overload count but different vector directions yield
+// different recovery curves.
+// ---------------------------------------------------------------------------
+
+export type LoadComponent = 'compression' | 'shear' | 'tension';
+export type LoadTissue =
+  | 'disc' | 'facet' | 'cartilage' | 'meniscus' | 'labrum'
+  | 'tendon' | 'ligament' | 'capsule' | 'bone' | 'generic';
+
+export interface JointLoadVector {
+  /** Source joint id (matches JointSurfaceForce.id). */
+  jointId: string;
+  /** Human-readable label. */
+  label: string;
+  /** Joint category (spine, knee, hip, …) for grouping. */
+  category: string;
+  /** Total joint reaction force in body weights. */
+  magnitudeBW: number;
+  /** Which load component dominates the joint reaction. */
+  dominantComponent: LoadComponent;
+  /** Per-component breakdown (BW units). */
+  components: { compression: number; shear: number; tension: number };
+  /** Tissue most likely absorbing the dominant load at this joint. */
+  dominantTissue: LoadTissue;
+  /** Engine status band ('high' / 'very_high' = clinically loaded). */
+  status: JointSurfaceForce['status'];
+}
+
+const TISSUE_BY_CATEGORY: Record<string, LoadTissue> = {
+  disc: 'disc',
+  facet: 'facet',
+  spine: 'disc',
+  hip: 'cartilage',
+  patellofemoral: 'cartilage',
+  tibiofemoral: 'meniscus',
+  knee: 'meniscus',
+  ankle: 'cartilage',
+  shoulder: 'labrum',
+  glenohumeral: 'labrum',
+  elbow: 'cartilage',
+  wrist: 'cartilage',
+  si: 'ligament',
+  sij: 'ligament',
+};
+
+function inferDominantTissue(joint: JointSurfaceForce, dominant: LoadComponent): LoadTissue {
+  const id = (joint.id ?? '').toLowerCase();
+  const cat = (joint.category ?? '').toLowerCase();
+  // ID patterns first — they're more specific than category buckets.
+  if (id.includes('disc')) return 'disc';
+  if (id.includes('facet')) return 'facet';
+  if (id.includes('labrum') || id.includes('labral')) return 'labrum';
+  if (id.includes('meniscus') || id.includes('menisc')) return 'meniscus';
+  if (id.includes('tendon') || id.includes('tendin')) return 'tendon';
+  if (id.includes('ligament') || id.includes('acl') || id.includes('mcl') ||
+      id.includes('lcl') || id.includes('pcl')) return 'ligament';
+  if (id.includes('capsule')) return 'capsule';
+  // Category fallback.
+  for (const key of Object.keys(TISSUE_BY_CATEGORY)) {
+    if (cat.includes(key) || id.includes(key)) return TISSUE_BY_CATEGORY[key];
+  }
+  // Final hint from the dominant component itself.
+  if (dominant === 'shear') return 'ligament';
+  if (dominant === 'tension') return 'tendon';
+  return 'generic';
+}
+
+function pickDominantComponent(j: JointSurfaceForce): LoadComponent {
+  const c = j.compression ?? 0;
+  const s = j.shear ?? 0;
+  const t = j.tension ?? 0;
+  if (s >= c && s >= t) return 'shear';
+  if (t > c) return 'tension';
+  return 'compression';
+}
+
+export interface ExtractJointLoadVectorsOptions {
+  /** Cap on the number of vectors returned (sorted by magnitude desc). */
+  topN?: number;
+  /** Minimum status band to include — defaults to 'high'. */
+  minStatus?: JointSurfaceForce['status'];
+}
+
+const STATUS_RANK: Record<JointSurfaceForce['status'], number> = {
+  low: 0, moderate: 1, high: 2, very_high: 3,
+};
+
+/** Project a ForceAnalysisResult down to a compact, ranked list of joint
+ *  load vectors. Used by ConditionContext + the natural-driver bias model. */
+export function extractJointLoadVectors(
+  forceAnalysis: ForceAnalysisResult | null | undefined,
+  opts: ExtractJointLoadVectorsOptions = {},
+): JointLoadVector[] {
+  if (!forceAnalysis || !Array.isArray(forceAnalysis.joints)) return [];
+  const minStatus = opts.minStatus ?? 'high';
+  const topN = opts.topN ?? 6;
+  const minRank = STATUS_RANK[minStatus];
+  const filtered = forceAnalysis.joints
+    .filter(j => j && j.enabled !== false && STATUS_RANK[j.status] >= minRank)
+    .slice()
+    .sort((a, b) => (b.totalForce ?? 0) - (a.totalForce ?? 0))
+    .slice(0, Math.max(0, topN));
+  return filtered.map((j): JointLoadVector => {
+    const dominant = pickDominantComponent(j);
+    return {
+      jointId: j.id,
+      label: j.label ?? j.id,
+      category: j.category ?? 'generic',
+      magnitudeBW: Math.max(0, j.totalForce ?? 0),
+      dominantComponent: dominant,
+      components: {
+        compression: Math.max(0, j.compression ?? 0),
+        shear: Math.max(0, j.shear ?? 0),
+        tension: Math.max(0, j.tension ?? 0),
+      },
+      dominantTissue: inferDominantTissue(j, dominant),
+      status: j.status,
+    };
+  });
+}

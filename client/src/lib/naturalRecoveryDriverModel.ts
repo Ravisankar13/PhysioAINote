@@ -20,6 +20,7 @@ import type {
   ConditionContext,
   ConditionTissue,
   HealingPhase,
+  JointLoadVector,
   ParallelTimelines,
   RecoveryState,
   SimulationInput,
@@ -56,6 +57,14 @@ export interface SkeletonBiasInputs {
   compensationCount?: number;
   jointForceOverloadCount?: number;
   romDeficitPercent?: number;
+  /** Task #239 — full per-joint load vectors. When provided, the
+   *  compensation_burden bias is computed from the actual load mix
+   *  (compression / shear / tension × magnitude) instead of the
+   *  legacy `jointForceOverloadCount` count. Two skeletons with the
+   *  same overload COUNT but different load DIRECTIONS therefore
+   *  produce different bias magnitudes (and different downstream
+   *  recovery curves). When absent, falls back to the count path. */
+  jointLoadVectors?: JointLoadVector[];
 }
 
 // ---------------------------------------------------------------------------
@@ -223,15 +232,47 @@ export function computeStructuralBiases(
   }
 
   // -- Compensation burden ----------------------------------------------
+  // Task #239 — when joint load vectors are available we replace the
+  // count-based `overload * 6` term with a direction-aware sum:
+  //   load = Σ ( shear × 1.5 + compression × 1.0 + tension × 0.8 ) × 2.5
+  // The component weights reflect tissue tolerance (shear is the most
+  // injurious component for cartilage/labrum/disc, tension the least);
+  // the ×2.5 calibration keeps the typical-case magnitude inside the
+  // same ~5–30 band the legacy `count * 6` produced (so the rest of the
+  // tuned curves are preserved). When vectors are absent we fall back
+  // to the legacy count path verbatim.
   let comp = 0;
   const cSigs: string[] = [];
   const compCount = s.compensationCount ?? 0;
   const sling = ctx?.slingWeakLinkSeverity ?? 0;
-  const overload = s.jointForceOverloadCount ?? 0;
   const obliquity = abs(s.pelvis?.obliquity ?? 0);
   if (compCount > 0) { comp += compCount * 8; cSigs.push(`${compCount} compensation pattern${compCount > 1 ? 's' : ''}`); }
   if (sling > 20) { comp += sling * 0.5; cSigs.push(`sling weak-link ${sling.toFixed(0)}`); }
-  if (overload > 0) { comp += overload * 6; cSigs.push(`${overload} overloaded joint${overload > 1 ? 's' : ''}`); }
+
+  const vectors = s.jointLoadVectors;
+  if (vectors && vectors.length > 0) {
+    let vectorLoad = 0;
+    for (const v of vectors) {
+      vectorLoad += v.components.shear * 1.5
+                  + v.components.compression * 1.0
+                  + v.components.tension * 0.8;
+    }
+    vectorLoad *= 2.5; // calibration: ~equal to legacy count*6 at typical magnitudes
+    if (vectorLoad >= 1) {
+      comp += vectorLoad;
+      // Surface up to two dominant vectors as human-readable signals so
+      // the bias card explains *why* the same overload count produces
+      // different bias magnitudes for two different skeletons.
+      const top = vectors.slice(0, 2).map(v =>
+        `${v.label} ${v.dominantComponent} ${v.magnitudeBW.toFixed(1)}×BW`
+      );
+      cSigs.push(`${vectors.length} loaded joint${vectors.length > 1 ? 's' : ''} (${top.join(', ')})`);
+    }
+  } else {
+    const overload = s.jointForceOverloadCount ?? 0;
+    if (overload > 0) { comp += overload * 6; cSigs.push(`${overload} overloaded joint${overload > 1 ? 's' : ''}`); }
+  }
+
   if (obliquity > 4) { comp += obliquity * 1.5; cSigs.push(`pelvic obliquity ${obliquity.toFixed(0)}°`); }
   if (comp >= 5) {
     pushBias(out, 'compensation_burden', 'Compensation burden',

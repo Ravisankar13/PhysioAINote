@@ -16,7 +16,8 @@
  * a useMemo on every render.
  */
 
-import type { SlingAnalysisResult, SlingResult, SlingId } from './slingEngine';
+import type { SlingAnalysisResult, SlingResult, SlingId, SlingTreatmentTarget } from './slingEngine';
+import { getSlingDefinitions } from './slingEngine';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -545,14 +546,23 @@ function scoreMarkersBySling(
   const perSling = new Map<SlingId, { score: number; contributions: MarkerScoreContribution[]; regions: Set<string> }>();
   const unmapped: DriverAnalysisPainMarker[] = [];
 
-  // Build a quick lookup of bone → slings (for nearestBone match).
+  // Build a real bone → slings lookup from the engine's bone pathways. The
+  // forward SlingResult does not surface bonePathway directly so we read the
+  // same SlingDefinition list the engine uses. Bone names are normalised to
+  // lower-case and stripped of side suffix so a marker on "Hip_R" still hits
+  // a sling whose pathway lists "Hip_L". This is the deterministic
+  // nearestBone → sling-pathway mapping used to drive recommendations.
   const boneToSlings = new Map<string, SlingId[]>();
-  for (const fs of forwardSlings) {
-    // SlingResult does not directly expose bonePathway, so pull it from the
-    // same SLING_SPECS that build the forward output. Forward output keeps
-    // overloadedBoneIndices / compensatingBoneIndices but we want labels so
-    // we reuse the muscleScores list as a coarse joint hint.
-    void fs;
+  const normalizeBone = (b: string) =>
+    b.toLowerCase().replace(/_(l|r|m)$/i, '').replace(/part\d+$/i, '').trim();
+  for (const def of getSlingDefinitions()) {
+    for (const bone of def.bonePathway) {
+      const key = normalizeBone(bone);
+      if (!key) continue;
+      const arr = boneToSlings.get(key) || [];
+      if (!arr.includes(def.id as SlingId)) arr.push(def.id as SlingId);
+      boneToSlings.set(key, arr);
+    }
   }
 
   for (const marker of markers) {
@@ -582,9 +592,36 @@ function scoreMarkersBySling(
       }
     }
 
-    // Bone-pathway match (used for ambiguous labels). We still consult the
-    // forward output: any sling whose overloadedBoneIndices includes a bone
-    // matching this marker's nearestBone gets a small boost.
+    // Bone-pathway match: use the real bone → sling lookup we built from
+    // SlingDefinition.bonePathway. Any sling whose pathway includes a bone
+    // close to this marker's nearestBone gets a meaningful boost (1.0).
+    if (marker.nearestBone) {
+      const key = normalizeBone(marker.nearestBone);
+      const slingsForBone = boneToSlings.get(key) || [];
+      for (const slingId of slingsForBone) {
+        matched = true;
+        if (!perSling.has(slingId)) {
+          perSling.set(slingId, { score: 0, contributions: [], regions: new Set() });
+        }
+        const entry = perSling.get(slingId)!;
+        const w = 1.0 * symptomMul * sevMul;
+        entry.score += w;
+        // Record once per (marker, sling) so supportingMarkers de-dupes.
+        if (!entry.contributions.some(c => c.markerId === marker.id && c.region === 'bone-pathway')) {
+          entry.contributions.push({
+            markerId: marker.id,
+            bone: marker.nearestBone,
+            label: marker.anatomicalLabel || marker.nearestBone,
+            weight: w,
+            region: 'bone-pathway',
+          });
+        }
+      }
+    }
+
+    // Muscle-name fallback for slings whose pathway doesn't include the
+    // marker's nearest bone but whose muscleScores list includes it (small
+    // boost so the marker still influences ranking when bone names diverge).
     for (const fs of forwardSlings) {
       const boneHit = fs.muscleScores.some(ms =>
         marker.nearestBone &&
@@ -838,21 +875,28 @@ export function runDriverAnalysis(
 
   const { perSling, unmappedMarkers } = scoreMarkersBySling(markers, forwardOutput.slings);
 
+  // Min-2 hypotheses contract: when no marker maps cleanly to a sling region
+  // we still surface the two most-dysfunctional forward slings as low-
+  // confidence differentials so the panel never returns an empty hypothesis
+  // list when markers exist. We seed `perSling` with these candidates and
+  // let the rest of the pipeline run normally — that way recommendations,
+  // flow-graph and prediction-quality stay consistent.
   if (perSling.size === 0) {
-    return {
-      hasMarkers: true,
-      markerCount: markers.length,
-      hypotheses: [],
-      topHypothesis: null,
-      topFlowGraph: null,
-      recommendations: [],
-      fallbackNote:
-        'None of the placed markers map cleanly to a known sling region. Try placing markers nearer the muscle/joint of interest.',
-      predictionQuality: {
-        band: 'low',
-        note: 'Markers do not map to any known sling region — driver attribution skipped.',
-      },
-    };
+    const seed = [...forwardOutput.slings]
+      .sort((a, b) => {
+        const aw = a.status !== 'normal' ? 1 : 0;
+        const bw = b.status !== 'normal' ? 1 : 0;
+        if (aw !== bw) return bw - aw;
+        return (b.activationScore || 0) - (a.activationScore || 0);
+      })
+      .slice(0, 2);
+    for (const fs of seed) {
+      perSling.set(fs.slingId, {
+        score: 0.3,
+        contributions: [],
+        regions: new Set(),
+      });
+    }
   }
 
   const slingById = new Map<SlingId, SlingResult>();
@@ -960,19 +1004,72 @@ export function runDriverAnalysis(
       : `Sparse marker support (${markers.length}) — driver attribution is tentative.`;
   }
 
-  // Build recommendations from the top 1–2 hypotheses so we don't drown the
-  // engine tabs in noise. If the top two hypotheses have similar scores
-  // (within 25%), include both.
+  // Build recommendations from the top 1–2 hypotheses. Recommendations are
+  // primarily generated from the forward engine's `treatmentTargets` (which
+  // already encode muscle-specific intervention + priority + rationale for
+  // this analysis) and the templates serve as fallback defaults so every
+  // hypothesis still produces at least one card per modality. If the top
+  // two hypotheses have similar scores (within 25%), include both.
   const cutoffSling: SlingId[] = [top.slingId];
   if (hypotheses[1] && hypotheses[1].score >= top.score * 0.75) cutoffSling.push(hypotheses[1].slingId);
 
   const recommendations: SlingDrivenRecommendation[] = [];
+  // Map a forward intervention verb onto the modality + role used by the
+  // engine tabs. `release` is the only verb that maps to manual therapy and
+  // intentionally carries the calm-compensatory role since it down-regulates
+  // tissue downstream of the driver.
+  const interventionToModality: Record<
+    SlingTreatmentTarget['intervention'],
+    { modality: DriverModality; role: DriverRole; verb: string }
+  > = {
+    strengthen: { modality: 'exercise', role: 'restore', verb: 'Strengthen' },
+    activate: { modality: 'exercise', role: 'address-driver', verb: 'Activate' },
+    stabilize: { modality: 'exercise', role: 'restore', verb: 'Stabilize' },
+    release: { modality: 'manual_therapy', role: 'calm-compensatory', verb: 'Release' },
+  };
+
   for (const sid of cutoffSling) {
-    const slingLabel = slingById.get(sid)?.label ?? sid;
-    const slingColor = slingById.get(sid)?.color ?? '#06b6d4';
-    for (const tpl of SLING_REC_TEMPLATES[sid]) {
+    const fs = slingById.get(sid);
+    const slingLabel = fs?.label ?? sid;
+    const slingColor = fs?.color ?? '#06b6d4';
+
+    // 1) Forward-engine treatment targets — these are the highest-value
+    //    recommendations because they reflect the actual dysfunction the
+    //    forward engine measured (weak link, force reroute) for this sling.
+    const targets = fs?.treatmentTargets ?? [];
+    const seenIds = new Set<string>();
+    for (const tgt of targets.slice(0, 4)) {
+      const map = interventionToModality[tgt.intervention];
+      if (!map) continue;
+      const itemKey = `${map.verb}_${tgt.muscle}`.replace(/\s+/g, '_').toLowerCase();
+      const recId = `sling-rec::${sid}::${map.modality}::${itemKey}`;
+      if (seenIds.has(recId)) continue;
+      seenIds.add(recId);
       recommendations.push({
-        id: `sling-rec::${sid}::${tpl.modality}::${tpl.name.replace(/\s+/g, '_').toLowerCase()}`,
+        id: recId,
+        modality: map.modality,
+        role: map.role,
+        slingId: sid,
+        slingLabel,
+        slingColor,
+        name: `${map.verb} ${tgt.muscle}`,
+        target: tgt.muscle,
+        rationale: tgt.rationale,
+        matchKeywords: [tgt.muscle.toLowerCase(), map.verb.toLowerCase()],
+        intervention: tgt.intervention,
+      });
+    }
+
+    // 2) Template fallback — guarantees coverage across all modality tabs
+    //    (manual / EPA / lifestyle) even when the forward engine surfaced
+    //    only strength-flavoured targets. De-duplicates against forward-
+    //    derived recs by id so we never double-count a target.
+    for (const tpl of SLING_REC_TEMPLATES[sid]) {
+      const recId = `sling-rec::${sid}::${tpl.modality}::${tpl.name.replace(/\s+/g, '_').toLowerCase()}`;
+      if (seenIds.has(recId)) continue;
+      seenIds.add(recId);
+      recommendations.push({
+        id: recId,
         modality: tpl.modality,
         role: tpl.role,
         slingId: sid,

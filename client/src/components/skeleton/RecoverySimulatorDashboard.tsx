@@ -152,6 +152,23 @@ interface Props {
   /** Per-phase Manual Therapy Rx generator. Same contract as
    *  onGeneratePhaseExerciseRx for the manual-therapy endpoint. */
   onGeneratePhaseManualRx?: (req: PhaseRxRequest) => Promise<CustomManualTechniqueInput[]>;
+  /** Task #240 — patient-modifier breakdown produced by
+   *  `computePatientModifiers(effectivePatientFactors)`. When provided,
+   *  the dashboard renders a "What's affecting this curve" panel that
+   *  shows the top contributing factors (sorted by |multiplier-1|). */
+  patientModifiers?: import("@/lib/patientFactorsEngine").PatientModifierProfile | null;
+  /** Task #240 — count of clinician-edited factors (vs. auto-detected
+   *  baseline). Drives a small badge on the "What's affecting" header. */
+  patientFactorsOverrideCount?: number;
+  /** Task #240 — derived workDemand / fearAvoidance from the
+   *  structured occupational + psychosocial fields. Each may be null
+   *  when the form is left at "auto". Shown in the panel as a chip. */
+  derivedDrivers?: {
+    fearAvoidance: number | null;
+    workDemand: number | null;
+    fearAvoidanceContributors: string[];
+    workDemandContributors: string[];
+  };
   /** Promote per-phase generated exercises into the session-wide
    *  customExercises array so the simulation engine consumes them
    *  through buildCustomTreatmentProfiles. Parent merges into its own
@@ -657,6 +674,9 @@ export default function RecoverySimulatorDashboard({
   onOpenElectroTab,
   onGenerateElectroPlanForPhase,
   skeletonBiasInputs,
+  patientModifiers,
+  patientFactorsOverrideCount,
+  derivedDrivers,
 }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
   const [branches, setBranches] = useState<ScenarioBranch[]>(() => [defaultBranch(defaultInput())]);
@@ -2212,6 +2232,71 @@ export default function RecoverySimulatorDashboard({
                     </span>
                   ))}
                 </div>
+
+                {/* Task #240 — "What's affecting this curve" panel.
+                    Surfaces the top patient-factor multipliers (sorted by
+                    |multiplier - 1|) so clinicians can see *why* the curve
+                    looks the way it does. Driven by the modifierBreakdown
+                    array on `patientModifiers`, computed from the
+                    structured patient-factors form. */}
+                {patientModifiers && patientModifiers.modifierBreakdown.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-amber-700/40 bg-amber-950/15 p-2.5" data-testid="patient-factors-affecting-panel">
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-semibold text-amber-100">What&apos;s affecting this curve</span>
+                        {patientFactorsOverrideCount && patientFactorsOverrideCount > 0 ? (
+                          <Badge className="bg-amber-700/40 border-amber-600/60 text-amber-100 text-[9px]" title="Number of clinician-edited patient factors vs. auto-detected baseline">
+                            {patientFactorsOverrideCount} edited
+                          </Badge>
+                        ) : (
+                          <span className="text-[9px] text-gray-400 italic">auto-detected</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[9px]">
+                        {derivedDrivers && derivedDrivers.workDemand !== null && (
+                          <Badge className="bg-cyan-800/40 border-cyan-600/60 text-cyan-100 text-[9px]" title={`Derived from: ${derivedDrivers.workDemandContributors.join(', ') || 'occupational fields'}`}>
+                            workDemand {Math.round(derivedDrivers.workDemand * 100)}%
+                          </Badge>
+                        )}
+                        {derivedDrivers && derivedDrivers.fearAvoidance !== null && (
+                          <Badge className="bg-rose-800/40 border-rose-600/60 text-rose-100 text-[9px]" title={`Derived from: ${derivedDrivers.fearAvoidanceContributors.join(', ') || 'psychosocial fields'}`}>
+                            fearAvoidance {Math.round(derivedDrivers.fearAvoidance * 100)}%
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      {[...patientModifiers.modifierBreakdown]
+                        .sort((a, b) => Math.abs(b.multiplier - 1) - Math.abs(a.multiplier - 1))
+                        .slice(0, 5)
+                        .map((row, i) => {
+                          const delta = row.multiplier - 1;
+                          const helping = delta > 0
+                            ? row.factor.toLowerCase().includes('healing') || row.factor.toLowerCase().includes('compliance') || row.factor.toLowerCase().includes('tissue') || row.factor.toLowerCase().includes('support') || row.factor.toLowerCase().includes('efficacy')
+                            : !(row.factor.toLowerCase().includes('healing') || row.factor.toLowerCase().includes('compliance') || row.factor.toLowerCase().includes('tissue') || row.factor.toLowerCase().includes('support') || row.factor.toLowerCase().includes('efficacy'));
+                          const arrow = delta > 0 ? '▲' : delta < 0 ? '▼' : '·';
+                          const color = helping ? 'text-emerald-300' : delta === 0 ? 'text-gray-400' : 'text-red-300';
+                          const pct = Math.round(Math.abs(delta) * 100);
+                          return (
+                            <div key={`${row.factor}-${i}`} className="flex items-start justify-between gap-2 text-[10px] leading-snug" data-testid={`affecting-row-${i}`}>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-amber-100 font-semibold">{row.factor}</span>
+                                <span className="text-gray-400"> · {row.effect}</span>
+                              </div>
+                              <span className={`shrink-0 font-mono ${color}`} title={`Multiplier ×${row.multiplier.toFixed(2)}`}>
+                                {arrow} {pct}%
+                              </span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                    {patientModifiers.modifierBreakdown.length > 5 && (
+                      <div className="mt-1 text-[9px] text-gray-500 italic">
+                        +{patientModifiers.modifierBreakdown.length - 5} more factor{patientModifiers.modifierBreakdown.length - 5 === 1 ? '' : 's'} (smaller effect)
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Task #189 — Natural-recovery driver model overlay.
                     Renders the four explicit drivers as a sub-chart, the

@@ -10,6 +10,37 @@ export type SleepQuality = "good" | "fair" | "poor";
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "athletic";
 export type SideAffected = "dominant" | "non_dominant" | "bilateral" | "axial";
 
+// === Task #240 — Expanded Patient Context (5 field groups) ===
+// Each new field maps to one or more named simulator multipliers
+// (healingRate, tissueQuality, painSensitivity, recurrenceRisk,
+// psychosocial, compliance) with documented coefficients applied in
+// `computePatientModifiers`. All groups are optional with neutral
+// defaults so legacy cases continue to behave identically.
+
+// Group 1 — Comorbidities & lifestyle
+export type MenopausalStatus = "premenopausal" | "perimenopausal" | "postmenopausal" | "not_applicable" | "unknown";
+export interface CurrentMedications {
+  nsaids: boolean;          // chronic NSAIDs → tendon healing ×0.92
+  oralCorticosteroids: boolean; // tissue quality ×0.85
+  statins: boolean;         // tendon fatigue ×0.95
+  anticoagulants: boolean;  // bleeding/bruising risk flag
+}
+
+// Group 2 — Tissue-quality & history
+export type ImagingFindings = "none" | "mild_degenerative" | "moderate_degenerative" | "severe_degenerative" | "structural_lesion" | "unknown";
+
+// Group 3 — Sleep / nutrition / activity baseline
+export type ProteinIntake = "low" | "adequate" | "high" | "unknown";
+export type DailyStepsBand = "sedentary" | "low" | "moderate" | "active" | "very_active" | "unknown";
+
+// Group 4 — Psychosocial granularity (drives derived `fearAvoidance`)
+export type SocialSupportLevel = "low" | "moderate" | "high" | "unknown";
+
+// Group 5 — Occupational specifics (drives derived `workDemand`)
+export type LiftingFrequency = "none" | "occasional" | "frequent" | "heavy_repeated" | "unknown";
+export type RepetitiveTaskExposure = "none" | "low" | "moderate" | "high" | "unknown";
+export type SportSurface = "soft" | "mixed" | "hard" | "unknown";
+
 export interface PatientFactors {
   age: number | null;
   bmi: BmiCategory;
@@ -28,6 +59,36 @@ export interface PatientFactors {
   sideAffected: SideAffected;
   medicationUse: string[];
   comorbiditiesNotes: string;
+
+  // Group 1 — Comorbidities & lifestyle
+  menopausalStatus: MenopausalStatus;
+  currentMedications: CurrentMedications;
+  bmiNumeric: number | null;
+
+  // Group 2 — Tissue-quality & history
+  timeSinceLastEpisodeMonths: number | null;
+  priorSurgeryArea: boolean;
+  keyImagingFindings: ImagingFindings;
+
+  // Group 3 — Sleep / nutrition / activity baseline
+  sleepHours: number | null;
+  proteinIntake: ProteinIntake;
+  dailyStepsBand: DailyStepsBand;
+  trainingAgeYears: number | null;
+
+  // Group 4 — Psychosocial granularity (0–100 scales except socialSupport)
+  kinesiophobia: number | null;
+  painCatastrophizing: number | null;
+  selfEfficacy: number | null;
+  perceivedStress: number | null;
+  socialSupport: SocialSupportLevel;
+
+  // Group 5 — Occupational specifics
+  sittingHoursPerDay: number | null;
+  liftingFrequency: LiftingFrequency;
+  repetitiveTaskExposure: RepetitiveTaskExposure;
+  sportPosition: string;
+  sportSurface: SportSurface;
 }
 
 export const DEFAULT_PATIENT_FACTORS: PatientFactors = {
@@ -48,6 +109,36 @@ export const DEFAULT_PATIENT_FACTORS: PatientFactors = {
   sideAffected: "dominant",
   medicationUse: [],
   comorbiditiesNotes: "",
+
+  menopausalStatus: "unknown",
+  currentMedications: {
+    nsaids: false,
+    oralCorticosteroids: false,
+    statins: false,
+    anticoagulants: false,
+  },
+  bmiNumeric: null,
+
+  timeSinceLastEpisodeMonths: null,
+  priorSurgeryArea: false,
+  keyImagingFindings: "unknown",
+
+  sleepHours: null,
+  proteinIntake: "unknown",
+  dailyStepsBand: "unknown",
+  trainingAgeYears: null,
+
+  kinesiophobia: null,
+  painCatastrophizing: null,
+  selfEfficacy: null,
+  perceivedStress: null,
+  socialSupport: "unknown",
+
+  sittingHoursPerDay: null,
+  liftingFrequency: "unknown",
+  repetitiveTaskExposure: "unknown",
+  sportPosition: "",
+  sportSurface: "unknown",
 };
 
 export interface RecoveryPhase {
@@ -266,6 +357,204 @@ export function computePatientModifiers(factors: PatientFactors, conditionProfil
     positiveFactors.push("High expected compliance");
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Task #240 — Expanded Patient Context coefficients
+  // ─────────────────────────────────────────────────────────────────
+
+  // Group 1 — Comorbidities & lifestyle
+  if (factors.menopausalStatus === "postmenopausal") {
+    healingRate *= 0.92;
+    tissueQuality *= 0.92;
+    breakdown.push({ factor: "Postmenopausal", effect: "Reduced collagen synthesis & bone density", multiplier: 0.92 });
+    riskFlags.push("Postmenopausal — reduced oestrogen impacts tendon & bone healing");
+  } else if (factors.menopausalStatus === "perimenopausal") {
+    healingRate *= 0.96;
+    breakdown.push({ factor: "Perimenopausal", effect: "Hormonal fluctuation slightly slows healing", multiplier: 0.96 });
+  }
+
+  if (factors.currentMedications.oralCorticosteroids) {
+    tissueQuality *= 0.85;
+    healingRate *= 0.9;
+    riskFlags.push("Oral corticosteroids — significant tissue weakening, slower healing");
+    breakdown.push({ factor: "Oral corticosteroids", effect: "Tissue catabolism, healing impaired", multiplier: 0.85 });
+  }
+  if (factors.currentMedications.statins) {
+    tissueQuality *= 0.95;
+    breakdown.push({ factor: "Statins", effect: "Tendon-related muscle fatigue", multiplier: 0.95 });
+  }
+  if (factors.currentMedications.nsaids) {
+    healingRate *= 0.92;
+    breakdown.push({ factor: "Chronic NSAIDs", effect: "Suppress tendon/bone healing prostaglandins", multiplier: 0.92 });
+  }
+  if (factors.currentMedications.anticoagulants) {
+    riskFlags.push("Anticoagulants — bleeding/bruising risk with manual therapy & needling");
+  }
+
+  // Numeric BMI overrides category-derived adjustment if more extreme
+  if (factors.bmiNumeric !== null && factors.bmiNumeric > 0) {
+    if (factors.bmiNumeric >= 35) {
+      healingRate *= 0.92;
+      recurrenceRisk *= 1.15;
+      breakdown.push({ factor: "BMI ≥35", effect: `BMI ${factors.bmiNumeric.toFixed(1)} — class II+ obesity load`, multiplier: 0.92 });
+    } else if (factors.bmiNumeric < 18.5) {
+      tissueQuality *= 0.95;
+      breakdown.push({ factor: `BMI ${factors.bmiNumeric.toFixed(1)}`, effect: "Underweight — reduced tissue reserves", multiplier: 0.95 });
+    }
+  }
+
+  // Group 2 — Tissue-quality & history
+  if (factors.timeSinceLastEpisodeMonths !== null && factors.previousEpisodes > 0) {
+    if (factors.timeSinceLastEpisodeMonths < 3) {
+      recurrenceRisk *= 1.2;
+      tissueQuality *= 0.95;
+      riskFlags.push(`Last episode <3 months ago — tissue still vulnerable`);
+      breakdown.push({ factor: "Recent episode (<3mo)", effect: "Tissue not fully remodelled", multiplier: 0.95 });
+    } else if (factors.timeSinceLastEpisodeMonths >= 12) {
+      breakdown.push({ factor: "Last episode ≥12mo", effect: "Adequate inter-episode recovery window", multiplier: 1.05 });
+      positiveFactors.push("Long inter-episode interval (>1y)");
+    }
+  }
+
+  if (factors.priorSurgeryArea) {
+    tissueQuality *= 0.92;
+    breakdown.push({ factor: "Prior surgery (same area)", effect: "Local scarring, altered architecture", multiplier: 0.92 });
+    riskFlags.push("Prior surgery on the affected area — expect adhesion/scar effects");
+  }
+
+  if (factors.keyImagingFindings === "severe_degenerative") {
+    healingRate *= 0.9;
+    tissueQuality *= 0.85;
+    breakdown.push({ factor: "Imaging: severe degeneration", effect: "Reduced regenerative substrate", multiplier: 0.85 });
+    riskFlags.push("Severe degenerative imaging findings — slower tissue response");
+  } else if (factors.keyImagingFindings === "moderate_degenerative") {
+    tissueQuality *= 0.95;
+    breakdown.push({ factor: "Imaging: moderate degeneration", effect: "Moderate tissue compromise", multiplier: 0.95 });
+  } else if (factors.keyImagingFindings === "structural_lesion") {
+    healingRate *= 0.85;
+    breakdown.push({ factor: "Imaging: structural lesion", effect: "Discrete lesion limits intrinsic healing", multiplier: 0.85 });
+    riskFlags.push("Structural lesion identified — slower & ceiling-limited recovery");
+  } else if (factors.keyImagingFindings === "none" || factors.keyImagingFindings === "mild_degenerative") {
+    positiveFactors.push("Unremarkable / mild imaging — no structural penalty");
+  }
+
+  // Group 3 — Sleep / nutrition / activity baseline
+  if (factors.sleepHours !== null && factors.sleepHours > 0) {
+    if (factors.sleepHours < 6) {
+      healingRate *= 0.85;
+      painSensitivity *= 1.2;
+      breakdown.push({ factor: `Sleep ${factors.sleepHours.toFixed(1)}h`, effect: "Sleep debt — impaired anabolic recovery", multiplier: 0.85 });
+      riskFlags.push("Short sleep (<6h) — major recovery & pain modulation impairment");
+    } else if (factors.sleepHours >= 7 && factors.sleepHours <= 9) {
+      breakdown.push({ factor: `Sleep ${factors.sleepHours.toFixed(1)}h`, effect: "Optimal sleep window", multiplier: 1.05 });
+      positiveFactors.push("Sleep within optimal 7–9h band");
+    }
+  }
+
+  if (factors.proteinIntake === "low") {
+    tissueQuality *= 0.92;
+    healingRate *= 0.95;
+    breakdown.push({ factor: "Protein intake (low)", effect: "Insufficient amino acid supply for repair", multiplier: 0.92 });
+    riskFlags.push("Low protein intake — tissue repair substrate inadequate");
+  } else if (factors.proteinIntake === "high") {
+    breakdown.push({ factor: "Protein intake (high)", effect: "Ample repair substrate", multiplier: 1.05 });
+    positiveFactors.push("High protein intake supports tissue repair");
+  }
+
+  if (factors.dailyStepsBand === "sedentary") {
+    healingRate *= 0.92;
+    recurrenceRisk *= 1.1;
+    breakdown.push({ factor: "Daily steps: sedentary", effect: "Low circulation & deconditioning", multiplier: 0.92 });
+  } else if (factors.dailyStepsBand === "very_active") {
+    breakdown.push({ factor: "Daily steps: very active", effect: "High baseline circulation & capacity", multiplier: 1.05 });
+    positiveFactors.push("Very active baseline — strong circulation & capacity");
+  }
+
+  if (factors.trainingAgeYears !== null && factors.trainingAgeYears >= 5) {
+    tissueQuality *= 1.05;
+    breakdown.push({ factor: `Training age ${factors.trainingAgeYears}y`, effect: "Resilient tissue & motor patterns", multiplier: 1.05 });
+    positiveFactors.push("Long training history — robust tissue & motor control");
+  } else if (factors.trainingAgeYears !== null && factors.trainingAgeYears < 1) {
+    breakdown.push({ factor: "Training age <1y", effect: "Untrained tissue — slower load progression", multiplier: 0.95 });
+  }
+
+  // Group 4 — Psychosocial granularity
+  if (factors.kinesiophobia !== null && factors.kinesiophobia >= 60) {
+    psychosocial *= 0.85;
+    healingRate *= 0.92;
+    breakdown.push({ factor: `Kinesiophobia ${factors.kinesiophobia}`, effect: "Movement avoidance limits dose adherence", multiplier: 0.85 });
+    riskFlags.push("High kinesiophobia — fear of movement limits exercise adherence");
+  } else if (factors.kinesiophobia !== null && factors.kinesiophobia <= 30) {
+    positiveFactors.push("Low kinesiophobia — willing to load");
+  }
+
+  if (factors.painCatastrophizing !== null && factors.painCatastrophizing >= 60) {
+    painSensitivity *= 1.25;
+    psychosocial *= 0.85;
+    breakdown.push({ factor: `Catastrophizing ${factors.painCatastrophizing}`, effect: "Amplifies central pain processing", multiplier: 0.85 });
+    riskFlags.push("High pain catastrophizing — amplified pain perception, worse outcomes");
+  }
+
+  if (factors.selfEfficacy !== null) {
+    if (factors.selfEfficacy >= 70) {
+      psychosocial *= 1.1;
+      complianceMult = Math.min(1.0, complianceMult * 1.1);
+      breakdown.push({ factor: `Self-efficacy ${factors.selfEfficacy}`, effect: "Drives adherence & active coping", multiplier: 1.1 });
+      positiveFactors.push("High self-efficacy — strong active coping");
+    } else if (factors.selfEfficacy <= 30) {
+      psychosocial *= 0.9;
+      complianceMult *= 0.9;
+      breakdown.push({ factor: `Self-efficacy ${factors.selfEfficacy}`, effect: "Low confidence reduces adherence", multiplier: 0.9 });
+      riskFlags.push("Low self-efficacy — adherence & active coping at risk");
+    }
+  }
+
+  if (factors.perceivedStress !== null && factors.perceivedStress >= 60) {
+    healingRate *= 0.9;
+    psychosocial *= 0.9;
+    breakdown.push({ factor: `Perceived stress ${factors.perceivedStress}`, effect: "Cortisol load impairs anabolic recovery", multiplier: 0.9 });
+    riskFlags.push("High perceived stress — impaired healing & flare risk");
+  }
+
+  if (factors.socialSupport === "low") {
+    psychosocial *= 0.9;
+    complianceMult *= 0.95;
+    breakdown.push({ factor: "Social support: low", effect: "Reduced behavioural reinforcement", multiplier: 0.9 });
+    riskFlags.push("Low social support — adherence and recovery at risk");
+  } else if (factors.socialSupport === "high") {
+    breakdown.push({ factor: "Social support: high", effect: "Strong behavioural reinforcement", multiplier: 1.05 });
+    positiveFactors.push("Strong social support");
+  }
+
+  // Group 5 — Occupational specifics
+  if (factors.sittingHoursPerDay !== null && factors.sittingHoursPerDay >= 8) {
+    recurrenceRisk *= 1.15;
+    breakdown.push({ factor: `Sitting ${factors.sittingHoursPerDay}h/day`, effect: "Prolonged static loading drives recurrence", multiplier: 0.95 });
+    riskFlags.push("Prolonged sitting (≥8h/day) — recurrence and stiffness risk");
+  }
+
+  if (factors.liftingFrequency === "heavy_repeated") {
+    recurrenceRisk *= 1.3;
+    breakdown.push({ factor: "Heavy repeated lifting", effect: "Cumulative tissue load drives recurrence", multiplier: 0.85 });
+    riskFlags.push("Heavy repeated lifting at work — high recurrence risk");
+  } else if (factors.liftingFrequency === "frequent") {
+    recurrenceRisk *= 1.15;
+    breakdown.push({ factor: "Frequent lifting", effect: "Elevated cumulative load", multiplier: 0.92 });
+  }
+
+  if (factors.repetitiveTaskExposure === "high") {
+    recurrenceRisk *= 1.2;
+    breakdown.push({ factor: "Repetitive tasks (high)", effect: "Tendinopathy/RSI cumulative exposure", multiplier: 0.9 });
+    riskFlags.push("High repetitive task exposure — overuse driver");
+  } else if (factors.repetitiveTaskExposure === "moderate") {
+    recurrenceRisk *= 1.1;
+    breakdown.push({ factor: "Repetitive tasks (moderate)", effect: "Moderate cumulative exposure", multiplier: 0.95 });
+  }
+
+  if (factors.sportSurface === "hard") {
+    recurrenceRisk *= 1.1;
+    breakdown.push({ factor: "Hard sport surface", effect: "Higher impact loading per step", multiplier: 0.95 });
+  }
+
   const overallRecovery = Math.max(0.3, Math.min(1.5,
     healingRate * 0.35 +
     (1 / Math.max(0.5, painSensitivity)) * 0.15 +
@@ -304,6 +593,110 @@ export function computePatientModifiers(factors: PatientFactors, conditionProfil
     riskFlags,
     positiveFactors,
     modifierBreakdown: breakdown,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Task #240 — Derived aggregates from structured fields
+//
+// The recovery sim's existing `SimulationInput.workDemand` and the
+// initial `RecoveryState.fearAvoidance` were free sliders before;
+// they are now driven from the new structured fields whenever the
+// clinician fills them in. Returns nulls for fields that should fall
+// back to the engine's pre-existing defaults.
+// ─────────────────────────────────────────────────────────────────
+export function derivePsychosocialAndOccupationalDrivers(factors: PatientFactors): {
+  fearAvoidance: number | null;
+  workDemand: number | null;
+  fearAvoidanceContributors: { factor: string; weight: number }[];
+  workDemandContributors: { factor: string; weight: number }[];
+} {
+  const clamp01 = (v: number) => Math.max(0, Math.min(100, v));
+
+  // Derived fearAvoidance: weighted blend of the four psychosocial
+  // 0–100 scales. Self-efficacy is inverted (high self-efficacy
+  // reduces fear-avoidance). Returns null if no granular data given
+  // so the engine keeps using its irritability-derived default.
+  const psychosocialContribs: { factor: string; weight: number }[] = [];
+  let psychosocialSum = 0;
+  let psychosocialWeightTotal = 0;
+  if (factors.kinesiophobia !== null) {
+    const w = 0.4;
+    psychosocialSum += factors.kinesiophobia * w;
+    psychosocialWeightTotal += w;
+    psychosocialContribs.push({ factor: "Kinesiophobia", weight: w });
+  }
+  if (factors.painCatastrophizing !== null) {
+    const w = 0.3;
+    psychosocialSum += factors.painCatastrophizing * w;
+    psychosocialWeightTotal += w;
+    psychosocialContribs.push({ factor: "Pain catastrophizing", weight: w });
+  }
+  if (factors.perceivedStress !== null) {
+    const w = 0.2;
+    psychosocialSum += factors.perceivedStress * w;
+    psychosocialWeightTotal += w;
+    psychosocialContribs.push({ factor: "Perceived stress", weight: w });
+  }
+  if (factors.selfEfficacy !== null) {
+    const w = 0.1;
+    psychosocialSum += (100 - factors.selfEfficacy) * w; // inverted
+    psychosocialWeightTotal += w;
+    psychosocialContribs.push({ factor: "Self-efficacy (inv)", weight: w });
+  }
+  let fearAvoidance: number | null = null;
+  if (psychosocialWeightTotal > 0) {
+    fearAvoidance = clamp01(psychosocialSum / psychosocialWeightTotal);
+  }
+
+  // Derived workDemand: base from activityLevel + occupational add-ons.
+  const occContribs: { factor: string; weight: number }[] = [];
+  let activityBase: number | null = null;
+  switch (factors.activityLevel) {
+    case "sedentary": activityBase = 25; break;
+    case "light": activityBase = 35; break;
+    case "moderate": activityBase = 50; break;
+    case "active": activityBase = 65; break;
+    case "athletic": activityBase = 80; break;
+  }
+
+  let occBoost = 0;
+  let hasOccData = false;
+  if (factors.sittingHoursPerDay !== null && factors.sittingHoursPerDay >= 8) {
+    occBoost += 5; hasOccData = true;
+    occContribs.push({ factor: `Sitting ${factors.sittingHoursPerDay}h/day`, weight: 5 });
+  }
+  if (factors.liftingFrequency === "heavy_repeated") {
+    occBoost += 25; hasOccData = true;
+    occContribs.push({ factor: "Heavy repeated lifting", weight: 25 });
+  } else if (factors.liftingFrequency === "frequent") {
+    occBoost += 15; hasOccData = true;
+    occContribs.push({ factor: "Frequent lifting", weight: 15 });
+  } else if (factors.liftingFrequency === "occasional") {
+    occBoost += 5; hasOccData = true;
+    occContribs.push({ factor: "Occasional lifting", weight: 5 });
+  }
+  if (factors.repetitiveTaskExposure === "high") {
+    occBoost += 15; hasOccData = true;
+    occContribs.push({ factor: "Repetitive tasks (high)", weight: 15 });
+  } else if (factors.repetitiveTaskExposure === "moderate") {
+    occBoost += 8; hasOccData = true;
+    occContribs.push({ factor: "Repetitive tasks (moderate)", weight: 8 });
+  }
+
+  let workDemand: number | null = null;
+  if (activityBase !== null || hasOccData) {
+    workDemand = clamp01((activityBase ?? 50) + occBoost);
+    if (activityBase !== null) {
+      occContribs.unshift({ factor: `Activity: ${factors.activityLevel}`, weight: activityBase });
+    }
+  }
+
+  return {
+    fearAvoidance,
+    workDemand,
+    fearAvoidanceContributors: psychosocialContribs,
+    workDemandContributors: occContribs,
   };
 }
 

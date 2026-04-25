@@ -206,7 +206,9 @@ const RecoverySimulatorDashboard = lazy(() => import("@/components/skeleton/Reco
 import { buildConditionContext, buildCustomExerciseId, buildCustomTechniqueId, extractJointLoadVectors, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput, type JointLoadVector } from "@/lib/recoverySimulationEngine";
 import { buildPrescriptionContext } from "@/lib/prescriptionAdapterEngine";
 import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDashboard";
-import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers } from "@/lib/patientFactorsEngine";
+import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers, derivePsychosocialAndOccupationalDrivers, type PatientFactors } from "@/lib/patientFactorsEngine";
+const PatientFactorsForm = lazy(() => import("@/components/skeleton/PatientFactorsForm"));
+import { countFactorOverrides } from "@/components/skeleton/PatientFactorsForm";
 const TimelineBottomBar = lazy(() => import("@/components/skeleton/TimelineBottomBar"));
 import type { PlaybackSyncState, TimelinePlaybackRef, ConditionPhaseInfo } from "@/components/skeleton/TimelineBottomBar";
 const MechanismTreatmentTab = lazy(() => import("@/components/skeleton/MechanismTreatmentTab"));
@@ -704,6 +706,12 @@ export default function PhysioGPT() {
   // AI-driven Patient Context state — session-level only (intentionally
   // not persisted across reloads, per task spec).
   const [patientContextState, setPatientContextState] = useState<PatientContextState>(EMPTY_PATIENT_CONTEXT_STATE);
+  // Task #240 — Structured Patient Factors live alongside the AI Q&A
+  // panel. They start as the pipeline-derived auto-population and are
+  // overridden by the clinician via the new PatientFactorsForm. The
+  // overrides are persisted to localStorage keyed by case fingerprint
+  // so opening the same case in a future session restores the edits.
+  const [patientFactorOverrides, setPatientFactorOverrides] = useState<Partial<PatientFactors> | null>(null);
   const patientContextPayload = useMemo(
     () => buildPatientContextPayload(patientContextState),
     [patientContextState],
@@ -722,6 +730,108 @@ export default function PhysioGPT() {
     if (!live) return false;
     return live !== patientContextState.predictionFingerprint;
   }, [patientContextState.predictionFingerprint, lastClinicalParseResult]);
+
+  // ───── Task #240 — Effective patient factors + persistence ─────
+  // The pipeline-derived `autoFactors` is the baseline; clinician edits
+  // are stored in `patientFactorOverrides` and merged on top. We
+  // persist overrides to localStorage keyed by case fingerprint so the
+  // same case re-opened in a future session restores its structured
+  // patient context.
+  const patientFactorsCaseKey = useMemo(() => {
+    const fp = predictionFingerprintFor(lastClinicalParseResult);
+    return fp ? `physiogpt:patientFactors:${fp}` : null;
+  }, [lastClinicalParseResult]);
+
+  const autoDetectedPatientFactors = useMemo(() => {
+    return autoPopulateFromPipeline(
+      extractionResult ?? null,
+      structuredReasoningData ?? null,
+      DEFAULT_PATIENT_FACTORS,
+    );
+  }, [extractionResult, structuredReasoningData]);
+
+  const effectivePatientFactors = useMemo<PatientFactors>(() => {
+    if (!patientFactorOverrides) return autoDetectedPatientFactors;
+    return {
+      ...autoDetectedPatientFactors,
+      ...patientFactorOverrides,
+      currentMedications: {
+        ...autoDetectedPatientFactors.currentMedications,
+        ...(patientFactorOverrides.currentMedications ?? {}),
+      },
+    };
+  }, [autoDetectedPatientFactors, patientFactorOverrides]);
+
+  // Load persisted overrides whenever the case fingerprint changes
+  useEffect(() => {
+    if (!patientFactorsCaseKey) {
+      setPatientFactorOverrides(null);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(patientFactorsCaseKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setPatientFactorOverrides(parsed as Partial<PatientFactors>);
+          return;
+        }
+      }
+    } catch {/* ignore localStorage failures */}
+    setPatientFactorOverrides(null);
+  }, [patientFactorsCaseKey]);
+
+  // Persist overrides on change
+  useEffect(() => {
+    if (!patientFactorsCaseKey) return;
+    try {
+      if (patientFactorOverrides && Object.keys(patientFactorOverrides).length > 0) {
+        window.localStorage.setItem(patientFactorsCaseKey, JSON.stringify(patientFactorOverrides));
+      } else {
+        window.localStorage.removeItem(patientFactorsCaseKey);
+      }
+    } catch {/* ignore localStorage failures (quota, private mode) */}
+  }, [patientFactorsCaseKey, patientFactorOverrides]);
+
+  // Compute overrides as the diff between user-edited factors and the
+  // auto-detected baseline so persistence stays minimal and the
+  // clinician can always click Reset to drop back to pipeline values.
+  const handlePatientFactorsChange = useCallback((next: PatientFactors) => {
+    const auto = autoDetectedPatientFactors;
+    const overrides: Partial<PatientFactors> = {};
+    const keys: (keyof PatientFactors)[] = [
+      "menopausalStatus", "bmiNumeric", "timeSinceLastEpisodeMonths", "priorSurgeryArea",
+      "keyImagingFindings", "sleepHours", "proteinIntake", "dailyStepsBand", "trainingAgeYears",
+      "kinesiophobia", "painCatastrophizing", "selfEfficacy", "perceivedStress", "socialSupport",
+      "sittingHoursPerDay", "liftingFrequency", "repetitiveTaskExposure", "sportPosition", "sportSurface",
+    ];
+    for (const k of keys) {
+      if (JSON.stringify(next[k]) !== JSON.stringify(auto[k])) {
+        // @ts-expect-error — generic key copy across union types
+        overrides[k] = next[k];
+      }
+    }
+    if (JSON.stringify(next.currentMedications) !== JSON.stringify(auto.currentMedications)) {
+      overrides.currentMedications = next.currentMedications;
+    }
+    setPatientFactorOverrides(Object.keys(overrides).length > 0 ? overrides : null);
+  }, [autoDetectedPatientFactors]);
+
+  // Pre-computed modifiers + derived workDemand/fearAvoidance for the
+  // recovery sim and the "What's affecting this curve" panel.
+  const effectivePatientModifiers = useMemo(() => {
+    return computePatientModifiers(effectivePatientFactors, null);
+  }, [effectivePatientFactors]);
+
+  const derivedDrivers = useMemo(() => {
+    return derivePsychosocialAndOccupationalDrivers(effectivePatientFactors);
+  }, [effectivePatientFactors]);
+
+  const patientFactorsOverrideCount = useMemo(() => {
+    return countFactorOverrides(effectivePatientFactors, autoDetectedPatientFactors);
+  }, [effectivePatientFactors, autoDetectedPatientFactors]);
+  // ─────────────────────────────────────────────────────────────────
+
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
@@ -4823,12 +4933,10 @@ ${ddxList}`;
     }
     const pathologyText = pathologyParts.length > 0 ? pathologyParts.join(' | ') : null;
 
-    const factors = autoPopulateFromPipeline(
-      extractionResult ?? null,
-      structuredReasoningData ?? null,
-      DEFAULT_PATIENT_FACTORS,
-    );
-    const mods = computePatientModifiers(factors, null);
+    // Task #240 — use the effective (auto-populated + clinician-edited)
+    // patient factors so structured-form edits flow into the sim.
+    const factors = effectivePatientFactors;
+    const mods = effectivePatientModifiers;
 
     return buildConditionContext({
       mainComplaint: pathologyText,
@@ -4854,7 +4962,7 @@ ${ddxList}`;
       // load components on the active skeleton.
       jointLoadVectors: extractJointLoadVectors(hudForceAnalysis ?? null, { topN: 6 }),
     });
-  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, slingActivationOverrides, collectModelConfigDeviations, hudForceAnalysis]);
+  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, slingActivationOverrides, collectModelConfigDeviations, hudForceAnalysis, effectivePatientFactors, effectivePatientModifiers]);
 
   const naturalTimelineRequestContext = useMemo<NaturalTimelineRequestContext | null>(() => {
     if (!showRecoverySim) return null;
@@ -11081,7 +11189,15 @@ ${ddxList}`;
                     irritability: extractionResult?.irritability === 'high' ? 75 : extractionResult?.irritability === 'low' ? 25 : 50,
                     acuity: extractionResult?.duration === 'acute' ? 'acute' : extractionResult?.duration === 'chronic' ? 'chronic' : 'subacute',
                     patientAdherence: 0.8,
+                    // Task #240 — derived from the structured Patient
+                    // Factors form (occupational specifics) when set;
+                    // otherwise the dashboard's own default takes over.
+                    ...(derivedDrivers.workDemand !== null ? { workDemand: derivedDrivers.workDemand } : {}),
+                    ...(derivedDrivers.fearAvoidance !== null ? { initialState: { fearAvoidance: derivedDrivers.fearAvoidance } } : {}),
                   }}
+                  patientModifiers={effectivePatientModifiers}
+                  patientFactorsOverrideCount={patientFactorsOverrideCount}
+                  derivedDrivers={derivedDrivers}
                 />
               </Suspense>
               );
@@ -12466,7 +12582,7 @@ ${ddxList}`;
             into the prediction re-run, the natural-history timeline,
             the case-specific treatment plan and the recovery sim. */}
         {lastClinicalParseResult && (
-          <div ref={patientContextSectionRef} className="mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
+          <div ref={patientContextSectionRef} className="mt-2 animate-in fade-in slide-in-from-top-1 duration-300 space-y-2">
             <PatientContextPanel
               parseResult={lastClinicalParseResult}
               state={patientContextState}
@@ -12482,6 +12598,17 @@ ${ddxList}`;
                 clinicalTextInputRef.current?.triggerIncrementalParse();
               }}
             />
+            {/* Task #240 — Structured Patient Factors form. Lives next
+                to the AI Q&A panel; edits flow into the recovery sim's
+                multipliers via `effectivePatientFactors`. */}
+            <Suspense fallback={<LazyPanelFallback />}>
+              <PatientFactorsForm
+                factors={effectivePatientFactors}
+                autoDetected={autoDetectedPatientFactors}
+                overriddenCount={patientFactorsOverrideCount}
+                onChange={handlePatientFactorsChange}
+              />
+            </Suspense>
           </div>
         )}
         {hasClinicalTextData && (

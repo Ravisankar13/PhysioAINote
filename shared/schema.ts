@@ -5842,6 +5842,9 @@ export interface TendinopathyLoadingResponse {
 // using real adherence/symptom values instead of the static plan.
 export const recoveryWeeklyCheckIns = pgTable("recovery_weekly_check_ins", {
   id: serial("id").primaryKey(),
+  // Owner of the check-in. Scoped per (userId, caseId, week) so one
+  // clinician's case data can never be read or modified by another.
+  userId: integer("user_id").notNull(),
   caseId: text("case_id").notNull(),
   week: integer("week").notNull(),
   pain: integer("pain").notNull(),
@@ -5852,12 +5855,15 @@ export const recoveryWeeklyCheckIns = pgTable("recovery_weekly_check_ins", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
-  caseWeekUnique: uniqueIndex("recovery_weekly_check_ins_case_week_unique").on(t.caseId, t.week),
+  userCaseWeekUnique: uniqueIndex("recovery_weekly_check_ins_user_case_week_unique").on(t.userId, t.caseId, t.week),
 }));
 
+// Insert schema omits userId — it is server-injected from the
+// authenticated session, never trusted from the client payload.
 export const insertRecoveryWeeklyCheckInSchema = createInsertSchema(recoveryWeeklyCheckIns).omit({
   id: true,
   createdAt: true,
+  userId: true,
 }).extend({
   caseId: z.string().min(1).max(200),
   week: z.number().int().min(0).max(520),

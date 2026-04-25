@@ -9758,11 +9758,16 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
   // their own case workspace; the caseId is a free-form clinician-
   // generated key (e.g. patient hash + condition slug). No cross-user
   // ownership model in v1 — out-of-scope per the task brief.
+  // All check-in operations are scoped by the authenticated user's id.
+  // The caseId is a free-form clinician-provided slug, so without
+  // userId scoping any logged-in user could read/modify another's
+  // check-ins by guessing the slug. userId comes from the session and
+  // is never trusted from the client payload.
   app.get("/api/recovery-weekly-check-ins/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const caseId = String(req.params.caseId || "").trim();
       if (!caseId) return res.status(400).json({ error: "Missing caseId" });
-      const rows = await storage.listRecoveryWeeklyCheckIns(caseId);
+      const rows = await storage.listRecoveryWeeklyCheckIns(req.user!.id, caseId);
       res.json(rows);
     } catch (error: unknown) {
       console.error("List recovery weekly check-ins error:", error);
@@ -9778,7 +9783,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid check-in payload", details: parsed.error.flatten() });
       }
-      const row = await storage.upsertRecoveryWeeklyCheckIn(parsed.data);
+      const row = await storage.upsertRecoveryWeeklyCheckIn(req.user!.id, parsed.data);
       res.json(row);
     } catch (error: unknown) {
       console.error("Upsert recovery weekly check-in error:", error);
@@ -9793,7 +9798,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const week = Number(req.params.week);
       if (!caseId) return res.status(400).json({ error: "Missing caseId" });
       if (!Number.isFinite(week) || week < 0) return res.status(400).json({ error: "Invalid week" });
-      await storage.deleteRecoveryWeeklyCheckIn(caseId, week);
+      await storage.deleteRecoveryWeeklyCheckIn(req.user!.id, caseId, week);
       res.json({ success: true });
     } catch (error: unknown) {
       console.error("Delete recovery weekly check-in error:", error);

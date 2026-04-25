@@ -100,7 +100,14 @@ export default function WeeklyCheckInPanel({
   const [sleepHours, setSleepHours] = useState<string>('7');
   const [notes, setNotes] = useState<string>('');
 
-  const queryKey = ['/api/recovery-weekly-check-ins', caseId];
+  // The default queryFn fetches `queryKey[0]` as a URL, so the caseId
+  // MUST live in the URL itself (not as a separate cache segment) or
+  // the request hits the wrong route. Same shape is reused by the
+  // dashboard so invalidation works across both consumers.
+  const queryKey = useMemo(
+    () => [`/api/recovery-weekly-check-ins/${encodeURIComponent(caseId)}`] as const,
+    [caseId],
+  );
   const { data: checkIns = [], isLoading } = useQuery<WeeklyCheckInRecord[]>({
     queryKey,
     enabled: !!caseId,
@@ -116,6 +123,8 @@ export default function WeeklyCheckInPanel({
     [checkIns, originalPainSeries],
   );
 
+  // apiRequest signature is (url, method, data?) and returns the parsed
+  // JSON body directly — there is no Response object to call .json() on.
   const upsertMutation = useMutation({
     mutationFn: async (payload: {
       caseId: string;
@@ -127,8 +136,7 @@ export default function WeeklyCheckInPanel({
       sleepHours: number | null;
       notes: string | null;
     }) => {
-      const res = await apiRequest('POST', '/api/recovery-weekly-check-ins', payload);
-      return res.json();
+      return await apiRequest('/api/recovery-weekly-check-ins', 'POST', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
@@ -142,8 +150,10 @@ export default function WeeklyCheckInPanel({
 
   const deleteMutation = useMutation({
     mutationFn: async (w: number) => {
-      const res = await apiRequest('DELETE', `/api/recovery-weekly-check-ins/${encodeURIComponent(caseId)}/${w}`);
-      return res.json().catch(() => ({}));
+      return await apiRequest(
+        `/api/recovery-weekly-check-ins/${encodeURIComponent(caseId)}/${w}`,
+        'DELETE',
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
@@ -203,10 +213,34 @@ export default function WeeklyCheckInPanel({
             variant="outline"
             className="h-6 px-2 text-[10px] border-violet-600/50 bg-violet-950/40 text-violet-200 hover:bg-violet-900/60"
             onClick={() => {
-              setShowForm(v => !v);
-              setWeek(Math.max(1, defaultWeek || 1));
-              setSessionsPrescribed(defaultPrescribed || 1);
-              setSessionsCompleted(defaultPrescribed || 1);
+              const opening = !showForm;
+              setShowForm(opening);
+              if (opening) {
+                // Prefill from the most recent prior check-in so the
+                // clinician only edits what changed week-over-week.
+                // Falls back to sensible defaults on the first log.
+                const prior = sortedCheckIns.length > 0
+                  ? sortedCheckIns[sortedCheckIns.length - 1]
+                  : null;
+                const nextWeek = prior
+                  ? Math.min(totalWeeks, prior.week + 1)
+                  : Math.max(1, defaultWeek || 1);
+                setWeek(nextWeek);
+                setPain(prior ? prior.pain : 30);
+                setFlareSeverity(0); // Flares should not carry forward
+                setSessionsPrescribed(
+                  prior ? prior.sessionsPrescribed : (defaultPrescribed || 1),
+                );
+                setSessionsCompleted(
+                  prior ? prior.sessionsCompleted : (defaultPrescribed || 1),
+                );
+                setSleepHours(
+                  prior && prior.sleepHours != null
+                    ? String(Number(prior.sleepHours))
+                    : '7',
+                );
+                setNotes(''); // Notes are week-specific
+              }
             }}
             data-testid="weekly-check-in-toggle-form"
           >

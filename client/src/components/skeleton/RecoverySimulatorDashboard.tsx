@@ -964,8 +964,12 @@ export default function RecoverySimulatorDashboard({
   /** Task #241 — Live check-ins fetched from the server. Empty array
    *  while loading or when no caseId has been derived yet so all
    *  downstream simulator calls remain pure pre-checkin baselines. */
+  // The default queryFn fetches `queryKey[0]` as the URL, so the
+  // caseId must live in the URL itself. The same key shape is reused
+  // by WeeklyCheckInPanel so that mutation invalidation refreshes
+  // both consumers atomically.
   const { data: weeklyCheckInRows = [] } = useQuery<WeeklyCheckInRecord[]>({
-    queryKey: ['/api/recovery-weekly-check-ins', caseId],
+    queryKey: [`/api/recovery-weekly-check-ins/${encodeURIComponent(caseId)}`],
     enabled: !!caseId,
   });
   const engineCheckIns = useMemo(
@@ -2475,6 +2479,28 @@ export default function RecoverySimulatorDashboard({
                     ? 'Driver-model natural recovery (irritability, load vs capacity, tissue capacity, sensitivity) modulated by skeleton-derived structural biases — drag to scrub.'
                     : 'Drag timeline or modify treatments to see changes'}
                 </div>
+                {/* Task #241 — tracking verdict rendered above the
+                    main chart so a clinician sees ahead/on/behind at
+                    a glance without opening the side panel. Only on
+                    the plan view (the natural-history view doesn't
+                    consume check-ins). */}
+                {trackingVerdict && !usingNaturalChart && (
+                  <div
+                    className={`mb-1 inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded border ${
+                      trackingVerdict.status === 'ahead'
+                        ? 'bg-emerald-600/20 text-emerald-200 border-emerald-500/40'
+                        : trackingVerdict.status === 'behind'
+                        ? 'bg-red-600/20 text-red-200 border-red-500/40'
+                        : 'bg-sky-600/20 text-sky-200 border-sky-500/40'
+                    }`}
+                    data-testid="chart-tracking-indicator"
+                    title={`Wk ${trackingVerdict.lastWeek}: actual pain ${trackingVerdict.gap >= 0 ? '+' : ''}${trackingVerdict.gap.toFixed(0)} vs original prediction.`}
+                  >
+                    {trackingVerdict.status === 'ahead' && <>Ahead of plan · wk {trackingVerdict.lastWeek} ({trackingVerdict.gap.toFixed(0)} vs predicted)</>}
+                    {trackingVerdict.status === 'behind' && <>Behind plan · wk {trackingVerdict.lastWeek} (+{trackingVerdict.gap.toFixed(0)} vs predicted)</>}
+                    {trackingVerdict.status === 'on' && <>On track · wk {trackingVerdict.lastWeek} (within ±5 of predicted)</>}
+                  </div>
+                )}
                 <div className="h-[260px] shrink-0 overflow-hidden">
                   <MiniChart
                     series={mainSeries}

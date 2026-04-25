@@ -770,9 +770,9 @@ export interface IStorage {
   deleteElectroConditionPreset(id: number): Promise<void>;
 
   // Recovery Simulator weekly check-ins (Task #241)
-  listRecoveryWeeklyCheckIns(caseId: string): Promise<RecoveryWeeklyCheckIn[]>;
-  upsertRecoveryWeeklyCheckIn(checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn>;
-  deleteRecoveryWeeklyCheckIn(caseId: string, week: number): Promise<void>;
+  listRecoveryWeeklyCheckIns(userId: number, caseId: string): Promise<RecoveryWeeklyCheckIn[]>;
+  upsertRecoveryWeeklyCheckIn(userId: number, checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn>;
+  deleteRecoveryWeeklyCheckIn(userId: number, caseId: string, week: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4981,15 +4981,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Recovery weekly check-ins (Task #241) ──────────────────────
-  async listRecoveryWeeklyCheckIns(caseId: string): Promise<RecoveryWeeklyCheckIn[]> {
+  // All operations are scoped by userId so one clinician's check-ins
+  // can never be read or modified by another (IDOR-safe even with
+  // guessable case slugs).
+  async listRecoveryWeeklyCheckIns(userId: number, caseId: string): Promise<RecoveryWeeklyCheckIn[]> {
     return await db
       .select()
       .from(recoveryWeeklyCheckIns)
-      .where(eq(recoveryWeeklyCheckIns.caseId, caseId))
+      .where(and(
+        eq(recoveryWeeklyCheckIns.userId, userId),
+        eq(recoveryWeeklyCheckIns.caseId, caseId),
+      ))
       .orderBy(recoveryWeeklyCheckIns.week);
   }
 
-  async upsertRecoveryWeeklyCheckIn(checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn> {
+  async upsertRecoveryWeeklyCheckIn(userId: number, checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn> {
     const sleepHoursValue =
       checkIn.sleepHours === null || checkIn.sleepHours === undefined
         ? null
@@ -4997,6 +5003,7 @@ export class DatabaseStorage implements IStorage {
         ? String(checkIn.sleepHours)
         : checkIn.sleepHours;
     const values = {
+      userId,
       caseId: checkIn.caseId,
       week: checkIn.week,
       pain: checkIn.pain,
@@ -5010,7 +5017,7 @@ export class DatabaseStorage implements IStorage {
       .insert(recoveryWeeklyCheckIns)
       .values(values)
       .onConflictDoUpdate({
-        target: [recoveryWeeklyCheckIns.caseId, recoveryWeeklyCheckIns.week],
+        target: [recoveryWeeklyCheckIns.userId, recoveryWeeklyCheckIns.caseId, recoveryWeeklyCheckIns.week],
         set: {
           pain: values.pain,
           flareSeverity: values.flareSeverity,
@@ -5024,10 +5031,14 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async deleteRecoveryWeeklyCheckIn(caseId: string, week: number): Promise<void> {
+  async deleteRecoveryWeeklyCheckIn(userId: number, caseId: string, week: number): Promise<void> {
     await db
       .delete(recoveryWeeklyCheckIns)
-      .where(and(eq(recoveryWeeklyCheckIns.caseId, caseId), eq(recoveryWeeklyCheckIns.week, week)));
+      .where(and(
+        eq(recoveryWeeklyCheckIns.userId, userId),
+        eq(recoveryWeeklyCheckIns.caseId, caseId),
+        eq(recoveryWeeklyCheckIns.week, week),
+      ));
   }
 }
 

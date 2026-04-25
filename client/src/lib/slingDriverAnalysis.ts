@@ -77,6 +77,17 @@ export interface FlowNode {
   compensating: boolean;
   x: number;
   y: number;
+  /** 0–100 % activation of the parent sling at this node, propagated from
+   *  the forward engine so popovers can quantify the "how loaded is this
+   *  link?" question. */
+  activationPct: number;
+  /** "anchor" / "transmitter" / "endpoint" — where this node sits in the
+   *  intended chain. Drives popover wording and helps clinicians reason
+   *  about whether to address the driver or restore the endpoint. */
+  roleInChain: 'anchor' | 'transmitter' | 'endpoint';
+  /** Optional inline evidence sentence (forward-engine clinical note +
+   *  pain-marker label when present). Rendered in the popover. */
+  evidenceNote?: string;
 }
 
 export interface FlowEdge {
@@ -118,6 +129,15 @@ export interface SlingDrivenRecommendation {
   dosage?: string;
 }
 
+export interface PredictionQuality {
+  /** 'high' when ≥3 well-localised markers feed ≥1 strong hypothesis;
+   *  'moderate' when partial coverage; 'low' when extremely sparse. */
+  band: 'high' | 'moderate' | 'low';
+  /** User-facing sentence explaining the limit ("only 1 marker placed —
+   *  driver attribution is tentative"). Always set; null when no marker. */
+  note: string | null;
+}
+
 export interface DriverAnalysisResult {
   hasMarkers: boolean;
   markerCount: number;
@@ -131,6 +151,9 @@ export interface DriverAnalysisResult {
   recommendations: SlingDrivenRecommendation[];
   /** All-text fallback shown when we cannot map any marker to a sling. */
   fallbackNote: string | null;
+  /** Prediction-quality envelope so the panel can warn the clinician
+   *  when input is sparse. Always present (never null). */
+  predictionQuality: PredictionQuality;
 }
 
 // ---------------------------------------------------------------------------
@@ -683,13 +706,52 @@ function buildFlowGraph(
   const padY = 40;
   const step = nodeDefs.length > 1 ? (W - padX * 2) / (nodeDefs.length - 1) : 0;
 
+  // Per-bone overload count from forward output. Used in popover evidence
+  // text to anchor "this is loaded" claims. We can't compute a true % without
+  // the parent sling's full bone list, so we report the raw count.
+  const overloadShare = forwardSling?.overloadedBoneIndices?.length ?? 0;
+
   const nodes: FlowNode[] = nodeDefs.map((nd, i) => {
     const haystackList = markers.map(m => `${m.anatomicalLabel || ''} ${m.nearestBone || ''}`);
+    const matchingMarker = markers.find(m =>
+      (NODE_PIN_KEYWORDS[nd.id] || []).some(rx =>
+        rx.test(`${m.anatomicalLabel || ''} ${m.nearestBone || ''}`),
+      ),
+    );
     const pinned = (NODE_PIN_KEYWORDS[nd.id] || []).some(rx =>
       haystackList.some(h => rx.test(h)),
     );
     // Light wave so the chain reads as a path rather than a flat line.
     const yOffset = (i % 2 === 0 ? -1 : 1) * 8;
+    // Role in chain: first node is the anchor, last is the endpoint, the
+    // rest are transmitters. This is purely a presentation aid for the
+    // popover — the forward engine treats all nodes as peers.
+    const roleInChain: FlowNode['roleInChain'] =
+      i === 0 ? 'anchor' : i === nodeDefs.length - 1 ? 'endpoint' : 'transmitter';
+    // Activation %: blend the parent sling's activation with a small
+    // pinned-node bump so loaded links visibly read hotter than the rest
+    // of the chain in popovers. Capped at 100.
+    const slingActivationPct = Math.round(
+      Math.max(0, Math.min(100, hypothesis.activationScore * 100)),
+    );
+    const activationPct = Math.min(
+      100,
+      slingActivationPct + (pinned ? 15 : 0) + (i === 0 || i === nodeDefs.length - 1 ? 0 : -5),
+    );
+    // Evidence note: prefer the matching marker's anatomical label, fall
+    // back to forward-engine clinical note where possible.
+    const evidenceParts: string[] = [];
+    if (matchingMarker) {
+      evidenceParts.push(`Pain marker on ${matchingMarker.anatomicalLabel || matchingMarker.nearestBone}`);
+    }
+    if (pinned && hypothesis.status === 'overloaded' && overloadShare > 0) {
+      evidenceParts.push(`forward engine: ${overloadShare} overloaded bone${overloadShare === 1 ? '' : 's'} in this sling`);
+    } else if (hypothesis.status === 'compensating') {
+      evidenceParts.push('forward engine: compensatory recruitment detected');
+    } else if (hypothesis.status === 'underperforming') {
+      evidenceParts.push('forward engine: underperforming sling');
+    }
+    const evidenceNote = evidenceParts.length > 0 ? evidenceParts.join(' · ') : undefined;
     return {
       id: nd.id,
       label: nd.label,
@@ -698,6 +760,9 @@ function buildFlowGraph(
       compensating: hypothesis.status === 'compensating',
       x: padX + step * i,
       y: padY + yOffset,
+      activationPct,
+      roleInChain,
+      evidenceNote,
     };
   });
 
@@ -760,6 +825,12 @@ export function runDriverAnalysis(
       fallbackNote: markers.length === 0
         ? 'Place pain markers on the 3D skeleton to surface culpable-sling hypotheses.'
         : 'Sling forward analysis not yet ready — adjust the skeleton to populate biomechanical data.',
+      predictionQuality: {
+        band: 'low',
+        note: markers.length === 0
+          ? null
+          : 'Forward sling analysis not yet ready — driver attribution skipped.',
+      },
     };
   }
 
@@ -775,6 +846,10 @@ export function runDriverAnalysis(
       recommendations: [],
       fallbackNote:
         'None of the placed markers map cleanly to a known sling region. Try placing markers nearer the muscle/joint of interest.',
+      predictionQuality: {
+        band: 'low',
+        note: 'Markers do not map to any known sling region — driver attribution skipped.',
+      },
     };
   }
 
@@ -822,10 +897,66 @@ export function runDriverAnalysis(
 
   hypotheses.sort((a, b) => b.score - a.score);
 
+  // Min-2 hypotheses fallback: when we only matched a single sling, surface
+  // the strongest unmatched alternative from the forward output (status !=
+  // normal preferred) so the panel can still present a differential. The
+  // fallback hypothesis carries low confidence and an explicit rationale.
+  if (hypotheses.length === 1) {
+    const usedId = hypotheses[0].slingId;
+    const fallbackCandidates = forwardOutput.slings
+      .filter(fs => fs.slingId !== usedId)
+      .sort((a, b) => {
+        const aw = a.status !== 'normal' ? 1 : 0;
+        const bw = b.status !== 'normal' ? 1 : 0;
+        if (aw !== bw) return bw - aw;
+        return (b.activationScore || 0) - (a.activationScore || 0);
+      });
+    const alt = fallbackCandidates[0];
+    if (alt) {
+      hypotheses.push({
+        slingId: alt.slingId,
+        slingLabel: alt.label,
+        color: alt.color,
+        score: Math.round(hypotheses[0].score * 0.4 * 10) / 10,
+        confidence: 'low',
+        rationale: `No direct marker support — surfaced as a differential because the forward engine reports ${alt.status} activation.`,
+        supportingMarkers: [],
+        loadedRegions: [],
+        intendedRole: INTENDED_ROLES[alt.slingId],
+        actualPattern: actualPatternFor(alt),
+        differentiationTests: (alt.assessmentTests && alt.assessmentTests.length > 0
+          ? alt.assessmentTests
+          : alt.commonDysfunctions || []
+        ).slice(0, 4),
+        status: alt.status,
+        activationScore: alt.activationScore,
+      });
+    }
+  }
+
   const top = hypotheses[0];
   const topFlowGraph = top
     ? buildFlowGraph(top, markers, slingById.get(top.slingId))
     : null;
+
+  // Prediction-quality envelope. We grade the analysis by (a) marker count,
+  // (b) the top hypothesis confidence, and (c) how many supporting markers
+  // back the top hypothesis. Used by the panel to render an inline caveat.
+  const topSupporting = top?.supportingMarkers.length ?? 0;
+  let qualityBand: PredictionQuality['band'] = 'low';
+  let qualityNote: string | null = null;
+  if (markers.length >= 3 && top?.confidence === 'high' && topSupporting >= 2) {
+    qualityBand = 'high';
+    qualityNote = `Driver attribution is well supported (${markers.length} markers · top hypothesis backed by ${topSupporting}).`;
+  } else if (markers.length >= 2 && (top?.confidence === 'moderate' || topSupporting >= 2)) {
+    qualityBand = 'moderate';
+    qualityNote = `Driver attribution is moderate — ${markers.length} marker${markers.length === 1 ? '' : 's'} placed; differentiation tests recommended.`;
+  } else {
+    qualityBand = 'low';
+    qualityNote = markers.length === 1
+      ? 'Only 1 marker placed — driver attribution is tentative. Add more markers for a stronger differential.'
+      : `Sparse marker support (${markers.length}) — driver attribution is tentative.`;
+  }
 
   // Build recommendations from the top 1–2 hypotheses so we don't drown the
   // engine tabs in noise. If the top two hypotheses have similar scores
@@ -865,6 +996,10 @@ export function runDriverAnalysis(
     fallbackNote: unmappedMarkers.length > 0 && hypotheses.length === 0
       ? `${unmappedMarkers.length} marker${unmappedMarkers.length === 1 ? '' : 's'} could not be mapped to a sling region.`
       : null,
+    predictionQuality: {
+      band: qualityBand,
+      note: qualityNote,
+    },
   };
 }
 
@@ -874,30 +1009,58 @@ export function runDriverAnalysis(
 // reorder lists. Pure, deterministic, called from useMemo.
 // ---------------------------------------------------------------------------
 
+/** Returns the FIRST recommendation that matches the given engine-tab item.
+ *  All four engine tabs use the single-match form to render one chip per
+ *  card and propagate one slingTag/slingRole into the cart. The signature
+ *  is intentionally `(name, target, recs, modality)` so a card can pass its
+ *  full target context in one call.
+ *
+ *  - `itemName` → exercise/technique/modality/lifestyle item name (primary).
+ *  - `targetText` → secondary haystack (target structure / description /
+ *     finding) so a recommendation that keys off "glute medius" still
+ *     matches a generic-sounding item title like "side-lying clamshell".
+ *  - `recommendations` → the full SlingDrivenRecommendation[] from the
+ *     active DriverAnalysisResult.
+ *  - `modality` → which engine tab is asking; only recs of this modality
+ *     can match. */
 export function matchRecommendationsForItem(
   itemName: string | undefined | null,
-  modality: DriverModality,
+  targetText: string | undefined | null,
   recommendations: SlingDrivenRecommendation[] | undefined | null,
-): SlingDrivenRecommendation[] {
-  if (!itemName || !recommendations || recommendations.length === 0) return [];
-  const hay = itemName.toLowerCase();
-  return recommendations.filter(rec =>
+  modality: DriverModality,
+): SlingDrivenRecommendation | undefined {
+  if (!recommendations || recommendations.length === 0) return undefined;
+  const hay = `${itemName ?? ''} ${targetText ?? ''}`.toLowerCase();
+  if (!hay.trim()) return undefined;
+  // Prefer 'restore' > 'address-driver' > 'calm-compensatory' so the chip
+  // reflects the highest-priority role available for this item.
+  const rolePriority: Record<DriverRole, number> = {
+    restore: 0,
+    'address-driver': 1,
+    'calm-compensatory': 2,
+  };
+  const matches = recommendations.filter(rec =>
     rec.modality === modality &&
     rec.matchKeywords.some(kw => kw && hay.includes(kw)),
   );
+  if (matches.length === 0) return undefined;
+  matches.sort((a, b) => rolePriority[a.role] - rolePriority[b.role]);
+  return matches[0];
 }
 
-/** Sort comparator: items with restore role first, then address-driver, then
- *  calm-compensatory, then untagged. Stable for items in the same band. */
+/** Sort comparator: items with restore role first, then address-driver,
+ *  then calm-compensatory, then untagged. Stable for items in the same
+ *  band. The getter returns the role of the (single) match the caller
+ *  has already resolved via `matchRecommendationsForItem`. */
 export function sortByDriverRole<T>(
   items: T[],
-  getRecs: (item: T) => SlingDrivenRecommendation[],
+  getRole: (item: T) => DriverRole | undefined,
 ): T[] {
   const bandOf = (item: T): number => {
-    const recs = getRecs(item);
-    if (recs.some(r => r.role === 'restore')) return 0;
-    if (recs.some(r => r.role === 'address-driver')) return 1;
-    if (recs.some(r => r.role === 'calm-compensatory')) return 2;
+    const role = getRole(item);
+    if (role === 'restore') return 0;
+    if (role === 'address-driver') return 1;
+    if (role === 'calm-compensatory') return 2;
     return 3;
   };
   return items

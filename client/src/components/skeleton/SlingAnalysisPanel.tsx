@@ -27,7 +27,7 @@ import {
   type DriverRole,
 } from '@/lib/slingDriverAnalysis';
 import SlingLoadFlowMap from './SlingLoadFlowMap';
-import { AddToPlanButton, makeCartId, type PlanCartItem, type PlanCartModality } from '@/lib/planCart';
+import { AddToPlanButton, makeCartId, usePlanCart, type PlanCartItem, type PlanCartModality } from '@/lib/planCart';
 
 interface SlingAnalysisPanelProps {
   analysis: SlingAnalysisResult | null;
@@ -485,6 +485,23 @@ function DriverAnalysisSection({ result }: { result: DriverAnalysisResult }) {
       </button>
       {expanded && (
         <div className="space-y-2">
+          {result.predictionQuality.note && (
+            <div
+              className={`rounded border px-2 py-1 text-[9px] leading-snug ${
+                result.predictionQuality.band === 'high'
+                  ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-200'
+                  : result.predictionQuality.band === 'moderate'
+                  ? 'border-amber-500/30 bg-amber-500/5 text-amber-200'
+                  : 'border-rose-500/30 bg-rose-500/5 text-rose-200'
+              }`}
+              data-testid={`sling-prediction-quality-${result.predictionQuality.band}`}
+            >
+              <span className="font-semibold uppercase tracking-wide mr-1">
+                Prediction · {result.predictionQuality.band}
+              </span>
+              {result.predictionQuality.note}
+            </div>
+          )}
           {result.hypotheses.slice(0, 3).map((h, idx) => (
             <div
               key={h.slingId}
@@ -550,19 +567,52 @@ function DriverAnalysisSection({ result }: { result: DriverAnalysisResult }) {
 
 function PlanFromAnalysisSection({ recommendations }: { recommendations: SlingDrivenRecommendation[] }) {
   const [open, setOpen] = useState(false);
+  const { add, has } = usePlanCart();
+
+  // Group by sling THEN by role. Per-group "Add all" performs a batched
+  // drop into the Plan Cart so the clinician can adopt a whole sub-plan
+  // (e.g. "all restore items for the posterior oblique") in one click.
+  // Recommendations are session-scoped and de-duplicated by id inside add().
+  const groupedBySling = useMemo(() => {
+    const slingMap = new Map<
+      SlingId,
+      {
+        label: string;
+        color: string;
+        roles: Map<DriverRole, SlingDrivenRecommendation[]>;
+      }
+    >();
+    for (const r of recommendations) {
+      if (!slingMap.has(r.slingId)) {
+        slingMap.set(r.slingId, {
+          label: r.slingLabel,
+          color: r.slingColor,
+          roles: new Map(),
+        });
+      }
+      const slingEntry = slingMap.get(r.slingId)!;
+      if (!slingEntry.roles.has(r.role)) slingEntry.roles.set(r.role, []);
+      slingEntry.roles.get(r.role)!.push(r);
+    }
+    return Array.from(slingMap.entries()).map(([sid, s]) => ({
+      slingId: sid,
+      label: s.label,
+      color: s.color,
+      roleGroups: Array.from(s.roles.entries()).sort((a, b) => {
+        const order: DriverRole[] = ['address-driver', 'restore', 'calm-compensatory'];
+        return order.indexOf(a[0]) - order.indexOf(b[0]);
+      }),
+    }));
+  }, [recommendations]);
+
   if (recommendations.length === 0) return null;
 
-  // Group by sling for readability.
-  const grouped = useMemo(() => {
-    const map = new Map<SlingId, { label: string; color: string; items: SlingDrivenRecommendation[] }>();
-    for (const r of recommendations) {
-      if (!map.has(r.slingId)) {
-        map.set(r.slingId, { label: r.slingLabel, color: r.slingColor, items: [] });
-      }
-      map.get(r.slingId)!.items.push(r);
+  const addAllInGroup = (items: SlingDrivenRecommendation[]) => {
+    for (const rec of items) {
+      const cartItem = recToCartItem(rec);
+      if (!has(cartItem.id)) add(cartItem);
     }
-    return Array.from(map.entries());
-  }, [recommendations]);
+  };
 
   return (
     <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 overflow-hidden" data-testid="sling-plan-from-analysis">
@@ -585,32 +635,67 @@ function PlanFromAnalysisSection({ recommendations }: { recommendations: SlingDr
           <div className="text-[9px] text-emerald-200/80 italic">
             One-click drop into the Plan Cart — items are tagged with the driving sling and role.
           </div>
-          {grouped.map(([sid, g]) => (
-            <div key={sid} className="rounded border border-slate-700/40 bg-slate-900/40 p-1.5">
+          {groupedBySling.map(g => (
+            <div
+              key={g.slingId}
+              className="rounded border border-slate-700/40 bg-slate-900/40 p-1.5"
+              data-testid={`sling-plan-group-${g.slingId}`}
+            >
               <div className="flex items-center gap-1.5 mb-1">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
                 <span className="text-[10px] font-medium text-slate-200">{g.label}</span>
               </div>
-              <div className="space-y-1">
-                {g.items.map(rec => (
-                  <div key={rec.id} className="flex items-start gap-1.5 p-1 rounded hover:bg-slate-800/40">
-                    <Sparkles className="w-2.5 h-2.5 text-emerald-300 mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <span className="text-[10px] text-slate-100">{rec.name}</span>
-                        <span className={`text-[8px] px-1 py-0 rounded-full border ${ROLE_COLOR[rec.role]}`}>
-                          {ROLE_LABEL[rec.role]}
+              <div className="space-y-1.5">
+                {g.roleGroups.map(([role, items]) => {
+                  const allInPlan = items.every(rec => has(recToCartItem(rec).id));
+                  return (
+                    <div
+                      key={role}
+                      className="rounded-sm border border-slate-700/30 bg-slate-900/30 p-1"
+                      data-testid={`sling-plan-role-${g.slingId}-${role}`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className={`text-[8px] px-1 py-0 rounded-full border ${ROLE_COLOR[role]}`}>
+                          {ROLE_LABEL[role]}
                         </span>
-                        <span className="text-[8px] text-slate-500 capitalize">· {rec.modality.replace('_', ' ')}</span>
+                        <span className="text-[8px] text-slate-500">
+                          {items.length} item{items.length === 1 ? '' : 's'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => addAllInGroup(items)}
+                          disabled={allInPlan}
+                          className={`ml-auto text-[8px] px-1.5 py-0.5 rounded border transition-colors ${
+                            allInPlan
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300/60 cursor-default'
+                              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+                          }`}
+                          data-testid={`sling-plan-add-all-${g.slingId}-${role}`}
+                        >
+                          {allInPlan ? 'All added' : `Add all ${items.length}`}
+                        </button>
                       </div>
-                      <div className="text-[9px] text-slate-400 leading-snug">{rec.rationale}</div>
-                      {rec.dosage && (
-                        <div className="text-[8px] text-slate-500 mt-0.5">Dosage: {rec.dosage}</div>
-                      )}
+                      <div className="space-y-1">
+                        {items.map(rec => (
+                          <div key={rec.id} className="flex items-start gap-1.5 p-1 rounded hover:bg-slate-800/40">
+                            <Sparkles className="w-2.5 h-2.5 text-emerald-300 mt-0.5 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span className="text-[10px] text-slate-100">{rec.name}</span>
+                                <span className="text-[8px] text-slate-500 capitalize">· {rec.modality.replace('_', ' ')}</span>
+                              </div>
+                              <div className="text-[9px] text-slate-400 leading-snug">{rec.rationale}</div>
+                              {rec.dosage && (
+                                <div className="text-[8px] text-slate-500 mt-0.5">Dosage: {rec.dosage}</div>
+                              )}
+                            </div>
+                            <AddToPlanButton size="xs" item={recToCartItem(rec)} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <AddToPlanButton size="xs" item={recToCartItem(rec)} />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}

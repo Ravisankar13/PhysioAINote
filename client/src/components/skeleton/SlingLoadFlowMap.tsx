@@ -184,6 +184,44 @@ export default function SlingLoadFlowMap({ graph }: SlingLoadFlowMapProps) {
                 ×
               </button>
             </div>
+            {popoverNode.roleInChain && (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`px-1.5 py-px rounded text-[8px] font-semibold uppercase tracking-wide ${
+                    popoverNode.roleInChain === 'anchor'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                      : popoverNode.roleInChain === 'endpoint'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                      : 'bg-slate-500/20 text-slate-300 border border-slate-500/40'
+                  }`}
+                  data-testid={`flow-node-role-${popoverNode.roleInChain}`}
+                >
+                  {popoverNode.roleInChain}
+                </span>
+                {typeof popoverNode.activationPct === 'number' && (
+                  <span
+                    className="text-[9px] text-slate-400"
+                    data-testid="flow-node-activation"
+                  >
+                    activation {popoverNode.activationPct}%
+                  </span>
+                )}
+              </div>
+            )}
+            {typeof popoverNode.activationPct === 'number' && (
+              <div className="h-1 w-full rounded bg-slate-700/60 overflow-hidden">
+                <div
+                  className={`h-full ${
+                    popoverNode.activationPct >= 75
+                      ? 'bg-red-400'
+                      : popoverNode.activationPct >= 50
+                      ? 'bg-amber-400'
+                      : 'bg-emerald-400'
+                  }`}
+                  style={{ width: `${Math.max(2, popoverNode.activationPct)}%` }}
+                />
+              </div>
+            )}
             {popoverNode.pinned && (
               <div className="text-red-300">Pain marker pinned to this node.</div>
             )}
@@ -193,7 +231,15 @@ export default function SlingLoadFlowMap({ graph }: SlingLoadFlowMapProps) {
             {popoverNode.compensating && (
               <div className="text-amber-300">This node is acting as a force compensator.</div>
             )}
-            {!popoverNode.pinned && !popoverNode.overloaded && !popoverNode.compensating && (
+            {popoverNode.evidenceNote && (
+              <div
+                className="text-slate-300 text-[9px] leading-tight pt-1 border-t border-slate-700/40"
+                data-testid="flow-node-evidence"
+              >
+                {popoverNode.evidenceNote}
+              </div>
+            )}
+            {!popoverNode.pinned && !popoverNode.overloaded && !popoverNode.compensating && !popoverNode.evidenceNote && (
               <div className="text-slate-400">No active load anomaly here in this analysis.</div>
             )}
           </div>

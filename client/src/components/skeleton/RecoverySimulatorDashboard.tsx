@@ -73,6 +73,13 @@ import {
   relevantBiasWeight,
 } from "@/lib/naturalRecoveryDriverModel";
 import { matchModalitiesForPhase, dosingOneLiner } from "@/lib/electroPhaseMatcher";
+import {
+  assembleUncertaintySignals,
+  computeBandHalfWidthByWeek,
+  describeUncertainty,
+  useAnimatedNumberArray,
+  PATIENT_CONTEXT_TOTAL_FIELDS,
+} from "@/lib/recoveryUncertainty";
 import type { ElectrophysicalPlan } from "@/components/skeleton/ElectrophysicalEngineTab";
 import TreatmentTimelinePanel from "@/components/skeleton/TreatmentTimelinePanel";
 import { generateGoalProfile, type RecoveryGoalProfile } from "@/lib/goalStateEngine";
@@ -160,6 +167,12 @@ interface Props {
   /** Task #240 — count of clinician-edited factors (vs. auto-detected
    *  baseline). Drives a small badge on the "What's affecting" header. */
   patientFactorsOverrideCount?: number;
+  /** Task #242 — count of structured patient-context fields the form
+   *  reports as "filled" (out of `PATIENT_CONTEXT_TOTAL_FIELDS`).
+   *  Drives the curve confidence bands: more filled fields → tighter
+   *  band (animated). When omitted, the dashboard falls back to using
+   *  `patientFactorsOverrideCount` as a proxy. */
+  patientFactorsFilledCount?: number;
   /** Task #240 — derived workDemand / fearAvoidance from the
    *  structured occupational + psychosocial fields. Each may be null
    *  when the form is left at "auto". Shown in the panel as a chip. */
@@ -358,6 +371,8 @@ function MiniChart({
   axisUnit = 'WEEK',
   markers,
   onWeekAddClick,
+  uncertaintyHalfWidth,
+  showBands = true,
 }: {
   series: { label: string; color: string; values: number[]; dash?: string }[];
   scrubWeek?: number;
@@ -380,6 +395,15 @@ function MiniChart({
    *  model to surface plateau / recurrence / chronic detection points
    *  directly on the chart timeline. */
   markers?: { week: number; color: string; label: string; glyph?: string }[];
+  /** Task #242 — per-week half-width (in 0–100 chart units) used to
+   *  paint a translucent confidence band around each non-dashed
+   *  series. When omitted no bands are drawn. The same array is
+   *  applied to every solid series; dashed series (e.g. risk
+   *  overlays) are left as plain lines to avoid visual noise. */
+  uncertaintyHalfWidth?: number[];
+  /** Visible toggle for the bands. The toggle UI itself lives in the
+   *  parent — this prop just gates rendering. Default true. */
+  showBands?: boolean;
 }) {
   const width = 720;
   const padding = { top: 14, right: 16, bottom: 26, left: 36 };
@@ -391,6 +415,44 @@ function MiniChart({
   const xFor = (w: number) => padding.left + (totalWeeks > 0 ? (w / totalWeeks) * cw : 0);
   const yFor = (v: number) => padding.top + (1 - (v - yMin) / (yMax - yMin)) * ch;
   const path = (vals: number[]) => vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${xFor(i).toFixed(1)},${yFor(v).toFixed(1)}`).join(' ');
+
+  /** Build a closed polygon (upper edge → reversed lower edge) for
+   *  the confidence band around a single series. Half-widths are
+   *  clamped so the polygon never escapes the [0,100] chart range. */
+  const bandPath = (vals: number[], halfW: number[]): string => {
+    if (vals.length === 0 || halfW.length === 0) return '';
+    const upper: { x: number; y: number }[] = [];
+    const lower: { x: number; y: number }[] = [];
+    for (let i = 0; i < vals.length; i++) {
+      const v = vals[i];
+      const h = halfW[i] ?? halfW[halfW.length - 1] ?? 0;
+      const hi = Math.max(yMin, Math.min(yMax, v + h));
+      const lo = Math.max(yMin, Math.min(yMax, v - h));
+      upper.push({ x: xFor(i), y: yFor(hi) });
+      lower.push({ x: xFor(i), y: yFor(lo) });
+    }
+    const top = upper.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+    const bot = lower.slice().reverse().map(p => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+    return `${top} ${bot} Z`;
+  };
+
+  const bandsActive = !!(showBands && uncertaintyHalfWidth && uncertaintyHalfWidth.length > 0);
+  // Per-series scrub readouts (expected + low/high when bands are
+  // active). Used both by the on-chart dots and the readout panel.
+  const scrubReadouts = scrubWeek != null ? series.map(s => {
+    const idx = Math.max(0, Math.min(s.values.length - 1, scrubWeek));
+    const exp = s.values[idx];
+    const h = bandsActive && uncertaintyHalfWidth ? (uncertaintyHalfWidth[idx] ?? 0) : 0;
+    return {
+      label: s.label,
+      color: s.color,
+      dash: s.dash,
+      expected: exp,
+      low: Math.max(yMin, exp - h),
+      high: Math.min(yMax, exp + h),
+      hasBand: bandsActive && !s.dash,
+    };
+  }) : [];
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!onScrub && !onWeekAddClick) return;
@@ -426,9 +488,43 @@ function MiniChart({
         <text key={i} x={xFor(w)} y={height - 8} textAnchor="middle" fill="#6b7280" fontSize={9}>{axisUnit === 'CHECKPOINT' ? 'Checkpoint' : 'Week'} {w}</text>
       ))}
 
+      {bandsActive && uncertaintyHalfWidth && series.map((s, i) => {
+        if (s.dash) return null; // Skip dashed/secondary series — band on those is noisy.
+        return (
+          <path
+            key={`band-${i}`}
+            d={bandPath(s.values, uncertaintyHalfWidth)}
+            fill={s.color}
+            opacity={0.13}
+            stroke="none"
+            style={{ transition: 'opacity 350ms ease-out' }}
+          >
+            <title>{`${s.label} confidence band — wider where uncertainty is higher`}</title>
+          </path>
+        );
+      })}
+
       {series.map((s, i) => (
         <path key={i} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray={s.dash} />
       ))}
+
+      {scrubWeek != null && scrubReadouts.map((r, i) => {
+        const cx = xFor(scrubWeek);
+        const cyExp = yFor(r.expected);
+        return (
+          <g key={`sr-${i}`}>
+            {r.hasBand && (
+              <line
+                x1={cx} y1={yFor(r.high)} x2={cx} y2={yFor(r.low)}
+                stroke={r.color} strokeWidth={1} opacity={0.55}
+              />
+            )}
+            <circle cx={cx} cy={cyExp} r={3} fill={r.color} stroke="#0b1220" strokeWidth={1}>
+              <title>{`${r.label}: ${r.expected.toFixed(0)}${r.hasBand ? ` (range ${r.low.toFixed(0)}–${r.high.toFixed(0)})` : ''}`}</title>
+            </circle>
+          </g>
+        );
+      })}
 
       {markers && markers.map((m, i) => {
         const x = xFor(Math.max(0, Math.min(totalWeeks, m.week)));
@@ -676,6 +772,7 @@ export default function RecoverySimulatorDashboard({
   skeletonBiasInputs,
   patientModifiers,
   patientFactorsOverrideCount,
+  patientFactorsFilledCount,
   derivedDrivers,
 }: Props) {
   const [input, setInput] = useState<SimulationInput>(() => ({ ...defaultInput(), ...(initialInput ?? {}) }));
@@ -865,6 +962,45 @@ export default function RecoverySimulatorDashboard({
   useEffect(() => {
     setScrubWeek(prev => Math.max(0, Math.min(prev, displayTotalWeeks)));
   }, [displayTotalWeeks]);
+
+  // ─── Task #242: Curve confidence bands ───────────────────────────
+  // Visible toggle (default ON) — clinicians can hide the bands when
+  // they want a "clean" curve. State is session-scoped only.
+  const [showBands, setShowBands] = useState<boolean>(true);
+  // Assemble the four uncertainty signals from props the dashboard
+  // already receives. Falls back to `patientFactorsOverrideCount` as
+  // a proxy for filled-count when the parent hasn't threaded the
+  // explicit count yet.
+  const uncertaintySignals = useMemo(() => {
+    const filledProxy = patientFactorsFilledCount ?? patientFactorsOverrideCount ?? 0;
+    return assembleUncertaintySignals({
+      patientFactorsFilledCount: filledProxy,
+      aiNaturalTimeline: aiNaturalTimeline ?? null,
+      naturalTimelineLoading,
+      caseSpecificPlanLoading,
+      caseSpecificPlanError: caseSpecificPlanError ?? null,
+      // No check-in feed wired through to this dashboard yet —
+      // Task #241 will bring `weeksSinceLastCheckIn` here once it
+      // lands. Until then the helper applies the "no anchor"
+      // contribution so the band is honest about the gap.
+      weeksSinceLastCheckIn: null,
+    });
+  }, [
+    patientFactorsFilledCount,
+    patientFactorsOverrideCount,
+    aiNaturalTimeline,
+    naturalTimelineLoading,
+    caseSpecificPlanLoading,
+    caseSpecificPlanError,
+  ]);
+  // Target half-width per week. Animated via the hook below so the
+  // band visibly tightens as the clinician fills more context.
+  const targetBandHalfWidth = useMemo(
+    () => computeBandHalfWidthByWeek(uncertaintySignals, { totalWeeks: displayTotalWeeks }),
+    [uncertaintySignals, displayTotalWeeks],
+  );
+  const animatedBandHalfWidth = useAnimatedNumberArray(targetBandHalfWidth, 450);
+  const uncertaintyDescription = useMemo(() => describeUncertainty(uncertaintySignals), [uncertaintySignals]);
   /** Pick the passive baseline closest to the active projection's trajectory
    *  (sum-of-squared-differences across pain, function, capacity & risk
    *  timelines) so the Compare panel always shows the most informative
@@ -2177,20 +2313,38 @@ export default function RecoverySimulatorDashboard({
                     )}
                   </div>
                   {/* Mode toggle: only meaningful once an AI verdict exists */}
-                  <div className="flex items-center gap-1 bg-gray-950/60 border border-gray-800/80 rounded p-0.5" role="tablist" aria-label="Chart mode">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Task #242 — confidence-band toggle */}
                     <button
-                      onClick={() => setChartMode('natural')}
-                      disabled={!naturalProjection}
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${chartMode === 'natural' && naturalProjection ? 'bg-violet-600/40 text-violet-100' : 'text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed'}`}
-                      data-testid="chart-mode-natural"
-                      title={naturalProjection ? 'Show AI-predicted natural healing trajectory' : 'Generate the natural-history timeline first'}
-                    >Natural timeline</button>
-                    <button
-                      onClick={() => setChartMode('plan')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${chartMode === 'plan' ? 'bg-cyan-600/40 text-cyan-100' : 'text-gray-400 hover:text-gray-200'}`}
-                      data-testid="chart-mode-plan"
-                      title="Show the projection with the current treatment plan applied"
-                    >With current plan</button>
+                      onClick={() => setShowBands(v => !v)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition ${showBands ? 'bg-slate-700/60 border-slate-500/60 text-slate-100' : 'bg-gray-950/60 border-gray-800/80 text-gray-400 hover:text-gray-200'}`}
+                      data-testid="toggle-confidence-bands"
+                      title={`Confidence bands ${showBands ? 'on' : 'off'} — width reflects how complete & fresh the inputs are. Currently: ${uncertaintyDescription.band} (${uncertaintySignals.filledFactorCount}/${uncertaintySignals.totalFactorCount} fields filled${uncertaintySignals.aiConfidence > 0 ? `, AI confidence ${(uncertaintySignals.aiConfidence * 100).toFixed(0)}%` : ', no AI verdict yet'}${uncertaintySignals.sourceConflict > 0 ? ', source updating' : ''}).`}
+                      aria-pressed={showBands}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-sm"
+                          style={{ background: uncertaintyDescription.color, opacity: showBands ? 0.55 : 0.25 }}
+                        />
+                        Bands · {uncertaintyDescription.band}
+                      </span>
+                    </button>
+                    <div className="flex items-center gap-1 bg-gray-950/60 border border-gray-800/80 rounded p-0.5" role="tablist" aria-label="Chart mode">
+                      <button
+                        onClick={() => setChartMode('natural')}
+                        disabled={!naturalProjection}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${chartMode === 'natural' && naturalProjection ? 'bg-violet-600/40 text-violet-100' : 'text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed'}`}
+                        data-testid="chart-mode-natural"
+                        title={naturalProjection ? 'Show AI-predicted natural healing trajectory' : 'Generate the natural-history timeline first'}
+                      >Natural timeline</button>
+                      <button
+                        onClick={() => setChartMode('plan')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${chartMode === 'plan' ? 'bg-cyan-600/40 text-cyan-100' : 'text-gray-400 hover:text-gray-200'}`}
+                        data-testid="chart-mode-plan"
+                        title="Show the projection with the current treatment plan applied"
+                      >With current plan</button>
+                    </div>
                   </div>
                 </div>
                 <div className="text-[9px] text-gray-500 mb-1">
@@ -2207,6 +2361,8 @@ export default function RecoverySimulatorDashboard({
                     height={240}
                     axisUnit={axisUnit}
                     onWeekAddClick={(wk) => setTimelinePaletteWeek(wk)}
+                    uncertaintyHalfWidth={animatedBandHalfWidth}
+                    showBands={showBands}
                     markers={
                       usingNaturalChart && naturalDriverModel
                         ? [
@@ -2231,6 +2387,19 @@ export default function RecoverySimulatorDashboard({
                       <span className="w-2.5 h-0.5" style={{ background: s.color }} />{s.label}
                     </span>
                   ))}
+                  {showBands && (
+                    <span
+                      className="flex items-center gap-1 text-[9px] text-gray-300 ml-2 pl-2 border-l border-gray-700/60"
+                      data-testid="legend-confidence-band"
+                      title={`Translucent band = uncertainty range around the expected curve. Tightens as you fill patient context, the AI verdict converges, and check-ins are recorded. Currently ${uncertaintyDescription.band} — ${uncertaintySignals.filledFactorCount}/${uncertaintySignals.totalFactorCount} fields filled${uncertaintySignals.aiConfidence > 0 ? `, AI confidence ${(uncertaintySignals.aiConfidence * 100).toFixed(0)}%` : ', no AI verdict yet'}.`}
+                    >
+                      <span className="relative inline-block w-3 h-2.5">
+                        <span className="absolute inset-0 rounded-sm" style={{ background: '#94a3b8', opacity: 0.18 }} />
+                        <span className="absolute left-0 right-0 top-1/2 h-px" style={{ background: '#cbd5e1' }} />
+                      </span>
+                      Confidence band ({uncertaintyDescription.band.toLowerCase()})
+                    </span>
+                  )}
                 </div>
 
                 {/* Task #240 — "What's affecting this curve" panel.

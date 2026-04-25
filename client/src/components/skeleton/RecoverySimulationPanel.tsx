@@ -98,6 +98,8 @@ function MultiLineChart({
   milestoneMarkers = [],
   interventionMarkers = [],
   thresholdLines = [],
+  uncertaintyHalfWidth,
+  showUncertaintyBands = true,
 }: {
   series: { label: string; color: string; values: number[]; dash?: string }[];
   height?: number;
@@ -113,6 +115,14 @@ function MultiLineChart({
   milestoneMarkers?: { week: number; label: string; achieved: boolean }[];
   interventionMarkers?: { week: number; label: string; type: string; treatmentId?: string }[];
   thresholdLines?: { value: number; color: string; label?: string }[];
+  /** Task #242 — per-week half-width (in 0–100 chart units) painted
+   *  as a translucent confidence band around each non-dashed series.
+   *  Independent of the existing `bands` prop (which carries the
+   *  best/expected/slower envelope from `simulateBranch`). */
+  uncertaintyHalfWidth?: number[];
+  /** Visibility toggle for the uncertainty band — gated by the
+   *  parent's "Show bands" control. */
+  showUncertaintyBands?: boolean;
 }) {
   const padding = { top: 8, right: 6, bottom: 16, left: 24 };
   const cw = width - padding.left - padding.right;
@@ -166,6 +176,35 @@ function MultiLineChart({
           <path d={path(bands.flareAdjusted)} fill="none" stroke="#ef4444" strokeWidth={0.5} strokeDasharray="3,3" opacity={0.5} />
         </>
       )}
+
+      {/* Task #242 — per-series uncertainty bands. Painted *under* the
+          series stroke so the center line is always crisp. */}
+      {showUncertaintyBands && uncertaintyHalfWidth && uncertaintyHalfWidth.length > 0 && series.map((s, i) => {
+        if (s.dash) return null;
+        const upper: { x: number; y: number }[] = [];
+        const lower: { x: number; y: number }[] = [];
+        for (let j = 0; j < s.values.length; j++) {
+          const h = uncertaintyHalfWidth[j] ?? uncertaintyHalfWidth[uncertaintyHalfWidth.length - 1] ?? 0;
+          const hi = Math.max(yMin, Math.min(yMax, s.values[j] + h));
+          const lo = Math.max(yMin, Math.min(yMax, s.values[j] - h));
+          upper.push({ x: xFor(j), y: yFor(hi) });
+          lower.push({ x: xFor(j), y: yFor(lo) });
+        }
+        const top = upper.map((p, k) => `${k === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+        const bot = lower.slice().reverse().map(p => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+        return (
+          <path
+            key={`ub-${i}`}
+            d={`${top} ${bot} Z`}
+            fill={s.color}
+            opacity={0.13}
+            stroke="none"
+            style={{ transition: 'opacity 350ms ease-out' }}
+          >
+            <title>{`${s.label} confidence band`}</title>
+          </path>
+        );
+      })}
 
       {thresholdLines.map((th, i) => (
         <g key={i}>

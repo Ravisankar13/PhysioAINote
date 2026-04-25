@@ -209,6 +209,7 @@ import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDash
 import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers, derivePsychosocialAndOccupationalDrivers, type PatientFactors } from "@/lib/patientFactorsEngine";
 const PatientFactorsForm = lazy(() => import("@/components/skeleton/PatientFactorsForm"));
 import { countFactorOverrides } from "@/components/skeleton/PatientFactorsForm";
+import { computePatientFactorsFilledCount } from "@/lib/recoveryUncertainty";
 const TimelineBottomBar = lazy(() => import("@/components/skeleton/TimelineBottomBar"));
 import type { PlaybackSyncState, TimelinePlaybackRef, ConditionPhaseInfo } from "@/components/skeleton/TimelineBottomBar";
 const MechanismTreatmentTab = lazy(() => import("@/components/skeleton/MechanismTreatmentTab"));
@@ -843,6 +844,12 @@ export default function PhysioGPT() {
   const patientFactorsOverrideCount = useMemo(() => {
     return countFactorOverrides(effectivePatientFactors, autoDetectedPatientFactors);
   }, [effectivePatientFactors, autoDetectedPatientFactors]);
+  /** Task #242 — total filled (clinician- or pipeline-set) structured
+   *  fields, used by the recovery dashboards' confidence-band model.
+   *  Lines up 1:1 with the "X filled" badge on PatientFactorsForm. */
+  const patientFactorsFilledCount = useMemo(() => {
+    return computePatientFactorsFilledCount(effectivePatientFactors);
+  }, [effectivePatientFactors]);
   // ─────────────────────────────────────────────────────────────────
 
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
@@ -11219,6 +11226,7 @@ ${ddxList}`;
                   }}
                   patientModifiers={effectivePatientModifiers}
                   patientFactorsOverrideCount={patientFactorsOverrideCount}
+                  patientFactorsFilledCount={patientFactorsFilledCount}
                   derivedDrivers={derivedDrivers}
                 />
               </Suspense>

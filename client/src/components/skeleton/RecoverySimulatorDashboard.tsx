@@ -78,7 +78,6 @@ import {
   computeBandHalfWidthByWeek,
   describeUncertainty,
   useAnimatedNumberArray,
-  PATIENT_CONTEXT_TOTAL_FIELDS,
 } from "@/lib/recoveryUncertainty";
 import type { ElectrophysicalPlan } from "@/components/skeleton/ElectrophysicalEngineTab";
 import TreatmentTimelinePanel from "@/components/skeleton/TreatmentTimelinePanel";
@@ -2401,6 +2400,48 @@ export default function RecoverySimulatorDashboard({
                     </span>
                   )}
                 </div>
+
+                {/* Task #242 — explicit low / expected / high readout
+                    chip for the currently-scrubbed week. Real DOM
+                    tooltip so the values are accessible without
+                    relying on the SVG <title> hover. */}
+                {showBands && scrubWeek != null && animatedBandHalfWidth.length > 0 && (
+                  <div
+                    className="mt-1.5 rounded-md border border-gray-700/50 bg-gray-900/60 px-2 py-1.5"
+                    data-testid="scrub-band-readout"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <span className="text-[9px] uppercase tracking-wide text-gray-400">
+                        At {axisUnit === 'CHECKPOINT' ? 'checkpoint' : 'week'} {scrubWeek}
+                      </span>
+                      <span className="text-[9px] text-gray-500">low · expected · high</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {mainSeries.map((s, i) => {
+                        if (s.dash) return null;
+                        const idx = Math.max(0, Math.min(s.values.length - 1, scrubWeek));
+                        const exp = s.values[idx] ?? 0;
+                        const h = animatedBandHalfWidth[idx] ?? 0;
+                        const lo = Math.max(0, exp - h);
+                        const hi = Math.min(100, exp + h);
+                        return (
+                          <span
+                            key={`sb-${i}`}
+                            className="flex items-center gap-1 text-[10px] text-gray-200 font-mono"
+                          >
+                            <span className="inline-block w-2 h-2 rounded-sm" style={{ background: s.color }} />
+                            <span className="text-gray-400">{s.label}:</span>
+                            <span className="text-gray-500">{lo.toFixed(0)}</span>
+                            <span className="text-gray-500">·</span>
+                            <span className="text-gray-100 font-semibold">{exp.toFixed(0)}</span>
+                            <span className="text-gray-500">·</span>
+                            <span className="text-gray-500">{hi.toFixed(0)}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Task #240 — "What's affecting this curve" panel.
                     Surfaces the top patient-factor multipliers (sorted by

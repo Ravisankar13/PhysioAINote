@@ -36,10 +36,17 @@ import type { PatientFactors } from './patientFactorsEngine';
 import type { AINaturalTimeline } from './recoverySimulationEngine';
 
 /** Total number of patient-context fields the structured form
- *  exposes — kept in lockstep with `countFactorOverrides` /
- *  `filledCount` in `PatientFactorsForm.tsx` so the "filled ratio"
- *  here lines up with the badge the clinician sees. */
-export const PATIENT_CONTEXT_TOTAL_FIELDS = 21;
+ *  exposes — kept in lockstep with `computePatientFactorsFilledCount`
+ *  below (and with `countFactorOverrides` / `filledCount` in
+ *  `PatientFactorsForm.tsx`) so the "filled ratio" here lines up with
+ *  the badge the clinician sees. Currently 20 fields:
+ *  menopausalStatus, currentMedications (any-of), bmiNumeric,
+ *  timeSinceLastEpisodeMonths, priorSurgeryArea, keyImagingFindings,
+ *  sleepHours, proteinIntake, dailyStepsBand, trainingAgeYears,
+ *  kinesiophobia, painCatastrophizing, selfEfficacy, perceivedStress,
+ *  socialSupport, sittingHoursPerDay, liftingFrequency,
+ *  repetitiveTaskExposure, sportPosition, sportSurface. */
+export const PATIENT_CONTEXT_TOTAL_FIELDS = 20;
 
 export interface UncertaintySignals {
   /** 0–1: share of patient-context fields that are filled in. */

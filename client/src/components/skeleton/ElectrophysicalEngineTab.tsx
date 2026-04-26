@@ -1026,6 +1026,14 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
             const targetTissueVal = modality.targetTissue ?? inferTargetTissue(modality);
             const desiredEffectVal = modality.desiredEffect ?? inferDesiredEffect(modality, groupHint);
             const evidenceStrengthVal = modality.evidenceStrength ?? inferEvidenceStrength(modality);
+            // Resolve sling match so auto-added items carry the same
+            // slingTag/slingRole metadata as in-card AddToPlanButton clicks.
+            const slingMatch = matchRecommendationsForItem(
+              modality.modality,
+              modality.targetStructure,
+              slingDrivenRecommendations ?? [],
+              'electrophysical',
+            );
             addToPlanCart({
               id: makeCartId('electrophysical', modality.modality),
               modality: 'electrophysical',
@@ -1043,6 +1051,8 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
               desiredEffect: desiredEffectVal,
               evidenceStrength: evidenceStrengthVal,
               dosing: modality.dosing,
+              slingTag: slingMatch?.slingLabel,
+              slingRole: slingMatch?.role,
             });
           }, i * 110);
         });
@@ -1058,7 +1068,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, activePresetId, fetchEvidence, autoAddOnGenerate, addToPlanCart, onGenerateComplete]);
+  }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, activePresetId, fetchEvidence, autoAddOnGenerate, addToPlanCart, onGenerateComplete, slingDrivenRecommendations]);
 
   // Each new `autoGenerateNonce` from the parent represents a fresh phase-card
   // CTA: re-sync condition/stage from the latest `initialCondition`/`initialStage`

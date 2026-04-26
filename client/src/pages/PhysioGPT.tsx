@@ -4515,8 +4515,13 @@ ${ddxList}`;
   // after the last add), advance the state machine to 'organizing', surface
   // a failure toast if anything errored, then — after a short tick so the
   // last cart-add line/flash animations can paint — navigate to My Plan and
-  // bump the orchestration nonce. Re-clicks remain blocked until the final
-  // timer drops state back to 'idle'.
+  // bump the orchestration nonce.
+  //
+  // Reset to 'idle' is driven by MyPlanPanel's onAutoOrganizeConsumed callback
+  // (the real "organize was kicked off" signal), not a fixed timer. We keep a
+  // 4 s safety fallback for the edge case where the cart ended up with < 2
+  // items so MyPlanPanel never consumes the key (the button would otherwise
+  // stay disabled forever).
   useEffect(() => {
     if (autoBuildState !== 'generating') return;
     if (autoBuildInFlightExercise || autoBuildInFlightMT || autoBuildInFlightEPA || autoBuildInFlightAdjunct) return;
@@ -4533,13 +4538,16 @@ ${ddxList}`;
       setMechanismActiveTab('myPlan');
       setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
     }, 150);
-    const idleTimer = window.setTimeout(() => {
-      setAutoBuildState('idle');
+    // Safety fallback: if the orchestrator never consumes the key (e.g. cart
+    // is empty because all four engines failed), don't strand the button
+    // disabled — drop back to idle after a generous timeout.
+    const safetyIdleTimer = window.setTimeout(() => {
+      setAutoBuildState(prev => (prev === 'organizing' ? 'idle' : prev));
       setAutoBuildFailures(new Set());
-    }, 400);
+    }, 4000);
     return () => {
       window.clearTimeout(navTimer);
-      window.clearTimeout(idleTimer);
+      window.clearTimeout(safetyIdleTimer);
     };
   }, [autoBuildState, autoBuildInFlightExercise, autoBuildInFlightMT, autoBuildInFlightEPA, autoBuildInFlightAdjunct, autoBuildFailures, toast]);
 
@@ -10956,7 +10964,15 @@ ${ddxList}`;
                       <Suspense fallback={<div className="flex items-center justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-cyan-400" /></div>}>
                         <MyPlanPanel
                           autoOrganizeKey={myPlanAutoOrganizeKey}
-                          onAutoOrganizeConsumed={() => setMyPlanAutoOrganizeKey(null)}
+                          onAutoOrganizeConsumed={() => {
+                            setMyPlanAutoOrganizeKey(null);
+                            // When the auto-build flow consumed the orchestrate
+                            // trigger, return the state machine to 'idle' so
+                            // the Build-full-plan button re-enables. Guard with
+                            // a functional updater so we don't double-fire.
+                            setAutoBuildState(prev => (prev === 'organizing' ? 'idle' : prev));
+                            setAutoBuildFailures(new Set());
+                          }}
                           clinicalContext={{
                             topHypothesis: structuredReasoningData?.hypotheses?.[0]?.condition || extractionResult?.mainComplaint || mechanismAnalysisResult?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim() || undefined,
                             irritability: extractionResult?.irritability || undefined,

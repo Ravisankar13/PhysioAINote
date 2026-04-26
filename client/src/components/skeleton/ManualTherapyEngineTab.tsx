@@ -768,6 +768,14 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
         const items = sorted.techniqueGroups.flatMap(group => group.techniques);
         items.forEach((technique, i) => {
           window.setTimeout(() => {
+            // Resolve sling match so auto-added items carry the same
+            // slingTag/slingRole metadata as in-card AddToPlanButton clicks.
+            const slingMatch = matchRecommendationsForItem(
+              technique.technique,
+              technique.targetStructure,
+              slingDrivenRecommendations ?? [],
+              'manual_therapy',
+            );
             addToPlanCart({
               id: makeCartId('manual_therapy', technique.technique),
               modality: 'manual_therapy',
@@ -778,6 +786,8 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
               rationale: technique.rationale,
               contraindications: technique.contraindications,
               patientPosition: technique.patientPosition,
+              slingTag: slingMatch?.slingLabel,
+              slingRole: slingMatch?.role,
             });
           }, i * 110);
         });
@@ -793,7 +803,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [buildPayload, onGenerateComplete, autoAddOnGenerate, addToPlanCart]);
+  }, [buildPayload, onGenerateComplete, autoAddOnGenerate, addToPlanCart, slingDrivenRecommendations]);
 
   useEffect(() => {
     if (pendingGenerate) {

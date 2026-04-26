@@ -1207,6 +1207,14 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
         const items = sorted.exerciseGroups.flatMap(group => group.exercises);
         items.forEach((ex, i) => {
           window.setTimeout(() => {
+            // Resolve sling match so auto-added items carry the same
+            // slingTag/slingRole metadata as in-card AddToPlanButton clicks.
+            const slingMatch = matchRecommendationsForItem(
+              ex.name,
+              ex.targetStructure,
+              slingDrivenRecommendations ?? [],
+              'exercise',
+            );
             addToPlanCart({
               id: makeCartId('exercise', ex.name),
               modality: 'exercise',
@@ -1216,6 +1224,8 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
               dosage: `${ex.sets} × ${ex.reps}`,
               rationale: ex.rationale,
               contraindications: ex.contraindications,
+              slingTag: slingMatch?.slingLabel,
+              slingRole: slingMatch?.role,
             });
           }, i * 110);
         });
@@ -1231,7 +1241,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [buildPayload, onGenerateComplete, autoAddOnGenerate, addToPlanCart]);
+  }, [buildPayload, onGenerateComplete, autoAddOnGenerate, addToPlanCart, slingDrivenRecommendations]);
 
   useEffect(() => {
     if (pendingGenerate) {

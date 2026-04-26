@@ -4510,18 +4510,13 @@ ${ddxList}`;
     setAutoBuildInFlightAdjunct(true);
     setAutoBuildElectroNonce(prev => prev + 1);
   }, [autoBuildState, hasClinicalTextData]);
-  // Settle: once all 4 phantom engines finish (success or failure) AND their
-  // staggered cart-adds have completed (onGenerateComplete is deferred until
-  // after the last add), advance the state machine to 'organizing', surface
-  // a failure toast if anything errored, then — after a short tick so the
-  // last cart-add line/flash animations can paint — navigate to My Plan and
-  // bump the orchestration nonce.
-  //
-  // Reset to 'idle' is driven by MyPlanPanel's onAutoOrganizeConsumed callback
-  // (the real "organize was kicked off" signal), not a fixed timer. We keep a
-  // 4 s safety fallback for the edge case where the cart ended up with < 2
-  // items so MyPlanPanel never consumes the key (the button would otherwise
-  // stay disabled forever).
+  // Settle (Phase 1): detect when all four phantom engines have settled
+  // (success or failure) and their staggered cart-add cascades have
+  // completed (onGenerateComplete is deferred until after the last add).
+  // Promote the state machine to 'organizing' and surface a failure toast if
+  // anything errored. Phase 2 (below) schedules the nav + orchestrate timers
+  // — splitting them prevents this effect's own state update from triggering
+  // its cleanup and cancelling the timers before they fire.
   useEffect(() => {
     if (autoBuildState !== 'generating') return;
     if (autoBuildInFlightExercise || autoBuildInFlightMT || autoBuildInFlightEPA || autoBuildInFlightAdjunct) return;
@@ -4533,14 +4528,24 @@ ${ddxList}`;
         variant: 'destructive',
       });
     }
+  }, [autoBuildState, autoBuildInFlightExercise, autoBuildInFlightMT, autoBuildInFlightEPA, autoBuildInFlightAdjunct, autoBuildFailures, toast]);
+  // Settle (Phase 2): once we're in 'organizing', schedule a short tick so
+  // the last cart-add flash/line animation can paint, then open the My Plan
+  // tab and bump the orchestrate nonce. Reset to 'idle' is driven primarily
+  // by MyPlanPanel's onAutoOrganizeConsumed; we keep a 4 s safety fallback
+  // for the edge case where the cart ended up with < 2 items (orchestrator
+  // never consumes) so the button doesn't stay stranded disabled.
+  //
+  // This effect's only dep is `autoBuildState`, so cleanup only fires when
+  // the state actually leaves 'organizing' (not as an artifact of the
+  // setState call inside the same effect).
+  useEffect(() => {
+    if (autoBuildState !== 'organizing') return;
     const navTimer = window.setTimeout(() => {
       setShowInjuryMechanism(true);
       setMechanismActiveTab('myPlan');
       setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
     }, 150);
-    // Safety fallback: if the orchestrator never consumes the key (e.g. cart
-    // is empty because all four engines failed), don't strand the button
-    // disabled — drop back to idle after a generous timeout.
     const safetyIdleTimer = window.setTimeout(() => {
       setAutoBuildState(prev => (prev === 'organizing' ? 'idle' : prev));
       setAutoBuildFailures(new Set());
@@ -4549,7 +4554,7 @@ ${ddxList}`;
       window.clearTimeout(navTimer);
       window.clearTimeout(safetyIdleTimer);
     };
-  }, [autoBuildState, autoBuildInFlightExercise, autoBuildInFlightMT, autoBuildInFlightEPA, autoBuildInFlightAdjunct, autoBuildFailures, toast]);
+  }, [autoBuildState]);
 
   const exerciseMtActivePhaseIndex = useMemo(() => {
     if (!treatmentPlanData || !treatmentPlanData.phases || treatmentPlanData.phases.length === 0) return 0;

@@ -583,6 +583,9 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showNotes, setShowNotes] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Track stagger timer IDs from autoAddOnGenerate so we can cancel them on
+  // unmount or before a fresh generate run.
+  const autoAddTimeoutsRef = useRef<number[]>([]);
 
   const [customResult, setCustomResult] = useState<CustomManualTherapyResult | null>(null);
   const [customLoading, setCustomLoading] = useState(false);
@@ -765,9 +768,12 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       const allIds = new Set(sorted.techniqueGroups.map(g => g.groupId));
       setExpandedGroups(allIds);
       if (autoAddOnGenerate) {
+        // Cancel any leftover stagger timers from a prior auto-add cascade.
+        autoAddTimeoutsRef.current.forEach(window.clearTimeout);
+        autoAddTimeoutsRef.current = [];
         const items = sorted.techniqueGroups.flatMap(group => group.techniques);
         items.forEach((technique, i) => {
-          window.setTimeout(() => {
+          const tid = window.setTimeout(() => {
             // Resolve sling match so auto-added items carry the same
             // slingTag/slingRole metadata as in-card AddToPlanButton clicks.
             const slingMatch = matchRecommendationsForItem(
@@ -790,8 +796,10 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
               slingRole: slingMatch?.role,
             });
           }, i * 110);
+          autoAddTimeoutsRef.current.push(tid);
         });
-        window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+        const completeTid = window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+        autoAddTimeoutsRef.current.push(completeTid);
       } else {
         onGenerateComplete?.(true);
       }
@@ -804,6 +812,14 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       if (!controller.signal.aborted) setLoading(false);
     }
   }, [buildPayload, onGenerateComplete, autoAddOnGenerate, addToPlanCart, slingDrivenRecommendations]);
+
+  // Cancel any pending auto-add stagger timers on unmount.
+  useEffect(() => {
+    return () => {
+      autoAddTimeoutsRef.current.forEach(window.clearTimeout);
+      autoAddTimeoutsRef.current = [];
+    };
+  }, []);
 
   useEffect(() => {
     if (pendingGenerate) {

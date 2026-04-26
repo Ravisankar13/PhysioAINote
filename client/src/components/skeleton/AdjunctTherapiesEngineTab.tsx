@@ -460,6 +460,9 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const evidenceAbortRef = useRef<AbortController | null>(null);
+  // Track stagger timer IDs from autoAddOnGenerate so we can cancel them on
+  // unmount or before a fresh generate run.
+  const autoAddTimeoutsRef = useRef<number[]>([]);
 
   const fetchEvidence = useCallback(async (currentPlan: AdjunctTherapiesPlan) => {
     if (evidenceAbortRef.current) evidenceAbortRef.current.abort();
@@ -577,6 +580,9 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
       setExpandedGroups(new Set(sorted.therapyGroups.map(g => g.groupId)));
       void fetchEvidence(sorted);
       if (autoAddOnGenerate) {
+        // Cancel any leftover stagger timers from a prior auto-add cascade.
+        autoAddTimeoutsRef.current.forEach(window.clearTimeout);
+        autoAddTimeoutsRef.current = [];
         const items: Array<{ category: string; rec: AdjunctRecommendation }> = [];
         sorted.therapyGroups.forEach(group => {
           group.recommendations.forEach(rec => {
@@ -584,7 +590,7 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
           });
         });
         items.forEach(({ category, rec }, i) => {
-          window.setTimeout(() => {
+          const tid = window.setTimeout(() => {
             const referralRequired = /refer/i.test(rec.referralGuidance || '') && /scope|out|qualified/i.test(rec.referralGuidance || '');
             addToPlanCart({
               id: makeCartId('adjunct', `${category}-${rec.therapyName}`),
@@ -600,8 +606,10 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
               evidenceGrade: typeof rec.evidenceLevel === 'string' ? rec.evidenceLevel : undefined,
             });
           }, i * 110);
+          autoAddTimeoutsRef.current.push(tid);
         });
-        window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+        const completeTid = window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+        autoAddTimeoutsRef.current.push(completeTid);
       } else {
         onGenerateComplete?.(true);
       }
@@ -614,6 +622,14 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
       if (!controller.signal.aborted) setLoading(false);
     }
   }, [mechanismAnalysis, painMarkers, diagnosis, recoveryPhase, irritability, fetchEvidence, autoAddOnGenerate, addToPlanCart, onGenerateComplete]);
+
+  // Cancel any pending auto-add stagger timers on unmount.
+  useEffect(() => {
+    return () => {
+      autoAddTimeoutsRef.current.forEach(window.clearTimeout);
+      autoAddTimeoutsRef.current = [];
+    };
+  }, []);
 
   useEffect(() => {
     if (pendingGenerate) {

@@ -844,6 +844,9 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
 
   const abortRef = useRef<AbortController | null>(null);
   const evidenceAbortRef = useRef<AbortController | null>(null);
+  // Track stagger timer IDs from autoAddOnGenerate so we can cancel them on
+  // unmount or before a fresh generate run.
+  const autoAddTimeoutsRef = useRef<number[]>([]);
   const planChangeRef = useRef(onPlanChange);
   planChangeRef.current = onPlanChange;
   // Notify parent on plan changes so other surfaces (Recovery Simulator
@@ -1014,6 +1017,9 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
       setExpandedGroups(allIds);
       void fetchEvidence(sorted);
       if (autoAddOnGenerate) {
+        // Cancel any leftover stagger timers from a prior auto-add cascade.
+        autoAddTimeoutsRef.current.forEach(window.clearTimeout);
+        autoAddTimeoutsRef.current = [];
         const items: Array<{ groupHint: string; modality: ModalityItem }> = [];
         sorted.modalityGroups.forEach(group => {
           group.modalities.forEach(modality => {
@@ -1021,7 +1027,7 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
           });
         });
         items.forEach(({ groupHint, modality }, i) => {
-          window.setTimeout(() => {
+          const tid = window.setTimeout(() => {
             const mechanismVal = modality.mechanism ?? inferMechanism(modality.modality, groupHint);
             const targetTissueVal = modality.targetTissue ?? inferTargetTissue(modality);
             const desiredEffectVal = modality.desiredEffect ?? inferDesiredEffect(modality, groupHint);
@@ -1055,8 +1061,10 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
               slingRole: slingMatch?.role,
             });
           }, i * 110);
+          autoAddTimeoutsRef.current.push(tid);
         });
-        window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+        const completeTid = window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+        autoAddTimeoutsRef.current.push(completeTid);
       } else {
         onGenerateComplete?.(true);
       }

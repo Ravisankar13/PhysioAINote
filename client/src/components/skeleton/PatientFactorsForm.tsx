@@ -321,7 +321,7 @@ export default function PatientFactorsForm({
                     {section.id === "comorbidities" && (
                       <>
                         <FieldRow label="Diabetes" hint="type1: healing ×0.7 · type2: ×0.8">
-                          <Sel<DiabetesStatus>
+                          <Sel
                             value={factors.diabetes}
                             options={[
                               { value: "none", label: "None" },
@@ -334,7 +334,7 @@ export default function PatientFactorsForm({
                           />
                         </FieldRow>
                         <FieldRow label="Smoking status" hint="current: healing ×0.75, recurrence ×1.3">
-                          <Sel<SmokingStatus>
+                          <Sel
                             value={factors.smoking}
                             options={[
                               { value: "never", label: "Never" },
@@ -346,7 +346,7 @@ export default function PatientFactorsForm({
                           />
                         </FieldRow>
                         <FieldRow label="Menopausal status" hint="postmenopausal: healing & tissue ×0.92">
-                          <Sel<MenopausalStatus>
+                          <Sel
                             value={factors.menopausalStatus}
                             options={[
                               { value: "unknown", label: "Unknown / not asked" },
@@ -411,7 +411,7 @@ export default function PatientFactorsForm({
                           </div>
                         </FieldRow>
                         <FieldRow label="Key imaging findings">
-                          <Sel<ImagingFindings>
+                          <Sel
                             value={factors.keyImagingFindings}
                             options={[
                               { value: "unknown", label: "Unknown / no imaging" },
@@ -431,7 +431,7 @@ export default function PatientFactorsForm({
                     {section.id === "sleep_nutrition" && (
                       <>
                         <FieldRow label="Sleep quality" hint="poor: healing ×0.8, pain ×1.25">
-                          <Sel<SleepQuality>
+                          <Sel
                             value={factors.sleepQuality}
                             options={[
                               { value: "good", label: "Good" },
@@ -454,7 +454,7 @@ export default function PatientFactorsForm({
                           />
                         </FieldRow>
                         <FieldRow label="Protein intake" hint="low: tissue ×0.92">
-                          <Sel<ProteinIntake>
+                          <Sel
                             value={factors.proteinIntake}
                             options={[
                               { value: "unknown", label: "Unknown" },
@@ -467,7 +467,7 @@ export default function PatientFactorsForm({
                           />
                         </FieldRow>
                         <FieldRow label="Daily steps band" hint="sedentary: healing ×0.92, recurrence ×1.1">
-                          <Sel<DailyStepsBand>
+                          <Sel
                             value={factors.dailyStepsBand}
                             options={[
                               { value: "unknown", label: "Unknown" },
@@ -510,7 +510,7 @@ export default function PatientFactorsForm({
                           <Slider01 value={factors.perceivedStress} onChange={(v) => set("perceivedStress", v)} testId="slider-stress" />
                         </FieldRow>
                         <FieldRow label="Social support">
-                          <Sel<SocialSupportLevel>
+                          <Sel
                             value={factors.socialSupport}
                             options={[
                               { value: "unknown", label: "Unknown" },
@@ -539,7 +539,7 @@ export default function PatientFactorsForm({
                           />
                         </FieldRow>
                         <FieldRow label="Lifting frequency at work" hint="heavy repeated: recurrence ×1.3">
-                          <Sel<LiftingFrequency>
+                          <Sel
                             value={factors.liftingFrequency}
                             options={[
                               { value: "unknown", label: "Unknown" },
@@ -553,7 +553,7 @@ export default function PatientFactorsForm({
                           />
                         </FieldRow>
                         <FieldRow label="Repetitive task exposure" hint="high: recurrence ×1.2">
-                          <Sel<RepetitiveTaskExposure>
+                          <Sel
                             value={factors.repetitiveTaskExposure}
                             options={[
                               { value: "unknown", label: "Unknown" },
@@ -576,7 +576,7 @@ export default function PatientFactorsForm({
                           />
                         </FieldRow>
                         <FieldRow label="Sport surface" hint="hard: recurrence ×1.1">
-                          <Sel<SportSurface>
+                          <Sel
                             value={factors.sportSurface}
                             options={[
                               { value: "unknown", label: "Unknown / N/A" },

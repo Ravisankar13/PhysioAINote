@@ -46,7 +46,13 @@ import type { AINaturalTimeline } from './recoverySimulationEngine';
  *  kinesiophobia, painCatastrophizing, selfEfficacy, perceivedStress,
  *  socialSupport, sittingHoursPerDay, liftingFrequency,
  *  repetitiveTaskExposure, sportPosition, sportSurface. */
-export const PATIENT_CONTEXT_TOTAL_FIELDS = 20;
+/** Total number of structured-form fields exposed by
+ *  `PatientFactorsForm`. Bumped to 33 in Task #255 to account for the
+ *  Natural Progression layer (chronicity stage, severity grade, pre-tx
+ *  slope, 5 validated screeners, expanded meds aggregate, expectations,
+ *  predicted adherence, flare pattern, concurrent involvement, demands
+ *  ramp, prior tx response). */
+export const PATIENT_CONTEXT_TOTAL_FIELDS = 33;
 
 export interface UncertaintySignals {
   /** 0–1: share of patient-context fields that are filled in. */
@@ -110,6 +116,31 @@ export function computePatientFactorsFilledCount(
   if (factors.repetitiveTaskExposure !== 'unknown') n++;
   if (factors.sportPosition && factors.sportPosition.trim()) n++;
   if (factors.sportSurface !== 'unknown') n++;
+  // Task #255 — Natural Progression Layer fields. 13 additional
+  // fields, each only counted when populated (no zero-fill).
+  if (factors.weeksSinceOnset !== null) n++;
+  if (factors.chronicityStage !== 'unknown') n++;
+  if (factors.severityGradeFamily !== 'unknown' && factors.severityGradeValue !== null) n++;
+  if (factors.preTxSlope !== 'unknown') n++;
+  const s = factors.screenerScores;
+  if (s) {
+    if (s.startBack !== null) n++;
+    if (s.orebro !== null) n++;
+    if (s.fabq !== null) n++;
+    if (s.pcs !== null) n++;
+    if (s.osproYf !== null) n++;
+  }
+  const xm = factors.expandedMedications;
+  if (xm && (xm.ssris || xm.glp1 || xm.aromataseInhibitors || xm.chronicOpioids || xm.ocp || xm.hrt)) n++;
+  if (factors.recoveryExpectations !== 'unknown') n++;
+  if (factors.predictedAdherence !== 'unknown') n++;
+  const fp = factors.flarePattern;
+  if (fp && (fp.frequency !== 'unknown' || fp.count12mo !== null || fp.lastFlareWeeks !== null)) n++;
+  const ci = factors.concurrentInvolvement;
+  if (ci && (ci.bilateral || ci.multiSite || ci.systemicCondition)) n++;
+  const dr = factors.demandsRamp;
+  if (dr && (dr.targetWeeks !== null || dr.intensityMultiplier !== null)) n++;
+  if (factors.priorTxResponse !== 'unknown') n++;
   return n;
 }
 

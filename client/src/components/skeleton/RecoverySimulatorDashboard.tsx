@@ -53,6 +53,7 @@ import {
   generateNarrative,
   defaultBranch,
   defaultInput,
+  MAX_SIMULATION_WEEKS,
   buildCustomTreatmentProfiles,
   buildCustomExerciseId,
   buildCustomTechniqueId,
@@ -1045,7 +1046,7 @@ export default function RecoverySimulatorDashboard({
     const aiWeeks = aiNaturalTimeline?.overall_window_weeks?.expected;
     const horizonInput: SimulationInput = {
       ...input,
-      totalWeeks: Math.max(4, Math.min(52, Math.round(aiWeeks ?? input.totalWeeks))),
+      totalWeeks: Math.max(4, Math.min(MAX_SIMULATION_WEEKS, Math.round(aiWeeks ?? input.totalWeeks))),
     };
     return simulateNaturalDriverModel(horizonInput, conditionContext, structuralBiases, aiNaturalTimeline ?? null);
   }, [conditionContext, structuralBiases, aiNaturalTimeline, input]);
@@ -2704,6 +2705,72 @@ export default function RecoverySimulatorDashboard({
                         );
                       })()}
                     </div>
+                  </div>
+                )}
+
+                {/* Task #255 — Natural Progression Layer "Why this curve"
+                    breakdown. Anchors the natural-history baseline (and
+                    lightly modulates the treated forecast) to a
+                    literature-derived prior, then explains the per-week
+                    multipliers via the active shifters. Visible whenever
+                    the engine has a prior — independent of chart mode. */}
+                {ctxForSim?.naturalProgression && (
+                  <div className="mt-3 rounded-lg border border-indigo-700/40 bg-indigo-950/15 p-2.5" data-testid="natural-progression-panel">
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-indigo-700/40 text-indigo-100 border-indigo-600/60 text-[10px] uppercase tracking-wide">
+                          Natural progression
+                        </Badge>
+                        <span className="text-[10px] text-gray-300">
+                          Prior: <span className="font-semibold text-indigo-200" data-testid="natural-progression-prior-label">{ctxForSim.naturalProgression.prior.conditionLabel}</span>
+                        </span>
+                        <span className="text-[10px] text-gray-300" title="Median time to meaningful recovery from cited literature">
+                          Median: <span className="font-semibold text-indigo-200">~{ctxForSim.naturalProgression.prior.medianRecoveryWeeks} wk</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        <Badge className="bg-amber-800/40 border-amber-600/60 text-amber-100 text-[9px]" title="Probability the natural course chronifies given current shifters">
+                          Chronify {Math.round(ctxForSim.naturalProgression.chronificationProbability * 100)}%
+                        </Badge>
+                        <Badge className="bg-orange-800/40 border-orange-600/60 text-orange-100 text-[9px]" title="Probability the curve plateaus before the literature ceiling">
+                          Plateau {Math.round(ctxForSim.naturalProgression.plateauProbability * 100)}%
+                        </Badge>
+                        <Badge className="bg-emerald-800/40 border-emerald-600/60 text-emerald-100 text-[9px]" title="Best-case ceiling on the natural-history baseline (0–100%)">
+                          Ceiling {Math.round(ctxForSim.naturalProgression.ceiling * 100)}%
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-indigo-200/80 italic mb-2" data-testid="natural-progression-summary">
+                      {ctxForSim.naturalProgression.summary}
+                    </div>
+                    {ctxForSim.naturalProgression.shifters.length > 0 && (
+                      <div className="space-y-1" data-testid="natural-progression-shifters">
+                        <div className="text-[10px] text-gray-400 mb-0.5">Why this curve · top {Math.min(6, ctxForSim.naturalProgression.shifters.length)} shifters</div>
+                        {ctxForSim.naturalProgression.shifters.slice(0, 6).map((s) => (
+                          <div key={s.id} className="flex items-center justify-between gap-2 text-[10px]">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <Badge className={`text-[9px] ${
+                                s.direction === 'helping' ? 'bg-emerald-700/30 border-emerald-600/40 text-emerald-200' :
+                                s.direction === 'hurting' ? 'bg-red-700/30 border-red-600/40 text-red-200' :
+                                                            'bg-gray-700/30 border-gray-600/40 text-gray-200'
+                              }`}>
+                                {s.direction === 'helping' ? '↑' : s.direction === 'hurting' ? '↓' : '·'}
+                              </Badge>
+                              <span className="text-gray-200 truncate" title={s.effect}>{s.label}</span>
+                              {s.value !== undefined && s.value !== null && (
+                                <span className="text-gray-500 truncate">· {String(s.value)}</span>
+                              )}
+                            </div>
+                            <span className={`font-mono tabular-nums ${
+                              s.direction === 'helping' ? 'text-emerald-300' :
+                              s.direction === 'hurting' ? 'text-red-300' : 'text-gray-400'
+                            }`}>
+                              {s.contributionPercent >= 0 ? '+' : ''}{s.contributionPercent.toFixed(1)}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

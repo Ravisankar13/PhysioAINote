@@ -41,6 +41,101 @@ export type LiftingFrequency = "none" | "occasional" | "frequent" | "heavy_repea
 export type RepetitiveTaskExposure = "none" | "low" | "moderate" | "high" | "unknown";
 export type SportSurface = "soft" | "mixed" | "hard" | "unknown";
 
+// === Task #255 — Natural Progression Layer ===
+// New fields capture chronicity, severity grade, pre-treatment slope,
+// validated screener scores, expanded meds/hormones, expectations,
+// adherence, flare pattern, concurrent/systemic involvement, demands
+// trajectory, and prior treatment response. Each maps to one or more
+// natural-progression shifters (see `naturalProgressionEngine.ts`)
+// and/or simulator multipliers in `computePatientModifiers`.
+
+/** Stage of chronicity. Drives the diagnosis prior lookup and a
+ *  multiplier on healingRate / chronicityRisk. `unknown` falls back
+ *  to weeksSinceOnset-derived inference where possible. */
+export type ChronicityStage = "acute" | "subacute" | "chronic" | "unknown";
+
+/** Severity-grade families. Each condition family uses a different
+ *  scale (KL grade for OA, tear thickness for cuff, Neer/Hawkins for
+ *  impingement, nerve-conduction grade for radicular, etc.). */
+export type SeverityGradeFamily =
+  | "kl_grade"           // 0–4
+  | "tear_thickness"     // 0=none, 1=partial, 2=full
+  | "neer_hawkins"       // 0=neg, 1=pos one, 2=pos both
+  | "nerve_conduction"   // 0=normal, 1=mild, 2=moderate, 3=severe
+  | "lbp_severity"       // 0=mild, 1=moderate, 2=severe
+  | "tendon_cook_stage"  // 0=reactive, 1=disrepair, 2=degenerative
+  | "generic_severity"   // 0–3
+  | "unknown";
+
+/** Pre-treatment trajectory slope over the last 2–4 weeks. */
+export type PreTxSlope = "improving" | "flat" | "worsening" | "unknown";
+
+/** Validated screener scores. All optional; range constraints follow
+ *  the published instruments (StarT Back 0–9, Örebro 0–210, FABQ-PA
+ *  0–24, FABQ-W 0–42 collapsed here to FABQ overall 0–96, PCS 0–52,
+ *  OSPRO-YF 17-item summary 0–100 normalised). */
+export interface ValidatedScreenerScores {
+  startBack: number | null;   // 0–9
+  orebro: number | null;      // 0–210
+  fabq: number | null;        // 0–96
+  pcs: number | null;         // 0–52
+  osproYf: number | null;     // 0–100 normalised
+}
+
+/** Expanded medication / hormonal context (additive to
+ *  CurrentMedications). All boolean toggles; clinician selects what
+ *  applies. */
+export interface ExpandedMedications {
+  ssris: boolean;                 // SSRIs slow tendon repair, raise bleeding risk
+  glp1: boolean;                  // GLP-1 agonists — appetite suppression, sarcopenia risk
+  aromataseInhibitors: boolean;   // Joint pain, tendon weakening
+  chronicOpioids: boolean;        // Hyperalgesia, slower recovery
+  ocp: boolean;                   // Oral contraceptive — collagen effects
+  hrt: boolean;                   // Hormone replacement — protective for tendon/bone post-meno
+}
+
+/** Recovery expectations as expressed by the patient. */
+export type RecoveryExpectations = "low" | "moderate" | "high" | "unknown";
+
+/** Predicted adherence — clinician's structured estimate of how
+ *  closely the patient will follow the prescribed plan over the next
+ *  4–8 weeks (separate from `compliance` which is a snapshot 0–100). */
+export type PredictedAdherence = "low" | "moderate" | "high" | "unknown";
+
+/** Flare pattern history over the prior 12 months. */
+export interface FlarePattern {
+  count12mo: number | null;       // total flares in last 12 mo
+  frequency: "none" | "rare" | "monthly" | "weekly" | "unknown";
+  lastFlareWeeks: number | null;  // weeks since last flare
+}
+
+/** Concurrent / contralateral / systemic involvement. */
+export interface ConcurrentInvolvement {
+  bilateral: boolean;             // same condition on both sides
+  multiSite: boolean;             // multiple body regions affected
+  systemicCondition: boolean;     // RA, fibromyalgia, lupus, etc.
+}
+
+/** Demands-trajectory ramp — captures the *trajectory* of return-to-
+ *  activity expectations, not just the snapshot. */
+export interface DemandsRamp {
+  /** Weeks until the patient needs to be back to full demand. */
+  targetWeeks: number | null;
+  /** 0.5 = half-load, 1.0 = current load, 1.5 = sport-reload, 2.0 =
+   *  competition / heavy occupational. */
+  intensityMultiplier: number | null;
+}
+
+/** Prior treatment response — bucketed history of how the patient
+ *  responded to similar episodes before. */
+export type PriorTxResponse =
+  | "fast_responder"     // resolved in <expected weeks
+  | "expected"           // tracked the prior
+  | "slow_responder"     // resolved late
+  | "non_responder"      // never fully resolved
+  | "naive"              // first episode / no prior data
+  | "unknown";
+
 export interface PatientFactors {
   age: number | null;
   bmi: BmiCategory;
@@ -89,6 +184,43 @@ export interface PatientFactors {
   repetitiveTaskExposure: RepetitiveTaskExposure;
   sportPosition: string;
   sportSurface: SportSurface;
+
+  // === Task #255 — Natural Progression Layer ===
+  // Chronicity & Severity
+  weeksSinceOnset: number | null;
+  chronicityStage: ChronicityStage;
+  severityGradeFamily: SeverityGradeFamily;
+  /** Numeric grade in the chosen family (0–4 typical). Interpretation
+   *  depends on `severityGradeFamily`. */
+  severityGradeValue: number | null;
+
+  // Pre-treatment trajectory
+  preTxSlope: PreTxSlope;
+  /** Magnitude of the slope: 0–100 representing pp/week change in
+   *  pain or function over the 2–4 weeks pre-presentation. */
+  preTxSlopeMagnitude: number | null;
+
+  // Validated screeners
+  screenerScores: ValidatedScreenerScores;
+
+  // Expanded meds / hormonal context
+  expandedMedications: ExpandedMedications;
+
+  // Expectations & adherence
+  recoveryExpectations: RecoveryExpectations;
+  predictedAdherence: PredictedAdherence;
+
+  // Flare pattern
+  flarePattern: FlarePattern;
+
+  // Concurrent / systemic involvement
+  concurrentInvolvement: ConcurrentInvolvement;
+
+  // Demands trajectory (return-to-activity ramp)
+  demandsRamp: DemandsRamp;
+
+  // Prior treatment response
+  priorTxResponse: PriorTxResponse;
 }
 
 export const DEFAULT_PATIENT_FACTORS: PatientFactors = {
@@ -139,6 +271,46 @@ export const DEFAULT_PATIENT_FACTORS: PatientFactors = {
   repetitiveTaskExposure: "unknown",
   sportPosition: "",
   sportSurface: "unknown",
+
+  // Task #255 — Natural Progression Layer defaults
+  weeksSinceOnset: null,
+  chronicityStage: "unknown",
+  severityGradeFamily: "unknown",
+  severityGradeValue: null,
+  preTxSlope: "unknown",
+  preTxSlopeMagnitude: null,
+  screenerScores: {
+    startBack: null,
+    orebro: null,
+    fabq: null,
+    pcs: null,
+    osproYf: null,
+  },
+  expandedMedications: {
+    ssris: false,
+    glp1: false,
+    aromataseInhibitors: false,
+    chronicOpioids: false,
+    ocp: false,
+    hrt: false,
+  },
+  recoveryExpectations: "unknown",
+  predictedAdherence: "unknown",
+  flarePattern: {
+    count12mo: null,
+    frequency: "unknown",
+    lastFlareWeeks: null,
+  },
+  concurrentInvolvement: {
+    bilateral: false,
+    multiSite: false,
+    systemicCondition: false,
+  },
+  demandsRamp: {
+    targetWeeks: null,
+    intensityMultiplier: null,
+  },
+  priorTxResponse: "unknown",
 };
 
 export interface RecoveryPhase {

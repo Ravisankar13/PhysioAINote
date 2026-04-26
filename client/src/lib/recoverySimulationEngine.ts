@@ -309,6 +309,14 @@ export interface OptimizerResult {
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
+/** Hard upper bound on the simulator's projection horizon. The
+ *  RecoverySimulatorDashboard clamps `input.totalWeeks` to this value,
+ *  so callers that pre-compute per-week structures (such as the
+ *  natural-history `adjustedCurve`) should size them to this constant
+ *  to guarantee coverage of the worst-case dashboard request. The
+ *  simulator's own per-week loop then truncates to `input.totalWeeks`. */
+export const MAX_SIMULATION_WEEKS = 52;
+
 export const TREATMENT_LIBRARY: TreatmentEffectProfile[] = [
   {
     id: 'rest_offload',
@@ -1121,6 +1129,57 @@ export interface ConditionContext {
    *  treatments target specific load components. Optional — when absent,
    *  the engine falls back to the legacy `jointForceOverloadCount` path. */
   jointLoadVectors?: JointLoadVector[];
+  /** Task #255 — Natural-history prior + patient shifters. When
+   *  provided, baseline (no-treatment / rest / usual-care / continued-
+   *  aggravation) branches anchor their capacity / function curves to
+   *  the prior via `perWeekMultipliers` and cap at `ceiling`; treated
+   *  branches inherit a softened (30%) version of the same shifters
+   *  so the dashboard's "Why this curve" breakdown stays consistent
+   *  across both forecasts. Omit for graceful fallback to the legacy
+   *  biomechanics-only model. */
+  naturalProgression?: {
+    /** Per-week multiplier on capacity / function GAIN (1.0 = neutral). */
+    perWeekMultipliers: number[];
+    /** Per-week recovery fraction (0–1) on the literature prior curve
+     *  *after* shifters have been applied. Length = totalWeeks + 1.
+     *  Drives the baseline-anchor blend so a "do nothing" curve tracks
+     *  the literature's slow-or-fast shape (acute LBP recovers fast;
+     *  adhesive capsulitis crawls for months) regardless of whether
+     *  any patient shifters are filled in. */
+    adjustedCurve: number[];
+    /** Per-week recovery fraction (0–1) on the literature prior curve
+     *  *before* shifters. Useful for diagnostics / future overlays. */
+    baseCurve: number[];
+    /** Maximum achievable capacity / function (0–1 fraction). */
+    ceiling: number;
+    /** Chronification probability added to initial chronicityRisk. */
+    chronificationProbability: number;
+    /** Plateau probability after applying shifters (0–1). */
+    plateauProbability: number;
+    /** Plain-language summary for tooltips. */
+    summary: string;
+    /** True when matched to a literature prior; false when generic
+     *  fallback was used. */
+    priorMatched: boolean;
+    /** Matched literature prior label + median weeks. Carried as a
+     *  shallow shape so this engine module doesn't depend on the
+     *  natural-history priors module's full type. */
+    prior: {
+      conditionLabel: string;
+      medianRecoveryWeeks: number;
+      [k: string]: unknown;
+    };
+    /** Ordered (|contribution| desc) list of active patient shifters
+     *  the dashboard's "Why this curve" panel renders. */
+    shifters: Array<{
+      id: string;
+      label: string;
+      effect: string;
+      contributionPercent: number;
+      direction: "helping" | "hurting" | "informational";
+      value: string | number | null;
+    }>;
+  };
 }
 
 /** Slings that meaningfully gate recovery for each archetype. Used
@@ -1234,6 +1293,20 @@ const CONDITION_OVERRIDES: { match: RegExp; id: string; override: ConditionOverr
   { match: /(fibromyalg|chronic pain|chronic widespread|central sensit|cps|nociplastic)/i, id: 'chronic_pain', override: { primaryTissue: 'generic', healingRateMult: 0.70, painDecayMult: 0.75, chronicityRiskAdd: 25 } },
   // Instability / hypermobility
   { match: /(hypermobil|eds|ehlers[- ]danlos|joint instab|multidirectional instab|shoulder instab)/i, id: 'joint_instability', override: { primaryTissue: 'ligament', healingRateMult: 0.85, capacityRampMult: 0.90 } },
+  // Task #255 — LBP variants. The natural-history priors catalog
+  // keys LBP under three distinct `conditionId`s (acute_lbp,
+  // subacute_lbp, chronic_lbp) rather than a single id with a stage
+  // dimension, so the classifier needs to surface a plausible
+  // variant from the complaint string. The
+  // `resolveNaturalProgressionConditionId` bridge in
+  // naturalProgressionEngine then refines the choice using the
+  // structured patient `chronicityStage` / `weeksSinceOnset` so a
+  // clinician's "low back pain" complaint plus chronicityStage =
+  // chronic still routes to the chronic_lbp prior.
+  { match: /(acute (low back|lumbar|lbp)|acute back pain)/i, id: 'acute_lbp', override: { primaryTissue: 'disc', healingRateMult: 1.10, painDecayMult: 0.85, flareRiskBase: 6 } },
+  { match: /(chronic (low back|lumbar|lbp)|chronic back pain|persistent (low back|lumbar)|long[- ]standing back)/i, id: 'chronic_lbp', override: { primaryTissue: 'disc', healingRateMult: 0.65, painDecayMult: 0.85, flareRiskBase: 8, chronicityRiskAdd: 15 } },
+  { match: /(subacute (low back|lumbar|lbp))/i, id: 'subacute_lbp', override: { primaryTissue: 'disc', healingRateMult: 0.90, painDecayMult: 0.85, flareRiskBase: 7 } },
+  { match: /(low back pain|lumbar pain|^lbp\b|lumbago|mechanical back pain|non[- ]specific (low back|back pain))/i, id: 'subacute_lbp', override: { primaryTissue: 'disc', healingRateMult: 0.90, painDecayMult: 0.85, flareRiskBase: 7 } },
 ];
 
 export function classifyCondition(mainComplaint?: string | null): { id: string; label: string; override: ConditionOverride } {
@@ -1273,6 +1346,11 @@ export function buildConditionContext(args: {
   patientRomCeiling?: number;
   ageYears?: number | null;
   jointLoadVectors?: JointLoadVector[];
+  /** Task #255 — pre-computed natural-progression result. Pass the
+   *  output of `computeNaturalProgression(...)` so the simulator can
+   *  anchor baseline branches to the literature prior. Omit for
+   *  graceful fallback. */
+  naturalProgression?: ConditionContext["naturalProgression"];
 }): ConditionContext {
   const cls = classifyCondition(args.mainComplaint);
   let tissueLoad = 0;
@@ -1349,6 +1427,7 @@ export function buildConditionContext(args: {
     patientRomCeiling: args.patientRomCeiling ?? 1,
     ageYears: args.ageYears ?? null,
     jointLoadVectors: args.jointLoadVectors,
+    naturalProgression: args.naturalProgression,
   };
 }
 
@@ -2054,6 +2133,15 @@ export function simulateBranch(
     state.strength = Math.min(state.strength, mods.ceiling);
     state.workCapacity = Math.min(state.workCapacity, mods.ceiling);
   }
+  // Task #255 — natural-history prior: bumps initial chronification on
+  // baseline branches so the "do nothing" curve carries the literature
+  // base-rate forward. Treated branches keep their existing initial
+  // chronicityRisk so intervention forecasts aren't double-penalised.
+  if (!initialOverride && isBaselineBranch && conditionContext?.naturalProgression) {
+    const np = conditionContext.naturalProgression;
+    const chronAdd = np.chronificationProbability * 100; // 0–1 → 0–100
+    state.chronicityRisk = clamp(Math.max(state.chronicityRisk, chronAdd * 0.5));
+  }
   states.push({ ...state, week: 0 });
 
   const lookup = buildLookup(customProfiles);
@@ -2075,7 +2163,39 @@ export function simulateBranch(
     ? aiBaselineModifiers(effectiveAI, baselineMode, conditionContext?.primaryTissue).ceiling
     : 100;
 
+  // Task #255 — per-week multipliers from the natural-history prior.
+  // Baseline branches consume the full multiplier; treated branches
+  // inherit a softened (30%) version so intervention forecasts shift in
+  // the same direction without double-counting the base prior.
+  const npMults = conditionContext?.naturalProgression?.perWeekMultipliers;
+  const npCurve = conditionContext?.naturalProgression?.adjustedCurve;
+  const npCeilingPct = conditionContext?.naturalProgression
+    ? conditionContext.naturalProgression.ceiling * 100
+    : 100;
+  const npWeight = isBaselineBranch ? 1 : 0.3;
+  // Task #255 — baseline-anchor blend weight. Pulls the simulator's
+  // capacity / ROM / strength / work-capacity curves toward the
+  // literature-derived `adjustedCurve` so the natural-history shape
+  // (slow-recovering frozen shoulder vs fast-recovering acute LBP)
+  // drives the trajectory even when no patient shifters are filled
+  // and `perWeekMultipliers` are all 1.0. Treated branches anchor
+  // only lightly so interventions can still bend the curve above the
+  // literature floor when warranted.
+  const npAnchorWeight = isBaselineBranch ? 0.6 : 0.15;
+  // Compute the prior's *gain envelope* (capacity points expected to
+  // be earned this week) from the adjustedCurve. We anchor by gain so
+  // the initial state from `defaultInitialState(...)` still sets the
+  // week-0 baseline (the literature curve is normalised to 0 at w0).
+  const baselineCapacityFloor = state.capacity;
+
   for (let w = 1; w <= input.totalWeeks; w++) {
+    const prevCapacity = state.capacity;
+    const prevWalking = state.walking;
+    const prevStairs = state.stairs;
+    const prevSquat = state.squat;
+    const prevRom = state.romPercent;
+    const prevStrength = state.strength;
+    const prevWorkCap = state.workCapacity;
     const { newState, markers, attribution } = applyTreatmentEffects(state, ctx, w);
     state = newState;
     if (effectiveAI) {
@@ -2083,6 +2203,73 @@ export function simulateBranch(
       state.romPercent = Math.min(state.romPercent, aiCeiling);
       state.strength = Math.min(state.strength, aiCeiling);
       state.workCapacity = Math.min(state.workCapacity, aiCeiling);
+    }
+    // Apply natural-progression per-week multiplier to the GAIN (not
+    // the absolute) so treatment-driven movement is preserved while
+    // the curve's slope tilts toward the literature prior.
+    if (npMults && npMults.length > w) {
+      const baseMult = npMults[w] ?? 1;
+      const m = 1 + (baseMult - 1) * npWeight;
+      const scaleGain = (prev: number, next: number) =>
+        clamp(prev + (next - prev) * m);
+      state.capacity = scaleGain(prevCapacity, state.capacity);
+      state.walking = scaleGain(prevWalking, state.walking);
+      state.stairs = scaleGain(prevStairs, state.stairs);
+      state.squat = scaleGain(prevSquat, state.squat);
+      state.romPercent = scaleGain(prevRom, state.romPercent);
+      state.strength = scaleGain(prevStrength, state.strength);
+      state.workCapacity = scaleGain(prevWorkCap, state.workCapacity);
+    }
+
+    // Task #255 — baseline-anchor blend. Pull capacity / function
+    // curves toward the literature prior's expected fraction. The
+    // prior curve is 0–1; it represents how much of the *recovery
+    // headroom* (full = 100, floor = the simulator's week-0 baseline)
+    // a typical patient with this diagnosis should have regained by
+    // week `w`. Without this blend the natural-history shape is only
+    // expressed via slope-tilt (perWeekMultipliers), so when no patient
+    // shifters are filled in the multipliers degenerate to 1.0 and the
+    // baseline trajectory ignores the prior entirely. With this blend,
+    // a slow-recovering frozen shoulder will crawl for months and a
+    // fast-recovering acute LBP will round the corner by w4 even with
+    // a totally blank patient profile.
+    if (npCurve && npCurve.length > w) {
+      const frac = npCurve[w] ?? 0;
+      // Map 0–1 fraction onto 0–100 capacity scale, lifting *from* the
+      // simulator's week-0 baseline so the prior never erases the
+      // initial-state floor (e.g. a patient who already has 60%
+      // capacity doesn't get reset to 8% just because the literature
+      // curve says w12 ≈ 0.08 of full recovery).
+      const headroom = 100 - baselineCapacityFloor;
+      const target = baselineCapacityFloor + frac * headroom;
+      const blend = (cur: number) => clamp(cur + (target - cur) * npAnchorWeight);
+      state.capacity = blend(state.capacity);
+      state.romPercent = blend(state.romPercent);
+      state.strength = blend(state.strength);
+      state.workCapacity = blend(state.workCapacity);
+      state.walking = blend(state.walking);
+      state.stairs = blend(state.stairs);
+      state.squat = blend(state.squat);
+    }
+    // Natural-progression residual-deficit ceiling — clip baseline
+    // branches; treated branches use a relaxed ceiling (halfway between
+    // the prior ceiling and 100) so interventions can still recover
+    // beyond the natural-history floor when warranted.
+    if (conditionContext?.naturalProgression) {
+      const cap = isBaselineBranch ? npCeilingPct : (npCeilingPct + 100) / 2;
+      state.capacity = Math.min(state.capacity, cap);
+      state.romPercent = Math.min(state.romPercent, cap);
+      state.strength = Math.min(state.strength, cap);
+      state.workCapacity = Math.min(state.workCapacity, cap);
+      // Functional curves get the same residual-deficit cap so the
+      // dashboard's walking / stairs / squat lines stay consistent
+      // with the literature ceiling that already governs capacity /
+      // ROM / strength / workCapacity above (a chronic LBP curve
+      // shouldn't quietly walk to 100% while its capacity is held to
+      // the prior's residual-deficit floor).
+      state.walking = Math.min(state.walking, cap);
+      state.stairs = Math.min(state.stairs, cap);
+      state.squat = Math.min(state.squat, cap);
     }
     // Task #241 — once per-week treatment math is settled, snap the
     // observable state values (pain, sleep) to the clinician-logged

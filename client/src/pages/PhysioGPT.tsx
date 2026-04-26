@@ -203,7 +203,8 @@ const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSim
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
 const RecoverySimulationPanel = lazy(() => import("@/components/skeleton/RecoverySimulationPanel"));
 const RecoverySimulatorDashboard = lazy(() => import("@/components/skeleton/RecoverySimulatorDashboard"));
-import { buildConditionContext, buildCustomExerciseId, buildCustomTechniqueId, extractJointLoadVectors, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput, type JointLoadVector } from "@/lib/recoverySimulationEngine";
+import { buildConditionContext, buildCustomExerciseId, buildCustomTechniqueId, classifyCondition, extractJointLoadVectors, MAX_SIMULATION_WEEKS, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput, type JointLoadVector } from "@/lib/recoverySimulationEngine";
+import { computeNaturalProgression, resolveNaturalProgressionConditionId } from "@/lib/naturalProgressionEngine";
 import { buildPrescriptionContext } from "@/lib/prescriptionAdapterEngine";
 import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDashboard";
 import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers, derivePsychosocialAndOccupationalDrivers, type PatientFactors } from "@/lib/patientFactorsEngine";
@@ -4975,6 +4976,29 @@ ${ddxList}`;
     const factors = effectivePatientFactors;
     const mods = effectivePatientModifiers;
 
+    // Task #255 — Natural Progression Layer. Resolve conditionId
+    // from the pathology text the same way `buildConditionContext`
+    // will, then compute the literature-derived prior + shifters and
+    // pass them into the context so `simulateBranch` can anchor the
+    // baseline branch (and lightly modulate the treated branch) to
+    // the natural-history curve. We size the curve to the simulator's
+    // hard upper-bound horizon (`MAX_SIMULATION_WEEKS`) — the
+    // dashboard clamps `input.totalWeeks` to that value, and the
+    // engine's per-week loop truncates to whatever the user picks.
+    // Step 1: classify the complaint string. For most diagnoses this
+    // is the final id. For LBP variants (acute_lbp / subacute_lbp /
+    // chronic_lbp), the classifier picks a default from the text and
+    // the bridge below refines it using structured patient factors so
+    // a plain "low back pain" complaint plus a chronic chronicity
+    // stage routes to chronic_lbp instead of the subacute default.
+    const classifiedNpId = classifyCondition(pathologyText).id;
+    const npConditionId = resolveNaturalProgressionConditionId(classifiedNpId, factors);
+    const naturalProgression = computeNaturalProgression({
+      conditionId: npConditionId,
+      factors,
+      totalWeeks: MAX_SIMULATION_WEEKS,
+    });
+
     return buildConditionContext({
       mainComplaint: pathologyText,
       compromisedTissues: compromisedTissueInputs,
@@ -4999,6 +5023,7 @@ ${ddxList}`;
       // motor_control, manual_therapy, …) can target the actual dominant
       // load components on the active skeleton.
       jointLoadVectors: extractJointLoadVectors(hudForceAnalysis ?? null, { topN: 6 }),
+      naturalProgression,
     });
   }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, slingActivationOverrides, collectModelConfigDeviations, hudForceAnalysis, effectivePatientFactors, effectivePatientModifiers]);
 

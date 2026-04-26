@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, ChevronUp, HeartPulse, History, Moon, Brain, Briefcase, X, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, HeartPulse, History, Moon, Brain, Briefcase, X, RotateCcw, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   type PatientFactors,
@@ -18,6 +18,12 @@ import {
   type DiabetesStatus,
   type SmokingStatus,
   type SleepQuality,
+  type ChronicityStage,
+  type SeverityGradeFamily,
+  type PreTxSlope,
+  type RecoveryExpectations,
+  type PredictedAdherence,
+  type PriorTxResponse,
   DEFAULT_PATIENT_FACTORS,
 } from "@/lib/patientFactorsEngine";
 
@@ -56,6 +62,7 @@ const SECTIONS: SectionDef[] = [
   { id: "sleep_nutrition", label: "Sleep · nutrition · activity", Icon: Moon, tone: "border-emerald-500/30 bg-emerald-500/5" },
   { id: "psychosocial", label: "Psychosocial granularity", Icon: Brain, tone: "border-violet-500/30 bg-violet-500/5" },
   { id: "occupational", label: "Occupational specifics", Icon: Briefcase, tone: "border-sky-500/30 bg-sky-500/5" },
+  { id: "natural_progression", label: "Natural progression layer", Icon: TrendingUp, tone: "border-indigo-500/30 bg-indigo-500/5" },
 ];
 
 function FieldRow({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -247,6 +254,28 @@ export default function PatientFactorsForm({
     if (factors.repetitiveTaskExposure !== "unknown") n++;
     if (factors.sportPosition.trim()) n++;
     if (factors.sportSurface !== "unknown") n++;
+    // Task #255 — Natural Progression Layer fields
+    if (factors.weeksSinceOnset !== null) n++;
+    if (factors.chronicityStage !== "unknown") n++;
+    if (factors.severityGradeFamily !== "unknown" && factors.severityGradeValue !== null) n++;
+    if (factors.preTxSlope !== "unknown") n++;
+    const sc = factors.screenerScores;
+    if (sc.startBack !== null) n++;
+    if (sc.orebro !== null) n++;
+    if (sc.fabq !== null) n++;
+    if (sc.pcs !== null) n++;
+    if (sc.osproYf !== null) n++;
+    const xm = factors.expandedMedications;
+    if (xm.ssris || xm.glp1 || xm.aromataseInhibitors || xm.chronicOpioids || xm.ocp || xm.hrt) n++;
+    if (factors.recoveryExpectations !== "unknown") n++;
+    if (factors.predictedAdherence !== "unknown") n++;
+    const fp = factors.flarePattern;
+    if (fp.frequency !== "unknown" || fp.count12mo !== null || fp.lastFlareWeeks !== null) n++;
+    const ci = factors.concurrentInvolvement;
+    if (ci.bilateral || ci.multiSite || ci.systemicCondition) n++;
+    const dr = factors.demandsRamp;
+    if (dr.targetWeeks !== null || dr.intensityMultiplier !== null) n++;
+    if (factors.priorTxResponse !== "unknown") n++;
     return n;
   }, [factors]);
 
@@ -590,6 +619,266 @@ export default function PatientFactorsForm({
                         </FieldRow>
                       </>
                     )}
+
+                    {/* Task #255 — Natural Progression Layer fields. */}
+                    {section.id === "natural_progression" && (
+                      <>
+                        <FieldRow label="Weeks since onset" hint="<4: acute · 4–12: subacute · ≥12: chronic">
+                          <NumInput
+                            value={factors.weeksSinceOnset}
+                            onChange={(v) => set("weeksSinceOnset", v)}
+                            placeholder="e.g. 8"
+                            min={0}
+                            max={520}
+                            step={1}
+                            testId="input-weeks-since-onset"
+                          />
+                        </FieldRow>
+                        <FieldRow label="Chronicity stage" hint="overrides inference from weeks">
+                          <Sel
+                            value={factors.chronicityStage}
+                            options={[
+                              { value: "unknown", label: "Unknown / infer" },
+                              { value: "acute", label: "Acute (<4 wk)" },
+                              { value: "subacute", label: "Subacute (4–12 wk)" },
+                              { value: "chronic", label: "Chronic (≥12 wk)" },
+                            ]}
+                            onChange={(v) => set("chronicityStage", v as ChronicityStage)}
+                            testId="select-chronicity-stage"
+                          />
+                        </FieldRow>
+                        <FieldRow label="Severity grade family" hint="scale used for the grade value">
+                          <Sel
+                            value={factors.severityGradeFamily}
+                            options={[
+                              { value: "unknown", label: "Unknown / N/A" },
+                              { value: "kl_grade", label: "KL grade (OA, 0–4)" },
+                              { value: "tear_thickness", label: "Tear thickness (0–2)" },
+                              { value: "neer_hawkins", label: "Neer/Hawkins (0–2)" },
+                              { value: "nerve_conduction", label: "Nerve conduction (0–3)" },
+                              { value: "lbp_severity", label: "LBP severity (0–2)" },
+                              { value: "tendon_cook_stage", label: "Cook stage (0–2)" },
+                              { value: "generic_severity", label: "Generic (0–3)" },
+                            ]}
+                            onChange={(v) => set("severityGradeFamily", v as SeverityGradeFamily)}
+                            testId="select-severity-family"
+                          />
+                        </FieldRow>
+                        <FieldRow label="Severity grade value" hint="numeric in the chosen scale">
+                          <NumInput
+                            value={factors.severityGradeValue}
+                            onChange={(v) => set("severityGradeValue", v)}
+                            placeholder="0–4"
+                            min={0}
+                            max={4}
+                            step={1}
+                            testId="input-severity-value"
+                          />
+                        </FieldRow>
+                        <FieldRow label="Pre-treatment slope" hint="trend over last 2–4 wk">
+                          <Sel
+                            value={factors.preTxSlope}
+                            options={[
+                              { value: "unknown", label: "Unknown" },
+                              { value: "improving", label: "Improving (+9%)" },
+                              { value: "flat", label: "Flat (−3%)" },
+                              { value: "worsening", label: "Worsening (−12%)" },
+                            ]}
+                            onChange={(v) => set("preTxSlope", v as PreTxSlope)}
+                            testId="select-pre-tx-slope"
+                          />
+                        </FieldRow>
+                        <FieldRow label="Pre-tx slope magnitude" hint="pp/wk change in pain or function">
+                          <NumInput
+                            value={factors.preTxSlopeMagnitude}
+                            onChange={(v) => set("preTxSlopeMagnitude", v)}
+                            placeholder="e.g. 5"
+                            min={0}
+                            max={100}
+                            step={1}
+                            testId="input-pre-tx-slope-mag"
+                          />
+                        </FieldRow>
+
+                        <FieldRow label="STarT Back (0–9)" hint="≥4: moderate · ≥4 + sub-score≥4: high">
+                          <NumInput
+                            value={factors.screenerScores.startBack}
+                            onChange={(v) => onChange({ ...factors, screenerScores: { ...factors.screenerScores, startBack: v } })}
+                            placeholder="0–9"
+                            min={0}
+                            max={9}
+                            step={1}
+                            testId="input-screener-startback"
+                          />
+                        </FieldRow>
+                        <FieldRow label="Örebro / ÖMPSQ (0–210)" hint="≥50: high · 30–49: moderate">
+                          <NumInput
+                            value={factors.screenerScores.orebro}
+                            onChange={(v) => onChange({ ...factors, screenerScores: { ...factors.screenerScores, orebro: v } })}
+                            placeholder="0–210"
+                            min={0}
+                            max={210}
+                            step={1}
+                            testId="input-screener-orebro"
+                          />
+                        </FieldRow>
+                        <FieldRow label="FABQ overall (0–96)" hint="≥40: high · 20–39: moderate">
+                          <NumInput
+                            value={factors.screenerScores.fabq}
+                            onChange={(v) => onChange({ ...factors, screenerScores: { ...factors.screenerScores, fabq: v } })}
+                            placeholder="0–96"
+                            min={0}
+                            max={96}
+                            step={1}
+                            testId="input-screener-fabq"
+                          />
+                        </FieldRow>
+                        <FieldRow label="PCS (0–52)" hint="≥30: high · 20–29: moderate">
+                          <NumInput
+                            value={factors.screenerScores.pcs}
+                            onChange={(v) => onChange({ ...factors, screenerScores: { ...factors.screenerScores, pcs: v } })}
+                            placeholder="0–52"
+                            min={0}
+                            max={52}
+                            step={1}
+                            testId="input-screener-pcs"
+                          />
+                        </FieldRow>
+                        <FieldRow label="OSPRO-YF (0–100)" hint=">66: high · 33–66: moderate">
+                          <NumInput
+                            value={factors.screenerScores.osproYf}
+                            onChange={(v) => onChange({ ...factors, screenerScores: { ...factors.screenerScores, osproYf: v } })}
+                            placeholder="0–100"
+                            min={0}
+                            max={100}
+                            step={1}
+                            testId="input-screener-ospro"
+                          />
+                        </FieldRow>
+
+                        <FieldRow label="Expanded meds / hormones" hint="adds to chronic NSAIDs / steroids list above">
+                          <div className="flex flex-wrap gap-1">
+                            <Toggle checked={factors.expandedMedications.ssris} onChange={(v) => onChange({ ...factors, expandedMedications: { ...factors.expandedMedications, ssris: v } })} label="SSRIs" testId="toggle-med-ssris" />
+                            <Toggle checked={factors.expandedMedications.glp1} onChange={(v) => onChange({ ...factors, expandedMedications: { ...factors.expandedMedications, glp1: v } })} label="GLP-1" testId="toggle-med-glp1" />
+                            <Toggle checked={factors.expandedMedications.aromataseInhibitors} onChange={(v) => onChange({ ...factors, expandedMedications: { ...factors.expandedMedications, aromataseInhibitors: v } })} label="Aromatase inhibitors" testId="toggle-med-ai" />
+                            <Toggle checked={factors.expandedMedications.chronicOpioids} onChange={(v) => onChange({ ...factors, expandedMedications: { ...factors.expandedMedications, chronicOpioids: v } })} label="Chronic opioids" testId="toggle-med-opioids" />
+                            <Toggle checked={factors.expandedMedications.ocp} onChange={(v) => onChange({ ...factors, expandedMedications: { ...factors.expandedMedications, ocp: v } })} label="OCP" testId="toggle-med-ocp" />
+                            <Toggle checked={factors.expandedMedications.hrt} onChange={(v) => onChange({ ...factors, expandedMedications: { ...factors.expandedMedications, hrt: v } })} label="HRT" testId="toggle-med-hrt" />
+                          </div>
+                        </FieldRow>
+
+                        <FieldRow label="Recovery expectations" hint="patient-stated optimism">
+                          <Sel
+                            value={factors.recoveryExpectations}
+                            options={[
+                              { value: "unknown", label: "Unknown" },
+                              { value: "low", label: "Low (−7%)" },
+                              { value: "moderate", label: "Moderate" },
+                              { value: "high", label: "High (+6%)" },
+                            ]}
+                            onChange={(v) => set("recoveryExpectations", v as RecoveryExpectations)}
+                            testId="select-recovery-expectations"
+                          />
+                        </FieldRow>
+                        <FieldRow label="Predicted adherence" hint="next 4–8 wk">
+                          <Sel
+                            value={factors.predictedAdherence}
+                            options={[
+                              { value: "unknown", label: "Unknown" },
+                              { value: "low", label: "Low (−8%)" },
+                              { value: "moderate", label: "Moderate" },
+                              { value: "high", label: "High (+5%)" },
+                            ]}
+                            onChange={(v) => set("predictedAdherence", v as PredictedAdherence)}
+                            testId="select-predicted-adherence"
+                          />
+                        </FieldRow>
+
+                        <FieldRow label="Flare pattern (last 12 mo)" hint="frequency + total count">
+                          <div className="flex gap-1">
+                            <Sel
+                              value={factors.flarePattern.frequency}
+                              options={[
+                                { value: "unknown", label: "Unknown" },
+                                { value: "none", label: "None" },
+                                { value: "rare", label: "Rare" },
+                                { value: "monthly", label: "Monthly" },
+                                { value: "weekly", label: "Weekly" },
+                              ]}
+                              onChange={(v) => onChange({ ...factors, flarePattern: { ...factors.flarePattern, frequency: v as PatientFactors["flarePattern"]["frequency"] } })}
+                              testId="select-flare-frequency"
+                            />
+                            <NumInput
+                              value={factors.flarePattern.count12mo}
+                              onChange={(v) => onChange({ ...factors, flarePattern: { ...factors.flarePattern, count12mo: v } })}
+                              placeholder="count"
+                              min={0}
+                              max={104}
+                              step={1}
+                              testId="input-flare-count"
+                            />
+                          </div>
+                        </FieldRow>
+                        <FieldRow label="Weeks since last flare">
+                          <NumInput
+                            value={factors.flarePattern.lastFlareWeeks}
+                            onChange={(v) => onChange({ ...factors, flarePattern: { ...factors.flarePattern, lastFlareWeeks: v } })}
+                            placeholder="e.g. 3"
+                            min={0}
+                            max={520}
+                            step={1}
+                            testId="input-flare-last-weeks"
+                          />
+                        </FieldRow>
+
+                        <FieldRow label="Concurrent / systemic">
+                          <div className="flex flex-wrap gap-1">
+                            <Toggle checked={factors.concurrentInvolvement.bilateral} onChange={(v) => onChange({ ...factors, concurrentInvolvement: { ...factors.concurrentInvolvement, bilateral: v } })} label="Bilateral" testId="toggle-bilateral" />
+                            <Toggle checked={factors.concurrentInvolvement.multiSite} onChange={(v) => onChange({ ...factors, concurrentInvolvement: { ...factors.concurrentInvolvement, multiSite: v } })} label="Multi-site" testId="toggle-multisite" />
+                            <Toggle checked={factors.concurrentInvolvement.systemicCondition} onChange={(v) => onChange({ ...factors, concurrentInvolvement: { ...factors.concurrentInvolvement, systemicCondition: v } })} label="Systemic" testId="toggle-systemic" />
+                          </div>
+                        </FieldRow>
+
+                        <FieldRow label="Demands ramp" hint="target weeks × intensity multiplier">
+                          <div className="flex gap-1">
+                            <NumInput
+                              value={factors.demandsRamp.targetWeeks}
+                              onChange={(v) => onChange({ ...factors, demandsRamp: { ...factors.demandsRamp, targetWeeks: v } })}
+                              placeholder="weeks"
+                              min={1}
+                              max={104}
+                              step={1}
+                              testId="input-demands-target-weeks"
+                            />
+                            <NumInput
+                              value={factors.demandsRamp.intensityMultiplier}
+                              onChange={(v) => onChange({ ...factors, demandsRamp: { ...factors.demandsRamp, intensityMultiplier: v } })}
+                              placeholder="0.5–2"
+                              min={0.1}
+                              max={3}
+                              step={0.1}
+                              testId="input-demands-intensity"
+                            />
+                          </div>
+                        </FieldRow>
+
+                        <FieldRow label="Prior treatment response" hint="how past episodes resolved">
+                          <Sel
+                            value={factors.priorTxResponse}
+                            options={[
+                              { value: "unknown", label: "Unknown" },
+                              { value: "naive", label: "First episode / naïve" },
+                              { value: "fast_responder", label: "Fast responder (+7%)" },
+                              { value: "expected", label: "Tracked expected" },
+                              { value: "slow_responder", label: "Slow responder (−8%)" },
+                              { value: "non_responder", label: "Non-responder (−14%)" },
+                            ]}
+                            onChange={(v) => set("priorTxResponse", v as PriorTxResponse)}
+                            testId="select-prior-tx-response"
+                          />
+                        </FieldRow>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -620,11 +909,20 @@ export function countFactorOverrides(current: PatientFactors, autoDetected: Pati
     "keyImagingFindings", "sleepHours", "proteinIntake", "dailyStepsBand", "trainingAgeYears",
     "kinesiophobia", "painCatastrophizing", "selfEfficacy", "perceivedStress", "socialSupport",
     "sittingHoursPerDay", "liftingFrequency", "repetitiveTaskExposure", "sportPosition", "sportSurface",
+    // Task #255 — Natural Progression Layer fields
+    "weeksSinceOnset", "chronicityStage", "severityGradeFamily", "severityGradeValue",
+    "preTxSlope", "preTxSlopeMagnitude",
+    "recoveryExpectations", "predictedAdherence", "priorTxResponse",
   ];
   for (const k of keys) {
     if (JSON.stringify(current[k]) !== JSON.stringify(autoDetected[k])) n++;
   }
   if (JSON.stringify(current.currentMedications) !== JSON.stringify(autoDetected.currentMedications)) n++;
+  if (JSON.stringify(current.expandedMedications) !== JSON.stringify(autoDetected.expandedMedications)) n++;
+  if (JSON.stringify(current.screenerScores) !== JSON.stringify(autoDetected.screenerScores)) n++;
+  if (JSON.stringify(current.flarePattern) !== JSON.stringify(autoDetected.flarePattern)) n++;
+  if (JSON.stringify(current.concurrentInvolvement) !== JSON.stringify(autoDetected.concurrentInvolvement)) n++;
+  if (JSON.stringify(current.demandsRamp) !== JSON.stringify(autoDetected.demandsRamp)) n++;
   return n;
 }
 

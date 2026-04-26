@@ -176,6 +176,7 @@ import type { TissueTarget } from "@/components/skeleton/ManualTherapyEngineTab"
 const ElectrophysicalEngineTab = lazy(() => import("@/components/skeleton/ElectrophysicalEngineTab"));
 const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/PatientEducationEngineTab"));
 const MyPlanPanel = lazy(() => import("@/components/skeleton/MyPlanPanel"));
+import MasterPlanCard from "@/components/skeleton/MasterPlanCard";
 import { PlanCartProvider, usePlanCart } from "@/lib/planCart";
 
 function MyPlanTabButton({ active, onClick }: { active: boolean; onClick: () => void }) {
@@ -699,6 +700,18 @@ export default function PhysioGPT() {
   const [electroPlan, setElectroPlan] = useState<import('@/components/skeleton/ElectrophysicalEngineTab').ElectrophysicalPlan | null>(null);
   const [electroPrefill, setElectroPrefill] = useState<{ condition: string; stage: 'acute' | 'subacute' | 'chronic'; nonce: number } | null>(null);
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
+  // Master Plan convergence card: nonce bumped when the card's "Organize with AI"
+  // button is pressed, so MyPlanPanel re-runs the same orchestration request once.
+  const [myPlanAutoOrganizeKey, setMyPlanAutoOrganizeKey] = useState<number | null>(null);
+  // Refs for the 4 quick-launch pills (Exercise/Manual/Electro/Adjunct) and the
+  // wrapping container so the convergence overlay can compute SVG anchor points.
+  const masterPlanContainerRef = useRef<HTMLDivElement>(null);
+  const masterPlanPillRefs = {
+    exercise: useRef<HTMLElement>(null),
+    manual: useRef<HTMLElement>(null),
+    electro: useRef<HTMLElement>(null),
+    adjunct: useRef<HTMLElement>(null),
+  };
   // Latest clinical-text parse result, retained at page level so the
   // Patient Context panel can fingerprint the prediction (for stale
   // detection) and the AI prompt-generation request can quote the
@@ -10813,6 +10826,7 @@ ${ddxList}`;
                     return (
                       <Suspense fallback={<div className="flex items-center justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-cyan-400" /></div>}>
                         <MyPlanPanel
+                          autoOrganizeKey={myPlanAutoOrganizeKey}
                           clinicalContext={{
                             topHypothesis: structuredReasoningData?.hypotheses?.[0]?.condition || extractionResult?.mainComplaint || mechanismAnalysisResult?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim() || undefined,
                             irritability: extractionResult?.irritability || undefined,
@@ -12676,44 +12690,64 @@ ${ddxList}`;
           </div>
         )}
         {hasClinicalTextData && (
-          <div className="flex gap-1.5 mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-7 text-[11px] bg-violet-600/90 text-white hover:bg-violet-500 border border-violet-400/30 shadow-lg shadow-violet-900/30"
-              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('exercise'); }}
-            >
-              <Dumbbell className="h-3 w-3 mr-1" />
-              Exercise Rx
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-7 text-[11px] bg-rose-600/90 text-white hover:bg-rose-500 border border-rose-400/30 shadow-lg shadow-rose-900/30"
-              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('manualRx'); }}
-            >
-              <Hand className="h-3 w-3 mr-1" />
-              Manual Therapy
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-7 text-[11px] bg-amber-600/90 text-white hover:bg-amber-500 border border-amber-400/30 shadow-lg shadow-amber-900/30"
-              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('electroRx'); }}
-            >
-              <Zap className="h-3 w-3 mr-1" />
-              Electrophysical Agents
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-7 text-[11px] bg-emerald-600/90 text-white hover:bg-emerald-500 border border-emerald-400/30 shadow-lg shadow-emerald-900/30"
-              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('adjunctRx'); }}
-              data-testid="button-adjunct-rx-quick"
-            >
-              <Leaf className="h-3 w-3 mr-1" />
-              Adjunct Rx
-            </Button>
+          <div ref={masterPlanContainerRef} className="relative mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
+            <div className="flex gap-1.5">
+              <Button
+                ref={masterPlanPillRefs.exercise as React.Ref<HTMLButtonElement>}
+                variant="secondary"
+                size="sm"
+                className="h-7 text-[11px] bg-violet-600/90 text-white hover:bg-violet-500 border border-violet-400/30 shadow-lg shadow-violet-900/30"
+                onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('exercise'); }}
+              >
+                <Dumbbell className="h-3 w-3 mr-1" />
+                Exercise Rx
+              </Button>
+              <Button
+                ref={masterPlanPillRefs.manual as React.Ref<HTMLButtonElement>}
+                variant="secondary"
+                size="sm"
+                className="h-7 text-[11px] bg-rose-600/90 text-white hover:bg-rose-500 border border-rose-400/30 shadow-lg shadow-rose-900/30"
+                onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('manualRx'); }}
+              >
+                <Hand className="h-3 w-3 mr-1" />
+                Manual Therapy
+              </Button>
+              <Button
+                ref={masterPlanPillRefs.electro as React.Ref<HTMLButtonElement>}
+                variant="secondary"
+                size="sm"
+                className="h-7 text-[11px] bg-amber-600/90 text-white hover:bg-amber-500 border border-amber-400/30 shadow-lg shadow-amber-900/30"
+                onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('electroRx'); }}
+              >
+                <Zap className="h-3 w-3 mr-1" />
+                Electrophysical Agents
+              </Button>
+              <Button
+                ref={masterPlanPillRefs.adjunct as React.Ref<HTMLButtonElement>}
+                variant="secondary"
+                size="sm"
+                className="h-7 text-[11px] bg-emerald-600/90 text-white hover:bg-emerald-500 border border-emerald-400/30 shadow-lg shadow-emerald-900/30"
+                onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('adjunctRx'); }}
+                data-testid="button-adjunct-rx-quick"
+              >
+                <Leaf className="h-3 w-3 mr-1" />
+                Adjunct Rx
+              </Button>
+            </div>
+            <MasterPlanCard
+              diagnosis={extractionResult?.mainComplaint ?? null}
+              pillRefs={masterPlanPillRefs}
+              containerRef={masterPlanContainerRef}
+              onOpenPlan={() => {
+                setShowInjuryMechanism(true);
+                setMechanismActiveTab('myPlan');
+              }}
+              onOrganize={() => {
+                setShowInjuryMechanism(true);
+                setMechanismActiveTab('myPlan');
+                setMyPlanAutoOrganizeKey(Date.now());
+              }}
+            />
           </div>
         )}
       </div>

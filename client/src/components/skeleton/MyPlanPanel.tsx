@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Activity,
@@ -95,6 +95,10 @@ interface ClinicalContextInput {
 
 interface MyPlanPanelProps {
   clinicalContext: ClinicalContextInput;
+  // Optional one-shot trigger: when this nonce changes (and ≥2 items are in the cart),
+  // the panel auto-fires the same orchestration request as the in-panel "Organize with AI" button.
+  // Used by the Master Plan convergence card so its "Organize with AI" button can drive this panel.
+  autoOrganizeKey?: number | null;
 }
 
 const MODALITY_META: Record<PlanCartModality, { label: string; icon: typeof Dumbbell; color: string; bg: string; border: string }> = {
@@ -391,7 +395,7 @@ function ConflictList({ conflicts }: { conflicts: OrchestratedConflict[] }) {
   );
 }
 
-export default function MyPlanPanel({ clinicalContext }: MyPlanPanelProps) {
+export default function MyPlanPanel({ clinicalContext, autoOrganizeKey }: MyPlanPanelProps) {
   const { items, remove, clear, count } = usePlanCart();
   const [orchestrated, setOrchestrated] = useState<OrchestratedPlanResult | null>(null);
   const [showCart, setShowCart] = useState(true);
@@ -406,6 +410,18 @@ export default function MyPlanPanel({ clinicalContext }: MyPlanPanelProps) {
     },
     onSuccess: (data) => setOrchestrated(data),
   });
+
+  // External trigger from Master Plan convergence card: fire orchestration once per nonce change.
+  const lastSeenAutoKeyRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (autoOrganizeKey == null) return;
+    if (lastSeenAutoKeyRef.current === autoOrganizeKey) return;
+    lastSeenAutoKeyRef.current = autoOrganizeKey;
+    if (count >= 2 && !orchestrate.isPending) {
+      orchestrate.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOrganizeKey, count]);
 
   const grouped = items.reduce<Record<PlanCartModality, PlanCartItem[]>>((acc, it) => {
     (acc[it.modality] ||= []).push(it);

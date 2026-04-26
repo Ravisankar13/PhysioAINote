@@ -99,6 +99,10 @@ interface MyPlanPanelProps {
   // the panel auto-fires the same orchestration request as the in-panel "Organize with AI" button.
   // Used by the Master Plan convergence card so its "Organize with AI" button can drive this panel.
   autoOrganizeKey?: number | null;
+  // Called once the panel has actually dispatched an orchestration in response
+  // to a new autoOrganizeKey, so the parent can clear the key and prevent
+  // re-fires across panel remounts (tab switches / modal reopens).
+  onAutoOrganizeConsumed?: () => void;
 }
 
 const MODALITY_META: Record<PlanCartModality, { label: string; icon: typeof Dumbbell; color: string; bg: string; border: string }> = {
@@ -395,7 +399,7 @@ function ConflictList({ conflicts }: { conflicts: OrchestratedConflict[] }) {
   );
 }
 
-export default function MyPlanPanel({ clinicalContext, autoOrganizeKey }: MyPlanPanelProps) {
+export default function MyPlanPanel({ clinicalContext, autoOrganizeKey, onAutoOrganizeConsumed }: MyPlanPanelProps) {
   const { items, remove, clear, count } = usePlanCart();
   const [orchestrated, setOrchestrated] = useState<OrchestratedPlanResult | null>(null);
   const [showCart, setShowCart] = useState(true);
@@ -412,17 +416,17 @@ export default function MyPlanPanel({ clinicalContext, autoOrganizeKey }: MyPlan
   });
 
   // External trigger from Master Plan convergence card: fire orchestration once
-  // per nonce change. We mark the key as consumed only after the mutation
-  // actually starts so that triggers arriving while a previous run is in flight
-  // are queued and replayed once the run finishes (instead of being dropped).
-  const lastSeenAutoKeyRef = useRef<number | null>(null);
+  // per nonce change. The parent owns the lifecycle — once we dispatch, we call
+  // `onAutoOrganizeConsumed` so the parent clears the nonce. This makes the
+  // trigger truly one-shot even if this panel unmounts/remounts on tab switches
+  // or modal close+reopen (the local "seen" ref would reset on remount, but the
+  // parent's cleared key prevents a re-fire).
   useEffect(() => {
     if (autoOrganizeKey == null) return;
-    if (lastSeenAutoKeyRef.current === autoOrganizeKey) return;
     if (count < 2) return;
-    if (orchestrate.isPending) return; // leave nonce unconsumed → re-eval on isPending change
-    lastSeenAutoKeyRef.current = autoOrganizeKey;
+    if (orchestrate.isPending) return; // wait — parent's key is still set, we'll re-eval when isPending flips
     orchestrate.mutate();
+    onAutoOrganizeConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOrganizeKey, count, orchestrate.isPending]);
 

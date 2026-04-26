@@ -10836,6 +10836,7 @@ ${ddxList}`;
                       <Suspense fallback={<div className="flex items-center justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-cyan-400" /></div>}>
                         <MyPlanPanel
                           autoOrganizeKey={myPlanAutoOrganizeKey}
+                          onAutoOrganizeConsumed={() => setMyPlanAutoOrganizeKey(null)}
                           clinicalContext={{
                             topHypothesis: structuredReasoningData?.hypotheses?.[0]?.condition || extractionResult?.mainComplaint || mechanismAnalysisResult?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim() || undefined,
                             irritability: extractionResult?.irritability || undefined,

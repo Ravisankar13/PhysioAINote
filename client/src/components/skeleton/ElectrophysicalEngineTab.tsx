@@ -1078,6 +1078,14 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
     }
   }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, activePresetId, fetchEvidence, autoAddOnGenerate, addToPlanCart, onGenerateComplete, slingDrivenRecommendations]);
 
+  // Cancel any pending auto-add stagger timers on unmount.
+  useEffect(() => {
+    return () => {
+      autoAddTimeoutsRef.current.forEach(window.clearTimeout);
+      autoAddTimeoutsRef.current = [];
+    };
+  }, []);
+
   // Each new `autoGenerateNonce` from the parent represents a fresh phase-card
   // CTA: re-sync condition/stage from the latest `initialCondition`/`initialStage`
   // props into local state and (if `autoGenerate` is on) fire generatePlan with

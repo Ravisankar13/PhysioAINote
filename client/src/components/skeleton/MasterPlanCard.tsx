@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   Dumbbell,
+  ExternalLink,
   FileText,
   Hand,
   Leaf,
@@ -263,6 +264,17 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
             {expanded ? <ChevronUp className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
             {expanded ? "Hide plan" : "Show plan"}
           </button>
+          {onOpenSidePanel && (
+            <button
+              onClick={onOpenSidePanel}
+              className="flex-1 text-[10px] px-2 py-1 rounded bg-white/5 text-gray-200 border border-white/10 hover:bg-white/10 inline-flex items-center justify-center gap-1 transition-colors"
+              data-testid="button-master-plan-open"
+              title="Open the My Plan tab in the side panel"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Open full plan
+            </button>
+          )}
           <button
             onClick={organize}
             disabled={!orchestrateEligible || orchestrating}
@@ -356,17 +368,6 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
               </div>
             )}
 
-            {onOpenSidePanel && (
-              <div className="pt-1 flex justify-end">
-                <button
-                  onClick={onOpenSidePanel}
-                  className="text-[9px] text-cyan-300/80 hover:text-cyan-200 underline-offset-2 hover:underline"
-                  data-testid="button-master-plan-open-side"
-                >
-                  Open in side panel
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>

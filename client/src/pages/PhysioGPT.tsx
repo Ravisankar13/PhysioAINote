@@ -715,9 +715,10 @@ export default function PhysioGPT() {
   const [patientFactorOverrides, setPatientFactorOverrides] = useState<Partial<PatientFactors> | null>(null);
   // Hoisted from later in the component so the patient-factors memos
   // below (autoDetectedPatientFactors / effectivePatientFactors) can
-  // read `extractionResult` without hitting a temporal dead zone.
+  // read these values without hitting a temporal dead zone.
   const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
   const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
+  const [structuredReasoningData, setStructuredReasoningData] = useState<StructuredReasoningResult | null>(null);
   const patientContextPayload = useMemo(
     () => buildPatientContextPayload(patientContextState),
     [patientContextState],
@@ -938,7 +939,9 @@ export default function PhysioGPT() {
   const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
   const [clinicalReasoningProcessing, setClinicalReasoningProcessing] = useState(false);
   const [clinicalReasoningPaused, setClinicalReasoningPaused] = useState(false);
-  const [structuredReasoningData, setStructuredReasoningData] = useState<StructuredReasoningResult | null>(null);
+  // `structuredReasoningData` was hoisted above to avoid a TDZ in the
+  // patient-factors memos near the top of the component. Do not
+  // redeclare here.
   const [structuredReasoningLoading, setStructuredReasoningLoading] = useState(false);
   const [treatmentDecisionData, setTreatmentDecisionData] = useState<TreatmentDecisionResult | null>(null);
   const [treatmentDecisionLoading, setTreatmentDecisionLoading] = useState(false);

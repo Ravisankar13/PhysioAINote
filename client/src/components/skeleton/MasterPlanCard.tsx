@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Dumbbell, FileText, Hand, Leaf, Sparkles, Zap } from "lucide-react";
 import { usePlanCart } from "@/lib/planCart";
 

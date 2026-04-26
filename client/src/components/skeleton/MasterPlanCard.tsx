@@ -83,9 +83,12 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   };
   const total = counts.exercise + counts.manual + counts.electro + counts.adjunct;
   const isEmpty = total === 0;
-  // Organize-enable mirrors My Plan's true orchestration eligibility, which
-  // looks at the full cart (lifestyle included), not just the four card buckets.
-  const orchestrateEligible = items.length >= 2;
+  // Organize-enable mirrors My Plan's true orchestration eligibility (full
+  // cart, lifestyle included), but is additionally suppressed while the card
+  // itself looks empty — so we never expose an "empty-looking" card with an
+  // active Organize button just because non-represented (lifestyle) items
+  // exist in the cart.
+  const orchestrateEligible = !isEmpty && items.length >= 2;
 
   const summaryParts: string[] = [];
   if (counts.exercise) summaryParts.push(`${counts.exercise} exercise${counts.exercise === 1 ? "" : "s"}`);

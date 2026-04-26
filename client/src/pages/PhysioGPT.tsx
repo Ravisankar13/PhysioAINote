@@ -705,13 +705,22 @@ export default function PhysioGPT() {
   const [myPlanAutoOrganizeKey, setMyPlanAutoOrganizeKey] = useState<number | null>(null);
   // Refs for the 4 quick-launch pills (Exercise/Manual/Electro/Adjunct) and the
   // wrapping container so the convergence overlay can compute SVG anchor points.
+  // pillRefs object is memoized so its identity is stable across renders — this
+  // prevents the overlay's effects from re-initializing on every parent render.
   const masterPlanContainerRef = useRef<HTMLDivElement>(null);
-  const masterPlanPillRefs = {
-    exercise: useRef<HTMLElement>(null),
-    manual: useRef<HTMLElement>(null),
-    electro: useRef<HTMLElement>(null),
-    adjunct: useRef<HTMLElement>(null),
-  };
+  const masterPlanExerciseRef = useRef<HTMLElement>(null);
+  const masterPlanManualRef = useRef<HTMLElement>(null);
+  const masterPlanElectroRef = useRef<HTMLElement>(null);
+  const masterPlanAdjunctRef = useRef<HTMLElement>(null);
+  const masterPlanPillRefs = useMemo(
+    () => ({
+      exercise: masterPlanExerciseRef,
+      manual: masterPlanManualRef,
+      electro: masterPlanElectroRef,
+      adjunct: masterPlanAdjunctRef,
+    }),
+    [],
+  );
   // Latest clinical-text parse result, retained at page level so the
   // Patient Context panel can fingerprint the prediction (for stale
   // detection) and the AI prompt-generation request can quote the

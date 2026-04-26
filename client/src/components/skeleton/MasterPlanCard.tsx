@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Dumbbell, FileText, Hand, Leaf, Sparkles, Zap } from "lucide-react";
 import { usePlanCart } from "@/lib/planCart";
 
@@ -91,12 +91,19 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   if (counts.adjunct) summaryParts.push(`${counts.adjunct} adjunct${counts.adjunct === 1 ? "" : "s"}`);
   const summary = summaryParts.length > 0 ? `${summaryParts.join(", ")} ready to organize` : null;
 
-  const anchorRefs: AnchorRefs = {
-    exercise: useRef<HTMLSpanElement>(null),
-    manual: useRef<HTMLSpanElement>(null),
-    electro: useRef<HTMLSpanElement>(null),
-    adjunct: useRef<HTMLSpanElement>(null),
-  };
+  // Anchor refs are created once and stored in a ref so the AnchorRefs object
+  // identity stays stable across renders — the overlay depends on this object
+  // and we don't want to re-init its observers on every render.
+  const anchorRefsBox = useRef<AnchorRefs | null>(null);
+  if (anchorRefsBox.current === null) {
+    anchorRefsBox.current = {
+      exercise: { current: null },
+      manual: { current: null },
+      electro: { current: null },
+      adjunct: { current: null },
+    };
+  }
+  const anchorRefs = anchorRefsBox.current;
 
   // Track previous counts to trigger one-shot per-line animations on add.
   const [animKeys, setAnimKeys] = useState<Record<PillKey, number>>({ exercise: 0, manual: 0, electro: 0, adjunct: 0 });
@@ -250,7 +257,15 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
     const c = containerRef.current;
     if (!c) return;
     const rect = c.getBoundingClientRect();
-    setSize({ w: rect.width, h: rect.height });
+
+    // Guarded size update — only commit when width/height actually changed
+    // (rounded to 0.5px), otherwise we'd churn state on every paint.
+    setSize(prev => {
+      const w = Math.round(rect.width * 2) / 2;
+      const h = Math.round(rect.height * 2) / 2;
+      if (prev.w === w && prev.h === h) return prev;
+      return { w, h };
+    });
 
     const compute = (pill: HTMLElement | null, anchor: HTMLElement | null): PathSpec => {
       if (!pill || !anchor) return { d: "", midX: 0, midY: 0 };
@@ -266,11 +281,21 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
       return { d, midX: (x1 + x2) / 2, midY };
     };
 
-    setPaths({
+    const next = {
       exercise: compute(pillRefs.exercise.current, anchorRefs.exercise.current),
       manual: compute(pillRefs.manual.current, anchorRefs.manual.current),
       electro: compute(pillRefs.electro.current, anchorRefs.electro.current),
       adjunct: compute(pillRefs.adjunct.current, anchorRefs.adjunct.current),
+    };
+
+    // Guarded path update — bail out when every modality's d-string is unchanged
+    // so we don't enter a render → effect → setState → render loop.
+    setPaths(prev => {
+      const same = (["exercise", "manual", "electro", "adjunct"] as const).every(
+        k => prev[k].d === next[k].d,
+      );
+      if (same) return prev;
+      return next;
     });
   }, [containerRef, pillRefs, anchorRefs]);
 
@@ -279,7 +304,7 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
     // Re-run after a microtask so card mount + layout settle for the very first paint.
     const id = requestAnimationFrame(recompute);
     return () => cancelAnimationFrame(id);
-  });
+  }, [recompute]);
 
   useEffect(() => {
     const c = containerRef.current;

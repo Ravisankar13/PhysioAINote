@@ -183,6 +183,31 @@ import {
 } from "./utilities/deIdentify";
 import { patientSessionStorage } from "./patientSessionStorage";
 
+/**
+ * Thrown by storage methods when an inbound payload would otherwise
+ * forward invalid data (e.g. an empty string for an integer column)
+ * to Postgres. Routes catch this to return a 400 with the offending
+ * field name, instead of leaking a Postgres "invalid input syntax"
+ * 500 to the clinician (see Task #257).
+ */
+export class CheckInValidationError extends Error {
+  readonly field: string;
+  constructor(field: string, message: string) {
+    super(message);
+    this.name = "CheckInValidationError";
+    this.field = field;
+  }
+}
+
+/** Render a value for an error message without dumping huge objects. */
+function describeValue(raw: unknown): string {
+  if (raw === null) return "null";
+  if (raw === undefined) return "undefined";
+  if (typeof raw === "string") return JSON.stringify(raw);
+  if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
+  return typeof raw;
+}
+
 export interface IStorage {
   // User Operations
   getUser(id: number): Promise<User | undefined>;
@@ -4996,22 +5021,49 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertRecoveryWeeklyCheckIn(userId: number, checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn> {
-    const sleepHoursValue =
-      checkIn.sleepHours === null || checkIn.sleepHours === undefined
-        ? null
-        : typeof checkIn.sleepHours === "number"
-        ? String(checkIn.sleepHours)
-        : checkIn.sleepHours;
+    // Final, defense-in-depth validation right before the data hits
+    // Drizzle. The Zod schema in @shared/schema is the first line of
+    // defense, but the storage layer must ALSO refuse to forward an
+    // empty string to Postgres so a future caller (script, internal
+    // tool, second route) cannot reintroduce the Task #257 500. Any
+    // failure throws CheckInValidationError, which the route turns
+    // into a clean 400 with the offending field name.
+    const requireInt = (field: string, raw: unknown): number => {
+      if (typeof raw === "number" && Number.isFinite(raw) && Number.isInteger(raw)) {
+        return raw;
+      }
+      throw new CheckInValidationError(field, `${field} must be an integer (got ${describeValue(raw)})`);
+    };
+    const optionalInt = (field: string, raw: unknown): number | null => {
+      if (raw === null || raw === undefined) return null;
+      if (typeof raw === "number" && Number.isFinite(raw) && Number.isInteger(raw)) {
+        return raw;
+      }
+      throw new CheckInValidationError(field, `${field} must be an integer or null (got ${describeValue(raw)})`);
+    };
+    const optionalNumericString = (field: string, raw: unknown): string | null => {
+      if (raw === null || raw === undefined) return null;
+      if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+      // The shared Zod schema preprocesses strings → numbers, so reaching
+      // this branch means a caller bypassed validation. Refuse explicitly
+      // — never let a raw string (especially "") reach the numeric column.
+      throw new CheckInValidationError(field, `${field} must be a finite number or null (got ${describeValue(raw)})`);
+    };
+
     const values = {
       userId,
-      caseId: checkIn.caseId,
-      week: checkIn.week,
-      pain: checkIn.pain,
-      flareSeverity: checkIn.flareSeverity ?? null,
-      sessionsCompleted: checkIn.sessionsCompleted,
-      sessionsPrescribed: checkIn.sessionsPrescribed,
-      sleepHours: sleepHoursValue,
-      notes: checkIn.notes ?? null,
+      caseId: typeof checkIn.caseId === "string" && checkIn.caseId.trim() !== ""
+        ? checkIn.caseId
+        : (() => { throw new CheckInValidationError("caseId", "caseId is required"); })(),
+      week: requireInt("week", checkIn.week),
+      pain: requireInt("pain", checkIn.pain),
+      flareSeverity: optionalInt("flareSeverity", checkIn.flareSeverity),
+      sessionsCompleted: requireInt("sessionsCompleted", checkIn.sessionsCompleted),
+      sessionsPrescribed: requireInt("sessionsPrescribed", checkIn.sessionsPrescribed),
+      sleepHours: optionalNumericString("sleepHours", checkIn.sleepHours),
+      notes: checkIn.notes == null || (typeof checkIn.notes === "string" && checkIn.notes.trim() === "")
+        ? null
+        : checkIn.notes,
     };
     const [row] = await db
       .insert(recoveryWeeklyCheckIns)

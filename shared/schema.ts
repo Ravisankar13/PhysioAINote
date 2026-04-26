@@ -5858,6 +5858,50 @@ export const recoveryWeeklyCheckIns = pgTable("recovery_weekly_check_ins", {
   userCaseWeekUnique: uniqueIndex("recovery_weekly_check_ins_user_case_week_unique").on(t.userId, t.caseId, t.week),
 }));
 
+// Coerce sleepHours — the only non-integer numeric on this row — into
+// a `number | null`. Drizzle stores `numeric` columns as strings, but
+// the API contract is "send a number or null"; an empty string used to
+// slip through the previous loose `z.union([z.number(), z.string()])`
+// schema and reach Postgres, which then threw an opaque 500 (see Task
+// #257). The preprocess below normalises null/undefined/blank-string
+// to `null` and parses any remaining string to a finite number, so
+// from this point onwards the value is guaranteed to be a real number
+// or `null` — never the literal `""`.
+const sleepHoursSchema = z.preprocess(
+  (val) => {
+    if (val === null || val === undefined) return null;
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed === '') return null;
+      const n = Number(trimmed);
+      return Number.isFinite(n) ? n : val; // let z.number() reject NaN
+    }
+    return val;
+  },
+  z.number().finite().min(0).max(24).nullable(),
+).optional();
+
+// Defensive integer parser used for every integer column on the row.
+// `z.number().int()` already rejects strings, but this preprocess
+// surfaces an explicit error for the common failure mode (an empty
+// string from a cleared `<Input type="number">`) so the route can
+// turn it into a clear 400 instead of relying on Postgres' opaque
+// "invalid input syntax for type integer: \"\"" message.
+function intField(min: number, max: number) {
+  return z.preprocess(
+    (val) => {
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '') return Number.NaN; // forces .number() to reject
+        const n = Number(trimmed);
+        return Number.isFinite(n) ? n : Number.NaN;
+      }
+      return val;
+    },
+    z.number().int().min(min).max(max),
+  );
+}
+
 // Insert schema omits userId — it is server-injected from the
 // authenticated session, never trusted from the client payload.
 export const insertRecoveryWeeklyCheckInSchema = createInsertSchema(recoveryWeeklyCheckIns).omit({
@@ -5866,13 +5910,35 @@ export const insertRecoveryWeeklyCheckInSchema = createInsertSchema(recoveryWeek
   userId: true,
 }).extend({
   caseId: z.string().min(1).max(200),
-  week: z.number().int().min(0).max(520),
-  pain: z.number().int().min(0).max(100),
-  flareSeverity: z.number().int().min(0).max(100).nullable().optional(),
-  sessionsCompleted: z.number().int().min(0).max(100),
-  sessionsPrescribed: z.number().int().min(0).max(100),
-  sleepHours: z.union([z.number(), z.string()]).nullable().optional(),
-  notes: z.string().max(2000).nullable().optional(),
+  week: intField(0, 520),
+  pain: intField(0, 100),
+  flareSeverity: z.preprocess(
+    (val) => {
+      if (val === null || val === undefined) return null;
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '') return null;
+        const n = Number(trimmed);
+        return Number.isFinite(n) ? n : Number.NaN;
+      }
+      return val;
+    },
+    z.number().int().min(0).max(100).nullable(),
+  ).optional(),
+  sessionsCompleted: intField(0, 100),
+  sessionsPrescribed: intField(0, 100),
+  sleepHours: sleepHoursSchema,
+  notes: z.preprocess(
+    (val) => {
+      if (val === null || val === undefined) return null;
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        return trimmed === '' ? null : val;
+      }
+      return val;
+    },
+    z.string().max(2000).nullable(),
+  ).optional(),
 });
 
 export type InsertRecoveryWeeklyCheckIn = z.infer<typeof insertRecoveryWeeklyCheckInSchema>;

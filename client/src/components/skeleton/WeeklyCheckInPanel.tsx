@@ -92,11 +92,16 @@ export default function WeeklyCheckInPanel({
 }: Props) {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
-  const [week, setWeek] = useState<number>(Math.max(1, defaultWeek || 1));
+  // Numeric inputs are stored as raw strings so a half-typed value
+  // ("", "1.", etc.) doesn't get silently coerced mid-edit. Submission
+  // converts them to numbers (or rejects them with an inline error)
+  // exactly once, so the API never receives "" — the failure mode that
+  // produced the Postgres 500 in Task #257.
+  const [week, setWeek] = useState<string>(String(Math.max(1, defaultWeek || 1)));
   const [pain, setPain] = useState<number>(30);
   const [flareSeverity, setFlareSeverity] = useState<number>(0);
-  const [sessionsCompleted, setSessionsCompleted] = useState<number>(defaultPrescribed);
-  const [sessionsPrescribed, setSessionsPrescribed] = useState<number>(defaultPrescribed);
+  const [sessionsCompleted, setSessionsCompleted] = useState<string>(String(defaultPrescribed));
+  const [sessionsPrescribed, setSessionsPrescribed] = useState<string>(String(defaultPrescribed));
   const [sleepHours, setSleepHours] = useState<string>('7');
   const [notes, setNotes] = useState<string>('');
 
@@ -163,20 +168,77 @@ export default function WeeklyCheckInPanel({
     },
   });
 
+  // Parse a required integer field. Returns the integer, or `null` if
+  // the value is missing/blank/non-numeric. Used to bail submission
+  // with a clear inline toast instead of sending "" to the API.
+  const parseRequiredInt = (raw: string): number | null => {
+    const trimmed = raw.trim();
+    if (trimmed === '') return null;
+    const n = Number(trimmed);
+    return Number.isFinite(n) && Number.isInteger(n) ? n : null;
+  };
+
   const handleSubmit = () => {
     if (!caseId) {
       toast({ title: 'Cannot save', description: 'Case identity not set.', variant: 'destructive' });
       return;
     }
-    const sleepNum = sleepHours.trim() === '' ? null : Number(sleepHours);
+
+    // Validate every numeric input that the schema treats as required.
+    // Without this guard, a clinician who clears any number input then
+    // hits Save would previously send "" → Postgres 500 (Task #257).
+    const weekNum = parseRequiredInt(week);
+    if (weekNum == null || weekNum < 1 || weekNum > Math.max(1, totalWeeks)) {
+      toast({ title: 'Invalid week', description: `Week must be a whole number between 1 and ${Math.max(1, totalWeeks)}.`, variant: 'destructive' });
+      return;
+    }
+    const completedNum = parseRequiredInt(sessionsCompleted);
+    if (completedNum == null || completedNum < 0) {
+      toast({ title: 'Invalid sessions completed', description: 'Sessions completed must be a whole number ≥ 0.', variant: 'destructive' });
+      return;
+    }
+    // Prescribed treats *blank* as "use the live plan default" so a
+    // clinician who never touches the field still saves cleanly, but
+    // any value the clinician actually typed must parse — silently
+    // defaulting on parse failure (e.g. "1.5", "abc") would mask a
+    // typo and write the wrong cadence to the recovery curve.
+    const prescribedTrimmed = sessionsPrescribed.trim();
+    let prescribedNum: number;
+    if (prescribedTrimmed === '') {
+      prescribedNum = defaultPrescribed > 0 ? defaultPrescribed : 1;
+    } else {
+      const parsed = parseRequiredInt(sessionsPrescribed);
+      if (parsed == null) {
+        toast({ title: 'Invalid sessions prescribed', description: 'Sessions prescribed must be a whole number ≥ 1.', variant: 'destructive' });
+        return;
+      }
+      prescribedNum = parsed;
+    }
+    if (prescribedNum < 1) {
+      toast({ title: 'Invalid sessions prescribed', description: 'Sessions prescribed must be a whole number ≥ 1.', variant: 'destructive' });
+      return;
+    }
+
+    // sleepHours is optional — empty/whitespace coerces to null, never "".
+    const sleepTrimmed = sleepHours.trim();
+    let sleepNum: number | null = null;
+    if (sleepTrimmed !== '') {
+      const n = Number(sleepTrimmed);
+      if (!Number.isFinite(n) || n < 0 || n > 24) {
+        toast({ title: 'Invalid sleep hours', description: 'Sleep must be between 0 and 24 hours, or left blank.', variant: 'destructive' });
+        return;
+      }
+      sleepNum = n;
+    }
+
     upsertMutation.mutate({
       caseId,
-      week,
+      week: weekNum,
       pain,
       flareSeverity: flareSeverity > 0 ? flareSeverity : null,
-      sessionsCompleted,
-      sessionsPrescribed: sessionsPrescribed || defaultPrescribed || 1,
-      sleepHours: sleepNum != null && !Number.isNaN(sleepNum) ? sleepNum : null,
+      sessionsCompleted: completedNum,
+      sessionsPrescribed: prescribedNum,
+      sleepHours: sleepNum,
       notes: notes.trim() || null,
     });
   };
@@ -225,14 +287,17 @@ export default function WeeklyCheckInPanel({
                 const nextWeek = prior
                   ? Math.min(totalWeeks, prior.week + 1)
                   : Math.max(1, defaultWeek || 1);
-                setWeek(nextWeek);
+                // Always seed numeric inputs with a real numeric string
+                // (never "" or "undefined"), so a clinician who hits Save
+                // without touching the form still produces a valid payload.
+                setWeek(String(nextWeek));
                 setPain(prior ? prior.pain : 30);
                 setFlareSeverity(0); // Flares should not carry forward
                 setSessionsPrescribed(
-                  prior ? prior.sessionsPrescribed : (defaultPrescribed || 1),
+                  String(prior ? prior.sessionsPrescribed : (defaultPrescribed || 1)),
                 );
                 setSessionsCompleted(
-                  prior ? prior.sessionsCompleted : (defaultPrescribed || 1),
+                  String(prior ? prior.sessionsCompleted : (defaultPrescribed || 1)),
                 );
                 setSleepHours(
                   prior && prior.sleepHours != null
@@ -268,7 +333,7 @@ export default function WeeklyCheckInPanel({
                 min={1}
                 max={Math.max(1, totalWeeks)}
                 value={week}
-                onChange={e => setWeek(Math.max(1, Math.min(totalWeeks, Number(e.target.value) || 1)))}
+                onChange={e => setWeek(e.target.value)}
                 className="h-7 text-[11px] bg-gray-950/60 border-gray-700/60"
                 data-testid="check-in-input-week"
               />
@@ -325,7 +390,7 @@ export default function WeeklyCheckInPanel({
                 type="number"
                 min={0}
                 value={sessionsCompleted}
-                onChange={e => setSessionsCompleted(Math.max(0, Number(e.target.value) || 0))}
+                onChange={e => setSessionsCompleted(e.target.value)}
                 className="h-7 text-[11px] bg-gray-950/60 border-gray-700/60"
                 data-testid="check-in-input-completed"
               />
@@ -336,7 +401,7 @@ export default function WeeklyCheckInPanel({
                 type="number"
                 min={1}
                 value={sessionsPrescribed}
-                onChange={e => setSessionsPrescribed(Math.max(1, Number(e.target.value) || 1))}
+                onChange={e => setSessionsPrescribed(e.target.value)}
                 className="h-7 text-[11px] bg-gray-950/60 border-gray-700/60"
                 data-testid="check-in-input-prescribed"
               />

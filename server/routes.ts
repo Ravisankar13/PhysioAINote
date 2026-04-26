@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { eq, sql, ilike, desc, and } from "drizzle-orm";
-import { storage } from "./storage";
+import { storage, CheckInValidationError } from "./storage";
 import { db } from "./db";
 import { generateSoapNote } from "./openai";
 import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
@@ -9786,6 +9786,17 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const row = await storage.upsertRecoveryWeeklyCheckIn(req.user!.id, parsed.data);
       res.json(row);
     } catch (error: unknown) {
+      // Storage's defensive guards throw CheckInValidationError when an
+      // invalid value would otherwise reach Postgres. Surface those as
+      // a 400 with the field name so the clinician sees a meaningful
+      // toast instead of an opaque Postgres "invalid input syntax" 500.
+      if (error instanceof CheckInValidationError) {
+        return res.status(400).json({
+          error: "Invalid check-in payload",
+          field: error.field,
+          message: error.message,
+        });
+      }
       console.error("Upsert recovery weekly check-in error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(500).json({ error: "Failed to save check-in", details: message });

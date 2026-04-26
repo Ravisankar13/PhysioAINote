@@ -718,10 +718,23 @@ export default function PhysioGPT() {
   // Re-clicking the button is a no-op while state !== 'idle'.
   type AutoBuildState = 'idle' | 'generating' | 'organizing';
   const [autoBuildState, setAutoBuildState] = useState<AutoBuildState>('idle');
-  const [autoBuildPendingExercise, setAutoBuildPendingExercise] = useState(false);
-  const [autoBuildPendingMT, setAutoBuildPendingMT] = useState(false);
-  const [autoBuildPendingEPA, setAutoBuildPendingEPA] = useState(false);
-  const [autoBuildPendingAdjunct, setAutoBuildPendingAdjunct] = useState(false);
+  // One-shot trigger flags driving each engine's `pendingGenerate` prop.
+  // Cleared by the engine's `onGenerateStarted` callback as soon as
+  // generation begins — they say nothing about completion.
+  const [autoBuildTriggerExercise, setAutoBuildTriggerExercise] = useState(false);
+  const [autoBuildTriggerMT, setAutoBuildTriggerMT] = useState(false);
+  const [autoBuildTriggerAdjunct, setAutoBuildTriggerAdjunct] = useState(false);
+  // In-flight flags for each engine. Set true alongside the trigger on click,
+  // cleared only when the engine fires `onGenerateComplete` (which itself is
+  // deferred until after the staggered cart-add cascade finishes). The settle
+  // effect transitions to 'organizing' only when ALL four are false.
+  const [autoBuildInFlightExercise, setAutoBuildInFlightExercise] = useState(false);
+  const [autoBuildInFlightMT, setAutoBuildInFlightMT] = useState(false);
+  const [autoBuildInFlightEPA, setAutoBuildInFlightEPA] = useState(false);
+  const [autoBuildInFlightAdjunct, setAutoBuildInFlightAdjunct] = useState(false);
+  // EPA uses a monotonic nonce instead of a boolean trigger (per its existing
+  // autoGenerate contract). Bumped on each click; engine de-dupes via its
+  // own lastNonceRef.
   const [autoBuildElectroNonce, setAutoBuildElectroNonce] = useState(0);
   // Names of engines that returned an error during the current build (cleared
   // when state cycles back to 'idle'). Drives the failure toast.
@@ -4447,9 +4460,13 @@ ${ddxList}`;
   }, [mtGeneratingSession]);
 
   // ----- Master Plan auto-build handlers (Task #267) -----
-  const handleAutoBuildStartExercise = useCallback(() => setAutoBuildPendingExercise(false), []);
-  const handleAutoBuildStartMT = useCallback(() => setAutoBuildPendingMT(false), []);
-  const handleAutoBuildStartAdjunct = useCallback(() => setAutoBuildPendingAdjunct(false), []);
+  // onGenerateStarted: clears ONLY the trigger flag (so the engine's effect
+  // doesn't fire generation twice). Critically, this does NOT clear the
+  // in-flight flag — completion is tracked separately and only flips when
+  // the engine's onGenerateComplete fires after the cart cascade.
+  const handleAutoBuildStartExercise = useCallback(() => setAutoBuildTriggerExercise(false), []);
+  const handleAutoBuildStartMT = useCallback(() => setAutoBuildTriggerMT(false), []);
+  const handleAutoBuildStartAdjunct = useCallback(() => setAutoBuildTriggerAdjunct(false), []);
   const recordAutoBuildFailure = useCallback((engineLabel: string) => {
     setAutoBuildFailures(prev => {
       if (prev.has(engineLabel)) return prev;
@@ -4460,19 +4477,19 @@ ${ddxList}`;
   }, []);
   const handleAutoBuildCompleteExercise = useCallback((success: boolean) => {
     if (!success) recordAutoBuildFailure('Exercise Rx');
-    setAutoBuildPendingExercise(false);
+    setAutoBuildInFlightExercise(false);
   }, [recordAutoBuildFailure]);
   const handleAutoBuildCompleteMT = useCallback((success: boolean) => {
     if (!success) recordAutoBuildFailure('Manual Therapy');
-    setAutoBuildPendingMT(false);
+    setAutoBuildInFlightMT(false);
   }, [recordAutoBuildFailure]);
   const handleAutoBuildCompleteEPA = useCallback((success: boolean) => {
     if (!success) recordAutoBuildFailure('Electrophysical Agents');
-    setAutoBuildPendingEPA(false);
+    setAutoBuildInFlightEPA(false);
   }, [recordAutoBuildFailure]);
   const handleAutoBuildCompleteAdjunct = useCallback((success: boolean) => {
     if (!success) recordAutoBuildFailure('Adjunct Rx');
-    setAutoBuildPendingAdjunct(false);
+    setAutoBuildInFlightAdjunct(false);
   }, [recordAutoBuildFailure]);
   const handleAutoBuildClick = useCallback(() => {
     // No-op while a build is anywhere in flight (generating OR organizing) or
@@ -4481,21 +4498,28 @@ ${ddxList}`;
     if (!hasClinicalTextData) return;
     setAutoBuildFailures(new Set());
     setAutoBuildState('generating');
-    setAutoBuildPendingExercise(true);
-    setAutoBuildPendingMT(true);
-    setAutoBuildPendingEPA(true);
-    setAutoBuildPendingAdjunct(true);
+    // Trigger flags drive the one-shot pendingGenerate prop on each engine.
+    setAutoBuildTriggerExercise(true);
+    setAutoBuildTriggerMT(true);
+    setAutoBuildTriggerAdjunct(true);
+    // In-flight flags gate the settle effect. Stay true until the engine
+    // emits onGenerateComplete (after its staggered cart-add cascade).
+    setAutoBuildInFlightExercise(true);
+    setAutoBuildInFlightMT(true);
+    setAutoBuildInFlightEPA(true);
+    setAutoBuildInFlightAdjunct(true);
     setAutoBuildElectroNonce(prev => prev + 1);
   }, [autoBuildState, hasClinicalTextData]);
-  // Settle: once all 4 phantom engines finish (success or failure), advance
-  // the state machine to 'organizing', surface a failure toast if anything
-  // errored, then — after a short tick so the last cart-add line/flash
-  // animations can paint — navigate to My Plan and bump the orchestration
-  // nonce. Re-clicks remain blocked until the final timer drops state back
-  // to 'idle'.
+  // Settle: once all 4 phantom engines finish (success or failure) AND their
+  // staggered cart-adds have completed (onGenerateComplete is deferred until
+  // after the last add), advance the state machine to 'organizing', surface
+  // a failure toast if anything errored, then — after a short tick so the
+  // last cart-add line/flash animations can paint — navigate to My Plan and
+  // bump the orchestration nonce. Re-clicks remain blocked until the final
+  // timer drops state back to 'idle'.
   useEffect(() => {
     if (autoBuildState !== 'generating') return;
-    if (autoBuildPendingExercise || autoBuildPendingMT || autoBuildPendingEPA || autoBuildPendingAdjunct) return;
+    if (autoBuildInFlightExercise || autoBuildInFlightMT || autoBuildInFlightEPA || autoBuildInFlightAdjunct) return;
     setAutoBuildState('organizing');
     if (autoBuildFailures.size > 0) {
       toast({
@@ -4517,7 +4541,7 @@ ${ddxList}`;
       window.clearTimeout(navTimer);
       window.clearTimeout(idleTimer);
     };
-  }, [autoBuildState, autoBuildPendingExercise, autoBuildPendingMT, autoBuildPendingEPA, autoBuildPendingAdjunct, autoBuildFailures, toast]);
+  }, [autoBuildState, autoBuildInFlightExercise, autoBuildInFlightMT, autoBuildInFlightEPA, autoBuildInFlightAdjunct, autoBuildFailures, toast]);
 
   const exerciseMtActivePhaseIndex = useMemo(() => {
     if (!treatmentPlanData || !treatmentPlanData.phases || treatmentPlanData.phases.length === 0) return 0;
@@ -12877,7 +12901,7 @@ ${ddxList}`;
                     }))}
                     slingDrivenRecommendations={slingDrivenRecommendations}
                     onCustomExerciseResult={() => { /* phantom: ignore */ }}
-                    pendingGenerate={autoBuildPendingExercise}
+                    pendingGenerate={autoBuildTriggerExercise}
                     onGenerateStarted={handleAutoBuildStartExercise}
                     onGenerateComplete={handleAutoBuildCompleteExercise}
                     autoAddOnGenerate
@@ -12908,7 +12932,7 @@ ${ddxList}`;
                     onSetMuscleHighlightColors={() => { /* phantom: ignore */ }}
                     onSetManualTherapyAnnotations={() => { /* phantom: ignore */ }}
                     onCustomManualTherapyResult={() => { /* phantom: ignore */ }}
-                    pendingGenerate={autoBuildPendingMT}
+                    pendingGenerate={autoBuildTriggerMT}
                     onGenerateStarted={handleAutoBuildStartMT}
                     onGenerateComplete={handleAutoBuildCompleteMT}
                     autoAddOnGenerate
@@ -12948,7 +12972,7 @@ ${ddxList}`;
                     diagnosis={extractionResult?.mainComplaint || undefined}
                     recoveryPhase={extractionResult?.duration || undefined}
                     irritability={extractionResult?.irritability || undefined}
-                    pendingGenerate={autoBuildPendingAdjunct}
+                    pendingGenerate={autoBuildTriggerAdjunct}
                     onGenerateStarted={handleAutoBuildStartAdjunct}
                     onGenerateComplete={handleAutoBuildCompleteAdjunct}
                     autoAddOnGenerate

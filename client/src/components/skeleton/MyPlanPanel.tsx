@@ -411,17 +411,20 @@ export default function MyPlanPanel({ clinicalContext, autoOrganizeKey }: MyPlan
     onSuccess: (data) => setOrchestrated(data),
   });
 
-  // External trigger from Master Plan convergence card: fire orchestration once per nonce change.
+  // External trigger from Master Plan convergence card: fire orchestration once
+  // per nonce change. We mark the key as consumed only after the mutation
+  // actually starts so that triggers arriving while a previous run is in flight
+  // are queued and replayed once the run finishes (instead of being dropped).
   const lastSeenAutoKeyRef = useRef<number | null>(null);
   useEffect(() => {
     if (autoOrganizeKey == null) return;
     if (lastSeenAutoKeyRef.current === autoOrganizeKey) return;
+    if (count < 2) return;
+    if (orchestrate.isPending) return; // leave nonce unconsumed → re-eval on isPending change
     lastSeenAutoKeyRef.current = autoOrganizeKey;
-    if (count >= 2 && !orchestrate.isPending) {
-      orchestrate.mutate();
-    }
+    orchestrate.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoOrganizeKey, count]);
+  }, [autoOrganizeKey, count, orchestrate.isPending]);
 
   const grouped = items.reduce<Record<PlanCartModality, PlanCartItem[]>>((acc, it) => {
     (acc[it.modality] ||= []).push(it);

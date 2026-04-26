@@ -708,10 +708,10 @@ export default function PhysioGPT() {
   // pillRefs object is memoized so its identity is stable across renders — this
   // prevents the overlay's effects from re-initializing on every parent render.
   const masterPlanContainerRef = useRef<HTMLDivElement>(null);
-  const masterPlanExerciseRef = useRef<HTMLElement>(null);
-  const masterPlanManualRef = useRef<HTMLElement>(null);
-  const masterPlanElectroRef = useRef<HTMLElement>(null);
-  const masterPlanAdjunctRef = useRef<HTMLElement>(null);
+  const masterPlanExerciseRef = useRef<HTMLButtonElement>(null);
+  const masterPlanManualRef = useRef<HTMLButtonElement>(null);
+  const masterPlanElectroRef = useRef<HTMLButtonElement>(null);
+  const masterPlanAdjunctRef = useRef<HTMLButtonElement>(null);
   const masterPlanPillRefs = useMemo(
     () => ({
       exercise: masterPlanExerciseRef,
@@ -12702,7 +12702,7 @@ ${ddxList}`;
           <div ref={masterPlanContainerRef} className="relative mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
             <div className="flex gap-1.5">
               <Button
-                ref={masterPlanPillRefs.exercise as React.Ref<HTMLButtonElement>}
+                ref={masterPlanPillRefs.exercise}
                 variant="secondary"
                 size="sm"
                 className="h-7 text-[11px] bg-violet-600/90 text-white hover:bg-violet-500 border border-violet-400/30 shadow-lg shadow-violet-900/30"
@@ -12712,7 +12712,7 @@ ${ddxList}`;
                 Exercise Rx
               </Button>
               <Button
-                ref={masterPlanPillRefs.manual as React.Ref<HTMLButtonElement>}
+                ref={masterPlanPillRefs.manual}
                 variant="secondary"
                 size="sm"
                 className="h-7 text-[11px] bg-rose-600/90 text-white hover:bg-rose-500 border border-rose-400/30 shadow-lg shadow-rose-900/30"
@@ -12722,7 +12722,7 @@ ${ddxList}`;
                 Manual Therapy
               </Button>
               <Button
-                ref={masterPlanPillRefs.electro as React.Ref<HTMLButtonElement>}
+                ref={masterPlanPillRefs.electro}
                 variant="secondary"
                 size="sm"
                 className="h-7 text-[11px] bg-amber-600/90 text-white hover:bg-amber-500 border border-amber-400/30 shadow-lg shadow-amber-900/30"
@@ -12732,7 +12732,7 @@ ${ddxList}`;
                 Electrophysical Agents
               </Button>
               <Button
-                ref={masterPlanPillRefs.adjunct as React.Ref<HTMLButtonElement>}
+                ref={masterPlanPillRefs.adjunct}
                 variant="secondary"
                 size="sm"
                 className="h-7 text-[11px] bg-emerald-600/90 text-white hover:bg-emerald-500 border border-emerald-400/30 shadow-lg shadow-emerald-900/30"
@@ -12754,7 +12754,7 @@ ${ddxList}`;
               onOrganize={() => {
                 setShowInjuryMechanism(true);
                 setMechanismActiveTab('myPlan');
-                setMyPlanAutoOrganizeKey(Date.now());
+                setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
               }}
             />
           </div>

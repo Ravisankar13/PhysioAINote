@@ -1,6 +1,31 @@
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { Dumbbell, FileText, Hand, Leaf, Loader2, Sparkles, Wand2, Zap } from "lucide-react";
-import { usePlanCart } from "@/lib/planCart";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Dumbbell,
+  FileText,
+  Hand,
+  Leaf,
+  Loader2,
+  Sparkles,
+  Trash2,
+  Wand2,
+  Zap,
+} from "lucide-react";
+import { usePlanCart, type PlanCartItem, type PlanCartModality } from "@/lib/planCart";
+import { useOrchestratePlan } from "@/lib/orchestratePlanContext";
+import {
+  CartItemRow,
+  ConflictList,
+  FrequencyList,
+  MODALITY_META,
+  OrchestratedSummaryCard,
+  PhaseCards,
+  RecoveryTimeline,
+  SessionOrderStrip,
+  WeeklyScheduleGrid,
+} from "@/components/skeleton/MyPlanRenderBlocks";
 
 export type PillKey = "exercise" | "manual" | "electro" | "adjunct";
 
@@ -41,8 +66,10 @@ interface MasterPlanCardProps {
   diagnosis?: string | null;
   pillRefs: MasterPlanPillRefs;
   containerRef: RefObject<HTMLDivElement>;
-  onOpenPlan: () => void;
-  onOrganize: () => void;
+  /** Optional escape hatch: still let the user open the right-side My Plan
+   *  tab. Renders a small "Open in side panel" link at the bottom of the
+   *  inline section when provided. */
+  onOpenSidePanel?: () => void;
   /** Single-click full-plan auto-build: generate Exercise + Manual + EPA +
    *  Adjunct, auto-add every item to the cart, then trigger AI orchestration. */
   onAutoBuild?: () => void;
@@ -52,6 +79,10 @@ interface MasterPlanCardProps {
   /** True when the host has not yet captured enough clinical context for
    *  meaningful generation (no diagnosis / no pain markers / no extraction). */
   autoBuildDisabled?: boolean;
+  /** Bumps when the host wants the inline section to expand (e.g. after the
+   *  Build-full-plan settle effect finishes). The card reacts only to changes
+   *  of this value, so user-toggled collapse is preserved between bumps. */
+  expandSignal?: number;
 }
 
 interface AnchorRefs {
@@ -79,10 +110,11 @@ function CountChip({ pillKey, count }: { pillKey: PillKey; count: number }) {
 }
 
 const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function MasterPlanCard(
-  { diagnosis, pillRefs, containerRef, onOpenPlan, onOrganize, onAutoBuild, autoBuildPending = false, autoBuildDisabled = false },
+  { diagnosis, pillRefs, containerRef, onOpenSidePanel, onAutoBuild, autoBuildPending = false, autoBuildDisabled = false, expandSignal },
   ref,
 ) {
-  const { items } = usePlanCart();
+  const { items, remove, clear } = usePlanCart();
+  const { orchestrated, isPending: orchestrating, error: orchestrateError, organize, reset: resetOrchestrated } = useOrchestratePlan();
 
   const counts = {
     exercise: items.filter(i => i.modality === "exercise" || i.modality === "exercise_custom").length,
@@ -101,6 +133,23 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   if (counts.electro) summaryParts.push(`${counts.electro} electrophysical agent${counts.electro === 1 ? "" : "s"}`);
   if (counts.adjunct) summaryParts.push(`${counts.adjunct} adjunct${counts.adjunct === 1 ? "" : "s"}`);
   const summary = summaryParts.length > 0 ? `${summaryParts.join(", ")} ready to organize` : null;
+
+  // Inline expansion. Default collapsed when empty, otherwise stays in sync
+  // with the host's expandSignal (bumped by the Build-full-plan settle
+  // effect) and the user's manual toggle.
+  const [expanded, setExpanded] = useState(false);
+  const lastExpandSignalRef = useRef<number | undefined>(expandSignal);
+  useEffect(() => {
+    if (expandSignal === undefined) return;
+    if (expandSignal === lastExpandSignalRef.current) return;
+    lastExpandSignalRef.current = expandSignal;
+    setExpanded(true);
+  }, [expandSignal]);
+  // Auto-expand also when an orchestrated result lands so the user can see
+  // the AI's plan inline without having to click anything.
+  useEffect(() => {
+    if (orchestrated) setExpanded(true);
+  }, [orchestrated]);
 
   // Stable AnchorRefs object identity — the overlay's effects depend on this object.
   const anchorRefsBox = useRef<AnchorRefs | null>(null);
@@ -135,6 +184,13 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   }, [cExercise, cManual, cElectro, cAdjunct]);
 
   const cardJustGotItem = Object.values(animKeys).reduce((a, b) => a + b, 0);
+
+  const grouped = items.reduce<Record<PlanCartModality, PlanCartItem[]>>((acc, it) => {
+    (acc[it.modality] ||= []).push(it);
+    return acc;
+  }, {} as Record<PlanCartModality, PlanCartItem[]>);
+
+  const canExpand = !isEmpty;
 
   return (
     <>
@@ -198,22 +254,24 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
 
         <div className="flex items-center gap-1.5">
           <button
-            onClick={onOpenPlan}
-            className="flex-1 text-[10px] px-2 py-1 rounded bg-white/5 text-gray-200 border border-white/10 hover:bg-white/10 inline-flex items-center justify-center gap-1 transition-colors"
-            data-testid="button-master-plan-open"
+            onClick={() => canExpand && setExpanded(e => !e)}
+            disabled={!canExpand}
+            className="flex-1 text-[10px] px-2 py-1 rounded bg-white/5 text-gray-200 border border-white/10 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-colors"
+            data-testid="button-master-plan-toggle"
+            title={canExpand ? (expanded ? "Collapse plan" : "Expand plan") : "Add at least one item"}
           >
-            <FileText className="h-3 w-3" />
-            Open full plan
+            {expanded ? <ChevronUp className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+            {expanded ? "Hide plan" : "Show plan"}
           </button>
           <button
-            onClick={onOrganize}
-            disabled={!orchestrateEligible}
+            onClick={organize}
+            disabled={!orchestrateEligible || orchestrating}
             className="flex-1 text-[10px] px-2 py-1 rounded bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 hover:bg-cyan-500/40 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-colors"
             data-testid="button-master-plan-organize"
-            title={!orchestrateEligible ? "Add at least 2 items to organize" : "Send to AI orchestration"}
+            title={!orchestrateEligible ? "Add at least 2 items to organize" : orchestrating ? "Organizing…" : "Send to AI orchestration"}
           >
-            <Sparkles className="h-3 w-3" />
-            Organize with AI
+            {orchestrating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            {orchestrated ? "Re-organize" : "Organize with AI"}
           </button>
           {onAutoBuild && (
             <button
@@ -237,6 +295,80 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
             </button>
           )}
         </div>
+
+        {expanded && canExpand && (
+          <div className="mt-2.5 pt-2.5 border-t border-white/10 space-y-2.5" data-testid="master-plan-inline-section">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-300">Items in plan ({items.length})</span>
+              <button
+                onClick={clear}
+                className="text-[9px] text-gray-400 hover:text-red-300 inline-flex items-center gap-1"
+                data-testid="button-master-plan-clear"
+              >
+                <Trash2 className="h-3 w-3" />
+                Clear
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {(Object.keys(grouped) as PlanCartModality[]).map(modality => {
+                const meta = MODALITY_META[modality];
+                const list = grouped[modality];
+                return (
+                  <div key={modality} className="space-y-1">
+                    <div className={`text-[9px] uppercase tracking-wider font-semibold ${meta.color}`}>{meta.label} ({list.length})</div>
+                    <div className="space-y-1">
+                      {list.map(it => (
+                        <CartItemRow key={it.id} item={it} onRemove={() => remove(it.id)} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {items.length < 2 && !orchestrated && (
+                <p className="text-[9px] text-gray-500 italic">Add at least 2 items, then click Organize with AI.</p>
+              )}
+            </div>
+
+            {orchestrateError && (
+              <div className="rounded border border-red-500/30 bg-red-500/10 p-2 text-[10px] text-red-200 flex items-start gap-1.5">
+                <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                <span>{orchestrateError.message || "Could not organize the plan. Try again."}</span>
+              </div>
+            )}
+
+            {orchestrating && !orchestrated && (
+              <div className="rounded border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] text-cyan-200 flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Organizing the plan with AI…
+              </div>
+            )}
+
+            {orchestrated && (
+              <div className="space-y-2 border-t border-white/10 pt-2.5">
+                <OrchestratedSummaryCard orchestrated={orchestrated} onDiscard={resetOrchestrated} />
+                <ConflictList conflicts={orchestrated.conflicts} />
+                <SessionOrderStrip steps={orchestrated.sessionOrder} items={items} />
+                <FrequencyList frequencies={orchestrated.frequencies} items={items} />
+                <WeeklyScheduleGrid schedule={orchestrated.weeklySchedule} items={items} totalWeeks={orchestrated.totalDurationWeeks} frequencies={orchestrated.frequencies} />
+                <PhaseCards phases={orchestrated.phases} items={items} />
+                <RecoveryTimeline milestones={orchestrated.timeline} totalWeeks={orchestrated.totalDurationWeeks} />
+              </div>
+            )}
+
+            {onOpenSidePanel && (
+              <div className="pt-1 flex justify-end">
+                <button
+                  onClick={onOpenSidePanel}
+                  className="text-[9px] text-cyan-300/80 hover:text-cyan-200 underline-offset-2 hover:underline"
+                  data-testid="button-master-plan-open-side"
+                >
+                  Open in side panel
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

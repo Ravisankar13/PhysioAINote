@@ -178,6 +178,7 @@ const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/Patie
 const MyPlanPanel = lazy(() => import("@/components/skeleton/MyPlanPanel"));
 import MasterPlanCard from "@/components/skeleton/MasterPlanCard";
 import { PlanCartProvider, usePlanCart } from "@/lib/planCart";
+import { OrchestratePlanProvider } from "@/lib/orchestratePlanContext";
 
 function MyPlanTabButton({ active, onClick }: { active: boolean; onClick: () => void }) {
   const { count } = usePlanCart();
@@ -700,9 +701,16 @@ export default function PhysioGPT() {
   const [electroPlan, setElectroPlan] = useState<import('@/components/skeleton/ElectrophysicalEngineTab').ElectrophysicalPlan | null>(null);
   const [electroPrefill, setElectroPrefill] = useState<{ condition: string; stage: 'acute' | 'subacute' | 'chronic'; nonce: number } | null>(null);
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
-  // Master Plan convergence card: nonce bumped when the card's "Organize with AI"
-  // button is pressed, so MyPlanPanel re-runs the same orchestration request once.
-  const [myPlanAutoOrganizeKey, setMyPlanAutoOrganizeKey] = useState<number | null>(null);
+  // Master Plan auto-organize: nonce bumped only when the "Build full plan"
+  // settle effect needs the OrchestratePlanProvider to fire orchestration on
+  // its own (no click). Manual "Organize with AI" clicks call the provider's
+  // organize() directly. Cleared once the provider consumes the nonce.
+  const [orchestrateAutoNonce, setOrchestrateAutoNonce] = useState<number | null>(null);
+  // Bump signal that asks MasterPlanCard to expand its inline section
+  // (e.g. after a successful Build-full-plan cascade). The card only reacts
+  // to *changes* of this value, so manual collapse is preserved between
+  // bumps.
+  const [masterPlanExpandSignal, setMasterPlanExpandSignal] = useState(0);
   // ----- Master Plan auto-build (Task #267) -----
   // When the user clicks "Build full plan", the four engines are mounted as
   // hidden phantom instances (alongside any visible tab) and triggered to
@@ -4530,28 +4538,36 @@ ${ddxList}`;
     }
   }, [autoBuildState, autoBuildInFlightExercise, autoBuildInFlightMT, autoBuildInFlightEPA, autoBuildInFlightAdjunct, autoBuildFailures, toast]);
   // Settle (Phase 2): once we're in 'organizing', schedule a short tick so
-  // the last cart-add flash/line animation can paint, then open the My Plan
-  // tab and bump the orchestrate nonce. Reset to 'idle' is driven primarily
-  // by MyPlanPanel's onAutoOrganizeConsumed; we keep a 4 s safety fallback
-  // for the edge case where the cart ended up with < 2 items (orchestrator
-  // never consumes) so the button doesn't stay stranded disabled.
+  // the last cart-add flash/line animation can paint, then expand the
+  // MasterPlanCard's inline section, scroll it into view, and bump the
+  // orchestrate auto-trigger nonce so the OrchestratePlanProvider fires the
+  // request. We deliberately do NOT navigate to the right-side My Plan tab
+  // any more — the result lands inside the Master Plan card itself
+  // (Task #270). Reset to 'idle' is driven primarily by the provider's
+  // onAutoTriggerConsumed; we keep a 4 s safety fallback for the edge case
+  // where the cart ended up with < 2 items so the button doesn't stay
+  // stranded disabled.
   //
   // This effect's only dep is `autoBuildState`, so cleanup only fires when
   // the state actually leaves 'organizing' (not as an artifact of the
   // setState call inside the same effect).
   useEffect(() => {
     if (autoBuildState !== 'organizing') return;
-    const navTimer = window.setTimeout(() => {
-      setShowInjuryMechanism(true);
-      setMechanismActiveTab('myPlan');
-      setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
+    const settleTimer = window.setTimeout(() => {
+      setMasterPlanExpandSignal(s => s + 1);
+      setOrchestrateAutoNonce(prev => (prev ?? 0) + 1);
+      // Best-effort scroll the card into view so the inline plan is visible.
+      const el = masterPlanContainerRef.current;
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     }, 150);
     const safetyIdleTimer = window.setTimeout(() => {
       setAutoBuildState(prev => (prev === 'organizing' ? 'idle' : prev));
       setAutoBuildFailures(new Set());
     }, 4000);
     return () => {
-      window.clearTimeout(navTimer);
+      window.clearTimeout(settleTimer);
       window.clearTimeout(safetyIdleTimer);
     };
   }, [autoBuildState]);
@@ -6809,9 +6825,90 @@ ${ddxList}`;
 
   const getSeverityColor = (severity: 'mild' | 'moderate' | 'severe') => severity === 'severe' ? 'text-red-400' : severity === 'moderate' ? 'text-orange-400' : 'text-yellow-400';
 
+  // Plan factors / modifiers / constraints — lifted to component scope so the
+  // OrchestratePlanProvider's clinicalContext can be assembled at the top
+  // level (the inline-rendered Master Plan card needs the same context the
+  // right-side My Plan tab uses, but the card is mounted unconditionally so
+  // the derivation must live outside the per-tab render branch).
+  const planFactors = useMemo(
+    () => autoPopulateFromPipeline(extractionResult ?? null, structuredReasoningData ?? null, DEFAULT_PATIENT_FACTORS),
+    [extractionResult, structuredReasoningData],
+  );
+  const planMods = useMemo(() => computePatientModifiers(planFactors, null), [planFactors]);
+  const planConstraints = useMemo<string[]>(() => {
+    const out: string[] = [];
+    const er = extractionResult as unknown as Record<string, unknown> | undefined;
+    const collectStrings = (v: unknown) => {
+      if (!v) return;
+      if (Array.isArray(v)) {
+        v.forEach(item => {
+          if (typeof item === 'string' && item.trim()) out.push(item.trim());
+          else if (item && typeof item === 'object') {
+            const obj = item as Record<string, unknown>;
+            const label = obj.label ?? obj.name ?? obj.description ?? obj.flag;
+            if (typeof label === 'string' && label.trim()) out.push(label.trim());
+          }
+        });
+      } else if (typeof v === 'string' && v.trim()) {
+        out.push(v.trim());
+      }
+    };
+    if (er) {
+      collectStrings(er.redFlags);
+      collectStrings(er.yellowFlags);
+      collectStrings(er.precautions);
+      collectStrings(er.contraindications);
+      collectStrings(er.comorbidities);
+      collectStrings(er.currentMedications);
+      collectStrings(er.relevantHistory);
+    }
+    return out;
+  }, [extractionResult]);
+  const orchestrateClinicalContext = useMemo(() => {
+    const archetypePhase = recoverySimArchetype?.id || (recoverySimArchetype?.stages?.[0]?.id ?? undefined);
+    return {
+      topHypothesis:
+        structuredReasoningData?.hypotheses?.[0]?.condition
+        || extractionResult?.mainComplaint
+        || mechanismAnalysisResult?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim()
+        || undefined,
+      irritability: extractionResult?.irritability || undefined,
+      stage: extractionResult?.duration || undefined,
+      recoveryPhase: archetypePhase || extractionResult?.duration || undefined,
+      primaryRegion:
+        (mechanismAnalysisResult?.topContributors?.[0] as { region?: string } | undefined)?.region
+        || painMarkers[0]?.anatomicalLabel
+        || painMarkers[0]?.nearestBone
+        || undefined,
+      patientFactors: {
+        age: planFactors.age ?? undefined,
+        healingMultiplier: planMods.healingRateMultiplier,
+        painSensitivityMultiplier: planMods.painSensitivityMultiplier,
+        tissueQualityMultiplier: planMods.tissueQualityMultiplier,
+        phaseTimingMultiplier: planMods.phaseTimingMultiplier,
+        recurrenceRiskMultiplier: planMods.recurrenceRiskMultiplier,
+        romCeilingAdjustment: planMods.romCeilingAdjustment,
+        archetypeId: recoverySimArchetype?.id,
+        archetypeName: recoverySimArchetype?.name,
+      },
+      constraints: planConstraints.length > 0 ? planConstraints.slice(0, 12) : undefined,
+    };
+  }, [structuredReasoningData, extractionResult, mechanismAnalysisResult, recoverySimArchetype, painMarkers, planFactors, planMods, planConstraints]);
+
   return (
     <Suspense fallback={<LazyPanelFallback />}>
     <PlanCartProvider>
+    <OrchestratePlanProvider
+      clinicalContext={orchestrateClinicalContext}
+      autoOrganizeNonce={orchestrateAutoNonce}
+      onAutoTriggerConsumed={() => {
+        setOrchestrateAutoNonce(null);
+        // The build cascade's auto-trigger has been consumed — return the
+        // state machine to 'idle' so the Build-full-plan button re-enables.
+        setAutoBuildState(prev => (prev === 'organizing' ? 'idle' : prev));
+        setAutoBuildFailures(new Set());
+      }}
+    >
     <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 flex flex-col overflow-hidden">
     <div className="flex-1 relative overflow-hidden min-h-0">
       {!modelReady && (
@@ -10931,76 +11028,15 @@ ${ddxList}`;
                       }))}
                     />
                   )}
-                  {mechanismActiveTab === 'myPlan' && (() => {
-                    const planFactors = autoPopulateFromPipeline(
-                      extractionResult ?? null,
-                      structuredReasoningData ?? null,
-                      DEFAULT_PATIENT_FACTORS,
-                    );
-                    const planMods = computePatientModifiers(planFactors, null);
-                    const planConstraints: string[] = [];
-                    const er = extractionResult as unknown as Record<string, unknown> | undefined;
-                    const collectStrings = (v: unknown) => {
-                      if (!v) return;
-                      if (Array.isArray(v)) {
-                        v.forEach(item => {
-                          if (typeof item === 'string' && item.trim()) planConstraints.push(item.trim());
-                          else if (item && typeof item === 'object') {
-                            const obj = item as Record<string, unknown>;
-                            const label = obj.label ?? obj.name ?? obj.description ?? obj.flag;
-                            if (typeof label === 'string' && label.trim()) planConstraints.push(label.trim());
-                          }
-                        });
-                      } else if (typeof v === 'string' && v.trim()) {
-                        planConstraints.push(v.trim());
-                      }
-                    };
-                    if (er) {
-                      collectStrings(er.redFlags);
-                      collectStrings(er.yellowFlags);
-                      collectStrings(er.precautions);
-                      collectStrings(er.contraindications);
-                      collectStrings(er.comorbidities);
-                      collectStrings(er.currentMedications);
-                      collectStrings(er.relevantHistory);
-                    }
-                    const archetypePhase = recoverySimArchetype?.id || (recoverySimArchetype?.stages?.[0]?.id ?? undefined);
-                    return (
-                      <Suspense fallback={<div className="flex items-center justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-cyan-400" /></div>}>
-                        <MyPlanPanel
-                          autoOrganizeKey={myPlanAutoOrganizeKey}
-                          onAutoOrganizeConsumed={() => {
-                            setMyPlanAutoOrganizeKey(null);
-                            // When the auto-build flow consumed the orchestrate
-                            // trigger, return the state machine to 'idle' so
-                            // the Build-full-plan button re-enables. Guard with
-                            // a functional updater so we don't double-fire.
-                            setAutoBuildState(prev => (prev === 'organizing' ? 'idle' : prev));
-                            setAutoBuildFailures(new Set());
-                          }}
-                          clinicalContext={{
-                            topHypothesis: structuredReasoningData?.hypotheses?.[0]?.condition || extractionResult?.mainComplaint || mechanismAnalysisResult?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim() || undefined,
-                            irritability: extractionResult?.irritability || undefined,
-                            stage: extractionResult?.duration || undefined,
-                            recoveryPhase: archetypePhase || extractionResult?.duration || undefined,
-                            primaryRegion: (mechanismAnalysisResult?.topContributors?.[0] as { region?: string } | undefined)?.region || painMarkers[0]?.anatomicalLabel || painMarkers[0]?.nearestBone || undefined,
-                            patientFactors: {
-                              age: planFactors.age ?? undefined,
-                              healingMultiplier: planMods.healingRateMultiplier,
-                              painSensitivityMultiplier: planMods.painSensitivityMultiplier,
-                              tissueQualityMultiplier: planMods.tissueQualityMultiplier,
-                              phaseTimingMultiplier: planMods.phaseTimingMultiplier,
-                              recurrenceRiskMultiplier: planMods.recurrenceRiskMultiplier,
-                              romCeilingAdjustment: planMods.romCeilingAdjustment,
-                              archetypeId: recoverySimArchetype?.id,
-                              archetypeName: recoverySimArchetype?.name,
-                            },
-                            constraints: planConstraints.length > 0 ? planConstraints.slice(0, 12) : undefined,
-                          }}
-                        />
-                      </Suspense>
-                    );
-                  })()}
+                  {mechanismActiveTab === 'myPlan' && (
+                    <Suspense fallback={<div className="flex items-center justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-cyan-400" /></div>}>
+                      {/* Clinical context + orchestrate state are now owned
+                          by the OrchestratePlanProvider wrapping the whole
+                          page, so MyPlanPanel reads them via the shared
+                          context instead of taking them as props. */}
+                      <MyPlanPanel />
+                    </Suspense>
+                  )}
                 </div>
               </div>
             )}
@@ -12889,18 +12925,18 @@ ${ddxList}`;
               diagnosis={extractionResult?.mainComplaint ?? null}
               pillRefs={masterPlanPillRefs}
               containerRef={masterPlanContainerRef}
-              onOpenPlan={() => {
+              onOpenSidePanel={() => {
+                // Optional escape hatch — let users still pop the right-side
+                // tab open if they prefer. The card no longer auto-navigates
+                // when "Build full plan" finishes; the inline section
+                // surfaces the result in place (Task #270).
                 setShowInjuryMechanism(true);
                 setMechanismActiveTab('myPlan');
-              }}
-              onOrganize={() => {
-                setShowInjuryMechanism(true);
-                setMechanismActiveTab('myPlan');
-                setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
               }}
               onAutoBuild={handleAutoBuildClick}
               autoBuildPending={autoBuildState !== 'idle'}
               autoBuildDisabled={!hasClinicalTextData}
+              expandSignal={masterPlanExpandSignal}
             />
             {/* Phantom engines (Task #267): hidden, mount only during auto-build
                 so each engine's autoAddOnGenerate cascade fires without forcing
@@ -13164,6 +13200,7 @@ ${ddxList}`;
       </Suspense>
     )}
     </div>
+    </OrchestratePlanProvider>
     </PlanCartProvider>
     </Suspense>
   );

@@ -713,6 +713,11 @@ export default function PhysioGPT() {
   // overrides are persisted to localStorage keyed by case fingerprint
   // so opening the same case in a future session restores the edits.
   const [patientFactorOverrides, setPatientFactorOverrides] = useState<Partial<PatientFactors> | null>(null);
+  // Hoisted from later in the component so the patient-factors memos
+  // below (autoDetectedPatientFactors / effectivePatientFactors) can
+  // read `extractionResult` without hitting a temporal dead zone.
+  const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
+  const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
   const patientContextPayload = useMemo(
     () => buildPatientContextPayload(patientContextState),
     [patientContextState],
@@ -954,8 +959,9 @@ export default function PhysioGPT() {
   const [mtGeneratingSession, setMtGeneratingSession] = useState<number | null>(null);
   const [exerciseGeneratedSessions, setExerciseGeneratedSessions] = useState<Set<number>>(new Set());
   const [mtGeneratedSessions, setMtGeneratedSessions] = useState<Set<number>>(new Set());
-  const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
-  const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
+  // `extractionResult` / `extractionResultsOpen` were hoisted above to
+  // avoid a TDZ in the patient-factors memos near the top of the
+  // component. Do not redeclare here.
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

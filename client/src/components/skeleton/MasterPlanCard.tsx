@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Dumbbell, FileText, Hand, Leaf, Sparkles, Zap } from "lucide-react";
 import { usePlanCart } from "@/lib/planCart";
 
@@ -83,6 +83,9 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   };
   const total = counts.exercise + counts.manual + counts.electro + counts.adjunct;
   const isEmpty = total === 0;
+  // Organize-enable mirrors My Plan's true orchestration eligibility, which
+  // looks at the full cart (lifestyle included), not just the four card buckets.
+  const orchestrateEligible = items.length >= 2;
 
   const summaryParts: string[] = [];
   if (counts.exercise) summaryParts.push(`${counts.exercise} exercise${counts.exercise === 1 ? "" : "s"}`);
@@ -197,10 +200,10 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
           </button>
           <button
             onClick={onOrganize}
-            disabled={total < 2}
+            disabled={!orchestrateEligible}
             className="flex-1 text-[10px] px-2 py-1 rounded bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 hover:bg-cyan-500/40 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-colors"
             data-testid="button-master-plan-organize"
-            title={total < 2 ? "Add at least 2 items to organize" : "Send to AI orchestration"}
+            title={!orchestrateEligible ? "Add at least 2 items to organize" : "Send to AI orchestration"}
           >
             <Sparkles className="h-3 w-3" />
             Organize with AI
@@ -399,7 +402,7 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
                   style={{
                     offsetPath: `path('${path.d}')`,
                     animation: "master-plan-pulse-travel 800ms ease-out forwards",
-                  } as React.CSSProperties}
+                  } as CSSProperties}
                 />
               </g>
             )}

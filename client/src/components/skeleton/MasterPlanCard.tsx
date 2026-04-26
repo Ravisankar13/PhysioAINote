@@ -97,9 +97,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   if (counts.adjunct) summaryParts.push(`${counts.adjunct} adjunct${counts.adjunct === 1 ? "" : "s"}`);
   const summary = summaryParts.length > 0 ? `${summaryParts.join(", ")} ready to organize` : null;
 
-  // Anchor refs are created once and stored in a ref so the AnchorRefs object
-  // identity stays stable across renders — the overlay depends on this object
-  // and we don't want to re-init its observers on every render.
+  // Stable AnchorRefs object identity — the overlay's effects depend on this object.
   const anchorRefsBox = useRef<AnchorRefs | null>(null);
   if (anchorRefsBox.current === null) {
     anchorRefsBox.current = {
@@ -213,25 +211,6 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
           </button>
         </div>
       </div>
-
-      {/* Keyframes — scoped via a single style tag is fine since this component is conditionally rendered */}
-      <style>{`
-        @keyframes master-plan-line-draw {
-          from { stroke-dashoffset: 1; }
-          to { stroke-dashoffset: 0; }
-        }
-        @keyframes master-plan-pulse-travel {
-          0% { offset-distance: 0%; opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { offset-distance: 100%; opacity: 0; }
-        }
-        @keyframes master-plan-flash {
-          0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.0); transform: translateY(0); }
-          30% { box-shadow: 0 0 24px 4px rgba(34, 211, 238, 0.5); transform: translateY(-1px); }
-          100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.0); transform: translateY(0); }
-        }
-      `}</style>
     </>
   );
 });

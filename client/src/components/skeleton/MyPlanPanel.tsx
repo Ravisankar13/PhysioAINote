@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Activity,
@@ -415,20 +415,21 @@ export default function MyPlanPanel({ clinicalContext, autoOrganizeKey, onAutoOr
     onSuccess: (data) => setOrchestrated(data),
   });
 
-  // External trigger from Master Plan convergence card: fire orchestration once
-  // per nonce change. The parent owns the lifecycle — once we dispatch, we call
-  // `onAutoOrganizeConsumed` so the parent clears the nonce. This makes the
-  // trigger truly one-shot even if this panel unmounts/remounts on tab switches
-  // or modal close+reopen (the local "seen" ref would reset on remount, but the
-  // parent's cleared key prevents a re-fire).
+  // External one-shot trigger from the Master Plan convergence card. Parent
+  // clears autoOrganizeKey via onAutoOrganizeConsumed so re-mounts don't re-fire.
+  const onConsumedRef = useRef(onAutoOrganizeConsumed);
+  useEffect(() => {
+    onConsumedRef.current = onAutoOrganizeConsumed;
+  }, [onAutoOrganizeConsumed]);
+  const mutate = orchestrate.mutate;
+  const isPending = orchestrate.isPending;
   useEffect(() => {
     if (autoOrganizeKey == null) return;
     if (count < 2) return;
-    if (orchestrate.isPending) return; // wait — parent's key is still set, we'll re-eval when isPending flips
-    orchestrate.mutate();
-    onAutoOrganizeConsumed?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoOrganizeKey, count, orchestrate.isPending]);
+    if (isPending) return;
+    mutate();
+    onConsumedRef.current?.();
+  }, [autoOrganizeKey, count, isPending, mutate]);
 
   const grouped = items.reduce<Record<PlanCartModality, PlanCartItem[]>>((acc, it) => {
     (acc[it.modality] ||= []).push(it);

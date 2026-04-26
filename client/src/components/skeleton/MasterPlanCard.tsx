@@ -83,11 +83,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   };
   const total = counts.exercise + counts.manual + counts.electro + counts.adjunct;
   const isEmpty = total === 0;
-  // Organize-enable mirrors My Plan's true orchestration eligibility (full
-  // cart, lifestyle included), but is additionally suppressed while the card
-  // itself looks empty — so we never expose an "empty-looking" card with an
-  // active Organize button just because non-represented (lifestyle) items
-  // exist in the cart.
+  // Suppress organize when the card looks empty so its visual state stays consistent.
   const orchestrateEligible = !isEmpty && items.length >= 2;
 
   const summaryParts: string[] = [];
@@ -109,24 +105,25 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   }
   const anchorRefs = anchorRefsBox.current;
 
-  // Track previous counts to trigger one-shot per-line animations on add.
+  const cExercise = counts.exercise;
+  const cManual = counts.manual;
+  const cElectro = counts.electro;
+  const cAdjunct = counts.adjunct;
   const [animKeys, setAnimKeys] = useState<Record<PillKey, number>>({ exercise: 0, manual: 0, electro: 0, adjunct: 0 });
-  const prevCountsRef = useRef(counts);
+  const prevCountsRef = useRef({ exercise: cExercise, manual: cManual, electro: cElectro, adjunct: cAdjunct });
   useEffect(() => {
     const prev = prevCountsRef.current;
-    const next = counts;
-    let changed = false;
-    const updated: Record<PillKey, number> = { ...animKeys };
-    (["exercise", "manual", "electro", "adjunct"] as const).forEach(k => {
-      if (next[k] > prev[k]) {
-        updated[k] = animKeys[k] + 1;
-        changed = true;
-      }
+    setAnimKeys(curr => {
+      let changed = false;
+      const next = { ...curr };
+      if (cExercise > prev.exercise) { next.exercise = curr.exercise + 1; changed = true; }
+      if (cManual > prev.manual) { next.manual = curr.manual + 1; changed = true; }
+      if (cElectro > prev.electro) { next.electro = curr.electro + 1; changed = true; }
+      if (cAdjunct > prev.adjunct) { next.adjunct = curr.adjunct + 1; changed = true; }
+      return changed ? next : curr;
     });
-    if (changed) setAnimKeys(updated);
-    prevCountsRef.current = next;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [counts.exercise, counts.manual, counts.electro, counts.adjunct]);
+    prevCountsRef.current = { exercise: cExercise, manual: cManual, electro: cElectro, adjunct: cAdjunct };
+  }, [cExercise, cManual, cElectro, cAdjunct]);
 
   const cardJustGotItem = Object.values(animKeys).reduce((a, b) => a + b, 0);
 
@@ -243,8 +240,6 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
     if (!c) return;
     const rect = c.getBoundingClientRect();
 
-    // Guarded size update — only commit when width/height actually changed
-    // (rounded to 0.5px), otherwise we'd churn state on every paint.
     setSize(prev => {
       const w = Math.round(rect.width * 2) / 2;
       const h = Math.round(rect.height * 2) / 2;
@@ -260,7 +255,6 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
       const y1 = p.bottom - rect.top;
       const x2 = a.left - rect.left;
       const y2 = a.top - rect.top;
-      // S-curve via cubic Bézier so each line "leaves" the pill straight down then "enters" the card straight down
       const midY = (y1 + y2) / 2;
       const d = `M ${x1.toFixed(2)} ${y1.toFixed(2)} C ${x1.toFixed(2)} ${midY.toFixed(2)}, ${x2.toFixed(2)} ${midY.toFixed(2)}, ${x2.toFixed(2)} ${y2.toFixed(2)}`;
       return { d, midX: (x1 + x2) / 2, midY };
@@ -273,8 +267,6 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
       adjunct: compute(pillRefs.adjunct.current, anchorRefs.adjunct.current),
     };
 
-    // Guarded path update — bail out when every modality's d-string is unchanged
-    // so we don't enter a render → effect → setState → render loop.
     setPaths(prev => {
       const same = (["exercise", "manual", "electro", "adjunct"] as const).every(
         k => prev[k].d === next[k].d,
@@ -286,7 +278,6 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
 
   useLayoutEffect(() => {
     recompute();
-    // Re-run after a microtask so card mount + layout settle for the very first paint.
     const id = requestAnimationFrame(recompute);
     return () => cancelAnimationFrame(id);
   }, [recompute]);
@@ -296,7 +287,6 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
     if (!c) return;
     const ro = new ResizeObserver(() => recompute());
     ro.observe(c);
-    // Also observe each pill so any size changes (e.g. font load) reflow lines.
     Object.values(pillRefs).forEach(r => {
       if (r.current) ro.observe(r.current as Element);
     });
@@ -307,16 +297,7 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
     };
   }, [recompute, containerRef, pillRefs]);
 
-  if (size.w === 0 || size.h === 0) {
-    return (
-      <svg
-        ref={() => {}}
-        className="absolute inset-0 pointer-events-none"
-        style={{ width: "100%", height: "100%" }}
-        aria-hidden="true"
-      />
-    );
-  }
+  if (size.w === 0 || size.h === 0) return null;
 
   return (
     <svg

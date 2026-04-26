@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { Dumbbell, FileText, Hand, Leaf, Sparkles, Zap } from "lucide-react";
+import { Dumbbell, FileText, Hand, Leaf, Loader2, Sparkles, Wand2, Zap } from "lucide-react";
 import { usePlanCart } from "@/lib/planCart";
 
 export type PillKey = "exercise" | "manual" | "electro" | "adjunct";
@@ -43,6 +43,15 @@ interface MasterPlanCardProps {
   containerRef: RefObject<HTMLDivElement>;
   onOpenPlan: () => void;
   onOrganize: () => void;
+  /** Single-click full-plan auto-build: generate Exercise + Manual + EPA +
+   *  Adjunct, auto-add every item to the cart, then trigger AI orchestration. */
+  onAutoBuild?: () => void;
+  /** True while the auto-build cascade is in flight. Disables the button and
+   *  swaps the icon/label to a loading state. */
+  autoBuildPending?: boolean;
+  /** True when the host has not yet captured enough clinical context for
+   *  meaningful generation (no diagnosis / no pain markers / no extraction). */
+  autoBuildDisabled?: boolean;
 }
 
 interface AnchorRefs {
@@ -70,7 +79,7 @@ function CountChip({ pillKey, count }: { pillKey: PillKey; count: number }) {
 }
 
 const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function MasterPlanCard(
-  { diagnosis, pillRefs, containerRef, onOpenPlan, onOrganize },
+  { diagnosis, pillRefs, containerRef, onOpenPlan, onOrganize, onAutoBuild, autoBuildPending = false, autoBuildDisabled = false },
   ref,
 ) {
   const { items } = usePlanCart();
@@ -206,6 +215,27 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
             <Sparkles className="h-3 w-3" />
             Organize with AI
           </button>
+          {onAutoBuild && (
+            <button
+              onClick={onAutoBuild}
+              disabled={autoBuildPending || autoBuildDisabled}
+              className="flex-1 text-[10px] px-2 py-1 rounded bg-gradient-to-r from-violet-500/40 via-fuchsia-500/40 to-amber-500/40 text-white border border-fuchsia-400/50 hover:from-violet-500/55 hover:via-fuchsia-500/55 hover:to-amber-500/55 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-colors shadow-[0_0_8px_rgba(217,70,239,0.25)]"
+              data-testid="button-master-plan-auto-build"
+              title={autoBuildDisabled ? "Capture a diagnosis first" : autoBuildPending ? "Building plan…" : "Auto-build the full treatment plan and orchestrate"}
+            >
+              {autoBuildPending ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Building plan…
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-3 w-3" />
+                  Build full plan
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </>

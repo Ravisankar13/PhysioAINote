@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Zap, Activity, Sparkles, ArrowRight, Clock, ShieldAlert, Crosshair, Home, MessageSquare, Send, RotateCcw, Link2 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
-import { AddToPlanButton, makeCartId } from '@/lib/planCart';
+import { AddToPlanButton, makeCartId, usePlanCart } from '@/lib/planCart';
 import { matchRecommendationsForItem, sortByDriverRole, type SlingDrivenRecommendation } from '@/lib/slingDriverAnalysis';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
@@ -116,6 +116,9 @@ interface ManualTherapyEngineTabProps {
   pendingGenerate?: boolean;
   onGenerateStarted?: () => void;
   onGenerateComplete?: (success: boolean) => void;
+  /** Master Plan auto-build: when true, every generated technique is added to
+   *  the plan cart in a staggered cascade (~110ms apart). */
+  autoAddOnGenerate?: boolean;
 }
 
 const TISSUE_NAME_TO_MUSCLE_GROUP: Record<string, string[]> = {
@@ -572,7 +575,8 @@ function TechniqueCard({ technique, index, slingMatch }: { technique: TechniqueI
   );
 }
 
-export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete }: ManualTherapyEngineTabProps) {
+export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete, autoAddOnGenerate }: ManualTherapyEngineTabProps) {
+  const { add: addToPlanCart } = usePlanCart();
   const [plan, setPlan] = useState<ManualTherapyPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -760,7 +764,27 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       setPlan(sorted);
       const allIds = new Set(sorted.techniqueGroups.map(g => g.groupId));
       setExpandedGroups(allIds);
-      onGenerateComplete?.(true);
+      if (autoAddOnGenerate) {
+        const items = sorted.techniqueGroups.flatMap(group => group.techniques);
+        items.forEach((technique, i) => {
+          window.setTimeout(() => {
+            addToPlanCart({
+              id: makeCartId('manual_therapy', technique.technique),
+              modality: 'manual_therapy',
+              name: technique.technique,
+              targetStructure: technique.targetStructure,
+              targetFinding: technique.targetFinding,
+              dosage: technique.dosage,
+              rationale: technique.rationale,
+              contraindications: technique.contraindications,
+              patientPosition: technique.patientPosition,
+            });
+          }, i * 110);
+        });
+        window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+      } else {
+        onGenerateComplete?.(true);
+      }
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -769,7 +793,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [buildPayload, onGenerateComplete]);
+  }, [buildPayload, onGenerateComplete, autoAddOnGenerate, addToPlanCart]);
 
   useEffect(() => {
     if (pendingGenerate) {

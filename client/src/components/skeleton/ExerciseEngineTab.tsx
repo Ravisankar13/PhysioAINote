@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } fro
 import { Dumbbell, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Sparkles, Zap, ArrowRight, Clock, Activity, ShieldAlert, Crosshair, Image, BarChart3, Link2 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { AddToPlanButton, makeCartId } from '@/lib/planCart';
+import { AddToPlanButton, makeCartId, usePlanCart } from '@/lib/planCart';
 import { matchRecommendationsForItem, sortByDriverRole, type SlingDrivenRecommendation } from '@/lib/slingDriverAnalysis';
 
 const ExerciseBodyDiagram = lazy(() => import('./ExerciseBodyDiagram'));
@@ -124,6 +124,10 @@ interface ExerciseEngineTabProps {
   pendingGenerate?: boolean;
   onGenerateStarted?: () => void;
   onGenerateComplete?: (success: boolean) => void;
+  /** Master Plan auto-build: when true, every generated exercise is added to
+   *  the plan cart in a staggered cascade (~110ms apart) so the per-modality
+   *  flash/line animations fire item-by-item. */
+  autoAddOnGenerate?: boolean;
   // ---- Loading Engine handshake (Task #231) ----
   /** Free-text condition / diagnosis name — passed to the loading engine to detect tendinopathies. */
   conditionName?: string;
@@ -970,7 +974,8 @@ function CustomExerciseCard({
   );
 }
 
-export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete, conditionName, loadingPatientFactors }: ExerciseEngineTabProps) {
+export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, onCustomExerciseResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete, autoAddOnGenerate, conditionName, loadingPatientFactors }: ExerciseEngineTabProps) {
+  const { add: addToPlanCart } = usePlanCart();
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1198,7 +1203,26 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
       setPlan(sorted);
       const allIds = new Set(sorted.exerciseGroups.map(g => g.groupId));
       setExpandedGroups(allIds);
-      onGenerateComplete?.(true);
+      if (autoAddOnGenerate) {
+        const items = sorted.exerciseGroups.flatMap(group => group.exercises);
+        items.forEach((ex, i) => {
+          window.setTimeout(() => {
+            addToPlanCart({
+              id: makeCartId('exercise', ex.name),
+              modality: 'exercise',
+              name: ex.name,
+              targetStructure: ex.targetStructure,
+              targetFinding: ex.targetFinding,
+              dosage: `${ex.sets} × ${ex.reps}`,
+              rationale: ex.rationale,
+              contraindications: ex.contraindications,
+            });
+          }, i * 110);
+        });
+        window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+      } else {
+        onGenerateComplete?.(true);
+      }
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -1207,7 +1231,7 @@ export default function ExerciseEngineTab({ mechanismAnalysis, slingAnalysis, pa
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [buildPayload, onGenerateComplete]);
+  }, [buildPayload, onGenerateComplete, autoAddOnGenerate, addToPlanCart]);
 
   useEffect(() => {
     if (pendingGenerate) {

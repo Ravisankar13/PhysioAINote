@@ -703,6 +703,20 @@ export default function PhysioGPT() {
   // Master Plan convergence card: nonce bumped when the card's "Organize with AI"
   // button is pressed, so MyPlanPanel re-runs the same orchestration request once.
   const [myPlanAutoOrganizeKey, setMyPlanAutoOrganizeKey] = useState<number | null>(null);
+  // ----- Master Plan auto-build (Task #267) -----
+  // When the user clicks "Build full plan", the four engines are mounted as
+  // hidden phantom instances (alongside any visible tab) and triggered to
+  // generate concurrently. As each engine returns, its `autoAddOnGenerate`
+  // path adds every generated item to the plan cart in a staggered cascade
+  // (~110ms per item) so the existing MasterPlanCard flash + line-draw
+  // animations fire item-by-item. When all four engines finish, we navigate
+  // to the My Plan tab and bump the existing organize nonce.
+  const [autoBuildActive, setAutoBuildActive] = useState(false);
+  const [autoBuildPendingExercise, setAutoBuildPendingExercise] = useState(false);
+  const [autoBuildPendingMT, setAutoBuildPendingMT] = useState(false);
+  const [autoBuildPendingEPA, setAutoBuildPendingEPA] = useState(false);
+  const [autoBuildPendingAdjunct, setAutoBuildPendingAdjunct] = useState(false);
+  const [autoBuildElectroNonce, setAutoBuildElectroNonce] = useState(0);
   // Refs for the 4 quick-launch pills (Exercise/Manual/Electro/Adjunct) and the
   // wrapping container so the convergence overlay can compute SVG anchor points.
   // pillRefs object is memoized so its identity is stable across renders — this
@@ -4422,6 +4436,36 @@ ${ddxList}`;
     }
     setMtGeneratingSession(null);
   }, [mtGeneratingSession]);
+
+  // ----- Master Plan auto-build handlers (Task #267) -----
+  const handleAutoBuildStartExercise = useCallback(() => setAutoBuildPendingExercise(false), []);
+  const handleAutoBuildStartMT = useCallback(() => setAutoBuildPendingMT(false), []);
+  const handleAutoBuildStartAdjunct = useCallback(() => setAutoBuildPendingAdjunct(false), []);
+  const handleAutoBuildCompleteExercise = useCallback(() => { setAutoBuildPendingExercise(false); }, []);
+  const handleAutoBuildCompleteMT = useCallback(() => { setAutoBuildPendingMT(false); }, []);
+  const handleAutoBuildCompleteEPA = useCallback(() => { setAutoBuildPendingEPA(false); }, []);
+  const handleAutoBuildCompleteAdjunct = useCallback(() => { setAutoBuildPendingAdjunct(false); }, []);
+  const handleAutoBuildClick = useCallback(() => {
+    // No-op while a build is in flight or before clinical context is captured.
+    if (autoBuildActive) return;
+    if (!hasClinicalTextData) return;
+    setAutoBuildActive(true);
+    setAutoBuildPendingExercise(true);
+    setAutoBuildPendingMT(true);
+    setAutoBuildPendingEPA(true);
+    setAutoBuildPendingAdjunct(true);
+    setAutoBuildElectroNonce(prev => prev + 1);
+  }, [autoBuildActive, hasClinicalTextData]);
+  // Watch for all 4 phantom engines to finish (success or failure) — then
+  // navigate to My Plan and trigger AI orchestration via the existing nonce.
+  useEffect(() => {
+    if (!autoBuildActive) return;
+    if (autoBuildPendingExercise || autoBuildPendingMT || autoBuildPendingEPA || autoBuildPendingAdjunct) return;
+    setAutoBuildActive(false);
+    setShowInjuryMechanism(true);
+    setMechanismActiveTab('myPlan');
+    setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
+  }, [autoBuildActive, autoBuildPendingExercise, autoBuildPendingMT, autoBuildPendingEPA, autoBuildPendingAdjunct]);
 
   const exerciseMtActivePhaseIndex = useMemo(() => {
     if (!treatmentPlanData || !treatmentPlanData.phases || treatmentPlanData.phases.length === 0) return 0;
@@ -12757,7 +12801,107 @@ ${ddxList}`;
                 setMechanismActiveTab('myPlan');
                 setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
               }}
+              onAutoBuild={handleAutoBuildClick}
+              autoBuildPending={autoBuildActive}
+              autoBuildDisabled={!hasClinicalTextData}
             />
+            {/* Phantom engines (Task #267): hidden, mount only during auto-build
+                so each engine's autoAddOnGenerate cascade fires without forcing
+                the user to leave their current tab. Each engine adds its
+                generated items to the shared plan cart, which drives the
+                MasterPlanCard's per-modality flash + line-draw animations. */}
+            {autoBuildActive && (
+              <div className="hidden" aria-hidden="true" data-testid="master-plan-auto-build-phantoms">
+                <Suspense fallback={null}>
+                  <ExerciseEngineTab
+                    mechanismAnalysis={mechanismAnalysisResult}
+                    slingAnalysis={slingAnalysis}
+                    painMarkers={painMarkers.map(pm => ({
+                      label: pm.anatomicalLabel || pm.nearestBone,
+                      severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                      type: pm.type,
+                    }))}
+                    slingDrivenRecommendations={slingDrivenRecommendations}
+                    onCustomExerciseResult={() => { /* phantom: ignore */ }}
+                    pendingGenerate={autoBuildPendingExercise}
+                    onGenerateStarted={handleAutoBuildStartExercise}
+                    onGenerateComplete={handleAutoBuildCompleteExercise}
+                    autoAddOnGenerate
+                    conditionName={extractionResult?.mainComplaint ?? undefined}
+                  />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <ManualTherapyEngineTab
+                    mechanismAnalysis={mechanismAnalysisResult}
+                    slingAnalysis={slingAnalysis}
+                    painMarkers={painMarkers.map(pm => ({
+                      label: pm.anatomicalLabel || pm.nearestBone,
+                      severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                      type: pm.type,
+                    }))}
+                    slingDrivenRecommendations={slingDrivenRecommendations}
+                    scarMarkers={scarMarkers}
+                    adhesionBands={adhesionBands}
+                    musclePathologies={Object.entries(compensatedOverrides)
+                      .filter(([, ov]) => ov?.pathology && ov.pathology !== 'none')
+                      .map(([muscleId, ov]) => ({
+                        muscleId,
+                        label: muscleId.replace(/_/g, ' '),
+                        pathology: ov!.pathology as string,
+                        severity: ov!.tensionOffset > 20 ? 'severe' : ov!.tensionOffset > 10 ? 'moderate' : 'mild',
+                      }))}
+                    onHighlightMuscles={() => { /* phantom: ignore */ }}
+                    onSetMuscleHighlightColors={() => { /* phantom: ignore */ }}
+                    onSetManualTherapyAnnotations={() => { /* phantom: ignore */ }}
+                    onCustomManualTherapyResult={() => { /* phantom: ignore */ }}
+                    pendingGenerate={autoBuildPendingMT}
+                    onGenerateStarted={handleAutoBuildStartMT}
+                    onGenerateComplete={handleAutoBuildCompleteMT}
+                    autoAddOnGenerate
+                  />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <ElectrophysicalEngineTab
+                    mechanismAnalysis={mechanismAnalysisResult}
+                    slingAnalysis={slingAnalysis}
+                    painMarkers={painMarkers.map(pm => ({
+                      label: pm.anatomicalLabel || pm.nearestBone,
+                      severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                      type: pm.type,
+                    }))}
+                    slingDrivenRecommendations={slingDrivenRecommendations}
+                    onPlanChange={() => { /* phantom: ignore */ }}
+                    initialCondition={extractionResult?.mainComplaint ?? ''}
+                    initialStage={(extractionResult?.duration === 'acute' ? 'acute'
+                      : extractionResult?.duration === 'subacute' ? 'subacute'
+                      : extractionResult?.duration === 'chronic' || extractionResult?.duration === 'recurrent' ? 'chronic'
+                      : 'subacute') as 'acute' | 'subacute' | 'chronic'}
+                    autoGenerateNonce={autoBuildElectroNonce}
+                    autoGenerate
+                    autoAddOnGenerate
+                    onGenerateComplete={handleAutoBuildCompleteEPA}
+                    patientId={selectedConversationId ?? null}
+                  />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <AdjunctTherapiesEngineTab
+                    mechanismAnalysis={mechanismAnalysisResult}
+                    painMarkers={painMarkers.map(pm => ({
+                      label: pm.anatomicalLabel || pm.nearestBone,
+                      severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                      type: pm.type,
+                    }))}
+                    diagnosis={extractionResult?.mainComplaint || undefined}
+                    recoveryPhase={extractionResult?.duration || undefined}
+                    irritability={extractionResult?.irritability || undefined}
+                    pendingGenerate={autoBuildPendingAdjunct}
+                    onGenerateStarted={handleAutoBuildStartAdjunct}
+                    onGenerateComplete={handleAutoBuildCompleteAdjunct}
+                    autoAddOnGenerate
+                  />
+                </Suspense>
+              </div>
+            )}
           </div>
         )}
       </div>

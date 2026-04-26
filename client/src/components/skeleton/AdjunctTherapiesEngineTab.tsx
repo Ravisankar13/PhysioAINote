@@ -1,7 +1,7 @@
-import { useState, useCallback, useRef, type ComponentType } from 'react';
+import { useState, useCallback, useEffect, useRef, type ComponentType } from 'react';
 import { Leaf, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Loader2, Info, ShieldAlert, Sparkles, Award, Stethoscope, BookOpen, ExternalLink, Syringe, Hand, Flame, CircleDot, Wind, Waves, Snowflake, Tag, Zap, Activity, Heart, Brain, Sprout, Droplets, Apple, Footprints, Pipette } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
-import { AddToPlanButton, makeCartId } from '@/lib/planCart';
+import { AddToPlanButton, makeCartId, usePlanCart } from '@/lib/planCart';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 
 interface EvidenceArticle {
@@ -70,6 +70,14 @@ interface AdjunctTherapiesEngineTabProps {
   diagnosis?: string;
   recoveryPhase?: string;
   irritability?: string;
+  /** When toggled true, fires generatePlan() once. Parent should reset to
+   *  false in onGenerateStarted (mirrors Exercise / Manual engines). */
+  pendingGenerate?: boolean;
+  onGenerateStarted?: () => void;
+  onGenerateComplete?: (success: boolean) => void;
+  /** Master Plan auto-build: when true, every generated recommendation is
+   *  added to the plan cart in a staggered cascade (~110ms apart). */
+  autoAddOnGenerate?: boolean;
 }
 
 type CategoryStyle = { bg: string; border: string; text: string; badge: string; icon: ComponentType<{ className?: string }>; group: string; groupOrder: number };
@@ -440,7 +448,8 @@ function RecommendationCard({ rec, index, evidence, evidenceLoading, therapyCate
   );
 }
 
-export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarkers, diagnosis, recoveryPhase, irritability }: AdjunctTherapiesEngineTabProps) {
+export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarkers, diagnosis, recoveryPhase, irritability, pendingGenerate, onGenerateStarted, onGenerateComplete, autoAddOnGenerate }: AdjunctTherapiesEngineTabProps) {
+  const { add: addToPlanCart } = usePlanCart();
   const [plan, setPlan] = useState<AdjunctTherapiesPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -567,14 +576,51 @@ export default function AdjunctTherapiesEngineTab({ mechanismAnalysis, painMarke
       setPlan(sorted);
       setExpandedGroups(new Set(sorted.therapyGroups.map(g => g.groupId)));
       void fetchEvidence(sorted);
+      if (autoAddOnGenerate) {
+        const items: Array<{ category: string; rec: AdjunctRecommendation }> = [];
+        sorted.therapyGroups.forEach(group => {
+          group.recommendations.forEach(rec => {
+            items.push({ category: group.therapyCategory, rec });
+          });
+        });
+        items.forEach(({ category, rec }, i) => {
+          window.setTimeout(() => {
+            const referralRequired = /refer/i.test(rec.referralGuidance || '') && /scope|out|qualified/i.test(rec.referralGuidance || '');
+            addToPlanCart({
+              id: makeCartId('adjunct', `${category}-${rec.therapyName}`),
+              modality: 'adjunct',
+              name: referralRequired ? `[Refer out] ${rec.therapyName}` : rec.therapyName,
+              category,
+              targetStructure: rec.targetStructure,
+              targetFinding: rec.targetFinding,
+              dosage: rec.techniqueDetails,
+              parameters: rec.referralGuidance,
+              rationale: rec.clinicalRationale,
+              contraindications: rec.contraindications,
+              evidenceGrade: typeof rec.evidenceLevel === 'string' ? rec.evidenceLevel : undefined,
+            });
+          }, i * 110);
+        });
+        window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+      } else {
+        onGenerateComplete?.(true);
+      }
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setError(msg);
+      onGenerateComplete?.(false);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [mechanismAnalysis, painMarkers, diagnosis, recoveryPhase, irritability, fetchEvidence]);
+  }, [mechanismAnalysis, painMarkers, diagnosis, recoveryPhase, irritability, fetchEvidence, autoAddOnGenerate, addToPlanCart, onGenerateComplete]);
+
+  useEffect(() => {
+    if (pendingGenerate) {
+      onGenerateStarted?.();
+      void generatePlan();
+    }
+  }, [pendingGenerate, generatePlan, onGenerateStarted]);
 
   const hasData = mechanismAnalysis !== null || (painMarkers && painMarkers.length > 0);
 

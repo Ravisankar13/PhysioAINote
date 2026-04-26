@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Zap, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Activity, Waves, ExternalLink, HelpCircle, BookOpen, Award, Stethoscope, Sparkles, Ban, Save, Trash2, Pencil, BookmarkPlus, Link2 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { AddToPlanButton, makeCartId } from '@/lib/planCart';
+import { AddToPlanButton, makeCartId, usePlanCart } from '@/lib/planCart';
 import { matchRecommendationsForItem, type SlingDrivenRecommendation } from '@/lib/slingDriverAnalysis';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
@@ -376,6 +376,11 @@ interface ElectrophysicalEngineTabProps {
    *  the supplied initialCondition / initialStage. Resets after firing. */
   autoGenerate?: boolean;
   onAutoGenerateConsumed?: () => void;
+  /** Master Plan auto-build: when true, every generated modality is added to
+   *  the plan cart in a staggered cascade (~110ms apart). */
+  autoAddOnGenerate?: boolean;
+  /** Fired once the auto-build cascade for this engine finishes (or fails). */
+  onGenerateComplete?: (success: boolean) => void;
   /** Optional patient/conversation id used to scope saved Condition presets.
    *  When null/undefined, presets are user-global ("any patient"). */
   patientId?: number | null;
@@ -710,7 +715,8 @@ function ModalityCard({ modality, index, evidence, evidenceLoading, groupHint, s
   );
 }
 
-export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, onPlanChange, initialCondition, initialStage, autoGenerateNonce, autoGenerate, onAutoGenerateConsumed, patientId = null }: ElectrophysicalEngineTabProps) {
+export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, onPlanChange, initialCondition, initialStage, autoGenerateNonce, autoGenerate, onAutoGenerateConsumed, autoAddOnGenerate, onGenerateComplete, patientId = null }: ElectrophysicalEngineTabProps) {
+  const { add: addToPlanCart } = usePlanCart();
   const [plan, setPlan] = useState<ElectrophysicalPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1007,14 +1013,52 @@ export default function ElectrophysicalEngineTab({ mechanismAnalysis, slingAnaly
       const allIds = new Set(sorted.modalityGroups.map(g => g.groupId));
       setExpandedGroups(allIds);
       void fetchEvidence(sorted);
+      if (autoAddOnGenerate) {
+        const items: Array<{ groupHint: string; modality: ModalityItem }> = [];
+        sorted.modalityGroups.forEach(group => {
+          group.modalities.forEach(modality => {
+            if (!modality.notAdvisedReason) items.push({ groupHint: group.goalTitle, modality });
+          });
+        });
+        items.forEach(({ groupHint, modality }, i) => {
+          window.setTimeout(() => {
+            const mechanismVal = modality.mechanism ?? inferMechanism(modality.modality, groupHint);
+            const targetTissueVal = modality.targetTissue ?? inferTargetTissue(modality);
+            const desiredEffectVal = modality.desiredEffect ?? inferDesiredEffect(modality, groupHint);
+            const evidenceStrengthVal = modality.evidenceStrength ?? inferEvidenceStrength(modality);
+            addToPlanCart({
+              id: makeCartId('electrophysical', modality.modality),
+              modality: 'electrophysical',
+              name: modality.modality,
+              targetStructure: modality.targetStructure,
+              targetFinding: modality.targetFinding,
+              parameters: modality.parameters,
+              dosage: modality.parameters,
+              rationale: modality.rationale,
+              contraindications: modality.contraindications,
+              evidenceGrade: modality.evidenceGrade,
+              patientPosition: modality.patientPosition,
+              mechanism: mechanismVal,
+              targetTissue: targetTissueVal,
+              desiredEffect: desiredEffectVal,
+              evidenceStrength: evidenceStrengthVal,
+              dosing: modality.dosing,
+            });
+          }, i * 110);
+        });
+        window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+      } else {
+        onGenerateComplete?.(true);
+      }
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setError(msg);
+      onGenerateComplete?.(false);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, activePresetId, fetchEvidence]);
+  }, [mechanismAnalysis, slingAnalysis, painMarkers, condition, stage, irritability, tissueType, primaryGoal, contraindicationFlags, activePresetId, fetchEvidence, autoAddOnGenerate, addToPlanCart, onGenerateComplete]);
 
   // Each new `autoGenerateNonce` from the parent represents a fresh phase-card
   // CTA: re-sync condition/stage from the latest `initialCondition`/`initialStage`

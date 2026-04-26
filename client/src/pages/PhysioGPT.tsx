@@ -709,14 +709,23 @@ export default function PhysioGPT() {
   // generate concurrently. As each engine returns, its `autoAddOnGenerate`
   // path adds every generated item to the plan cart in a staggered cascade
   // (~110ms per item) so the existing MasterPlanCard flash + line-draw
-  // animations fire item-by-item. When all four engines finish, we navigate
-  // to the My Plan tab and bump the existing organize nonce.
-  const [autoBuildActive, setAutoBuildActive] = useState(false);
+  // animations fire item-by-item. When all four engines settle we hold a
+  // brief tick (so the last cart-add animations can paint) before navigating
+  // to My Plan and bumping the existing organize nonce.
+  //
+  // State machine: 'idle' → 'generating' (all four engines in flight) →
+  //                'organizing' (post-settle nav + nonce bump) → 'idle'.
+  // Re-clicking the button is a no-op while state !== 'idle'.
+  type AutoBuildState = 'idle' | 'generating' | 'organizing';
+  const [autoBuildState, setAutoBuildState] = useState<AutoBuildState>('idle');
   const [autoBuildPendingExercise, setAutoBuildPendingExercise] = useState(false);
   const [autoBuildPendingMT, setAutoBuildPendingMT] = useState(false);
   const [autoBuildPendingEPA, setAutoBuildPendingEPA] = useState(false);
   const [autoBuildPendingAdjunct, setAutoBuildPendingAdjunct] = useState(false);
   const [autoBuildElectroNonce, setAutoBuildElectroNonce] = useState(0);
+  // Names of engines that returned an error during the current build (cleared
+  // when state cycles back to 'idle'). Drives the failure toast.
+  const [autoBuildFailures, setAutoBuildFailures] = useState<Set<string>>(new Set());
   // Refs for the 4 quick-launch pills (Exercise/Manual/Electro/Adjunct) and the
   // wrapping container so the convergence overlay can compute SVG anchor points.
   // pillRefs object is memoized so its identity is stable across renders — this
@@ -4441,31 +4450,74 @@ ${ddxList}`;
   const handleAutoBuildStartExercise = useCallback(() => setAutoBuildPendingExercise(false), []);
   const handleAutoBuildStartMT = useCallback(() => setAutoBuildPendingMT(false), []);
   const handleAutoBuildStartAdjunct = useCallback(() => setAutoBuildPendingAdjunct(false), []);
-  const handleAutoBuildCompleteExercise = useCallback(() => { setAutoBuildPendingExercise(false); }, []);
-  const handleAutoBuildCompleteMT = useCallback(() => { setAutoBuildPendingMT(false); }, []);
-  const handleAutoBuildCompleteEPA = useCallback(() => { setAutoBuildPendingEPA(false); }, []);
-  const handleAutoBuildCompleteAdjunct = useCallback(() => { setAutoBuildPendingAdjunct(false); }, []);
+  const recordAutoBuildFailure = useCallback((engineLabel: string) => {
+    setAutoBuildFailures(prev => {
+      if (prev.has(engineLabel)) return prev;
+      const next = new Set(prev);
+      next.add(engineLabel);
+      return next;
+    });
+  }, []);
+  const handleAutoBuildCompleteExercise = useCallback((success: boolean) => {
+    if (!success) recordAutoBuildFailure('Exercise Rx');
+    setAutoBuildPendingExercise(false);
+  }, [recordAutoBuildFailure]);
+  const handleAutoBuildCompleteMT = useCallback((success: boolean) => {
+    if (!success) recordAutoBuildFailure('Manual Therapy');
+    setAutoBuildPendingMT(false);
+  }, [recordAutoBuildFailure]);
+  const handleAutoBuildCompleteEPA = useCallback((success: boolean) => {
+    if (!success) recordAutoBuildFailure('Electrophysical Agents');
+    setAutoBuildPendingEPA(false);
+  }, [recordAutoBuildFailure]);
+  const handleAutoBuildCompleteAdjunct = useCallback((success: boolean) => {
+    if (!success) recordAutoBuildFailure('Adjunct Rx');
+    setAutoBuildPendingAdjunct(false);
+  }, [recordAutoBuildFailure]);
   const handleAutoBuildClick = useCallback(() => {
-    // No-op while a build is in flight or before clinical context is captured.
-    if (autoBuildActive) return;
+    // No-op while a build is anywhere in flight (generating OR organizing) or
+    // before clinical context is captured.
+    if (autoBuildState !== 'idle') return;
     if (!hasClinicalTextData) return;
-    setAutoBuildActive(true);
+    setAutoBuildFailures(new Set());
+    setAutoBuildState('generating');
     setAutoBuildPendingExercise(true);
     setAutoBuildPendingMT(true);
     setAutoBuildPendingEPA(true);
     setAutoBuildPendingAdjunct(true);
     setAutoBuildElectroNonce(prev => prev + 1);
-  }, [autoBuildActive, hasClinicalTextData]);
-  // Watch for all 4 phantom engines to finish (success or failure) — then
-  // navigate to My Plan and trigger AI orchestration via the existing nonce.
+  }, [autoBuildState, hasClinicalTextData]);
+  // Settle: once all 4 phantom engines finish (success or failure), advance
+  // the state machine to 'organizing', surface a failure toast if anything
+  // errored, then — after a short tick so the last cart-add line/flash
+  // animations can paint — navigate to My Plan and bump the orchestration
+  // nonce. Re-clicks remain blocked until the final timer drops state back
+  // to 'idle'.
   useEffect(() => {
-    if (!autoBuildActive) return;
+    if (autoBuildState !== 'generating') return;
     if (autoBuildPendingExercise || autoBuildPendingMT || autoBuildPendingEPA || autoBuildPendingAdjunct) return;
-    setAutoBuildActive(false);
-    setShowInjuryMechanism(true);
-    setMechanismActiveTab('myPlan');
-    setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
-  }, [autoBuildActive, autoBuildPendingExercise, autoBuildPendingMT, autoBuildPendingEPA, autoBuildPendingAdjunct]);
+    setAutoBuildState('organizing');
+    if (autoBuildFailures.size > 0) {
+      toast({
+        title: "Some engines couldn't generate",
+        description: `Plan still built — ${Array.from(autoBuildFailures).join(', ')} did not respond. Re-run the affected tab manually if needed.`,
+        variant: 'destructive',
+      });
+    }
+    const navTimer = window.setTimeout(() => {
+      setShowInjuryMechanism(true);
+      setMechanismActiveTab('myPlan');
+      setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
+    }, 150);
+    const idleTimer = window.setTimeout(() => {
+      setAutoBuildState('idle');
+      setAutoBuildFailures(new Set());
+    }, 400);
+    return () => {
+      window.clearTimeout(navTimer);
+      window.clearTimeout(idleTimer);
+    };
+  }, [autoBuildState, autoBuildPendingExercise, autoBuildPendingMT, autoBuildPendingEPA, autoBuildPendingAdjunct, autoBuildFailures, toast]);
 
   const exerciseMtActivePhaseIndex = useMemo(() => {
     if (!treatmentPlanData || !treatmentPlanData.phases || treatmentPlanData.phases.length === 0) return 0;
@@ -12802,15 +12854,17 @@ ${ddxList}`;
                 setMyPlanAutoOrganizeKey(prev => (prev ?? 0) + 1);
               }}
               onAutoBuild={handleAutoBuildClick}
-              autoBuildPending={autoBuildActive}
+              autoBuildPending={autoBuildState !== 'idle'}
               autoBuildDisabled={!hasClinicalTextData}
             />
             {/* Phantom engines (Task #267): hidden, mount only during auto-build
                 so each engine's autoAddOnGenerate cascade fires without forcing
                 the user to leave their current tab. Each engine adds its
                 generated items to the shared plan cart, which drives the
-                MasterPlanCard's per-modality flash + line-draw animations. */}
-            {autoBuildActive && (
+                MasterPlanCard's per-modality flash + line-draw animations.
+                Mounted during 'generating' AND 'organizing' so the final
+                paint tick still owns the same React tree. */}
+            {autoBuildState !== 'idle' && (
               <div className="hidden" aria-hidden="true" data-testid="master-plan-auto-build-phantoms">
                 <Suspense fallback={null}>
                   <ExerciseEngineTab

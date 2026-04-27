@@ -206,6 +206,7 @@ const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSim
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
 const RecoverySimulationPanel = lazy(() => import("@/components/skeleton/RecoverySimulationPanel"));
 const RecoverySimulatorDashboard = lazy(() => import("@/components/skeleton/RecoverySimulatorDashboard"));
+const MechanicsAnalyserDashboard = lazy(() => import("@/components/skeleton/MechanicsAnalyserDashboard"));
 import { buildConditionContext, buildCustomExerciseId, buildCustomTechniqueId, classifyCondition, extractJointLoadVectors, MAX_SIMULATION_WEEKS, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput, type JointLoadVector } from "@/lib/recoverySimulationEngine";
 import { computeNaturalProgression, resolveNaturalProgressionConditionId } from "@/lib/naturalProgressionEngine";
 import { buildPrescriptionContext } from "@/lib/prescriptionAdapterEngine";
@@ -693,6 +694,15 @@ export default function PhysioGPT() {
    *  PureThreeGLBViewer instance — so the user is never looking at a
    *  duplicated viewer; the existing one is reparented into the dashboard. */
   const [recoverySimSlot, setRecoverySimSlot] = useState<HTMLDivElement | null>(null);
+  // Task #294 — Mechanics Analyser bottom-tab dashboard. Same portal pattern
+  // as Recovery Sim: the live PureThreeGLBViewer is reparented into the
+  // dashboard's central skeleton slot so the analyser shares the SAME viewer
+  // instance + overlays + animation state instead of mounting a duplicate.
+  const [showMechanicsAnalyser, setShowMechanicsAnalyser] = useState(false);
+  const [mechanicsAnalyserSlot, setMechanicsAnalyserSlot] = useState<HTMLDivElement | null>(null);
+  const [mechanicsOverlay, setMechanicsOverlay] = useState<{
+    comTrail: boolean; stabilityCone: boolean; plantarHeatmap: boolean; jointReactionArrows: boolean;
+  }>({ comTrail: true, stabilityCone: true, plantarHeatmap: false, jointReactionArrows: true });
   const [timelinePlaybackState, setTimelinePlaybackState] = useState<PlaybackSyncState | null>(null);
   const [conditionPhases, setConditionPhases] = useState<ConditionPhaseInfo[] | null>(null);
   const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
@@ -7431,6 +7441,7 @@ ${ddxList}`;
               enableZoomTool={zoomToolMode}
               onLandmarkSelect={handleLandmarkSelect}
               forceOverlay={(() => {
+                if (showMechanicsAnalyser && !mechanicsOverlay.jointReactionArrows) return null;
                 const activeForceData = hudForceAnalysis ?? (forceMode && forceAnalysis ? forceAnalysis : null);
                 if (forceMode && activeForceData) {
                   const base = activeForceData.joints.filter(j => enabledForceJoints.has(j.id));
@@ -7444,6 +7455,9 @@ ${ddxList}`;
                 if (showInjuryMechanism && mechanismBoneIds.length > 0 && hudForceAnalysis) {
                   const boneSet = new Set(mechanismBoneIds);
                   return hudForceAnalysis.joints.filter((j: { boneName: string }) => boneSet.has(j.boneName));
+                }
+                if (showMechanicsAnalyser && mechanicsOverlay.jointReactionArrows && hudForceAnalysis) {
+                  return hudForceAnalysis.joints;
                 }
                 return null;
               })()}
@@ -7565,7 +7579,7 @@ ${ddxList}`;
                 }
               }}
             />
-            ); return showRecoverySim && recoverySimSlot ? createPortal(__viewer, recoverySimSlot) : __viewer; })()}
+            ); if (showRecoverySim && recoverySimSlot) return createPortal(__viewer, recoverySimSlot); if (showMechanicsAnalyser && mechanicsAnalyserSlot) return createPortal(__viewer, mechanicsAnalyserSlot); return __viewer; })()}
 
             {expandedSlingDetailId && slingAnalysis && (() => {
               const slingData = slingAnalysis.slings.find(s => s.slingId === expandedSlingDetailId);
@@ -10467,10 +10481,28 @@ ${ddxList}`;
                 variant="secondary"
                 size="sm"
                 className={`h-7 text-xs shadow-sm ${showRecoverySim ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => setShowRecoverySim(!showRecoverySim)}
+                onClick={() => {
+                  const next = !showRecoverySim;
+                  setShowRecoverySim(next);
+                  if (next && showMechanicsAnalyser) setShowMechanicsAnalyser(false);
+                }}
               >
                 <Activity className="h-3 w-3 mr-1" />
                 Recovery Sim
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${showMechanicsAnalyser ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  const next = !showMechanicsAnalyser;
+                  setShowMechanicsAnalyser(next);
+                  if (next && showRecoverySim) setShowRecoverySim(false);
+                }}
+                data-testid="toggle-mechanics-analyser"
+              >
+                <span className="font-serif italic mr-1 text-[12px] leading-none">Σ</span>
+                Mechanics Analyser
               </Button>
               <Button
                 variant="secondary"
@@ -11693,6 +11725,26 @@ ${ddxList}`;
               </Suspense>
               );
             })()}
+
+            {showMechanicsAnalyser && (
+              <Suspense fallback={<LazyPanelFallback />}>
+                <MechanicsAnalyserDashboard
+                  onClose={() => setShowMechanicsAnalyser(false)}
+                  onSkeletonSlotMount={setMechanicsAnalyserSlot}
+                  onOverlayChange={setMechanicsOverlay}
+                  modelConfig={finalModelConfig as Record<string, Record<string, number | undefined> | undefined>}
+                  bodyWeightKg={bodyWeightKg}
+                  forceAnalysis={hudForceAnalysis ?? null}
+                  animationState={animationState}
+                  setAnimationState={setAnimationState}
+                  patientMeta={[
+                    extractionResult?.patientAge ? `Age ${extractionResult.patientAge}` : null,
+                    extractionResult?.duration,
+                  ].filter(Boolean).join(' · ') || undefined}
+                  conditionLabel={extractionResult?.mainComplaint || undefined}
+                />
+              </Suspense>
+            )}
 
             {showShoulderAssessment && (
               <div className="absolute top-2 right-2 z-30 w-80 h-[calc(100%-50px)]">

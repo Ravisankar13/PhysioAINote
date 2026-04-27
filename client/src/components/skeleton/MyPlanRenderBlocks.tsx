@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { PlanCartItem, PlanCartModality } from "@/lib/planCart";
 import type { TreatmentRationaleResult, TreatmentRationaleSource } from "@/lib/treatmentRationaleContext";
+import { getDriverLabelsByItemId } from "@/lib/treatmentRationaleLocal";
 
 export interface OrchestratedSessionStep {
   order: number;
@@ -745,56 +746,72 @@ export function TreatmentRationaleSection({
           </div>
 
           {/* Per-item rationale block — only shown when the host context
-              doesn't already provide per-row "Why?" affordances. */}
-          {!hidePerItemBlock && rationale.treatmentRationale.length > 0 && (
-            <div>
-              <button
-                onClick={() => setPerItemOpen(o => !o)}
-                className="text-[9px] font-semibold text-cyan-300 uppercase tracking-wider inline-flex items-center gap-1 hover:text-cyan-200"
-                data-testid="button-rationale-per-item-toggle"
-              >
-                {perItemOpen ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
-                Per-item rationale ({rationale.treatmentRationale.length})
-              </button>
-              {perItemOpen && (
-                <div className="space-y-1.5 mt-1">
-                  {rationale.treatmentRationale.map(r => {
-                    const it = itemMap.get(r.itemId);
-                    const meta = it ? MODALITY_META[it.modality] : MODALITY_META.exercise;
-                    const Icon = meta.icon;
-                    return (
-                      <div
-                        key={r.itemId}
-                        className={`rounded border ${meta.border} ${meta.bg} px-2 py-1.5`}
-                        data-testid={`rationale-item-${r.itemId}`}
-                      >
-                        <div className="flex items-start gap-1.5">
-                          <Icon className={`h-3 w-3 ${meta.color} mt-0.5 shrink-0`} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[10px] font-medium text-gray-100 truncate">{r.itemName}</div>
-                            <p className="text-[9.5px] text-gray-200 leading-snug mt-0.5">{r.why}</p>
-                            {r.addresses.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {r.addresses.map((a, i) => (
-                                  <span
-                                    key={i}
-                                    className="text-[8px] px-1 py-0.5 rounded bg-black/40 text-gray-300 border border-white/10 inline-flex items-center gap-0.5"
-                                  >
-                                    <Target className="h-2 w-2" />
-                                    {a}
+              doesn't already provide per-row "Why?" affordances. The
+              chips beneath each item show the MAPPED CLINICAL DRIVERS
+              the item targets (derived from drivers.addressedItemIds),
+              not the item's structure/finding text. */}
+          {!hidePerItemBlock && rationale.treatmentRationale.length > 0 && (() => {
+            const driverLabelsByItemId = getDriverLabelsByItemId(rationale);
+            return (
+              <div>
+                <button
+                  onClick={() => setPerItemOpen(o => !o)}
+                  className="text-[9px] font-semibold text-cyan-300 uppercase tracking-wider inline-flex items-center gap-1 hover:text-cyan-200"
+                  data-testid="button-rationale-per-item-toggle"
+                >
+                  {perItemOpen ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
+                  Per-item rationale ({rationale.treatmentRationale.length})
+                </button>
+                {perItemOpen && (
+                  <div className="space-y-1.5 mt-1">
+                    {rationale.treatmentRationale.map(r => {
+                      const it = itemMap.get(r.itemId);
+                      const meta = it ? MODALITY_META[it.modality] : MODALITY_META.exercise;
+                      const Icon = meta.icon;
+                      const mappedDrivers = driverLabelsByItemId.get(r.itemId) ?? [];
+                      return (
+                        <div
+                          key={r.itemId}
+                          className={`rounded border ${meta.border} ${meta.bg} px-2 py-1.5`}
+                          data-testid={`rationale-item-${r.itemId}`}
+                        >
+                          <div className="flex items-start gap-1.5">
+                            <Icon className={`h-3 w-3 ${meta.color} mt-0.5 shrink-0`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[10px] font-medium text-gray-100 truncate">{r.itemName}</div>
+                              <p className="text-[9.5px] text-gray-200 leading-snug mt-0.5">{r.why}</p>
+                              {mappedDrivers.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 mt-1" data-testid={`rationale-item-drivers-${r.itemId}`}>
+                                  <span className="text-[8px] text-gray-500 uppercase tracking-wider mr-0.5">Addresses:</span>
+                                  {mappedDrivers.map((label, i) => (
+                                    <span
+                                      key={i}
+                                      className="text-[8px] px-1 py-0.5 rounded bg-cyan-500/15 text-cyan-200 border border-cyan-500/40 inline-flex items-center gap-0.5"
+                                      title={`Targets clinical driver: ${label}`}
+                                    >
+                                      <Target className="h-2 w-2" />
+                                      {label}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="mt-1">
+                                  <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-200 border border-amber-500/40 inline-flex items-center gap-0.5">
+                                    <AlertTriangle className="h-2 w-2" />
+                                    No mapped clinical driver
                                   </span>
-                                ))}
-                              </div>
-                            )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Subtle hint when local synthesis is in use */}
           {source === "local" && !error && (

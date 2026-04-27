@@ -27,6 +27,31 @@ const MODALITY_LABEL: Record<string, string> = {
   lifestyle: "lifestyle/adjunct rx",
 };
 
+/**
+ * Build a Map<itemId, driverLabel[]> from a rationale, by inverting
+ * `drivers[].addressedItemIds`. Used by per-item "Why?" reveals so they
+ * show the actual MAPPED CLINICAL DRIVERS the item targets (e.g.
+ * "Pain mechanism · nociceptive", "Sling · posterior oblique"), not just
+ * the item's own targetStructure / targetFinding text.
+ */
+export function getDriverLabelsByItemId(
+  rationale: { drivers: Array<{ label: string; addressedItemIds: string[] }> } | null | undefined,
+): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  if (!rationale) return out;
+  for (const d of rationale.drivers) {
+    for (const id of d.addressedItemIds || []) {
+      const list = out.get(id);
+      if (list) {
+        if (!list.includes(d.label)) list.push(d.label);
+      } else {
+        out.set(id, [d.label]);
+      }
+    }
+  }
+  return out;
+}
+
 function searchableText(item: PlanCartItem): string {
   return [
     item.name,

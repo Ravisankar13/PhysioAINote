@@ -154,8 +154,13 @@ export function TreatmentRationaleProvider({
     );
   }, [items, clinicalContext, orchestrated?.sessionOrder]);
 
-  const generateMutation = useMutation({
-    mutationFn: async () => {
+  // Signature is bound to each individual mutation call as the variable
+  // — that way the response is tagged with the cart/context state IT WAS
+  // GENERATED FOR, even if the user kept editing the cart while the AI
+  // was thinking. The result is then correctly classified fresh / stale
+  // against the *current* signature on render.
+  const generateMutation = useMutation<TreatmentRationaleResult, Error, string>({
+    mutationFn: async (_requestSignature: string) => {
       const sessionOrder: OrchestratedSessionStep[] | undefined = orchestratedRef.current?.sessionOrder;
       const result = await apiRequest("/api/treatment-plan/rationale", "POST", {
         items: itemsRef.current,
@@ -164,16 +169,13 @@ export function TreatmentRationaleProvider({
       });
       return result as TreatmentRationaleResult;
     },
-    // Record the signature CAPTURED AT THE MOMENT THE REQUEST WAS SENT
-    // (via signatureRef) so that if anything has drifted since the user
-    // hit "Generate", we still know to mark the result stale.
-    onSuccess: (data) => setAiResult({ data, signature: signatureRef.current }),
+    onSuccess: (data, requestSignature) => setAiResult({ data, signature: requestSignature }),
   });
 
   const generate = useCallback(() => {
     if (generateMutation.isPending) return;
     if (itemsRef.current.length < 1) return;
-    generateMutation.mutate();
+    generateMutation.mutate(signatureRef.current);
   }, [generateMutation]);
 
   const reset = useCallback(() => {
@@ -193,7 +195,7 @@ export function TreatmentRationaleProvider({
     if (itemsRef.current.length < 1) return;
     if (isPending) return;
     lastOrchestratedAtRef.current = orchestrated.generatedAt;
-    mutate();
+    mutate(signatureRef.current);
   }, [orchestrated, autoOnOrchestrate, isPending, mutate]);
 
   // Clear AI rationale if the cart is emptied, so we don't show stale text.

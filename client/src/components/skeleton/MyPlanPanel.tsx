@@ -10,6 +10,7 @@ import {
 import { usePlanCart, type PlanCartItem, type PlanCartModality } from "@/lib/planCart";
 import { useOrchestratePlan } from "@/lib/orchestratePlanContext";
 import { useTreatmentRationale } from "@/lib/treatmentRationaleContext";
+import { getDriverLabelsByItemId } from "@/lib/treatmentRationaleLocal";
 import {
   CartItemRow,
   ConflictList,
@@ -106,36 +107,43 @@ export default function MyPlanPanel() {
         hidePerItemBlock
       />
 
-      {showCart && (
-        <div className="space-y-2">
-          {(Object.keys(grouped) as PlanCartModality[]).map(modality => {
-            const meta = MODALITY_META[modality];
-            const list = grouped[modality];
-            return (
-              <div key={modality} className="space-y-1">
-                <div className={`text-[9px] uppercase tracking-wider font-semibold ${meta.color}`}>{meta.label} ({list.length})</div>
-                <div className="space-y-1">
-                  {list.map(it => {
-                    const r = rationale?.treatmentRationale.find(x => x.itemId === it.id);
-                    return (
-                      <CartItemRow
-                        key={it.id}
-                        item={it}
-                        onRemove={() => remove(it.id)}
-                        whyText={r?.why}
-                        whyAddresses={r?.addresses}
-                      />
-                    );
-                  })}
+      {showCart && (() => {
+        // Build mapped-driver lookup once per render so each row's "Why?"
+        // reveal shows the actual clinical drivers it targets, not the
+        // item's own structure/finding text. (Task #274)
+        const driverLabelsByItemId = getDriverLabelsByItemId(rationale);
+        return (
+          <div className="space-y-2">
+            {(Object.keys(grouped) as PlanCartModality[]).map(modality => {
+              const meta = MODALITY_META[modality];
+              const list = grouped[modality];
+              return (
+                <div key={modality} className="space-y-1">
+                  <div className={`text-[9px] uppercase tracking-wider font-semibold ${meta.color}`}>{meta.label} ({list.length})</div>
+                  <div className="space-y-1">
+                    {list.map(it => {
+                      const r = rationale?.treatmentRationale.find(x => x.itemId === it.id);
+                      const mappedDrivers = driverLabelsByItemId.get(it.id) ?? [];
+                      return (
+                        <CartItemRow
+                          key={it.id}
+                          item={it}
+                          onRemove={() => remove(it.id)}
+                          whyText={r?.why}
+                          whyAddresses={mappedDrivers}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-          {count < 2 && (
-            <p className="text-[9px] text-gray-500 italic">Add at least 2 items, then click Organize with AI.</p>
-          )}
-        </div>
-      )}
+              );
+            })}
+            {count < 2 && (
+              <p className="text-[9px] text-gray-500 italic">Add at least 2 items, then click Organize with AI.</p>
+            )}
+          </div>
+        );
+      })()}
 
       {error && (
         <div className="rounded border border-red-500/30 bg-red-500/10 p-2 text-[10px] text-red-200 flex items-start gap-1.5">

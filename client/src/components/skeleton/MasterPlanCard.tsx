@@ -17,6 +17,7 @@ import {
 import { usePlanCart, type PlanCartItem, type PlanCartModality } from "@/lib/planCart";
 import { useOrchestratePlan } from "@/lib/orchestratePlanContext";
 import { useTreatmentRationale } from "@/lib/treatmentRationaleContext";
+import { getDriverLabelsByItemId } from "@/lib/treatmentRationaleLocal";
 import {
   CartItemRow,
   ConflictList,
@@ -482,6 +483,13 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
               </button>
             </div>
 
+            {(() => {
+              // Build the mapped-driver lookup ONCE per render so each
+              // CartItemRow's "Why?" reveal can show the actual clinical
+              // drivers it targets (per Task #274), rather than the
+              // item's own structure/finding text.
+              const driverLabelsByItemId = getDriverLabelsByItemId(rationale);
+              return (
             <div className="space-y-2">
               {(Object.keys(grouped) as PlanCartModality[]).map(modality => {
                 const meta = MODALITY_META[modality];
@@ -492,13 +500,17 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
                     <div className="space-y-1">
                       {list.map(it => {
                         const r = rationale?.treatmentRationale.find(x => x.itemId === it.id);
+                        // Why-pill chips show MAPPED CLINICAL DRIVERS
+                        // (derived from drivers.addressedItemIds), not the
+                        // item's structure/finding text.
+                        const mappedDrivers = driverLabelsByItemId.get(it.id) ?? [];
                         return (
                           <CartItemRow
                             key={it.id}
                             item={it}
                             onRemove={() => remove(it.id)}
                             whyText={r?.why}
-                            whyAddresses={r?.addresses}
+                            whyAddresses={mappedDrivers}
                           />
                         );
                       })}
@@ -510,6 +522,8 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
                 <p className="text-[9px] text-gray-500 italic">Add at least 2 items, then click Organize with AI.</p>
               )}
             </div>
+              );
+            })()}
 
             {orchestrateError && (
               <div className="rounded border border-red-500/30 bg-red-500/10 p-2 text-[10px] text-red-200 flex items-start gap-1.5">

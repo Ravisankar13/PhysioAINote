@@ -49,6 +49,11 @@ export interface OrchestratedScheduleCell {
   dayOfWeek: number;
   itemIds: string[];
   label?: string;
+  /** When set, this cell was synthesised by replicating the cells from the
+   *  given source week (because the orchestrator did not emit a native cell
+   *  for this week). Used by the UI to show a "Repeats W{n}" hint and a
+   *  small ↻ glyph on the corresponding week tab. */
+  derivedFromWeek?: number;
 }
 
 export interface OrchestratedPhase {
@@ -260,38 +265,164 @@ export function SessionOrderStrip({ steps, items }: { steps: OrchestratedSession
   );
 }
 
-export function WeeklyScheduleGrid({ schedule, items, totalWeeks, frequencies }: { schedule: OrchestratedScheduleCell[]; items: PlanCartItem[]; totalWeeks: number; frequencies: OrchestratedFrequency[] }) {
+/** Tab color stripe palette used to indicate which phase a week belongs to.
+ *  Phases beyond the 4th wrap back to the first colour. */
+const PHASE_TAB_COLORS = [
+  "bg-cyan-400/70",
+  "bg-violet-400/70",
+  "bg-amber-400/70",
+  "bg-emerald-400/70",
+];
+
+function parsePhaseWeeksClient(s: string): number {
+  const m = String(s || "").match(/(\d+)/);
+  return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+}
+
+export function WeeklyScheduleGrid({
+  schedule,
+  items,
+  totalWeeks,
+  frequencies,
+  phases,
+}: {
+  schedule: OrchestratedScheduleCell[];
+  items: PlanCartItem[];
+  totalWeeks: number;
+  frequencies: OrchestratedFrequency[];
+  phases?: OrchestratedPhase[];
+}) {
   const [activeWeek, setActiveWeek] = useState(0);
   if (schedule.length === 0) return null;
   const itemMap = new Map(items.map(i => [i.id, i]));
   const freqMap = new Map(frequencies.map(f => [f.itemId, f]));
   const weeks = Array.from({ length: Math.max(1, totalWeeks) }, (_, i) => i);
+
+  // Phase ranges (start/end weekIndex, inclusive) used to colour-code tabs
+  // and to swap items when synthesising cells across phase boundaries.
+  const phaseRanges = (() => {
+    if (!phases || phases.length === 0) return [] as Array<{ id: string; name: string; start: number; end: number; itemIds: string[]; colorIdx: number }>;
+    const out: Array<{ id: string; name: string; start: number; end: number; itemIds: string[]; colorIdx: number }> = [];
+    let cursor = 0;
+    phases.forEach((p, idx) => {
+      const len = parsePhaseWeeksClient(p.durationWeeks);
+      const start = cursor;
+      const end = Math.min((totalWeeks || 1) - 1, cursor + len - 1);
+      out.push({ id: p.id, name: p.name, start, end, itemIds: p.itemIds, colorIdx: idx % PHASE_TAB_COLORS.length });
+      cursor += len;
+    });
+    return out;
+  })();
+  const phaseAtWeek = (w: number) => phaseRanges.find(r => w >= r.start && w <= r.end);
+
+  // Defensive fallback expansion: even if the server returns sparse data
+  // (only week 0 cells, for example), fill every week from 0..totalWeeks-1
+  // by replicating the most recent populated week's day pattern. When the
+  // missing week falls in a different phase from the source week, swap in
+  // the phase's items so the cells reflect the active phase.
+  const nativeByWeek = new Map<number, OrchestratedScheduleCell[]>();
+  for (const c of schedule) {
+    if (!nativeByWeek.has(c.weekIndex)) nativeByWeek.set(c.weekIndex, []);
+    nativeByWeek.get(c.weekIndex)!.push(c);
+  }
+  const display: OrchestratedScheduleCell[] = [];
+  let lastSourceWeek = -1;
+  for (let w = 0; w < weeks.length; w++) {
+    const native = nativeByWeek.get(w);
+    if (native && native.length > 0) {
+      display.push(...native);
+      lastSourceWeek = w;
+      continue;
+    }
+    if (lastSourceWeek < 0) continue;
+    const sourceCells = nativeByWeek.get(lastSourceWeek)!;
+    const phase = phaseAtWeek(w);
+    const sourcePhase = phaseAtWeek(lastSourceWeek);
+    const swap = phase && sourcePhase && phase.id !== sourcePhase.id && phase.itemIds.length > 0;
+    for (const sc of sourceCells) {
+      const ids = swap
+        ? (() => {
+            const kept = sc.itemIds.filter(id => phase!.itemIds.includes(id));
+            const need = Math.max(0, sc.itemIds.length - kept.length);
+            const filler = phase!.itemIds.filter(id => !sc.itemIds.includes(id)).slice(0, need);
+            return [...kept, ...filler];
+          })()
+        : sc.itemIds;
+      if (ids.length === 0) continue;
+      display.push({
+        weekIndex: w,
+        dayOfWeek: sc.dayOfWeek,
+        itemIds: ids,
+        label: sc.label,
+        derivedFromWeek: sc.derivedFromWeek ?? lastSourceWeek,
+      });
+    }
+  }
+
+  // Figure out per-week native vs derived state for tab styling.
+  const weekIsNative = new Map<number, boolean>();
+  for (const w of weeks) weekIsNative.set(w, (nativeByWeek.get(w)?.length ?? 0) > 0);
+
   const cellsByDay = (week: number) => DAY_LABELS.map((_, day) => {
-    return schedule.find(c => c.weekIndex === week && c.dayOfWeek === day);
+    return display.find(c => c.weekIndex === week && c.dayOfWeek === day);
   });
+
+  const activeCells = cellsByDay(activeWeek);
+  const activeDerivedFrom = (() => {
+    const c = activeCells.find(cell => cell?.derivedFromWeek !== undefined);
+    return c?.derivedFromWeek;
+  })();
 
   return (
     <div className="rounded-lg border border-white/10 bg-black/30 p-2">
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-1.5">
-          <Calendar className="h-3 w-3 text-sky-400" />
+      <div className="flex items-center justify-between mb-1.5 gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Calendar className="h-3 w-3 text-sky-400 shrink-0" />
           <span className="text-[9px] font-semibold text-sky-300 uppercase tracking-wider">Weekly Schedule</span>
-        </div>
-        <div className="flex gap-0.5">
-          {weeks.map(w => (
-            <button
-              key={w}
-              onClick={() => setActiveWeek(w)}
-              className={`text-[9px] px-1.5 py-0.5 rounded transition-colors ${activeWeek === w ? "bg-sky-500/30 text-sky-200" : "text-gray-400 hover:text-gray-200"}`}
-              data-testid={`button-week-${w + 1}`}
+          {activeDerivedFrom !== undefined && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[8px] px-1 py-0.5 rounded border border-white/10 bg-white/5 text-gray-400"
+              title={`These cells repeat the W${activeDerivedFrom + 1} pattern because no unique schedule was emitted for this week.`}
+              data-testid={`week-${activeWeek + 1}-repeats-hint`}
             >
-              W{w + 1}
-            </button>
-          ))}
+              <RotateCcw className="h-2 w-2" />
+              Repeats W{activeDerivedFrom + 1}
+            </span>
+          )}
+          {phaseAtWeek(activeWeek) && (
+            <span
+              className="text-[8px] text-gray-400 truncate"
+              title={`Phase: ${phaseAtWeek(activeWeek)!.name}`}
+            >
+              · {phaseAtWeek(activeWeek)!.name}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-0.5 shrink-0">
+          {weeks.map(w => {
+            const native = weekIsNative.get(w);
+            const phase = phaseAtWeek(w);
+            const stripe = phase ? PHASE_TAB_COLORS[phase.colorIdx] : "bg-white/10";
+            return (
+              <button
+                key={w}
+                onClick={() => setActiveWeek(w)}
+                className={`relative text-[9px] px-1.5 py-0.5 rounded transition-colors inline-flex items-center gap-0.5 ${activeWeek === w ? "bg-sky-500/30 text-sky-200" : "text-gray-400 hover:text-gray-200"}`}
+                data-testid={`button-week-${w + 1}`}
+                title={`${phase ? `Phase: ${phase.name}` : ""}${!native ? `${phase ? " · " : ""}Repeats prior week` : ""}`}
+              >
+                <span>W{w + 1}</span>
+                {!native && (
+                  <RotateCcw className="h-2 w-2 opacity-60" data-testid={`week-${w + 1}-repeat-glyph`} />
+                )}
+                <span className={`absolute left-0.5 right-0.5 bottom-0 h-[2px] rounded-full ${stripe}`} />
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="grid grid-cols-7 gap-1">
-        {cellsByDay(activeWeek).map((cell, day) => (
+        {activeCells.map((cell, day) => (
           <div key={day} className="rounded border border-white/5 bg-white/5 p-1 min-h-[60px]">
             <div className="text-[8px] text-gray-500 font-semibold mb-0.5">{DAY_LABELS[day]}</div>
             {cell?.itemIds.map((id, i) => {

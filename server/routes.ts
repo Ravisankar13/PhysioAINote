@@ -23909,10 +23909,11 @@ If there are existing notes, seamlessly integrate the new content while maintain
     notes: z.string().optional(),
   });
   const scheduleCellSchema = z.object({
-    weekIndex: z.number().int().min(0).max(11),
+    weekIndex: z.number().int().min(0).max(51),
     dayOfWeek: z.number().int().min(0).max(6),
     itemIds: z.array(z.string()),
     label: z.string().optional(),
+    derivedFromWeek: z.number().int().min(0).optional(),
   });
   const phaseSchema = z.object({
     id: z.string(),
@@ -23988,7 +23989,7 @@ If there are existing notes, seamlessly integrate the new content while maintain
       const systemPrompt = `You are a senior physiotherapist organising a multi-modality treatment plan into a coherent program. You will receive a list of clinician-selected items (exercises, manual therapy, electrophysical modalities, adjunct therapies) and must return:
 1. The intra-session order (what to do first, second, etc., in a single visit) with rationale and duration in minutes.
 2. Per-item weekly frequency (sessions/week) and setting (supervised in clinic, home, or either).
-3. A multi-week schedule grid (weeklySchedule) mapping items to specific weeks (0-indexed) and days of week (0=Monday..6=Sunday). Only schedule items on the days they actually occur. Use as many weeks as needed (totalDurationWeeks).
+3. A multi-week schedule grid (weeklySchedule) mapping items to specific weeks (0-indexed) and days of week (0=Monday..6=Sunday). CRITICAL: emit cells for EVERY week index from 0 to totalDurationWeeks-1 — do NOT collapse the program into a single representative week. Repeat the weekly cadence implied by the frequencies array (e.g. Mon/Wed/Fri) explicitly in every week. When a phases boundary changes the active item set, switch the cells in the corresponding weeks accordingly. Only place items on the days they actually occur within that week.
 4. A phased program (phases) covering the full duration. Use 2–4 phases (e.g. acute/protect → restore → load → return). Each phase lists which item IDs are active and a review point.
 5. A recovery timeline (timeline) of 3–8 dated milestones (weekIndex from 0).
 6. Any conflicts or cautions (e.g., contradicting modalities, contraindications, dosage clashes).
@@ -24035,12 +24036,76 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
       }
 
       const validIds = new Set(items.map(i => i.id));
+      const filteredPhases = planParse.data.phases.map(p => ({ ...p, itemIds: p.itemIds.filter(id => validIds.has(id)) }));
+      const filteredSchedule = planParse.data.weeklySchedule
+        .map(c => ({ ...c, itemIds: c.itemIds.filter(id => validIds.has(id)) }))
+        .filter(c => c.itemIds.length > 0);
+
+      // ---- Multi-week schedule expansion (safety net) ----
+      // When the AI undercommits and only emits cells for week 0 (or some
+      // weeks are empty), replicate the most recent populated week's day
+      // pattern forward into each missing week. When the missing week falls
+      // inside a phase whose item set differs from the source week, swap the
+      // itemIds for the phase's items so the cells reflect the active phase.
+      const totalWeeks = Math.max(1, planParse.data.totalDurationWeeks);
+      const parsePhaseWeeks = (s: string): number => {
+        const m = String(s || '').match(/(\d+)/);
+        return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+      };
+      const phaseRanges: Array<{ id: string; start: number; end: number; itemIds: string[] }> = [];
+      {
+        let cursor = 0;
+        for (const p of filteredPhases) {
+          const len = parsePhaseWeeks(p.durationWeeks);
+          const start = cursor;
+          const end = Math.min(totalWeeks - 1, cursor + len - 1);
+          phaseRanges.push({ id: p.id, start, end, itemIds: p.itemIds });
+          cursor += len;
+        }
+      }
+      const phaseAtWeek = (w: number) => phaseRanges.find(r => w >= r.start && w <= r.end);
+      const cellsByWeek = new Map<number, typeof filteredSchedule>();
+      for (const c of filteredSchedule) {
+        if (!cellsByWeek.has(c.weekIndex)) cellsByWeek.set(c.weekIndex, []);
+        cellsByWeek.get(c.weekIndex)!.push(c);
+      }
+      const expandedSchedule: typeof filteredSchedule = [];
+      let lastSourceWeek = -1;
+      for (let w = 0; w < totalWeeks; w++) {
+        const native = cellsByWeek.get(w);
+        if (native && native.length > 0) {
+          expandedSchedule.push(...native);
+          lastSourceWeek = w;
+          continue;
+        }
+        if (lastSourceWeek < 0) continue; // no source yet to derive from
+        const sourceCells = cellsByWeek.get(lastSourceWeek)!;
+        const phase = phaseAtWeek(w);
+        const sourcePhase = phaseAtWeek(lastSourceWeek);
+        const phaseSwap = phase && sourcePhase && phase.id !== sourcePhase.id && phase.itemIds.length > 0;
+        for (const sc of sourceCells) {
+          const newItemIds = phaseSwap
+            ? sc.itemIds.filter(id => phase!.itemIds.includes(id)).concat(
+                phase!.itemIds.filter(id => !sc.itemIds.includes(id)).slice(0, Math.max(0, sc.itemIds.length - sc.itemIds.filter(id => phase!.itemIds.includes(id)).length)),
+              )
+            : sc.itemIds;
+          if (newItemIds.length === 0) continue;
+          expandedSchedule.push({
+            weekIndex: w,
+            dayOfWeek: sc.dayOfWeek,
+            itemIds: newItemIds,
+            label: sc.label,
+            derivedFromWeek: lastSourceWeek,
+          });
+        }
+      }
+
       const filtered = {
         ...planParse.data,
         sessionOrder: planParse.data.sessionOrder.filter(s => validIds.has(s.itemId)),
         frequencies: planParse.data.frequencies.filter(f => validIds.has(f.itemId)),
-        weeklySchedule: planParse.data.weeklySchedule.map(c => ({ ...c, itemIds: c.itemIds.filter(id => validIds.has(id)) })).filter(c => c.itemIds.length > 0),
-        phases: planParse.data.phases.map(p => ({ ...p, itemIds: p.itemIds.filter(id => validIds.has(id)) })),
+        weeklySchedule: expandedSchedule,
+        phases: filteredPhases,
         conflicts: planParse.data.conflicts.map(c => ({ ...c, involvedItemIds: c.involvedItemIds.filter(id => validIds.has(id)) })),
       };
 

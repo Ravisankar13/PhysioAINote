@@ -9,9 +9,30 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   Loader2, FlaskConical, RefreshCcw, AlertTriangle, ChevronDown, ChevronUp,
-  ExternalLink, BookOpen, ListFilter, Search, Info, ShieldCheck,
+  ExternalLink, BookOpen, ListFilter, Search, Info, ShieldCheck, GripHorizontal,
 } from "lucide-react";
 import type { CaseResearchSynthesis } from "@shared/schema";
+
+/** localStorage key for the user's preferred body height (px). */
+const BODY_HEIGHT_STORAGE_KEY = "caseResearchPanel.bodyHeightPx";
+const BODY_MIN_HEIGHT_PX = 180;
+const BODY_DEFAULT_VH = 0.68;
+/** Reserve some viewport for header/chrome so the body can't grow off-screen. */
+const BODY_MAX_HEIGHT_RESERVE_PX = 160;
+
+function clampBodyHeight(px: number, viewportH: number): number {
+  const max = Math.max(BODY_MIN_HEIGHT_PX, viewportH - BODY_MAX_HEIGHT_RESERVE_PX);
+  return Math.min(max, Math.max(BODY_MIN_HEIGHT_PX, Math.round(px)));
+}
+
+function readInitialBodyHeight(): number {
+  if (typeof window === "undefined") return 480;
+  const stored = window.localStorage.getItem(BODY_HEIGHT_STORAGE_KEY);
+  const parsed = stored ? Number(stored) : NaN;
+  const fallback = Math.round(window.innerHeight * BODY_DEFAULT_VH);
+  const initial = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return clampBodyHeight(initial, window.innerHeight);
+}
 
 /** Inputs for the panel — the caller is responsible for keeping
  *  these stable (memoized) so we don't auto-trigger spurious refetches.
@@ -167,6 +188,32 @@ export function CaseResearchPanel({
   const [showVariables, setShowVariables] = useState(false);
   const [showHowSearched, setShowHowSearched] = useState(false);
   const [highlightedCitation, setHighlightedCitation] = useState<number | null>(null);
+  // User-controlled body height (px). Hydrated from localStorage on first
+  // render so the chosen size persists across reloads. The browser's
+  // native CSS `resize-y` handle on the body element does the actual
+  // dragging; a ResizeObserver mirrors the post-drag size back into
+  // state and persists it (debounced) so we don't thrash localStorage.
+  const [bodyHeightPx, setBodyHeightPx] = useState<number>(readInitialBodyHeight);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el || typeof window === "undefined" || typeof ResizeObserver === "undefined") return;
+    let lastH = el.getBoundingClientRect().height;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const ro = new ResizeObserver(() => {
+      const h = el.getBoundingClientRect().height;
+      if (Math.abs(h - lastH) < 1) return;
+      lastH = h;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const clamped = clampBodyHeight(h, window.innerHeight);
+        setBodyHeightPx(prev => (prev === clamped ? prev : clamped));
+        try { window.localStorage.setItem(BODY_HEIGHT_STORAGE_KEY, String(clamped)); } catch { /* ignore quota */ }
+      }, 200);
+    });
+    ro.observe(el);
+    return () => { if (timer) clearTimeout(timer); ro.disconnect(); };
+  }, [collapsed]);
   const citationRefs = useRef<Map<number, HTMLLIElement>>(new Map());
   const setCitationRef = useCallback((n: number) => (el: HTMLLIElement | null) => {
     if (el) citationRefs.current.set(n, el);
@@ -304,7 +351,17 @@ export function CaseResearchPanel({
       </div>
 
       {!collapsed && (
-        <div className="px-3 py-3 space-y-3 max-h-[68vh] overflow-y-auto">
+        <div className="relative group/case-research-body">
+          <div
+            ref={bodyRef}
+            className="px-3 py-3 space-y-3 overflow-y-auto resize-y"
+            style={{
+              height: `${bodyHeightPx}px`,
+              minHeight: `${BODY_MIN_HEIGHT_PX}px`,
+              maxHeight: `calc(100vh - ${BODY_MAX_HEIGHT_RESERVE_PX}px)`,
+            }}
+            data-testid="case-research-body"
+          >
           {!enabled && (
             <p className="text-[11px] text-slate-400 leading-relaxed">
               Submit a clinical prediction above and PhysioGPT will synthesize patient-specific research from PubMed, OpenAlex, and Europe PMC for this exact case.
@@ -555,6 +612,16 @@ export function CaseResearchPanel({
               </div>
             </div>
           )}
+          </div>
+          {/* Visible drag affordance — the actual resize is the
+              browser's native CSS handle on the body above. We don't
+              capture pointer events here so the handle stays usable. */}
+          <div
+            className="pointer-events-none absolute bottom-0.5 right-0.5 flex h-3 w-3 items-center justify-center text-slate-500 opacity-50 transition-opacity group-hover/case-research-body:opacity-90"
+            aria-hidden="true"
+          >
+            <GripHorizontal className="h-3 w-3" />
+          </div>
         </div>
       )}
     </Card>

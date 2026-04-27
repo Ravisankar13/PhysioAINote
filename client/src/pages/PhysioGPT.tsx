@@ -137,6 +137,7 @@ import { forceTimeBuffer, type ForceTimeMetrics, subscribeForceBuffer, augmentFo
 import type { PatientState } from "@/lib/forceCitations";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 import { type ClinicalParseResult, type CompromisedTissue, type ClinicalTextInputHandle, type FollowUpQuestion } from "@/components/skeleton/ClinicalTextInput";
+import { type VoiceActivityEntry, type VoiceTriggerReason } from "@/components/skeleton/VoiceActivityDock";
 import {
   PatientContextPanel,
   EMPTY_PATIENT_CONTEXT_STATE,
@@ -221,6 +222,7 @@ import type { PlaybackSyncState, TimelinePlaybackRef, ConditionPhaseInfo } from 
 const MechanismTreatmentTab = lazy(() => import("@/components/skeleton/MechanismTreatmentTab"));
 const SlingAnalysisPanel = lazy(() => import("@/components/skeleton/SlingAnalysisPanel"));
 const ClinicalTextInput = lazy(() => import("@/components/skeleton/ClinicalTextInput"));
+const VoiceActivityDock = lazy(() => import("@/components/skeleton/VoiceActivityDock"));
 
 const LazyPanelFallback = () => (
   <div className="flex items-center justify-center p-8">
@@ -1252,6 +1254,14 @@ export default function PhysioGPT() {
       liveTranscriptRef.current = "";
       lastAnalyzedLengthRef.current = 0;
       isAnalyzingRef.current = false;
+      // Voice Activity dock: anchor recording-time stamps for this
+      // session. Do NOT clear prior entries — the spec requires the
+      // log to persist across stop/start until an explicit session
+      // reset wipes it. Keeping the existing entries also keeps any
+      // outstanding Undo buttons functional.
+      recordingStartedAtRef.current = Date.now();
+      setVoiceDockVisible(true);
+      pendingVoiceTriggerRef.current = null;
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
@@ -1305,8 +1315,24 @@ export default function PhysioGPT() {
                   }
                 }
               } else if (newContentLength > 10 && !isAnalyzingRef.current) {
-                lastAnalyzedLengthRef.current = transcript.length;
-                clinicalTextInputRef.current.triggerIncrementalParse();
+                const chunk = transcript.slice(lastAnalyzedLengthRef.current).trim();
+                pendingVoiceTriggerRef.current = {
+                  trigger: 'silence_pause',
+                  chunkText: chunk,
+                  timestamp: Date.now(),
+                  recordingTimeSec: recordingStartedAtRef.current
+                    ? (Date.now() - recordingStartedAtRef.current) / 1000
+                    : 0,
+                };
+                const dispatched = clinicalTextInputRef.current.triggerIncrementalParse(transcript);
+                if (dispatched) {
+                  lastAnalyzedLengthRef.current = transcript.length;
+                } else {
+                  // Parse was skipped (already in flight, too short).
+                  // Drop the staged trigger so it can't be misattributed
+                  // to a later, unrelated parse.
+                  pendingVoiceTriggerRef.current = null;
+                }
               }
             }, VOICE_SILENCE_DEBOUNCE_MS);
           }
@@ -1344,8 +1370,21 @@ export default function PhysioGPT() {
                 }
               }
             } else {
-              lastAnalyzedLengthRef.current = currentTranscript.length;
-              clinicalTextInputRef.current.triggerIncrementalParse();
+              const chunk = currentTranscript.slice(lastAnalyzedLengthRef.current).trim();
+              pendingVoiceTriggerRef.current = {
+                trigger: 'interval_pulse',
+                chunkText: chunk,
+                timestamp: Date.now(),
+                recordingTimeSec: recordingStartedAtRef.current
+                  ? (Date.now() - recordingStartedAtRef.current) / 1000
+                  : 0,
+              };
+              const dispatched = clinicalTextInputRef.current.triggerIncrementalParse(currentTranscript);
+              if (dispatched) {
+                lastAnalyzedLengthRef.current = currentTranscript.length;
+              } else {
+                pendingVoiceTriggerRef.current = null;
+              }
             }
           }
         }
@@ -1446,8 +1485,27 @@ export default function PhysioGPT() {
 
       voiceAutoSubmitTimerRef.current = setTimeout(() => {
         if (clinicalTextInputRef.current) {
-          clinicalTextInputRef.current.triggerParse();
-          toast({ title: "Analyzing Voice Input", description: "Updating skeleton from your clinical description..." });
+          // Voice transcript no longer mirrors into the Clinical
+          // Prediction textarea, so feed the final transcript through
+          // the incremental-parse path with a textOverride. Tag it as
+          // a silence_pause so it shows up in the Voice Activity dock
+          // alongside any in-flight chunks.
+          const tailChunk = finalTranscript.slice(lastAnalyzedLengthRef.current).trim() || finalTranscript;
+          pendingVoiceTriggerRef.current = {
+            trigger: 'silence_pause',
+            chunkText: tailChunk,
+            timestamp: Date.now(),
+            recordingTimeSec: recordingStartedAtRef.current
+              ? (Date.now() - recordingStartedAtRef.current) / 1000
+              : 0,
+          };
+          const dispatched = clinicalTextInputRef.current.triggerIncrementalParse(finalTranscript);
+          if (dispatched) {
+            lastAnalyzedLengthRef.current = finalTranscript.length;
+            toast({ title: "Analyzing Voice Input", description: "Updating skeleton from your clinical description..." });
+          } else {
+            pendingVoiceTriggerRef.current = null;
+          }
         }
         voiceAutoSubmitTimerRef.current = null;
       }, VOICE_STOP_DEBOUNCE_MS);
@@ -1676,9 +1734,74 @@ export default function PhysioGPT() {
     markerIds: string[];
     muscleIds: string[];
     deviationKeys: string[];
+    /** Legacy/fallback: clear-all uses these for highlights inserted
+     *  without an instanceId. */
     highlightLabels: string[];
+    /** Per-highlight instance ids stamped at insert time. Clear-all
+     *  removes these specific instances; per-entry undo also removes
+     *  them so subsequent clear-all stays correct. Required to avoid
+     *  label-collision regressions when fallback labels like
+     *  `ctp_${region}_${type}` repeat across parses. */
+    highlightInstanceIds: string[];
     predictionText: string;
   } | null>(null);
+
+  // Per-entry voice activity log + per-entry undo bookkeeping. Lives
+  // alongside the cumulative clinicalTextAppliedRef so "Clear All" still
+  // wipes everything voice has touched in one shot, while individual
+  // dock entries can be rolled back surgically.
+  interface VoiceActivityEntryRecord extends VoiceActivityEntry {
+    /** Marker ids this entry added (used to undo just this entry). */
+    appliedMarkerIds: string[];
+    /** Muscle overrides this entry set: id → exact value applied. Only
+     *  reverted by undo if the current override still equals what we set
+     *  (otherwise a later entry has overwritten it). */
+    appliedMuscleOverrides: Record<string, MuscleOverride>;
+    /** Postural deviations this entry wrote: dotPath → { prev, set }.
+     *  Undo restores `prev` only if the current value still equals
+     *  `set`. */
+    appliedDeviations: Record<string, { prev: number; set: number }>;
+    /** Region highlight labels this entry added (kept for diagnostics
+     *  / parity with the cumulative ref). */
+    appliedHighlightLabels: string[];
+    /** Per-highlight instance ids stamped at insert time. Used by
+     *  undo to remove only the highlights this entry contributed,
+     *  even when later entries reuse the same fallback label. */
+    appliedHighlightInstanceIds: string[];
+    /** Compromised tissues snapshot taken BEFORE this entry overwrote
+     *  them. Undo restores this snapshot only if this entry was the
+     *  most recent one to overwrite the list. */
+    prevCompromisedTissues: CompromisedTissue[] | null;
+    /** True if this entry overwrote the compromised tissues list. */
+    overwroteCompromisedTissues: boolean;
+  }
+  const [voiceActivityEntries, setVoiceActivityEntries] = useState<VoiceActivityEntryRecord[]>([]);
+  const voiceActivityEntriesRef = useRef<VoiceActivityEntryRecord[]>([]);
+  voiceActivityEntriesRef.current = voiceActivityEntries;
+  const [voiceDockVisible, setVoiceDockVisible] = useState(false);
+  /** Bumped on session reset; used as a React key so the dock fully
+   *  remounts and clears its internal collapse/unread preferences. */
+  const [voiceDockSessionKey, setVoiceDockSessionKey] = useState(0);
+  /** Anchor used to compute "00:42"-style stamps for entries. */
+  const recordingStartedAtRef = useRef<number | null>(null);
+  /** Trigger metadata set by the silence-debounce / interval-pulse paths
+   *  immediately before they call triggerIncrementalParse. The next call
+   *  to handleClinicalTextParse consumes it (and clears it). */
+  const pendingVoiceTriggerRef = useRef<{
+    trigger: VoiceTriggerReason;
+    chunkText: string;
+    timestamp: number;
+    recordingTimeSec: number;
+  } | null>(null);
+  // Mirrored refs so handleClinicalTextParse can snapshot prior state
+  // (deviations, compromised tissues) without changing its useCallback
+  // identity each render.
+  const modelConfigRef = useRef(modelConfig);
+  modelConfigRef.current = modelConfig;
+  const muscleOverridesRef = useRef(muscleOverrides);
+  muscleOverridesRef.current = muscleOverrides;
+  const compromisedTissuesRef = useRef(compromisedTissues);
+  compromisedTissuesRef.current = compromisedTissues;
 
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
     // Retain the latest parse for the Patient Context panel (used for
@@ -1687,6 +1810,21 @@ export default function PhysioGPT() {
     setLastClinicalParseResult(result);
     const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightLabels: string[] } = {
       markerIds: [], muscleIds: [], deviationKeys: [], highlightLabels: [],
+    };
+    // Per-entry tracking for the Voice Activity dock — only consumed if
+    // the parse came from a voice trigger (pendingVoiceTriggerRef set).
+    const perEntry: {
+      muscleOverridesSet: Record<string, MuscleOverride>;
+      deviationsSet: Record<string, { prev: number; set: number }>;
+      highlightInstanceIds: string[];
+      prevCompromisedTissues: CompromisedTissue[] | null;
+      overwroteCompromisedTissues: boolean;
+    } = {
+      muscleOverridesSet: {},
+      deviationsSet: {},
+      highlightInstanceIds: [],
+      prevCompromisedTissues: null,
+      overwroteCompromisedTissues: false,
     };
 
     if (result.pain_markers.length > 0) {
@@ -1736,7 +1874,7 @@ export default function PhysioGPT() {
         const updated = { ...prev };
         for (const ms of result.muscle_states) {
           applied.muscleIds.push(ms.muscle_id);
-          updated[ms.muscle_id] = {
+          const next: MuscleOverride = {
             tensionOffset: ms.tension_offset || 0,
             activationOffset: ms.activation_offset || 0,
             lengthOverride: 'normal' as LengthOverride,
@@ -1744,6 +1882,8 @@ export default function PhysioGPT() {
             pathology: (ms.pathology || 'none') as PathologyType,
             isManual: true,
           };
+          updated[ms.muscle_id] = next;
+          perEntry.muscleOverridesSet[ms.muscle_id] = next;
         }
         return updated;
       });
@@ -1753,11 +1893,17 @@ export default function PhysioGPT() {
       applied.deviationKeys = Object.keys(result.postural_deviations);
       setModelConfig(prev => {
         const updated = JSON.parse(JSON.stringify(prev));
+        const prevAny = prev as unknown as Record<string, Record<string, number> | unknown>;
         for (const [dotPath, value] of Object.entries(result.postural_deviations)) {
           const parts = dotPath.split('.');
           if (parts.length === 2) {
             const [joint, param] = parts;
             if (updated[joint] && typeof updated[joint] === 'object') {
+              const prevJoint = prevAny[joint];
+              const prevVal = prevJoint && typeof prevJoint === 'object'
+                ? (prevJoint as Record<string, number>)[param] ?? 0
+                : 0;
+              perEntry.deviationsSet[dotPath] = { prev: prevVal, set: value };
               updated[joint][param] = value;
             }
           }
@@ -1772,19 +1918,31 @@ export default function PhysioGPT() {
         weakness: 'weakness', instability: 'dysfunction', stiffness: 'stiffness',
         dysfunction: 'dysfunction', referral: 'referral',
       };
-      const highlights: RegionHighlight[] = result.region_highlights.map(rh => {
+      const highlights: RegionHighlight[] = result.region_highlights.map((rh, idx) => {
         const label = rh.label || `ctp_${rh.region}_${rh.type}`;
+        // Stamp a unique instanceId so per-entry undo can remove
+        // exactly the highlights this parse contributed without
+        // clobbering newer highlights that happen to share a fallback
+        // label like `ctp_${region}_${type}`.
+        const instanceId = `vh_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 7)}`;
         applied.highlightLabels.push(label);
+        perEntry.highlightInstanceIds.push(instanceId);
         return {
           region: rh.region as AnatomicalRegion,
           type: typeMap[rh.type] || 'pain',
           severity: rh.severity,
           label,
+          instanceId,
         };
       });
       setClinicalHighlights(prev => [...prev, ...highlights]);
     }
 
+    // Compromised tissues: any mutation of the list (including
+    // clearing it to empty when the parse returned none) counts as an
+    // overwrite for undo purposes — otherwise voice-driven clears
+    // would silently strip a previous parse's tissues with no way to
+    // restore them.
     if (result.compromised_tissues && result.compromised_tissues.length > 0) {
       const validatedTissues = result.compromised_tissues
         .filter((ct: CompromisedTissue) => {
@@ -1795,6 +1953,8 @@ export default function PhysioGPT() {
           ...ct,
           severity: Math.max(0, Math.min(1, ct.severity)),
         }));
+      perEntry.prevCompromisedTissues = compromisedTissuesRef.current;
+      perEntry.overwroteCompromisedTissues = true;
       setCompromisedTissues(validatedTissues);
       if (validatedTissues.length > 0 && !tissueViewManualRef.current) {
         const typeCounts: Record<string, number> = {};
@@ -1816,6 +1976,13 @@ export default function PhysioGPT() {
         setSelectedTissueEntry(null);
       }
     } else {
+      // Empty-result branch: still counts as an overwrite when there
+      // were tissues before, so the entry can be undone.
+      const prevTissues = compromisedTissuesRef.current;
+      if (prevTissues.length > 0) {
+        perEntry.prevCompromisedTissues = prevTissues;
+        perEntry.overwroteCompromisedTissues = true;
+      }
       setCompromisedTissues([]);
     }
 
@@ -1845,11 +2012,54 @@ export default function PhysioGPT() {
       muscleIds: [...(prev?.muscleIds || []), ...applied.muscleIds],
       deviationKeys: [...(prev?.deviationKeys || []), ...applied.deviationKeys],
       highlightLabels: [...(prev?.highlightLabels || []), ...applied.highlightLabels],
+      highlightInstanceIds: [...(prev?.highlightInstanceIds || []), ...perEntry.highlightInstanceIds],
       predictionText,
     };
     const hasFindings = applied.markerIds.length > 0 || applied.muscleIds.length > 0 || applied.highlightLabels.length > 0;
     if (hasFindings) {
       setHasClinicalTextData(true);
+    }
+
+    // If this parse came from a voice trigger (silence pause / interval
+    // pulse), record an entry into the Voice Activity dock so the
+    // clinician can see exactly what fired and undo it surgically.
+    const triggerCtx = pendingVoiceTriggerRef.current;
+    pendingVoiceTriggerRef.current = null;
+    if (triggerCtx) {
+      const counts = {
+        painMarkers: applied.markerIds.length,
+        muscleOverrides: applied.muscleIds.length,
+        posturalDeviations: applied.deviationKeys.length,
+        regionHighlights: applied.highlightLabels.length,
+        compromisedTissuesUpdated: perEntry.overwroteCompromisedTissues,
+      };
+      const noChanges =
+        counts.painMarkers === 0 &&
+        counts.muscleOverrides === 0 &&
+        counts.posturalDeviations === 0 &&
+        counts.regionHighlights === 0 &&
+        !counts.compromisedTissuesUpdated;
+      const entry: VoiceActivityEntryRecord = {
+        id: `va_${triggerCtx.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
+        trigger: triggerCtx.trigger,
+        recordingTimeSec: triggerCtx.recordingTimeSec,
+        timestamp: triggerCtx.timestamp,
+        chunkText: triggerCtx.chunkText,
+        clinicalSummary: result.clinical_summary || '',
+        counts,
+        noChanges,
+        undone: false,
+        appliedMarkerIds: [...applied.markerIds],
+        appliedMuscleOverrides: perEntry.muscleOverridesSet,
+        appliedDeviations: perEntry.deviationsSet,
+        appliedHighlightLabels: [...applied.highlightLabels],
+        appliedHighlightInstanceIds: [...perEntry.highlightInstanceIds],
+        prevCompromisedTissues: perEntry.prevCompromisedTissues,
+        overwroteCompromisedTissues: perEntry.overwroteCompromisedTissues,
+      };
+      // Prepend so the most recent entry is at the top.
+      setVoiceActivityEntries(prevEntries => [entry, ...prevEntries]);
+      setVoiceDockVisible(true);
     }
   }, []);
 
@@ -1885,9 +2095,16 @@ export default function PhysioGPT() {
         return updated;
       });
     }
-    if (applied.highlightLabels.length > 0) {
+    if (applied.highlightInstanceIds.length > 0 || applied.highlightLabels.length > 0) {
+      const idsToRemove = new Set(applied.highlightInstanceIds);
       const labelsToRemove = new Set(applied.highlightLabels);
-      setClinicalHighlights(prev => prev.filter(h => !labelsToRemove.has(h.label || '')));
+      // Prefer instance-id matching (correct under fallback-label
+      // collisions); fall back to label match only for highlights
+      // that have no instanceId (legacy / non-voice insertions).
+      setClinicalHighlights(prev => prev.filter(h => {
+        if (h.instanceId) return !idsToRemove.has(h.instanceId);
+        return !labelsToRemove.has(h.label || '');
+      }));
     }
 
     if (applied.predictionText && subjectiveHistoryRef.current.includes(applied.predictionText)) {
@@ -1908,6 +2125,126 @@ export default function PhysioGPT() {
     // to.
     setLastClinicalParseResult(null);
     setPatientContextState(EMPTY_PATIENT_CONTEXT_STATE);
+  }, []);
+
+  /**
+   * Per-entry undo for the Voice Activity dock.
+   *
+   * Reverts only the contributions of a single dock entry:
+   *   - Removes the pain markers it added.
+   *   - Deletes muscle overrides it set (only when the current value
+   *     still matches what this entry set — otherwise a later entry has
+   *     overwritten it and we leave it alone).
+   *   - Restores postural-deviation values to the pre-entry value
+   *     (again only when the current value still matches what this
+   *     entry set).
+   *   - Removes the region highlights this entry added by label.
+   *   - Restores the compromised-tissues snapshot if this entry was the
+   *     most recent one to overwrite that list (otherwise leave alone).
+   *
+   * Also updates the cumulative `clinicalTextAppliedRef` so that a
+   * later "Clear All" doesn't try to re-undo the same things and so it
+   * still cleans up everything that's still attributable to voice.
+   */
+  const handleVoiceActivityUndo = useCallback((entryId: string) => {
+    const entries = voiceActivityEntriesRef.current;
+    const entry = entries.find(e => e.id === entryId);
+    if (!entry || entry.undone) return;
+
+    if (entry.appliedMarkerIds.length > 0) {
+      const ids = new Set(entry.appliedMarkerIds);
+      setPainMarkers(prev => prev.filter(m => !ids.has(m.id)));
+    }
+
+    const muscleEntries = Object.entries(entry.appliedMuscleOverrides);
+    if (muscleEntries.length > 0) {
+      setMuscleOverrides(prev => {
+        const updated = { ...prev };
+        for (const [id, setVal] of muscleEntries) {
+          const curr = updated[id];
+          if (!curr) continue;
+          // Only revert if still equal to what this entry set.
+          if (
+            curr.tensionOffset === setVal.tensionOffset &&
+            curr.activationOffset === setVal.activationOffset &&
+            curr.lengthOverride === setVal.lengthOverride &&
+            curr.inhibition === setVal.inhibition &&
+            curr.pathology === setVal.pathology
+          ) {
+            delete updated[id];
+          }
+        }
+        return updated;
+      });
+    }
+
+    const deviationEntries = Object.entries(entry.appliedDeviations);
+    if (deviationEntries.length > 0) {
+      setModelConfig(prev => {
+        const updated = JSON.parse(JSON.stringify(prev));
+        for (const [dotPath, { prev: prevVal, set: setVal }] of deviationEntries) {
+          const parts = dotPath.split('.');
+          if (parts.length !== 2) continue;
+          const [joint, param] = parts;
+          if (!updated[joint] || typeof updated[joint] !== 'object') continue;
+          const currVal = (updated[joint] as Record<string, number>)[param];
+          if (currVal === setVal) {
+            (updated[joint] as Record<string, number>)[param] = prevVal;
+          }
+        }
+        return updated;
+      });
+    }
+
+    if (entry.appliedHighlightInstanceIds.length > 0) {
+      const ids = new Set(entry.appliedHighlightInstanceIds);
+      // Remove only the exact highlight instances this entry inserted.
+      // Filtering by label would clobber newer highlights that share
+      // a fallback label like `ctp_${region}_${type}`.
+      setClinicalHighlights(prev => prev.filter(h => !h.instanceId || !ids.has(h.instanceId)));
+    }
+
+    if (entry.overwroteCompromisedTissues) {
+      // Only restore if no later entry has since overwritten the
+      // compromised-tissues list. Entries are stored newest-first so
+      // a later overwrite would appear *before* this entry in the
+      // array.
+      const later = entries.findIndex(e => e.id === entryId);
+      const hasLaterOverwrite = entries.slice(0, later).some(e => e.overwroteCompromisedTissues && !e.undone);
+      if (!hasLaterOverwrite) {
+        setCompromisedTissues(entry.prevCompromisedTissues || []);
+      }
+    }
+
+    // Update cumulative ref so a later "Clear All" doesn't try to
+    // undo the same things, and so it still cleans up the rest of
+    // what's still attributable to voice.
+    const prevApplied = clinicalTextAppliedRef.current;
+    if (prevApplied) {
+      const removedMarkers = new Set(entry.appliedMarkerIds);
+      const removedMuscles = new Set(Object.keys(entry.appliedMuscleOverrides));
+      const removedDeviations = new Set(Object.keys(entry.appliedDeviations));
+      const removedInstanceIds = new Set(entry.appliedHighlightInstanceIds);
+      // For label-only entries we have to remove labels one-per-undo so
+      // we don't strip labels that belong to other still-active entries
+      // (fallback labels like `ctp_${region}_${type}` repeat across
+      // parses). Drop one occurrence per appliedHighlightLabels entry.
+      let remainingLabels = [...prevApplied.highlightLabels];
+      for (const lbl of entry.appliedHighlightLabels) {
+        const idx = remainingLabels.indexOf(lbl);
+        if (idx >= 0) remainingLabels.splice(idx, 1);
+      }
+      clinicalTextAppliedRef.current = {
+        markerIds: prevApplied.markerIds.filter(id => !removedMarkers.has(id)),
+        muscleIds: prevApplied.muscleIds.filter(id => !removedMuscles.has(id)),
+        deviationKeys: prevApplied.deviationKeys.filter(k => !removedDeviations.has(k)),
+        highlightLabels: remainingLabels,
+        highlightInstanceIds: prevApplied.highlightInstanceIds.filter(id => !removedInstanceIds.has(id)),
+        predictionText: prevApplied.predictionText,
+      };
+    }
+
+    setVoiceActivityEntries(prev => prev.map(e => e.id === entryId ? { ...e, undone: true } : e));
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
@@ -10701,6 +11038,14 @@ ${ddxList}`;
                   setPendingAdhesionStart(null);
 
                   clinicalTextAppliedRef.current = null;
+                  // Voice Activity dock: session reset clears the
+                  // entry log, hides the dock, and bumps the session
+                  // key so the dock fully remounts and forgets any
+                  // collapse/unread state from the previous session.
+                  setVoiceActivityEntries([]);
+                  setVoiceDockVisible(false);
+                  setVoiceDockSessionKey(k => k + 1);
+                  pendingVoiceTriggerRef.current = null;
                   lastReasoningTriggerRef.current = '';
                   slingAnalysisRef.current = null;
                   setSlingActivationOverrides({});
@@ -13100,9 +13445,12 @@ ${ddxList}`;
         <ClinicalTextInput
           ref={clinicalTextInputRef}
           onParseResult={handleClinicalTextParse}
+          onParseError={() => {
+            // Clear any staged voice trigger metadata so the next
+            // successful parse isn't misattributed to a failed one.
+            pendingVoiceTriggerRef.current = null;
+          }}
           onClearFindings={handleClinicalTextClear}
-          voiceText={isRecording ? (liveTranscript + (interimTranscript ? ` ${interimTranscript}` : '')).trim() : undefined}
-          isVoiceActive={isRecording}
           onFollowUpQuestionsChange={handleVoiceFollowUpQuestionsChange}
           patientContext={patientContextPayload}
           chainIntegrityScores={(() => {
@@ -13522,6 +13870,15 @@ ${ddxList}`;
         />
       </Suspense>
     )}
+    <Suspense fallback={null}>
+      <VoiceActivityDock
+        key={voiceDockSessionKey}
+        entries={voiceActivityEntries}
+        isRecording={isRecording}
+        visible={voiceDockVisible}
+        onUndo={handleVoiceActivityUndo}
+      />
+    </Suspense>
     </div>
     </TreatmentRationaleProvider>
     </OrchestratePlanProvider>

@@ -5943,3 +5943,98 @@ export const insertRecoveryWeeklyCheckInSchema = createInsertSchema(recoveryWeek
 
 export type InsertRecoveryWeeklyCheckIn = z.infer<typeof insertRecoveryWeeklyCheckInSchema>;
 export type RecoveryWeeklyCheckIn = typeof recoveryWeeklyCheckIns.$inferSelect;
+
+// =====================================================================
+// Task #281 — Case-Aware Research Engine v1
+//
+// Persists one synthesized, citation-backed answer per case. Cache key
+// is the deterministic content hash of the case (clinical text +
+// patient context). The same caseId is upserted on each refresh so a
+// case has at most one row in the cache at any time. Stale rows
+// (different `contentHash`) are still returned by GET so the UI can
+// flag them and offer a "Re-run" action.
+// =====================================================================
+export const caseResearchSyntheses = pgTable("case_research_syntheses", {
+  id: serial("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  userId: integer("user_id").notNull(),
+  contentHash: text("content_hash").notNull(),
+  // Free-text condition / diagnosis label used as the broadest tier
+  // and to render headings.
+  condition: text("condition").notNull(),
+  // The exact case summary fed to the engine — kept for debugging /
+  // explainability so the clinician can see what the AI was reasoning
+  // over.
+  caseSummary: text("case_summary").notNull(),
+  // AI-inferred discriminating variables, ranked by importance.
+  inferredVariables: jsonb("inferred_variables").$type<Array<{
+    label: string;
+    value: string;
+    importance: number;     // 1 = most important, drops last
+    queryTerms: string[];   // terms to AND into the search
+    rationale: string;
+  }>>().notNull(),
+  // Each tier of the query ladder that was actually executed (most
+  // specific first). The "winning" tier is the last one in this array
+  // since the engine stops as soon as it has enough evidence.
+  queriesRan: jsonb("queries_ran").$type<Array<{
+    tier: number;
+    label: string;
+    query: string;
+    droppedVariables: string[];
+    sources: Record<string, { count: number; ok: boolean; error?: string }>;
+    paperCount: number;
+  }>>().notNull(),
+  // De-duplicated, ranked papers actually used in synthesis.
+  retrievedPapers: jsonb("retrieved_papers").$type<Array<{
+    citationNumber: number;     // 1-indexed; matches inline [N] in answer
+    source: 'pubmed' | 'openalex' | 'europepmc';
+    externalId: string;         // pmid / openalex id / europepmc id
+    title: string;
+    authors: string[];
+    year: number | null;
+    journal: string | null;
+    abstract: string;
+    doi: string | null;
+    url: string;
+    openAccess: boolean;
+    matchedVariables: string[]; // labels of variables this paper covers
+  }>>().notNull(),
+  synthesizedAnswer: text("synthesized_answer").notNull(),
+  // Confidence buckets per spec: High / Moderate / Low / Extrapolated.
+  confidence: text("confidence").notNull(),
+  confidenceReason: text("confidence_reason"),
+  // Lightweight audit of which variables ended up dropped to satisfy
+  // the tiered query ladder (mirrored from queriesRan for fast UI
+  // rendering).
+  droppedVariables: jsonb("dropped_variables").$type<string[]>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  // One row per (user, case). Upserted on refresh.
+  userCaseUnique: uniqueIndex("case_research_syntheses_user_case_unique").on(t.userId, t.caseId),
+}));
+
+export const insertCaseResearchSynthesisSchema = createInsertSchema(caseResearchSyntheses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertCaseResearchSynthesis = z.infer<typeof insertCaseResearchSynthesisSchema>;
+export type CaseResearchSynthesis = typeof caseResearchSyntheses.$inferSelect;
+
+/** Body shape accepted by POST /api/case-research/:caseId. The
+ *  `caseSummary` is the canonical clinical text the engine reasons
+ *  over (clinician description + AI-extracted summary + patient
+ *  context answers). `condition` is the parsed diagnosis used as the
+ *  broadest fallback tier. `contentHash` is computed client-side from
+ *  the same source material so cache hits are deterministic. */
+export const caseResearchRequestSchema = z.object({
+  caseSummary: z.string().min(10).max(20000),
+  condition: z.string().min(1).max(500),
+  contentHash: z.string().min(1).max(128),
+  refresh: z.boolean().optional(),
+});
+export type CaseResearchRequest = z.infer<typeof caseResearchRequestSchema>;
+

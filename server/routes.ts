@@ -9818,6 +9818,69 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  // ─── Case-Aware Research Engine v1 (Task #281) ─────────────────
+  // POST runs the engine end-to-end: AI variable inference → tiered
+  // multi-source retrieval → synthesis. Result is upserted per (user,
+  // caseId). On a hit with the same contentHash we return the cached
+  // row instead of re-running, unless `?refresh=1` is passed (or
+  // refresh:true in the body). GET is a pure cache read.
+  app.get("/api/case-research/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const row = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      if (!row) return res.status(404).json({ error: "No synthesis cached for this case" });
+      res.json(row);
+    } catch (error: unknown) {
+      console.error("Get case-research synthesis error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to load synthesis", details: message });
+    }
+  });
+
+  app.post("/api/case-research/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const { caseResearchRequestSchema } = await import("@shared/schema");
+      const parsed = caseResearchRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request payload", details: parsed.error.flatten() });
+      }
+      const { caseSummary, condition, contentHash } = parsed.data;
+      const refresh = parsed.data.refresh === true || String(req.query.refresh || "") === "1";
+
+      // Cache hit if hash matches and not forcing refresh.
+      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      if (existing && existing.contentHash === contentHash && !refresh) {
+        return res.json({ ...existing, cached: true });
+      }
+
+      const { runCaseResearch } = await import("./services/research/caseResearchEngine");
+      const outcome = await runCaseResearch(condition, caseSummary);
+
+      const saved = await storage.upsertCaseResearchSynthesis({
+        caseId,
+        userId: req.user!.id,
+        contentHash,
+        condition,
+        caseSummary,
+        inferredVariables: outcome.inferredVariables,
+        queriesRan: outcome.queriesRan,
+        retrievedPapers: outcome.retrievedPapers,
+        synthesizedAnswer: outcome.synthesizedAnswer,
+        confidence: outcome.confidence,
+        confidenceReason: outcome.confidenceReason,
+        droppedVariables: outcome.droppedVariables,
+      });
+      res.json({ ...saved, cached: false });
+    } catch (error: unknown) {
+      console.error("Run case-research engine error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to run case research", details: message });
+    }
+  });
+
   app.post("/api/adjunct-therapies-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const adjunctInputSchema = z.object({

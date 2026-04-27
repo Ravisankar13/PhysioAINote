@@ -173,6 +173,9 @@ import {
   recoveryWeeklyCheckIns,
   type RecoveryWeeklyCheckIn,
   type InsertRecoveryWeeklyCheckIn,
+  caseResearchSyntheses,
+  type CaseResearchSynthesis,
+  type InsertCaseResearchSynthesis,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -798,6 +801,10 @@ export interface IStorage {
   listRecoveryWeeklyCheckIns(userId: number, caseId: string): Promise<RecoveryWeeklyCheckIn[]>;
   upsertRecoveryWeeklyCheckIn(userId: number, checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn>;
   deleteRecoveryWeeklyCheckIn(userId: number, caseId: string, week: number): Promise<void>;
+
+  // Case-Aware Research Engine (Task #281)
+  getCaseResearchSynthesis(userId: number, caseId: string): Promise<CaseResearchSynthesis | undefined>;
+  upsertCaseResearchSynthesis(synthesis: InsertCaseResearchSynthesis): Promise<CaseResearchSynthesis>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5091,6 +5098,46 @@ export class DatabaseStorage implements IStorage {
         eq(recoveryWeeklyCheckIns.caseId, caseId),
         eq(recoveryWeeklyCheckIns.week, week),
       ));
+  }
+
+  // ==========================================================
+  // Case-Aware Research Engine (Task #281)
+  // ==========================================================
+  async getCaseResearchSynthesis(userId: number, caseId: string): Promise<CaseResearchSynthesis | undefined> {
+    const [row] = await db
+      .select()
+      .from(caseResearchSyntheses)
+      .where(and(
+        eq(caseResearchSyntheses.userId, userId),
+        eq(caseResearchSyntheses.caseId, caseId),
+      ))
+      .limit(1);
+    return row;
+  }
+
+  async upsertCaseResearchSynthesis(synthesis: InsertCaseResearchSynthesis): Promise<CaseResearchSynthesis> {
+    const now = new Date();
+    const [row] = await db
+      .insert(caseResearchSyntheses)
+      .values({ ...synthesis, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [caseResearchSyntheses.userId, caseResearchSyntheses.caseId],
+        set: {
+          contentHash: synthesis.contentHash,
+          condition: synthesis.condition,
+          caseSummary: synthesis.caseSummary,
+          inferredVariables: synthesis.inferredVariables,
+          queriesRan: synthesis.queriesRan,
+          retrievedPapers: synthesis.retrievedPapers,
+          synthesizedAnswer: synthesis.synthesizedAnswer,
+          confidence: synthesis.confidence,
+          confidenceReason: synthesis.confidenceReason,
+          droppedVariables: synthesis.droppedVariables,
+          updatedAt: now,
+        },
+      })
+      .returning();
+    return row;
   }
 }
 

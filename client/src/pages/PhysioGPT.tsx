@@ -213,6 +213,7 @@ import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDash
 import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers, derivePsychosocialAndOccupationalDrivers, type PatientFactors } from "@/lib/patientFactorsEngine";
 const PatientFactorsForm = lazy(() => import("@/components/skeleton/PatientFactorsForm"));
 import { countFactorOverrides } from "@/components/skeleton/PatientFactorsForm";
+import { CaseResearchPanel } from "@/components/skeleton/CaseResearchPanel";
 import { computePatientFactorsFilledCount } from "@/lib/recoveryUncertainty";
 const TimelineBottomBar = lazy(() => import("@/components/skeleton/TimelineBottomBar"));
 import type { PlaybackSyncState, TimelinePlaybackRef, ConditionPhaseInfo } from "@/components/skeleton/TimelineBottomBar";
@@ -13099,6 +13100,44 @@ ${ddxList}`;
                 onChange={handlePatientFactorsChange}
               />
             </Suspense>
+            {/* Task #281 — Case-Aware Research Engine v1. Mounted next to
+                Patient Context so the synthesis is anchored to the same
+                inputs the clinician has just curated. caseId is a stable
+                hash of the original description (so "the same case"
+                across edits stays addressable), while contentHash mixes
+                description + patient context sig so any meaningful
+                change marks the cached synthesis stale. */}
+            {(() => {
+              const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+              const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
+              if (!desc) return null;
+              // Tiny, deterministic FNV-1a 32-bit hash → 8-char hex.
+              const fnv32 = (s: string) => {
+                let h = 0x811c9dc5;
+                for (let i = 0; i < s.length; i++) {
+                  h ^= s.charCodeAt(i);
+                  h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+                }
+                return h.toString(16).padStart(8, '0');
+              };
+              const caseId = `case-${fnv32(desc)}`;
+              const condition = desc.length > 160 ? desc.slice(0, 160) : desc;
+              const caseSummary = [
+                `Description: ${desc}`,
+                summary && summary !== desc ? `Clinical summary: ${summary}` : '',
+                patientContextSig ? `Patient context: ${patientContextSig}` : '',
+              ].filter(Boolean).join('\n\n');
+              const contentHash = fnv32(`${desc}\u241F${summary}\u241F${patientContextSig}`);
+              return (
+                <CaseResearchPanel
+                  caseId={caseId}
+                  condition={condition}
+                  caseSummary={caseSummary}
+                  contentHash={contentHash}
+                  className="w-full"
+                />
+              );
+            })()}
           </div>
         )}
         {hasClinicalTextData && (

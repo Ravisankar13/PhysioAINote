@@ -24097,7 +24097,19 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
     })).max(8).optional(),
     compromisedTissues: z.array(z.object({
       name: z.string().max(120),
-      status: z.string().max(60).optional(),
+      // Accept either a string label OR a numeric severity for resilience —
+      // some upstream callers pass the tissue's numeric severity score
+      // straight through. We coerce to a short string so the rationale
+      // prompt always sees a readable label, and we cap at 60 chars.
+      status: z.union([z.string(), z.number()])
+        .optional()
+        .transform(v => {
+          if (v === undefined || v === null) return undefined;
+          const s = typeof v === "number" ? String(v) : v;
+          const trimmed = s.trim();
+          if (trimmed.length === 0) return undefined;
+          return trimmed.length > 60 ? trimmed.slice(0, 60) : trimmed;
+        }),
       region: z.string().max(80).optional(),
     })).max(20).optional(),
     scarLoad: z.object({

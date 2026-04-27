@@ -6973,11 +6973,35 @@ ${ddxList}`;
       .slice(0, 6);
 
     // Compromised tissues — name, status, region.
-    const compromisedTissuesSummary = compromisedTissues.slice(0, 12).map(t => ({
-      name: (t as { name?: string; tissue?: string }).name || (t as { tissue?: string }).tissue || 'tissue',
-      status: (t as { status?: string; severity?: string }).status || (t as { severity?: string }).severity,
-      region: (t as { region?: string; location?: string }).region || (t as { location?: string }).location,
-    }));
+    const compromisedTissuesSummary = compromisedTissues.slice(0, 12).map(t => {
+      const rawStatus = (t as { status?: string }).status;
+      const rawSeverity = (t as { severity?: unknown }).severity;
+      let statusStr: string | undefined;
+      if (typeof rawStatus === "string" && rawStatus.trim().length > 0) {
+        statusStr = rawStatus.trim();
+      } else if (typeof rawSeverity === "string" && rawSeverity.trim().length > 0) {
+        statusStr = rawSeverity.trim();
+      } else if (typeof rawSeverity === "number" && Number.isFinite(rawSeverity)) {
+        const n = rawSeverity;
+        if (n >= 0 && n <= 1) {
+          const pct = Math.round(n * 100);
+          const band = n >= 0.66 ? "high" : n >= 0.33 ? "moderate" : "low";
+          statusStr = `${band} (${pct}%)`;
+        } else if (n >= 0 && n <= 100) {
+          const pct = Math.round(n);
+          const band = pct >= 66 ? "high" : pct >= 33 ? "moderate" : "low";
+          statusStr = `${band} (${pct}%)`;
+        } else {
+          statusStr = String(Math.round(n));
+        }
+      }
+      if (statusStr && statusStr.length > 60) statusStr = statusStr.slice(0, 60);
+      return {
+        name: (t as { name?: string; tissue?: string }).name || (t as { tissue?: string }).tissue || 'tissue',
+        status: statusStr,
+        region: (t as { region?: string; location?: string }).region || (t as { location?: string }).location,
+      };
+    });
 
     // Scar / adhesion load.
     let scarLoad: RationaleClinicalContextInput['scarLoad'] | undefined;

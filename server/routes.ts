@@ -9847,8 +9847,10 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid request payload", details: parsed.error.flatten() });
       }
-      const { caseSummary, condition, contentHash } = parsed.data;
-      const refresh = parsed.data.refresh === true || String(req.query.refresh || "") === "1";
+      const { caseSummary, condition, contentHash, phenotypeOverride } = parsed.data;
+      // A phenotype override always forces a fresh run — the clinician
+      // explicitly asked to re-search with their edited interpretation.
+      const refresh = parsed.data.refresh === true || String(req.query.refresh || "") === "1" || !!phenotypeOverride;
 
       // Cache hit if hash matches and not forcing refresh.
       const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
@@ -9857,7 +9859,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       }
 
       const { runCaseResearch } = await import("./services/research/caseResearchEngine");
-      const outcome = await runCaseResearch(condition, caseSummary);
+      const outcome = await runCaseResearch(condition, caseSummary, { phenotypeOverride });
 
       const saved = await storage.upsertCaseResearchSynthesis({
         caseId,
@@ -9865,8 +9867,10 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         contentHash,
         condition,
         caseSummary,
+        phenotype: outcome.phenotype,
         inferredVariables: outcome.inferredVariables,
         queriesRan: outcome.queriesRan,
+        seedBroadenings: outcome.seedBroadenings,
         retrievedPapers: outcome.retrievedPapers,
         synthesizedAnswer: outcome.synthesizedAnswer,
         confidence: outcome.confidence,

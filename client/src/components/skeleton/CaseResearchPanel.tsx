@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -10,8 +11,9 @@ import { cn } from "@/lib/utils";
 import {
   Loader2, FlaskConical, RefreshCcw, AlertTriangle, ChevronDown, ChevronUp,
   ExternalLink, BookOpen, ListFilter, Search, Info, ShieldCheck, GripHorizontal,
+  Pencil, X, Plus, Microscope, Sparkles,
 } from "lucide-react";
-import type { CaseResearchSynthesis } from "@shared/schema";
+import type { CaseResearchSynthesis, SearchablePhenotype } from "@shared/schema";
 
 /** localStorage key for the user's preferred body height (px). */
 const BODY_HEIGHT_STORAGE_KEY = "caseResearchPanel.bodyHeightPx";
@@ -65,6 +67,371 @@ const SOURCE_LABEL: Record<string, string> = {
   openalex: "OpenAlex",
   europepmc: "Europe PMC",
 };
+
+/** Build a sensible default phenotype for cached rows that pre-date
+ *  Task #286 (and therefore lack the phenotype field). The value is
+ *  good enough to display + edit; on the next re-run the engine will
+ *  replace it with a real translated phenotype. */
+function deriveFallbackPhenotype(condition: string | null | undefined): SearchablePhenotype {
+  const cleaned = (condition || "")
+    .replace(/[",.()\[\]{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+  return {
+    canonicalCondition: { primary: cleaned || "this case", synonyms: [] },
+    region: null,
+    regionSoft: false,
+    laterality: "unspecified",
+    mechanism: { phrases: [], soft: false },
+    aggravatingFactors: { phrases: [], soft: true },
+    painType: null,
+    painTypeSoft: true,
+  };
+}
+
+const LATERALITY_LABEL: Record<string, string> = {
+  left: "Left",
+  right: "Right",
+  bilateral: "Bilateral",
+  unspecified: "Unspecified",
+};
+
+/** Tiny chip-list editor — used for synonyms, mechanism phrases, and
+ *  aggravating factors in the phenotype editor. Stays inline (no
+ *  modal) and keeps state in the parent. */
+function ChipListEditor({
+  values, onChange, placeholder, dataTestid, max = 8,
+}: {
+  values: string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+  dataTestid: string;
+  max?: number;
+}) {
+  const [draft, setDraft] = useState("");
+  const commit = useCallback(() => {
+    const v = draft.trim();
+    if (!v || values.length >= max) { setDraft(""); return; }
+    if (values.some(x => x.toLowerCase() === v.toLowerCase())) { setDraft(""); return; }
+    onChange([...values, v]);
+    setDraft("");
+  }, [draft, values, onChange, max]);
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-1" data-testid={`${dataTestid}-chips`}>
+        {values.length === 0 && (
+          <span className="text-[10.5px] text-slate-500 italic">none</span>
+        )}
+        {values.map((v, i) => (
+          <span
+            key={`${v}-${i}`}
+            className="inline-flex items-center gap-1 rounded border border-violet-500/40 bg-violet-500/10 text-violet-100 px-1.5 py-[1px] text-[10.5px]"
+            data-testid={`${dataTestid}-chip-${i}`}
+          >
+            <span>{v}</span>
+            <button
+              type="button"
+              className="text-violet-300 hover:text-rose-200"
+              onClick={() => onChange(values.filter((_, j) => j !== i))}
+              aria-label={`Remove ${v}`}
+              data-testid={`${dataTestid}-remove-${i}`}
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </span>
+        ))}
+      </div>
+      {values.length < max && (
+        <div className="flex items-center gap-1">
+          <Input
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") { e.preventDefault(); commit(); }
+            }}
+            placeholder={placeholder}
+            className="h-6 text-[11px] bg-slate-950/60 border-slate-700/60 text-slate-100"
+            data-testid={`${dataTestid}-input`}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 w-6 p-0 text-violet-200 hover:text-violet-100"
+            onClick={commit}
+            disabled={!draft.trim()}
+            aria-label="Add"
+            data-testid={`${dataTestid}-add`}
+          >
+            <Plus className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Interpreted your case as…" block + inline phenotype editor.
+ *  Read-only mode shows a compact summary + an Edit button. Edit
+ *  mode swaps in chip lists and a primary-condition input, plus
+ *  Cancel / "Re-run with my edits" actions. */
+function PhenotypeBlock({
+  phenotype, editing, onStartEdit, onCancelEdit, onChange, onApply, isRunning,
+}: {
+  phenotype: SearchablePhenotype;
+  editing: SearchablePhenotype | null;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onChange: (next: SearchablePhenotype) => void;
+  onApply: (edits: SearchablePhenotype) => void;
+  isRunning: boolean;
+}) {
+  const isEditing = editing !== null;
+  const draft = editing ?? phenotype;
+  const canApply =
+    isEditing &&
+    !!editing &&
+    editing.canonicalCondition.primary.trim().length > 0 &&
+    !isRunning;
+
+  const synonymsView = phenotype.canonicalCondition.synonyms;
+
+  return (
+    <div className="rounded-md border border-violet-500/30 bg-violet-950/20 px-2.5 py-2" data-testid="phenotype-block">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-100">
+          <Microscope className="h-3 w-3 text-violet-300" />
+          Interpreted your case as…
+        </div>
+        {!isEditing ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[11px] text-violet-200 hover:text-violet-50"
+            onClick={onStartEdit}
+            data-testid="button-phenotype-edit"
+          >
+            <Pencil className="h-3 w-3 mr-1" />
+            Edit interpretation
+          </Button>
+        ) : (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[11px] text-slate-300 hover:text-slate-100"
+              onClick={onCancelEdit}
+              disabled={isRunning}
+              data-testid="button-phenotype-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-6 px-2 text-[11px] bg-violet-600 hover:bg-violet-500 text-white"
+              onClick={() => editing && onApply(editing)}
+              disabled={!canApply}
+              data-testid="button-phenotype-apply"
+            >
+              {isRunning ? (
+                <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Re-running…</>
+              ) : (
+                <><RefreshCcw className="h-3 w-3 mr-1" />Re-run with my edits</>
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {!isEditing ? (
+        <dl className="text-[11px] grid grid-cols-[110px_1fr] gap-x-2 gap-y-0.5 text-slate-200">
+          <dt className="text-slate-400">Canonical</dt>
+          <dd className="font-semibold text-slate-50" data-testid="phenotype-canonical">
+            {phenotype.canonicalCondition.primary}
+          </dd>
+          {synonymsView.length > 0 && (
+            <>
+              <dt className="text-slate-400">Synonyms</dt>
+              <dd className="text-slate-200" data-testid="phenotype-synonyms">{synonymsView.join(' · ')}</dd>
+            </>
+          )}
+          {phenotype.region && (
+            <>
+              <dt className="text-slate-400">Region</dt>
+              <dd className="text-slate-200">{phenotype.region}</dd>
+            </>
+          )}
+          <dt className="text-slate-400">Laterality</dt>
+          <dd className="text-slate-300" data-testid="phenotype-laterality">
+            {LATERALITY_LABEL[phenotype.laterality ?? 'unspecified']}{' '}
+            <span className="text-[10px] text-slate-500">(soft — never AND'd into queries)</span>
+          </dd>
+          {phenotype.mechanism.phrases.length > 0 && (
+            <>
+              <dt className="text-slate-400">Mechanism</dt>
+              <dd className="text-slate-200" data-testid="phenotype-mechanism">
+                {phenotype.mechanism.phrases.join(' · ')}
+                {phenotype.mechanism.soft && <span className="ml-1 text-[10px] text-slate-500">(soft)</span>}
+              </dd>
+            </>
+          )}
+          {phenotype.aggravatingFactors.phrases.length > 0 && (
+            <>
+              <dt className="text-slate-400">Aggravators</dt>
+              <dd className="text-slate-200" data-testid="phenotype-aggravators">
+                {phenotype.aggravatingFactors.phrases.join(' · ')}
+                {phenotype.aggravatingFactors.soft && <span className="ml-1 text-[10px] text-slate-500">(soft)</span>}
+              </dd>
+            </>
+          )}
+          {phenotype.painType && (
+            <>
+              <dt className="text-slate-400">Pain type</dt>
+              <dd className="text-slate-200">{phenotype.painType}</dd>
+            </>
+          )}
+        </dl>
+      ) : (
+        <div className="space-y-2" data-testid="phenotype-editor">
+          <div className="space-y-1">
+            <label className="text-[10.5px] uppercase tracking-wide text-slate-400">Canonical condition</label>
+            <Input
+              value={draft.canonicalCondition.primary}
+              onChange={e => onChange({
+                ...draft,
+                canonicalCondition: { ...draft.canonicalCondition, primary: e.target.value },
+              })}
+              placeholder="e.g. non-specific low back pain"
+              className="h-7 text-[11px] bg-slate-950/60 border-slate-700/60 text-slate-100"
+              data-testid="input-phenotype-primary"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10.5px] uppercase tracking-wide text-slate-400">Synonyms (broader → broadest)</label>
+            <ChipListEditor
+              values={draft.canonicalCondition.synonyms}
+              onChange={next => onChange({
+                ...draft,
+                canonicalCondition: { ...draft.canonicalCondition, synonyms: next },
+              })}
+              placeholder="e.g. mechanical low back pain"
+              dataTestid="chips-phenotype-synonyms"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[10.5px] uppercase tracking-wide text-slate-400">Region</label>
+                <label className="flex items-center gap-1 text-[10px] text-slate-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.regionSoft === true}
+                    onChange={e => onChange({ ...draft, regionSoft: e.target.checked })}
+                    className="h-3 w-3 accent-violet-500"
+                    data-testid="checkbox-phenotype-region-soft"
+                  />
+                  Soft
+                </label>
+              </div>
+              <Input
+                value={draft.region ?? ""}
+                onChange={e => onChange({ ...draft, region: e.target.value || null })}
+                placeholder="e.g. lumbar spine"
+                className="h-7 text-[11px] bg-slate-950/60 border-slate-700/60 text-slate-100"
+                data-testid="input-phenotype-region"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10.5px] uppercase tracking-wide text-slate-400">Laterality (soft)</label>
+              <select
+                value={draft.laterality ?? "unspecified"}
+                onChange={e => onChange({ ...draft, laterality: e.target.value as SearchablePhenotype['laterality'] })}
+                className="h-7 w-full text-[11px] bg-slate-950/60 border border-slate-700/60 text-slate-100 rounded px-1"
+                data-testid="select-phenotype-laterality"
+              >
+                <option value="unspecified">Unspecified</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="bilateral">Bilateral</option>
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[10.5px] uppercase tracking-wide text-slate-400">Mechanism phrases</label>
+              <label className="flex items-center gap-1 text-[10px] text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={draft.mechanism.soft}
+                  onChange={e => onChange({ ...draft, mechanism: { ...draft.mechanism, soft: e.target.checked } })}
+                  className="h-3 w-3 accent-violet-500"
+                  data-testid="checkbox-phenotype-mechanism-soft"
+                />
+                Soft (drop first)
+              </label>
+            </div>
+            <ChipListEditor
+              values={draft.mechanism.phrases}
+              onChange={next => onChange({ ...draft, mechanism: { ...draft.mechanism, phrases: next } })}
+              placeholder="e.g. lumbar flexion"
+              dataTestid="chips-phenotype-mechanism"
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[10.5px] uppercase tracking-wide text-slate-400">Aggravating factors</label>
+              <label className="flex items-center gap-1 text-[10px] text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={draft.aggravatingFactors.soft}
+                  onChange={e => onChange({ ...draft, aggravatingFactors: { ...draft.aggravatingFactors, soft: e.target.checked } })}
+                  className="h-3 w-3 accent-violet-500"
+                  data-testid="checkbox-phenotype-aggravators-soft"
+                />
+                Soft (drop first)
+              </label>
+            </div>
+            <ChipListEditor
+              values={draft.aggravatingFactors.phrases}
+              onChange={next => onChange({ ...draft, aggravatingFactors: { ...draft.aggravatingFactors, phrases: next } })}
+              placeholder="e.g. stair climbing"
+              dataTestid="chips-phenotype-aggravators"
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[10.5px] uppercase tracking-wide text-slate-400">Pain type</label>
+              <label className="flex items-center gap-1 text-[10px] text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={draft.painTypeSoft !== false}
+                  onChange={e => onChange({ ...draft, painTypeSoft: e.target.checked })}
+                  className="h-3 w-3 accent-violet-500"
+                  data-testid="checkbox-phenotype-paintype-soft"
+                />
+                Soft (drop first)
+              </label>
+            </div>
+            <Input
+              value={draft.painType ?? ""}
+              onChange={e => onChange({ ...draft, painType: e.target.value || null })}
+              placeholder="e.g. mechanical, neuropathic"
+              className="h-7 text-[11px] bg-slate-950/60 border-slate-700/60 text-slate-100"
+              data-testid="input-phenotype-paintype"
+            />
+          </div>
+          <p className="text-[10px] text-slate-500 leading-snug">
+            "Re-run with my edits" submits this exact phenotype to the search engine — the AI translation step is bypassed and your wording is used directly.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Render the synthesized markdown answer with clickable [N] citation
  *  chips. We do a minimal markdown pass — bold, italic, headers,
@@ -187,7 +554,15 @@ export function CaseResearchPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
   const [showHowSearched, setShowHowSearched] = useState(false);
+  // Tracks which tier row in "How we searched" has its per-source
+  // queries panel expanded. Only one open at a time keeps the panel
+  // compact.
+  const [expandedTier, setExpandedTier] = useState<number | null>(null);
   const [highlightedCitation, setHighlightedCitation] = useState<number | null>(null);
+  // Phenotype editor (inline, no modal). `editingPhenotype` is the
+  // working copy being mutated by the chip editors; null means "not
+  // editing". Re-runs use this draft, then close on success.
+  const [editingPhenotype, setEditingPhenotype] = useState<SearchablePhenotype | null>(null);
   // User-controlled body height (px). Hydrated from localStorage on first
   // render so the chosen size persists across reloads. The browser's
   // native CSS `resize-y` handle on the body element does the actual
@@ -255,17 +630,20 @@ export function CaseResearchPanel({
   });
 
   const runMutation = useMutation({
-    mutationFn: async (opts: { refresh: boolean }) => {
+    mutationFn: async (opts: { refresh: boolean; phenotypeOverride?: SearchablePhenotype }) => {
       if (!caseId || !condition || !contentHash) throw new Error("Case is not ready for search");
       return await apiRequest(`/api/case-research/${encodeURIComponent(caseId)}`, 'POST', {
         caseSummary,
         condition,
         contentHash,
         refresh: opts.refresh,
+        phenotypeOverride: opts.phenotypeOverride,
       }) as CaseResearchSynthesis & { cached?: boolean };
     },
     onSuccess: (data) => {
       qc.setQueryData(queryKey, data);
+      // Re-run with edits succeeded — close the editor.
+      setEditingPhenotype(null);
     },
     onError: (e: unknown) => {
       const msg = e instanceof Error ? e.message : 'Search failed';
@@ -281,6 +659,23 @@ export function CaseResearchPanel({
   const trigger = useCallback((refresh: boolean) => {
     runMutation.mutate({ refresh });
   }, [runMutation]);
+
+  const triggerWithEdits = useCallback((edits: SearchablePhenotype) => {
+    runMutation.mutate({ refresh: true, phenotypeOverride: edits });
+  }, [runMutation]);
+
+  // Display phenotype = either the cached one (preferred) or a derived
+  // fallback for old rows. Null when there's no cached row at all.
+  const displayPhenotype: SearchablePhenotype | null = useMemo(() => {
+    if (!cached) return null;
+    return (cached.phenotype as SearchablePhenotype | null) ?? deriveFallbackPhenotype(cached.condition || condition);
+  }, [cached, condition]);
+
+  const startEditing = useCallback(() => {
+    if (!displayPhenotype) return;
+    setEditingPhenotype(JSON.parse(JSON.stringify(displayPhenotype)) as SearchablePhenotype);
+  }, [displayPhenotype]);
+  const cancelEditing = useCallback(() => setEditingPhenotype(null), []);
 
   // When the cache is fresh-for-this-case and we have data, do nothing.
   // We never auto-fire the engine — the clinician explicitly clicks to
@@ -371,7 +766,7 @@ export function CaseResearchPanel({
           {enabled && !hasResult && !isRunning && (
             <div className="space-y-2">
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Find evidence tailored to <span className="text-slate-200 font-medium">{condition || 'this case'}</span> — the AI infers which variables make this patient different (comorbidities, mechanism, timing) and runs tiered queries that drop modifiers only when needed.
+                Find evidence tailored to <span className="text-slate-200 font-medium">{condition || 'this case'}</span> — the AI translates the case into canonical biomedical phrasing, expands each modifier with synonyms, and broadens the seed (e.g. "mechanical low back pain" → "low back pain") before dropping modifiers that actually matter.
               </p>
               <Button
                 type="button"
@@ -396,6 +791,39 @@ export function CaseResearchPanel({
 
           {hasResult && cached && (
             <div className="space-y-3">
+              {/* "Interpreted your case as…" — appears at the very top
+                  so the clinician can sanity-check the search before
+                  reading the answer. */}
+              {displayPhenotype && (
+                <PhenotypeBlock
+                  phenotype={displayPhenotype}
+                  editing={editingPhenotype}
+                  onStartEdit={startEditing}
+                  onCancelEdit={cancelEditing}
+                  onChange={setEditingPhenotype}
+                  onApply={triggerWithEdits}
+                  isRunning={isRunning}
+                />
+              )}
+
+              {/* Seed broadenings audit chip — the engine will set
+                  this when it had to swap "mechanical low back pain"
+                  → "low back pain" etc. to find evidence. */}
+              {(cached.seedBroadenings ?? []).length > 0 && (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-100 px-2 py-1.5 text-[11px] leading-snug flex items-start gap-1.5" data-testid="banner-case-research-seed-broadenings">
+                  <Sparkles className="h-3 w-3 mt-[1px] shrink-0" />
+                  <span>
+                    Seed broadened to find evidence:{' '}
+                    {(cached.seedBroadenings ?? []).map((b, i) => (
+                      <span key={i} className="font-semibold">
+                        {i === 0 ? `"${b.from}"` : ''} → "{b.to}"
+                      </span>
+                    ))}
+                    .
+                  </span>
+                </div>
+              )}
+
               {/* Dedicated no-evidence empty state */}
               {cached.retrievedPapers.length === 0 && (
                 <div
@@ -405,7 +833,14 @@ export function CaseResearchPanel({
                   <Info className="h-3.5 w-3.5 mt-[1px] shrink-0" />
                   <span>
                     <span className="font-semibold">No evidence found.</span>{' '}
-                    All {cached.queriesRan.length} query tier{cached.queriesRan.length === 1 ? '' : 's'} returned zero usable papers across PubMed, OpenAlex, and Europe PMC. The synthesis below is fully extrapolated from the case context — treat as low-confidence reasoning, not literature-supported.
+                    All {cached.queriesRan.length} query tier{cached.queriesRan.length === 1 ? '' : 's'} returned zero usable papers across PubMed, OpenAlex, and Europe PMC
+                    {(cached.seedBroadenings ?? []).length > 0
+                      ? ', even after broadening the seed'
+                      : ''}
+                    {cached.droppedVariables.length > 0
+                      ? ` and dropping ${cached.droppedVariables.length} modifier${cached.droppedVariables.length === 1 ? '' : 's'}`
+                      : ''}
+                    . Try <button type="button" className="underline text-rose-200 hover:text-rose-100" onClick={startEditing}>editing the interpreted case</button> above (broaden the canonical condition or add synonyms), then re-run.
                   </span>
                 </div>
               )}
@@ -495,13 +930,25 @@ export function CaseResearchPanel({
                   <ol className="px-2 pb-2 space-y-1.5" data-testid="list-case-research-tiers">
                     {cached.queriesRan.map((t, i) => {
                       const isWinning = i === cached.queriesRan.length - 1;
+                      const isBroaden = t.kind === 'broaden-seed';
+                      const isExpanded = expandedTier === i;
+                      // Per-source queries — only show distinct ones
+                      // (PubMed often differs from OpenAlex via [tiab]).
+                      const sourceQueries: Array<[string, string | undefined]> = Object.entries(t.sources)
+                        .map(([s, info]) => [s, info.query] as [string, string | undefined]);
+                      const distinctSourceQueries = sourceQueries.filter(([, q]) => q && q !== t.query);
                       return (
                         <li
                           key={i}
                           className={cn(
                             "rounded border px-2 py-1.5 text-[10.5px] leading-snug",
-                            isWinning ? "border-emerald-500/40 bg-emerald-950/20" : "border-slate-700/50 bg-slate-950/40",
+                            isWinning
+                              ? "border-emerald-500/40 bg-emerald-950/20"
+                              : isBroaden
+                                ? "border-amber-500/40 bg-amber-950/20"
+                                : "border-slate-700/50 bg-slate-950/40",
                           )}
+                          data-testid={`tier-row-${i}`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-slate-200 font-semibold">
@@ -510,7 +957,7 @@ export function CaseResearchPanel({
                             <span className="text-[10px] text-slate-500 shrink-0">{t.paperCount} hits</span>
                           </div>
                           <code className="block text-[10px] text-violet-200 break-all my-1">{t.query}</code>
-                          <div className="flex flex-wrap gap-1 text-[10px] text-slate-400">
+                          <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
                             {Object.entries(t.sources).map(([s, info]) => (
                               <span
                                 key={s}
@@ -523,7 +970,42 @@ export function CaseResearchPanel({
                                 {SOURCE_LABEL[s] ?? s}: {info.ok ? info.count : 'fail'}
                               </span>
                             ))}
+                            {/* Toggle: show per-source query strings.
+                                Only render the toggle when there's
+                                actually something to reveal (i.e. at
+                                least one source serializes the query
+                                differently from the default bag). */}
+                            {distinctSourceQueries.length > 0 && (
+                              <button
+                                type="button"
+                                className="ml-auto text-[10px] text-violet-300 hover:text-violet-100 underline-offset-2 hover:underline"
+                                onClick={() => setExpandedTier(isExpanded ? null : i)}
+                                data-testid={`button-tier-expand-${i}`}
+                              >
+                                {isExpanded ? 'Hide per-source queries' : 'Show per-source queries'}
+                              </button>
+                            )}
                           </div>
+                          {isExpanded && (
+                            <div className="mt-1.5 space-y-1 border-t border-slate-700/40 pt-1.5" data-testid={`tier-source-queries-${i}`}>
+                              {Object.entries(t.sources).map(([s, info]) => (
+                                <div key={s} className="text-[10px]">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="text-slate-300 font-semibold">{SOURCE_LABEL[s] ?? s}</span>
+                                    <span className={cn(
+                                      "text-[9.5px]",
+                                      info.ok ? "text-slate-500" : "text-rose-300",
+                                    )}>
+                                      {info.ok ? `${info.count} result${info.count === 1 ? '' : 's'}` : `error: ${info.error || 'failed'}`}
+                                    </span>
+                                  </div>
+                                  <code className="block text-[10px] text-violet-200 break-all bg-slate-950/60 rounded px-1 py-0.5 mt-0.5" data-testid={`tier-source-query-${i}-${s}`}>
+                                    {info.query || '(none — source skipped)'}
+                                  </code>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           {isWinning && (
                             <div className="text-[10px] text-emerald-300 mt-0.5">Winning tier (used for synthesis)</div>
                           )}

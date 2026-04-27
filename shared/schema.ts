@@ -5966,11 +5966,27 @@ export const caseResearchSyntheses = pgTable("case_research_syntheses", {
   // explainability so the clinician can see what the AI was reasoning
   // over.
   caseSummary: text("case_summary").notNull(),
+  // AI-translated structured search phenotype derived from the raw
+  // condition + case summary. Captures the canonical biomedical
+  // wording, region, laterality, mechanism, aggravating factors and
+  // pain type. Persisted so the UI can display it ("Interpreted your
+  // case as…") and so the clinician can edit and re-run with their
+  // own version. Optional for backwards compatibility with rows
+  // written before Task #286 — the UI generates a sensible default.
+  phenotype: jsonb("phenotype").$type<{
+    canonicalCondition: { primary: string; synonyms: string[] };
+    region: string | null;
+    laterality: 'left' | 'right' | 'bilateral' | 'unspecified' | null;
+    mechanism: { phrases: string[]; soft: boolean };
+    aggravatingFactors: { phrases: string[]; soft: boolean };
+    painType: string | null;
+  }>(),
   // AI-inferred discriminating variables, ranked by importance.
   inferredVariables: jsonb("inferred_variables").$type<Array<{
     label: string;
     value: string;
     importance: number;     // 1 = most important, drops last
+    dropFirstIfNeeded?: boolean;
     queryTerms: string[];   // terms to AND into the search
     rationale: string;
   }>>().notNull(),
@@ -5982,9 +5998,19 @@ export const caseResearchSyntheses = pgTable("case_research_syntheses", {
     label: string;
     query: string;
     droppedVariables: string[];
-    sources: Record<string, { count: number; ok: boolean; error?: string }>;
+    sources: Record<string, { count: number; ok: boolean; error?: string; query?: string }>;
     paperCount: number;
+    seedUsed?: string;
+    kind?: 'full' | 'drop-soft' | 'broaden-seed' | 'drop-hard' | 'condition-only';
   }>>().notNull(),
+  // Audit of every "broaden the seed" swap the engine tried during
+  // the ladder run. Mirrored from queriesRan for fast UI rendering.
+  // Empty array if the engine never had to broaden.
+  seedBroadenings: jsonb("seed_broadenings").$type<Array<{
+    tier: number;
+    from: string;
+    to: string;
+  }>>(),
   // De-duplicated, ranked papers actually used in synthesis.
   retrievedPapers: jsonb("retrieved_papers").$type<Array<{
     citationNumber: number;     // 1-indexed; matches inline [N] in answer
@@ -6024,17 +6050,53 @@ export const insertCaseResearchSynthesisSchema = createInsertSchema(caseResearch
 export type InsertCaseResearchSynthesis = z.infer<typeof insertCaseResearchSynthesisSchema>;
 export type CaseResearchSynthesis = typeof caseResearchSyntheses.$inferSelect;
 
+/** Shape of the structured search phenotype the engine derives from
+ *  the clinician's free-text condition + case summary. Edited inline
+ *  by the clinician via "Edit interpretation" and submitted back to
+ *  re-run the search without re-doing the AI translation. */
+export const searchablePhenotypeSchema = z.object({
+  canonicalCondition: z.object({
+    primary: z.string().min(1).max(160),
+    synonyms: z.array(z.string().min(1).max(160)).max(8).default([]),
+  }),
+  region: z.string().min(1).max(80).nullable().optional().default(null),
+  /** When true, region is treated as a soft modifier (drop first when
+   *  literature is thin). Defaults false because region is usually
+   *  central to the search (e.g. "lumbar spine" for back pain). */
+  regionSoft: z.boolean().optional().default(false),
+  laterality: z.enum(['left', 'right', 'bilateral', 'unspecified']).nullable().optional().default('unspecified'),
+  mechanism: z.object({
+    phrases: z.array(z.string().min(1).max(120)).max(8).default([]),
+    soft: z.boolean().default(false),
+  }).default({ phrases: [], soft: false }),
+  aggravatingFactors: z.object({
+    phrases: z.array(z.string().min(1).max(120)).max(8).default([]),
+    soft: z.boolean().default(true),
+  }).default({ phrases: [], soft: true }),
+  painType: z.string().min(1).max(80).nullable().optional().default(null),
+  /** Soft/hard toggle for pain type. Defaults true because pain type
+   *  ("mechanical", "neuropathic") rarely returns dense literature
+   *  when AND'd as a hard modifier. */
+  painTypeSoft: z.boolean().optional().default(true),
+});
+export type SearchablePhenotype = z.infer<typeof searchablePhenotypeSchema>;
+
 /** Body shape accepted by POST /api/case-research/:caseId. The
  *  `caseSummary` is the canonical clinical text the engine reasons
  *  over (clinician description + AI-extracted summary + patient
  *  context answers). `condition` is the parsed diagnosis used as the
  *  broadest fallback tier. `contentHash` is computed client-side from
- *  the same source material so cache hits are deterministic. */
+ *  the same source material so cache hits are deterministic.
+ *  `phenotypeOverride` (optional): when supplied (e.g. from the
+ *  clinician's "Edit interpretation" → "Re-run with my edits"), the
+ *  engine SKIPS its own AI translation step and uses the supplied
+ *  phenotype directly. */
 export const caseResearchRequestSchema = z.object({
   caseSummary: z.string().min(10).max(20000),
   condition: z.string().min(1).max(500),
   contentHash: z.string().min(1).max(128),
   refresh: z.boolean().optional(),
+  phenotypeOverride: searchablePhenotypeSchema.optional(),
 });
 export type CaseResearchRequest = z.infer<typeof caseResearchRequestSchema>;
 

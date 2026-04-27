@@ -109,3 +109,85 @@ export function normalizeDoi(d: string | null | undefined): string | null {
     .trim();
   return cleaned || null;
 }
+
+// ---- Structured query + per-source serialization -----------------
+//
+// Each tier of the engine's ladder yields a StructuredQuery — a seed
+// (canonical condition phrase + any synonyms to OR for that tier) plus
+// a list of AND'd OR-groups (one per discriminating variable). The
+// adapters then format this object into the dialect their API likes
+// best, instead of all sources receiving the same generic boolean
+// string.
+// ------------------------------------------------------------------
+
+export interface StructuredQuery {
+  /** Phrases that form the OR'd seed group (canonical condition +
+   *  optional broader synonyms). For most tiers this is a single
+   *  phrase. */
+  seedPhrases: string[];
+  /** AND'd OR-groups. Each entry's phrases are OR'd together; groups
+   *  are joined with AND. */
+  groups: Array<{ label: string; phrases: string[] }>;
+}
+
+function quotePhrase(p: string): string {
+  const t = p.trim().replace(/"/g, '');
+  if (!t) return '';
+  return /\s/.test(t) ? `"${t}"` : t;
+}
+
+/** PubMed: full boolean, with `[tiab]` field qualifier on every leaf
+ *  phrase so we search title/abstract instead of all fields (which
+ *  matches free-text and pulls in noise). */
+export function serializeForPubMed(q: StructuredQuery): string {
+  const seedGroup = q.seedPhrases
+    .map(quotePhrase)
+    .filter(Boolean)
+    .map(p => `${p}[tiab]`);
+  const groups: string[] = [];
+  if (seedGroup.length > 0) {
+    groups.push(seedGroup.length === 1 ? seedGroup[0] : `(${seedGroup.join(' OR ')})`);
+  }
+  for (const g of q.groups) {
+    const ors = g.phrases.map(quotePhrase).filter(Boolean).map(p => `${p}[tiab]`);
+    if (ors.length === 0) continue;
+    groups.push(ors.length === 1 ? ors[0] : `(${ors.join(' OR ')})`);
+  }
+  return groups.join(' AND ');
+}
+
+/** Europe PMC: boolean form similar to PubMed but without field
+ *  qualifiers (Europe PMC's relevance ranker handles title/abstract
+ *  weighting itself). Quoted phrases are preserved as exact-match. */
+export function serializeForEuropePmc(q: StructuredQuery): string {
+  const seedGroup = q.seedPhrases.map(quotePhrase).filter(Boolean);
+  const groups: string[] = [];
+  if (seedGroup.length > 0) {
+    groups.push(seedGroup.length === 1 ? seedGroup[0] : `(${seedGroup.join(' OR ')})`);
+  }
+  for (const g of q.groups) {
+    const ors = g.phrases.map(quotePhrase).filter(Boolean);
+    if (ors.length === 0) continue;
+    groups.push(ors.length === 1 ? ors[0] : `(${ors.join(' OR ')})`);
+  }
+  return groups.join(' AND ');
+}
+
+/** OpenAlex (and any other relevance-only source): bag-of-phrases.
+ *  Boolean operators degrade OpenAlex relevance ranking, so we just
+ *  hand it the phrases (quoted to preserve multi-word units) and let
+ *  its TF-IDF do the work. Truncated to 250 chars to stay under the
+ *  search field's effective length. */
+export function serializeForBag(q: StructuredQuery): string {
+  const phrases: string[] = [];
+  for (const p of q.seedPhrases) {
+    const qp = quotePhrase(p); if (qp) phrases.push(qp);
+  }
+  for (const g of q.groups) {
+    for (const p of g.phrases) {
+      const qp = quotePhrase(p); if (qp) phrases.push(qp);
+    }
+  }
+  const joined = Array.from(new Set(phrases)).join(' ');
+  return joined.length > 250 ? joined.slice(0, 250).trim() : joined;
+}

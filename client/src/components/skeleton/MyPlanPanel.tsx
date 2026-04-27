@@ -158,7 +158,7 @@ export default function MyPlanPanel() {
           <ConflictList conflicts={orchestrated.conflicts} />
           <SessionOrderStrip steps={orchestrated.sessionOrder} items={items} />
           <FrequencyList frequencies={orchestrated.frequencies} items={items} />
-          <WeeklyScheduleGrid schedule={orchestrated.weeklySchedule} items={items} totalWeeks={orchestrated.totalDurationWeeks} frequencies={orchestrated.frequencies} phases={orchestrated.phases} />
+          <WeeklyScheduleGrid schedule={orchestrated.weeklySchedule} items={items} totalWeeks={orchestrated.totalDurationWeeks} frequencies={orchestrated.frequencies} phases={orchestrated.phases} meta={orchestrated.weeklyScheduleMeta} />
           <PhaseCards phases={orchestrated.phases} items={items} />
           <RecoveryTimeline milestones={orchestrated.timeline} totalWeeks={orchestrated.totalDurationWeeks} />
         </div>

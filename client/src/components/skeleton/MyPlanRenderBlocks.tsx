@@ -81,6 +81,10 @@ export interface OrchestratedPlanResult {
   sessionOrder: OrchestratedSessionStep[];
   frequencies: OrchestratedFrequency[];
   weeklySchedule: OrchestratedScheduleCell[];
+  /** Sibling metadata reported by the server when it expanded
+   *  weeklySchedule via forward replication. Keyed by weekIndex
+   *  (as a string). Cell shape itself stays unchanged. */
+  weeklyScheduleMeta?: Record<string, { derivedFromWeek: number }>;
   phases: OrchestratedPhase[];
   timeline: OrchestratedTimelineMilestone[];
   conflicts: OrchestratedConflict[];
@@ -303,12 +307,19 @@ export function WeeklyScheduleGrid({
   totalWeeks,
   frequencies,
   phases,
+  meta,
 }: {
   schedule: OrchestratedScheduleCell[];
   items: PlanCartItem[];
   totalWeeks: number;
   frequencies: OrchestratedFrequency[];
   phases?: OrchestratedPhase[];
+  /** Optional sibling map from the orchestrator response telling the
+   *  client which weeks the server expanded via forward replication
+   *  and from which source week. Used to render "Repeats W{n}" hints
+   *  for server-derived weeks (so the UX still works after the server
+   *  pre-fills missing weeks). */
+  meta?: Record<string, { derivedFromWeek: number }>;
 }) {
   const [activeWeek, setActiveWeek] = useState(0);
 
@@ -387,16 +398,18 @@ export function WeeklyScheduleGrid({
   };
 
   // ---- Build the display schedule + per-week source map ----
-  // Strategy:
-  //  1. If a week has native cells, keep them and mark 'native'.
+  // Strategy (in order of precedence):
+  //  1. If a week has native cells, keep them and mark 'native'. If the
+  //     server reported derivation metadata for this week (it expanded
+  //     the schedule itself), mark 'repeat' with from = that source.
   //  2. Else if a prior populated week exists, replicate it forward
   //     (mark 'repeat' with from = lastSource).
-  //  3. Else if a later populated week exists, replicate IT backward
-  //     to fill leading gaps (mark 'repeat' with from = firstPopulated).
-  //  4. Else if synthCanonicalWeek has cells, synthesise from frequencies
-  //     (mark 'synth').
-  //  5. Else leave the week empty (final fallback only when there is
-  //     literally no data anywhere).
+  //  3. Else if a later populated week exists, replicate it backward
+  //     to fill LEADING GAPS (mark 'repeat' with from = firstPopulated).
+  //  4. Else if synthCanonicalWeek has cells, synthesise from
+  //     frequencies (mark 'synth').
+  //  5. Else leave the week empty (only when there is literally no
+  //     data anywhere).
   const display: OrchestratedScheduleCell[] = [];
   const weekSource = new Map<number, WeekSource>();
   let lastSourceWeek = -1;
@@ -404,7 +417,15 @@ export function WeeklyScheduleGrid({
     const native = nativeByWeek.get(w);
     if (native && native.length > 0) {
       display.push(...native);
-      weekSource.set(w, { kind: "native" });
+      const serverDerived = meta?.[String(w)]?.derivedFromWeek;
+      // Server-side expansion produced these cells: surface the same
+      // "Repeats W{n}" UX rather than treating them as native AI output.
+      weekSource.set(
+        w,
+        serverDerived !== undefined && serverDerived !== w
+          ? { kind: "repeat", from: serverDerived }
+          : { kind: "native" },
+      );
       lastSourceWeek = w;
       continue;
     }
@@ -414,7 +435,7 @@ export function WeeklyScheduleGrid({
       weekSource.set(w, { kind: "repeat", from: lastSourceWeek });
       continue;
     }
-    // Backward seeding from the first future populated week.
+    // Backward seeding from the first future populated week (leading gap).
     if (firstPopulatedWeek > w) {
       display.push(...replicate(nativeByWeek.get(firstPopulatedWeek)!, w));
       weekSource.set(w, { kind: "repeat", from: firstPopulatedWeek });
@@ -487,13 +508,22 @@ export function WeeklyScheduleGrid({
             const native = src?.kind === "native";
             const phase = phaseAtWeek(w);
             const stripe = phase ? PHASE_TAB_COLORS[phase.colorIdx] : "bg-white/10";
+            // Type-safe tooltip text: narrow `src.kind` explicitly rather
+            // than reaching into the union with a cast.
+            const sourceLabel: string = src?.kind === "repeat"
+              ? `Repeats W${src.from + 1}`
+              : src?.kind === "synth"
+                ? "Synthesised from frequencies"
+                : "";
+            const phaseLabel = phase ? `Phase: ${phase.name}` : "";
+            const titleText = [phaseLabel, sourceLabel].filter(Boolean).join(" · ");
             return (
               <button
                 key={w}
                 onClick={() => setActiveWeek(w)}
                 className={`relative text-[9px] px-1.5 py-0.5 rounded transition-colors inline-flex items-center gap-0.5 ${activeWeek === w ? "bg-sky-500/30 text-sky-200" : "text-gray-400 hover:text-gray-200"}`}
                 data-testid={`button-week-${w + 1}`}
-                title={`${phase ? `Phase: ${phase.name}` : ""}${!native ? `${phase ? " · " : ""}${src?.kind === "synth" ? "Synthesised from frequencies" : `Repeats W${(src as any)?.from + 1 ?? ""}`}` : ""}`}
+                title={titleText}
               >
                 <span>W{w + 1}</span>
                 {!native && src && (

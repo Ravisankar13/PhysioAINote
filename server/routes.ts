@@ -24035,16 +24035,83 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
       }
 
       const validIds = new Set(items.map(i => i.id));
+      const filteredPhases = planParse.data.phases.map(p => ({ ...p, itemIds: p.itemIds.filter(id => validIds.has(id)) }));
+      const filteredSchedule = planParse.data.weeklySchedule
+        .map(c => ({ ...c, itemIds: c.itemIds.filter(id => validIds.has(id)) }))
+        .filter(c => c.itemIds.length > 0);
+
+      // ---- Server-side weeklySchedule safety net (forward replication) ----
+      // When the AI under-emits and only populates a few weeks (often only
+      // week 0), replicate the most recent populated week's day pattern
+      // forward into each missing week so every week index in
+      // [0, totalDurationWeeks) has cells. When the missing week falls
+      // inside a different phase from the source week, swap the itemIds
+      // for items belonging to the active phase.
+      // Cell shape stays {weekIndex, dayOfWeek, itemIds, label}; the
+      // derivation source is reported in a sibling weeklyScheduleMeta
+      // field on the response (not on the cell).
+      const totalWeeks = Math.max(1, planParse.data.totalDurationWeeks);
+      const parsePhaseWeeks = (s: string): number => {
+        const m = String(s || '').match(/(\d+)/);
+        return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+      };
+      const phaseRanges: Array<{ id: string; start: number; end: number; itemIds: string[] }> = [];
+      {
+        let cursor = 0;
+        for (const p of filteredPhases) {
+          const len = parsePhaseWeeks(p.durationWeeks);
+          phaseRanges.push({ id: p.id, start: cursor, end: Math.min(totalWeeks - 1, cursor + len - 1), itemIds: p.itemIds });
+          cursor += len;
+        }
+      }
+      const phaseAtWeek = (w: number) => phaseRanges.find(r => w >= r.start && w <= r.end);
+      const cellsByWeek = new Map<number, typeof filteredSchedule>();
+      for (const c of filteredSchedule) {
+        if (!cellsByWeek.has(c.weekIndex)) cellsByWeek.set(c.weekIndex, []);
+        cellsByWeek.get(c.weekIndex)!.push(c);
+      }
+      const expandedSchedule: typeof filteredSchedule = [];
+      const weeklyScheduleMeta: Record<string, { derivedFromWeek: number }> = {};
+      let lastSourceWeek = -1;
+      for (let w = 0; w < totalWeeks; w++) {
+        const native = cellsByWeek.get(w);
+        if (native && native.length > 0) {
+          expandedSchedule.push(...native);
+          lastSourceWeek = w;
+          continue;
+        }
+        if (lastSourceWeek < 0) continue; // leading gap — handled client-side
+        const sourceCells = cellsByWeek.get(lastSourceWeek)!;
+        const tphase = phaseAtWeek(w);
+        const sphase = phaseAtWeek(lastSourceWeek);
+        const swap = tphase && sphase && tphase.id !== sphase.id && tphase.itemIds.length > 0;
+        let added = false;
+        for (const sc of sourceCells) {
+          const ids = swap
+            ? (() => {
+                const kept = sc.itemIds.filter(id => tphase!.itemIds.includes(id));
+                const need = Math.max(0, sc.itemIds.length - kept.length);
+                const filler = tphase!.itemIds.filter(id => !sc.itemIds.includes(id)).slice(0, need);
+                return [...kept, ...filler];
+              })()
+            : sc.itemIds;
+          if (ids.length === 0) continue;
+          expandedSchedule.push({ weekIndex: w, dayOfWeek: sc.dayOfWeek, itemIds: ids, label: sc.label });
+          added = true;
+        }
+        if (added) weeklyScheduleMeta[String(w)] = { derivedFromWeek: lastSourceWeek };
+      }
+
       const filtered = {
         ...planParse.data,
         sessionOrder: planParse.data.sessionOrder.filter(s => validIds.has(s.itemId)),
         frequencies: planParse.data.frequencies.filter(f => validIds.has(f.itemId)),
-        weeklySchedule: planParse.data.weeklySchedule.map(c => ({ ...c, itemIds: c.itemIds.filter(id => validIds.has(id)) })).filter(c => c.itemIds.length > 0),
-        phases: planParse.data.phases.map(p => ({ ...p, itemIds: p.itemIds.filter(id => validIds.has(id)) })),
+        weeklySchedule: expandedSchedule,
+        phases: filteredPhases,
         conflicts: planParse.data.conflicts.map(c => ({ ...c, involvedItemIds: c.involvedItemIds.filter(id => validIds.has(id)) })),
       };
 
-      res.json({ ...filtered, generatedAt: new Date().toISOString() });
+      res.json({ ...filtered, weeklyScheduleMeta, generatedAt: new Date().toISOString() });
     } catch (err) {
       console.error('[treatment-plan/orchestrate] error:', err);
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to orchestrate plan' });

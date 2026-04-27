@@ -253,6 +253,33 @@ function buildDrivers(
     });
   }
 
+  // Patient factors / constraints (yellow / red flags, modifiers).
+  const factorLabels: string[] = [];
+  if (Array.isArray(ctx.patientFactors)) {
+    for (const f of ctx.patientFactors) {
+      if (typeof f === "string" && f.trim()) factorLabels.push(f.trim());
+    }
+  } else if (ctx.patientFactors && typeof ctx.patientFactors === "object") {
+    for (const [k, v] of Object.entries(ctx.patientFactors as Record<string, unknown>)) {
+      if (v === true) factorLabels.push(k);
+      else if (typeof v === "string" && v.trim()) factorLabels.push(`${k}: ${v.trim()}`);
+      else if (typeof v === "number") factorLabels.push(`${k}: ${v}`);
+    }
+  }
+  for (const c of ctx.constraints || []) {
+    if (typeof c === "string" && c.trim()) factorLabels.push(c.trim());
+  }
+  if (factorLabels.length > 0) {
+    drivers.push({
+      label: "Patient factors / constraints",
+      detail: factorLabels.slice(0, 6).join("; "),
+      kind: "other",
+      addressedItemIds: findItemsMatching(items, factorLabels.concat([
+        "education", "pacing", "self-manage", "load manage", "brace", "ergonom", "sleep", "lifestyle",
+      ])),
+    });
+  }
+
   // Natural progression risk.
   const np = ctx.naturalProgression;
   if (np && ((np.chronicityRiskPercent ?? 0) >= 30 || (np.recurrenceRiskPercent ?? 0) >= 30)) {
@@ -311,11 +338,17 @@ function buildOrderingRationale(
   sessionOrder?: OrchestratedSessionStep[],
 ): string {
   if (sessionOrder && sessionOrder.length > 0) {
-    const seq = sessionOrder
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map(s => `${s.order}) ${s.itemName}`)
-      .join(" → ");
+    const sorted = sessionOrder.slice().sort((a, b) => a.order - b.order);
+    const seq = sorted.map(s => `${s.order}) ${s.itemName}`).join(" → ");
+    // Stitch the per-step rationales (when the orchestrator provided them)
+    // into the ordering narrative, so the rationale reflects the AI's own
+    // sequencing reasons rather than a generic ladder.
+    const stepReasons = sorted
+      .filter(s => typeof s.rationale === "string" && s.rationale.trim().length > 0)
+      .map(s => `${s.order}) ${s.rationale!.trim().replace(/\s+/g, " ")}`);
+    if (stepReasons.length > 0) {
+      return `Ordered ${seq}. ${stepReasons.join(" ")}`;
+    }
     return `Ordered ${seq}. The sequence follows standard physio principles: pain/inflammation modulation first, manual therapy that opens range next, then activation and motor control, then loading, with cool-down and self-management last.`;
   }
 

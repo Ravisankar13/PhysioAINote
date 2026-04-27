@@ -49,11 +49,6 @@ export interface OrchestratedScheduleCell {
   dayOfWeek: number;
   itemIds: string[];
   label?: string;
-  /** When set, this cell was synthesised by replicating the cells from the
-   *  given source week (because the orchestrator did not emit a native cell
-   *  for this week). Used by the UI to show a "Repeats W{n}" hint and a
-   *  small ↻ glyph on the corresponding week tab. */
-  derivedFromWeek?: number;
 }
 
 export interface OrchestratedPhase {
@@ -274,10 +269,33 @@ const PHASE_TAB_COLORS = [
   "bg-emerald-400/70",
 ];
 
+/** Day-of-week patterns used to distribute N sessions per week evenly when
+ *  synthesising cells from frequencies (no schedule emitted by the AI). */
+const DAY_PATTERNS: Record<number, number[]> = {
+  1: [2],                       // Wed
+  2: [0, 3],                    // Mon, Thu
+  3: [0, 2, 4],                 // Mon, Wed, Fri
+  4: [0, 1, 3, 5],              // Mon, Tue, Thu, Sat
+  5: [0, 1, 2, 3, 4],           // Mon-Fri
+  6: [0, 1, 2, 3, 4, 5],        // Mon-Sat
+  7: [0, 1, 2, 3, 4, 5, 6],     // Every day
+};
+
 function parsePhaseWeeksClient(s: string): number {
   const m = String(s || "").match(/(\d+)/);
   return m ? Math.max(1, parseInt(m[1], 10)) : 1;
 }
+
+/** Local UI-only marker explaining why a derived week's cells exist:
+ *  - { kind: 'native' }   → cells came directly from the orchestrator
+ *  - { kind: 'repeat', from } → replicated from week index `from`
+ *  - { kind: 'synth' }    → synthesised from the frequencies array
+ *                            because no schedule was emitted at all
+ */
+type WeekSource =
+  | { kind: "native" }
+  | { kind: "repeat"; from: number }
+  | { kind: "synth" };
 
 export function WeeklyScheduleGrid({
   schedule,
@@ -293,10 +311,10 @@ export function WeeklyScheduleGrid({
   phases?: OrchestratedPhase[];
 }) {
   const [activeWeek, setActiveWeek] = useState(0);
-  if (schedule.length === 0) return null;
+
   const itemMap = new Map(items.map(i => [i.id, i]));
   const freqMap = new Map(frequencies.map(f => [f.itemId, f]));
-  const weeks = Array.from({ length: Math.max(1, totalWeeks) }, (_, i) => i);
+  const weeks = Array.from({ length: Math.max(1, totalWeeks || 1) }, (_, i) => i);
 
   // Phase ranges (start/end weekIndex, inclusive) used to colour-code tabs
   // and to swap items when synthesising cells across phase boundaries.
@@ -307,7 +325,7 @@ export function WeeklyScheduleGrid({
     phases.forEach((p, idx) => {
       const len = parsePhaseWeeksClient(p.durationWeeks);
       const start = cursor;
-      const end = Math.min((totalWeeks || 1) - 1, cursor + len - 1);
+      const end = Math.min(weeks.length - 1, cursor + len - 1);
       out.push({ id: p.id, name: p.name, start, end, itemIds: p.itemIds, colorIdx: idx % PHASE_TAB_COLORS.length });
       cursor += len;
     });
@@ -315,63 +333,118 @@ export function WeeklyScheduleGrid({
   })();
   const phaseAtWeek = (w: number) => phaseRanges.find(r => w >= r.start && w <= r.end);
 
-  // Defensive fallback expansion: even if the server returns sparse data
-  // (only week 0 cells, for example), fill every week from 0..totalWeeks-1
-  // by replicating the most recent populated week's day pattern. When the
-  // missing week falls in a different phase from the source week, swap in
-  // the phase's items so the cells reflect the active phase.
+  // Build the canonical-week pattern from the frequencies array. Used both
+  // for the synthesis fallback (when the schedule is empty) and as a phase
+  // template when swapping items into a derived week that belongs to a
+  // different phase.
+  const synthCanonicalWeek: OrchestratedScheduleCell[] = (() => {
+    if (frequencies.length === 0) return [];
+    const byDay = new Map<number, string[]>();
+    for (const f of frequencies) {
+      const n = Math.max(1, Math.min(7, Math.round(f.sessionsPerWeek || 1)));
+      const days = DAY_PATTERNS[n] ?? DAY_PATTERNS[3];
+      for (const d of days) {
+        if (!byDay.has(d)) byDay.set(d, []);
+        byDay.get(d)!.push(f.itemId);
+      }
+    }
+    return Array.from(byDay.entries()).map(([day, ids]) => ({
+      weekIndex: 0,
+      dayOfWeek: day,
+      itemIds: ids,
+    }));
+  })();
+
+  // Group native cells by week.
   const nativeByWeek = new Map<number, OrchestratedScheduleCell[]>();
   for (const c of schedule) {
     if (!nativeByWeek.has(c.weekIndex)) nativeByWeek.set(c.weekIndex, []);
     nativeByWeek.get(c.weekIndex)!.push(c);
   }
-  const display: OrchestratedScheduleCell[] = [];
-  let lastSourceWeek = -1;
-  for (let w = 0; w < weeks.length; w++) {
-    const native = nativeByWeek.get(w);
-    if (native && native.length > 0) {
-      display.push(...native);
-      lastSourceWeek = w;
-      continue;
-    }
-    if (lastSourceWeek < 0) continue;
-    const sourceCells = nativeByWeek.get(lastSourceWeek)!;
-    const phase = phaseAtWeek(w);
-    const sourcePhase = phaseAtWeek(lastSourceWeek);
-    const swap = phase && sourcePhase && phase.id !== sourcePhase.id && phase.itemIds.length > 0;
+  const populatedWeeks = Array.from(nativeByWeek.keys()).sort((a, b) => a - b);
+  const firstPopulatedWeek = populatedWeeks[0] ?? -1;
+
+  // Helper to swap a source week's cells onto a target week, optionally
+  // substituting item IDs to match the target week's phase.
+  const replicate = (sourceCells: OrchestratedScheduleCell[], targetWeek: number): OrchestratedScheduleCell[] => {
+    const tphase = phaseAtWeek(targetWeek);
+    const sphase = phaseAtWeek(sourceCells[0]?.weekIndex ?? targetWeek);
+    const swap = tphase && sphase && tphase.id !== sphase.id && tphase.itemIds.length > 0;
+    const out: OrchestratedScheduleCell[] = [];
     for (const sc of sourceCells) {
       const ids = swap
         ? (() => {
-            const kept = sc.itemIds.filter(id => phase!.itemIds.includes(id));
+            const kept = sc.itemIds.filter(id => tphase!.itemIds.includes(id));
             const need = Math.max(0, sc.itemIds.length - kept.length);
-            const filler = phase!.itemIds.filter(id => !sc.itemIds.includes(id)).slice(0, need);
+            const filler = tphase!.itemIds.filter(id => !sc.itemIds.includes(id)).slice(0, need);
             return [...kept, ...filler];
           })()
         : sc.itemIds;
       if (ids.length === 0) continue;
-      display.push({
-        weekIndex: w,
-        dayOfWeek: sc.dayOfWeek,
-        itemIds: ids,
-        label: sc.label,
-        derivedFromWeek: sc.derivedFromWeek ?? lastSourceWeek,
-      });
+      out.push({ weekIndex: targetWeek, dayOfWeek: sc.dayOfWeek, itemIds: ids, label: sc.label });
+    }
+    return out;
+  };
+
+  // ---- Build the display schedule + per-week source map ----
+  // Strategy:
+  //  1. If a week has native cells, keep them and mark 'native'.
+  //  2. Else if a prior populated week exists, replicate it forward
+  //     (mark 'repeat' with from = lastSource).
+  //  3. Else if a later populated week exists, replicate IT backward
+  //     to fill leading gaps (mark 'repeat' with from = firstPopulated).
+  //  4. Else if synthCanonicalWeek has cells, synthesise from frequencies
+  //     (mark 'synth').
+  //  5. Else leave the week empty (final fallback only when there is
+  //     literally no data anywhere).
+  const display: OrchestratedScheduleCell[] = [];
+  const weekSource = new Map<number, WeekSource>();
+  let lastSourceWeek = -1;
+  for (const w of weeks) {
+    const native = nativeByWeek.get(w);
+    if (native && native.length > 0) {
+      display.push(...native);
+      weekSource.set(w, { kind: "native" });
+      lastSourceWeek = w;
+      continue;
+    }
+    // Forward replication from the most recent populated week.
+    if (lastSourceWeek >= 0) {
+      display.push(...replicate(nativeByWeek.get(lastSourceWeek)!, w));
+      weekSource.set(w, { kind: "repeat", from: lastSourceWeek });
+      continue;
+    }
+    // Backward seeding from the first future populated week.
+    if (firstPopulatedWeek > w) {
+      display.push(...replicate(nativeByWeek.get(firstPopulatedWeek)!, w));
+      weekSource.set(w, { kind: "repeat", from: firstPopulatedWeek });
+      continue;
+    }
+    // Frequency-based synthesis fallback.
+    if (synthCanonicalWeek.length > 0) {
+      const tphase = phaseAtWeek(w);
+      for (const sc of synthCanonicalWeek) {
+        const ids = tphase && tphase.itemIds.length > 0
+          ? sc.itemIds.filter(id => tphase.itemIds.includes(id))
+          : sc.itemIds;
+        if (ids.length === 0) continue;
+        display.push({ weekIndex: w, dayOfWeek: sc.dayOfWeek, itemIds: ids });
+      }
+      weekSource.set(w, { kind: "synth" });
     }
   }
 
-  // Figure out per-week native vs derived state for tab styling.
-  const weekIsNative = new Map<number, boolean>();
-  for (const w of weeks) weekIsNative.set(w, (nativeByWeek.get(w)?.length ?? 0) > 0);
+  // If there is literally nothing to show across the entire program (no
+  // schedule AND no frequencies), the section is hidden entirely — same
+  // behaviour as before for truly empty plans.
+  const hasAnyContent = display.length > 0;
+  if (!hasAnyContent) return null;
 
   const cellsByDay = (week: number) => DAY_LABELS.map((_, day) => {
     return display.find(c => c.weekIndex === week && c.dayOfWeek === day);
   });
 
-  const activeCells = cellsByDay(activeWeek);
-  const activeDerivedFrom = (() => {
-    const c = activeCells.find(cell => cell?.derivedFromWeek !== undefined);
-    return c?.derivedFromWeek;
-  })();
+  const activeSource = weekSource.get(activeWeek);
 
   return (
     <div className="rounded-lg border border-white/10 bg-black/30 p-2">
@@ -379,14 +452,24 @@ export function WeeklyScheduleGrid({
         <div className="flex items-center gap-1.5 min-w-0">
           <Calendar className="h-3 w-3 text-sky-400 shrink-0" />
           <span className="text-[9px] font-semibold text-sky-300 uppercase tracking-wider">Weekly Schedule</span>
-          {activeDerivedFrom !== undefined && (
+          {activeSource?.kind === "repeat" && (
             <span
               className="inline-flex items-center gap-0.5 text-[8px] px-1 py-0.5 rounded border border-white/10 bg-white/5 text-gray-400"
-              title={`These cells repeat the W${activeDerivedFrom + 1} pattern because no unique schedule was emitted for this week.`}
+              title={`These cells repeat the W${activeSource.from + 1} pattern because no unique schedule was emitted for this week.`}
               data-testid={`week-${activeWeek + 1}-repeats-hint`}
             >
               <RotateCcw className="h-2 w-2" />
-              Repeats W{activeDerivedFrom + 1}
+              Repeats W{activeSource.from + 1}
+            </span>
+          )}
+          {activeSource?.kind === "synth" && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[8px] px-1 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-200"
+              title="Synthesised from the per-item frequencies array — the orchestrator did not emit an explicit schedule, so cells are distributed evenly across the week."
+              data-testid={`week-${activeWeek + 1}-synth-hint`}
+            >
+              <RotateCcw className="h-2 w-2" />
+              From frequencies
             </span>
           )}
           {phaseAtWeek(activeWeek) && (
@@ -400,7 +483,8 @@ export function WeeklyScheduleGrid({
         </div>
         <div className="flex gap-0.5 shrink-0">
           {weeks.map(w => {
-            const native = weekIsNative.get(w);
+            const src = weekSource.get(w);
+            const native = src?.kind === "native";
             const phase = phaseAtWeek(w);
             const stripe = phase ? PHASE_TAB_COLORS[phase.colorIdx] : "bg-white/10";
             return (
@@ -409,10 +493,10 @@ export function WeeklyScheduleGrid({
                 onClick={() => setActiveWeek(w)}
                 className={`relative text-[9px] px-1.5 py-0.5 rounded transition-colors inline-flex items-center gap-0.5 ${activeWeek === w ? "bg-sky-500/30 text-sky-200" : "text-gray-400 hover:text-gray-200"}`}
                 data-testid={`button-week-${w + 1}`}
-                title={`${phase ? `Phase: ${phase.name}` : ""}${!native ? `${phase ? " · " : ""}Repeats prior week` : ""}`}
+                title={`${phase ? `Phase: ${phase.name}` : ""}${!native ? `${phase ? " · " : ""}${src?.kind === "synth" ? "Synthesised from frequencies" : `Repeats W${(src as any)?.from + 1 ?? ""}`}` : ""}`}
               >
                 <span>W{w + 1}</span>
-                {!native && (
+                {!native && src && (
                   <RotateCcw className="h-2 w-2 opacity-60" data-testid={`week-${w + 1}-repeat-glyph`} />
                 )}
                 <span className={`absolute left-0.5 right-0.5 bottom-0 h-[2px] rounded-full ${stripe}`} />
@@ -422,7 +506,7 @@ export function WeeklyScheduleGrid({
         </div>
       </div>
       <div className="grid grid-cols-7 gap-1">
-        {activeCells.map((cell, day) => (
+        {cellsByDay(activeWeek).map((cell, day) => (
           <div key={day} className="rounded border border-white/5 bg-white/5 p-1 min-h-[60px]">
             <div className="text-[8px] text-gray-500 font-semibold mb-0.5">{DAY_LABELS[day]}</div>
             {cell?.itemIds.map((id, i) => {

@@ -23909,11 +23909,10 @@ If there are existing notes, seamlessly integrate the new content while maintain
     notes: z.string().optional(),
   });
   const scheduleCellSchema = z.object({
-    weekIndex: z.number().int().min(0).max(51),
+    weekIndex: z.number().int().min(0).max(11),
     dayOfWeek: z.number().int().min(0).max(6),
     itemIds: z.array(z.string()),
     label: z.string().optional(),
-    derivedFromWeek: z.number().int().min(0).optional(),
   });
   const phaseSchema = z.object({
     id: z.string(),
@@ -24036,76 +24035,12 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
       }
 
       const validIds = new Set(items.map(i => i.id));
-      const filteredPhases = planParse.data.phases.map(p => ({ ...p, itemIds: p.itemIds.filter(id => validIds.has(id)) }));
-      const filteredSchedule = planParse.data.weeklySchedule
-        .map(c => ({ ...c, itemIds: c.itemIds.filter(id => validIds.has(id)) }))
-        .filter(c => c.itemIds.length > 0);
-
-      // ---- Multi-week schedule expansion (safety net) ----
-      // When the AI undercommits and only emits cells for week 0 (or some
-      // weeks are empty), replicate the most recent populated week's day
-      // pattern forward into each missing week. When the missing week falls
-      // inside a phase whose item set differs from the source week, swap the
-      // itemIds for the phase's items so the cells reflect the active phase.
-      const totalWeeks = Math.max(1, planParse.data.totalDurationWeeks);
-      const parsePhaseWeeks = (s: string): number => {
-        const m = String(s || '').match(/(\d+)/);
-        return m ? Math.max(1, parseInt(m[1], 10)) : 1;
-      };
-      const phaseRanges: Array<{ id: string; start: number; end: number; itemIds: string[] }> = [];
-      {
-        let cursor = 0;
-        for (const p of filteredPhases) {
-          const len = parsePhaseWeeks(p.durationWeeks);
-          const start = cursor;
-          const end = Math.min(totalWeeks - 1, cursor + len - 1);
-          phaseRanges.push({ id: p.id, start, end, itemIds: p.itemIds });
-          cursor += len;
-        }
-      }
-      const phaseAtWeek = (w: number) => phaseRanges.find(r => w >= r.start && w <= r.end);
-      const cellsByWeek = new Map<number, typeof filteredSchedule>();
-      for (const c of filteredSchedule) {
-        if (!cellsByWeek.has(c.weekIndex)) cellsByWeek.set(c.weekIndex, []);
-        cellsByWeek.get(c.weekIndex)!.push(c);
-      }
-      const expandedSchedule: typeof filteredSchedule = [];
-      let lastSourceWeek = -1;
-      for (let w = 0; w < totalWeeks; w++) {
-        const native = cellsByWeek.get(w);
-        if (native && native.length > 0) {
-          expandedSchedule.push(...native);
-          lastSourceWeek = w;
-          continue;
-        }
-        if (lastSourceWeek < 0) continue; // no source yet to derive from
-        const sourceCells = cellsByWeek.get(lastSourceWeek)!;
-        const phase = phaseAtWeek(w);
-        const sourcePhase = phaseAtWeek(lastSourceWeek);
-        const phaseSwap = phase && sourcePhase && phase.id !== sourcePhase.id && phase.itemIds.length > 0;
-        for (const sc of sourceCells) {
-          const newItemIds = phaseSwap
-            ? sc.itemIds.filter(id => phase!.itemIds.includes(id)).concat(
-                phase!.itemIds.filter(id => !sc.itemIds.includes(id)).slice(0, Math.max(0, sc.itemIds.length - sc.itemIds.filter(id => phase!.itemIds.includes(id)).length)),
-              )
-            : sc.itemIds;
-          if (newItemIds.length === 0) continue;
-          expandedSchedule.push({
-            weekIndex: w,
-            dayOfWeek: sc.dayOfWeek,
-            itemIds: newItemIds,
-            label: sc.label,
-            derivedFromWeek: lastSourceWeek,
-          });
-        }
-      }
-
       const filtered = {
         ...planParse.data,
         sessionOrder: planParse.data.sessionOrder.filter(s => validIds.has(s.itemId)),
         frequencies: planParse.data.frequencies.filter(f => validIds.has(f.itemId)),
-        weeklySchedule: expandedSchedule,
-        phases: filteredPhases,
+        weeklySchedule: planParse.data.weeklySchedule.map(c => ({ ...c, itemIds: c.itemIds.filter(id => validIds.has(id)) })).filter(c => c.itemIds.length > 0),
+        phases: planParse.data.phases.map(p => ({ ...p, itemIds: p.itemIds.filter(id => validIds.has(id)) })),
         conflicts: planParse.data.conflicts.map(c => ({ ...c, involvedItemIds: c.involvedItemIds.filter(id => validIds.has(id)) })),
       };
 

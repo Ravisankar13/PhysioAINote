@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -93,6 +93,35 @@ interface AnchorRefs {
   adjunct: RefObject<HTMLSpanElement>;
 }
 
+// User-resizable card sizing — persisted across sessions.
+const SIZE_STORAGE_KEY = "physiogpt:masterPlanCardSize";
+const DEFAULT_WIDTH = 320;
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 640;
+const MIN_HEIGHT = 160;
+const MAX_HEIGHT_VH = 0.85;
+
+interface SavedCardSize { width: number; height: number | null }
+
+function loadSavedCardSize(): SavedCardSize {
+  if (typeof window === "undefined") return { width: DEFAULT_WIDTH, height: null };
+  try {
+    const raw = window.localStorage.getItem(SIZE_STORAGE_KEY);
+    if (!raw) return { width: DEFAULT_WIDTH, height: null };
+    const parsed = JSON.parse(raw) as Partial<SavedCardSize>;
+    const widthNum = typeof parsed.width === "number" ? parsed.width : DEFAULT_WIDTH;
+    const width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, widthNum));
+    let height: number | null = null;
+    if (parsed.height !== null && parsed.height !== undefined && Number.isFinite(parsed.height)) {
+      const maxH = window.innerHeight * MAX_HEIGHT_VH;
+      height = Math.min(maxH, Math.max(MIN_HEIGHT, parsed.height as number));
+    }
+    return { width, height };
+  } catch {
+    return { width: DEFAULT_WIDTH, height: null };
+  }
+}
+
 function CountChip({ pillKey, count }: { pillKey: PillKey; count: number }) {
   const meta = PILL_META[pillKey];
   const palette = CHIP_PALETTE[pillKey];
@@ -116,6 +145,82 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
 ) {
   const { items, remove, clear } = usePlanCart();
   const { orchestrated, isPending: orchestrating, error: orchestrateError, organize, reset: resetOrchestrated } = useOrchestratePlan();
+
+  // User-resizable card. Width is always explicit (so the box doesn't snap
+  // back when items are added). Height is null = auto (sized to content with
+  // an inner 60vh cap on the expanded section); once the user drags the
+  // bottom edge or corner, height becomes explicit and the inline section
+  // fills the remaining space with its own scrollbar.
+  const [size, setSize] = useState<SavedCardSize>(() => loadSavedCardSize());
+  useEffect(() => {
+    try { window.localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify(size)); } catch {}
+  }, [size]);
+
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  // Bridge the forwarded ref + our internal ref.
+  const setCardRef = useCallback((node: HTMLDivElement | null) => {
+    cardRef.current = node;
+    if (typeof ref === "function") ref(node);
+    else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+  }, [ref]);
+
+  const startResize = useCallback((axis: "x" | "y" | "xy") => (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = cardRef.current?.getBoundingClientRect().width ?? size.width;
+    const startH = cardRef.current?.getBoundingClientRect().height ?? size.height ?? MIN_HEIGHT;
+    const target = e.currentTarget;
+    try { target.setPointerCapture(e.pointerId); } catch {}
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+    const maxH = window.innerHeight * MAX_HEIGHT_VH;
+    const onMove = (ev: PointerEvent) => {
+      setSize(prev => {
+        const next: SavedCardSize = { width: prev.width, height: prev.height };
+        if (axis === "x" || axis === "xy") {
+          next.width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startW + (ev.clientX - startX)));
+        }
+        if (axis === "y" || axis === "xy") {
+          next.height = Math.min(maxH, Math.max(MIN_HEIGHT, startH + (ev.clientY - startY)));
+        }
+        return next;
+      });
+    };
+    const onUp = () => {
+      try { target.releasePointerCapture(e.pointerId); } catch {}
+      document.body.style.userSelect = prevUserSelect;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      // Nudge the convergence overlay to recompute paths in case the parent
+      // container's bounding box didn't change observably.
+      window.dispatchEvent(new Event("resize"));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }, [size]);
+
+  const resetSize = useCallback(() => {
+    setSize({ width: DEFAULT_WIDTH, height: null });
+    window.dispatchEvent(new Event("resize"));
+  }, []);
+
+  // Re-clamp height on viewport changes so the saved size stays valid.
+  useEffect(() => {
+    const onWinResize = () => {
+      setSize(prev => {
+        if (prev.height == null) return prev;
+        const maxH = window.innerHeight * MAX_HEIGHT_VH;
+        if (prev.height <= maxH) return prev;
+        return { ...prev, height: maxH };
+      });
+    };
+    window.addEventListener("resize", onWinResize);
+    return () => window.removeEventListener("resize", onWinResize);
+  }, []);
 
   const counts = {
     exercise: items.filter(i => i.modality === "exercise" || i.modality === "exercise_custom").length,
@@ -203,12 +308,18 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
         animKeys={animKeys}
       />
       <div
-        ref={ref}
-        className={`relative mt-12 w-[320px] max-w-full rounded-lg border p-2.5 transition-all ${
+        ref={setCardRef}
+        className={`relative mt-12 max-w-full rounded-lg border p-2.5 transition-colors ${
+          size.height != null ? "flex flex-col" : ""
+        } ${
           isEmpty
             ? "border-white/10 bg-black/30"
             : "border-cyan-500/40 bg-gradient-to-br from-cyan-500/10 via-black/40 to-black/40 shadow-lg shadow-cyan-900/20"
         }`}
+        style={{
+          width: `${size.width}px`,
+          ...(size.height != null ? { height: `${size.height}px` } : {}),
+        }}
         data-testid="master-plan-card"
       >
         {/* One-shot card flash overlay — re-keyed per add so the animation restarts every time. */}
@@ -309,7 +420,12 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
         </div>
 
         {expanded && canExpand && (
-          <div className="mt-2.5 pt-2.5 border-t border-white/10 space-y-2.5 max-h-[60vh] overflow-y-auto pr-1 master-plan-scroll" data-testid="master-plan-inline-section">
+          <div
+            className={`mt-2.5 pt-2.5 border-t border-white/10 space-y-2.5 overflow-y-auto pr-1 master-plan-scroll ${
+              size.height != null ? "flex-1 min-h-0" : "max-h-[60vh]"
+            }`}
+            data-testid="master-plan-inline-section"
+          >
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-300">Items in plan ({items.length})</span>
               <button
@@ -370,6 +486,40 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
 
           </div>
         )}
+
+        {/* Resize handles — right edge, bottom edge, bottom-right corner.
+            Double-click the corner to reset to the default size. */}
+        <div
+          onPointerDown={startResize("x")}
+          className="absolute top-0 right-0 h-full w-1.5 cursor-ew-resize group/resize-x"
+          style={{ touchAction: "none" }}
+          title="Drag to resize width"
+          data-testid="master-plan-resize-x"
+        >
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 h-8 w-0.5 rounded-full bg-white/10 group-hover/resize-x:bg-cyan-400/70 transition-colors" />
+        </div>
+        <div
+          onPointerDown={startResize("y")}
+          className="absolute bottom-0 left-0 w-full h-1.5 cursor-ns-resize group/resize-y"
+          style={{ touchAction: "none" }}
+          title="Drag to resize height"
+          data-testid="master-plan-resize-y"
+        >
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-white/10 group-hover/resize-y:bg-cyan-400/70 transition-colors" />
+        </div>
+        <div
+          onPointerDown={startResize("xy")}
+          onDoubleClick={resetSize}
+          className="absolute bottom-0 right-0 h-3.5 w-3.5 cursor-nwse-resize group/resize-xy"
+          style={{ touchAction: "none" }}
+          title="Drag to resize · double-click to reset"
+          data-testid="master-plan-resize-corner"
+        >
+          <svg viewBox="0 0 10 10" className="absolute bottom-0 right-0 h-2.5 w-2.5 text-white/20 group-hover/resize-xy:text-cyan-400/80 transition-colors" aria-hidden="true">
+            <path d="M9 1 L9 9 L1 9" stroke="currentColor" strokeWidth="1" fill="none" />
+            <path d="M9 5 L5 9" stroke="currentColor" strokeWidth="1" fill="none" />
+          </svg>
+        </div>
       </div>
     </>
   );

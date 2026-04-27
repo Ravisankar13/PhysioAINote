@@ -48,20 +48,24 @@ interface InputChannelMeta {
   color: string;
 }
 
+// All hues kept in the cool half of the wheel — cyan / teal / sky / blue /
+// indigo / fuchsia / lime / slate. The output convergence overlay uses the
+// warm modality palette (violet / rose / amber / emerald), so input lines
+// stay perceptually distinct from output lines even when both are visible.
 export const INPUT_CHANNEL_META: Record<InputChannelKey, InputChannelMeta> = {
-  diagnosis: { label: "Dx",       icon: Stethoscope,    color: "#67e8f9" },
-  pain:      { label: "Pain",     icon: Activity,       color: "#f472b6" },
-  slings:    { label: "Slings",   icon: Link2,          color: "#2dd4bf" },
-  fascial:   { label: "Fascia",   icon: Waves,          color: "#e879f9" },
-  chain:     { label: "Chains",   icon: GitBranch,      color: "#818cf8" },
-  tissues:   { label: "Tissues",  icon: HeartPulse,     color: "#fb923c" },
-  scar:      { label: "Scars",    icon: Bandage,        color: "#facc15" },
-  force:     { label: "Forces",   icon: Gauge,          color: "#94a3b8" },
-  posture:   { label: "Posture",  icon: Accessibility,  color: "#38bdf8" },
-  thoracic:  { label: "Thoracic", icon: Layers3,        color: "#60a5fa" },
-  tendons:   { label: "Tendons",  icon: Flame,          color: "#f87171" },
-  risk:      { label: "Risk",     icon: TrendingUp,     color: "#a3e635" },
-  factors:   { label: "Patient",  icon: UserCheck,      color: "#22d3ee" },
+  diagnosis: { label: "Dx",       icon: Stethoscope,    color: "#67e8f9" }, // cyan-300
+  pain:      { label: "Pain",     icon: Activity,       color: "#f0abfc" }, // fuchsia-300
+  slings:    { label: "Slings",   icon: Link2,          color: "#5eead4" }, // teal-300
+  fascial:   { label: "Fascia",   icon: Waves,          color: "#e879f9" }, // fuchsia-400
+  chain:     { label: "Chains",   icon: GitBranch,      color: "#a5b4fc" }, // indigo-300
+  tissues:   { label: "Tissues",  icon: HeartPulse,     color: "#bae6fd" }, // sky-200
+  scar:      { label: "Scars",    icon: Bandage,        color: "#cbd5e1" }, // slate-300
+  force:     { label: "Forces",   icon: Gauge,          color: "#94a3b8" }, // slate-400
+  posture:   { label: "Posture",  icon: Accessibility,  color: "#7dd3fc" }, // sky-300
+  thoracic:  { label: "Thoracic", icon: Layers3,        color: "#93c5fd" }, // blue-300
+  tendons:   { label: "Tendons",  icon: Flame,          color: "#a5f3fc" }, // cyan-200
+  risk:      { label: "Risk",     icon: TrendingUp,     color: "#bef264" }, // lime-300
+  factors:   { label: "Patient",  icon: UserCheck,      color: "#22d3ee" }, // cyan-500
 };
 
 const ORDER: InputChannelKey[] = [
@@ -230,12 +234,19 @@ interface MasterPlanInputStripProps {
   clinicalContext: RationaleClinicalContextInput | null | undefined;
   /** The resizable card body — the SVG overlay sits absolutely over it. */
   cardRef: RefObject<HTMLElement>;
-  /** Where every input line converges to — typically a 1×1 invisible
-   *  span placed next to the diagnosis text in the card header. */
-  anchorRef: RefObject<HTMLElement>;
 }
 
-export function MasterPlanInputStrip({ clinicalContext, cardRef, anchorRef }: MasterPlanInputStripProps) {
+/** True when at least one input channel carries data. Used by the parent
+ *  card to gate render so the strip + overlay disappear when both the
+ *  cart and the clinical context are empty. */
+export function hasInputContextData(
+  ctx: RationaleClinicalContextInput | null | undefined,
+): boolean {
+  if (!ctx) return false;
+  return deriveInputChannels(ctx).some(c => c.count > 0);
+}
+
+export function MasterPlanInputStrip({ clinicalContext, cardRef }: MasterPlanInputStripProps) {
   const channels = useMemo(() => deriveInputChannels(clinicalContext), [clinicalContext]);
 
   // Stable per-channel button refs.
@@ -247,37 +258,53 @@ export function MasterPlanInputStrip({ clinicalContext, cardRef, anchorRef }: Ma
   }
   const pillRefs = pillRefsBox.current;
 
+  // The strip OWNS its convergence anchor — a small chip rendered directly
+  // beneath the pill row, labelled "→ AI Plan". Lines drawn by the input
+  // overlay flow downward from each pill into this chip, keeping the input
+  // story visually self-contained inside the card body and clearly separate
+  // from the output convergence overlay (which targets anchors at the card's
+  // top edge so output lines flow down to the pills below the card).
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
+
   const [hovered, setHovered] = useState<InputChannelKey | null>(null);
 
-  // Pulse animation: bump the per-channel key whenever its count rises.
+  // Pulse animation: bump the per-channel key whenever its content signature
+  // changes (count delta OR detail delta). Per spec the pulse must fire on
+  // 0→N transitions AND on memo updates that swap underlying data while the
+  // count stays constant. The first observation of each key is "primed" so
+  // the initial mount does not pulse.
   const [animKeys, setAnimKeys] = useState<Record<InputChannelKey, number>>(() => {
     const m = {} as Record<InputChannelKey, number>;
     for (const k of ORDER) m[k] = 0;
     return m;
   });
-  const prevCountsRef = useRef<Record<InputChannelKey, number>>(
-    Object.fromEntries(ORDER.map(k => [k, 0])) as Record<InputChannelKey, number>,
+  const channelSig = useCallback(
+    (c: InputChannel) => `${c.count}|${c.details.join("\u0001")}`,
+    [],
   );
+  const prevSigRef = useRef<Partial<Record<InputChannelKey, string>>>({});
   useEffect(() => {
     setAnimKeys(curr => {
-      const prev = prevCountsRef.current;
       const next = { ...curr };
       let changed = false;
       for (const c of channels) {
-        if (c.count > prev[c.key]) {
+        const sig = channelSig(c);
+        const prev = prevSigRef.current[c.key];
+        // Skip first observation (priming) so we don't pulse on mount.
+        if (prev !== undefined && prev !== sig && c.count > 0) {
           next[c.key] = curr[c.key] + 1;
           changed = true;
         }
+        prevSigRef.current[c.key] = sig;
       }
       return changed ? next : curr;
     });
-    for (const c of channels) prevCountsRef.current[c.key] = c.count;
-  }, [channels]);
+  }, [channels, channelSig]);
 
   return (
     <>
       <div
-        className="flex flex-wrap items-center gap-1 mb-1.5"
+        className="flex flex-wrap items-center gap-1 mb-1"
         data-testid="master-plan-input-strip"
         onMouseLeave={() => setHovered(null)}
       >
@@ -296,10 +323,10 @@ export function MasterPlanInputStrip({ clinicalContext, cardRef, anchorRef }: Ma
               onMouseEnter={() => setHovered(c.key)}
               onFocus={() => setHovered(c.key)}
               onBlur={() => setHovered(prev => (prev === c.key ? null : prev))}
-              className={`relative inline-flex items-center gap-0.5 rounded-full border text-[9px] transition-all ${
+              className={`relative inline-flex items-center gap-0.5 rounded-full border text-[9px] px-1.5 py-0.5 transition-all ${
                 active
-                  ? "px-1.5 py-0.5 bg-black/30 hover:bg-black/40"
-                  : "px-1 py-0.5 border-dashed border-white/10 bg-transparent text-gray-500 opacity-60 hover:opacity-90"
+                  ? "bg-black/30 hover:bg-black/40"
+                  : "border-dashed border-white/10 bg-transparent text-gray-500 opacity-55 hover:opacity-85"
               }`}
               style={
                 active
@@ -311,8 +338,8 @@ export function MasterPlanInputStrip({ clinicalContext, cardRef, anchorRef }: Ma
               title={`${meta.label}${active ? ` · ${c.count}` : " · no data"}`}
             >
               <Icon className="h-2.5 w-2.5" />
-              {active && <span>{meta.label}</span>}
-              {active && c.count > 1 && (
+              <span>{meta.label}</span>
+              {active && (
                 <span
                   className="ml-0.5 px-1 rounded-full text-[8px] bg-black/50 font-semibold"
                   style={{ color: meta.color }}
@@ -362,6 +389,27 @@ export function MasterPlanInputStrip({ clinicalContext, cardRef, anchorRef }: Ma
             </button>
           );
         })}
+      </div>
+      {/* Convergence anchor chip — every input line flows DOWN into this
+          target. Visually distinct from the output convergence (which targets
+          anchors at the card's top edge so output lines flow downward to the
+          modality pills below the card). */}
+      <div
+        className="flex items-center justify-center mb-1.5"
+        data-testid="master-plan-input-anchor-row"
+      >
+        <span
+          className="inline-flex items-center gap-1 text-[8.5px] uppercase tracking-wider font-semibold rounded-full px-1.5 py-0.5 border border-cyan-400/30 bg-cyan-500/10 text-cyan-200"
+          title="Inputs above feed the AI treatment plan"
+        >
+          <span className="opacity-70">↓</span>
+          <span>Feeds AI Plan</span>
+          <span
+            ref={anchorRef}
+            className="inline-block w-px h-px"
+            data-testid="master-plan-input-anchor"
+          />
+        </span>
       </div>
       <InputConvergenceOverlay
         cardRef={cardRef}
@@ -419,7 +467,9 @@ function InputConvergenceOverlay({
       if (!pill) continue;
       const p = pill.getBoundingClientRect();
       const x1 = p.left + p.width / 2 - rect.left;
-      const y1 = p.top - rect.top; // top edge of pill — line exits upward
+      // Bottom edge of pill — line exits downward toward the anchor that
+      // sits beneath the pill row in the strip's own anchor chip.
+      const y1 = p.bottom - rect.top;
       const midY = (y1 + ay) / 2;
       const d = `M ${x1.toFixed(2)} ${y1.toFixed(2)} C ${x1.toFixed(2)} ${midY.toFixed(2)}, ${ax.toFixed(2)} ${midY.toFixed(2)}, ${ax.toFixed(2)} ${ay.toFixed(2)}`;
       next[c.key] = { d, midX: (x1 + ax) / 2, midY };

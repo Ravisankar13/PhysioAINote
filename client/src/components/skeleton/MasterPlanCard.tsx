@@ -18,7 +18,7 @@ import { usePlanCart, type PlanCartItem, type PlanCartModality } from "@/lib/pla
 import { useOrchestratePlan } from "@/lib/orchestratePlanContext";
 import { useTreatmentRationale, type RationaleClinicalContextInput } from "@/lib/treatmentRationaleContext";
 import { getDriverLabelsByItemId } from "@/lib/treatmentRationaleLocal";
-import { MasterPlanInputStrip } from "@/components/skeleton/MasterPlanInputStrip";
+import { MasterPlanInputStrip, hasInputContextData } from "@/components/skeleton/MasterPlanInputStrip";
 import {
   CartItemRow,
   ConflictList,
@@ -305,10 +305,13 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   }
   const anchorRefs = anchorRefsBox.current;
 
-  // Anchor for the input convergence overlay — a 1×1 invisible span placed
-  // next to the diagnosis text in the header. Every input pill draws a line
-  // up into this point.
-  const inputConvergeAnchorRef = useRef<HTMLSpanElement | null>(null);
+  // The input strip OWNS its own convergence anchor (rendered inside the
+  // strip as a "↓ Feeds AI Plan" chip beneath the pill row), so the card
+  // header no longer needs to host an anchor span. We just decide here
+  // whether the strip should be rendered at all — the symmetric "what fed
+  // this plan" view should disappear when there is literally nothing on
+  // either side: cart is empty AND no clinical context has been captured.
+  const showInputStrip = !isEmpty || hasInputContextData(clinicalContext);
 
   const cExercise = counts.exercise;
   const cManual = counts.manual;
@@ -390,11 +393,6 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
                 <span className="text-cyan-300">{diagnosis}</span>
               </>
             ) : null}
-            <span
-              ref={inputConvergeAnchorRef}
-              className="inline-block w-px h-px align-middle"
-              data-testid="master-plan-input-anchor"
-            />
           </span>
         </div>
 
@@ -405,11 +403,12 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
           <CountChip pillKey="adjunct" count={counts.adjunct} />
         </div>
 
-        <MasterPlanInputStrip
-          clinicalContext={clinicalContext}
-          cardRef={cardRef}
-          anchorRef={inputConvergeAnchorRef}
-        />
+        {showInputStrip && (
+          <MasterPlanInputStrip
+            clinicalContext={clinicalContext}
+            cardRef={cardRef}
+          />
+        )}
 
         <p className={`text-[10px] italic mb-2 ${isEmpty ? "text-gray-500" : "text-gray-400"}`}>
           {isEmpty

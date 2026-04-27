@@ -1,6 +1,8 @@
-import { POLITE_USER_AGENT, timeoutFetch, type AdapterResult, type NormalizedPaper, type SearchOptions } from './types';
+import { POLITE_USER_AGENT, politeFetch, type AdapterResult, type NormalizedPaper, type SearchOptions } from './types';
 
 const WORKS = 'https://api.openalex.org/works';
+// OpenAlex polite pool is 10 req/s; we keep ~5 req/s margin.
+const OPENALEX_MIN_INTERVAL_MS = 220;
 
 /** OpenAlex stores abstracts as an inverted index `{word: [positions...]}`.
  *  Reconstruct a plain string for the model to read. */
@@ -35,7 +37,7 @@ export async function searchOpenAlex(query: string, opts: SearchOptions): Promis
 
   try {
     const url = `${WORKS}?search=${encodeURIComponent(query)}&per-page=${limit}&select=id,doi,title,display_name,publication_year,abstract_inverted_index,open_access,primary_location,authorships`;
-    const r = await timeoutFetch(url, { headers, timeoutMs });
+    const r = await politeFetch('openalex', url, { headers, timeoutMs, minIntervalMs: OPENALEX_MIN_INTERVAL_MS });
     if (!r.ok) throw new Error(`openalex ${r.status}`);
     const j = await r.json() as { results?: OAWork[] };
     const results = j?.results ?? [];

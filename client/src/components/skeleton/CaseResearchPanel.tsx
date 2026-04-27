@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,8 +47,14 @@ const SOURCE_LABEL: Record<string, string> = {
 
 /** Render the synthesized markdown answer with clickable [N] citation
  *  chips. We do a minimal markdown pass — bold, italic, headers,
- *  bullets, paragraphs — to avoid pulling in a heavy markdown lib. */
-function renderAnswer(answer: string, papers: CaseResearchSynthesis['retrievedPapers']) {
+ *  bullets, paragraphs — to avoid pulling in a heavy markdown lib.
+ *  Chips scroll to the citation list (with a brief flash) by default;
+ *  modifier-click (Cmd/Ctrl/Shift) opens the source in a new tab. */
+function renderAnswer(
+  answer: string,
+  papers: CaseResearchSynthesis['retrievedPapers'],
+  onCiteClick: (n: number, openExternal: boolean, paperUrl: string | null) => void,
+) {
   const byNumber = new Map<number, typeof papers[number]>();
   for (const p of papers) byNumber.set(p.citationNumber, p);
 
@@ -67,23 +73,27 @@ function renderAnswer(answer: string, papers: CaseResearchSynthesis['retrievedPa
           {nums.map((n, i) => {
             const paper = byNumber.get(n);
             return (
-              <a
+              <button
                 key={`${n}-${i}`}
-                href={paper?.url ?? '#'}
-                target="_blank"
-                rel="noreferrer"
+                type="button"
                 className={cn(
-                  "inline-flex items-center justify-center text-[10px] font-semibold rounded px-1 mx-px h-4 min-w-[16px] transition-colors",
+                  "inline-flex items-center justify-center text-[10px] font-semibold rounded px-1 mx-px h-4 min-w-[16px] transition-colors align-baseline",
                   paper
-                    ? "bg-violet-500/25 text-violet-100 border border-violet-400/40 hover:bg-violet-500/40"
+                    ? "bg-violet-500/25 text-violet-100 border border-violet-400/40 hover:bg-violet-500/40 cursor-pointer"
                     : "bg-slate-700/60 text-slate-300 border border-slate-600/60 cursor-default",
                 )}
-                title={paper ? `${paper.title}${paper.year ? ` (${paper.year})` : ''}` : `Reference ${n} not found`}
+                title={paper
+                  ? `${paper.title}${paper.year ? ` (${paper.year})` : ''} — click to jump to citation, ⌘/Ctrl-click to open source`
+                  : `Reference ${n} not found`}
                 data-testid={`citation-link-${n}`}
-                onClick={(e) => { if (!paper) e.preventDefault(); }}
+                onClick={(e) => {
+                  if (!paper) return;
+                  const openExternal = e.metaKey || e.ctrlKey || e.shiftKey;
+                  onCiteClick(n, openExternal, paper.url ?? null);
+                }}
               >
                 {n}
-              </a>
+              </button>
             );
           })}
         </span>
@@ -156,6 +166,24 @@ export function CaseResearchPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
   const [showHowSearched, setShowHowSearched] = useState(false);
+  const [highlightedCitation, setHighlightedCitation] = useState<number | null>(null);
+  const citationRefs = useRef<Map<number, HTMLLIElement>>(new Map());
+  const setCitationRef = useCallback((n: number) => (el: HTMLLIElement | null) => {
+    if (el) citationRefs.current.set(n, el);
+    else citationRefs.current.delete(n);
+  }, []);
+  const handleCitationClick = useCallback((n: number, openExternal: boolean, paperUrl: string | null) => {
+    if (openExternal && paperUrl) {
+      window.open(paperUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    const el = citationRefs.current.get(n);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedCitation(n);
+      window.setTimeout(() => setHighlightedCitation(curr => (curr === n ? null : curr)), 1600);
+    }
+  }, []);
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -313,7 +341,7 @@ export function CaseResearchPanel({
             <div className="space-y-3">
               {/* Synthesized answer */}
               <div className="space-y-2" data-testid="text-case-research-answer">
-                {renderAnswer(cached.synthesizedAnswer, cached.retrievedPapers)}
+                {renderAnswer(cached.synthesizedAnswer, cached.retrievedPapers, handleCitationClick)}
               </div>
 
               {/* Confidence reason */}
@@ -447,7 +475,13 @@ export function CaseResearchPanel({
                   {cached.retrievedPapers.map(p => (
                     <li
                       key={p.citationNumber}
-                      className="rounded border border-slate-700/50 bg-slate-950/40 px-2 py-1.5 text-[11px] leading-snug"
+                      ref={setCitationRef(p.citationNumber)}
+                      className={cn(
+                        "rounded border px-2 py-1.5 text-[11px] leading-snug transition-colors",
+                        highlightedCitation === p.citationNumber
+                          ? "border-violet-400/70 bg-violet-500/15 ring-1 ring-violet-400/40"
+                          : "border-slate-700/50 bg-slate-950/40",
+                      )}
                       data-testid={`item-case-research-citation-${p.citationNumber}`}
                     >
                       <div className="flex items-baseline gap-1.5">

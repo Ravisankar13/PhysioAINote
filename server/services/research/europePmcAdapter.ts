@@ -1,6 +1,8 @@
-import { POLITE_USER_AGENT, timeoutFetch, type AdapterResult, type NormalizedPaper, type SearchOptions } from './types';
+import { POLITE_USER_AGENT, politeFetch, type AdapterResult, type NormalizedPaper, type SearchOptions } from './types';
 
 const SEARCH = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search';
+// Europe PMC has no published rate cap; we self-throttle to ~5 req/s.
+const EPMC_MIN_INTERVAL_MS = 220;
 
 interface EPmcResult {
   id?: string;
@@ -22,7 +24,7 @@ export async function searchEuropePmc(query: string, opts: SearchOptions): Promi
 
   try {
     const url = `${SEARCH}?query=${encodeURIComponent(query)}&format=json&pageSize=${limit}&resultType=core`;
-    const r = await timeoutFetch(url, { headers, timeoutMs });
+    const r = await politeFetch('europepmc', url, { headers, timeoutMs, minIntervalMs: EPMC_MIN_INTERVAL_MS });
     if (!r.ok) throw new Error(`epmc ${r.status}`);
     const j = await r.json() as { resultList?: { result?: EPmcResult[] } };
     const results = j?.resultList?.result ?? [];

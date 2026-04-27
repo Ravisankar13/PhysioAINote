@@ -1,4 +1,7 @@
-import { POLITE_USER_AGENT, timeoutFetch, type AdapterResult, type NormalizedPaper, type SearchOptions } from './types';
+import { POLITE_USER_AGENT, politeFetch, type AdapterResult, type NormalizedPaper, type SearchOptions } from './types';
+
+// PubMed E-utilities allow 3 req/s without an API key — leave headroom.
+const PUBMED_MIN_INTERVAL_MS = 380;
 
 const ESEARCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi';
 const ESUMMARY = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi';
@@ -66,11 +69,20 @@ function parseEfetchXml(xml: string): ParsedArticle[] {
       if (collective) authors.push(collective);
       else if (last) authors.push(initials ? `${last} ${initials}` : last);
     }
+    // PubMed DOIs live in <ArticleId IdType="doi">10.x/y</ArticleId>.
+    // The IdType lives on the OPENING tag's attributes, so we have to
+    // match opening-tag-with-attrs + inner content together — the
+    // generic allTags() helper strips the opening tag and discards
+    // attributes, which would make every DOI come back null.
     let doi: string | null = null;
-    const articleIds = allTags(block, 'ArticleId');
-    for (const aid of articleIds) {
-      if (/IdType="doi"/i.test(aid)) {
-        doi = stripXml(aid);
+    const articleIdRe = /<ArticleId\b([^>]*)>([\s\S]*?)<\/ArticleId>/gi;
+    let aidMatch: RegExpExecArray | null;
+    while ((aidMatch = articleIdRe.exec(block)) !== null) {
+      const attrs = aidMatch[1] || '';
+      const inner = aidMatch[2] || '';
+      // Accept either single or double quotes around doi.
+      if (/IdType\s*=\s*["']doi["']/i.test(attrs)) {
+        doi = stripXml(inner);
         break;
       }
     }
@@ -86,7 +98,7 @@ export async function searchPubMed(query: string, opts: SearchOptions): Promise<
 
   try {
     const esearchUrl = `${ESEARCH}?db=pubmed&retmode=json&retmax=${limit}&sort=relevance&term=${encodeURIComponent(query)}`;
-    const r = await timeoutFetch(esearchUrl, { headers, timeoutMs });
+    const r = await politeFetch('pubmed', esearchUrl, { headers, timeoutMs, minIntervalMs: PUBMED_MIN_INTERVAL_MS });
     if (!r.ok) throw new Error(`esearch ${r.status}`);
     const j = await r.json() as { esearchresult?: { idlist?: string[] } };
     const ids = j?.esearchresult?.idlist ?? [];
@@ -95,7 +107,7 @@ export async function searchPubMed(query: string, opts: SearchOptions): Promise<
     }
 
     const efetchUrl = `${EFETCH}?db=pubmed&retmode=xml&rettype=abstract&id=${ids.join(',')}`;
-    const r2 = await timeoutFetch(efetchUrl, { headers, timeoutMs });
+    const r2 = await politeFetch('pubmed', efetchUrl, { headers, timeoutMs, minIntervalMs: PUBMED_MIN_INTERVAL_MS });
     if (!r2.ok) throw new Error(`efetch ${r2.status}`);
     const xml = await r2.text();
     const parsed = parseEfetchXml(xml);

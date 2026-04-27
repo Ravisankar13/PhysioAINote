@@ -13162,6 +13162,7 @@ ${ddxList}`;
               autoBuildPending={autoBuildState !== 'idle'}
               autoBuildDisabled={!hasClinicalTextData}
               expandSignal={masterPlanExpandSignal}
+              clinicalContext={rationaleClinicalContext}
             />
             {/* Phantom engines (Task #267): hidden, mount only during auto-build
                 so each engine's autoAddOnGenerate cascade fires without forcing

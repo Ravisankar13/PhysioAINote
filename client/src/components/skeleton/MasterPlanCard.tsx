@@ -16,8 +16,9 @@ import {
 } from "lucide-react";
 import { usePlanCart, type PlanCartItem, type PlanCartModality } from "@/lib/planCart";
 import { useOrchestratePlan } from "@/lib/orchestratePlanContext";
-import { useTreatmentRationale } from "@/lib/treatmentRationaleContext";
+import { useTreatmentRationale, type RationaleClinicalContextInput } from "@/lib/treatmentRationaleContext";
 import { getDriverLabelsByItemId } from "@/lib/treatmentRationaleLocal";
+import { MasterPlanInputStrip } from "@/components/skeleton/MasterPlanInputStrip";
 import {
   CartItemRow,
   ConflictList,
@@ -87,6 +88,12 @@ interface MasterPlanCardProps {
    *  Build-full-plan settle effect finishes). The card reacts only to changes
    *  of this value, so user-toggled collapse is preserved between bumps. */
   expandSignal?: number;
+  /** Same clinical context the AI rationale uses. When provided, an input
+   *  pill strip is rendered inside the card showing every channel of data
+   *  fed to the AI, with lines converging from each pill into the diagnosis
+   *  header — the symmetric "what fed this plan" view to the existing
+   *  output convergence overlay. */
+  clinicalContext?: RationaleClinicalContextInput | null;
 }
 
 interface AnchorRefs {
@@ -143,7 +150,7 @@ function CountChip({ pillKey, count }: { pillKey: PillKey; count: number }) {
 }
 
 const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function MasterPlanCard(
-  { diagnosis, pillRefs, containerRef, onOpenSidePanel, onAutoBuild, autoBuildPending = false, autoBuildDisabled = false, expandSignal },
+  { diagnosis, pillRefs, containerRef, onOpenSidePanel, onAutoBuild, autoBuildPending = false, autoBuildDisabled = false, expandSignal, clinicalContext },
   ref,
 ) {
   const { items, remove, clear } = usePlanCart();
@@ -298,6 +305,11 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
   }
   const anchorRefs = anchorRefsBox.current;
 
+  // Anchor for the input convergence overlay — a 1×1 invisible span placed
+  // next to the diagnosis text in the header. Every input pill draws a line
+  // up into this point.
+  const inputConvergeAnchorRef = useRef<HTMLSpanElement | null>(null);
+
   const cExercise = counts.exercise;
   const cManual = counts.manual;
   const cElectro = counts.electro;
@@ -378,6 +390,11 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
                 <span className="text-cyan-300">{diagnosis}</span>
               </>
             ) : null}
+            <span
+              ref={inputConvergeAnchorRef}
+              className="inline-block w-px h-px align-middle"
+              data-testid="master-plan-input-anchor"
+            />
           </span>
         </div>
 
@@ -387,6 +404,12 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
           <CountChip pillKey="electro" count={counts.electro} />
           <CountChip pillKey="adjunct" count={counts.adjunct} />
         </div>
+
+        <MasterPlanInputStrip
+          clinicalContext={clinicalContext}
+          cardRef={cardRef}
+          anchorRef={inputConvergeAnchorRef}
+        />
 
         <p className={`text-[10px] italic mb-2 ${isEmpty ? "text-gray-500" : "text-gray-400"}`}>
           {isEmpty

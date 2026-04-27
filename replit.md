@@ -9,7 +9,7 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Core Architecture
-The platform features a React 18 (TypeScript) frontend utilizing Shadcn/ui and Radix UI with Tailwind CSS. The backend is built with Node.js 20 (Express.js) in TypeScript, using Passport.js for authentication and a RESTful API. Data is stored in a PostgreSQL database (Neon serverless) managed by Drizzle ORM.
+The platform features a React 18 (TypeScript) frontend utilizing Shadcn/ui and Radix UI with Tailwind CSS. The backend is built with Node.js 20 (Express.js) in TypeScript, using Passport.js for authentication and a RESTful API. Data is stored in a PostgreSQL database (Neon serverless) managed by Drizzle ORM. The Drizzle pool uses the `@neondatabase/serverless` **WebSocket transport** (`neonConfig.poolQueryViaFetch = false` in `server/db.ts`); the HTTP-fetch transport is intentionally disabled because the Replit-hosted Neon-compatible HTTP gateway returns `rows: null` for empty result sets and drops the rows from `INSERT/UPDATE … RETURNING` responses, both of which crash or silently corrupt Drizzle queries.
 
 ### Key Features & Design Patterns
 - **AI Integration**: Leverages OpenAI GPT-4o for clinical analysis, content generation, and decision support, including virtual patient analysis, exercise generation, and real-time movement analysis.

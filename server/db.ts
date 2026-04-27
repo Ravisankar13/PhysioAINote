@@ -5,9 +5,29 @@ import * as schema from "@shared/schema";
 import { config } from 'dotenv';
 config();
 
-// Configure Neon for serverless environments
+// Configure Neon for serverless environments.
+//
+// IMPORTANT: We deliberately use the WebSocket transport (the default
+// when `poolQueryViaFetch` is false), NOT the HTTP-fetch transport.
+// The Replit-hosted Neon-compatible HTTP gateway has two confirmed
+// bugs that break Drizzle/pg-protocol parsing:
+//   1) Empty result sets come back as `{ rows: null }` instead of
+//      `{ rows: [] }`, which then crashes
+//      @neondatabase/serverless's processQueryResult at
+//      `r.rows.map(...)` with
+//      "Cannot read properties of null (reading 'map')". This made
+//      every cache-miss SELECT against any table fail (e.g. the
+//      Case-Aware Research Engine panel returned 500 on first use).
+//   2) `INSERT/UPDATE ... RETURNING ...` responses come back with
+//      `rows: []` even when `rowCount` is 1, silently dropping the
+//      returned row. This made every `.returning()` call hand back
+//      `undefined` rows.
+// The WebSocket transport returns correct `rows` arrays in all of
+// these cases AND is more efficient for a long-running Express
+// server (persistent connection vs HTTP overhead per query), so we
+// route everything through it.
 neonConfig.webSocketConstructor = ws;
-neonConfig.poolQueryViaFetch = true;
+neonConfig.poolQueryViaFetch = false;
 
 /**
  * Get database URL with fail-fast approach for production reliability

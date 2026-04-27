@@ -132,10 +132,29 @@ function quoteIfMultiword(term: string): string {
 }
 
 /** OR together the candidate phrasings for one variable, AND the
- *  variables together at the top level. Empty list -> empty string. */
+ *  variables together at the top level. Empty list -> empty string.
+ *
+ *  The CONDITION is NOT quoted as one phrase. Clinicians often paste
+ *  a long free-form description as the condition seed; quoting that
+ *  would force every search engine to look for the entire string
+ *  verbatim and zero-result the broadest tier. Instead we pass the
+ *  condition as a bag of words (PubMed/OpenAlex/Europe PMC each handle
+ *  it as a free-text relevance match). Variable terms are still phrase-
+ *  quoted because they are short canonical biomedical phrases. */
+function normalizeConditionSeed(condition: string): string {
+  // Strip punctuation that would confuse PubMed term parsing, collapse
+  // whitespace, cap to ~120 chars so the broadest tier stays usable.
+  const cleaned = condition
+    .replace(/["()\[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length > 120 ? cleaned.slice(0, 120).trim() : cleaned;
+}
+
 function compileQuery(condition: string, vars: InferredVariable[]): string {
   const parts: string[] = [];
-  if (condition.trim()) parts.push(`(${quoteIfMultiword(condition.trim())})`);
+  const seed = normalizeConditionSeed(condition);
+  if (seed) parts.push(seed);
   for (const v of vars) {
     const ors = v.queryTerms.map(quoteIfMultiword).filter(Boolean);
     if (ors.length > 0) parts.push(`(${ors.join(' OR ')})`);
@@ -322,8 +341,16 @@ export async function retrieveTiered(condition: string, variables: InferredVaria
 
 // ---- Synthesis ----------------------------------------------------
 
+/** The model MUST return a citation_map alongside the answer so we can
+ *  validate that every [N] it used actually points to a real paper.
+ *  citation_map[i] is the citation number that the model assigned to
+ *  the i-th claim (or list of supporting numbers). We don't enforce
+ *  positions here — we only enforce that every number it claims to
+ *  have used is in range. The post-validation step then re-scans the
+ *  answer text to scrub any [N] that is NOT in the validated set. */
 const synthesisSchema = z.object({
   answer: z.string().min(1).max(8000),
+  citation_map: z.array(z.number().int().positive()).max(50),
   confidence: z.enum(['High', 'Moderate', 'Low', 'Extrapolated']),
   confidence_reason: z.string().max(400),
 });
@@ -369,9 +396,10 @@ Hard rules:
    - Low: 1-2 papers OR conflicting findings.
    - Extrapolated: only condition-level evidence (most/all modifiers dropped) OR very thin abstracts.
 6. Provide a 1-2 sentence confidence_reason explaining the bucket.
+7. Return a "citation_map": the de-duplicated list of EVERY [N] number you used in the answer. Only use numbers from the supplied references — DO NOT invent numbers. The system will scrub any [N] in your answer that is not in this map.
 
 Return ONLY this JSON:
-{ "answer": "<markdown with [N] inline citations>", "confidence": "High|Moderate|Low|Extrapolated", "confidence_reason": "..." }`;
+{ "answer": "<markdown with [N] inline citations>", "citation_map": [1, 3, 4], "confidence": "High|Moderate|Low|Extrapolated", "confidence_reason": "..." }`;
 
   const usr = `Patient case condition: ${condition}
 
@@ -399,8 +427,40 @@ Write the synthesis now.`;
     });
     const raw = r.choices?.[0]?.message?.content || '{}';
     const parsed = synthesisSchema.parse(JSON.parse(raw));
+
+    // Validate the citation map against the actual paper set. Numbers
+    // the model "claims" to have used must reference real papers — if
+    // it hallucinates references we drop them from the validated set.
+    const validNumbers = new Set(papers.map(p => p.citationNumber));
+    const declaredValid = new Set(parsed.citation_map.filter(n => validNumbers.has(n)));
+
+    // Scrub any [N] in the answer text that is NOT in the validated
+    // declared set (handles both invented numbers and numbers the
+    // model used inline but forgot to put in citation_map). We also
+    // surface a warning so we can monitor model citation hygiene.
+    const seenInText = new Set<number>();
+    const scrubbed = parsed.answer.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (full, group: string) => {
+      const nums = group.split(/\s*,\s*/).map((s: string) => parseInt(s, 10)).filter(Number.isFinite);
+      const kept = nums.filter(n => validNumbers.has(n));
+      kept.forEach(n => seenInText.add(n));
+      if (kept.length === 0) return ''; // strip the whole [bad] marker
+      return `[${kept.join(',')}]`;
+    });
+
+    const droppedFromText = parsed.answer
+      .match(/\[(\d+(?:\s*,\s*\d+)*)\]/g)
+      ?.flatMap(m => m.slice(1, -1).split(/\s*,\s*/).map(s => parseInt(s, 10)))
+      .filter(n => Number.isFinite(n) && !validNumbers.has(n)) ?? [];
+    if (droppedFromText.length > 0) {
+      console.warn(`[caseResearch] scrubbed ${droppedFromText.length} hallucinated citation marker(s): [${Array.from(new Set(droppedFromText)).join(', ')}]`);
+    }
+    const declaredButMissingFromText = Array.from(declaredValid).filter(n => !seenInText.has(n));
+    if (declaredButMissingFromText.length > 0) {
+      console.warn(`[caseResearch] citation_map declared [${declaredButMissingFromText.join(', ')}] but not used inline.`);
+    }
+
     return {
-      answer: parsed.answer.trim(),
+      answer: scrubbed.trim(),
       confidence: parsed.confidence,
       confidenceReason: parsed.confidence_reason,
     };

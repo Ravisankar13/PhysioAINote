@@ -13121,7 +13121,13 @@ ${ddxList}`;
                 return h.toString(16).padStart(8, '0');
               };
               const caseId = `case-${fnv32(desc)}`;
-              const condition = desc.length > 160 ? desc.slice(0, 160) : desc;
+              // Condition seed: prefer the AI's clinical_summary (short
+              // clinician-style framing, typically containing a working
+              // diagnosis) over the raw clinician description (which can
+              // be a paragraph). Either way we cap at 160 chars and pass
+              // it UNQUOTED so the engine can use it as a free-text seed.
+              const conditionSeed = (summary && summary.length <= 240 ? summary : desc).trim();
+              const condition = conditionSeed.length > 160 ? conditionSeed.slice(0, 160).trim() : conditionSeed;
               const caseSummary = [
                 `Description: ${desc}`,
                 summary && summary !== desc ? `Clinical summary: ${summary}` : '',

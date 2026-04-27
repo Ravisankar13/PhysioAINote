@@ -24080,7 +24080,14 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
           lastSourceWeek = w;
           continue;
         }
-        if (lastSourceWeek < 0) continue; // leading gap — handled client-side
+        // Intentional split: server only forward-replicates from a known
+        // populated source week. Leading gaps (where the AI emits nothing
+        // for weeks 0..k but cells exist for k+) and entirely-empty
+        // schedules are handled by the client's WeeklyScheduleGrid via
+        // backward seeding and frequency-based synthesis. Doing it
+        // client-side keeps the orchestrator response close to the AI's
+        // intent and lets the UI choose the right fallback chip.
+        if (lastSourceWeek < 0) continue;
         const sourceCells = cellsByWeek.get(lastSourceWeek)!;
         const tphase = phaseAtWeek(w);
         const sphase = phaseAtWeek(lastSourceWeek);

@@ -526,7 +526,11 @@ export function WeeklyScheduleGrid({
                 title={titleText}
               >
                 <span>W{w + 1}</span>
-                {!native && src && (
+                {/* Spec says repeated weeks get the ↻ glyph specifically;
+                    synth weeks already get the amber "From frequencies"
+                    chip in the header, so we keep the tab glyph
+                    repeat-only for stricter UX parity. */}
+                {src?.kind === "repeat" && (
                   <RotateCcw className="h-2 w-2 opacity-60" data-testid={`week-${w + 1}-repeat-glyph`} />
                 )}
                 <span className={`absolute left-0.5 right-0.5 bottom-0 h-[2px] rounded-full ${stripe}`} />

@@ -339,6 +339,20 @@ export function CaseResearchPanel({
 
           {hasResult && cached && (
             <div className="space-y-3">
+              {/* Dedicated no-evidence empty state */}
+              {cached.retrievedPapers.length === 0 && (
+                <div
+                  className="rounded-md border border-rose-500/40 bg-rose-950/30 text-rose-100 px-2.5 py-2 text-[11px] leading-snug flex items-start gap-2"
+                  data-testid="banner-case-research-no-evidence"
+                >
+                  <Info className="h-3.5 w-3.5 mt-[1px] shrink-0" />
+                  <span>
+                    <span className="font-semibold">No evidence found.</span>{' '}
+                    All {cached.queriesRan.length} query tier{cached.queriesRan.length === 1 ? '' : 's'} returned zero usable papers across PubMed, OpenAlex, and Europe PMC. The synthesis below is fully extrapolated from the case context — treat as low-confidence reasoning, not literature-supported.
+                  </span>
+                </div>
+              )}
+
               {/* Synthesized answer */}
               <div className="space-y-2" data-testid="text-case-research-answer">
                 {renderAnswer(cached.synthesizedAnswer, cached.retrievedPapers, handleCitationClick)}

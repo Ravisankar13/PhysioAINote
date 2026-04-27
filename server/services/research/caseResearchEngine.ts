@@ -10,8 +10,13 @@ import { normalizeDoi, normalizeTitle, type AdapterResult, type NormalizedPaper 
 export interface InferredVariable {
   label: string;
   value: string;
-  importance: number;     // 1 = most important, drops last
-  queryTerms: string[];   // canonical search terms for this variable
+  importance: number;             // 1-10, higher = more central; tie-breaker for drop order
+  /** Explicit "drop me first" signal. The planner drops every variable
+   *  flagged true BEFORE it touches importance-only candidates, so the
+   *  AI can mark obviously soft modifiers (e.g. lifestyle aside) as
+   *  the first to relax. */
+  dropFirstIfNeeded: boolean;
+  queryTerms: string[];           // canonical search terms for this variable
   rationale: string;
 }
 
@@ -58,6 +63,7 @@ const inferenceSchema = z.object({
     label: z.string().min(1).max(60),
     value: z.string().min(1).max(200),
     importance: z.number().int().min(1).max(10),
+    dropFirstIfNeeded: z.boolean().optional().default(false),
     queryTerms: z.array(z.string().min(1).max(80)).min(1).max(5),
     rationale: z.string().min(1).max(280),
   })).min(1).max(8),
@@ -77,10 +83,11 @@ Rules:
 - Each variable must be something a literature search could be FILTERED by — i.e. there should be a plausible MeSH/keyword expression.
 - For each variable provide 1-5 short canonical "queryTerms" (the phrases a search engine should AND in to find papers that cover this modifier). Use real biomedical phrasing (e.g. "diabetes mellitus" not "sugar problem"; "subacute" not "8 weeks ago").
 - "importance" is 1-10; higher = more central to the case (will be kept longest as the tiers relax).
+- "dropFirstIfNeeded" (boolean): set true for soft modifiers (lifestyle aside, occupational details, secondary comorbidities) that should be relaxed FIRST when literature is thin. Leave false for clinically central modifiers (acuity, stage, primary comorbidity, surgical status).
 - "rationale" is one short sentence explaining why this variable changes the evidence.
 
 Return ONLY this JSON:
-{ "variables": [ { "label": "...", "value": "...", "importance": 8, "queryTerms": ["..."], "rationale": "..." } ] }`;
+{ "variables": [ { "label": "...", "value": "...", "importance": 8, "dropFirstIfNeeded": false, "queryTerms": ["..."], "rationale": "..." } ] }`;
 
   const usr = `Diagnosis / condition:
 """${condition.slice(0, 500)}"""
@@ -131,19 +138,11 @@ function quoteIfMultiword(term: string): string {
   return /\s/.test(t) ? `"${t.replace(/"/g, '')}"` : t;
 }
 
-/** OR together the candidate phrasings for one variable, AND the
- *  variables together at the top level. Empty list -> empty string.
- *
- *  The CONDITION is NOT quoted as one phrase. Clinicians often paste
- *  a long free-form description as the condition seed; quoting that
- *  would force every search engine to look for the entire string
- *  verbatim and zero-result the broadest tier. Instead we pass the
- *  condition as a bag of words (PubMed/OpenAlex/Europe PMC each handle
- *  it as a free-text relevance match). Variable terms are still phrase-
- *  quoted because they are short canonical biomedical phrases. */
+/** Pass the condition as a bag of words (free-text relevance match) —
+ *  not as a single quoted phrase — so the broadest tier doesn't
+ *  zero-result on long clinician descriptions. Strip query-confusing
+ *  punctuation and cap at 120 chars. */
 function normalizeConditionSeed(condition: string): string {
-  // Strip punctuation that would confuse PubMed term parsing, collapse
-  // whitespace, cap to ~120 chars so the broadest tier stays usable.
   const cleaned = condition
     .replace(/["()\[\]{}]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -163,13 +162,17 @@ function compileQuery(condition: string, vars: InferredVariable[]): string {
 }
 
 /** Build the tiered query ladder from most-specific (all variables) to
- *  broadest (condition only). Variables with the LOWEST importance are
- *  dropped first. */
+ *  broadest (condition only). Drop order: variables flagged
+ *  `dropFirstIfNeeded` go first (lowest importance among them first),
+ *  then everything else by ascending importance. */
 export function buildQueryLadder(condition: string, vars: InferredVariable[]): QueryTier[] {
   const tiers: QueryTier[] = [];
-  // Active list starts as all vars, sorted ascending by importance so
-  // we can pop() the lowest-importance one each tier.
-  const active = [...vars].sort((a, b) => a.importance - b.importance);
+  const active = [...vars].sort((a, b) => {
+    if (a.dropFirstIfNeeded !== b.dropFirstIfNeeded) {
+      return a.dropFirstIfNeeded ? -1 : 1; // drop-first flagged ones come first in active[] (= popped first)
+    }
+    return a.importance - b.importance;
+  });
   const dropped: InferredVariable[] = [];
 
   // Tier 0 = full set
@@ -341,13 +344,9 @@ export async function retrieveTiered(condition: string, variables: InferredVaria
 
 // ---- Synthesis ----------------------------------------------------
 
-/** The model MUST return a citation_map alongside the answer so we can
- *  validate that every [N] it used actually points to a real paper.
- *  citation_map[i] is the citation number that the model assigned to
- *  the i-th claim (or list of supporting numbers). We don't enforce
- *  positions here — we only enforce that every number it claims to
- *  have used is in range. The post-validation step then re-scans the
- *  answer text to scrub any [N] that is NOT in the validated set. */
+/** Model returns a citation_map of every [N] it intends to use. The
+ *  post-validation step scans the answer text and scrubs any [N] not
+ *  in the validated paper set. */
 const synthesisSchema = z.object({
   answer: z.string().min(1).max(8000),
   citation_map: z.array(z.number().int().positive()).max(50),

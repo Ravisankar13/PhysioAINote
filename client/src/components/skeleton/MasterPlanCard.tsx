@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { usePlanCart, type PlanCartItem, type PlanCartModality } from "@/lib/planCart";
 import { useOrchestratePlan } from "@/lib/orchestratePlanContext";
+import { useTreatmentRationale } from "@/lib/treatmentRationaleContext";
 import {
   CartItemRow,
   ConflictList,
@@ -25,6 +26,7 @@ import {
   PhaseCards,
   RecoveryTimeline,
   SessionOrderStrip,
+  TreatmentRationaleSection,
   WeeklyScheduleGrid,
 } from "@/components/skeleton/MyPlanRenderBlocks";
 
@@ -145,6 +147,12 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
 ) {
   const { items, remove, clear } = usePlanCart();
   const { orchestrated, isPending: orchestrating, error: orchestrateError, organize, reset: resetOrchestrated } = useOrchestratePlan();
+  const {
+    rationale,
+    isPending: rationalePending,
+    error: rationaleError,
+    generate: generateRationale,
+  } = useTreatmentRationale();
 
   // User-resizable card. Width is always explicit (so the box doesn't snap
   // back when items are added). Height is null = auto (sized to content with
@@ -445,6 +453,18 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
             }`}
             data-testid="master-plan-inline-section"
           >
+            {/* Treatment Rationale — "Why this plan?" (Task #274). Sits at
+                the top of the expanded section so the clinician sees the
+                rationale before the item list and any orchestrated output. */}
+            <TreatmentRationaleSection
+              rationale={rationale}
+              items={items}
+              isPending={rationalePending}
+              error={rationaleError}
+              onGenerate={generateRationale}
+              hasOrchestratedOrder={!!orchestrated && orchestrated.sessionOrder.length > 0}
+            />
+
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-300">Items in plan ({items.length})</span>
               <button

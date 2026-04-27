@@ -179,6 +179,7 @@ const MyPlanPanel = lazy(() => import("@/components/skeleton/MyPlanPanel"));
 import MasterPlanCard from "@/components/skeleton/MasterPlanCard";
 import { PlanCartProvider, usePlanCart } from "@/lib/planCart";
 import { OrchestratePlanProvider } from "@/lib/orchestratePlanContext";
+import { TreatmentRationaleProvider, type RationaleClinicalContextInput } from "@/lib/treatmentRationaleContext";
 
 function MyPlanTabButton({ active, onClick }: { active: boolean; onClick: () => void }) {
   const { count } = usePlanCart();
@@ -6895,6 +6896,205 @@ ${ddxList}`;
     };
   }, [structuredReasoningData, extractionResult, mechanismAnalysisResult, recoverySimArchetype, painMarkers, planFactors, planMods, planConstraints]);
 
+  // ===== Treatment Rationale clinical-context bundle (Task #274) =====
+  // Extends the orchestrate context with rich clinical signals (pain
+  // markers, sling drivers, fascial chain tensions, kinetic-chain
+  // integrity, compromised tissues, scars/adhesions, force hotspots,
+  // postural deviations, natural progression) so the rationale endpoint
+  // can tie each treatment back to the actual clinical picture.
+  const rationaleClinicalContext = useMemo<RationaleClinicalContextInput>(() => {
+    // Pain markers — count, structures, mechanisms, severity summary.
+    const painStructures = Array.from(new Set(
+      painMarkers
+        .map(m => m.anatomicalLabel || m.nearestBone || '')
+        .filter(s => s && s.length > 0)
+    )).slice(0, 12);
+    const painMechanisms = Array.from(new Set(
+      painMarkers
+        .map(m => (m as { mechanism?: string }).mechanism)
+        .filter((s): s is string => !!s && s.length > 0)
+    )).slice(0, 6);
+    const severities = painMarkers
+      .map(m => (m as { severity?: number; intensity?: number }).severity ?? (m as { intensity?: number }).intensity)
+      .filter((n): n is number => typeof n === 'number');
+    const severitySummary = severities.length > 0
+      ? `${severities.length} marker${severities.length === 1 ? '' : 's'}, peak ${Math.max(...severities)}/10, avg ${Math.round((severities.reduce((a, b) => a + b, 0) / severities.length) * 10) / 10}/10`
+      : undefined;
+
+    // Sling drivers — pull from slingAnalysisRef (latest computed result).
+    const sa = slingAnalysisRef.current;
+    const slingDrivers: RationaleClinicalContextInput['slingDrivers'] = [];
+    if (sa) {
+      const dom = sa.dominantDysfunction
+        ? sa.slings.find(s => s.slingId === sa.dominantDysfunction)
+        : null;
+      if (dom) {
+        slingDrivers.push({
+          sling: dom.label,
+          role: 'dominant-dysfunction',
+          drivingFinding: dom.narrative?.slice(0, 180) || dom.weakLinks?.[0]?.muscle || dom.commonDysfunctions?.[0],
+        });
+      }
+      if (sa.secondaryIssue) {
+        const sec = sa.slings.find(s => s.slingId === sa.secondaryIssue!.slingId);
+        slingDrivers.push({
+          sling: sec?.label || sa.secondaryIssue.slingId,
+          role: 'secondary',
+          drivingFinding: sa.secondaryIssue.summary?.slice(0, 180),
+        });
+      }
+    }
+
+    // Fascial chain tensions — driving + active chain ids → labels.
+    let fascialTensions: RationaleClinicalContextInput['fascialTensions'] | undefined;
+    if (fascialChainVizProp) {
+      const chainLabel = (id: string) => MYOFASCIAL_CHAINS.find(c => c.id === id)?.name || id;
+      const driving = (fascialChainVizProp.painHighlightChains || []).map(chainLabel).slice(0, 6);
+      const active = (fascialChainVizProp.activeChains || []).map(chainLabel).slice(0, 6);
+      const propagationCount = fascialChainVizProp.propagationDeltas
+        ? Object.keys(fascialChainVizProp.propagationDeltas as Record<string, unknown>).length
+        : undefined;
+      fascialTensions = { drivingChains: driving, activeChains: active, propagationCount };
+    }
+
+    // Kinetic-chain integrity — surface only chains with score < 80.
+    const chainIntegrity: RationaleClinicalContextInput['chainIntegrity'] = [];
+    hudChainIntegrity.forEach((entry, chainId) => {
+      if (entry.score < 80) {
+        chainIntegrity.push({
+          chain: chainId.replace(/_/g, ' '),
+          score: entry.score,
+          issues: (entry.issues || []).slice(0, 4),
+        });
+      }
+    });
+    const chainIntegrityTrim = chainIntegrity
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 6);
+
+    // Compromised tissues — name, status, region.
+    const compromisedTissuesSummary = compromisedTissues.slice(0, 12).map(t => ({
+      name: (t as { name?: string; tissue?: string }).name || (t as { tissue?: string }).tissue || 'tissue',
+      status: (t as { status?: string; severity?: string }).status || (t as { severity?: string }).severity,
+      region: (t as { region?: string; location?: string }).region || (t as { location?: string }).location,
+    }));
+
+    // Scar / adhesion load.
+    let scarLoad: RationaleClinicalContextInput['scarLoad'] | undefined;
+    if (scarMarkers.length > 0 || adhesionBands.length > 0) {
+      const regions = Array.from(new Set([
+        ...scarMarkers.map(s => (s as { region?: string; nearestBone?: string }).region || (s as { nearestBone?: string }).nearestBone || ''),
+        ...adhesionBands.map(a => (a as { region?: string }).region || ''),
+      ].filter(s => s && s.length > 0))).slice(0, 6);
+      scarLoad = {
+        scarCount: scarMarkers.length,
+        adhesionCount: adhesionBands.length,
+        regions,
+      };
+    }
+
+    // Force hotspots — top joints by peak force / asymmetry from hudForceAnalysis.
+    let forceHotspots: RationaleClinicalContextInput['forceHotspots'] | undefined;
+    const fa = hudForceAnalysis as unknown as {
+      joints?: Array<{ jointName?: string; jointId?: string; peakForceN?: number; forceN?: number; asymmetryIndex?: number; asymmetry?: number }>;
+    } | undefined;
+    if (fa?.joints && fa.joints.length > 0) {
+      const sorted = [...fa.joints]
+        .map(j => ({
+          joint: j.jointName || j.jointId || 'joint',
+          peakForceN: j.peakForceN ?? j.forceN,
+          asymmetryIndex: j.asymmetryIndex ?? j.asymmetry,
+        }))
+        .filter(j => (typeof j.peakForceN === 'number' && j.peakForceN > 0) || (typeof j.asymmetryIndex === 'number' && j.asymmetryIndex > 0.1))
+        .sort((a, b) => (b.peakForceN || 0) - (a.peakForceN || 0))
+        .slice(0, 5);
+      if (sorted.length > 0) forceHotspots = sorted;
+    }
+
+    // Postural deviations summary.
+    let posturalDeviations: RationaleClinicalContextInput['posturalDeviations'] | undefined;
+    if (posturalMetrics) {
+      const pm = posturalMetrics as unknown as {
+        summary?: string;
+        overallScore?: number;
+        score?: number;
+        deviations?: Array<{ name?: string; severity?: string }>;
+      };
+      const summaryBits: string[] = [];
+      if (pm.summary) summaryBits.push(pm.summary);
+      if (pm.deviations?.length) {
+        summaryBits.push(pm.deviations.slice(0, 4).map(d => `${d.name}${d.severity ? ` (${d.severity})` : ''}`).join(', '));
+      }
+      const score = pm.overallScore ?? pm.score;
+      const severity = typeof score === 'number'
+        ? (score < 50 ? 'severe' : score < 75 ? 'moderate' : 'mild')
+        : undefined;
+      if (summaryBits.length > 0 || severity) {
+        posturalDeviations = {
+          summary: summaryBits.join(' · ').slice(0, 280) || undefined,
+          severity,
+        };
+      }
+    }
+
+    // Natural progression risks.
+    let naturalProgression: RationaleClinicalContextInput['naturalProgression'] | undefined;
+    if (naturalTimeline?.result) {
+      const nt = naturalTimeline.result;
+      naturalProgression = {
+        window: nt.overall_window_weeks
+          ? `${Math.round(nt.overall_window_weeks.best)}–${Math.round(nt.overall_window_weeks.worst)} wk (expected ${Math.round(nt.overall_window_weeks.expected)})`
+          : undefined,
+        chronicityRiskPercent: nt.chronicity_risk_percent,
+        recurrenceRiskPercent: nt.recurrence_risk_percent,
+      };
+    }
+
+    // Tendon inflammation — pull from compromised tissues whose name mentions tendon/bursa/fasciitis.
+    const tendonInflammation = compromisedTissues
+      .filter(t => /tendon|bursa|fasciitis|tendinosis|tendinopathy/i.test((t as { name?: string }).name || ''))
+      .map(t => (t as { name?: string }).name)
+      .filter((n): n is string => !!n)
+      .slice(0, 6);
+
+    // Thoracic stiffness — derive from chain integrity entries that mention thoracic.
+    const thoracicEntry = chainIntegrityTrim.find(c => /thoracic|trunk/i.test(c.chain));
+    const thoracicStiffness = thoracicEntry
+      ? `${thoracicEntry.chain} integrity ${Math.round(thoracicEntry.score)}/100${thoracicEntry.issues?.length ? ` — ${thoracicEntry.issues.slice(0, 2).join(', ')}` : ''}`
+      : undefined;
+
+    return {
+      ...orchestrateClinicalContext,
+      painMarkers: painMarkers.length > 0 ? {
+        count: painMarkers.length,
+        structures: painStructures,
+        mechanisms: painMechanisms.length > 0 ? painMechanisms : undefined,
+        severitySummary,
+      } : undefined,
+      slingDrivers: slingDrivers.length > 0 ? slingDrivers : undefined,
+      fascialTensions,
+      chainIntegrity: chainIntegrityTrim.length > 0 ? chainIntegrityTrim : undefined,
+      compromisedTissues: compromisedTissuesSummary.length > 0 ? compromisedTissuesSummary : undefined,
+      scarLoad,
+      forceHotspots,
+      posturalDeviations,
+      thoracicStiffness,
+      tendonInflammation: tendonInflammation.length > 0 ? tendonInflammation : undefined,
+      naturalProgression,
+    };
+  }, [
+    orchestrateClinicalContext,
+    painMarkers,
+    fascialChainVizProp,
+    hudChainIntegrity,
+    compromisedTissues,
+    scarMarkers,
+    adhesionBands,
+    hudForceAnalysis,
+    posturalMetrics,
+    naturalTimeline?.result,
+  ]);
+
   return (
     <Suspense fallback={<LazyPanelFallback />}>
     <PlanCartProvider>
@@ -6909,6 +7109,7 @@ ${ddxList}`;
         setAutoBuildFailures(new Set());
       }}
     >
+    <TreatmentRationaleProvider clinicalContext={rationaleClinicalContext}>
     <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 flex flex-col overflow-hidden">
     <div className="flex-1 relative overflow-hidden min-h-0">
       {!modelReady && (
@@ -13200,6 +13401,7 @@ ${ddxList}`;
       </Suspense>
     )}
     </div>
+    </TreatmentRationaleProvider>
     </OrchestratePlanProvider>
     </PlanCartProvider>
     </Suspense>

@@ -2,12 +2,17 @@ import { useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  Brain,
   Calendar,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   Dumbbell,
   Hand,
   Leaf,
+  Loader2,
+  RefreshCw,
   RotateCcw,
   Sparkles,
   Target,
@@ -16,6 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { PlanCartItem, PlanCartModality } from "@/lib/planCart";
+import type { TreatmentRationaleResult } from "@/lib/treatmentRationaleContext";
 
 export interface OrchestratedSessionStep {
   order: number;
@@ -393,6 +399,225 @@ export function OrchestratedSummaryCard({ orchestrated, onDiscard }: { orchestra
           Discard
         </button>
       </div>
+    </div>
+  );
+}
+
+const RATIONALE_KIND_STYLE: Record<string, { bg: string; text: string; border: string }> = {
+  pain: { bg: "bg-rose-500/15", text: "text-rose-200", border: "border-rose-500/40" },
+  sling: { bg: "bg-cyan-500/15", text: "text-cyan-200", border: "border-cyan-500/40" },
+  fascial: { bg: "bg-fuchsia-500/15", text: "text-fuchsia-200", border: "border-fuchsia-500/40" },
+  chain: { bg: "bg-violet-500/15", text: "text-violet-200", border: "border-violet-500/40" },
+  tissue: { bg: "bg-orange-500/15", text: "text-orange-200", border: "border-orange-500/40" },
+  scar: { bg: "bg-amber-500/15", text: "text-amber-200", border: "border-amber-500/40" },
+  force: { bg: "bg-yellow-500/15", text: "text-yellow-200", border: "border-yellow-500/40" },
+  postural: { bg: "bg-sky-500/15", text: "text-sky-200", border: "border-sky-500/40" },
+  tendon: { bg: "bg-red-500/15", text: "text-red-200", border: "border-red-500/40" },
+  thoracic: { bg: "bg-indigo-500/15", text: "text-indigo-200", border: "border-indigo-500/40" },
+  risk: { bg: "bg-pink-500/15", text: "text-pink-200", border: "border-pink-500/40" },
+  other: { bg: "bg-white/5", text: "text-gray-200", border: "border-white/10" },
+};
+
+function driverStyle(kind?: string) {
+  if (!kind) return RATIONALE_KIND_STYLE.other;
+  return RATIONALE_KIND_STYLE[kind.toLowerCase()] ?? RATIONALE_KIND_STYLE.other;
+}
+
+interface TreatmentRationaleSectionProps {
+  rationale: TreatmentRationaleResult | null;
+  items: PlanCartItem[];
+  isPending: boolean;
+  error: Error | null;
+  onGenerate: () => void;
+  /** When true, the AI-orchestrated session order is available — we surface
+   *  a hint that the ordering rationale corresponds to that order. */
+  hasOrchestratedOrder?: boolean;
+}
+
+export function TreatmentRationaleSection({
+  rationale,
+  items,
+  isPending,
+  error,
+  onGenerate,
+  hasOrchestratedOrder,
+}: TreatmentRationaleSectionProps) {
+  const [perItemOpen, setPerItemOpen] = useState(true);
+  const itemMap = new Map(items.map(i => [i.id, i]));
+  const canGenerate = items.length >= 1;
+
+  // Empty state — show a CTA so the user can request the rationale.
+  if (!rationale && !isPending && !error) {
+    return (
+      <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-indigo-500/5 p-2.5">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Brain className="h-3.5 w-3.5 text-cyan-300" />
+          <span className="text-[10px] font-semibold text-cyan-200 uppercase tracking-wider">Why this plan?</span>
+        </div>
+        <p className="text-[10px] text-gray-300 leading-relaxed mb-2">
+          Generate an AI-written rationale that ties this plan back to the patient's pain markers, sling drivers,
+          fascial chains, kinetic-chain integrity and postural findings — and explains why these treatments are
+          done in this order.
+        </p>
+        <button
+          onClick={onGenerate}
+          disabled={!canGenerate}
+          className="text-[10px] px-2 py-1 rounded bg-cyan-500/30 text-cyan-100 border border-cyan-400/50 hover:bg-cyan-500/45 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1 transition-colors"
+          data-testid="button-treatment-rationale-generate"
+          title={canGenerate ? "Ask the AI to explain this plan" : "Add at least one item first"}
+        >
+          <Brain className="h-3 w-3" />
+          Generate rationale
+        </button>
+      </div>
+    );
+  }
+
+  // Loading state.
+  if (isPending && !rationale) {
+    return (
+      <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-2.5 flex items-center gap-2 text-[10px] text-cyan-100">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Tying findings to treatments…
+      </div>
+    );
+  }
+
+  // Error state.
+  if (error && !rationale) {
+    return (
+      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-2.5">
+        <div className="flex items-start gap-1.5 text-[10px] text-red-200">
+          <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+          <span>{error.message || "Could not generate the rationale."}</span>
+        </div>
+        <button
+          onClick={onGenerate}
+          className="mt-1.5 text-[10px] px-2 py-1 rounded bg-white/5 text-gray-200 border border-white/10 hover:bg-white/10 inline-flex items-center gap-1"
+          data-testid="button-treatment-rationale-retry"
+        >
+          <RefreshCw className="h-3 w-3" />
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!rationale) return null;
+
+  return (
+    <div className="rounded-lg border border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 via-indigo-500/5 to-transparent p-2.5 space-y-2" data-testid="master-plan-rationale-section">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Brain className="h-3.5 w-3.5 text-cyan-300 shrink-0" />
+          <span className="text-[10px] font-semibold text-cyan-200 uppercase tracking-wider truncate">
+            Why this plan?
+          </span>
+        </div>
+        <button
+          onClick={onGenerate}
+          disabled={isPending}
+          className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1 shrink-0"
+          data-testid="button-treatment-rationale-refresh"
+          title="Regenerate rationale"
+        >
+          {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
+          Refresh
+        </button>
+      </div>
+
+      {/* Clinical picture */}
+      <div>
+        <div className="text-[9px] font-semibold text-cyan-300 uppercase tracking-wider mb-0.5">Clinical picture</div>
+        <p className="text-[10.5px] text-gray-100 leading-relaxed" data-testid="rationale-clinical-picture">
+          {rationale.clinicalPicture}
+        </p>
+      </div>
+
+      {/* Drivers */}
+      {rationale.drivers.length > 0 && (
+        <div>
+          <div className="text-[9px] font-semibold text-cyan-300 uppercase tracking-wider mb-1">Clinical drivers</div>
+          <div className="flex flex-wrap gap-1">
+            {rationale.drivers.map((d, i) => {
+              const s = driverStyle(d.kind);
+              return (
+                <span
+                  key={i}
+                  className={`text-[9px] px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${s.bg} ${s.text} ${s.border}`}
+                  title={d.detail}
+                  data-testid={`rationale-driver-${i}`}
+                >
+                  <span className="font-semibold">{d.label}</span>
+                  <span className="opacity-80">·</span>
+                  <span className="opacity-90">{d.detail}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Ordering rationale */}
+      <div className="rounded border border-white/10 bg-black/30 p-2">
+        <div className="text-[9px] font-semibold text-amber-300 uppercase tracking-wider mb-0.5">
+          {hasOrchestratedOrder ? "Why this order" : "Ordering principles"}
+        </div>
+        <p className="text-[10px] text-gray-200 leading-relaxed" data-testid="rationale-ordering">
+          {rationale.orderingRationale}
+        </p>
+      </div>
+
+      {/* Per-item rationale (collapsible) */}
+      {rationale.treatmentRationale.length > 0 && (
+        <div>
+          <button
+            onClick={() => setPerItemOpen(o => !o)}
+            className="text-[9px] font-semibold text-cyan-300 uppercase tracking-wider inline-flex items-center gap-1 hover:text-cyan-200"
+            data-testid="button-rationale-per-item-toggle"
+          >
+            {perItemOpen ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
+            Per-item rationale ({rationale.treatmentRationale.length})
+          </button>
+          {perItemOpen && (
+            <div className="space-y-1.5 mt-1">
+              {rationale.treatmentRationale.map(r => {
+                const it = itemMap.get(r.itemId);
+                const meta = it ? MODALITY_META[it.modality] : MODALITY_META.exercise;
+                const Icon = meta.icon;
+                return (
+                  <div
+                    key={r.itemId}
+                    className={`rounded border ${meta.border} ${meta.bg} px-2 py-1.5`}
+                    data-testid={`rationale-item-${r.itemId}`}
+                  >
+                    <div className="flex items-start gap-1.5">
+                      <Icon className={`h-3 w-3 ${meta.color} mt-0.5 shrink-0`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] font-medium text-gray-100 truncate">{r.itemName}</div>
+                        <p className="text-[9.5px] text-gray-200 leading-snug mt-0.5">{r.why}</p>
+                        {r.addresses.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {r.addresses.map((a, i) => (
+                              <span
+                                key={i}
+                                className="text-[8px] px-1 py-0.5 rounded bg-black/40 text-gray-300 border border-white/10 inline-flex items-center gap-0.5"
+                              >
+                                <Target className="h-2 w-2" />
+                                {a}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

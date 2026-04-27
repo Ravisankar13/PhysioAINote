@@ -24051,6 +24051,297 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
     }
   });
 
+  // ===== Treatment Rationale (Task #274) =====
+  // Generates a "Why this plan?" narrative for the Master Plan card. Takes
+  // the same plan-cart items + a richer clinicalContext bundle (pain
+  // markers, sling drivers, fascial chain tensions, kinetic-chain
+  // integrity, compromised tissues, scars/adhesions, force hotspots,
+  // postural deviations, natural progression) and optionally the AI-
+  // orchestrated session order, then asks GPT-4o to:
+  //   1. Tie the findings together into a 2-4 sentence clinical picture.
+  //   2. Justify each treatment item against the findings it addresses.
+  //   3. Explain why the items are sequenced in the order they are.
+  // Returned itemIds are filtered against the submitted set so the model
+  // can never invent items.
+  const rationaleClinicalContextSchema = z.object({
+    topHypothesis: z.string().optional(),
+    irritability: z.string().optional(),
+    stage: z.string().optional(),
+    recoveryPhase: z.string().optional(),
+    primaryRegion: z.string().optional(),
+    patientFactors: z.union([
+      z.array(z.string()),
+      z.record(z.string(), z.unknown()),
+    ]).optional(),
+    constraints: z.array(z.string()).max(20).optional(),
+    painMarkers: z.object({
+      count: z.number().int().min(0).max(60).optional(),
+      structures: z.array(z.string().max(120)).max(20).optional(),
+      mechanisms: z.array(z.string().max(80)).max(10).optional(),
+      severitySummary: z.string().max(200).optional(),
+    }).optional(),
+    slingDrivers: z.array(z.object({
+      sling: z.string().max(80),
+      role: z.string().max(40).optional(),
+      drivingFinding: z.string().max(200).optional(),
+    })).max(8).optional(),
+    fascialTensions: z.object({
+      activeChains: z.array(z.string().max(80)).max(10).optional(),
+      drivingChains: z.array(z.string().max(80)).max(10).optional(),
+      propagationCount: z.number().int().min(0).max(60).optional(),
+    }).optional(),
+    chainIntegrity: z.array(z.object({
+      chain: z.string().max(80),
+      score: z.number().min(0).max(100),
+      issues: z.array(z.string().max(120)).max(8).optional(),
+    })).max(8).optional(),
+    compromisedTissues: z.array(z.object({
+      name: z.string().max(120),
+      status: z.string().max(60).optional(),
+      region: z.string().max(80).optional(),
+    })).max(20).optional(),
+    scarLoad: z.object({
+      scarCount: z.number().int().min(0).max(40).optional(),
+      adhesionCount: z.number().int().min(0).max(40).optional(),
+      regions: z.array(z.string().max(80)).max(10).optional(),
+    }).optional(),
+    forceHotspots: z.array(z.object({
+      joint: z.string().max(80),
+      peakForceN: z.number().optional(),
+      asymmetryIndex: z.number().optional(),
+      note: z.string().max(160).optional(),
+    })).max(10).optional(),
+    posturalDeviations: z.object({
+      summary: z.string().max(300).optional(),
+      severity: z.string().max(40).optional(),
+    }).optional(),
+    thoracicStiffness: z.string().max(200).optional(),
+    tendonInflammation: z.array(z.string().max(120)).max(10).optional(),
+    naturalProgression: z.object({
+      window: z.string().max(120).optional(),
+      chronicityRiskPercent: z.number().min(0).max(100).optional(),
+      recurrenceRiskPercent: z.number().min(0).max(100).optional(),
+    }).optional(),
+  }).strip();
+
+  const rationaleSessionStepSchema = z.object({
+    order: z.number().int().min(1).max(40),
+    itemId: z.string().min(1).max(200),
+    itemName: z.string().min(1).max(240),
+    modality: z.string().min(1).max(40),
+    durationMinutes: z.number().min(0).max(180).optional(),
+    rationale: z.string().max(600).optional(),
+  });
+
+  const rationaleBodySchema = z.object({
+    items: z.array(planCartItemSchema).min(1).max(40),
+    clinicalContext: rationaleClinicalContextSchema.default({}),
+    sessionOrder: z.array(rationaleSessionStepSchema).max(40).optional(),
+  });
+
+  const rationaleResultSchema = z.object({
+    clinicalPicture: z.string().min(1),
+    drivers: z.array(z.object({
+      label: z.string().min(1),
+      detail: z.string().min(1),
+      kind: z.string().optional(),
+    })).max(12).default([]),
+    treatmentRationale: z.array(z.object({
+      itemId: z.string().min(1),
+      itemName: z.string().min(1),
+      modality: z.string().min(1),
+      why: z.string().min(1),
+      addresses: z.array(z.string()).default([]),
+    })),
+    orderingRationale: z.string().min(1),
+  });
+
+  app.post('/api/treatment-plan/rationale', async (req: Request, res: Response) => {
+    try {
+      const parse = rationaleBodySchema.safeParse(req.body);
+      if (!parse.success) {
+        return res.status(400).json({ error: 'Invalid request', details: parse.error.format() });
+      }
+      const { items, clinicalContext, sessionOrder } = parse.data;
+
+      const itemsForPrompt = items.map(it => ({
+        id: it.id,
+        modality: it.modality,
+        name: it.name,
+        targetStructure: it.targetStructure || '',
+        targetFinding: it.targetFinding || '',
+        dosage: it.dosage || it.parameters || '',
+        rationale: it.rationale || '',
+        evidenceGrade: it.evidenceGrade || '',
+        contraindications: it.contraindications || '',
+        slingTag: it.slingTag || '',
+        slingRole: it.slingRole || '',
+        mechanism: it.mechanism || '',
+        targetTissue: it.targetTissue || '',
+        desiredEffect: it.desiredEffect || '',
+      }));
+
+      const ctxLines: string[] = [];
+      if (clinicalContext.topHypothesis) ctxLines.push(`Top hypothesis: ${clinicalContext.topHypothesis}`);
+      if (clinicalContext.primaryRegion) ctxLines.push(`Primary region: ${clinicalContext.primaryRegion}`);
+      if (clinicalContext.stage) ctxLines.push(`Stage/duration: ${clinicalContext.stage}`);
+      if (clinicalContext.irritability) ctxLines.push(`Irritability: ${clinicalContext.irritability}`);
+      if (clinicalContext.recoveryPhase) ctxLines.push(`Recovery phase: ${clinicalContext.recoveryPhase}`);
+      if (clinicalContext.patientFactors) {
+        const pf = clinicalContext.patientFactors;
+        if (Array.isArray(pf)) {
+          if (pf.length) ctxLines.push(`Patient factors: ${pf.join(', ')}`);
+        } else if (typeof pf === 'object') {
+          const parts = Object.entries(pf)
+            .filter(([, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => `${k}=${typeof v === 'number' ? Number((v as number).toFixed(2)) : String(v)}`);
+          if (parts.length) ctxLines.push(`Patient factors: ${parts.join(', ')}`);
+        }
+      }
+      if (clinicalContext.constraints?.length) ctxLines.push(`Constraints/flags: ${clinicalContext.constraints.join('; ')}`);
+      const pm = clinicalContext.painMarkers;
+      if (pm && (pm.count || pm.structures?.length)) {
+        const bits: string[] = [];
+        if (pm.count) bits.push(`${pm.count} pain marker${pm.count === 1 ? '' : 's'}`);
+        if (pm.structures?.length) bits.push(`on ${pm.structures.join(', ')}`);
+        if (pm.mechanisms?.length) bits.push(`mechanisms: ${pm.mechanisms.join(', ')}`);
+        if (pm.severitySummary) bits.push(pm.severitySummary);
+        ctxLines.push(`Pain markers: ${bits.join(' · ')}`);
+      }
+      if (clinicalContext.slingDrivers?.length) {
+        ctxLines.push(`Sling drivers: ${clinicalContext.slingDrivers.map(s => `${s.sling}${s.role ? ` (${s.role})` : ''}${s.drivingFinding ? ` — ${s.drivingFinding}` : ''}`).join('; ')}`);
+      }
+      const ft = clinicalContext.fascialTensions;
+      if (ft && (ft.activeChains?.length || ft.drivingChains?.length)) {
+        const bits: string[] = [];
+        if (ft.drivingChains?.length) bits.push(`driving: ${ft.drivingChains.join(', ')}`);
+        if (ft.activeChains?.length) bits.push(`active: ${ft.activeChains.join(', ')}`);
+        if (ft.propagationCount) bits.push(`${ft.propagationCount} propagation step${ft.propagationCount === 1 ? '' : 's'}`);
+        ctxLines.push(`Fascial chain tension: ${bits.join(' · ')}`);
+      }
+      if (clinicalContext.chainIntegrity?.length) {
+        const lo = clinicalContext.chainIntegrity.filter(c => c.score < 80);
+        if (lo.length) {
+          ctxLines.push(`Kinetic-chain integrity (low): ${lo.map(c => `${c.chain} ${Math.round(c.score)}/100${c.issues?.length ? ` [${c.issues.slice(0, 3).join(', ')}]` : ''}`).join('; ')}`);
+        }
+      }
+      if (clinicalContext.compromisedTissues?.length) {
+        ctxLines.push(`Compromised tissues: ${clinicalContext.compromisedTissues.map(t => `${t.name}${t.status ? ` (${t.status})` : ''}${t.region ? ` @ ${t.region}` : ''}`).join('; ')}`);
+      }
+      const sl = clinicalContext.scarLoad;
+      if (sl && ((sl.scarCount ?? 0) + (sl.adhesionCount ?? 0) > 0)) {
+        const bits: string[] = [];
+        if (sl.scarCount) bits.push(`${sl.scarCount} scar${sl.scarCount === 1 ? '' : 's'}`);
+        if (sl.adhesionCount) bits.push(`${sl.adhesionCount} adhesion band${sl.adhesionCount === 1 ? '' : 's'}`);
+        if (sl.regions?.length) bits.push(`regions: ${sl.regions.join(', ')}`);
+        ctxLines.push(`Scar/adhesion load: ${bits.join(' · ')}`);
+      }
+      if (clinicalContext.forceHotspots?.length) {
+        ctxLines.push(`Force hotspots: ${clinicalContext.forceHotspots.map(f => `${f.joint}${typeof f.peakForceN === 'number' ? ` peak ${Math.round(f.peakForceN)}N` : ''}${typeof f.asymmetryIndex === 'number' ? ` asym ${Math.round(f.asymmetryIndex * 100)}%` : ''}${f.note ? ` (${f.note})` : ''}`).join('; ')}`);
+      }
+      if (clinicalContext.posturalDeviations?.summary) {
+        ctxLines.push(`Postural deviation: ${clinicalContext.posturalDeviations.summary}${clinicalContext.posturalDeviations.severity ? ` (${clinicalContext.posturalDeviations.severity})` : ''}`);
+      }
+      if (clinicalContext.thoracicStiffness) ctxLines.push(`Thoracic stiffness: ${clinicalContext.thoracicStiffness}`);
+      if (clinicalContext.tendonInflammation?.length) ctxLines.push(`Tendon inflammation: ${clinicalContext.tendonInflammation.join(', ')}`);
+      const np = clinicalContext.naturalProgression;
+      if (np && (np.window || typeof np.chronicityRiskPercent === 'number' || typeof np.recurrenceRiskPercent === 'number')) {
+        const bits: string[] = [];
+        if (np.window) bits.push(`window ${np.window}`);
+        if (typeof np.chronicityRiskPercent === 'number') bits.push(`chronicity ${Math.round(np.chronicityRiskPercent)}%`);
+        if (typeof np.recurrenceRiskPercent === 'number') bits.push(`recurrence ${Math.round(np.recurrenceRiskPercent)}%`);
+        ctxLines.push(`Natural progression: ${bits.join(' · ')}`);
+      }
+
+      const orderBlock = sessionOrder && sessionOrder.length > 0
+        ? `\n\nAI-orchestrated session order (already chosen — explain WHY this order makes clinical sense):\n${sessionOrder.map(s => `${s.order}. ${s.itemName} [${s.modality}]${s.durationMinutes ? ` · ${s.durationMinutes} min` : ''}${s.rationale ? ` — ${s.rationale}` : ''}`).join('\n')}`
+        : '';
+
+      const systemPrompt = `You are a senior physiotherapist authoring the rationale section of a treatment plan. Your job is to make the clinician (or student) immediately see WHY each treatment was picked and WHY they are sequenced in this order, by tying everything back to the actual clinical picture.
+
+Rules:
+- Tie findings together. The clinical picture must read as one coherent story (e.g. "L5 radicular pain → posterior chain tension → glute inhibition driving lateral sling failure → compensatory thoracic stiffness").
+- Be specific to the patient. Quote real findings (sling names, chain names, structures, joints, scores) — never generic boilerplate.
+- For each item, name the clinical finding(s) it addresses (drives, calms, restores, protects, offloads, mobilises, etc.).
+- For ordering, use real principles: pain/inflammation modulation → tissue prep / manual rx that opens range → activation/motor control → loading/strength → cool-down. If the AI already produced an order, justify it; don't reinvent it.
+- Plain clinical language. No marketing fluff. No restating instructions.
+- Return STRICT JSON only.`;
+
+      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none provided)'}${orderBlock}\n\nSelected treatment items (${items.length}):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON with keys:\n- clinicalPicture (string, 2–4 sentences tying findings together)\n- drivers (array of {label, detail, kind?}; up to 8; "kind" is one of pain|sling|fascial|chain|tissue|scar|force|postural|tendon|thoracic|risk|other)\n- treatmentRationale (array of {itemId, itemName, modality, why, addresses[]}; one per item, IDs MUST be from the provided list)\n- orderingRationale (string, 2–4 sentences explaining the sequencing rationale)`;
+
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const completion = await aiClient.chat.completions.create({
+        model: 'gpt-4o',
+        response_format: { type: 'json_object' },
+        temperature: 0.4,
+        max_tokens: 2500,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || '{}';
+      let parsedJson: unknown;
+      try {
+        parsedJson = JSON.parse(raw);
+      } catch (e) {
+        return res.status(502).json({ error: 'AI returned invalid JSON' });
+      }
+
+      const result = rationaleResultSchema.safeParse(parsedJson);
+      if (!result.success) {
+        return res.status(502).json({ error: 'AI rationale failed validation', details: result.error.format() });
+      }
+
+      const validIds = new Set(items.map(i => i.id));
+      const itemMap = new Map(items.map(i => [i.id, i]));
+      const filteredRationale = result.data.treatmentRationale.filter(r => validIds.has(r.itemId));
+
+      // Backfill missing items with a minimal default so the UI shows every
+      // cart item (the model may occasionally skip one).
+      const seen = new Set(filteredRationale.map(r => r.itemId));
+      for (const it of items) {
+        if (seen.has(it.id)) continue;
+        filteredRationale.push({
+          itemId: it.id,
+          itemName: it.name,
+          modality: it.modality,
+          why: it.rationale || `Selected for ${it.targetStructure || it.targetFinding || 'this presentation'}.`,
+          addresses: [it.targetStructure || it.targetFinding || ''].filter(Boolean) as string[],
+        });
+      }
+
+      // Reorder rationale to match cart order for stable rendering.
+      const cartOrder = new Map(items.map((i, idx) => [i.id, idx]));
+      filteredRationale.sort((a, b) => (cartOrder.get(a.itemId) ?? 0) - (cartOrder.get(b.itemId) ?? 0));
+
+      // Re-attach canonical names from the cart so the UI is never out of sync.
+      const finalRationale = filteredRationale.map(r => {
+        const it = itemMap.get(r.itemId);
+        return {
+          ...r,
+          itemName: it?.name ?? r.itemName,
+          modality: it?.modality ?? r.modality,
+        };
+      });
+
+      res.json({
+        clinicalPicture: result.data.clinicalPicture,
+        drivers: result.data.drivers,
+        treatmentRationale: finalRationale,
+        orderingRationale: result.data.orderingRationale,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('[treatment-plan/rationale] error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to generate rationale' });
+    }
+  });
+
   // ===== Treatment Timeline Review (Task #193) =====
   // Scores each scheduled intervention as help / neutral / hinder for the
   // patient and flags conflicts. Filters returned IDs against submitted

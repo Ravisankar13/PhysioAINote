@@ -3,10 +3,14 @@ import { openai } from '../../openai';
 import { searchPubMed } from './pubmedAdapter';
 import { searchOpenAlex } from './openAlexAdapter';
 import { searchEuropePmc } from './europePmcAdapter';
+import { searchPedro } from './pedroAdapter';
+import { searchSemanticScholar } from './semanticScholarAdapter';
+import { searchCrossRef } from './crossrefAdapter';
+import { searchClinicalTrials } from './clinicalTrialsAdapter';
 import {
   normalizeDoi, normalizeTitle,
-  serializeForBag, serializeForPubMed, serializeForEuropePmc,
-  type AdapterResult, type NormalizedPaper, type StructuredQuery,
+  serializeForBag, serializeForPubMed, serializeForEuropePmc, serializeForTrials,
+  type AdapterResult, type NormalizedPaper, type Source, type StructuredQuery, type TrialMetadata,
 } from './types';
 import { searchablePhenotypeSchema, type SearchablePhenotype } from '@shared/schema';
 
@@ -42,7 +46,7 @@ export interface QueryTierRecord {
 
 export interface RankedPaper {
   citationNumber: number;
-  source: 'pubmed' | 'openalex' | 'europepmc';
+  source: Source;
   externalId: string;
   title: string;
   authors: string[];
@@ -53,6 +57,27 @@ export interface RankedPaper {
   url: string;
   openAccess: boolean;
   matchedVariables: string[];
+  /** Union of every source that contributed this paper (PubMed +
+   *  Semantic Scholar + CrossRef-filled, etc). Always contains at
+   *  least the primary `source`. */
+  mergedFromSources: Source[];
+  /** PEDro Score (0-10) when this paper came from PEDro. */
+  pedroScore?: number | null;
+  /** Citation count when populated by Semantic Scholar. */
+  citationCount?: number | null;
+}
+
+export interface RankedTrial {
+  source: 'clinicaltrials';
+  nct: string;
+  title: string;
+  abstract: string;
+  status: string;
+  phase: string | null;
+  intervention: string | null;
+  primaryOutcome: string | null;
+  url: string;
+  sponsor: string | null;
 }
 
 export type ConfidenceBucket = 'High' | 'Moderate' | 'Low' | 'Extrapolated';
@@ -68,6 +93,10 @@ export interface CaseResearchOutcome {
   inferredVariables: InferredVariable[];
   queriesRan: QueryTierRecord[];
   retrievedPapers: RankedPaper[];
+  /** ClinicalTrials.gov v2 records — split out of the citation
+   *  pipeline because they're trials, not abstracts. Up to 5 are
+   *  surfaced in a dedicated "Active & recent trials" sub-section. */
+  retrievedTrials: RankedTrial[];
   synthesizedAnswer: string;
   confidence: ConfidenceBucket;
   confidenceReason: string;
@@ -144,7 +173,7 @@ export function fallbackPhenotype(condition: string): SearchablePhenotype {
  *  the engine from AND'ing colloquial words ("right-sided", "hinging")
  *  into queries no source has papers for. */
 export async function inferPhenotype(condition: string, caseSummary: string): Promise<SearchablePhenotype> {
-  const sys = `You are a clinical-research librarian translating a clinician's free-text case description into a STRUCTURED search phenotype that PubMed / OpenAlex / Europe PMC will actually return papers for.
+  const sys = `You are a clinical-research librarian translating a clinician's free-text case description into a STRUCTURED search phenotype that PubMed / OpenAlex / Europe PMC / PEDro / Semantic Scholar / CrossRef / ClinicalTrials.gov will actually return papers for.
 
 Your only job: rephrase the case in the WORDS BIOMEDICAL LITERATURE USES.
 
@@ -540,24 +569,42 @@ export function buildQueryLadder(phenotype: SearchablePhenotype, vars: InferredV
 
 // ---- Retrieval + dedupe + ranking --------------------------------
 
-const SOURCE_PRIORITY: Record<NormalizedPaper['source'], number> = {
-  pubmed: 3,
-  europepmc: 2,
-  openalex: 1,
+/** Higher = preferred when the same paper is returned by multiple
+ *  sources. PubMed wins because its abstracts are the most reliably
+ *  complete; PEDro and Semantic Scholar tie just below because each is
+ *  domain-leading in its own niche (physio gold-standard / AI relevance).
+ *  ClinicalTrials.gov is 0 — trials don't compete on the paper ranking
+ *  (they're split out into their own sub-section). */
+const SOURCE_PRIORITY: Record<Source, number> = {
+  pubmed: 4,
+  europepmc: 3,
+  semanticscholar: 3,
+  pedro: 3,
+  openalex: 2,
+  crossref: 1,
+  clinicaltrials: 0,
 };
 
 interface MergedPaper extends NormalizedPaper {
   matchedVariables: string[];
   rankScore: number;
+  mergedFromSources: Source[];
 }
 
-function dedupeAndMerge(results: AdapterResult[], variables: InferredVariable[]): MergedPaper[] {
+function dedupeAndMerge(results: AdapterResult[], variables: InferredVariable[]): { papers: MergedPaper[]; trials: NormalizedPaper[] } {
   const byKey = new Map<string, MergedPaper>();
+  const trials: NormalizedPaper[] = [];
   const currentYear = new Date().getFullYear();
 
   for (const r of results) {
     if (!r.ok) continue;
     for (const p of r.papers) {
+      // Trials are a sibling channel — keep them out of the paper
+      // dedupe pool. They're surfaced in their own sub-section.
+      if (p.source === 'clinicaltrials') {
+        trials.push(p);
+        continue;
+      }
       const doi = normalizeDoi(p.doi);
       const titleKey = normalizeTitle(p.title);
       const key = doi ? `doi:${doi}` : `t:${titleKey}`;
@@ -577,25 +624,62 @@ function dedupeAndMerge(results: AdapterResult[], variables: InferredVariable[])
       const recencyScore = p.year ? Math.max(0, 5 - Math.min(5, currentYear - p.year)) : 0;
       const sourceScore = SOURCE_PRIORITY[p.source];
       const oaScore = p.openAccess ? 1 : 0;
-      const score = coverageScore + abstractScore + recencyScore + sourceScore + oaScore;
+      // PEDro Score (0-10) is a methodological-quality boost — half-weight
+      // the score so a 10/10 RCT lifts the paper by ~5 points without
+      // dominating coverage.
+      const pedroScore = typeof p.pedroScore === 'number' ? p.pedroScore * 0.5 : 0;
+      // Mild log-bump for highly-cited papers from S2.
+      const citationBoost = typeof p.citationCount === 'number' && p.citationCount > 0
+        ? Math.min(3, Math.log10(p.citationCount + 1))
+        : 0;
+      const score = coverageScore + abstractScore + recencyScore + sourceScore + oaScore + pedroScore + citationBoost;
 
       const existing = byKey.get(key);
       if (!existing) {
-        byKey.set(key, { ...p, matchedVariables: matched, rankScore: score });
+        byKey.set(key, {
+          ...p,
+          matchedVariables: matched,
+          rankScore: score,
+          mergedFromSources: [p.source],
+        });
       } else {
         const better = SOURCE_PRIORITY[p.source] > SOURCE_PRIORITY[existing.source] ? p : existing;
         const mergedMatched = Array.from(new Set([...existing.matchedVariables, ...matched]));
+        const mergedSources = Array.from(new Set([...existing.mergedFromSources, p.source])) as Source[];
+        // CrossRef opportunistic field-fill: when the existing record
+        // is missing journal/year and the same DOI/title comes back
+        // from CrossRef with those populated, fill them in. CrossRef
+        // metadata is usually clean even when its abstract is empty.
+        const fillJournal = !existing.journal && p.source === 'crossref' && p.journal ? p.journal : null;
+        const fillYear = existing.year == null && p.source === 'crossref' && typeof p.year === 'number' ? p.year : null;
+        // Also let any incoming source fill missing journal/year if
+        // the existing record happens to be CrossRef-only.
+        const reverseFillJournal = !existing.journal && existing.source === 'crossref' && p.journal ? p.journal : null;
+        const reverseFillYear = existing.year == null && existing.source === 'crossref' && typeof p.year === 'number' ? p.year : null;
+
         byKey.set(key, {
           ...better,
           abstract: (p.abstract.length > existing.abstract.length ? p.abstract : existing.abstract),
+          journal: better.journal ?? fillJournal ?? reverseFillJournal ?? existing.journal ?? p.journal,
+          year: better.year ?? fillYear ?? reverseFillYear ?? existing.year ?? p.year,
+          // Preserve any source-specific extras that may live on either side.
+          pedroScore: existing.pedroScore ?? p.pedroScore ?? null,
+          citationCount: typeof existing.citationCount === 'number'
+            ? Math.max(existing.citationCount, p.citationCount ?? 0)
+            : (p.citationCount ?? null),
+          openAccess: existing.openAccess || p.openAccess,
           matchedVariables: mergedMatched,
           rankScore: Math.max(existing.rankScore, score) + 1,
+          mergedFromSources: mergedSources,
         });
       }
     }
   }
 
-  return Array.from(byKey.values()).sort((a, b) => b.rankScore - a.rankScore);
+  return {
+    papers: Array.from(byKey.values()).sort((a, b) => b.rankScore - a.rankScore),
+    trials,
+  };
 }
 
 // ---- Tier runner -------------------------------------------------
@@ -607,24 +691,32 @@ const MAX_FINAL_PAPERS = 10;
 interface RunOutput {
   queriesRan: QueryTierRecord[];
   papers: MergedPaper[];
+  trials: NormalizedPaper[];
   droppedVariables: string[];
   winningTier: number;
   seedBroadenings: SeedBroadening[];
 }
 
-async function runTier(tier: QueryTier, variables: InferredVariable[]): Promise<{ record: QueryTierRecord; merged: MergedPaper[] }> {
+async function runTier(tier: QueryTier, variables: InferredVariable[]): Promise<{ record: QueryTierRecord; merged: MergedPaper[]; trials: NormalizedPaper[] }> {
   // Per-source serialization — PubMed gets boolean+[tiab], the others
-  // get a relevance-friendly bag of phrases.
+  // get a relevance-friendly bag of phrases. PEDro / Semantic Scholar /
+  // CrossRef all behave best with the bag form. ClinicalTrials.gov v2
+  // uses a plain-text condition query.
   const pubmedQ = serializeForPubMed(tier.structured);
   const bagQ = serializeForBag(tier.structured);
   const epmcQ = serializeForEuropePmc(tier.structured);
+  const trialsQ = serializeForTrials(tier.structured);
 
-  const [pm, oa, ep] = await Promise.all([
+  const [pm, oa, ep, pedro, s2, cr, ct] = await Promise.all([
     searchPubMed(pubmedQ, { limit: PER_SOURCE_LIMIT }),
     searchOpenAlex(bagQ, { limit: PER_SOURCE_LIMIT }),
     searchEuropePmc(epmcQ, { limit: PER_SOURCE_LIMIT }),
+    searchPedro(bagQ, { limit: PER_SOURCE_LIMIT }),
+    searchSemanticScholar(bagQ, { limit: PER_SOURCE_LIMIT }),
+    searchCrossRef(bagQ, { limit: PER_SOURCE_LIMIT }),
+    searchClinicalTrials(trialsQ, { limit: PER_SOURCE_LIMIT }),
   ]);
-  const merged = dedupeAndMerge([pm, oa, ep], variables);
+  const { papers: merged, trials } = dedupeAndMerge([pm, oa, ep, pedro, s2, cr, ct], variables);
   // Display query is the bag-of-phrases (most readable to clinicians).
   const record: QueryTierRecord = {
     tier: tier.tier,
@@ -635,12 +727,16 @@ async function runTier(tier: QueryTier, variables: InferredVariable[]): Promise<
       pubmed: { count: pm.papers.length, ok: pm.ok, query: pubmedQ, ...(pm.error ? { error: pm.error } : {}) },
       openalex: { count: oa.papers.length, ok: oa.ok, query: bagQ, ...(oa.error ? { error: oa.error } : {}) },
       europepmc: { count: ep.papers.length, ok: ep.ok, query: epmcQ, ...(ep.error ? { error: ep.error } : {}) },
+      pedro: { count: pedro.papers.length, ok: pedro.ok, query: bagQ, ...(pedro.error ? { error: pedro.error } : {}) },
+      semanticscholar: { count: s2.papers.length, ok: s2.ok, query: bagQ, ...(s2.error ? { error: s2.error } : {}) },
+      crossref: { count: cr.papers.length, ok: cr.ok, query: bagQ, ...(cr.error ? { error: cr.error } : {}) },
+      clinicaltrials: { count: ct.papers.length, ok: ct.ok, query: trialsQ, ...(ct.error ? { error: ct.error } : {}) },
     },
     paperCount: merged.length,
     seedUsed: tier.seed,
     kind: tier.kind,
   };
-  return { record, merged };
+  return { record, merged, trials };
 }
 
 export async function retrieveTiered(phenotype: SearchablePhenotype, variables: InferredVariable[]): Promise<RunOutput> {
@@ -648,6 +744,7 @@ export async function retrieveTiered(phenotype: SearchablePhenotype, variables: 
   const queriesRan: QueryTierRecord[] = [];
   const seedBroadenings: SeedBroadening[] = [];
   let bestMerged: MergedPaper[] = [];
+  let bestTrials: NormalizedPaper[] = [];
   let bestTier = 0;
   let bestDropped: string[] = [];
 
@@ -655,7 +752,7 @@ export async function retrieveTiered(phenotype: SearchablePhenotype, variables: 
 
   for (const tier of ladder) {
     if (tier.structured.seedPhrases.length === 0 && tier.structured.groups.length === 0) continue;
-    const { record, merged } = await runTier(tier, variables);
+    const { record, merged, trials } = await runTier(tier, variables);
     queriesRan.push(record);
 
     if (record.kind === 'broaden-seed' && tier.seed !== prevSeedSeen) {
@@ -668,18 +765,38 @@ export async function retrieveTiered(phenotype: SearchablePhenotype, variables: 
       bestMerged = merged;
       bestTier = tier.tier;
       bestDropped = tier.dropped.map(d => d.label);
+      // Same preservation rule as the merged-improves branch below: only
+      // overwrite trials when the winning tier actually returned any,
+      // so we don't drop earlier ClinicalTrials.gov hits when the
+      // paper tier finally hits TARGET_USABLE.
+      if (trials.length > 0) {
+        bestTrials = trials;
+      }
       break;
     }
     if (merged.length > bestMerged.length) {
       bestMerged = merged;
       bestTier = tier.tier;
       bestDropped = tier.dropped.map(d => d.label);
+      // Only overwrite trials when the winning tier actually returned
+      // some — otherwise we'd silently discard useful ClinicalTrials.gov
+      // hits from an earlier tier just because a later tier improved
+      // the paper pool. Trials live in their own sub-section, so we
+      // can keep the best non-empty set we've seen so far.
+      if (trials.length > 0) {
+        bestTrials = trials;
+      }
+    } else if (bestTrials.length === 0 && trials.length > 0) {
+      // Same idea, in reverse: even if the paper pool didn't grow,
+      // grab trial signal the first time we see it.
+      bestTrials = trials;
     }
   }
 
   return {
     queriesRan,
     papers: bestMerged.slice(0, MAX_FINAL_PAPERS),
+    trials: bestTrials,
     droppedVariables: bestDropped,
     winningTier: bestTier,
     seedBroadenings,
@@ -702,19 +819,25 @@ export async function synthesizeCaseAnswer(
   droppedVariables: string[],
   phenotype: SearchablePhenotype,
   seedBroadenings: SeedBroadening[],
+  trialCount: number = 0,
 ): Promise<{ answer: string; confidence: ConfidenceBucket; confidenceReason: string }> {
   if (papers.length === 0) {
     const broadenedNote = seedBroadenings.length > 0
       ? ` Searches were broadened from "${seedBroadenings[0].from}" through ${seedBroadenings.map(b => `"${b.to}"`).join(' → ')}.`
       : '';
+    // If trials matched even though no papers did, point the clinician
+    // at the trials sub-section rather than declaring the case a dead end.
+    const trialNote = trialCount > 0
+      ? ` However, ${trialCount} relevant ClinicalTrials.gov record${trialCount === 1 ? '' : 's'} matched — see the "Active & recent trials" section below for ongoing or recently-completed studies that may inform care.`
+      : '';
     return {
-      answer: `No directly applicable evidence was retrieved for **${condition}** with the current case modifiers. ` +
-        `Searches across PubMed, OpenAlex, and Europe PMC did not return citable abstracts.${broadenedNote} ` +
+      answer: `No directly applicable published evidence was retrieved for **${condition}** with the current case modifiers. ` +
+        `Searches across PubMed, OpenAlex, Europe PMC, PEDro, Semantic Scholar, CrossRef, and ClinicalTrials.gov did not return citable abstracts.${broadenedNote}${trialNote} ` +
         `Try editing the interpreted case (above) — adjusting the canonical condition or adding broader synonyms often unblocks the search.`,
       confidence: 'Extrapolated',
       confidenceReason: seedBroadenings.length > 0
-        ? `No papers retrieved even after broadening the seed${droppedVariables.length > 0 ? ` and dropping ${droppedVariables.length} modifier(s)` : ''}.`
-        : 'No papers were retrieved from any source.',
+        ? `No papers retrieved even after broadening the seed${droppedVariables.length > 0 ? ` and dropping ${droppedVariables.length} modifier(s)` : ''}${trialCount > 0 ? `; ${trialCount} trial(s) available as supplementary signal` : ''}.`
+        : `No papers were retrieved from any source${trialCount > 0 ? `; ${trialCount} trial(s) available as supplementary signal` : ''}.`,
     };
   }
 
@@ -840,9 +963,19 @@ export function computeBaselineConfidence(
   seedBroadenings: SeedBroadening[],
 ): { bucket: ConfidenceBucket; reason: string } {
   const usable = papers.filter(p => p.abstract && p.abstract.length >= 120).length;
-  const goodSources = papers.filter(p => p.source === 'pubmed' || p.source === 'europepmc').length;
+  // PEDro and Semantic Scholar both qualify as high-quality sources for
+  // this physiotherapy decision-support tool — PEDro because it's
+  // domain gold-standard, S2 because its citation count signal aligns
+  // with research consensus. CrossRef is excluded because its records
+  // are usually metadata-only.
+  const goodSources = papers.filter(p =>
+    p.source === 'pubmed'
+    || p.source === 'europepmc'
+    || p.source === 'pedro'
+    || p.source === 'semanticscholar'
+  ).length;
   if (winningTier === 0 && usable >= 3 && goodSources >= 2) {
-    return { bucket: 'High', reason: 'Full case query returned ≥3 abstracts from PubMed/Europe PMC.' };
+    return { bucket: 'High', reason: 'Full case query returned ≥3 abstracts from high-quality sources (PubMed / Europe PMC / PEDro / Semantic Scholar).' };
   }
   if (winningTier <= 1 && usable >= 2 && seedBroadenings.length === 0) {
     return { bucket: 'Moderate', reason: `Tier ${winningTier} retrieval; partial modifier coverage.` };
@@ -888,7 +1021,7 @@ export async function runCaseResearch(
   const ladder = buildQueryLadder(phenotype, variables);
   const totalTiers = ladder.length;
 
-  const { queriesRan, papers, droppedVariables, winningTier, seedBroadenings } =
+  const { queriesRan, papers, trials, droppedVariables, winningTier, seedBroadenings } =
     await retrieveTiered(phenotype, variables);
 
   const ranked: RankedPaper[] = papers.map((p, i) => ({
@@ -904,10 +1037,37 @@ export async function runCaseResearch(
     url: p.url,
     openAccess: p.openAccess,
     matchedVariables: p.matchedVariables,
+    mergedFromSources: p.mergedFromSources,
+    pedroScore: p.pedroScore ?? null,
+    citationCount: p.citationCount ?? null,
   }));
 
+  // Dedupe trials by NCT, keep up to 5 (UI cap), preserve API order so
+  // the most relevant ClinicalTrials.gov hits stay first.
+  const seenNct = new Set<string>();
+  const rankedTrials: RankedTrial[] = [];
+  for (const t of trials) {
+    const meta: TrialMetadata | null = t.trialMetadata ?? null;
+    const nct = (meta?.nct || t.externalId || '').trim();
+    if (!nct || seenNct.has(nct)) continue;
+    seenNct.add(nct);
+    rankedTrials.push({
+      source: 'clinicaltrials',
+      nct,
+      title: t.title,
+      abstract: t.abstract,
+      status: meta?.status ?? 'UNKNOWN',
+      phase: meta?.phase ?? null,
+      intervention: meta?.intervention ?? null,
+      primaryOutcome: meta?.primaryOutcome ?? null,
+      url: t.url,
+      sponsor: t.authors[0] ?? null,
+    });
+    if (rankedTrials.length >= 5) break;
+  }
+
   const synth = await synthesizeCaseAnswer(
-    condition, caseSummary, ranked, droppedVariables, phenotype, seedBroadenings,
+    condition, caseSummary, ranked, droppedVariables, phenotype, seedBroadenings, rankedTrials.length,
   );
   const baseline = computeBaselineConfidence(winningTier, totalTiers, ranked, seedBroadenings);
 
@@ -924,6 +1084,7 @@ export async function runCaseResearch(
     inferredVariables: variables,
     queriesRan,
     retrievedPapers: ranked,
+    retrievedTrials: rankedTrials,
     synthesizedAnswer: synth.answer,
     confidence: finalBucket,
     confidenceReason: finalReason,

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import {
   Loader2, FlaskConical, RefreshCcw, AlertTriangle, ChevronDown, ChevronUp,
   ExternalLink, BookOpen, ListFilter, Search, Info, ShieldCheck, GripHorizontal,
-  Pencil, X, Plus, Microscope, Sparkles,
+  Pencil, X, Plus, Microscope, Sparkles, Activity, Award, Quote,
 } from "lucide-react";
 import type { CaseResearchSynthesis, SearchablePhenotype } from "@shared/schema";
 
@@ -66,6 +66,10 @@ const SOURCE_LABEL: Record<string, string> = {
   pubmed: "PubMed",
   openalex: "OpenAlex",
   europepmc: "Europe PMC",
+  pedro: "PEDro",
+  semanticscholar: "Semantic Scholar",
+  crossref: "CrossRef",
+  clinicaltrials: "ClinicalTrials.gov",
 };
 
 /** Build a sensible default phenotype for cached rows that pre-date
@@ -759,7 +763,7 @@ export function CaseResearchPanel({
           >
           {!enabled && (
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Submit a clinical prediction above and PhysioGPT will synthesize patient-specific research from PubMed, OpenAlex, and Europe PMC for this exact case.
+              Submit a clinical prediction above and PhysioGPT will synthesize patient-specific research from PubMed, OpenAlex, Europe PMC, PEDro, Semantic Scholar, CrossRef, and ClinicalTrials.gov for this exact case.
             </p>
           )}
 
@@ -785,7 +789,7 @@ export function CaseResearchPanel({
           {isRunning && (
             <div className="flex items-center gap-2 text-[11px] text-slate-300" data-testid="status-case-research-loading">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-300" />
-              Inferring discriminating variables, querying PubMed / OpenAlex / Europe PMC, synthesizing…
+              Inferring discriminating variables, querying PubMed / OpenAlex / Europe PMC / PEDro / Semantic Scholar / CrossRef / ClinicalTrials.gov, synthesizing…
             </div>
           )}
 
@@ -824,8 +828,11 @@ export function CaseResearchPanel({
                 </div>
               )}
 
-              {/* Dedicated no-evidence empty state */}
-              {cached.retrievedPapers.length === 0 && (
+              {/* Dedicated no-evidence empty state — only fire when
+                  *both* literature and trials channels came back empty.
+                  Trial-only hits should still feel like a useful result,
+                  not a "no evidence" failure. */}
+              {cached.retrievedPapers.length === 0 && (cached.retrievedTrials ?? []).length === 0 && (
                 <div
                   className="rounded-md border border-rose-500/40 bg-rose-950/30 text-rose-100 px-2.5 py-2 text-[11px] leading-snug flex items-start gap-2"
                   data-testid="banner-case-research-no-evidence"
@@ -833,7 +840,7 @@ export function CaseResearchPanel({
                   <Info className="h-3.5 w-3.5 mt-[1px] shrink-0" />
                   <span>
                     <span className="font-semibold">No evidence found.</span>{' '}
-                    All {cached.queriesRan.length} query tier{cached.queriesRan.length === 1 ? '' : 's'} returned zero usable papers across PubMed, OpenAlex, and Europe PMC
+                    All {cached.queriesRan.length} query tier{cached.queriesRan.length === 1 ? '' : 's'} returned zero usable papers or trials across PubMed, OpenAlex, Europe PMC, PEDro, Semantic Scholar, CrossRef, and ClinicalTrials.gov
                     {(cached.seedBroadenings ?? []).length > 0
                       ? ', even after broadening the seed'
                       : ''}
@@ -841,6 +848,20 @@ export function CaseResearchPanel({
                       ? ` and dropping ${cached.droppedVariables.length} modifier${cached.droppedVariables.length === 1 ? '' : 's'}`
                       : ''}
                     . Try <button type="button" className="underline text-rose-200 hover:text-rose-100" onClick={startEditing}>editing the interpreted case</button> above (broaden the canonical condition or add synonyms), then re-run.
+                  </span>
+                </div>
+              )}
+              {/* Trial-only hit (no papers, but trials present): friendlier
+                  copy that surfaces the trials section as the result. */}
+              {cached.retrievedPapers.length === 0 && (cached.retrievedTrials ?? []).length > 0 && (
+                <div
+                  className="rounded-md border border-cyan-500/40 bg-cyan-950/30 text-cyan-100 px-2.5 py-2 text-[11px] leading-snug flex items-start gap-2"
+                  data-testid="banner-case-research-trials-only"
+                >
+                  <Info className="h-3.5 w-3.5 mt-[1px] shrink-0" />
+                  <span>
+                    <span className="font-semibold">No published abstracts, but trials matched.</span>{' '}
+                    See the Active &amp; recent trials section below for {(cached.retrievedTrials ?? []).length} relevant ClinicalTrials.gov record{(cached.retrievedTrials ?? []).length === 1 ? '' : 's'}.
                   </span>
                 </div>
               )}
@@ -1055,9 +1076,44 @@ export function CaseResearchPanel({
                         {p.journal ? ` · ${p.journal}` : ''}
                       </div>
                       <div className="flex flex-wrap items-center gap-1 ml-5 mt-0.5">
-                        <span className="text-[9.5px] px-1 rounded border border-slate-600/60 bg-slate-800/60 text-slate-300">
-                          {SOURCE_LABEL[p.source] ?? p.source}
-                        </span>
+                        {(() => {
+                          // Render every contributing source as its own
+                          // chip — falls back to the primary `source`
+                          // for older rows that don't have the union
+                          // field populated.
+                          const sources = (p.mergedFromSources && p.mergedFromSources.length > 0)
+                            ? p.mergedFromSources
+                            : [p.source];
+                          return sources.map(s => (
+                            <span
+                              key={s}
+                              className="text-[9.5px] px-1 rounded border border-slate-600/60 bg-slate-800/60 text-slate-300"
+                              data-testid={`citation-source-chip-${p.citationNumber}-${s}`}
+                            >
+                              {SOURCE_LABEL[s] ?? s}
+                            </span>
+                          ));
+                        })()}
+                        {typeof p.pedroScore === 'number' && (
+                          <span
+                            className="inline-flex items-center gap-0.5 text-[9.5px] px-1 rounded border border-amber-500/50 bg-amber-500/10 text-amber-200"
+                            title={`PEDro Score ${p.pedroScore}/10 — physiotherapy methodological quality rating`}
+                            data-testid={`citation-pedro-score-${p.citationNumber}`}
+                          >
+                            <Award className="h-2.5 w-2.5" />
+                            PEDro {p.pedroScore}/10
+                          </span>
+                        )}
+                        {typeof p.citationCount === 'number' && p.citationCount > 0 && (
+                          <span
+                            className="inline-flex items-center gap-0.5 text-[9.5px] px-1 rounded border border-violet-500/40 bg-violet-500/10 text-violet-200"
+                            title={`${p.citationCount.toLocaleString()} citations on Semantic Scholar`}
+                            data-testid={`citation-citation-count-${p.citationNumber}`}
+                          >
+                            <Quote className="h-2.5 w-2.5" />
+                            {p.citationCount.toLocaleString()}
+                          </span>
+                        )}
                         {p.openAccess && (
                           <span className="text-[9.5px] px-1 rounded border border-emerald-600/40 bg-emerald-950/40 text-emerald-200">OA</span>
                         )}
@@ -1069,6 +1125,66 @@ export function CaseResearchPanel({
                   ))}
                 </ul>
               </div>
+
+              {/* Active & recent trials — sibling section to Citations,
+                  rendered only when ClinicalTrials.gov returned hits.
+                  Hidden entirely when empty so the panel stays compact
+                  on cases where no trials matched. The `retrievedTrials`
+                  column is nullable for rows persisted before Task #287. */}
+              {(cached.retrievedTrials ?? []).length > 0 && (
+                <div className="space-y-1.5" data-testid="case-research-trials-section">
+                  <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-300">
+                    <Activity className="h-3 w-3" /> Active & recent trials
+                    <span className="text-[10px] text-slate-500 normal-case tracking-normal">
+                      from ClinicalTrials.gov
+                    </span>
+                  </div>
+                  <ul className="space-y-1.5 text-[11px]">
+                    {(cached.retrievedTrials ?? []).map(t => (
+                      <li
+                        key={t.nct}
+                        className="rounded border border-cyan-500/30 bg-cyan-950/20 p-2 text-slate-200"
+                        data-testid={`trial-card-${t.nct}`}
+                      >
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <a
+                            href={t.url || `https://clinicaltrials.gov/study/${t.nct}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border border-cyan-400/50 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25 font-mono"
+                            data-testid={`trial-nct-link-${t.nct}`}
+                          >
+                            {t.nct}
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                          <span className="text-[9.5px] px-1 rounded border border-slate-600/60 bg-slate-800/60 text-slate-300">
+                            {t.status}
+                          </span>
+                          {t.phase && (
+                            <span className="text-[9.5px] px-1 rounded border border-slate-600/60 bg-slate-800/60 text-slate-300">
+                              {t.phase}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 leading-snug">{t.title}</div>
+                        {t.intervention && (
+                          <div className="mt-0.5 text-[10px] text-slate-400">
+                            <span className="text-slate-500">Intervention:</span> {t.intervention}
+                          </div>
+                        )}
+                        {t.primaryOutcome && (
+                          <div className="mt-0.5 text-[10px] text-slate-400">
+                            <span className="text-slate-500">Primary outcome:</span> {t.primaryOutcome}
+                          </div>
+                        )}
+                        {t.sponsor && (
+                          <div className="mt-0.5 text-[10px] text-slate-500">Sponsor: {t.sponsor}</div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               <div className="flex items-center justify-between gap-2 pt-1">
                 <span className="text-[10px] text-slate-500">

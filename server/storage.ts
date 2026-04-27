@@ -5131,6 +5131,7 @@ export class DatabaseStorage implements IStorage {
           queriesRan: synthesis.queriesRan,
           seedBroadenings: synthesis.seedBroadenings,
           retrievedPapers: synthesis.retrievedPapers,
+          retrievedTrials: synthesis.retrievedTrials,
           synthesizedAnswer: synthesis.synthesizedAnswer,
           confidence: synthesis.confidence,
           confidenceReason: synthesis.confidenceReason,

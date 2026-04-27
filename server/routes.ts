@@ -9872,6 +9872,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         queriesRan: outcome.queriesRan,
         seedBroadenings: outcome.seedBroadenings,
         retrievedPapers: outcome.retrievedPapers,
+        retrievedTrials: outcome.retrievedTrials,
         synthesizedAnswer: outcome.synthesizedAnswer,
         confidence: outcome.confidence,
         confidenceReason: outcome.confidenceReason,

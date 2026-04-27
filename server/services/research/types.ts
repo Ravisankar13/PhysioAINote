@@ -1,6 +1,23 @@
 /** Common normalized record returned by every research source adapter. */
+export type Source =
+  | 'pubmed'
+  | 'openalex'
+  | 'europepmc'
+  | 'pedro'
+  | 'semanticscholar'
+  | 'crossref'
+  | 'clinicaltrials';
+
+export interface TrialMetadata {
+  nct: string;
+  status: string;
+  phase: string | null;
+  intervention: string | null;
+  primaryOutcome: string | null;
+}
+
 export interface NormalizedPaper {
-  source: 'pubmed' | 'openalex' | 'europepmc';
+  source: Source;
   externalId: string;
   title: string;
   authors: string[];
@@ -10,6 +27,14 @@ export interface NormalizedPaper {
   doi: string | null;
   url: string;
   openAccess: boolean;
+  /** PEDro Score (0-10) — physiotherapy methodological-quality rating. Only
+   *  populated by the PEDro adapter. */
+  pedroScore?: number | null;
+  /** Citation count — populated by Semantic Scholar; useful relevance signal. */
+  citationCount?: number | null;
+  /** Trial-specific metadata — populated only by the ClinicalTrials.gov
+   *  adapter. Trials are split out of the citation pipeline downstream. */
+  trialMetadata?: TrialMetadata | null;
 }
 
 export interface SearchOptions {
@@ -20,7 +45,7 @@ export interface SearchOptions {
 }
 
 export interface AdapterResult {
-  source: 'pubmed' | 'openalex' | 'europepmc';
+  source: Source;
   papers: NormalizedPaper[];
   ok: boolean;
   error?: string;
@@ -189,5 +214,25 @@ export function serializeForBag(q: StructuredQuery): string {
     }
   }
   const joined = Array.from(new Set(phrases)).join(' ');
+  return joined.length > 250 ? joined.slice(0, 250).trim() : joined;
+}
+
+/** Plain-text query for ClinicalTrials.gov v2 `query.cond`. We strip
+ *  surrounding quotes (the API tolerates either, but bare phrases
+ *  return broader, more useful results) and join seed + groups with
+ *  spaces. */
+export function serializeForTrials(q: StructuredQuery): string {
+  const parts: string[] = [];
+  for (const p of q.seedPhrases) {
+    const t = p.trim().replace(/"/g, '');
+    if (t) parts.push(t);
+  }
+  for (const g of q.groups) {
+    for (const p of g.phrases) {
+      const t = p.trim().replace(/"/g, '');
+      if (t) parts.push(t);
+    }
+  }
+  const joined = Array.from(new Set(parts)).join(' ');
   return joined.length > 250 ? joined.slice(0, 250).trim() : joined;
 }

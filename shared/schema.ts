@@ -6014,8 +6014,8 @@ export const caseResearchSyntheses = pgTable("case_research_syntheses", {
   // De-duplicated, ranked papers actually used in synthesis.
   retrievedPapers: jsonb("retrieved_papers").$type<Array<{
     citationNumber: number;     // 1-indexed; matches inline [N] in answer
-    source: 'pubmed' | 'openalex' | 'europepmc';
-    externalId: string;         // pmid / openalex id / europepmc id
+    source: 'pubmed' | 'openalex' | 'europepmc' | 'pedro' | 'semanticscholar' | 'crossref' | 'clinicaltrials';
+    externalId: string;         // pmid / openalex id / europepmc id / pedro id / s2 id / doi / nct
     title: string;
     authors: string[];
     year: number | null;
@@ -6025,7 +6025,30 @@ export const caseResearchSyntheses = pgTable("case_research_syntheses", {
     url: string;
     openAccess: boolean;
     matchedVariables: string[]; // labels of variables this paper covers
+    // Union of every source that contributed this record (e.g. PubMed
+    // + Semantic Scholar + CrossRef-filled). Always contains at least
+    // the primary `source`. Optional for backwards compatibility with
+    // rows persisted before Task #287.
+    mergedFromSources?: Array<'pubmed' | 'openalex' | 'europepmc' | 'pedro' | 'semanticscholar' | 'crossref' | 'clinicaltrials'>;
+    pedroScore?: number | null;
+    citationCount?: number | null;
   }>>().notNull(),
+  // ClinicalTrials.gov v2 records — surfaced in their own
+  // "Active & recent trials" sub-section (not mixed into citations).
+  // Optional for backwards compatibility with rows persisted before
+  // Task #287; default to [] in the upsert layer.
+  retrievedTrials: jsonb("retrieved_trials").$type<Array<{
+    source: 'clinicaltrials';
+    nct: string;
+    title: string;
+    abstract: string;
+    status: string;
+    phase: string | null;
+    intervention: string | null;
+    primaryOutcome: string | null;
+    url: string;
+    sponsor: string | null;
+  }>>(),
   synthesizedAnswer: text("synthesized_answer").notNull(),
   // Confidence buckets per spec: High / Moderate / Low / Extrapolated.
   confidence: text("confidence").notNull(),

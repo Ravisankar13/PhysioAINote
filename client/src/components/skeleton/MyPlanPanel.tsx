@@ -35,6 +35,7 @@ export default function MyPlanPanel() {
     error: rationaleError,
     generate: generateRationale,
     source: rationaleSource,
+    isStale: rationaleStale,
   } = useTreatmentRationale();
   const [showCart, setShowCart] = useState(true);
 
@@ -100,6 +101,7 @@ export default function MyPlanPanel() {
         error={rationaleError}
         onGenerate={generateRationale}
         source={rationaleSource}
+        isStale={rationaleStale}
         hasOrchestratedOrder={!!orchestrated && orchestrated.sessionOrder.length > 0}
         hidePerItemBlock
       />

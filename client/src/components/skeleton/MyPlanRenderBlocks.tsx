@@ -489,6 +489,10 @@ interface TreatmentRationaleSectionProps {
   /** Whether the displayed rationale was synthesised locally or by AI.
    *  Drives a subtle "AI" / "auto" pip in the header. */
   source?: TreatmentRationaleSource;
+  /** True when an AI rationale exists but is stale relative to the
+   *  current cart/context/order — surfaces a "Stale" pip and changes
+   *  the action label to "Regenerate". */
+  isStale?: boolean;
   /** When true, the AI-orchestrated session order is available — we surface
    *  a hint that the ordering rationale corresponds to that order. */
   hasOrchestratedOrder?: boolean;
@@ -521,6 +525,7 @@ export function TreatmentRationaleSection({
   error,
   onGenerate,
   source = "local",
+  isStale = false,
   hasOrchestratedOrder,
   hidePerItemBlock = false,
 }: TreatmentRationaleSectionProps) {
@@ -594,6 +599,16 @@ export function TreatmentRationaleSection({
             >
               {source === "ai" ? "AI" : "Auto"}
             </span>
+            {isStale && (
+              <span
+                className="text-[8px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 inline-flex items-center gap-0.5"
+                title="The plan or context has changed since the AI rationale was generated — showing the up-to-date auto rationale. Click Regenerate to refresh."
+                data-testid="rationale-stale-badge"
+              >
+                <AlertTriangle className="h-2 w-2" />
+                AI stale
+              </span>
+            )}
             {error && (
               <span
                 className="text-[8px] px-1 py-0.5 rounded bg-red-500/20 text-red-200 border border-red-500/40 inline-flex items-center gap-0.5"
@@ -629,12 +644,22 @@ export function TreatmentRationaleSection({
             type="button"
             onClick={(e) => { e.stopPropagation(); onGenerate(); }}
             disabled={isPending || !canGenerate}
-            className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
+            className={`text-[9px] px-1.5 py-0.5 rounded border inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
+              isStale
+                ? "bg-amber-500/25 text-amber-100 border-amber-500/50 hover:bg-amber-500/35"
+                : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+            }`}
             data-testid="button-treatment-rationale-refresh"
-            title={source === "ai" ? "Regenerate AI rationale" : "Generate AI rationale"}
+            title={
+              isStale
+                ? "Plan/context changed since the AI rationale was generated — click to regenerate."
+                : source === "ai"
+                ? "Regenerate AI rationale"
+                : "Generate AI rationale"
+            }
           >
             {isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
-            {source === "ai" ? "Refresh" : "Use AI"}
+            {isStale ? "Regenerate" : source === "ai" ? "Refresh" : "Use AI"}
           </button>
         </div>
       </button>

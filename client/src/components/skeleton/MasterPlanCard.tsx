@@ -153,6 +153,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
     error: rationaleError,
     generate: generateRationale,
     source: rationaleSource,
+    isStale: rationaleStale,
   } = useTreatmentRationale();
 
   // User-resizable card. Width is always explicit (so the box doesn't snap
@@ -464,6 +465,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
               error={rationaleError}
               onGenerate={generateRationale}
               source={rationaleSource}
+              isStale={rationaleStale}
               hasOrchestratedOrder={!!orchestrated && orchestrated.sessionOrder.length > 0}
               hidePerItemBlock
             />

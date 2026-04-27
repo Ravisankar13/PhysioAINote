@@ -152,6 +152,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
     isPending: rationalePending,
     error: rationaleError,
     generate: generateRationale,
+    source: rationaleSource,
   } = useTreatmentRationale();
 
   // User-resizable card. Width is always explicit (so the box doesn't snap
@@ -462,7 +463,9 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
               isPending={rationalePending}
               error={rationaleError}
               onGenerate={generateRationale}
+              source={rationaleSource}
               hasOrchestratedOrder={!!orchestrated && orchestrated.sessionOrder.length > 0}
+              hidePerItemBlock
             />
 
             <div className="flex items-center justify-between">
@@ -485,9 +488,18 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
                   <div key={modality} className="space-y-1">
                     <div className={`text-[9px] uppercase tracking-wider font-semibold ${meta.color}`}>{meta.label} ({list.length})</div>
                     <div className="space-y-1">
-                      {list.map(it => (
-                        <CartItemRow key={it.id} item={it} onRemove={() => remove(it.id)} />
-                      ))}
+                      {list.map(it => {
+                        const r = rationale?.treatmentRationale.find(x => x.itemId === it.id);
+                        return (
+                          <CartItemRow
+                            key={it.id}
+                            item={it}
+                            onRemove={() => remove(it.id)}
+                            whyText={r?.why}
+                            whyAddresses={r?.addresses}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 );

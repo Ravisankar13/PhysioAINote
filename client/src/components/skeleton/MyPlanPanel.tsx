@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { usePlanCart, type PlanCartItem, type PlanCartModality } from "@/lib/planCart";
 import { useOrchestratePlan } from "@/lib/orchestratePlanContext";
+import { useTreatmentRationale } from "@/lib/treatmentRationaleContext";
 import {
   CartItemRow,
   ConflictList,
@@ -18,6 +19,7 @@ import {
   PhaseCards,
   RecoveryTimeline,
   SessionOrderStrip,
+  TreatmentRationaleSection,
   WeeklyScheduleGrid,
 } from "@/components/skeleton/MyPlanRenderBlocks";
 
@@ -27,6 +29,13 @@ export type { OrchestratedPlanResult } from "@/components/skeleton/MyPlanRenderB
 export default function MyPlanPanel() {
   const { items, remove, clear, count } = usePlanCart();
   const { orchestrated, isPending, error, organize, reset } = useOrchestratePlan();
+  const {
+    rationale,
+    isPending: rationalePending,
+    error: rationaleError,
+    generate: generateRationale,
+    source: rationaleSource,
+  } = useTreatmentRationale();
   const [showCart, setShowCart] = useState(true);
 
   const grouped = items.reduce<Record<PlanCartModality, PlanCartItem[]>>((acc, it) => {
@@ -80,6 +89,21 @@ export default function MyPlanPanel() {
         </div>
       </div>
 
+      {/* Treatment Rationale — "Why this plan?" (Task #274). Sits at the
+          top of the panel body so the clinician sees the rationale that
+          ties the plan back to the clinical picture before scrolling
+          through the items themselves. */}
+      <TreatmentRationaleSection
+        rationale={rationale}
+        items={items}
+        isPending={rationalePending}
+        error={rationaleError}
+        onGenerate={generateRationale}
+        source={rationaleSource}
+        hasOrchestratedOrder={!!orchestrated && orchestrated.sessionOrder.length > 0}
+        hidePerItemBlock
+      />
+
       {showCart && (
         <div className="space-y-2">
           {(Object.keys(grouped) as PlanCartModality[]).map(modality => {
@@ -89,9 +113,18 @@ export default function MyPlanPanel() {
               <div key={modality} className="space-y-1">
                 <div className={`text-[9px] uppercase tracking-wider font-semibold ${meta.color}`}>{meta.label} ({list.length})</div>
                 <div className="space-y-1">
-                  {list.map(it => (
-                    <CartItemRow key={it.id} item={it} onRemove={() => remove(it.id)} />
-                  ))}
+                  {list.map(it => {
+                    const r = rationale?.treatmentRationale.find(x => x.itemId === it.id);
+                    return (
+                      <CartItemRow
+                        key={it.id}
+                        item={it}
+                        onRemove={() => remove(it.id)}
+                        whyText={r?.why}
+                        whyAddresses={r?.addresses}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             );

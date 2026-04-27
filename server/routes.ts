@@ -24145,6 +24145,9 @@ Return STRICT JSON only, matching this shape exactly. itemId values MUST come fr
       label: z.string().min(1),
       detail: z.string().min(1),
       kind: z.string().optional(),
+      // Item IDs from the cart that address this driver. Empty array means
+      // "no item targets this yet" — surfaced as a gap by the UI.
+      addressedItemIds: z.array(z.string()).default([]),
     })).max(12).default([]),
     treatmentRationale: z.array(z.object({
       itemId: z.string().min(1),
@@ -24267,7 +24270,7 @@ Rules:
 - Plain clinical language. No marketing fluff. No restating instructions.
 - Return STRICT JSON only.`;
 
-      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none provided)'}${orderBlock}\n\nSelected treatment items (${items.length}):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON with keys:\n- clinicalPicture (string, 2–4 sentences tying findings together)\n- drivers (array of {label, detail, kind?}; up to 8; "kind" is one of pain|sling|fascial|chain|tissue|scar|force|postural|tendon|thoracic|risk|other)\n- treatmentRationale (array of {itemId, itemName, modality, why, addresses[]}; one per item, IDs MUST be from the provided list)\n- orderingRationale (string, 2–4 sentences explaining the sequencing rationale)`;
+      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none provided)'}${orderBlock}\n\nSelected treatment items (${items.length}):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON with keys:\n- clinicalPicture (string, 2–4 sentences tying findings together)\n- drivers (array of {label, detail, kind?, addressedItemIds[]}; up to 8; "kind" is one of pain|sling|fascial|chain|tissue|scar|force|postural|tendon|thoracic|risk|other; addressedItemIds MUST list every cart item id that targets this driver, OR be an empty array if no item in the cart yet addresses it — empty array signals a clinical gap)\n- treatmentRationale (array of {itemId, itemName, modality, why, addresses[]}; one per item, IDs MUST be from the provided list)\n- orderingRationale (string, 2–4 sentences explaining the sequencing rationale)`;
 
       const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
@@ -24329,9 +24332,19 @@ Rules:
         };
       });
 
+      // Filter each driver's addressedItemIds against the cart so the model
+      // can never invent an item id, and dedupe in case the model
+      // duplicated entries.
+      const finalDrivers = result.data.drivers.map(d => ({
+        label: d.label,
+        detail: d.detail,
+        kind: d.kind,
+        addressedItemIds: Array.from(new Set((d.addressedItemIds || []).filter(id => validIds.has(id)))),
+      }));
+
       res.json({
         clinicalPicture: result.data.clinicalPicture,
-        drivers: result.data.drivers,
+        drivers: finalDrivers,
         treatmentRationale: finalRationale,
         orderingRationale: result.data.orderingRationale,
         generatedAt: new Date().toISOString(),

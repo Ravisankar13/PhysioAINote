@@ -104,6 +104,12 @@ export function deriveInputChannels(
     if (pm.structures?.length) c.details.push(...pm.structures.slice(0, 6).map(s => `• ${s}`));
     if (pm.mechanisms?.length) c.details.push(`Mechanisms: ${pm.mechanisms.join(", ")}`);
     if (pm.severitySummary) c.details.push(pm.severitySummary);
+    // Fallback: if only the count was provided (no structures / mechanisms /
+    // severity), ensure the popover reflects that pain data DID feed the
+    // plan — otherwise the tooltip would incorrectly say "no data".
+    if (c.details.length === 0 && c.count > 0) {
+      c.details.push(`${c.count} pain marker${c.count === 1 ? "" : "s"}`);
+    }
   }
 
   if (ctx.slingDrivers?.length) {

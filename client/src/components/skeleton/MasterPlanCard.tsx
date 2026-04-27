@@ -204,7 +204,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
       />
       <div
         ref={ref}
-        className={`relative mt-12 rounded-lg border p-2.5 transition-all ${
+        className={`relative mt-12 w-[320px] max-w-full rounded-lg border p-2.5 transition-all ${
           isEmpty
             ? "border-white/10 bg-black/30"
             : "border-cyan-500/40 bg-gradient-to-br from-cyan-500/10 via-black/40 to-black/40 shadow-lg shadow-cyan-900/20"
@@ -253,7 +253,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
             : summary}
         </p>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => canExpand && setExpanded(e => !e)}
             disabled={!canExpand}
@@ -309,7 +309,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
         </div>
 
         {expanded && canExpand && (
-          <div className="mt-2.5 pt-2.5 border-t border-white/10 space-y-2.5" data-testid="master-plan-inline-section">
+          <div className="mt-2.5 pt-2.5 border-t border-white/10 space-y-2.5 max-h-[60vh] overflow-y-auto pr-1 master-plan-scroll" data-testid="master-plan-inline-section">
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-300">Items in plan ({items.length})</span>
               <button

@@ -176,6 +176,20 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
     const prevUserSelect = document.body.style.userSelect;
     document.body.style.userSelect = "none";
     const maxH = window.innerHeight * MAX_HEIGHT_VH;
+    // Keep the convergence overlay's anchor lines glued to the card while
+    // the user drags. ResizeObserver on the parent container is not always
+    // reliable (the wrapper is block-level and can keep a stable bounding
+    // box even when the card grows), so we throttle a window-resize event
+    // through rAF on every move tick — the overlay listens for that and
+    // recomputes path geometry from the live anchor + pill rects.
+    let rafId: number | null = null;
+    const pingOverlay = () => {
+      if (rafId != null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        window.dispatchEvent(new Event("resize"));
+      });
+    };
     const onMove = (ev: PointerEvent) => {
       setSize(prev => {
         const next: SavedCardSize = { width: prev.width, height: prev.height };
@@ -187,6 +201,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
         }
         return next;
       });
+      pingOverlay();
     };
     const onUp = () => {
       try { target.releasePointerCapture(e.pointerId); } catch {}
@@ -194,8 +209,11 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
-      // Nudge the convergence overlay to recompute paths in case the parent
-      // container's bounding box didn't change observably.
+      if (rafId != null) {
+        window.cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      // Final settle so the overlay lands exactly on the post-drag rects.
       window.dispatchEvent(new Event("resize"));
     };
     window.addEventListener("pointermove", onMove);
@@ -302,6 +320,7 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
     <>
       <ConvergenceOverlay
         containerRef={containerRef}
+        cardRef={cardRef}
         pillRefs={pillRefs}
         anchorRefs={anchorRefs}
         counts={counts}
@@ -527,6 +546,11 @@ const MasterPlanCard = forwardRef<HTMLDivElement, MasterPlanCardProps>(function 
 
 interface ConvergenceOverlayProps {
   containerRef: RefObject<HTMLDivElement>;
+  /** Direct ref to the resizable card element so the overlay can observe
+   *  it and recompute paths the moment width/height changes — the
+   *  containerRef wrapper is block-level and may not always observably
+   *  resize when only the card grows. */
+  cardRef: RefObject<HTMLDivElement>;
   pillRefs: MasterPlanPillRefs;
   anchorRefs: AnchorRefs;
   counts: Record<PillKey, number>;
@@ -539,7 +563,7 @@ interface PathSpec {
   midY: number;
 }
 
-function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKeys }: ConvergenceOverlayProps) {
+function ConvergenceOverlay({ containerRef, cardRef, pillRefs, anchorRefs, counts, animKeys }: ConvergenceOverlayProps) {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [paths, setPaths] = useState<Record<PillKey, PathSpec>>({
     exercise: { d: "", midX: 0, midY: 0 },
@@ -600,6 +624,11 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
     if (!c) return;
     const ro = new ResizeObserver(() => recompute());
     ro.observe(c);
+    // Observe the resizable card itself so the moment its width or height
+    // changes (user dragging a handle) the overlay recomputes — the parent
+    // container is a block-level wrapper that can stay the same size even
+    // when the card grows.
+    if (cardRef.current) ro.observe(cardRef.current);
     Object.values(pillRefs).forEach(r => {
       if (r.current) ro.observe(r.current as Element);
     });
@@ -608,7 +637,7 @@ function ConvergenceOverlay({ containerRef, pillRefs, anchorRefs, counts, animKe
       ro.disconnect();
       window.removeEventListener("resize", recompute);
     };
-  }, [recompute, containerRef, pillRefs]);
+  }, [recompute, containerRef, cardRef, pillRefs]);
 
   if (size.w === 0 || size.h === 0) return null;
 

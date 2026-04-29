@@ -9896,47 +9896,52 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     try {
       const caseId = String(req.params.caseId || "").trim();
       if (!caseId) return res.status(400).json({ error: "Missing caseId" });
-      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
-      if (!existing) return res.status(404).json({ error: "No case research synthesis found for this case — run case research first." });
       const refresh = req.body?.refresh === true || String(req.query.refresh || "") === "1";
-      if (existing.activeCapacities && !refresh) {
+      // Existing case-research row is optional — for old cases that
+      // never ran the case-research engine the client can pass case
+      // context (condition, caseSummary, age, sex, pathologies) on
+      // the body and we'll generate capacities and persist a stub
+      // synthesis row so subsequent opens are instant.
+      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      if (existing?.activeCapacities && !refresh) {
         return res.json({ ...existing, cached: true });
       }
+      const inferredFromExisting = (existing?.inferredVariables || {}) as Record<string, unknown>;
+      const phenotypeFromExisting = (existing?.phenotype || {}) as Record<string, unknown>;
+      const body = (req.body || {}) as Record<string, unknown>;
+      const condition = (body.condition as string | undefined) || existing?.condition || "Unspecified";
+      const caseSummary = (body.caseSummary as string | undefined) || existing?.caseSummary || "";
+      const ageRaw = (body.age ?? inferredFromExisting.age ?? phenotypeFromExisting.age) as number | string | undefined;
+      const sexRaw = (body.sex ?? inferredFromExisting.sex ?? phenotypeFromExisting.sex) as string | undefined;
+      const pathologiesRaw = body.pathologies ?? inferredFromExisting.pathologies ?? phenotypeFromExisting.pathologies ?? [];
+      const inferredPathologies: string[] = Array.isArray(pathologiesRaw)
+        ? (pathologiesRaw as unknown[]).filter((p): p is string => typeof p === 'string')
+        : [];
       const { generateActiveCapacities } = await import("./services/activeCapacityService");
-      // Pull AI-inferred phenotype/variables off the same row so the
-      // capacity service can condition on age, sex, and inferred
-      // pathology context (Task #301 spec).
-      const inferred = (existing.inferredVariables || {}) as Record<string, unknown>;
-      const phenotype = (existing.phenotype || {}) as Record<string, unknown>;
-      const ageRaw = (inferred.age ?? phenotype.age) as number | string | undefined;
-      const sexRaw = (inferred.sex ?? phenotype.sex) as string | undefined;
-      const pathologiesRaw = (inferred.pathologies ?? phenotype.pathologies ?? []) as unknown;
       const profile = await generateActiveCapacities({
-        condition: existing.condition,
-        caseSummary: existing.caseSummary,
-        literatureSummary: existing.synthesizedAnswer,
+        condition,
+        caseSummary,
+        literatureSummary: existing?.synthesizedAnswer,
         age: typeof ageRaw === 'number' ? ageRaw : (typeof ageRaw === 'string' ? parseInt(ageRaw, 10) || undefined : undefined),
         sex: typeof sexRaw === 'string' ? sexRaw : undefined,
-        inferredPathologies: Array.isArray(pathologiesRaw)
-          ? (pathologiesRaw as unknown[]).filter((p): p is string => typeof p === 'string')
-          : [],
+        inferredPathologies,
       });
       const saved = await storage.upsertCaseResearchSynthesis({
         caseId,
         userId: req.user!.id,
-        contentHash: existing.contentHash,
-        condition: existing.condition,
-        caseSummary: existing.caseSummary,
-        phenotype: existing.phenotype,
-        inferredVariables: existing.inferredVariables,
-        queriesRan: existing.queriesRan,
-        seedBroadenings: existing.seedBroadenings,
-        retrievedPapers: existing.retrievedPapers,
-        retrievedTrials: existing.retrievedTrials,
-        synthesizedAnswer: existing.synthesizedAnswer,
-        confidence: existing.confidence,
-        confidenceReason: existing.confidenceReason,
-        droppedVariables: existing.droppedVariables,
+        contentHash: existing?.contentHash || `active-capacity:${caseId}`,
+        condition,
+        caseSummary,
+        phenotype: existing?.phenotype ?? null,
+        inferredVariables: existing?.inferredVariables ?? { age: ageRaw, sex: sexRaw, pathologies: inferredPathologies },
+        queriesRan: existing?.queriesRan ?? [],
+        seedBroadenings: existing?.seedBroadenings ?? [],
+        retrievedPapers: existing?.retrievedPapers ?? [],
+        retrievedTrials: existing?.retrievedTrials ?? [],
+        synthesizedAnswer: existing?.synthesizedAnswer ?? "",
+        confidence: existing?.confidence ?? null,
+        confidenceReason: existing?.confidenceReason ?? null,
+        droppedVariables: existing?.droppedVariables ?? [],
         activeCapacities: profile,
       });
       res.json({ ...saved, cached: false });

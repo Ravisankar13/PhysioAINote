@@ -1,5 +1,5 @@
 /**
- * Task #301 — Active Movement Mode
+ * Active Movement Mode
  *
  * Client hook for fetching, generating, and overriding the per-case
  * active-capacity profile. While the server profile loads (or while
@@ -37,18 +37,22 @@ type CaseResearchRow = {
   activeCapacities: ActiveCapacityProfile | null;
 };
 
+// Mirrors server PASSIVE_ROM: signed bidirectional DOFs (e.g. flexion
+// covers extension on the negative side) so fallback rows match the
+// viewer's signed drag-channel expectations and don't clamp out
+// valid opposite-direction movement.
 const PASSIVE_ROM: Record<string, Record<string, [number, number]>> = {
-  leftShoulder:   { flexion: [0, 180], abduction: [0, 180], extension: [0, 60], internalRotation: [0, 70], externalRotation: [0, 90] },
-  rightShoulder:  { flexion: [0, 180], abduction: [0, 180], extension: [0, 60], internalRotation: [0, 70], externalRotation: [0, 90] },
-  leftHip:        { flexion: [0, 120], extension: [0, 30], abduction: [0, 45], adduction: [0, 30], internalRotation: [0, 45], externalRotation: [0, 45] },
-  rightHip:       { flexion: [0, 120], extension: [0, 30], abduction: [0, 45], adduction: [0, 30], internalRotation: [0, 45], externalRotation: [0, 45] },
-  leftKnee:       { flexion: [0, 140], extension: [0, 0] },
-  rightKnee:      { flexion: [0, 140], extension: [0, 0] },
-  leftAnkle:      { dorsiflexion: [0, 20], plantarflexion: [0, 50], inversion: [0, 35], eversion: [0, 20] },
-  rightAnkle:     { dorsiflexion: [0, 20], plantarflexion: [0, 50], inversion: [0, 35], eversion: [0, 20] },
-  lumbar_spine:   { flexion: [0, 60], extension: [0, 25], rotation: [0, 5], lateralFlexion: [0, 25] },
-  cervical_spine: { flexion: [0, 50], extension: [0, 60], rotation: [0, 80], lateralFlexion: [0, 45] },
-  thoracic_spine: { flexion: [0, 40], extension: [0, 20], rotation: [0, 35], lateralFlexion: [0, 25] },
+  leftShoulder:   { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70], externalRotation: [0, 90], extension: [0, 60] },
+  rightShoulder:  { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70], externalRotation: [0, 90], extension: [0, 60] },
+  leftHip:        { flexion: [-30, 120], abduction: [-30, 45], internalRotation: [-45, 45], extension: [0, 30] },
+  rightHip:       { flexion: [-30, 120], abduction: [-30, 45], internalRotation: [-45, 45], extension: [0, 30] },
+  leftKnee:       { flexion: [0, 140] },
+  rightKnee:      { flexion: [0, 140] },
+  leftAnkle:      { dorsiflexion: [-50, 20], inversion: [-20, 35], plantarflexion: [0, 50] },
+  rightAnkle:     { dorsiflexion: [-50, 20], inversion: [-20, 35], plantarflexion: [0, 50] },
+  lumbar_spine:   { flexion: [-25, 60], rotation: [-5, 5], lateralFlexion: [-25, 25], extension: [0, 25] },
+  cervical_spine: { flexion: [-60, 50], rotation: [-80, 80], lateralFlexion: [-45, 45], extension: [0, 60] },
+  thoracic_spine: { flexion: [-20, 40], rotation: [-35, 35], lateralFlexion: [-25, 25], extension: [0, 20] },
   leftElbow:      { flexion: [0, 140] },
   rightElbow:     { flexion: [0, 140] },
 };
@@ -57,11 +61,16 @@ function buildFallbackProfile(): ActiveCapacityProfile {
   const rows: ActiveCapacityRow[] = [];
   for (const [joint, dirs] of Object.entries(PASSIVE_ROM)) {
     for (const [movement, [pmin, pmax]] of Object.entries(dirs)) {
-      const span = pmax - pmin;
+      // Signed-aware default active band: shrink each end of the
+      // passive range by 15% of its signed extent so bidirectional
+      // DOFs preserve both directions instead of collapsing toward
+      // the positive end.
+      const aMin = Math.round(pmin * 0.85);
+      const aMax = Math.round(pmax * 0.85);
       rows.push({
         joint, movement,
         passiveRomMin: pmin, passiveRomMax: pmax,
-        activeRomMin: pmin, activeRomMax: pmin + span * 0.85,
+        activeRomMin: aMin, activeRomMax: aMax,
         painfulArc: null,
         activeStrengthPct: 100,
         painInhibitionFactor: 0,

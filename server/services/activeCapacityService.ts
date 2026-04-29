@@ -1,5 +1,5 @@
 /**
- * Task #301 — Active Movement Mode
+ * Active Movement Mode
  *
  * Two-stage active-capacity profile:
  *   1. A DETERMINISTIC baseline composed of passive×0.85 default
@@ -28,7 +28,7 @@ export type ActiveCapacityRow = {
   painInhibitionFactor: number;
   source: 'pathology-baseline' | 'ai' | 'manual';
   rationale?: string;
-  // Task #301 — set when a clinician overrides this row from the
+  // set when a clinician overrides this row from the
   // Active Capacities side panel. Used by the AI / Manual / Default
   // badge and to skip overwriting on re-generation.
   editedAt?: string;

@@ -694,7 +694,7 @@ export default function PhysioGPT() {
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showSimTimeline, setShowSimTimeline] = useState(false);
   const [showRecoverySim, setShowRecoverySim] = useState(false);
-  // Task #301 — Active Movement Mode. 'posture' is the existing
+  // Active Movement Mode. 'posture' is the existing
   // default (drags = postural changes feeding the static-posture AI).
   // 'movement' switches drags to active-movement attempts gated by
   // the per-case active-capacity profile, replaces the Clinical
@@ -1813,7 +1813,7 @@ export default function PhysioGPT() {
   muscleOverridesRef.current = muscleOverrides;
   const compromisedTissuesRef = useRef(compromisedTissues);
   compromisedTissuesRef.current = compromisedTissues;
-  // Task #301 — skeleton mode ref so the static-posture trigger
+  // skeleton mode ref so the static-posture trigger
   // function (used inside callbacks already captured before the
   // mode toggle) can read the current mode without re-creation.
   const skeletonModeRef = useRef<'posture' | 'movement'>(skeletonMode);
@@ -4180,7 +4180,7 @@ ${ddxList}`;
   const triggerClinicalReasoningAnalysis = useCallback(async (forceRefresh = false) => {
     if (clinicalReasoningProcessing) return;
     if (clinicalReasoningPaused) return;
-    // Task #301 — Active Movement Mode gates the static-posture AI
+    // Active Movement Mode gates the static-posture AI
     // pipeline. Drag interactions are now interpreted as active
     // movement attempts (handled by the movement-findings stream) and
     // the static-posture clinical-reasoning analyser is silenced.
@@ -4483,7 +4483,7 @@ ${ddxList}`;
     });
     if (painMarkers.length === 0 && !hasPostureChanges) return;
     if (isRecording) return;
-    // Task #301 — Active Movement Mode: drags are not posture in
+    // Active Movement Mode: drags are not posture in
     // this mode, so the static-posture pipeline must stay silent.
     if (skeletonMode === 'movement') return;
 
@@ -5854,7 +5854,7 @@ ${ddxList}`;
     [patientContextPayload],
   );
 
-  // ─── Task #301 — Active Movement Mode wiring ──────────────────────
+  // ─── Active Movement Mode wiring ──────────────────────
   // Compute a stable per-case ID from the same FNV hash used by the
   // CaseResearchPanel below, so the active-capacity profile lives on
   // the same case row.
@@ -5892,6 +5892,23 @@ ${ddxList}`;
     // generateActiveCapacity is a stable mutation object from React Query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skeletonMode, activeCaseId, activeCapacityProfile, generatingActiveCapacity]);
+
+  // Painful-arc flare events emitted by the viewer mid-drag. We
+  // keep recent flares (last 8s) so the predicted-pain layer can
+  // surface them as transient hot-spots until they decay.
+  const [painfulArcFlares, setPainfulArcFlares] = useState<Array<{
+    joint: string; movement: string; angle: number; intensity: number; arcStart: number; arcEnd: number; timestamp: number;
+  }>>([]);
+  const handlePainfulArcFlare = useCallback((flare: {
+    joint: string; movement: string; angle: number; intensity: number; arcStart: number; arcEnd: number;
+  }) => {
+    if (skeletonModeRef.current !== 'movement') return;
+    const now = Date.now();
+    setPainfulArcFlares(prev => [
+      { ...flare, timestamp: now },
+      ...prev.filter(f => now - f.timestamp < 8000),
+    ].slice(0, 6));
+  }, []);
 
   const handleActiveMovementAttempt = useCallback(async (attempt: {
     joint: string;
@@ -7905,6 +7922,7 @@ ${ddxList}`;
               skeletonMode={skeletonMode}
               activeCapacities={viewerActiveCapacities}
               onActiveMovementAttempt={handleActiveMovementAttempt}
+              onPainfulArcFlare={handlePainfulArcFlare}
               enableZoomTool={zoomToolMode}
               onLandmarkSelect={handleLandmarkSelect}
               forceOverlay={(() => {
@@ -10961,7 +10979,7 @@ ${ddxList}`;
                   const next = !showRecoverySim;
                   setShowRecoverySim(next);
                   if (next && showMechanicsAnalyser) setShowMechanicsAnalyser(false);
-                  // Task #301 — Recovery Sim and Movement Mode are
+                  // Recovery Sim and Movement Mode are
                   // mutually exclusive (both reparent / repurpose the
                   // viewer's behaviour and AI streams).
                   if (next && skeletonMode === 'movement') setSkeletonMode('posture');
@@ -10985,7 +11003,7 @@ ${ddxList}`;
                 <span className="font-serif italic mr-1 text-[12px] leading-none">Σ</span>
                 Mechanics Analyser
               </Button>
-              {/* Task #301 — Active Movement Mode toggle. Switches the
+              {/* Active Movement Mode toggle. Switches the
                   drag interpretation between posture (default) and
                   active movement gated by the AI capacity profile.
                   Mutually exclusive with the static-posture clinical
@@ -10997,7 +11015,7 @@ ${ddxList}`;
                 onClick={() => {
                   setSkeletonMode(prev => {
                     const next = prev === 'movement' ? 'posture' : 'movement';
-                    // Task #301 — entering Movement Mode closes the
+                    // entering Movement Mode closes the
                     // sibling viewer panels (Recovery Sim + Mechanics
                     // Analyser) so the static-posture clinical pipeline
                     // and movement gating cannot run side-by-side.
@@ -13717,7 +13735,7 @@ ${ddxList}`;
                 />
               );
             })()}
-            {/* Task #301 — Movement Mode side panel. The Active
+            {/* Movement Mode side panel. The Active
                 Capacities table lives in the case-research column.
                 The Findings stream is rendered as a right-rail (mirror
                 of ClinicalReasoningPanel) below so it occupies the same
@@ -13912,7 +13930,7 @@ ${ddxList}`;
         </div>
       )}
 
-      {/* Task #301 — In Active Movement Mode the static-posture
+      {/* In Active Movement Mode the static-posture
           clinical reasoning AI pipeline is gated off; the per-movement
           Findings stream renders into the same right-rail slot the
           ClinicalReasoningPanel normally occupies. */}

@@ -1,5 +1,5 @@
 /**
- * Task #301 — Active Movement Mode
+ * Active Movement Mode
  *
  * Lists every joint × movement in the active-capacity profile,
  * grouped by anatomical region with collapse state persisted per

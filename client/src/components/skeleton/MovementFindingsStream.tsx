@@ -1,5 +1,5 @@
 /**
- * Task #301 — Active Movement Mode
+ * Active Movement Mode
  *
  * One-sentence-per-movement findings stream. Replaces the static-posture
  * Clinical Reasoning panel while in Movement Mode. Each finding is

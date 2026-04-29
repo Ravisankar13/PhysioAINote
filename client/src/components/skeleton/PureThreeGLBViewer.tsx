@@ -2740,6 +2740,7 @@ export default function PureThreeGLBViewer({
       activeRomMax: number;
       passiveRomMax: number;
       painfulArc?: { start: number; end: number; intensity: number } | null;
+      painInhibitionFactor?: number;
     } | null;
     /** Final clamped value reached so far in the drag — read by
      *  onMouseUp to fire the movement attempt callback. */
@@ -6392,9 +6393,7 @@ export default function PureThreeGLBViewer({
         poseDragRef.current.lastValue = newValue;
         if (exceededActiveLimit) poseDragRef.current.attemptedExceeded = true;
         if (inPainfulArc) poseDragRef.current.lastPainfulArc = true;
-        // Task #301 — derive effortful muscle activation while
-        // dragging in Movement Mode. Renders agonists firing,
-        // antagonists co-contracting, with pain-inhibition damping.
+        // Movement Mode: derive effortful muscle activation from drag.
         if (skeletonModeRef.current === 'movement' && row) {
           const activation = computeMovementMuscleActivation(
             poseDragRef.current.configKey,
@@ -6402,13 +6401,11 @@ export default function PureThreeGLBViewer({
             newValue,
             row.activeRomMin,
             row.activeRomMax,
-            (row as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
+            row.painInhibitionFactor ?? 0,
           );
           if (activation) setMovementMuscleActivation(activation);
         }
-        // Task #301 — fire pain toast on the *entry* edge of the painful
-        // arc so it doesn't re-trigger every frame the cursor stays
-        // inside the arc.
+        // Pain toast fires on entry edge only.
         if (inPainfulArc && !lastPainfulArcStateRef.current && row?.painfulArc) {
           const [, mv] = poseDragRef.current.configKey.split('.');
           setPainToast({
@@ -6582,10 +6579,7 @@ export default function PureThreeGLBViewer({
           const screenDir = computeScreenDir(anchor, a.dirWorld);
           const startValue = getCurrentValue(a.def.configKey);
           const lim = DOF_LIMIT_INDEX.get(a.def.configKey);
-          // Task #301 — when in Movement Mode, look up the
-          // active-capacity row that gates this DOF. configKey is
-          // 'joint.movement' (e.g. 'leftShoulder.flexion'); the
-          // capacity map keys with 'joint:movement'.
+          // Movement Mode: look up the capacity row gating this DOF.
           let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null; painInhibitionFactor: number } | null = null;
           if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
             const lookupKey = a.def.configKey.replace('.', ':');
@@ -6598,7 +6592,7 @@ export default function PureThreeGLBViewer({
                 painfulArc: r.painfulArc
                   ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity ?? 5 }
                   : null,
-                painInhibitionFactor: (r as { inhibitionLevel?: number }).inhibitionLevel ?? 0,
+                painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
               };
             }
           }
@@ -6627,8 +6621,7 @@ export default function PureThreeGLBViewer({
             lastPainfulArc: false,
             compensationsTriggered: [],
           };
-          // Task #301 — reset arc-edge ref + muscle activation at the
-          // start of a new drag.
+          // Reset arc-edge ref + muscle activation on new drag.
           lastPainfulArcStateRef.current = false;
           if (skeletonModeRef.current !== 'movement') setMovementMuscleActivation(null);
           controls.enabled = false;
@@ -6701,8 +6694,7 @@ export default function PureThreeGLBViewer({
         poseDragRef.current = null;
         controls.enabled = true;
         domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
-        // Task #301 — clear effortful muscle activation when the
-        // patient stops moving so the meshes relax back to baseline.
+        // Clear muscle activation so meshes relax back to baseline.
         lastPainfulArcStateRef.current = false;
         setMovementMuscleActivation(null);
       }
@@ -8803,17 +8795,11 @@ export default function PureThreeGLBViewer({
       );
     }
 
-    // Update muscle visualization based on visibility config.
-    // Task #301 — when in Movement Mode and a drag is producing live
-    // effortful activation, that takes priority over the prop-driven
-    // (e.g. simulation timeline) activation so the meshes flash with
-    // the patient's actual effort.
+    // Movement-Mode drag activation takes priority over prop activation.
     const effectiveActivation = (skeletonMode === 'movement' && movementMuscleActivation)
       ? movementMuscleActivation
       : (muscleActivation || {});
-    // In Movement Mode the muscle viz is always shown so the
-    // clinician sees agonist firing — even if the visibility toggle
-    // is off — but it auto-clears at mouseUp.
+    // Auto-show muscle viz during a Movement-Mode drag.
     const showMuscles = muscleVisibility?.enabled || (skeletonMode === 'movement' && !!movementMuscleActivation);
     if (showMuscles) {
       muscleVisualizationRef.current.setShowLabels(muscleVisibility?.showLabels || false);

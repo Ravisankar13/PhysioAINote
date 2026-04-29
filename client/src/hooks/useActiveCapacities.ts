@@ -75,14 +75,18 @@ function buildFallbackProfile(): ActiveCapacityProfile {
 export function useActiveCapacities(caseId: string | null, enabled: boolean) {
   const query = useQuery<CaseResearchRow>({
     queryKey: ['/api/case-research', caseId],
+    queryFn: async () => {
+      const res = await fetch(`/api/case-research/${caseId}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      return res.json();
+    },
     enabled: !!caseId && enabled,
   });
 
   const generate = useMutation({
     mutationFn: async (refresh: boolean = false) => {
       if (!caseId) throw new Error('No caseId');
-      const res = await apiRequest('POST', `/api/active-capacity/${caseId}`, { refresh });
-      return res.json();
+      return apiRequest(`/api/active-capacity/${caseId}`, 'POST', { refresh });
     },
     onSuccess: () => {
       if (caseId) queryClient.invalidateQueries({ queryKey: ['/api/case-research', caseId] });
@@ -92,8 +96,7 @@ export function useActiveCapacities(caseId: string | null, enabled: boolean) {
   const override = useMutation({
     mutationFn: async (patch: Partial<ActiveCapacityRow> & { joint: string; movement: string }) => {
       if (!caseId) throw new Error('No caseId');
-      const res = await apiRequest('PATCH', `/api/active-capacity/${caseId}`, patch);
-      return res.json();
+      return apiRequest(`/api/active-capacity/${caseId}`, 'PATCH', patch);
     },
     onMutate: async (patch) => {
       if (!caseId) return;

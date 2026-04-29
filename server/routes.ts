@@ -9993,6 +9993,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         confidenceReason: existing.confidenceReason,
         droppedVariables: existing.droppedVariables,
         activeCapacities: updated,
+        researchTreatmentPlan: existing.researchTreatmentPlan ?? null,
       });
       res.json(saved);
     } catch (error: unknown) {

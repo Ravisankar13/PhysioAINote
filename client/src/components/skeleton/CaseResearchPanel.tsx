@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import {
   Loader2, FlaskConical, RefreshCcw, AlertTriangle, ChevronDown, ChevronUp,
@@ -616,7 +617,33 @@ export function CaseResearchPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
   const [showHowSearched, setShowHowSearched] = useState(false);
-  const [showResearchPlan, setShowResearchPlan] = useState(true);
+  const { user } = useAuth();
+  // Persist collapse state of the research-derived plan section per
+  // (clinician × case). Mirrors the convention used by ActiveCapacities
+  // (`activeMovement:<userId>:panel:<caseId>:open`).
+  const planCollapseStorageKey = `caseResearchPlan:${user?.id ?? 'anon'}:panel:${caseId ?? 'none'}:open`;
+  const [showResearchPlan, setShowResearchPlan] = useState<boolean>(true);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(planCollapseStorageKey);
+      if (raw === null) {
+        setShowResearchPlan(true);
+      } else {
+        const parsed = JSON.parse(raw);
+        setShowResearchPlan(typeof parsed === 'boolean' ? parsed : true);
+      }
+    } catch {
+      setShowResearchPlan(true);
+    }
+  }, [planCollapseStorageKey]);
+  const toggleResearchPlan = useCallback(() => {
+    setShowResearchPlan(prev => {
+      const next = !prev;
+      try { window.localStorage.setItem(planCollapseStorageKey, JSON.stringify(next)); } catch { /* localStorage may be unavailable */ }
+      return next;
+    });
+  }, [planCollapseStorageKey]);
   // Tracks which tier row in "How we searched" has its per-source
   // queries panel expanded. Only one open at a time keeps the panel
   // compact.
@@ -964,7 +991,7 @@ export function CaseResearchPanel({
                   <button
                     type="button"
                     className="w-full flex items-center justify-between px-2.5 py-2 text-[12px] font-semibold text-violet-100 hover:text-white"
-                    onClick={() => setShowResearchPlan(v => !v)}
+                    onClick={toggleResearchPlan}
                     data-testid="button-toggle-research-plan"
                   >
                     <span className="flex items-center gap-1.5">

@@ -12,7 +12,7 @@ import {
   serializeForBag, serializeForPubMed, serializeForEuropePmc, serializeForTrials,
   type AdapterResult, type NormalizedPaper, type Source, type StructuredQuery, type TrialMetadata,
 } from './types';
-import { searchablePhenotypeSchema, type SearchablePhenotype } from '@shared/schema';
+import { researchTreatmentPlanSchema, searchablePhenotypeSchema, type SearchablePhenotype } from '@shared/schema';
 
 // ---- Public types -------------------------------------------------
 
@@ -1031,7 +1031,7 @@ export async function synthesizeResearchTreatmentPlan(
     const broadenedNote = seedBroadenings.length > 0
       ? ' even after broadening the seed'
       : '';
-    return {
+    const noEvidencePlan: ResearchTreatmentPlan = {
       generatedAt,
       hasEvidence: false,
       noEvidenceReason: `No literature was retrieved for this case${broadenedNote}${trialCount > 0 ? `; ${trialCount} ClinicalTrials.gov record(s) matched but trials are listed separately` : ''}, so a research-derived treatment plan cannot be produced. Edit the interpreted case (broaden the canonical condition or add synonyms) and re-run.`,
@@ -1042,6 +1042,9 @@ export async function synthesizeResearchTreatmentPlan(
       confidence: 'Extrapolated',
       confidenceReason: 'No retrieved literature; plan cannot be evidence-based.',
     };
+    // Validate against shared schema before persisting so the server
+    // and client never disagree on plan shape.
+    return researchTreatmentPlanSchema.parse(noEvidencePlan) as ResearchTreatmentPlan;
   }
 
   const refsBlock = papers.map(p => {
@@ -1163,7 +1166,7 @@ Build the structured plan now.`;
       citations: scrubCitations(om.citations),
     }));
 
-    return {
+    const finalPlan: ResearchTreatmentPlan = {
       generatedAt,
       hasEvidence: true,
       phases,
@@ -1173,6 +1176,9 @@ Build the structured plan now.`;
       confidence: parsed.confidence,
       confidenceReason: parsed.confidence_reason.trim(),
     };
+    // Validate against shared schema before returning so the persisted
+    // plan stays in lock-step with the type the client renders.
+    return researchTreatmentPlanSchema.parse(finalPlan) as ResearchTreatmentPlan;
   } catch (e) {
     console.warn('[caseResearch] research-treatment-plan synthesis failed:', e);
     throw e;

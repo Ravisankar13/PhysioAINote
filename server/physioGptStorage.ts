@@ -5,7 +5,8 @@ import {
   type PhysioGptConversation,
   type PhysioGptMessage,
   type InsertPhysioGptConversation,
-  type InsertPhysioGptMessage
+  type InsertPhysioGptMessage,
+  type PhysioGptCaseSnapshot
 } from "@shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 
@@ -46,6 +47,27 @@ export class PhysioGptStorage {
       .set({ 
         title,
         updatedAt: new Date()
+      })
+      .where(
+        and(
+          eq(physioGptConversations.id, id),
+          eq(physioGptConversations.userId, userId)
+        )
+      )
+      .returning();
+    return conversation;
+  }
+
+  async updateCaseSnapshot(
+    id: number,
+    userId: number,
+    caseSnapshot: PhysioGptCaseSnapshot
+  ): Promise<PhysioGptConversation | undefined> {
+    const [conversation] = await db
+      .update(physioGptConversations)
+      .set({
+        caseSnapshot,
+        updatedAt: new Date(),
       })
       .where(
         and(

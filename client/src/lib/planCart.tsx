@@ -54,6 +54,7 @@ interface PlanCartContextValue {
   clear: () => void;
   has: (id: string) => boolean;
   count: number;
+  replaceAll: (items: PlanCartItem[]) => void;
 }
 
 const PlanCartContext = createContext<PlanCartContextValue | null>(null);
@@ -69,8 +70,11 @@ export function PlanCartProvider({ children }: { children: ReactNode }) {
   }, []);
   const clear = useCallback(() => setItems([]), []);
   const has = useCallback((id: string) => items.some(i => i.id === id), [items]);
+  const replaceAll = useCallback((next: PlanCartItem[]) => {
+    setItems(Array.isArray(next) ? next : []);
+  }, []);
 
-  const value = useMemo(() => ({ items, add, remove, clear, has, count: items.length }), [items, add, remove, clear, has]);
+  const value = useMemo(() => ({ items, add, remove, clear, has, count: items.length, replaceAll }), [items, add, remove, clear, has, replaceAll]);
   return <PlanCartContext.Provider value={value}>{children}</PlanCartContext.Provider>;
 }
 
@@ -84,6 +88,7 @@ export function usePlanCart(): PlanCartContextValue {
       clear: () => {},
       has: () => false,
       count: 0,
+      replaceAll: () => {},
     };
   }
   return ctx;

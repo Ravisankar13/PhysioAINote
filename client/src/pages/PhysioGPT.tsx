@@ -181,9 +181,31 @@ const ElectrophysicalEngineTab = lazy(() => import("@/components/skeleton/Electr
 const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/PatientEducationEngineTab"));
 const MyPlanPanel = lazy(() => import("@/components/skeleton/MyPlanPanel"));
 import MasterPlanCard from "@/components/skeleton/MasterPlanCard";
-import { PlanCartProvider, usePlanCart } from "@/lib/planCart";
+import { PlanCartProvider, usePlanCart, type PlanCartItem } from "@/lib/planCart";
 import { OrchestratePlanProvider } from "@/lib/orchestratePlanContext";
 import { TreatmentRationaleProvider, type RationaleClinicalContextInput } from "@/lib/treatmentRationaleContext";
+import type { PhysioGptCaseSnapshot } from "@shared/schema";
+
+/** Bridges the plan cart context to refs/state in the parent PhysioGPT
+ *  component so case-snapshot persistence can read the cart contents and
+ *  call replaceAll on restore without restructuring the whole page. */
+function PlanCartHydrationBridge({
+  onItemsChange,
+  registerReplaceAll,
+}: {
+  onItemsChange: (items: PlanCartItem[]) => void;
+  registerReplaceAll: (fn: ((items: PlanCartItem[]) => void) | null) => void;
+}) {
+  const { items, replaceAll } = usePlanCart();
+  useEffect(() => {
+    onItemsChange(items);
+  }, [items, onItemsChange]);
+  useEffect(() => {
+    registerReplaceAll(replaceAll);
+    return () => registerReplaceAll(null);
+  }, [replaceAll, registerReplaceAll]);
+  return null;
+}
 
 function MyPlanTabButton({ active, onClick }: { active: boolean; onClick: () => void }) {
   const { count } = usePlanCart();
@@ -1125,6 +1147,309 @@ export default function PhysioGPT() {
 
   const messages = conversationData?.messages || [];
 
+  // ─── Case-Snapshot Persistence ─────────────────────────────────────────────
+  // Mirror plan cart contents into local state so the snapshot memo recomputes
+  // when the cart changes; provide an imperative replaceAll handle for restore.
+  const [planCartItemsState, setPlanCartItemsState] = useState<PlanCartItem[]>([]);
+  const planCartReplaceAllRef = useRef<((items: PlanCartItem[]) => void) | null>(null);
+  const handlePlanCartItemsChange = useCallback((items: PlanCartItem[]) => {
+    setPlanCartItemsState(items);
+  }, []);
+  const handlePlanCartRegisterReplaceAll = useCallback(
+    (fn: ((items: PlanCartItem[]) => void) | null) => {
+      planCartReplaceAllRef.current = fn;
+    },
+    [],
+  );
+
+  // Tracks which conversation id has had its caseSnapshot applied so we don't
+  // re-hydrate (or skip auto-save) erroneously across selection changes.
+  const hydratedConversationIdRef = useRef<number | null>(null);
+  const isHydratingRef = useRef<boolean>(false);
+  const lastSavedSnapshotRef = useRef<string>("");
+  const snapshotSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [snapshotSaveCounter, setSnapshotSaveCounter] = useState(0);
+  // Snapshot eligibility — only conversations created after this feature
+  // shipped (or that already have a snapshot persisted) are auto-saved.
+  // Legacy chat-only conversations stay chat-only even after interaction;
+  // they are NEVER backfilled by use, per the task requirement.
+  const snapshotEligibleRef = useRef<Set<number>>(new Set());
+  // Deterministic cutoff: any conversation created at or after this instant
+  // is automatically eligible regardless of whether the first snapshot write
+  // has succeeded yet. Conversations created strictly before are legacy.
+  const SNAPSHOT_FEATURE_CUTOFF_MS = Date.UTC(2026, 3, 29, 0, 0, 0); // 2026-04-29
+
+  // Build the live snapshot. Captures workspace inputs AND the
+  // treatment/timeline/right-panel state explicitly called out in the task —
+  // anything outside this snapshot is either recomputed deterministically from
+  // these inputs or considered transient UI noise.
+  const currentCaseSnapshot = useMemo<PhysioGptCaseSnapshot>(() => ({
+    version: 1,
+    modelConfig,
+    painMarkers,
+    compromisedTissues,
+    scarMarkers,
+    adhesionBands,
+    romMeasurements,
+    muscleOverrides,
+    slingActivationOverrides,
+    bodyWeightKg,
+    clinicalHighlights,
+    subjectiveHistoryInput,
+    patientContextState,
+    patientFactorOverrides,
+    movementFindings,
+    selectedRegion: selectedRegion ?? null,
+    planCartItems: planCartItemsState,
+    // Treatment / timeline / right-panel state
+    rightPanelTab,
+    mechanismActiveTab,
+    expandedTreatmentSection,
+    treatmentDecisionData,
+    treatmentPlanData,
+    showSimTimeline,
+    timelinePlaybackState,
+    showForceTimePanel,
+    showTreatmentPriority,
+    showUnifiedChainPanel,
+    unifiedBiomechanicsMovementTask: unifiedBiomechanicsMovementTask ?? null,
+    unifiedBiomechanicsProgress,
+    unifiedBiomechanicsFaultOverrides,
+  }), [
+    modelConfig,
+    painMarkers,
+    compromisedTissues,
+    scarMarkers,
+    adhesionBands,
+    romMeasurements,
+    muscleOverrides,
+    slingActivationOverrides,
+    bodyWeightKg,
+    clinicalHighlights,
+    subjectiveHistoryInput,
+    patientContextState,
+    patientFactorOverrides,
+    movementFindings,
+    selectedRegion,
+    planCartItemsState,
+    rightPanelTab,
+    mechanismActiveTab,
+    expandedTreatmentSection,
+    treatmentDecisionData,
+    treatmentPlanData,
+    showSimTimeline,
+    timelinePlaybackState,
+    showForceTimePanel,
+    showTreatmentPriority,
+    showUnifiedChainPanel,
+    unifiedBiomechanicsMovementTask,
+    unifiedBiomechanicsProgress,
+    unifiedBiomechanicsFaultOverrides,
+  ]);
+
+  // Hydrate the workspace from caseSnapshot when the loaded conversation
+  // changes. We ALWAYS reset every snapshot-participating field to its default
+  // first so that opening a legacy (no-snapshot) conversation, or a snapshot
+  // that omits some fields, never inherits stale values from a previously
+  // selected case.
+  useEffect(() => {
+    if (!selectedConversationId) return;
+    if (!conversationData?.conversation) return;
+    if (hydratedConversationIdRef.current === selectedConversationId) return;
+
+    const snap = conversationData.conversation.caseSnapshot ?? null;
+    isHydratingRef.current = true;
+    // Eligibility:
+    //   1) If a snapshot is already persisted → eligible (continue round-trip).
+    //   2) Else if the conversation was created on/after the feature cutoff
+    //      → eligible (covers the edge case where the very first snapshot
+    //      write failed; subsequent edits should still persist).
+    //   3) Otherwise legacy chat-only — never auto-save / never backfill.
+    const createdAt = conversationData.conversation.createdAt
+      ? new Date(conversationData.conversation.createdAt).getTime()
+      : 0;
+    const postRollout = createdAt >= SNAPSHOT_FEATURE_CUTOFF_MS;
+    if (snap || postRollout) {
+      snapshotEligibleRef.current.add(selectedConversationId);
+    } else {
+      snapshotEligibleRef.current.delete(selectedConversationId);
+    }
+
+    // Step 1 — reset every snapshot-participating field to its default.
+    setModelConfig({ ...DEFAULT_MODEL_CONFIG });
+    setPainMarkers([]);
+    setCompromisedTissues([]);
+    setScarMarkers([]);
+    setAdhesionBands([]);
+    setRomMeasurements([]);
+    setMuscleOverrides({});
+    setSlingActivationOverrides({});
+    setBodyWeightKg(70);
+    setClinicalHighlights([]);
+    setSubjectiveHistoryInput('');
+    setPatientContextState(EMPTY_PATIENT_CONTEXT_STATE);
+    setPatientFactorOverrides(null);
+    setMovementFindings([]);
+    setSelectedRegion(null);
+    planCartReplaceAllRef.current?.([]);
+    setRightPanelTab('chat');
+    setMechanismActiveTab('mechanism');
+    setExpandedTreatmentSection(null);
+    setTreatmentDecisionData(null);
+    setTreatmentPlanData(null);
+    setShowSimTimeline(false);
+    setTimelinePlaybackState(null);
+    setShowForceTimePanel(false);
+    setShowTreatmentPriority(false);
+    setShowUnifiedChainPanel(false);
+    setUnifiedBiomechanicsMovementTask(undefined);
+    setUnifiedBiomechanicsProgress(0.5);
+    setUnifiedBiomechanicsFaultOverrides([]);
+
+    // Step 2 — overlay snapshot values where present.
+    if (snap && typeof snap === 'object') {
+      if (snap.modelConfig && typeof snap.modelConfig === 'object') {
+        setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...(snap.modelConfig as Partial<ModelConfig>) });
+      }
+      if (Array.isArray(snap.painMarkers)) setPainMarkers(snap.painMarkers as PainMarker[]);
+      if (Array.isArray(snap.compromisedTissues)) setCompromisedTissues(snap.compromisedTissues as CompromisedTissue[]);
+      if (Array.isArray(snap.scarMarkers)) setScarMarkers(snap.scarMarkers as ScarMarker[]);
+      if (Array.isArray(snap.adhesionBands)) setAdhesionBands(snap.adhesionBands as AdhesionBand[]);
+      if (Array.isArray(snap.romMeasurements)) setRomMeasurements(snap.romMeasurements as RomMeasurement[]);
+      if (snap.muscleOverrides && typeof snap.muscleOverrides === 'object') {
+        setMuscleOverrides(snap.muscleOverrides as Record<string, MuscleOverride>);
+      }
+      if (snap.slingActivationOverrides && typeof snap.slingActivationOverrides === 'object') {
+        setSlingActivationOverrides(snap.slingActivationOverrides as Partial<Record<SlingId, number>>);
+      }
+      if (typeof snap.bodyWeightKg === 'number') setBodyWeightKg(snap.bodyWeightKg);
+      if (Array.isArray(snap.clinicalHighlights)) setClinicalHighlights(snap.clinicalHighlights as RegionHighlight[]);
+      if (typeof snap.subjectiveHistoryInput === 'string') setSubjectiveHistoryInput(snap.subjectiveHistoryInput);
+      if (snap.patientContextState && typeof snap.patientContextState === 'object') {
+        setPatientContextState(snap.patientContextState as PatientContextState);
+      }
+      if (snap.patientFactorOverrides && typeof snap.patientFactorOverrides === 'object') {
+        setPatientFactorOverrides(snap.patientFactorOverrides as Partial<PatientFactors>);
+      }
+      if (Array.isArray(snap.movementFindings)) setMovementFindings(snap.movementFindings as MovementFinding[]);
+      if (typeof snap.selectedRegion === 'string' && snap.selectedRegion in BODY_REGIONS) {
+        setSelectedRegion(snap.selectedRegion as keyof typeof BODY_REGIONS);
+      }
+      if (Array.isArray(snap.planCartItems)) {
+        planCartReplaceAllRef.current?.(snap.planCartItems as PlanCartItem[]);
+      }
+      if (snap.rightPanelTab === 'chat' || snap.rightPanelTab === 'treatment' || snap.rightPanelTab === 'biomechanics' || snap.rightPanelTab === 'slings') {
+        setRightPanelTab(snap.rightPanelTab);
+      }
+      const validMechanismTabs = ['mechanism', 'treatment', 'whatif', 'exercise', 'manualRx', 'electroRx', 'adjunctRx', 'lifestyleRx', 'patientEd', 'myPlan'] as const;
+      if (typeof snap.mechanismActiveTab === 'string' && (validMechanismTabs as readonly string[]).includes(snap.mechanismActiveTab)) {
+        setMechanismActiveTab(snap.mechanismActiveTab as typeof validMechanismTabs[number]);
+      }
+      if (typeof snap.expandedTreatmentSection === 'string' || snap.expandedTreatmentSection === null) {
+        setExpandedTreatmentSection(snap.expandedTreatmentSection as string | null);
+      }
+      if (snap.treatmentDecisionData && typeof snap.treatmentDecisionData === 'object') {
+        setTreatmentDecisionData(snap.treatmentDecisionData as TreatmentDecisionResult);
+      }
+      if (snap.treatmentPlanData && typeof snap.treatmentPlanData === 'object') {
+        setTreatmentPlanData(snap.treatmentPlanData as TreatmentPlanResult);
+      }
+      if (typeof snap.showSimTimeline === 'boolean') setShowSimTimeline(snap.showSimTimeline);
+      if (snap.timelinePlaybackState && typeof snap.timelinePlaybackState === 'object') {
+        setTimelinePlaybackState(snap.timelinePlaybackState as PlaybackSyncState);
+      }
+      if (typeof snap.showForceTimePanel === 'boolean') setShowForceTimePanel(snap.showForceTimePanel);
+      if (typeof snap.showTreatmentPriority === 'boolean') setShowTreatmentPriority(snap.showTreatmentPriority);
+      if (typeof snap.showUnifiedChainPanel === 'boolean') setShowUnifiedChainPanel(snap.showUnifiedChainPanel);
+      if (typeof snap.unifiedBiomechanicsMovementTask === 'string') {
+        setUnifiedBiomechanicsMovementTask(snap.unifiedBiomechanicsMovementTask);
+      }
+      if (typeof snap.unifiedBiomechanicsProgress === 'number') {
+        setUnifiedBiomechanicsProgress(snap.unifiedBiomechanicsProgress);
+      }
+      if (Array.isArray(snap.unifiedBiomechanicsFaultOverrides)) {
+        setUnifiedBiomechanicsFaultOverrides(snap.unifiedBiomechanicsFaultOverrides as Partial<FaultRuleConfig>[]);
+      }
+    }
+
+    hydratedConversationIdRef.current = selectedConversationId;
+    // Use the next-saved-snapshot serialization as the baseline so the
+    // immediately-following auto-save effect skips the redundant write.
+    try {
+      lastSavedSnapshotRef.current = JSON.stringify(snap ?? {});
+    } catch {
+      lastSavedSnapshotRef.current = "";
+    }
+    // Release the hydration guard after React has settled the batched setters.
+    const releaseTimer = setTimeout(() => { isHydratingRef.current = false; }, 200);
+    return () => clearTimeout(releaseTimer);
+  }, [selectedConversationId, conversationData]);
+
+  // Debounced auto-save of the snapshot to the conversation row.
+  useEffect(() => {
+    if (!selectedConversationId) return;
+    if (isHydratingRef.current) return;
+    if (hydratedConversationIdRef.current !== selectedConversationId) return;
+    // Hard gate: never auto-save (and therefore never backfill) a legacy
+    // conversation that did not have a snapshot at load time.
+    if (!snapshotEligibleRef.current.has(selectedConversationId)) return;
+
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(currentCaseSnapshot);
+    } catch {
+      return;
+    }
+    if (serialized === lastSavedSnapshotRef.current) return;
+
+    if (snapshotSaveTimerRef.current) clearTimeout(snapshotSaveTimerRef.current);
+    const conversationIdForSave = selectedConversationId;
+    snapshotSaveTimerRef.current = setTimeout(async () => {
+      snapshotSaveTimerRef.current = null;
+      try {
+        await apiRequest(
+          `/api/physiogpt/conversations/${conversationIdForSave}`,
+          "PATCH",
+          { caseSnapshot: currentCaseSnapshot },
+        );
+        lastSavedSnapshotRef.current = serialized;
+      } catch {
+        // best-effort; the next state change will retry
+      }
+    }, 1500);
+
+    return () => {
+      if (snapshotSaveTimerRef.current) {
+        clearTimeout(snapshotSaveTimerRef.current);
+        snapshotSaveTimerRef.current = null;
+      }
+    };
+  }, [selectedConversationId, currentCaseSnapshot, snapshotSaveCounter]);
+
+  // Best-effort flush on tab close / navigation away. Uses fetch with
+  // `keepalive: true` because navigator.sendBeacon doesn't support PATCH.
+  useEffect(() => {
+    const handler = () => {
+      if (!selectedConversationId) return;
+      if (hydratedConversationIdRef.current !== selectedConversationId) return;
+      // Same eligibility gate as the debounced autosave — never backfill a
+      // legacy conversation on tab close.
+      if (!snapshotEligibleRef.current.has(selectedConversationId)) return;
+      try {
+        fetch(`/api/physiogpt/conversations/${selectedConversationId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ caseSnapshot: currentCaseSnapshot }),
+          keepalive: true,
+          credentials: "include",
+        }).catch(() => {});
+      } catch {}
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [selectedConversationId, currentCaseSnapshot]);
+  // ───────────────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent]);
@@ -1228,6 +1553,12 @@ export default function PhysioGPT() {
                   setStreamingContent(accumulatedContent);
                 } else if (data.type === 'conversationId' && !selectedConversationId) {
                   setSelectedConversationId(data.data);
+                  if (data.data != null) {
+                    hydratedConversationIdRef.current = data.data;
+                    snapshotEligibleRef.current.add(data.data);
+                    lastSavedSnapshotRef.current = "";
+                    setSnapshotSaveCounter(c => c + 1);
+                  }
                 }
               } catch {}
             }
@@ -1578,6 +1909,16 @@ export default function PhysioGPT() {
                   case 'conversationId':
                     newConversationId = data.data;
                     setSelectedConversationId(newConversationId);
+                    // The conversation that was just created is initialised
+                    // FROM the current workspace state, so treat it as already
+                    // hydrated and trigger an immediate snapshot save instead
+                    // of waiting for the next user-driven state change.
+                    if (newConversationId != null) {
+                      hydratedConversationIdRef.current = newConversationId;
+                      snapshotEligibleRef.current.add(newConversationId);
+                      lastSavedSnapshotRef.current = "";
+                      setSnapshotSaveCounter(c => c + 1);
+                    }
                     break;
                   case 'chunk':
                     accumulatedContent += data.data;
@@ -3687,11 +4028,56 @@ ${ddxList}`;
   }, [message, selectedConversationId, selectedRegion]);
 
   const handleNewConversation = () => {
+    // Cancel any pending snapshot save targeted at the now-stale conversation.
+    if (snapshotSaveTimerRef.current) {
+      clearTimeout(snapshotSaveTimerRef.current);
+      snapshotSaveTimerRef.current = null;
+    }
+    // Mark as hydrating so the auto-save effect bails while we batch the
+    // resets below — otherwise the resets themselves would trigger a save
+    // back to the just-cleared conversation.
+    isHydratingRef.current = true;
+    hydratedConversationIdRef.current = null;
+    lastSavedSnapshotRef.current = "";
+
     setSelectedConversationId(null);
     setSuggestions([]);
     setMessage("");
     setChatPanelOpen(true);
     setSlingActivationOverrides({});
+    // Reset every panel that participates in the case snapshot so the new
+    // case starts from defaults instead of inheriting the previous one.
+    setModelConfig({ ...DEFAULT_MODEL_CONFIG });
+    setPainMarkers([]);
+    setCompromisedTissues([]);
+    setScarMarkers([]);
+    setAdhesionBands([]);
+    setRomMeasurements([]);
+    setMuscleOverrides({});
+    setBodyWeightKg(70);
+    setClinicalHighlights([]);
+    setSubjectiveHistoryInput('');
+    setPatientContextState(EMPTY_PATIENT_CONTEXT_STATE);
+    setPatientFactorOverrides(null);
+    setMovementFindings([]);
+    setSelectedRegion(null);
+    planCartReplaceAllRef.current?.([]);
+    setRightPanelTab('chat');
+    setMechanismActiveTab('mechanism');
+    setExpandedTreatmentSection(null);
+    setTreatmentDecisionData(null);
+    setTreatmentPlanData(null);
+    setShowSimTimeline(false);
+    setTimelinePlaybackState(null);
+    setShowForceTimePanel(false);
+    setShowTreatmentPriority(false);
+    setShowUnifiedChainPanel(false);
+    setUnifiedBiomechanicsMovementTask(undefined);
+    setUnifiedBiomechanicsProgress(0.5);
+    setUnifiedBiomechanicsFaultOverrides([]);
+
+    // Release the hydration guard once the resets have committed.
+    setTimeout(() => { isHydratingRef.current = false; }, 100);
   };
 
   const handleRegionSelect = (region: keyof typeof BODY_REGIONS) => {
@@ -7618,6 +8004,10 @@ ${ddxList}`;
   return (
     <Suspense fallback={<LazyPanelFallback />}>
     <PlanCartProvider>
+    <PlanCartHydrationBridge
+      onItemsChange={handlePlanCartItemsChange}
+      registerReplaceAll={handlePlanCartRegisterReplaceAll}
+    />
     <OrchestratePlanProvider
       clinicalContext={orchestrateClinicalContext}
       autoOrganizeNonce={orchestrateAutoNonce}

@@ -45,7 +45,7 @@ import { generateAISuggestions, applySuggestionToSoap, generateEnhancedDifferent
 import { ResearchService } from "./services/researchService";
 
 import type { ProvocationContextPainMarker } from "@shared/jointVocabulary";
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes, savedSkeletonConfigurations, physioGptConversations } from "@shared/schema";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes, savedSkeletonConfigurations, physioGptConversations, physioGptCaseSnapshotSchema, type PhysioGptCaseSnapshot } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -11646,6 +11646,34 @@ Now produce the refined hypothesis JSON.`;
     } catch (error) {
       console.error("Error deleting conversation:", error);
       res.status(500).json({ error: "Unable to delete conversation" });
+    }
+  });
+
+  app.patch("/api/physiogpt/conversations/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+
+      const { caseSnapshot } = req.body ?? {};
+      const parsed = physioGptCaseSnapshotSchema.safeParse(caseSnapshot);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid caseSnapshot payload" });
+      }
+
+      const updated = await physioGptService.updateCaseSnapshot(
+        conversationId,
+        req.user!.id,
+        parsed.data as PhysioGptCaseSnapshot,
+      );
+      if (!updated) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating case snapshot:", error);
+      res.status(500).json({ error: "Unable to update case snapshot" });
     }
   });
 

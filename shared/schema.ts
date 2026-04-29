@@ -3152,6 +3152,38 @@ export const tournamentMatchRelations = relations(tournamentMatches, ({ one }) =
   }),
 }));
 
+// PhysioGPT Case Snapshot — full workspace state captured per conversation.
+// Shape is intentionally loose (all fields optional, unknown payloads) so new
+// panels can be added without schema churn. Validation at the API layer just
+// confirms the value is an object.
+export interface PhysioGptCaseSnapshot {
+  version?: number;
+  modelConfig?: unknown;
+  painMarkers?: unknown;
+  compromisedTissues?: unknown;
+  scarMarkers?: unknown;
+  adhesionBands?: unknown;
+  romMeasurements?: unknown;
+  muscleOverrides?: unknown;
+  slingActivationOverrides?: unknown;
+  bodyWeightKg?: number;
+  clinicalHighlights?: unknown;
+  subjectiveHistoryInput?: string;
+  patientContextState?: unknown;
+  patientFactorOverrides?: unknown;
+  movementFindings?: unknown;
+  selectedRegion?: string | null;
+  planCartItems?: unknown;
+  // Reserved for forward compatibility — additional panels add fields here.
+  [key: string]: unknown;
+}
+
+export const physioGptCaseSnapshotSchema = z
+  .record(z.unknown())
+  .refine((v) => v !== null && typeof v === "object" && !Array.isArray(v), {
+    message: "caseSnapshot must be a JSON object",
+  });
+
 // PhysioGPT Chat Conversations Schema
 export const physioGptConversations = pgTable("physiogpt_conversations", {
   id: serial("id").primaryKey(),
@@ -3159,6 +3191,7 @@ export const physioGptConversations = pgTable("physiogpt_conversations", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  caseSnapshot: jsonb("case_snapshot").$type<PhysioGptCaseSnapshot>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

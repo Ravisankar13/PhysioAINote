@@ -56,7 +56,7 @@ export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props)
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>({});
 
-  const collapseStorageKey = `physiogpt:activeCapacities:collapse:${user?.id ?? 'anon'}:${caseId ?? 'none'}`;
+  const collapseStorageKey = `activeMovement:${user?.id ?? 'anon'}:panel:${caseId ?? 'none'}:open`;
   const [collapsedRegions, setCollapsedRegions] = useState<Record<string, boolean>>({});
   useEffect(() => {
     try {

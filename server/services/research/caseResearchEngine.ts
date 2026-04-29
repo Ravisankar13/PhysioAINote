@@ -1199,16 +1199,19 @@ Build the structured plan now.`;
       /\b(?:lifestyle|postural)\s+(?:advice|education|modification|correction)s?\b/i,
       /\badvice\s+on\s+activit(?:y|ies)\b/i,
     ];
-    const SPECIFIC_LABEL_SIGNALS: RegExp[] = [
+    // STRONG signals indicate the label contains a real technique cue
+    // or named parameter — enough to override the generic blocklist.
+    // Positioning alone is intentionally NOT a strong signal, because
+    // "movement control exercises in standing" is still vague.
+    const STRONG_LABEL_SIGNALS: RegExp[] = [
       /[:–—].{8,}/,
       /\([^)]{4,}\)/,
       /\bgrade\s+(?:I{1,4}V?|V|[1-5])\b/i,
       /\b\d+(?:\.\d+)?\s*(?:Hz|kHz|MHz|µs|us|ms|W\/?cm|J\/?cm|mA|min|sec|reps?|sets?|%|°)\b/i,
-      /\b(?:supine|prone|seated|sitting|standing|quadruped|side[-\s]?lying|sidelying|kneeling|half[-\s]kneeling)\b/i,
     ];
     const isGenericLabel = (label: string): boolean => {
       const t = label.trim();
-      if (SPECIFIC_LABEL_SIGNALS.some(re => re.test(t))) return false;
+      if (STRONG_LABEL_SIGNALS.some(re => re.test(t))) return false;
       return GENERIC_LABEL_PATTERNS.some(re => re.test(t));
     };
 

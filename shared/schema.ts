@@ -6053,6 +6053,28 @@ export const caseResearchSyntheses = pgTable("case_research_syntheses", {
   // Confidence buckets per spec: High / Moderate / Low / Extrapolated.
   confidence: text("confidence").notNull(),
   confidenceReason: text("confidence_reason"),
+  // Task #301 — Active Movement Mode capacities. Per-joint, per-direction
+  // active capacity rows derived from the case (literature priors +
+  // GPT-4o synthesis). Optional: only populated once the clinician
+  // toggles into Movement Mode at least once for this case. Manual
+  // overrides also write back here so they persist across reloads.
+  activeCapacities: jsonb("active_capacities").$type<{
+    rows: Array<{
+      joint: string;
+      movement: string;
+      passiveRomMin: number;
+      passiveRomMax: number;
+      activeRomMin: number;
+      activeRomMax: number;
+      painfulArc: { start: number; end: number; intensity: number } | null;
+      activeStrengthPct: number;
+      painInhibitionFactor: number;
+      source: 'pathology-baseline' | 'ai' | 'manual';
+      rationale?: string;
+    }>;
+    generatedAt: string;
+    rationaleSummary?: string;
+  }>(),
   // Lightweight audit of which variables ended up dropped to satisfy
   // the tiered query ladder (mirrored from queriesRan for fast UI
   // rendering).

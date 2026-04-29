@@ -91,6 +91,9 @@ import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState, AnimationConstraint } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
+import ActiveCapacitiesPanel from "@/components/skeleton/ActiveCapacitiesPanel";
+import MovementFindingsStream, { type MovementFinding } from "@/components/skeleton/MovementFindingsStream";
+import { useActiveCapacities } from "@/hooks/useActiveCapacities";
 import type {
   DiagnosisProvocationMovement,
   ProvocationComposeResponse,
@@ -691,6 +694,14 @@ export default function PhysioGPT() {
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showSimTimeline, setShowSimTimeline] = useState(false);
   const [showRecoverySim, setShowRecoverySim] = useState(false);
+  // Task #301 — Active Movement Mode. 'posture' is the existing
+  // default (drags = postural changes feeding the static-posture AI).
+  // 'movement' switches drags to active-movement attempts gated by
+  // the per-case active-capacity profile, replaces the Clinical
+  // Reasoning panel with a Movement Findings stream, and disables
+  // the static-posture AI pipeline.
+  const [skeletonMode, setSkeletonMode] = useState<'posture' | 'movement'>('posture');
+  const [movementFindings, setMovementFindings] = useState<MovementFinding[]>([]);
   /** When the Recovery Sim dashboard is mounted with its Skeleton View tab,
    *  it gives us a DOM container into which we portal the SAME live
    *  PureThreeGLBViewer instance — so the user is never looking at a
@@ -1802,6 +1813,11 @@ export default function PhysioGPT() {
   muscleOverridesRef.current = muscleOverrides;
   const compromisedTissuesRef = useRef(compromisedTissues);
   compromisedTissuesRef.current = compromisedTissues;
+  // Task #301 — skeleton mode ref so the static-posture trigger
+  // function (used inside callbacks already captured before the
+  // mode toggle) can read the current mode without re-creation.
+  const skeletonModeRef = useRef<'posture' | 'movement'>(skeletonMode);
+  skeletonModeRef.current = skeletonMode;
 
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
     // Retain the latest parse for the Patient Context panel (used for
@@ -4164,6 +4180,11 @@ ${ddxList}`;
   const triggerClinicalReasoningAnalysis = useCallback(async (forceRefresh = false) => {
     if (clinicalReasoningProcessing) return;
     if (clinicalReasoningPaused) return;
+    // Task #301 — Active Movement Mode gates the static-posture AI
+    // pipeline. Drag interactions are now interpreted as active
+    // movement attempts (handled by the movement-findings stream) and
+    // the static-posture clinical-reasoning analyser is silenced.
+    if (skeletonModeRef.current === 'movement') return;
 
     const markerData = painMarkersRef.current.map(pm => ({
       label: pm.anatomicalLabel || pm.nearestBone,
@@ -4462,6 +4483,9 @@ ${ddxList}`;
     });
     if (painMarkers.length === 0 && !hasPostureChanges) return;
     if (isRecording) return;
+    // Task #301 — Active Movement Mode: drags are not posture in
+    // this mode, so the static-posture pipeline must stay silent.
+    if (skeletonMode === 'movement') return;
 
     if (clinicalReasoningTimerRef.current) {
       clearTimeout(clinicalReasoningTimerRef.current);
@@ -4475,7 +4499,7 @@ ${ddxList}`;
         clearTimeout(clinicalReasoningTimerRef.current);
       }
     };
-  }, [painMarkers, modelConfig, triggerClinicalReasoningAnalysis, isRecording]);
+  }, [painMarkers, modelConfig, triggerClinicalReasoningAnalysis, isRecording, skeletonMode]);
 
   useEffect(() => {
     if (pendingCameraAnalysisRef.current && focusedCameraResult) {
@@ -5829,6 +5853,99 @@ ${ddxList}`;
     () => buildPatientContextSig(patientContextPayload),
     [patientContextPayload],
   );
+
+  // ─── Task #301 — Active Movement Mode wiring ──────────────────────
+  // Compute a stable per-case ID from the same FNV hash used by the
+  // CaseResearchPanel below, so the active-capacity profile lives on
+  // the same case row.
+  const activeCaseId = useMemo(() => {
+    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+    if (!desc) return null;
+    const fnv32 = (s: string) => {
+      let h = 0x811c9dc5;
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+      }
+      return h.toString(16).padStart(8, '0');
+    };
+    return `case-${fnv32(desc)}`;
+  }, [lastClinicalParseResult]);
+
+  const activeCapacitiesEnabled = skeletonMode === 'movement' && !!activeCaseId;
+  const { profile: activeCapacityProfile, profileMap: activeCapacityMap, generate: generateActiveCapacity, generating: generatingActiveCapacity }
+    = useActiveCapacities(activeCaseId, activeCapacitiesEnabled);
+
+  // Auto-generate the capacity profile the first time the clinician
+  // enters Movement Mode for a case that has a research synthesis but
+  // no active-capacity rows yet.
+  useEffect(() => {
+    if (skeletonMode !== 'movement') return;
+    if (!activeCaseId) return;
+    if (activeCapacityProfile) return;
+    if (generatingActiveCapacity) return;
+    const t = window.setTimeout(() => {
+      generateActiveCapacity.mutate(false);
+    }, 250);
+    return () => window.clearTimeout(t);
+    // generateActiveCapacity is a stable mutation object from React Query.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skeletonMode, activeCaseId, activeCapacityProfile, generatingActiveCapacity]);
+
+  const handleActiveMovementAttempt = useCallback(async (attempt: {
+    joint: string;
+    movement: string;
+    achievedAngle: number;
+    activeRomMax: number;
+    passiveRomMax: number;
+    inPainfulArc: boolean;
+    exceededActiveLimit: boolean;
+    compensationsTriggered: string[];
+  }) => {
+    if (skeletonModeRef.current !== 'movement') return;
+    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+    const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
+    const condition = (summary && summary.length <= 240 ? summary : desc).slice(0, 240) || 'Unspecified condition';
+    const id = `mf-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const placeholder: MovementFinding = {
+      id,
+      timestamp: Date.now(),
+      joint: attempt.joint,
+      movement: attempt.movement,
+      achievedAngle: attempt.achievedAngle,
+      inPainfulArc: attempt.inPainfulArc,
+      exceededActiveLimit: attempt.exceededActiveLimit,
+      sentence: '',
+      loading: true,
+    };
+    // Cap stream at 12 most-recent findings.
+    setMovementFindings(prev => [placeholder, ...prev].slice(0, 12));
+    try {
+      const res = await fetch('/api/movement-findings/summarise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          condition,
+          caseSummaryShort: summary ? summary.slice(0, 800) : undefined,
+          ...attempt,
+        }),
+      });
+      const data = res.ok ? await res.json() : null;
+      const sentence = (data?.sentence as string) || `${attempt.joint} ${attempt.movement} reached ${Math.round(attempt.achievedAngle)}°.`;
+      setMovementFindings(prev => prev.map(f => f.id === id ? { ...f, sentence, loading: false } : f));
+    } catch (err) {
+      setMovementFindings(prev => prev.map(f => f.id === id ? { ...f, sentence: `${attempt.joint} ${attempt.movement} reached ${Math.round(attempt.achievedAngle)}° (offline).`, loading: false } : f));
+    }
+  }, [lastClinicalParseResult]);
+
+  // Lightweight reshape of the capacity map → the prop expected by
+  // PureThreeGLBViewer (lookup by `joint:movement`).
+  const viewerActiveCapacities = useMemo(() => {
+    if (skeletonMode !== 'movement' || !activeCapacityProfile) return null;
+    return activeCapacityMap;
+  }, [skeletonMode, activeCapacityProfile, activeCapacityMap]);
+
   const lastAppliedPcSigRef = useRef<string>('');
   const pcAutoApplyTimerRef = useRef<number | null>(null);
   useEffect(() => {
@@ -7775,6 +7892,9 @@ ${ddxList}`;
               selectedRomJointId={selectedRomJoint?.id || null}
               enablePoseMode={poseMode}
               onModelConfigChange={updateModelConfig}
+              skeletonMode={skeletonMode}
+              activeCapacities={viewerActiveCapacities}
+              onActiveMovementAttempt={handleActiveMovementAttempt}
               enableZoomTool={zoomToolMode}
               onLandmarkSelect={handleLandmarkSelect}
               forceOverlay={(() => {
@@ -10841,6 +10961,24 @@ ${ddxList}`;
                 <span className="font-serif italic mr-1 text-[12px] leading-none">Σ</span>
                 Mechanics Analyser
               </Button>
+              {/* Task #301 — Active Movement Mode toggle. Switches the
+                  drag interpretation between posture (default) and
+                  active movement gated by the AI capacity profile.
+                  Mutually exclusive with the static-posture clinical
+                  reasoning AI pipeline. */}
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${skeletonMode === 'movement' ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  setSkeletonMode(prev => prev === 'movement' ? 'posture' : 'movement');
+                }}
+                data-testid="toggle-skeleton-mode"
+                title={skeletonMode === 'movement' ? 'Switch back to Posture Mode' : 'Switch to Active Movement Mode'}
+              >
+                <Activity className="h-3 w-3 mr-1" />
+                {skeletonMode === 'movement' ? 'Movement Mode' : 'Posture Mode'}
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -13544,6 +13682,20 @@ ${ddxList}`;
                 />
               );
             })()}
+            {/* Task #301 — Movement Mode panels. The Active Capacities
+                table and the per-attempt Findings stream live next to
+                the case research card so all per-case AI artifacts are
+                in the same column. They only render while Movement
+                Mode is the active skeleton mode. */}
+            {skeletonMode === 'movement' && activeCaseId && (
+              <div className="mt-3 space-y-3" data-testid="movement-mode-panels">
+                <ActiveCapacitiesPanel caseId={activeCaseId} />
+                <MovementFindingsStream
+                  findings={movementFindings}
+                  onClear={() => setMovementFindings([])}
+                />
+              </div>
+            )}
           </div>
         )}
         {hasClinicalTextData && (

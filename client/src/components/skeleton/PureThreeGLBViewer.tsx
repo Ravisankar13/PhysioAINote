@@ -1640,6 +1640,34 @@ interface PureThreeGLBViewerProps {
   selectedRomJointId?: string | null;
   enablePoseMode?: boolean;
   onModelConfigChange?: (path: string, value: number) => void;
+  /** Task #301 — Active Movement Mode. When 'movement', drags are
+   *  interpreted as the patient actively moving and are clamped to
+   *  the AI-generated active capacity (vs the canonical passive ROM
+   *  used in 'posture' mode). 'posture' is the default. */
+  skeletonMode?: 'posture' | 'movement';
+  /** Lookup keyed by `${joint}:${movement}` (e.g. 'leftShoulder:flexion').
+   *  Provided only when movement mode is active and a per-case
+   *  capacity profile has been generated. */
+  activeCapacities?: Record<string, {
+    activeRomMax: number;
+    passiveRomMax: number;
+    painfulArc?: { start: number; end: number } | null;
+    strengthGrade?: string;
+    inhibitionLevel?: number;
+    notes?: string;
+  }> | null;
+  /** Fired on mouseUp at the end of a movement-mode drag, so the
+   *  page can stream the attempt into the Movement Findings AI. */
+  onActiveMovementAttempt?: (attempt: {
+    joint: string;
+    movement: string;
+    achievedAngle: number;
+    activeRomMax: number;
+    passiveRomMax: number;
+    inPainfulArc: boolean;
+    exceededActiveLimit: boolean;
+    compensationsTriggered: string[];
+  }) => void;
   /** Externally controlled bone-segment selection (Task #212). When provided, the viewer mirrors this selection and emits changes via onSelectedBoneSegmentChange. */
   selectedBoneSegmentId?: BoneSegmentId | null;
   onSelectedBoneSegmentChange?: (id: BoneSegmentId | null) => void;
@@ -2440,6 +2468,9 @@ export default function PureThreeGLBViewer({
   selectedRomJointId = null,
   enablePoseMode = false,
   onModelConfigChange,
+  skeletonMode = 'posture',
+  activeCapacities = null,
+  onActiveMovementAttempt,
   selectedBoneSegmentId: selectedBoneSegmentIdProp,
   onSelectedBoneSegmentChange,
   enableZoomTool = false,
@@ -2611,7 +2642,30 @@ export default function PureThreeGLBViewer({
     label: string;
     min: number;
     max: number;
+    /** Task #301 — populated only when the drag begins in
+     *  Movement Mode and the joint:movement is in the active
+     *  capacity profile. */
+    activeRow?: {
+      activeRomMax: number;
+      passiveRomMax: number;
+      painfulArc?: { start: number; end: number } | null;
+    } | null;
+    /** Final clamped value reached so far in the drag — read by
+     *  onMouseUp to fire the movement attempt callback. */
+    lastValue?: number;
+    /** True if the user attempted to drag past the active limit
+     *  (in either direction). */
+    attemptedExceeded?: boolean;
   } | null>(null);
+  // Task #301 — refs so the long-lived three.js mouse handlers
+  // always read the current mode / capacity map / attempt callback
+  // without being torn down + rebuilt on every prop change.
+  const skeletonModeRef = useRef(skeletonMode);
+  skeletonModeRef.current = skeletonMode;
+  const activeCapacitiesRef = useRef(activeCapacities);
+  activeCapacitiesRef.current = activeCapacities;
+  const onActiveMovementAttemptRef = useRef(onActiveMovementAttempt);
+  onActiveMovementAttemptRef.current = onActiveMovementAttempt;
   const poseSelectedBoneRef = useRef<string | null>(null);
   const poseHighlightMeshRef = useRef<THREE.Mesh | null>(null);
   const [muscleHoverInfo, setMuscleHoverInfo] = useState<{ groupId: string; label: string; screenX: number; screenY: number } | null>(null);
@@ -6184,14 +6238,48 @@ export default function PureThreeGLBViewer({
         const hi = lim ? lim.max : poseDragRef.current.max;
         let newValue = poseDragRef.current.startValue + delta;
         newValue = Math.max(lo, Math.min(hi, Math.round(newValue)));
+
+        // ── Task #301 — Movement Mode active capacity clamp ────────
+        // Movement Mode caps the achievable angle at the per-case
+        // active ROM (passive ROM is still the absolute upper bound,
+        // since you can't physically move past anatomy). We track
+        // whether the user *attempted* to exceed the active limit so
+        // the AI summary can mention pain inhibition / strength loss.
+        let inPainfulArc = false;
+        let exceededActiveLimit = false;
+        const row = poseDragRef.current.activeRow;
+        if (skeletonModeRef.current === 'movement' && row) {
+          const targetRaw = poseDragRef.current.startValue + delta;
+          const sign = newValue >= 0 ? 1 : -1;
+          const cappedAbs = Math.min(Math.abs(newValue), row.activeRomMax);
+          const clamped = Math.round(sign * cappedAbs);
+          if (Math.abs(targetRaw) > row.activeRomMax + 0.5) {
+            exceededActiveLimit = true;
+          }
+          newValue = clamped;
+          if (row.painfulArc) {
+            const a = Math.abs(newValue);
+            if (a >= row.painfulArc.start && a <= row.painfulArc.end) inPainfulArc = true;
+          }
+        }
+        poseDragRef.current.lastValue = newValue;
+        if (exceededActiveLimit) poseDragRef.current.attemptedExceeded = true;
         onModelConfigChangeRef.current?.(poseDragRef.current.configKey, newValue);
 
         const rect = domElement.getBoundingClientRect();
+        // In movement mode add a small annotation to the tooltip so
+        // the clinician sees why the joint stopped moving.
+        let tooltipValue = `${newValue}°`;
+        if (skeletonModeRef.current === 'movement' && row) {
+          const tag = exceededActiveLimit ? ' • active limit'
+            : inPainfulArc ? ' • painful arc' : '';
+          tooltipValue = `${newValue}° / ${Math.round(row.activeRomMax)}° active${tag}`;
+        }
         setPoseModeTooltip({
           x: e.clientX - rect.left,
           y: e.clientY - rect.top - 40,
           label: poseDragRef.current.label,
-          value: `${newValue}°`,
+          value: tooltipValue,
         });
         return;
       }
@@ -6304,6 +6392,22 @@ export default function PureThreeGLBViewer({
           const screenDir = computeScreenDir(anchor, a.dirWorld);
           const startValue = getCurrentValue(a.def.configKey);
           const lim = DOF_LIMIT_INDEX.get(a.def.configKey);
+          // Task #301 — when in Movement Mode, look up the
+          // active-capacity row that gates this DOF. configKey is
+          // 'joint.movement' (e.g. 'leftShoulder.flexion'); the
+          // capacity map keys with 'joint:movement'.
+          let activeRow: { activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number } | null } | null = null;
+          if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
+            const lookupKey = a.def.configKey.replace('.', ':');
+            const r = activeCapacitiesRef.current[lookupKey];
+            if (r) {
+              activeRow = {
+                activeRomMax: r.activeRomMax,
+                passiveRomMax: r.passiveRomMax,
+                painfulArc: r.painfulArc ? { start: r.painfulArc.start, end: r.painfulArc.end } : null,
+              };
+            }
+          }
           poseDragRef.current = {
             configKey: a.def.configKey,
             startX: e.clientX,
@@ -6316,6 +6420,9 @@ export default function PureThreeGLBViewer({
             label: a.def.label,
             min: lim ? lim.min : -180,
             max: lim ? lim.max : 180,
+            activeRow,
+            lastValue: startValue,
+            attemptedExceeded: false,
           };
           controls.enabled = false;
           domElement.style.cursor = 'grabbing';
@@ -6350,6 +6457,32 @@ export default function PureThreeGLBViewer({
 
     const onMouseUp = (_e: MouseEvent) => {
       if (poseDragRef.current) {
+        // Task #301 — fire the active movement attempt callback so
+        // the page can stream a Findings sentence into the AI panel.
+        // Only fired when the drag actually originated against a
+        // capacity-gated DOF in Movement Mode.
+        const drag = poseDragRef.current;
+        if (skeletonModeRef.current === 'movement' && drag.activeRow && onActiveMovementAttemptRef.current) {
+          const [joint, movement] = drag.configKey.split('.');
+          const achievedAngle = drag.lastValue ?? drag.startValue;
+          const inPainfulArc = !!(drag.activeRow.painfulArc
+            && Math.abs(achievedAngle) >= drag.activeRow.painfulArc.start
+            && Math.abs(achievedAngle) <= drag.activeRow.painfulArc.end);
+          try {
+            onActiveMovementAttemptRef.current({
+              joint,
+              movement,
+              achievedAngle,
+              activeRomMax: drag.activeRow.activeRomMax,
+              passiveRomMax: drag.activeRow.passiveRomMax,
+              inPainfulArc,
+              exceededActiveLimit: !!drag.attemptedExceeded,
+              compensationsTriggered: [],
+            });
+          } catch (err) {
+            console.error('onActiveMovementAttempt threw:', err);
+          }
+        }
         poseDragRef.current = null;
         controls.enabled = true;
         domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';

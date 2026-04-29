@@ -9886,6 +9886,133 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  // ─── Active Movement Mode capacities (Task #301) ───────────────────
+  // POST generates / refreshes the per-joint active-capacity profile
+  // for a case using the literature priors + GPT-4o synthesis. PATCH
+  // applies a per-row manual override from the clinician. Both persist
+  // the result onto the same case_research_syntheses row so the
+  // capacity profile lives alongside the case research synthesis.
+  app.post("/api/active-capacity/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      if (!existing) return res.status(404).json({ error: "No case research synthesis found for this case — run case research first." });
+      const refresh = req.body?.refresh === true || String(req.query.refresh || "") === "1";
+      if (existing.activeCapacities && !refresh) {
+        return res.json({ ...existing, cached: true });
+      }
+      const { generateActiveCapacities } = await import("./services/activeCapacityService");
+      const profile = await generateActiveCapacities({
+        condition: existing.condition,
+        caseSummary: existing.caseSummary,
+        literatureSummary: existing.synthesizedAnswer,
+      });
+      const saved = await storage.upsertCaseResearchSynthesis({
+        caseId,
+        userId: req.user!.id,
+        contentHash: existing.contentHash,
+        condition: existing.condition,
+        caseSummary: existing.caseSummary,
+        phenotype: existing.phenotype,
+        inferredVariables: existing.inferredVariables,
+        queriesRan: existing.queriesRan,
+        seedBroadenings: existing.seedBroadenings,
+        retrievedPapers: existing.retrievedPapers,
+        retrievedTrials: existing.retrievedTrials,
+        synthesizedAnswer: existing.synthesizedAnswer,
+        confidence: existing.confidence,
+        confidenceReason: existing.confidenceReason,
+        droppedVariables: existing.droppedVariables,
+        activeCapacities: profile,
+      });
+      res.json({ ...saved, cached: false });
+    } catch (error: unknown) {
+      console.error("Generate active capacities error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate active capacities", details: message });
+    }
+  });
+
+  app.patch("/api/active-capacity/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const overrideSchema = z.object({
+        joint: z.string().min(1),
+        movement: z.string().min(1),
+        activeRomMin: z.number().optional(),
+        activeRomMax: z.number().optional(),
+        painfulArc: z.union([
+          z.null(),
+          z.object({ start: z.number(), end: z.number(), intensity: z.number() }),
+        ]).optional(),
+        activeStrengthPct: z.number().optional(),
+        painInhibitionFactor: z.number().optional(),
+      });
+      const parsed = overrideSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid override payload", details: parsed.error.flatten() });
+      }
+      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      if (!existing) return res.status(404).json({ error: "No case research synthesis found." });
+      if (!existing.activeCapacities) return res.status(400).json({ error: "No active capacities to override — generate first." });
+      const { applyManualOverride } = await import("./services/activeCapacityService");
+      const updated = applyManualOverride(existing.activeCapacities as any, parsed.data as any);
+      const saved = await storage.upsertCaseResearchSynthesis({
+        caseId,
+        userId: req.user!.id,
+        contentHash: existing.contentHash,
+        condition: existing.condition,
+        caseSummary: existing.caseSummary,
+        phenotype: existing.phenotype,
+        inferredVariables: existing.inferredVariables,
+        queriesRan: existing.queriesRan,
+        seedBroadenings: existing.seedBroadenings,
+        retrievedPapers: existing.retrievedPapers,
+        retrievedTrials: existing.retrievedTrials,
+        synthesizedAnswer: existing.synthesizedAnswer,
+        confidence: existing.confidence,
+        confidenceReason: existing.confidenceReason,
+        droppedVariables: existing.droppedVariables,
+        activeCapacities: updated,
+      });
+      res.json(saved);
+    } catch (error: unknown) {
+      console.error("Override active capacity error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to override active capacity", details: message });
+    }
+  });
+
+  app.post("/api/movement-findings/summarise", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const findingSchema = z.object({
+        condition: z.string().min(1).max(500),
+        caseSummaryShort: z.string().max(2000).optional(),
+        joint: z.string().min(1).max(60),
+        movement: z.string().min(1).max(60),
+        achievedAngle: z.number(),
+        activeRomMax: z.number(),
+        passiveRomMax: z.number(),
+        inPainfulArc: z.boolean(),
+        exceededActiveLimit: z.boolean(),
+        compensationsTriggered: z.array(z.string().max(80)).max(8),
+      });
+      const parsed = findingSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid finding payload", details: parsed.error.flatten() });
+      }
+      const { summariseMovementFinding } = await import("./services/movementFindingsService");
+      const sentence = await summariseMovementFinding(parsed.data);
+      res.json({ sentence });
+    } catch (error: unknown) {
+      console.error("Movement findings summarise error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to summarise movement finding", details: message });
+    }
+  });
+
   app.post("/api/adjunct-therapies-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const adjunctInputSchema = z.object({

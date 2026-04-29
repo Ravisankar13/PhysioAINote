@@ -1027,6 +1027,11 @@ export function CaseResearchPanel({
                         </div>
                       )}
 
+                      {/* Structured plan body — only when we actually
+                          have evidence-based content. In the no-evidence
+                          state above we render a short notice instead. */}
+                      {cached.researchTreatmentPlan.hasEvidence && (
+                        <>
                       {/* Phases */}
                       {cached.researchTreatmentPlan.phases.length > 0 && (
                         <div className="space-y-2" data-testid="list-research-plan-phases">
@@ -1177,6 +1182,8 @@ export function CaseResearchPanel({
                       <div className="text-[9.5px] text-slate-500 text-right">
                         Generated {new Date(cached.researchTreatmentPlan.generatedAt).toLocaleString()}
                       </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

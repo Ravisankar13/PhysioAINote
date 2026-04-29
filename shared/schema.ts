@@ -6071,6 +6071,10 @@ export const caseResearchSyntheses = pgTable("case_research_syntheses", {
       painInhibitionFactor: number;
       source: 'pathology-baseline' | 'ai' | 'manual';
       rationale?: string;
+      // Task #301 — set when a clinician overrides this row from the
+      // Active Capacities side panel. Used by the AI / Manual / Default
+      // badge and to skip overwriting on re-generation.
+      editedAt?: string;
     }>;
     generatedAt: string;
     rationaleSummary?: string;
@@ -6094,6 +6098,36 @@ export const insertCaseResearchSynthesisSchema = createInsertSchema(caseResearch
 
 export type InsertCaseResearchSynthesis = z.infer<typeof insertCaseResearchSynthesisSchema>;
 export type CaseResearchSynthesis = typeof caseResearchSyntheses.$inferSelect;
+
+/** Task #301 — Active Movement Mode Zod schemas. Used by both the
+ *  POST /api/active-capacity/:caseId regenerate endpoint and the
+ *  PATCH override endpoint to validate payloads before they reach
+ *  storage. Mirror the jsonb shape on `activeCapacities` above. */
+export const activeCapacityRowSchema = z.object({
+  joint: z.string().min(1),
+  movement: z.string().min(1),
+  passiveRomMin: z.number(),
+  passiveRomMax: z.number(),
+  activeRomMin: z.number(),
+  activeRomMax: z.number(),
+  painfulArc: z.object({ start: z.number(), end: z.number(), intensity: z.number().min(0).max(10) }).nullable(),
+  activeStrengthPct: z.number().min(0).max(100),
+  painInhibitionFactor: z.number().min(0).max(1),
+  source: z.enum(['pathology-baseline', 'ai', 'manual']),
+  rationale: z.string().optional(),
+  editedAt: z.string().optional(),
+});
+export const activeCapacityProfileSchema = z.object({
+  rows: z.array(activeCapacityRowSchema),
+  generatedAt: z.string(),
+  rationaleSummary: z.string().optional(),
+});
+export const activeCapacityOverridePatchSchema = activeCapacityRowSchema
+  .partial()
+  .extend({ joint: z.string().min(1), movement: z.string().min(1) });
+export type ActiveCapacityRowSchema = z.infer<typeof activeCapacityRowSchema>;
+export type ActiveCapacityProfileSchema = z.infer<typeof activeCapacityProfileSchema>;
+export type ActiveCapacityOverridePatchSchema = z.infer<typeof activeCapacityOverridePatchSchema>;
 
 /** Shape of the structured search phenotype the engine derives from
  *  the clinician's free-text condition + case summary. Edited inline

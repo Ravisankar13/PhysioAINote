@@ -317,7 +317,7 @@ export function applyManualOverride(
 ): ActiveCapacityProfile {
   const rows = profile.rows.map(r => {
     if (r.joint !== patch.joint || r.movement !== patch.movement) return r;
-    const next: ActiveCapacityRow = { ...r, source: 'manual' };
+    const next: ActiveCapacityRow = { ...r, source: 'manual', editedAt: new Date().toISOString() };
     if (typeof patch.activeRomMin === 'number') next.activeRomMin = Math.max(r.passiveRomMin, Math.min(r.passiveRomMax, patch.activeRomMin));
     if (typeof patch.activeRomMax === 'number') next.activeRomMax = Math.max(next.activeRomMin, Math.min(r.passiveRomMax, patch.activeRomMax));
     if (patch.painfulArc === null) next.painfulArc = null;

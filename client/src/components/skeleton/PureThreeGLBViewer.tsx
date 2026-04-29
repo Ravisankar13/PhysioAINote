@@ -1650,9 +1650,14 @@ interface PureThreeGLBViewerProps {
    *  Provided only when movement mode is active and a per-case
    *  capacity profile has been generated. */
   activeCapacities?: Record<string, {
+    // Task #301 — extended to carry signed min bounds + painful-arc
+    // intensity so the persistent ROM pill / red wedge / pain toast
+    // can render without a second lookup.
+    activeRomMin?: number;
     activeRomMax: number;
+    passiveRomMin?: number;
     passiveRomMax: number;
-    painfulArc?: { start: number; end: number } | null;
+    painfulArc?: { start: number; end: number; intensity?: number } | null;
     strengthGrade?: string;
     inhibitionLevel?: number;
     notes?: string;
@@ -2641,6 +2646,13 @@ export default function PureThreeGLBViewer({
   const modelConfigRef = useRef(modelConfig);
   modelConfigRef.current = modelConfig;
   const [poseModeTooltip, setPoseModeTooltip] = useState<{ x: number; y: number; label: string; value: string } | null>(null);
+  // Task #301 — persistent floating ROM pill that stays visible on the
+  // selected joint while in Movement Mode (independent of the drag
+  // tooltip), and a transient pain toast fired when the cursor enters
+  // a painful arc.
+  const [movementSelectedJoint, setMovementSelectedJoint] = useState<{ key: string; x: number; y: number } | null>(null);
+  const [painToast, setPainToast] = useState<{ angle: number; intensity: number; movement: string; expiresAt: number } | null>(null);
+  const lastPainfulArcStateRef = useRef<boolean>(false);
   const poseDragRef = useRef<{
     configKey: string;
     startX: number;
@@ -2657,9 +2669,10 @@ export default function PureThreeGLBViewer({
      *  Movement Mode and the joint:movement is in the active
      *  capacity profile. */
     activeRow?: {
+      activeRomMin: number;
       activeRomMax: number;
       passiveRomMax: number;
-      painfulArc?: { start: number; end: number } | null;
+      painfulArc?: { start: number; end: number; intensity: number } | null;
     } | null;
     /** Final clamped value reached so far in the drag — read by
      *  onMouseUp to fire the movement attempt callback. */
@@ -6108,6 +6121,17 @@ export default function PureThreeGLBViewer({
       const wp = new THREE.Vector3();
       bones[boneName]?.getWorldPosition(wp);
       buildArrowsForJoint(jointKey, wp);
+      // Task #301 — surface the selected joint into React state so the
+      // persistent ROM pill can render against it in Movement Mode.
+      if (skeletonModeRef.current === 'movement') {
+        const screen = wp.clone().project(camera);
+        const rect = domElement.getBoundingClientRect();
+        const sx = (screen.x * 0.5 + 0.5) * rect.width;
+        const sy = (-screen.y * 0.5 + 0.5) * rect.height;
+        setMovementSelectedJoint({ key: jointKey, x: sx, y: sy });
+      } else {
+        setMovementSelectedJoint(null);
+      }
       // Notify any external bone-selection consumer that the bone slot is now
       // empty. Without this, a parent-controlled selection would re-apply on
       // the next sync tick and clobber the joint we just selected.
@@ -6272,30 +6296,48 @@ export default function PureThreeGLBViewer({
         let frictionApplied = false;
         const row = poseDragRef.current.activeRow;
         if (skeletonModeRef.current === 'movement' && row) {
+          // Use signed min/max — many DOFs span negative ranges (e.g.
+          // shoulder ext = negative flexion, hip add = negative abd) so
+          // an abs-only cap would let the user pull through 0 into the
+          // opposite direction without ever hitting a limit.
+          const aMin = row.activeRomMin;
+          const aMax = row.activeRomMax;
           const targetRaw = poseDragRef.current.startValue + delta;
-          const sign = newValue >= 0 ? 1 : -1;
-          const distanceToLimit = row.activeRomMax - Math.abs(newValue);
+          // Distance to whichever bound the cursor is approaching.
+          const approachingHigh = targetRaw > poseDragRef.current.startValue;
+          const distanceToLimit = approachingHigh ? aMax - newValue : newValue - aMin;
           if (distanceToLimit <= 15 && distanceToLimit > 0) {
-            // Friction zone — scale incremental delta so the cursor feels heavy.
             const friction = Math.max(0.3, distanceToLimit / 15);
             const frictionedDelta = delta * friction;
             newValue = Math.round(poseDragRef.current.startValue + frictionedDelta);
             frictionApplied = true;
           }
-          const cappedAbs = Math.min(Math.abs(newValue), row.activeRomMax);
-          const clamped = Math.round(sign * cappedAbs);
-          if (Math.abs(targetRaw) > row.activeRomMax + 0.5) {
-            exceededActiveLimit = true;
-          }
-          newValue = clamped;
+          if (targetRaw > aMax + 0.5 || targetRaw < aMin - 0.5) exceededActiveLimit = true;
+          newValue = Math.max(aMin, Math.min(aMax, newValue));
           if (row.painfulArc) {
-            const a = Math.abs(newValue);
-            if (a >= row.painfulArc.start && a <= row.painfulArc.end) inPainfulArc = true;
+            // Painful arc is signed too — start/end are in DOF coordinates,
+            // not absolute magnitudes, so test the value directly.
+            const lo = Math.min(row.painfulArc.start, row.painfulArc.end);
+            const hi = Math.max(row.painfulArc.start, row.painfulArc.end);
+            if (newValue >= lo && newValue <= hi) inPainfulArc = true;
           }
         }
         poseDragRef.current.lastValue = newValue;
         if (exceededActiveLimit) poseDragRef.current.attemptedExceeded = true;
         if (inPainfulArc) poseDragRef.current.lastPainfulArc = true;
+        // Task #301 — fire pain toast on the *entry* edge of the painful
+        // arc so it doesn't re-trigger every frame the cursor stays
+        // inside the arc.
+        if (inPainfulArc && !lastPainfulArcStateRef.current && row?.painfulArc) {
+          const [, mv] = poseDragRef.current.configKey.split('.');
+          setPainToast({
+            angle: newValue,
+            intensity: row.painfulArc.intensity,
+            movement: mv,
+            expiresAt: Date.now() + 1800,
+          });
+        }
+        lastPainfulArcStateRef.current = inPainfulArc;
         onModelConfigChangeRef.current?.(poseDragRef.current.configKey, newValue);
 
         // Task #301 — when the active limit is exceeded, redistribute
@@ -6454,15 +6496,16 @@ export default function PureThreeGLBViewer({
           // active-capacity row that gates this DOF. configKey is
           // 'joint.movement' (e.g. 'leftShoulder.flexion'); the
           // capacity map keys with 'joint:movement'.
-          let activeRow: { activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number } | null } | null = null;
+          let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null } | null = null;
           if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
             const lookupKey = a.def.configKey.replace('.', ':');
             const r = activeCapacitiesRef.current[lookupKey];
             if (r) {
               activeRow = {
+                activeRomMin: r.activeRomMin,
                 activeRomMax: r.activeRomMax,
                 passiveRomMax: r.passiveRomMax,
-                painfulArc: r.painfulArc ? { start: r.painfulArc.start, end: r.painfulArc.end } : null,
+                painfulArc: r.painfulArc ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity } : null,
               };
             }
           }
@@ -9831,6 +9874,73 @@ export default function PureThreeGLBViewer({
           <div className="px-3 py-1.5 rounded-lg shadow-lg bg-emerald-600/90 backdrop-blur text-white text-sm font-medium">
             <div className="text-[10px] text-emerald-200 uppercase tracking-wider">{poseModeTooltip.label}</div>
             <div className="text-base font-bold">{poseModeTooltip.value}</div>
+          </div>
+        </div>
+      )}
+      {/* Task #301 — Persistent floating ROM pill on the selected
+          joint (Movement Mode only). Always visible — independent of
+          drag — so the clinician can see the active vs passive band
+          for the joint they've focused on. We surface every DOF that
+          has a capacity row (e.g. flexion + abduction) stacked. */}
+      {skeletonMode === 'movement' && movementSelectedJoint && activeCapacities && (() => {
+        const rows = Object.entries(activeCapacities)
+          .filter(([k]) => k.startsWith(`${movementSelectedJoint.key}:`))
+          .slice(0, 3);
+        if (rows.length === 0) return null;
+        return (
+          <div
+            className="absolute pointer-events-none z-20"
+            style={{ left: movementSelectedJoint.x, top: movementSelectedJoint.y - 18, transform: 'translate(-50%, -100%)' }}
+            data-testid="movement-rom-pill"
+          >
+            <div className="px-2.5 py-1.5 rounded-md shadow-lg bg-slate-900/95 backdrop-blur border border-emerald-500/40 text-white text-[11px] leading-tight space-y-0.5">
+              {rows.map(([k, r]) => {
+                const mv = k.split(':')[1];
+                const aMin = r.activeRomMin ?? 0;
+                const pMin = r.passiveRomMin ?? 0;
+                return (
+                  <div key={k} className="flex items-center gap-2">
+                    <span className="text-emerald-300 capitalize">{mv.replace(/([A-Z])/g, ' $1').trim()}</span>
+                    <span className="font-semibold tabular-nums">Active {Math.round(aMin)}–{Math.round(r.activeRomMax)}°</span>
+                    <span className="text-slate-400 tabular-nums">/ Passive {Math.round(pMin)}–{Math.round(r.passiveRomMax)}°</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+      {/* Task #301 — Painful-arc red wedge indicator. Renders as a
+          warning chip on the selected joint when the cursor is inside
+          the painful arc band, until the toast clears. */}
+      {skeletonMode === 'movement' && movementSelectedJoint && painToast && Date.now() < painToast.expiresAt && (
+        <div
+          className="absolute pointer-events-none z-20 animate-in fade-in zoom-in-95 duration-150"
+          style={{ left: movementSelectedJoint.x, top: movementSelectedJoint.y, transform: 'translate(-50%, -50%)' }}
+          data-testid="painful-arc-wedge"
+        >
+          <div
+            className="rounded-full border-2 border-red-500 bg-red-500/25 animate-pulse"
+            style={{ width: 44, height: 44, clipPath: 'polygon(50% 50%, 100% 0%, 100% 100%)' }}
+          />
+        </div>
+      )}
+      {/* Task #301 — Transient pain toast. Sits top-center of the
+          viewer for ~1.8s when the cursor enters a painful arc, with
+          intensity-coded color. */}
+      {painToast && Date.now() < painToast.expiresAt && (
+        <div
+          className="absolute pointer-events-none z-30 top-3 left-1/2 -translate-x-1/2 animate-in fade-in slide-in-from-top-2 duration-200"
+          data-testid="pain-toast"
+        >
+          <div className={`px-3 py-1.5 rounded-lg shadow-xl backdrop-blur text-white text-sm font-medium border ${
+            painToast.intensity >= 7 ? 'bg-red-600/90 border-red-300' :
+            painToast.intensity >= 4 ? 'bg-orange-500/90 border-orange-200' :
+            'bg-amber-500/90 border-amber-200'
+          }`}>
+            <span className="text-[10px] uppercase tracking-wider opacity-80 mr-1.5">Painful arc</span>
+            <span className="font-bold">{painToast.movement.replace(/([A-Z])/g, ' $1').trim()}</span>
+            <span className="ml-1.5 tabular-nums">{painToast.angle}° · {painToast.intensity}/10</span>
           </div>
         </div>
       )}

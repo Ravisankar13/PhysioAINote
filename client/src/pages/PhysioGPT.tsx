@@ -13717,18 +13717,15 @@ ${ddxList}`;
                 />
               );
             })()}
-            {/* Task #301 — Movement Mode panels. The Active Capacities
-                table and the per-attempt Findings stream live next to
-                the case research card so all per-case AI artifacts are
-                in the same column. They only render while Movement
-                Mode is the active skeleton mode. */}
+            {/* Task #301 — Movement Mode side panel. The Active
+                Capacities table lives in the case-research column.
+                The Findings stream is rendered as a right-rail (mirror
+                of ClinicalReasoningPanel) below so it occupies the same
+                visual slot as the static-posture reasoning panel it
+                replaces. */}
             {skeletonMode === 'movement' && activeCaseId && (
               <div className="mt-3 space-y-3" data-testid="movement-mode-panels">
                 <ActiveCapacitiesPanel caseId={activeCaseId} />
-                <MovementFindingsStream
-                  findings={movementFindings}
-                  onClear={() => setMovementFindings([])}
-                />
               </div>
             )}
           </div>
@@ -13917,7 +13914,17 @@ ${ddxList}`;
 
       {/* Task #301 — In Active Movement Mode the static-posture
           clinical reasoning AI pipeline is gated off; the per-movement
-          Findings stream replaces it. */}
+          Findings stream renders into the same right-rail slot the
+          ClinicalReasoningPanel normally occupies. */}
+      {skeletonMode === 'movement' && (
+        <div className="absolute top-0 right-0 h-full w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 pointer-events-auto" data-testid="movement-findings-rail">
+          <MovementFindingsStream
+            findings={movementFindings}
+            onClear={() => setMovementFindings([])}
+            className="h-full"
+          />
+        </div>
+      )}
       {skeletonMode !== 'movement' && (
       <ClinicalReasoningPanel
         data={clinicalReasoningData}

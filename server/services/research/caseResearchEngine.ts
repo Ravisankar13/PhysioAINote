@@ -1065,14 +1065,52 @@ export async function synthesizeResearchTreatmentPlan(
 
   const sys = `You are a senior physiotherapist building a STRUCTURED, EVIDENCE-CITED treatment plan for ONE specific patient. The plan is derived strictly from the supplied numbered references — never invent citations or claims unsupported by them.
 
+The plan must be CONCRETE and DEMONSTRABLE. Generic category labels are forbidden — every intervention must name a specific exercise, manual technique, modality with parameters, or education topic that the clinician can deliver as written, without further translation.
+
 Hard rules:
 1. Output 2-4 phases (e.g. acute / subacute / return-to-function / maintenance). Each phase has a short goal sentence and a typical duration drawn from or extrapolated from the evidence.
 2. Each phase has interventions grouped across the four categories: "exercise", "manual_therapy", "electrophysical", "education_lifestyle". Provide the categories that the evidence actually supports — do NOT pad empty categories with extrapolated filler.
-3. Every intervention has: category, short label (≤120 chars), dose (sets × reps × frequency × intensity OR session length / cadence), and a "citations" array of [N] numbers from the supplied references. If you cannot cite for a given intervention but it is clinically standard for this presentation, set "extrapolated": true and citations: []. Otherwise extrapolated: false and citations MUST be non-empty.
+3. Every intervention has: category, label (≤160 chars), dose, and a "citations" array of [N] numbers from the supplied references. If you cannot cite for a given intervention but it is clinically standard for this presentation, set "extrapolated": true and citations: []. Otherwise extrapolated: false and citations MUST be non-empty.
+
+SPECIFICITY RUBRIC — every "label" MUST name a specific demonstrable exercise/technique/modality with a brief inline cue (positioning, key constraint, key parameter). Generic category nouns are FORBIDDEN as standalone labels. Bad → good rewrites:
+  exercise:
+    BAD: "Movement control exercises"          GOOD: "Sitting pelvic tilt anterior/posterior — neutral seated, hands on iliac crests"
+    BAD: "Core stability training"             GOOD: "Bird-dog — contralateral arm/leg lift, hold 5s, neutral spine"
+    BAD: "Strengthening exercises"             GOOD: "Wall squat — back flat against wall, knees over 2nd toe, 90° knee, hold"
+    BAD: "Stretching"                          GOOD: "Supine hamstring stretch with strap — knee straight, ankle dorsiflexed, hold 30s"
+  manual_therapy:
+    BAD: "Joint mobilization for lumbar spine" GOOD: "Lumbar PA mobilization — central, grade III, L4 spinous process"
+    BAD: "Soft tissue work"                    GOOD: "Sustained myofascial release — thoracolumbar fascia, prone, 90s/zone"
+    BAD: "Manual therapy"                      GOOD: "Mulligan SNAG — C5/6 with active cervical rotation, 6×3 sets"
+  electrophysical:
+    BAD: "Electrotherapy"                      GOOD: "TENS — 100 Hz, 200 µs pulse, sensory level, 30 min over painful area"
+    BAD: "Modalities as needed"                GOOD: "Therapeutic ultrasound — 1 MHz, 1.0 W/cm², continuous, 5 min/zone"
+  education_lifestyle:
+    BAD: "Education"                           GOOD: "Pain neuroscience education — 1×30 min interactive session covering nociception vs nociplastic pain"
+    BAD: "Advice on activity"                  GOOD: "Graded activity plan — 10% weekly increase in walking volume, no symptom flare >2 h"
+    BAD: "Postural advice"                     GOOD: "Sit-stand cycling — 30 min sit / 5 min stand, hourly, with chin tuck reminders"
+
+EXPANSION RULE for cited multi-component protocols/programs — when a cited paper describes a NAMED protocol or program (e.g. DMA Clinical Pilates, McKenzie MDT, Mulligan SNAGs, Otago exercise program, Alfredson eccentric heel-drop protocol, GLA:D, SAID-principle running progression, Cuff Link rotator-cuff program), DO NOT collapse it into one umbrella row. Emit each component exercise/technique as its OWN intervention row, all sharing the parent paper's [N] citation, with the parent program named in the "rationale" field. Worked example for cited paper [3] = "DMA Clinical Pilates for chronic LBP":
+  { "category": "exercise", "label": "The Hundred — supine, head/shoulders lifted, arms pumping, neutral spine", "dose": "1×100 beats (10 breaths × 10), 3×/week", "citations": [3], "extrapolated": false, "rationale": "Component of DMA Clinical Pilates protocol per [3]" }
+  { "category": "exercise", "label": "Single-leg stretch — supine, alternate knee-to-chest with neutral spine", "dose": "2×10/side, 3×/week", "citations": [3], "extrapolated": false, "rationale": "Component of DMA Clinical Pilates protocol per [3]" }
+  { "category": "exercise", "label": "Swimming — prone, alternate contralateral arm/leg lift, neutral spine", "dose": "2×20 alternations, 3×/week", "citations": [3], "extrapolated": false, "rationale": "Component of DMA Clinical Pilates protocol per [3]" }
+
+FALLBACK RULE for vaguely-described evidence — when a cited paper genuinely only specifies a CLASS of intervention without listing the actual exercises (e.g. "motor control exercises improved disability"), operationalize it with 2-4 evidence-standard concrete exercises that ARE the canonical implementation of that class. Cite the parent paper [N] on each (extrapolated: false) and note in "rationale" that these are the standard implementation of the cited class. Worked example for cited paper [2] = "motor control exercises in chronic LBP":
+  { "category": "exercise", "label": "Sitting pelvic tilt anterior/posterior — neutral seated, hands on iliac crests", "dose": "3×10, 1-2×/day", "citations": [2], "extrapolated": false, "rationale": "Standard motor-control exercise per [2]" }
+  { "category": "exercise", "label": "Quadruped rocking — neutral spine, hips back to heels", "dose": "3×10, 1×/day", "citations": [2], "extrapolated": false, "rationale": "Standard motor-control exercise per [2]" }
+  { "category": "exercise", "label": "Standing hip hinge with dowel — dowel touching head/T-spine/sacrum throughout", "dose": "3×10, 1-2×/day", "citations": [2], "extrapolated": false, "rationale": "Standard motor-control exercise per [2]" }
+
+DOSE CONTRACT — every "dose" must be concrete and prescribable as written:
+  - exercise: sets × reps × hold (or duration) × frequency × intensity (e.g. "3×12 reps × 5s hold, 4-5×/week, 60% 1RM")
+  - manual_therapy: technique grade + region/segment + sets/reps + session frequency (e.g. "Grade III × 3×30s, 1-2×/week")
+  - electrophysical: modality parameters (frequency / intensity / pulse / duration) + session length + cadence (e.g. "100 Hz, 200 µs, sensory level, 30 min, 1×/day")
+  - education_lifestyle: format + duration + cadence (e.g. "1×30 min interactive session + handout, repeated at week 4")
+  Vague phrases like "as tolerated" or "as needed" are forbidden unless paired with concrete frequency/cadence.
+
 4. Each phase has 1-4 progression_criteria — measurable thresholds gating the move to the next phase (e.g. "pain ≤3/10 on aggravating movement", "ROM within 10° of contralateral side", "single-leg hop symmetry ≥90%"). Cite [N] where the evidence supports the criterion.
 5. Provide 2-6 outcome_measures (recommended PROMs / objective tests) appropriate to the condition; cite where literature supports the choice.
 6. Provide 2-6 red_flags — short safety items to escalate (e.g. progressive neurological deficit, unexplained weight loss, night pain unrelieved by rest).
-7. Provide a follow_up_cadence string (e.g. "Review at 2 weeks then every 4 weeks"). 
+7. Provide a follow_up_cadence string (e.g. "Review at 2 weeks then every 4 weeks").
 8. Provide a single-bucket plan-level confidence (High/Moderate/Low/Extrapolated) and a 1-2 sentence confidence_reason. Mirror the same banding logic the prose synthesis uses (papers count + modifier coverage + seed broadening).
 9. Citation numbers MUST be drawn ONLY from the supplied references — any other number will be discarded by the system.
 10. Be concise and clinically actionable. The clinician will read this in under a minute.
@@ -1085,15 +1123,15 @@ Return ONLY this JSON object:
       "goal": "...",
       "duration": "0-2 weeks",
       "interventions": [
-        { "category": "exercise", "label": "...", "dose": "...", "citations": [1,3], "extrapolated": false },
-        { "category": "education_lifestyle", "label": "...", "dose": "...", "citations": [], "extrapolated": true, "rationale": "..." }
+        { "category": "exercise", "label": "Bird-dog — contralateral arm/leg lift, hold 5s, neutral spine", "dose": "3×10/side × 5s hold, 1×/day", "citations": [1,3], "extrapolated": false, "rationale": "Component of motor-control program per [1]" },
+        { "category": "education_lifestyle", "label": "Pain neuroscience education — 1×30 min covering nociception vs nociplastic pain", "dose": "1×30 min in-clinic + handout, week 1", "citations": [], "extrapolated": true, "rationale": "Standard care for persistent musculoskeletal pain" }
       ],
-      "progression_criteria": [{ "criterion": "...", "citations": [2] }]
+      "progression_criteria": [{ "criterion": "Pain ≤3/10 on aggravating movement for ≥3 consecutive days", "citations": [2] }]
     }
   ],
-  "outcome_measures": [{ "name": "...", "purpose": "...", "citations": [1] }],
-  "red_flags": ["..."],
-  "follow_up_cadence": "...",
+  "outcome_measures": [{ "name": "Oswestry Disability Index", "purpose": "Track functional disability across phases", "citations": [1] }],
+  "red_flags": ["Progressive lower-limb weakness", "Saddle anaesthesia or new bladder/bowel dysfunction"],
+  "follow_up_cadence": "Review at 2 weeks then every 4 weeks",
   "confidence": "High|Moderate|Low|Extrapolated",
   "confidence_reason": "..."
 }`;
@@ -1134,8 +1172,56 @@ Build the structured plan now.`;
     const scrubCitations = (cs: number[]): number[] =>
       Array.from(new Set(cs.filter(n => validNumbers.has(n))));
 
+    // Generic-label blocklist (Task #308). The prompt forbids these,
+    // but the model occasionally still emits them — drop the offending
+    // rows so the panel never renders vague text the clinician would
+    // have to mentally translate. A label is treated as SPECIFIC (and
+    // therefore allowed) if it carries any of:
+    //   - a colon / em-dash / en-dash followed by ≥8 chars of cue text
+    //   - a parenthesized parameter ≥4 chars
+    //   - a manual-therapy grade (I-V or 1-5)
+    //   - a numeric parameter (Hz, µs, MHz, W/cm², min, sec, reps,
+    //     sets, %, °)
+    //   - a positioning cue (supine, prone, seated, standing, etc.)
+    const GENERIC_LABEL_PATTERNS: RegExp[] = [
+      /\b(?:motor|movement)\s+control\s+exercises?\b/i,
+      /\bcore\s+stab(?:ility|ilisation|ilization)(?:\s+(?:exercises?|training))?\b/i,
+      /\bstab(?:ility|ilisation|ilization)\s+exercises?\b/i,
+      /\b(?:general\s+)?strengthening\s+exercises?\b/i,
+      /\b(?:general\s+)?stretching(?:\s+exercises?)?\b/i,
+      /\baerobic\s+(?:exercises?|conditioning)\b/i,
+      /\bjoint\s+mobili[sz]ation\b/i,
+      /\bsoft[\s-]tissue\s+(?:work|massage|therapy)\b/i,
+      /\bmanual\s+therapy\b/i,
+      /\belectrotherapy\b/i,
+      /\bmodalit(?:ies|y)(?:\s+as\s+needed)?\b/i,
+      /\b(?:patient\s+)?education\b/i,
+      /\b(?:lifestyle|postural)\s+(?:advice|education|modification|correction)s?\b/i,
+      /\badvice\s+on\s+activit(?:y|ies)\b/i,
+    ];
+    const SPECIFIC_LABEL_SIGNALS: RegExp[] = [
+      /[:–—].{8,}/,
+      /\([^)]{4,}\)/,
+      /\bgrade\s+(?:I{1,4}V?|V|[1-5])\b/i,
+      /\b\d+(?:\.\d+)?\s*(?:Hz|kHz|MHz|µs|us|ms|W\/?cm|J\/?cm|mA|min|sec|reps?|sets?|%|°)\b/i,
+      /\b(?:supine|prone|seated|sitting|standing|quadruped|side[-\s]?lying|sidelying|kneeling|half[-\s]kneeling)\b/i,
+    ];
+    const isGenericLabel = (label: string): boolean => {
+      const t = label.trim();
+      if (SPECIFIC_LABEL_SIGNALS.some(re => re.test(t))) return false;
+      return GENERIC_LABEL_PATTERNS.some(re => re.test(t));
+    };
+
     const phases = parsed.phases.map(ph => {
-      const interventions = ph.interventions.map(iv => {
+      const interventions = ph.interventions
+        .filter(iv => {
+          if (isGenericLabel(iv.label)) {
+            console.warn('[caseResearch] dropping vague intervention label:', iv.label);
+            return false;
+          }
+          return true;
+        })
+        .map(iv => {
         const citations = scrubCitations(iv.citations);
         const extrapolated = iv.extrapolated || citations.length === 0;
         return {

@@ -9897,6 +9897,21 @@ export default function PureThreeGLBViewer({
           {CAMERA_PRESETS[cameraAngle].label}
         </div>
       )}
+      {/* Skeleton-mode pill: always-visible, unambiguous indicator
+          of the current interaction mode (Posture vs Movement). */}
+      <div
+        className={`absolute top-2 right-2 z-10 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur ${
+          skeletonMode === 'movement'
+            ? 'bg-emerald-500/95 text-white border border-emerald-300/50'
+            : 'bg-slate-800/90 text-slate-200 border border-slate-600/50'
+        }`}
+        data-testid={`skeleton-mode-pill-${skeletonMode}`}
+        title={skeletonMode === 'movement'
+          ? 'Drags simulate active patient movement gated by capacity'
+          : 'Drags reposition posture without active gating'}
+      >
+        {skeletonMode === 'movement' ? '● Movement Mode' : '○ Posture Mode'}
+      </div>
       
       {enableZoomTool && landmarkLabels.length > 0 && (
         <>

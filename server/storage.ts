@@ -5136,6 +5136,7 @@ export class DatabaseStorage implements IStorage {
           confidence: synthesis.confidence,
           confidenceReason: synthesis.confidenceReason,
           droppedVariables: synthesis.droppedVariables,
+          activeCapacities: synthesis.activeCapacities,
           updatedAt: now,
         },
       })

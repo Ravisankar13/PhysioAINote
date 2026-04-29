@@ -66,18 +66,23 @@ export type ActiveCapacityOverridePatch = {
 //   internalRotation: [-externalRotationMax, +internalRotationMax]
 //   rotation       : [-rotationMax, +rotationMax]
 //   lateralFlexion : [-lateralFlexionMax, +lateralFlexionMax]
+// Signed bidirectional DOFs: a single key per axis-pair (e.g. flexion
+// covers extension on the negative side). Additional movement keys
+// here are positive-only DOFs that the literature overlays reference
+// independently (externalRotation, lumbar extension), so the overlay
+// patches always have a baseline row to land on.
 const PASSIVE_ROM: Record<string, Record<string, [number, number]>> = {
-  leftShoulder:   { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70] },
-  rightShoulder:  { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70] },
-  leftHip:        { flexion: [-30, 120], abduction: [-30, 45], internalRotation: [-45, 45] },
-  rightHip:       { flexion: [-30, 120], abduction: [-30, 45], internalRotation: [-45, 45] },
+  leftShoulder:   { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70], externalRotation: [0, 90], extension: [0, 60] },
+  rightShoulder:  { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70], externalRotation: [0, 90], extension: [0, 60] },
+  leftHip:        { flexion: [-30, 120], abduction: [-30, 45], internalRotation: [-45, 45], extension: [0, 30] },
+  rightHip:       { flexion: [-30, 120], abduction: [-30, 45], internalRotation: [-45, 45], extension: [0, 30] },
   leftKnee:       { flexion: [0, 140] },
   rightKnee:      { flexion: [0, 140] },
-  leftAnkle:      { dorsiflexion: [-50, 20], inversion: [-20, 35] },
-  rightAnkle:     { dorsiflexion: [-50, 20], inversion: [-20, 35] },
-  lumbar_spine:   { flexion: [-25, 60], rotation: [-5, 5], lateralFlexion: [-25, 25] },
-  cervical_spine: { flexion: [-60, 50], rotation: [-80, 80], lateralFlexion: [-45, 45] },
-  thoracic_spine: { flexion: [-20, 40], rotation: [-35, 35], lateralFlexion: [-25, 25] },
+  leftAnkle:      { dorsiflexion: [-50, 20], inversion: [-20, 35], plantarflexion: [0, 50] },
+  rightAnkle:     { dorsiflexion: [-50, 20], inversion: [-20, 35], plantarflexion: [0, 50] },
+  lumbar_spine:   { flexion: [-25, 60], rotation: [-5, 5], lateralFlexion: [-25, 25], extension: [0, 25] },
+  cervical_spine: { flexion: [-60, 50], rotation: [-80, 80], lateralFlexion: [-45, 45], extension: [0, 60] },
+  thoracic_spine: { flexion: [-20, 40], rotation: [-35, 35], lateralFlexion: [-25, 25], extension: [0, 20] },
   leftElbow:      { flexion: [0, 140] },
   rightElbow:     { flexion: [0, 140] },
 };

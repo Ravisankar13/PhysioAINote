@@ -1641,18 +1641,8 @@ interface PureThreeGLBViewerProps {
   selectedRomJointId?: string | null;
   enablePoseMode?: boolean;
   onModelConfigChange?: (path: string, value: number) => void;
-  /** Active Movement Mode. When 'movement', drags are
-   *  interpreted as the patient actively moving and are clamped to
-   *  the AI-generated active capacity (vs the canonical passive ROM
-   *  used in 'posture' mode). 'posture' is the default. */
   skeletonMode?: 'posture' | 'movement';
-  /** Lookup keyed by `${joint}:${movement}` (e.g. 'leftShoulder:flexion').
-   *  Provided only when movement mode is active and a per-case
-   *  capacity profile has been generated. */
   activeCapacities?: Record<string, {
-    // extended to carry signed min bounds + painful-arc
-    // intensity so the persistent ROM pill / red wedge / pain toast
-    // can render without a second lookup.
     activeRomMin?: number;
     activeRomMax: number;
     passiveRomMin?: number;
@@ -2222,8 +2212,6 @@ const DOF_LIMIT_INDEX: Map<string, { min: number; max: number; label: string }> 
   return m;
 })();
 
-// index COMPENSATION_CHAINS by `joint:movement` (snake_case)
-// for O(1) lookup during the active-movement drag handler.
 const COMPENSATION_CHAIN_BY_KEY: Map<string, typeof COMPENSATION_CHAINS[number]['compensators']> = (() => {
   const m = new Map<string, typeof COMPENSATION_CHAINS[number]['compensators']>();
   for (const chain of COMPENSATION_CHAINS) m.set(`${chain.source.joint}:${chain.source.movement}`, chain.compensators);
@@ -2232,33 +2220,20 @@ const COMPENSATION_CHAIN_BY_KEY: Map<string, typeof COMPENSATION_CHAINS[number][
 function camelToSnake(s: string): string { return s.replace(/[A-Z]/g, c => '_' + c.toLowerCase()); }
 function snakeToCamel(s: string): string { return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
 
-// Effortful muscle activation map for Movement Mode.
-// Each (joint, movement, sign) tuple maps to the agonists that fire
-// in the dragged direction and the antagonists that lengthen against
-// them. Pain inhibition reduces the agonist activation (because the
-// patient guards). Limited to leg muscles because the visualization
-// system currently only models lower-limb meshes.
 type ActivationKey = keyof MuscleActivationLevels;
 const MOVEMENT_MUSCLE_AGONISTS: Record<string, { agonists: ActivationKey[]; antagonists: ActivationKey[] }> = {
-  // Hip flexion (positive)
   'leftHip.flexion+':   { agonists: ['rectusFemoris', 'sartorius', 'tensorFasciaeLatae'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
   'rightHip.flexion+':  { agonists: ['rectusFemoris', 'sartorius', 'tensorFasciaeLatae'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
-  // Hip extension (negative flexion)
   'leftHip.flexion-':   { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
   'rightHip.flexion-':  { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
-  // Hip abduction (positive)
   'leftHip.abduction+': { agonists: ['tensorFasciaeLatae'], antagonists: ['adductorMagnus', 'adductorLongus'] },
   'rightHip.abduction+':{ agonists: ['tensorFasciaeLatae'], antagonists: ['adductorMagnus', 'adductorLongus'] },
-  // Hip adduction (negative abduction)
   'leftHip.abduction-': { agonists: ['adductorMagnus', 'adductorLongus'], antagonists: ['tensorFasciaeLatae'] },
   'rightHip.abduction-':{ agonists: ['adductorMagnus', 'adductorLongus'], antagonists: ['tensorFasciaeLatae'] },
-  // Knee flexion
   'leftKnee.flexion+':  { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'] },
   'rightKnee.flexion+': { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'] },
-  // Ankle dorsiflexion (positive)
   'leftAnkle.dorsiflexion+':  { agonists: ['tibialisAnterior', 'extensorDigitorumLongus', 'extensorHallucisLongus'], antagonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus'] },
   'rightAnkle.dorsiflexion+': { agonists: ['tibialisAnterior', 'extensorDigitorumLongus', 'extensorHallucisLongus'], antagonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus'] },
-  // Plantarflexion (negative dorsiflexion)
   'leftAnkle.dorsiflexion-':  { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
   'rightAnkle.dorsiflexion-': { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
 };
@@ -2276,12 +2251,9 @@ function computeMovementMuscleActivation(
   const map = MOVEMENT_MUSCLE_AGONISTS[lookupKey];
   if (!map) return null;
   const side: 'left' | 'right' = configKey.startsWith('left') ? 'left' : 'right';
-  // Effort progress 0..1 toward the active limit on the dragged side.
   const targetLimit = direction === '+' ? activeRomMax : activeRomMin;
   const denom = Math.max(1, Math.abs(targetLimit - startValue));
   const progress = Math.min(1, Math.abs(currentValue - startValue) / denom);
-  // Pain inhibition reduces agonist activation; antagonist co-contraction
-  // *increases* slightly with inhibition (guarding behaviour).
   const agonistLevel = Math.max(0, progress * (1 - 0.6 * painInhibitionFactor));
   const antagonistLevel = Math.min(0.6, 0.15 + 0.4 * progress + 0.3 * painInhibitionFactor);
   const out: MuscleActivationLevels = {};
@@ -2720,17 +2692,9 @@ export default function PureThreeGLBViewer({
   const modelConfigRef = useRef(modelConfig);
   modelConfigRef.current = modelConfig;
   const [poseModeTooltip, setPoseModeTooltip] = useState<{ x: number; y: number; label: string; value: string } | null>(null);
-  // persistent floating ROM pill that stays visible on the
-  // selected joint while in Movement Mode (independent of the drag
-  // tooltip), and a transient pain toast fired when the cursor enters
-  // a painful arc.
   const [movementSelectedJoint, setMovementSelectedJoint] = useState<{ key: string; x: number; y: number } | null>(null);
   const [painToast, setPainToast] = useState<{ angle: number; intensity: number; movement: string; expiresAt: number } | null>(null);
   const lastPainfulArcStateRef = useRef<boolean>(false);
-  // effortful muscle activation derived live from the
-  // active drag (agonists fire, antagonists lengthen, pain inhibition
-  // dampens activation). Merged with the prop-driven activation in the
-  // muscle visualization effect so static-mode usage is unaffected.
   const [movementMuscleActivation, setMovementMuscleActivation] = useState<MuscleActivationLevels | null>(null);
   const poseDragRef = useRef<{
     configKey: string;
@@ -2744,9 +2708,6 @@ export default function PureThreeGLBViewer({
     label: string;
     min: number;
     max: number;
-    /** populated only when the drag begins in
-     *  Movement Mode and the joint:movement is in the active
-     *  capacity profile. */
     activeRow?: {
       activeRomMin: number;
       activeRomMax: number;
@@ -2754,21 +2715,11 @@ export default function PureThreeGLBViewer({
       painfulArc?: { start: number; end: number; intensity: number } | null;
       painInhibitionFactor?: number;
     } | null;
-    /** Final clamped value reached so far in the drag — read by
-     *  onMouseUp to fire the movement attempt callback. */
     lastValue?: number;
-    /** True if the user attempted to drag past the active limit
-     *  (in either direction). */
     attemptedExceeded?: boolean;
-    /** True if any frame of the drag landed inside the painful arc. */
     lastPainfulArc?: boolean;
-    /** Compensator joint.movement keys that were redistributed into
-     *  past the active limit. Empty unless attemptedExceeded. */
     compensationsTriggered?: string[];
   } | null>(null);
-  // refs so the long-lived three.js mouse handlers
-  // always read the current mode / capacity map / attempt callback
-  // without being torn down + rebuilt on every prop change.
   const skeletonModeRef = useRef(skeletonMode);
   skeletonModeRef.current = skeletonMode;
   const activeCapacitiesRef = useRef(activeCapacities);
@@ -2777,9 +2728,6 @@ export default function PureThreeGLBViewer({
   onActiveMovementAttemptRef.current = onActiveMovementAttempt;
   const onPainfulArcFlareRef = useRef(onPainfulArcFlare);
   onPainfulArcFlareRef.current = onPainfulArcFlare;
-  // 800ms drag-end stillness timer. Findings only fire
-  // after the clinician has held the joint still for 800ms, so a
-  // double-tug doesn't enqueue two AI summaries for the same attempt.
   const movementSettleTimerRef = useRef<number | null>(null);
   const pendingMovementAttemptRef = useRef<Parameters<NonNullable<typeof onActiveMovementAttempt>>[0] | null>(null);
   const poseSelectedBoneRef = useRef<string | null>(null);
@@ -6203,8 +6151,6 @@ export default function PureThreeGLBViewer({
       const wp = new THREE.Vector3();
       bones[boneName]?.getWorldPosition(wp);
       buildArrowsForJoint(jointKey, wp);
-      // surface the selected joint into React state so the
-      // persistent ROM pill can render against it in Movement Mode.
       if (skeletonModeRef.current === 'movement') {
         const screen = wp.clone().project(camera);
         const rect = domElement.getBoundingClientRect();
@@ -6366,26 +6312,14 @@ export default function PureThreeGLBViewer({
         let newValue = poseDragRef.current.startValue + delta;
         newValue = Math.max(lo, Math.min(hi, Math.round(newValue)));
 
-        // Movement Mode caps the achievable angle at the
-        // per-case active ROM. Within the last 15° before the active
-        // limit we apply rubber-band cursor friction so the clinician
-        // *feels* the resistance build (delta is scaled down). We track
-        // whether the user attempted to exceed the limit + which
-        // compensators the chain would recruit, then redistribute the
-        // residual angle into the chain via onModelConfigChange.
         let inPainfulArc = false;
         let exceededActiveLimit = false;
         let frictionApplied = false;
         const row = poseDragRef.current.activeRow;
         if (skeletonModeRef.current === 'movement' && row) {
-          // Use signed min/max — many DOFs span negative ranges (e.g.
-          // shoulder ext = negative flexion, hip add = negative abd) so
-          // an abs-only cap would let the user pull through 0 into the
-          // opposite direction without ever hitting a limit.
           const aMin = row.activeRomMin;
           const aMax = row.activeRomMax;
           const targetRaw = poseDragRef.current.startValue + delta;
-          // Distance to whichever bound the cursor is approaching.
           const approachingHigh = targetRaw > poseDragRef.current.startValue;
           const distanceToLimit = approachingHigh ? aMax - newValue : newValue - aMin;
           if (distanceToLimit <= 15 && distanceToLimit > 0) {
@@ -6397,8 +6331,6 @@ export default function PureThreeGLBViewer({
           if (targetRaw > aMax + 0.5 || targetRaw < aMin - 0.5) exceededActiveLimit = true;
           newValue = Math.max(aMin, Math.min(aMax, newValue));
           if (row.painfulArc) {
-            // Painful arc is signed too — start/end are in DOF coordinates,
-            // not absolute magnitudes, so test the value directly.
             const lo = Math.min(row.painfulArc.start, row.painfulArc.end);
             const hi = Math.max(row.painfulArc.start, row.painfulArc.end);
             if (newValue >= lo && newValue <= hi) inPainfulArc = true;
@@ -6407,7 +6339,6 @@ export default function PureThreeGLBViewer({
         poseDragRef.current.lastValue = newValue;
         if (exceededActiveLimit) poseDragRef.current.attemptedExceeded = true;
         if (inPainfulArc) poseDragRef.current.lastPainfulArc = true;
-        // Movement Mode: derive effortful muscle activation from drag.
         if (skeletonModeRef.current === 'movement' && row) {
           const activation = computeMovementMuscleActivation(
             poseDragRef.current.configKey,
@@ -6419,7 +6350,6 @@ export default function PureThreeGLBViewer({
           );
           if (activation) setMovementMuscleActivation(activation);
         }
-        // Pain toast fires on entry edge only.
         if (inPainfulArc && !lastPainfulArcStateRef.current && row?.painfulArc) {
           const [j, mv] = poseDragRef.current.configKey.split('.');
           setPainToast({
@@ -6428,8 +6358,6 @@ export default function PureThreeGLBViewer({
             movement: mv,
             expiresAt: Date.now() + 1800,
           });
-          // Notify the predicted-pain layer that this joint+movement
-          // just flared so it can register a transient hot-spot.
           onPainfulArcFlareRef.current?.({
             joint: j,
             movement: mv,
@@ -6442,18 +6370,10 @@ export default function PureThreeGLBViewer({
         lastPainfulArcStateRef.current = inPainfulArc;
         onModelConfigChangeRef.current?.(poseDragRef.current.configKey, newValue);
 
-        // when the active limit is exceeded, redistribute
-        // the residual angle into the chain compensators. Snake_case
-        // joint names from the chain table are translated to the
-        // camelCase configKey shape the rest of the engine uses.
         if (exceededActiveLimit && skeletonModeRef.current === 'movement' && row && !frictionApplied) {
           const [j, m] = poseDragRef.current.configKey.split('.');
           const chain = COMPENSATION_CHAIN_BY_KEY.get(`${camelToSnake(j)}:${camelToSnake(m)}`);
           if (chain) {
-            // Signed residual: distance the cursor pushed *past* the
-            // exceeded active bound. Direction of compensation matches
-            // the direction the user was dragging so the chain helps
-            // the original motion rather than opposing it.
             const targetRaw = poseDragRef.current.startValue + delta;
             const residual = targetRaw > row.activeRomMax
               ? targetRaw - row.activeRomMax
@@ -6603,7 +6523,6 @@ export default function PureThreeGLBViewer({
           const screenDir = computeScreenDir(anchor, a.dirWorld);
           const startValue = getCurrentValue(a.def.configKey);
           const lim = DOF_LIMIT_INDEX.get(a.def.configKey);
-          // Movement Mode: look up the capacity row gating this DOF.
           let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null; painInhibitionFactor: number } | null = null;
           if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
             const lookupKey = a.def.configKey.replace('.', ':');
@@ -6620,8 +6539,6 @@ export default function PureThreeGLBViewer({
               };
             }
           }
-          // a new drag begins, so cancel any pending
-          // 800ms stillness timer from the previous drag.
           if (movementSettleTimerRef.current !== null) {
             window.clearTimeout(movementSettleTimerRef.current);
             movementSettleTimerRef.current = null;
@@ -6645,7 +6562,6 @@ export default function PureThreeGLBViewer({
             lastPainfulArc: false,
             compensationsTriggered: [],
           };
-          // Reset arc-edge ref + muscle activation on new drag.
           lastPainfulArcStateRef.current = false;
           if (skeletonModeRef.current !== 'movement') setMovementMuscleActivation(null);
           controls.enabled = false;
@@ -6682,17 +6598,9 @@ export default function PureThreeGLBViewer({
     const onMouseUp = (_e: MouseEvent) => {
       if (poseDragRef.current) {
         const drag = poseDragRef.current;
-        // instead of firing the AI summary immediately,
-        // capture the drag snapshot and wait 800ms of stillness. Any
-        // new drag inside that window cancels the timer (set in
-        // onMouseDown) so we don't enqueue duplicate findings.
         if (skeletonModeRef.current === 'movement' && drag.activeRow && onActiveMovementAttemptRef.current) {
           const [joint, movement] = drag.configKey.split('.');
           const achievedAngle = drag.lastValue ?? drag.startValue;
-          // Signed painful-arc test: start/end may be negative for
-          // bidirectional DOFs (e.g. extension arcs, adduction arcs).
-          // Use min/max so the order of start/end doesn't matter and
-          // the achieved angle is compared in the same coordinate.
           const arc = drag.activeRow.painfulArc;
           const inPainfulArc = !!drag.lastPainfulArc || !!(arc
             && achievedAngle >= Math.min(arc.start, arc.end)
@@ -6718,7 +6626,6 @@ export default function PureThreeGLBViewer({
         poseDragRef.current = null;
         controls.enabled = true;
         domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
-        // Clear muscle activation so meshes relax back to baseline.
         lastPainfulArcStateRef.current = false;
         setMovementMuscleActivation(null);
       }
@@ -6817,8 +6724,6 @@ export default function PureThreeGLBViewer({
     return () => {
       cancelAnimationFrame(poseGlowAnimFrame.current);
       applyExternalBoneSelectionRef.current = null;
-      // clear any pending stillness-debounce timer so we
-      // don't fire onActiveMovementAttempt against an unmounted page.
       if (movementSettleTimerRef.current !== null) {
         window.clearTimeout(movementSettleTimerRef.current);
         movementSettleTimerRef.current = null;
@@ -8819,11 +8724,9 @@ export default function PureThreeGLBViewer({
       );
     }
 
-    // Movement-Mode drag activation takes priority over prop activation.
     const effectiveActivation = (skeletonMode === 'movement' && movementMuscleActivation)
       ? movementMuscleActivation
       : (muscleActivation || {});
-    // Auto-show muscle viz during a Movement-Mode drag.
     const showMuscles = muscleVisibility?.enabled || (skeletonMode === 'movement' && !!movementMuscleActivation);
     if (showMuscles) {
       muscleVisualizationRef.current.setShowLabels(muscleVisibility?.showLabels || false);
@@ -10019,11 +9922,6 @@ export default function PureThreeGLBViewer({
           </div>
         </div>
       )}
-      {/* Persistent floating ROM pill on the selected
-          joint (Movement Mode only). Always visible — independent of
-          drag — so the clinician can see the active vs passive band
-          for the joint they've focused on. We surface every DOF that
-          has a capacity row (e.g. flexion + abduction) stacked. */}
       {skeletonMode === 'movement' && movementSelectedJoint && activeCapacities && (() => {
         const rows = Object.entries(activeCapacities)
           .filter(([k]) => k.startsWith(`${movementSelectedJoint.key}:`))
@@ -10052,9 +9950,6 @@ export default function PureThreeGLBViewer({
           </div>
         );
       })()}
-      {/* Painful-arc red wedge indicator. Renders as a
-          warning chip on the selected joint when the cursor is inside
-          the painful arc band, until the toast clears. */}
       {skeletonMode === 'movement' && movementSelectedJoint && painToast && Date.now() < painToast.expiresAt && (
         <div
           className="absolute pointer-events-none z-20 animate-in fade-in zoom-in-95 duration-150"
@@ -10067,9 +9962,6 @@ export default function PureThreeGLBViewer({
           />
         </div>
       )}
-      {/* Transient pain toast. Sits top-center of the
-          viewer for ~1.8s when the cursor enters a painful arc, with
-          intensity-coded color. */}
       {painToast && Date.now() < painToast.expiresAt && (
         <div
           className="absolute pointer-events-none z-30 top-3 left-1/2 -translate-x-1/2 animate-in fade-in slide-in-from-top-2 duration-200"

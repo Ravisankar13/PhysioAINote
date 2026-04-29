@@ -37,10 +37,6 @@ type CaseResearchRow = {
   activeCapacities: ActiveCapacityProfile | null;
 };
 
-// Mirrors server PASSIVE_ROM: signed bidirectional DOFs (e.g. flexion
-// covers extension on the negative side) so fallback rows match the
-// viewer's signed drag-channel expectations and don't clamp out
-// valid opposite-direction movement.
 const PASSIVE_ROM: Record<string, Record<string, [number, number]>> = {
   leftShoulder:   { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70], externalRotation: [0, 90], extension: [0, 60] },
   rightShoulder:  { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70], externalRotation: [0, 90], extension: [0, 60] },
@@ -61,10 +57,6 @@ function buildFallbackProfile(): ActiveCapacityProfile {
   const rows: ActiveCapacityRow[] = [];
   for (const [joint, dirs] of Object.entries(PASSIVE_ROM)) {
     for (const [movement, [pmin, pmax]] of Object.entries(dirs)) {
-      // Signed-aware default active band: shrink each end of the
-      // passive range by 15% of its signed extent so bidirectional
-      // DOFs preserve both directions instead of collapsing toward
-      // the positive end.
       const aMin = Math.round(pmin * 0.85);
       const aMax = Math.round(pmax * 0.85);
       rows.push({

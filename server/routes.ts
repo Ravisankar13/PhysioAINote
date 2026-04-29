@@ -9897,11 +9897,6 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const caseId = String(req.params.caseId || "").trim();
       if (!caseId) return res.status(400).json({ error: "Missing caseId" });
       const refresh = req.body?.refresh === true || String(req.query.refresh || "") === "1";
-      // Existing case-research row is optional — for old cases that
-      // never ran the case-research engine the client can pass case
-      // context (condition, caseSummary, age, sex, pathologies) on
-      // the body and we'll generate capacities and persist a stub
-      // synthesis row so subsequent opens are instant.
       const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
       if (existing?.activeCapacities && !refresh) {
         return res.json({ ...existing, cached: true });
@@ -9939,7 +9934,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         retrievedPapers: existing?.retrievedPapers ?? [],
         retrievedTrials: existing?.retrievedTrials ?? [],
         synthesizedAnswer: existing?.synthesizedAnswer ?? "",
-        confidence: existing?.confidence ?? null,
+        confidence: existing?.confidence ?? "unknown",
         confidenceReason: existing?.confidenceReason ?? null,
         droppedVariables: existing?.droppedVariables ?? [],
         activeCapacities: profile,

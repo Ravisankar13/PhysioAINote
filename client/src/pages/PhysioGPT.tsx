@@ -694,12 +694,6 @@ export default function PhysioGPT() {
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showSimTimeline, setShowSimTimeline] = useState(false);
   const [showRecoverySim, setShowRecoverySim] = useState(false);
-  // Active Movement Mode. 'posture' is the existing
-  // default (drags = postural changes feeding the static-posture AI).
-  // 'movement' switches drags to active-movement attempts gated by
-  // the per-case active-capacity profile, replaces the Clinical
-  // Reasoning panel with a Movement Findings stream, and disables
-  // the static-posture AI pipeline.
   const [skeletonMode, setSkeletonMode] = useState<'posture' | 'movement'>('posture');
   const [movementFindings, setMovementFindings] = useState<MovementFinding[]>([]);
   /** When the Recovery Sim dashboard is mounted with its Skeleton View tab,
@@ -1813,9 +1807,6 @@ export default function PhysioGPT() {
   muscleOverridesRef.current = muscleOverrides;
   const compromisedTissuesRef = useRef(compromisedTissues);
   compromisedTissuesRef.current = compromisedTissues;
-  // skeleton mode ref so the static-posture trigger
-  // function (used inside callbacks already captured before the
-  // mode toggle) can read the current mode without re-creation.
   const skeletonModeRef = useRef<'posture' | 'movement'>(skeletonMode);
   skeletonModeRef.current = skeletonMode;
 
@@ -4180,10 +4171,6 @@ ${ddxList}`;
   const triggerClinicalReasoningAnalysis = useCallback(async (forceRefresh = false) => {
     if (clinicalReasoningProcessing) return;
     if (clinicalReasoningPaused) return;
-    // Active Movement Mode gates the static-posture AI
-    // pipeline. Drag interactions are now interpreted as active
-    // movement attempts (handled by the movement-findings stream) and
-    // the static-posture clinical-reasoning analyser is silenced.
     if (skeletonModeRef.current === 'movement') return;
 
     const markerData = painMarkersRef.current.map(pm => ({
@@ -4483,8 +4470,6 @@ ${ddxList}`;
     });
     if (painMarkers.length === 0 && !hasPostureChanges) return;
     if (isRecording) return;
-    // Active Movement Mode: drags are not posture in
-    // this mode, so the static-posture pipeline must stay silent.
     if (skeletonMode === 'movement') return;
 
     if (clinicalReasoningTimerRef.current) {
@@ -5893,9 +5878,6 @@ ${ddxList}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skeletonMode, activeCaseId, activeCapacityProfile, generatingActiveCapacity]);
 
-  // Painful-arc flare events emitted by the viewer mid-drag. We
-  // keep recent flares (last 8s) so the predicted-pain layer can
-  // surface them as transient hot-spots until they decay.
   const [painfulArcFlares, setPainfulArcFlares] = useState<Array<{
     joint: string; movement: string; angle: number; intensity: number; arcStart: number; arcEnd: number; timestamp: number;
   }>>([]);
@@ -6346,9 +6328,31 @@ ${ddxList}`;
   }, [hudMuscleAnalysis, showUnifiedChainPanel, chainIntegrityScores]);
 
   const predictedPainSpots = useMemo((): PredictedPainSpot[] => {
-    if (computeStage < 4) return [];
-    return computePredictedPain(effectiveModelConfig);
-  }, [effectiveModelConfig, computeStage]);
+    const base = computeStage < 4 ? [] : computePredictedPain(effectiveModelConfig);
+    if (skeletonMode !== 'movement' || painfulArcFlares.length === 0) return base;
+    const now = Date.now();
+    const jointToBone: Record<string, string> = {
+      leftShoulder: 'mixamorig:LeftShoulder', rightShoulder: 'mixamorig:RightShoulder',
+      leftHip: 'mixamorig:LeftUpLeg', rightHip: 'mixamorig:RightUpLeg',
+      leftKnee: 'mixamorig:LeftLeg', rightKnee: 'mixamorig:RightLeg',
+      leftAnkle: 'mixamorig:LeftFoot', rightAnkle: 'mixamorig:RightFoot',
+      leftElbow: 'mixamorig:LeftForeArm', rightElbow: 'mixamorig:RightForeArm',
+      lumbar_spine: 'mixamorig:Spine', thoracic_spine: 'mixamorig:Spine1', cervical_spine: 'mixamorig:Neck',
+    };
+    const flareSpots: PredictedPainSpot[] = painfulArcFlares
+      .filter(f => now - f.timestamp < 8000)
+      .map(f => ({
+        id: `flare-${f.joint}-${f.movement}-${f.timestamp}`,
+        boneName: jointToBone[f.joint] || 'mixamorig:Hips',
+        label: `${f.joint} ${f.movement} painful arc`,
+        confidence: 0.85,
+        severity: f.intensity,
+        rationale: `Active movement entered painful arc ${f.arcStart}–${f.arcEnd}° at ${Math.round(f.angle)}°`,
+        category: 'muscular',
+        position: { x: 0, y: 0, z: 0 },
+      }));
+    return [...base, ...flareSpots];
+  }, [effectiveModelConfig, computeStage, skeletonMode, painfulArcFlares]);
 
   const [showPredictedPain, setShowPredictedPain] = useState(true);
 
@@ -10979,9 +10983,6 @@ ${ddxList}`;
                   const next = !showRecoverySim;
                   setShowRecoverySim(next);
                   if (next && showMechanicsAnalyser) setShowMechanicsAnalyser(false);
-                  // Recovery Sim and Movement Mode are
-                  // mutually exclusive (both reparent / repurpose the
-                  // viewer's behaviour and AI streams).
                   if (next && skeletonMode === 'movement') setSkeletonMode('posture');
                 }}
               >
@@ -11003,11 +11004,6 @@ ${ddxList}`;
                 <span className="font-serif italic mr-1 text-[12px] leading-none">Σ</span>
                 Mechanics Analyser
               </Button>
-              {/* Active Movement Mode toggle. Switches the
-                  drag interpretation between posture (default) and
-                  active movement gated by the AI capacity profile.
-                  Mutually exclusive with the static-posture clinical
-                  reasoning AI pipeline. */}
               <Button
                 variant="secondary"
                 size="sm"

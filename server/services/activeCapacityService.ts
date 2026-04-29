@@ -28,9 +28,6 @@ export type ActiveCapacityRow = {
   painInhibitionFactor: number;
   source: 'pathology-baseline' | 'ai' | 'manual';
   rationale?: string;
-  // set when a clinician overrides this row from the
-  // Active Capacities side panel. Used by the AI / Manual / Default
-  // badge and to skip overwriting on re-generation.
   editedAt?: string;
 };
 
@@ -48,29 +45,9 @@ export type ActiveCapacityOverridePatch = {
   painfulArc?: { start: number; end: number; intensity: number } | null;
   activeStrengthPct?: number;
   painInhibitionFactor?: number;
-  // Stamped server-side; clients may also send to preserve a prior
-  // edit timestamp during reconciliation.
   editedAt?: string;
 };
 
-// Passive ROM table. Single-axis bidirectional DOFs (e.g. shoulder
-// flexion/extension on the same DOF channel, hip ab/adduction, ankle
-// dorsi/plantarflexion, ankle inv/eversion, spine rotation/lateral
-// flexion) are encoded with **signed** ranges so Movement Mode can
-// clamp the cursor symmetrically without losing the opposite
-// direction. Convention:
-//   flexion        : [-extensionMax, +flexionMax]
-//   abduction      : [-adductionMax, +abductionMax]
-//   dorsiflexion   : [-plantarflexionMax, +dorsiflexionMax]
-//   inversion      : [-eversionMax, +inversionMax]
-//   internalRotation: [-externalRotationMax, +internalRotationMax]
-//   rotation       : [-rotationMax, +rotationMax]
-//   lateralFlexion : [-lateralFlexionMax, +lateralFlexionMax]
-// Signed bidirectional DOFs: a single key per axis-pair (e.g. flexion
-// covers extension on the negative side). Additional movement keys
-// here are positive-only DOFs that the literature overlays reference
-// independently (externalRotation, lumbar extension), so the overlay
-// patches always have a baseline row to land on.
 const PASSIVE_ROM: Record<string, Record<string, [number, number]>> = {
   leftShoulder:   { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70], externalRotation: [0, 90], extension: [0, 60] },
   rightShoulder:  { flexion: [-60, 180], abduction: [0, 180], internalRotation: [-90, 70], externalRotation: [0, 90], extension: [0, 60] },
@@ -165,10 +142,6 @@ function buildBaselineRows(): ActiveCapacityRow[] {
   const rows: ActiveCapacityRow[] = [];
   for (const [joint, dirs] of Object.entries(PASSIVE_ROM)) {
     for (const [movement, [pmin, pmax]] of Object.entries(dirs)) {
-      // Signed-aware default active band: shrink each end of the
-      // passive range by 15 % of the *signed* extent on that side so
-      // bidirectional DOFs preserve both directions instead of
-      // collapsing toward the positive end.
       const aMin = Math.round(pmin * 0.85);
       const aMax = Math.round(pmax * 0.85);
       rows.push({
@@ -200,12 +173,7 @@ function applyPathologyBaseline(rows: ActiveCapacityRow[], pathologies: string[]
         if (!row) continue;
         const next: ActiveCapacityRow = { ...row };
         if (typeof patch.activeRomMaxFactor === 'number') {
-          // Signed-aware: scale the positive (max) end toward zero,
-          // preserving sign so a negative-leaning DOF (e.g. shoulder
-          // extension) still gets restricted instead of flipping.
           next.activeRomMax = Math.round(row.passiveRomMax * patch.activeRomMaxFactor);
-          // Mirror the restriction onto the negative end so painful
-          // pathologies don't spuriously expand the opposite direction.
           if (row.passiveRomMin < 0) {
             next.activeRomMin = Math.round(row.passiveRomMin * patch.activeRomMaxFactor);
           }
@@ -268,8 +236,6 @@ function applyPatches(baseline: ActiveCapacityRow[], patches: unknown): ActiveCa
     const row = map.get(key);
     if (!row) continue;
     const next: ActiveCapacityRow = { ...row, source: 'ai' };
-    // Signed clamping: AI may emit negative values for bidirectional
-    // DOFs (per the prompt). Clamp into the signed passive band.
     if (typeof patch.activeRomMin === 'number') next.activeRomMin = Math.max(row.passiveRomMin, Math.min(row.passiveRomMax, patch.activeRomMin));
     if (typeof patch.activeRomMax === 'number') next.activeRomMax = Math.max(next.activeRomMin, Math.min(row.passiveRomMax, patch.activeRomMax));
     if (patch.painfulArc === null) next.painfulArc = null;

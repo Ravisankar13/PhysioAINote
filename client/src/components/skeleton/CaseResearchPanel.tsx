@@ -982,7 +982,23 @@ export function CaseResearchPanel({
               {/* Research-derived treatment plan (Task #305).
                   Independent of the Treatment Plan box / Plan Cart /
                   AI Treatment Orchestrator — this plan is read-only,
-                  evidence-cited, and regenerated on every re-run. */}
+                  evidence-cited, and regenerated on every re-run.
+                  When the engine ran but plan generation itself
+                  failed, the persisted plan is null and we surface a
+                  short transparency banner so the clinician knows the
+                  plan section was attempted. */}
+              {!cached.researchTreatmentPlan && (
+                <div
+                  className="rounded-md border border-slate-700/60 bg-slate-900/60 px-2.5 py-2 text-[11px] leading-snug text-slate-300 flex items-start gap-1.5"
+                  data-testid="banner-research-plan-unavailable"
+                >
+                  <Info className="h-3.5 w-3.5 mt-[1px] shrink-0 text-slate-400" />
+                  <span>
+                    <span className="font-semibold text-slate-200">Research-derived treatment plan unavailable.</span>{' '}
+                    The structured plan could not be generated for this run. Re-run the search to try again — the prose synthesis above is unaffected.
+                  </span>
+                </div>
+              )}
               {cached.researchTreatmentPlan && (
                 <div
                   className="rounded-md border border-violet-700/50 bg-violet-950/30"

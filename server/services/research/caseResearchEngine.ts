@@ -1147,10 +1147,16 @@ Build the structured plan now.`;
           rationale: iv.rationale?.trim() || undefined,
         };
       });
-      const progressionCriteria = ph.progression_criteria.map(pc => ({
-        criterion: pc.criterion.trim(),
-        citations: scrubCitations(pc.citations),
-      }));
+      // Progression criteria don't have an "extrapolated" flag in the
+      // shared schema — they're meant to be cited. Drop any that lose
+      // all their citations after scrubbing so the panel never shows
+      // an uncited "progress when..." claim alongside cited ones.
+      const progressionCriteria = ph.progression_criteria
+        .map(pc => ({
+          criterion: pc.criterion.trim(),
+          citations: scrubCitations(pc.citations),
+        }))
+        .filter(pc => pc.citations.length > 0);
       return {
         name: ph.name.trim(),
         goal: ph.goal.trim(),
@@ -1160,11 +1166,15 @@ Build the structured plan now.`;
       };
     });
 
-    const outcomeMeasures = parsed.outcome_measures.map(om => ({
-      name: om.name.trim(),
-      purpose: om.purpose.trim(),
-      citations: scrubCitations(om.citations),
-    }));
+    // Same rule for outcome measures — drop uncited rows so every
+    // displayed measure is backed by a real reference.
+    const outcomeMeasures = parsed.outcome_measures
+      .map(om => ({
+        name: om.name.trim(),
+        purpose: om.purpose.trim(),
+        citations: scrubCitations(om.citations),
+      }))
+      .filter(om => om.citations.length > 0);
 
     const finalPlan: ResearchTreatmentPlan = {
       generatedAt,

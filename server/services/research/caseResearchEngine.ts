@@ -102,7 +102,36 @@ export interface CaseResearchOutcome {
   confidenceReason: string;
   droppedVariables: string[];
   seedBroadenings: SeedBroadening[];
+  /** Task #305 — structured, evidence-cited treatment plan derived
+   *  from the same retrieved papers. Null if plan synthesis failed
+   *  (the prose answer is still returned). */
+  researchTreatmentPlan: ResearchTreatmentPlan | null;
 }
+
+export type ResearchTreatmentPlan = {
+  generatedAt: string;
+  hasEvidence: boolean;
+  noEvidenceReason?: string;
+  phases: Array<{
+    name: string;
+    goal: string;
+    duration: string;
+    interventions: Array<{
+      category: 'exercise' | 'manual_therapy' | 'electrophysical' | 'education_lifestyle';
+      label: string;
+      dose: string;
+      citations: number[];
+      extrapolated: boolean;
+      rationale?: string;
+    }>;
+    progressionCriteria: Array<{ criterion: string; citations: number[] }>;
+  }>;
+  outcomeMeasures: Array<{ name: string; purpose: string; citations: number[] }>;
+  redFlags: string[];
+  followUpCadence: string;
+  confidence: ConfidenceBucket;
+  confidenceReason: string;
+};
 
 // ---- Phenotype translation ---------------------------------------
 
@@ -954,6 +983,202 @@ Write the synthesis now.`;
   }
 }
 
+// ---- Research-derived treatment plan (Task #305) ------------------
+
+const planInterventionAISchema = z.object({
+  category: z.enum(['exercise', 'manual_therapy', 'electrophysical', 'education_lifestyle']),
+  label: z.string().min(1).max(160),
+  dose: z.string().min(1).max(240),
+  citations: z.array(z.number().int().positive()).max(20),
+  extrapolated: z.boolean(),
+  rationale: z.string().max(400).optional(),
+});
+const planAISchema = z.object({
+  phases: z.array(z.object({
+    name: z.string().min(1).max(80),
+    goal: z.string().min(1).max(240),
+    duration: z.string().min(1).max(80),
+    interventions: z.array(planInterventionAISchema).max(20),
+    progression_criteria: z.array(z.object({
+      criterion: z.string().min(1).max(240),
+      citations: z.array(z.number().int().positive()).max(20),
+    })).max(10),
+  })).min(1).max(6),
+  outcome_measures: z.array(z.object({
+    name: z.string().min(1).max(120),
+    purpose: z.string().min(1).max(240),
+    citations: z.array(z.number().int().positive()).max(20),
+  })).max(10),
+  red_flags: z.array(z.string().min(1).max(240)).max(15),
+  follow_up_cadence: z.string().min(1).max(160),
+  confidence: z.enum(['High', 'Moderate', 'Low', 'Extrapolated']),
+  confidence_reason: z.string().max(400),
+});
+
+export async function synthesizeResearchTreatmentPlan(
+  condition: string,
+  caseSummary: string,
+  papers: RankedPaper[],
+  droppedVariables: string[],
+  phenotype: SearchablePhenotype,
+  seedBroadenings: SeedBroadening[],
+  trialCount: number,
+  synthesizedAnswer: string,
+): Promise<ResearchTreatmentPlan> {
+  const generatedAt = new Date().toISOString();
+
+  if (papers.length === 0) {
+    const broadenedNote = seedBroadenings.length > 0
+      ? ' even after broadening the seed'
+      : '';
+    return {
+      generatedAt,
+      hasEvidence: false,
+      noEvidenceReason: `No literature was retrieved for this case${broadenedNote}${trialCount > 0 ? `; ${trialCount} ClinicalTrials.gov record(s) matched but trials are listed separately` : ''}, so a research-derived treatment plan cannot be produced. Edit the interpreted case (broaden the canonical condition or add synonyms) and re-run.`,
+      phases: [],
+      outcomeMeasures: [],
+      redFlags: [],
+      followUpCadence: 'Defer until evidence is available.',
+      confidence: 'Extrapolated',
+      confidenceReason: 'No retrieved literature; plan cannot be evidence-based.',
+    };
+  }
+
+  const refsBlock = papers.map(p => {
+    const auth = p.authors.length > 0
+      ? (p.authors.length > 4 ? `${p.authors.slice(0, 3).join(', ')} et al.` : p.authors.join(', '))
+      : 'Unknown';
+    const yr = p.year ?? 'n.d.';
+    const j = p.journal ? `, ${p.journal}` : '';
+    return `[${p.citationNumber}] ${auth} (${yr}) ${p.title}${j}.\nAbstract: ${(p.abstract || '(no abstract)').slice(0, 1500)}`;
+  }).join('\n\n');
+
+  const phenotypeBlock = `Interpreted phenotype:
+- canonical condition: ${phenotype.canonicalCondition.primary}${phenotype.canonicalCondition.synonyms.length > 0 ? ` (alt: ${phenotype.canonicalCondition.synonyms.join(', ')})` : ''}
+- region: ${phenotype.region ?? 'unspecified'}
+- mechanism: ${phenotype.mechanism.phrases.length > 0 ? phenotype.mechanism.phrases.join(', ') : 'unspecified'}
+- aggravating factors: ${phenotype.aggravatingFactors.phrases.length > 0 ? phenotype.aggravatingFactors.phrases.join(', ') : 'unspecified'}
+- pain type: ${phenotype.painType ?? 'unspecified'}`;
+
+  const sys = `You are a senior physiotherapist building a STRUCTURED, EVIDENCE-CITED treatment plan for ONE specific patient. The plan is derived strictly from the supplied numbered references — never invent citations or claims unsupported by them.
+
+Hard rules:
+1. Output 2-4 phases (e.g. acute / subacute / return-to-function / maintenance). Each phase has a short goal sentence and a typical duration drawn from or extrapolated from the evidence.
+2. Each phase has interventions grouped across the four categories: "exercise", "manual_therapy", "electrophysical", "education_lifestyle". Provide the categories that the evidence actually supports — do NOT pad empty categories with extrapolated filler.
+3. Every intervention has: category, short label (≤120 chars), dose (sets × reps × frequency × intensity OR session length / cadence), and a "citations" array of [N] numbers from the supplied references. If you cannot cite for a given intervention but it is clinically standard for this presentation, set "extrapolated": true and citations: []. Otherwise extrapolated: false and citations MUST be non-empty.
+4. Each phase has 1-4 progression_criteria — measurable thresholds gating the move to the next phase (e.g. "pain ≤3/10 on aggravating movement", "ROM within 10° of contralateral side", "single-leg hop symmetry ≥90%"). Cite [N] where the evidence supports the criterion.
+5. Provide 2-6 outcome_measures (recommended PROMs / objective tests) appropriate to the condition; cite where literature supports the choice.
+6. Provide 2-6 red_flags — short safety items to escalate (e.g. progressive neurological deficit, unexplained weight loss, night pain unrelieved by rest).
+7. Provide a follow_up_cadence string (e.g. "Review at 2 weeks then every 4 weeks"). 
+8. Provide a single-bucket plan-level confidence (High/Moderate/Low/Extrapolated) and a 1-2 sentence confidence_reason. Mirror the same banding logic the prose synthesis uses (papers count + modifier coverage + seed broadening).
+9. Citation numbers MUST be drawn ONLY from the supplied references — any other number will be discarded by the system.
+10. Be concise and clinically actionable. The clinician will read this in under a minute.
+
+Return ONLY this JSON object:
+{
+  "phases": [
+    {
+      "name": "Acute (0-2 weeks)",
+      "goal": "...",
+      "duration": "0-2 weeks",
+      "interventions": [
+        { "category": "exercise", "label": "...", "dose": "...", "citations": [1,3], "extrapolated": false },
+        { "category": "education_lifestyle", "label": "...", "dose": "...", "citations": [], "extrapolated": true, "rationale": "..." }
+      ],
+      "progression_criteria": [{ "criterion": "...", "citations": [2] }]
+    }
+  ],
+  "outcome_measures": [{ "name": "...", "purpose": "...", "citations": [1] }],
+  "red_flags": ["..."],
+  "follow_up_cadence": "...",
+  "confidence": "High|Moderate|Low|Extrapolated",
+  "confidence_reason": "..."
+}`;
+
+  const usr = `Patient case condition (clinician's words): ${condition}
+
+${phenotypeBlock}
+
+Case summary the plan must apply to:
+"""${caseSummary.slice(0, 4000)}"""
+
+${droppedVariables.length > 0
+    ? `IMPORTANT: The following case modifiers had to be dropped from the search to find evidence: ${droppedVariables.join(', ')}. Reflect this in your confidence and rationale.`
+    : `All case modifiers were retained in the search.`}
+
+The prose synthesis above already describes the case-level reasoning. Use it as additional context but produce the structured plan independently:
+"""${synthesizedAnswer.slice(0, 3500)}"""
+
+Numbered references (use [N] to cite — these are the SAME numbers used by the prose synthesis):
+${refsBlock}
+
+Build the structured plan now.`;
+
+  try {
+    const r = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: sys },
+        { role: 'user', content: usr },
+      ],
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
+    });
+    const raw = r.choices?.[0]?.message?.content || '{}';
+    const parsed = planAISchema.parse(JSON.parse(raw));
+
+    const validNumbers = new Set(papers.map(p => p.citationNumber));
+    const scrubCitations = (cs: number[]): number[] =>
+      Array.from(new Set(cs.filter(n => validNumbers.has(n))));
+
+    const phases = parsed.phases.map(ph => {
+      const interventions = ph.interventions.map(iv => {
+        const citations = scrubCitations(iv.citations);
+        const extrapolated = iv.extrapolated || citations.length === 0;
+        return {
+          category: iv.category,
+          label: iv.label.trim(),
+          dose: iv.dose.trim(),
+          citations,
+          extrapolated,
+          rationale: iv.rationale?.trim() || undefined,
+        };
+      });
+      const progressionCriteria = ph.progression_criteria.map(pc => ({
+        criterion: pc.criterion.trim(),
+        citations: scrubCitations(pc.citations),
+      }));
+      return {
+        name: ph.name.trim(),
+        goal: ph.goal.trim(),
+        duration: ph.duration.trim(),
+        interventions,
+        progressionCriteria,
+      };
+    });
+
+    const outcomeMeasures = parsed.outcome_measures.map(om => ({
+      name: om.name.trim(),
+      purpose: om.purpose.trim(),
+      citations: scrubCitations(om.citations),
+    }));
+
+    return {
+      generatedAt,
+      hasEvidence: true,
+      phases,
+      outcomeMeasures,
+      redFlags: parsed.red_flags.map(f => f.trim()).filter(Boolean),
+      followUpCadence: parsed.follow_up_cadence.trim(),
+      confidence: parsed.confidence,
+      confidenceReason: parsed.confidence_reason.trim(),
+    };
+  } catch (e) {
+    console.warn('[caseResearch] research-treatment-plan synthesis failed:', e);
+    throw e;
+  }
+}
+
 // ---- Confidence helper (also used for sanity-checking AI bucket) --
 
 export function computeBaselineConfidence(
@@ -1079,6 +1304,16 @@ export async function runCaseResearch(
     ? synth.confidenceReason
     : `${baseline.reason} (AI suggested ${synth.confidence}: ${synth.confidenceReason})`;
 
+  let researchTreatmentPlan: ResearchTreatmentPlan | null = null;
+  try {
+    researchTreatmentPlan = await synthesizeResearchTreatmentPlan(
+      condition, caseSummary, ranked, droppedVariables, phenotype, seedBroadenings, rankedTrials.length, synth.answer,
+    );
+  } catch (e) {
+    console.warn('[caseResearch] research-treatment-plan generation failed, persisting null plan:', e);
+    researchTreatmentPlan = null;
+  }
+
   return {
     phenotype,
     inferredVariables: variables,
@@ -1090,5 +1325,6 @@ export async function runCaseResearch(
     confidenceReason: finalReason,
     droppedVariables,
     seedBroadenings,
+    researchTreatmentPlan,
   };
 }

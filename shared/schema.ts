@@ -6083,6 +6083,35 @@ export const caseResearchSyntheses = pgTable("case_research_syntheses", {
   // the tiered query ladder (mirrored from queriesRan for fast UI
   // rendering).
   droppedVariables: jsonb("dropped_variables").$type<string[]>().notNull(),
+  // Task #305 — Research-derived structured treatment plan, generated
+  // alongside synthesizedAnswer from the same retrieved papers. Read-only
+  // companion to the prose answer; never written into the Treatment Plan
+  // box / Plan Cart. Nullable for backwards compatibility with rows
+  // persisted before Task #305.
+  researchTreatmentPlan: jsonb("research_treatment_plan").$type<{
+    generatedAt: string;
+    hasEvidence: boolean;
+    noEvidenceReason?: string;
+    phases: Array<{
+      name: string;
+      goal: string;
+      duration: string;
+      interventions: Array<{
+        category: 'exercise' | 'manual_therapy' | 'electrophysical' | 'education_lifestyle';
+        label: string;
+        dose: string;
+        citations: number[];
+        extrapolated: boolean;
+        rationale?: string;
+      }>;
+      progressionCriteria: Array<{ criterion: string; citations: number[] }>;
+    }>;
+    outcomeMeasures: Array<{ name: string; purpose: string; citations: number[] }>;
+    redFlags: string[];
+    followUpCadence: string;
+    confidence: 'High' | 'Moderate' | 'Low' | 'Extrapolated';
+    confidenceReason: string;
+  }>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => ({
@@ -6128,6 +6157,44 @@ export const activeCapacityOverridePatchSchema = activeCapacityRowSchema
 export type ActiveCapacityRowSchema = z.infer<typeof activeCapacityRowSchema>;
 export type ActiveCapacityProfileSchema = z.infer<typeof activeCapacityProfileSchema>;
 export type ActiveCapacityOverridePatchSchema = z.infer<typeof activeCapacityOverridePatchSchema>;
+
+/** Task #305 — Research-derived structured treatment plan. Generated
+ *  alongside the synthesized prose answer using the same retrieved
+ *  papers; persisted on the same `case_research_syntheses` row. */
+export const researchPlanInterventionSchema = z.object({
+  category: z.enum(['exercise', 'manual_therapy', 'electrophysical', 'education_lifestyle']),
+  label: z.string().min(1).max(160),
+  dose: z.string().min(1).max(240),
+  citations: z.array(z.number().int().positive()).max(20).default([]),
+  extrapolated: z.boolean().default(false),
+  rationale: z.string().max(400).optional(),
+});
+export const researchPlanPhaseSchema = z.object({
+  name: z.string().min(1).max(80),
+  goal: z.string().min(1).max(240),
+  duration: z.string().min(1).max(80),
+  interventions: z.array(researchPlanInterventionSchema).max(20).default([]),
+  progressionCriteria: z.array(z.object({
+    criterion: z.string().min(1).max(240),
+    citations: z.array(z.number().int().positive()).max(20).default([]),
+  })).max(10).default([]),
+});
+export const researchTreatmentPlanSchema = z.object({
+  generatedAt: z.string(),
+  hasEvidence: z.boolean(),
+  noEvidenceReason: z.string().max(400).optional(),
+  phases: z.array(researchPlanPhaseSchema).max(6).default([]),
+  outcomeMeasures: z.array(z.object({
+    name: z.string().min(1).max(120),
+    purpose: z.string().min(1).max(240),
+    citations: z.array(z.number().int().positive()).max(20).default([]),
+  })).max(10).default([]),
+  redFlags: z.array(z.string().min(1).max(240)).max(15).default([]),
+  followUpCadence: z.string().min(1).max(160).default('Review at next session'),
+  confidence: z.enum(['High', 'Moderate', 'Low', 'Extrapolated']),
+  confidenceReason: z.string().max(400),
+});
+export type ResearchTreatmentPlanSchema = z.infer<typeof researchTreatmentPlanSchema>;
 
 /** Shape of the structured search phenotype the engine derives from
  *  the clinician's free-text condition + case summary. Edited inline

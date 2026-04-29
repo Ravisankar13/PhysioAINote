@@ -437,6 +437,64 @@ function PhenotypeBlock({
   );
 }
 
+/** Render an array of citation numbers as clickable chips alongside
+ *  the structured plan rows. Mirrors the [N] linkifier inside
+ *  `renderAnswer` but works from a number[] (not inline markdown).
+ *  Used by the Research-derived treatment plan section. */
+function renderCitationChips(
+  nums: number[],
+  papers: CaseResearchSynthesis['retrievedPapers'],
+  onCiteClick: (n: number, openExternal: boolean, paperUrl: string | null) => void,
+): JSX.Element | null {
+  if (!nums || nums.length === 0) return null;
+  const byNumber = new Map<number, typeof papers[number]>();
+  for (const p of papers) byNumber.set(p.citationNumber, p);
+  return (
+    <span className="inline-flex items-baseline gap-0.5 ml-1 align-baseline">
+      {nums.map((n, i) => {
+        const paper = byNumber.get(n);
+        return (
+          <button
+            key={`plan-cite-${n}-${i}`}
+            type="button"
+            className={cn(
+              "inline-flex items-center justify-center text-[10px] font-semibold rounded px-1 mx-px h-4 min-w-[16px] transition-colors align-baseline",
+              paper
+                ? "bg-violet-500/25 text-violet-100 border border-violet-400/40 hover:bg-violet-500/40 cursor-pointer"
+                : "bg-slate-700/60 text-slate-300 border border-slate-600/60 cursor-default",
+            )}
+            title={paper
+              ? `${paper.title}${paper.year ? ` (${paper.year})` : ''} — click to jump to citation, ⌘/Ctrl-click to open source`
+              : `Reference ${n} not found`}
+            data-testid={`plan-citation-link-${n}`}
+            onClick={(e) => {
+              if (!paper) return;
+              const openExternal = e.metaKey || e.ctrlKey || e.shiftKey;
+              onCiteClick(n, openExternal, paper.url ?? null);
+            }}
+          >
+            {n}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
+const PLAN_CATEGORY_LABELS: Record<string, string> = {
+  exercise: 'Exercise',
+  manual_therapy: 'Manual therapy',
+  electrophysical: 'Electrophysical',
+  education_lifestyle: 'Education & lifestyle',
+};
+
+const PLAN_CATEGORY_TONES: Record<string, string> = {
+  exercise: 'border-emerald-500/40 bg-emerald-950/30 text-emerald-100',
+  manual_therapy: 'border-sky-500/40 bg-sky-950/30 text-sky-100',
+  electrophysical: 'border-amber-500/40 bg-amber-950/30 text-amber-100',
+  education_lifestyle: 'border-violet-500/40 bg-violet-950/30 text-violet-100',
+};
+
 /** Render the synthesized markdown answer with clickable [N] citation
  *  chips. We do a minimal markdown pass — bold, italic, headers,
  *  bullets, paragraphs — to avoid pulling in a heavy markdown lib.
@@ -558,6 +616,7 @@ export function CaseResearchPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
   const [showHowSearched, setShowHowSearched] = useState(false);
+  const [showResearchPlan, setShowResearchPlan] = useState(true);
   // Tracks which tier row in "How we searched" has its per-source
   // queries panel expanded. Only one open at a time keeps the panel
   // compact.
@@ -890,6 +949,209 @@ export function CaseResearchPanel({
                     To find evidence we had to drop these case modifiers from the search:{' '}
                     <span className="font-semibold">{cached.droppedVariables.join(', ')}</span>. Inferences for those aspects are extrapolated.
                   </span>
+                </div>
+              )}
+
+              {/* Research-derived treatment plan (Task #305).
+                  Independent of the Treatment Plan box / Plan Cart /
+                  AI Treatment Orchestrator — this plan is read-only,
+                  evidence-cited, and regenerated on every re-run. */}
+              {cached.researchTreatmentPlan && (
+                <div
+                  className="rounded-md border border-violet-700/50 bg-violet-950/30"
+                  data-testid="section-research-treatment-plan"
+                >
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between px-2.5 py-2 text-[12px] font-semibold text-violet-100 hover:text-white"
+                    onClick={() => setShowResearchPlan(v => !v)}
+                    data-testid="button-toggle-research-plan"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-violet-300" />
+                      Research-derived treatment plan
+                      <span
+                        className={cn(
+                          "ml-2 inline-flex items-center gap-1 text-[10px] font-medium rounded px-1.5 py-0.5 border",
+                          CONFIDENCE_TONE[cached.researchTreatmentPlan.confidence] ?? CONFIDENCE_TONE.Low,
+                        )}
+                        title={cached.researchTreatmentPlan.confidenceReason}
+                      >
+                        {cached.researchTreatmentPlan.confidence}
+                      </span>
+                    </span>
+                    {showResearchPlan ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+
+                  {showResearchPlan && (
+                    <div className="px-2.5 pb-2.5 space-y-2.5">
+                      <div className="text-[10.5px] text-violet-200/80 italic leading-snug">
+                        Read-only, derived from this case's retrieved literature. Regenerated each time you re-run the search. Separate from the Treatment Plan box and Plan Cart.
+                      </div>
+
+                      {/* No-evidence state */}
+                      {!cached.researchTreatmentPlan.hasEvidence && (
+                        <div
+                          className="rounded-md border border-rose-500/40 bg-rose-950/30 text-rose-100 px-2 py-1.5 text-[11px] leading-snug flex items-start gap-1.5"
+                          data-testid="banner-research-plan-no-evidence"
+                        >
+                          <AlertTriangle className="h-3.5 w-3.5 mt-[1px] shrink-0" />
+                          <span>{cached.researchTreatmentPlan.noEvidenceReason || 'No literature retrieved — no evidence-based plan generated.'}</span>
+                        </div>
+                      )}
+
+                      {/* Phases */}
+                      {cached.researchTreatmentPlan.phases.length > 0 && (
+                        <div className="space-y-2" data-testid="list-research-plan-phases">
+                          {cached.researchTreatmentPlan.phases.map((phase, pi) => (
+                            <div
+                              key={`phase-${pi}`}
+                              className="rounded-md border border-slate-700/60 bg-slate-950/50"
+                              data-testid={`research-plan-phase-${pi}`}
+                            >
+                              <div className="px-2 py-1.5 border-b border-slate-700/50 flex flex-wrap items-center justify-between gap-1">
+                                <div className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-100">
+                                  <span className="text-violet-300">Phase {pi + 1}</span>
+                                  <span className="text-slate-300">·</span>
+                                  <span>{phase.name}</span>
+                                </div>
+                                <span className="text-[10.5px] text-slate-400">{phase.duration}</span>
+                              </div>
+                              <div className="px-2 py-1.5 space-y-1.5">
+                                <div className="text-[11px] text-slate-200 leading-snug">
+                                  <span className="text-slate-400 font-medium">Goal: </span>{phase.goal}
+                                </div>
+
+                                {/* Interventions */}
+                                {phase.interventions.length > 0 && (
+                                  <ul className="space-y-1" data-testid={`research-plan-phase-${pi}-interventions`}>
+                                    {phase.interventions.map((iv, ii) => (
+                                      <li
+                                        key={`iv-${ii}`}
+                                        className={cn(
+                                          "rounded border px-2 py-1 text-[11px] leading-snug",
+                                          PLAN_CATEGORY_TONES[iv.category] ?? "border-slate-700/50 bg-slate-950/40 text-slate-200",
+                                        )}
+                                      >
+                                        <div className="flex flex-wrap items-baseline gap-1.5">
+                                          <span className="text-[9.5px] uppercase tracking-wide font-semibold opacity-80">
+                                            {PLAN_CATEGORY_LABELS[iv.category] ?? iv.category}
+                                          </span>
+                                          <span className="font-semibold">{iv.label}</span>
+                                          {renderCitationChips(iv.citations, cached.retrievedPapers, handleCitationClick)}
+                                          {iv.extrapolated && (
+                                            <span
+                                              className="text-[9.5px] uppercase tracking-wide font-semibold rounded px-1 py-0.5 border border-rose-400/50 bg-rose-500/15 text-rose-200"
+                                              title="No direct citation — included as standard care for this presentation."
+                                            >
+                                              Extrapolated
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[10.5px] mt-0.5 opacity-90">
+                                          <span className="opacity-75 font-medium">Dose: </span>{iv.dose}
+                                        </div>
+                                        {iv.rationale && (
+                                          <div className="text-[10.5px] mt-0.5 opacity-75 italic">
+                                            {iv.rationale}
+                                          </div>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+
+                                {/* Progression criteria */}
+                                {phase.progressionCriteria.length > 0 && (
+                                  <div className="pt-1 border-t border-slate-800/60">
+                                    <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-0.5">
+                                      Progress to next phase when
+                                    </div>
+                                    <ul className="space-y-0.5" data-testid={`research-plan-phase-${pi}-progression`}>
+                                      {phase.progressionCriteria.map((pc, ci) => (
+                                        <li key={`pc-${ci}`} className="text-[11px] text-slate-200 leading-snug flex items-baseline gap-1">
+                                          <span className="text-violet-400 mt-0.5">▸</span>
+                                          <span>
+                                            {pc.criterion}
+                                            {renderCitationChips(pc.citations, cached.retrievedPapers, handleCitationClick)}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Outcome measures */}
+                      {cached.researchTreatmentPlan.outcomeMeasures.length > 0 && (
+                        <div className="rounded-md border border-slate-700/60 bg-slate-950/50 px-2 py-1.5" data-testid="list-research-plan-outcome-measures">
+                          <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-1 flex items-center gap-1">
+                            <Activity className="h-3 w-3 text-violet-300" /> Recommended outcome measures
+                          </div>
+                          <ul className="space-y-0.5">
+                            {cached.researchTreatmentPlan.outcomeMeasures.map((om, oi) => (
+                              <li key={`om-${oi}`} className="text-[11px] text-slate-200 leading-snug">
+                                <span className="font-semibold">{om.name}</span>
+                                <span className="text-slate-400"> — {om.purpose}</span>
+                                {renderCitationChips(om.citations, cached.retrievedPapers, handleCitationClick)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Red flags */}
+                      {cached.researchTreatmentPlan.redFlags.length > 0 && (
+                        <div className="rounded-md border border-rose-700/50 bg-rose-950/30 px-2 py-1.5" data-testid="list-research-plan-red-flags">
+                          <div className="text-[10px] uppercase tracking-wide font-semibold text-rose-200 mb-1 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" /> Red flags — escalate / refer
+                          </div>
+                          <ul className="space-y-0.5">
+                            {cached.researchTreatmentPlan.redFlags.map((rf, ri) => (
+                              <li key={`rf-${ri}`} className="text-[11px] text-rose-100 leading-snug flex items-baseline gap-1">
+                                <span className="text-rose-300 mt-0.5">•</span>
+                                <span>{rf}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Follow-up cadence + plan confidence reason */}
+                      <div className="flex flex-wrap items-stretch gap-1.5">
+                        <div
+                          className="flex-1 min-w-[180px] rounded-md border border-slate-700/60 bg-slate-950/50 px-2 py-1.5 text-[11px] text-slate-200"
+                          data-testid="text-research-plan-follow-up"
+                        >
+                          <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-0.5">
+                            Follow-up cadence
+                          </div>
+                          {cached.researchTreatmentPlan.followUpCadence}
+                        </div>
+                        <div
+                          className={cn(
+                            "flex-1 min-w-[180px] rounded-md border px-2 py-1.5 text-[11px] leading-snug",
+                            CONFIDENCE_TONE[cached.researchTreatmentPlan.confidence] ?? CONFIDENCE_TONE.Low,
+                          )}
+                          data-testid="text-research-plan-confidence"
+                        >
+                          <div className="text-[10px] uppercase tracking-wide font-semibold opacity-80 mb-0.5 flex items-center gap-1">
+                            <ShieldCheck className="h-3 w-3" /> Plan confidence
+                          </div>
+                          <span className="font-semibold">{cached.researchTreatmentPlan.confidence}: </span>
+                          {cached.researchTreatmentPlan.confidenceReason}
+                        </div>
+                      </div>
+
+                      <div className="text-[9.5px] text-slate-500 text-right">
+                        Generated {new Date(cached.researchTreatmentPlan.generatedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -9877,6 +9877,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         confidence: outcome.confidence,
         confidenceReason: outcome.confidenceReason,
         droppedVariables: outcome.droppedVariables,
+        researchTreatmentPlan: outcome.researchTreatmentPlan,
       });
       res.json({ ...saved, cached: false });
     } catch (error: unknown) {
@@ -9938,6 +9939,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         confidenceReason: existing?.confidenceReason ?? null,
         droppedVariables: existing?.droppedVariables ?? [],
         activeCapacities: profile,
+        researchTreatmentPlan: existing?.researchTreatmentPlan ?? null,
       });
       res.json({ ...saved, cached: false });
     } catch (error: unknown) {

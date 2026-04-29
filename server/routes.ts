@@ -9903,10 +9903,23 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         return res.json({ ...existing, cached: true });
       }
       const { generateActiveCapacities } = await import("./services/activeCapacityService");
+      // Pull AI-inferred phenotype/variables off the same row so the
+      // capacity service can condition on age, sex, and inferred
+      // pathology context (Task #301 spec).
+      const inferred = (existing.inferredVariables || {}) as Record<string, unknown>;
+      const phenotype = (existing.phenotype || {}) as Record<string, unknown>;
+      const ageRaw = (inferred.age ?? phenotype.age) as number | string | undefined;
+      const sexRaw = (inferred.sex ?? phenotype.sex) as string | undefined;
+      const pathologiesRaw = (inferred.pathologies ?? phenotype.pathologies ?? []) as unknown;
       const profile = await generateActiveCapacities({
         condition: existing.condition,
         caseSummary: existing.caseSummary,
         literatureSummary: existing.synthesizedAnswer,
+        age: typeof ageRaw === 'number' ? ageRaw : (typeof ageRaw === 'string' ? parseInt(ageRaw, 10) || undefined : undefined),
+        sex: typeof sexRaw === 'string' ? sexRaw : undefined,
+        inferredPathologies: Array.isArray(pathologiesRaw)
+          ? (pathologiesRaw as unknown[]).filter((p): p is string => typeof p === 'string')
+          : [],
       });
       const saved = await storage.upsertCaseResearchSynthesis({
         caseId,
@@ -9957,8 +9970,10 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
       if (!existing) return res.status(404).json({ error: "No case research synthesis found." });
       if (!existing.activeCapacities) return res.status(400).json({ error: "No active capacities to override — generate first." });
-      const { applyManualOverride } = await import("./services/activeCapacityService");
-      const updated = applyManualOverride(existing.activeCapacities as any, parsed.data as any);
+      const svc = await import("./services/activeCapacityService");
+      const profile = existing.activeCapacities as unknown as import("./services/activeCapacityService").ActiveCapacityProfile;
+      const overridePatch: import("./services/activeCapacityService").ActiveCapacityOverridePatch = parsed.data;
+      const updated = svc.applyManualOverride(profile, overridePatch);
       const saved = await storage.upsertCaseResearchSynthesis({
         caseId,
         userId: req.user!.id,

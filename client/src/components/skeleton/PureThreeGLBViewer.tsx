@@ -18,6 +18,7 @@ import { TISSUE_ANCHOR_CATALOGUE, paletteForState, SUPERFICIAL_MUSCLE_PATTERNS }
 import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 import { DOF_SPECS } from '@/components/skeleton/JointAngleEditor';
+import { COMPENSATION_CHAINS } from '@/lib/jointConstraints';
 
 interface JointConfig {
   flexion?: number;
@@ -2205,6 +2206,16 @@ const DOF_LIMIT_INDEX: Map<string, { min: number; max: number; label: string }> 
   return m;
 })();
 
+// Task #301 — index COMPENSATION_CHAINS by `joint:movement` (snake_case)
+// for O(1) lookup during the active-movement drag handler.
+const COMPENSATION_CHAIN_BY_KEY: Map<string, typeof COMPENSATION_CHAINS[number]['compensators']> = (() => {
+  const m = new Map<string, typeof COMPENSATION_CHAINS[number]['compensators']>();
+  for (const chain of COMPENSATION_CHAINS) m.set(`${chain.source.joint}:${chain.source.movement}`, chain.compensators);
+  return m;
+})();
+function camelToSnake(s: string): string { return s.replace(/[A-Z]/g, c => '_' + c.toLowerCase()); }
+function snakeToCamel(s: string): string { return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
+
 const JOINT_MOVEMENT_DEFS: Record<string, MovementArrowDef[]> = {
   // Hip: signed abduction (-45..45) and signed internalRotation (-45..45) are
   // each a single DOF — the second arrow uses scale: -1 to drive the same key
@@ -2656,6 +2667,11 @@ export default function PureThreeGLBViewer({
     /** True if the user attempted to drag past the active limit
      *  (in either direction). */
     attemptedExceeded?: boolean;
+    /** True if any frame of the drag landed inside the painful arc. */
+    lastPainfulArc?: boolean;
+    /** Compensator joint.movement keys that were redistributed into
+     *  past the active limit. Empty unless attemptedExceeded. */
+    compensationsTriggered?: string[];
   } | null>(null);
   // Task #301 — refs so the long-lived three.js mouse handlers
   // always read the current mode / capacity map / attempt callback
@@ -2666,6 +2682,11 @@ export default function PureThreeGLBViewer({
   activeCapacitiesRef.current = activeCapacities;
   const onActiveMovementAttemptRef = useRef(onActiveMovementAttempt);
   onActiveMovementAttemptRef.current = onActiveMovementAttempt;
+  // Task #301 — 800ms drag-end stillness timer. Findings only fire
+  // after the clinician has held the joint still for 800ms, so a
+  // double-tug doesn't enqueue two AI summaries for the same attempt.
+  const movementSettleTimerRef = useRef<number | null>(null);
+  const pendingMovementAttemptRef = useRef<Parameters<NonNullable<typeof onActiveMovementAttempt>>[0] | null>(null);
   const poseSelectedBoneRef = useRef<string | null>(null);
   const poseHighlightMeshRef = useRef<THREE.Mesh | null>(null);
   const [muscleHoverInfo, setMuscleHoverInfo] = useState<{ groupId: string; label: string; screenX: number; screenY: number } | null>(null);
@@ -6239,18 +6260,28 @@ export default function PureThreeGLBViewer({
         let newValue = poseDragRef.current.startValue + delta;
         newValue = Math.max(lo, Math.min(hi, Math.round(newValue)));
 
-        // ── Task #301 — Movement Mode active capacity clamp ────────
-        // Movement Mode caps the achievable angle at the per-case
-        // active ROM (passive ROM is still the absolute upper bound,
-        // since you can't physically move past anatomy). We track
-        // whether the user *attempted* to exceed the active limit so
-        // the AI summary can mention pain inhibition / strength loss.
+        // Task #301 — Movement Mode caps the achievable angle at the
+        // per-case active ROM. Within the last 15° before the active
+        // limit we apply rubber-band cursor friction so the clinician
+        // *feels* the resistance build (delta is scaled down). We track
+        // whether the user attempted to exceed the limit + which
+        // compensators the chain would recruit, then redistribute the
+        // residual angle into the chain via onModelConfigChange.
         let inPainfulArc = false;
         let exceededActiveLimit = false;
+        let frictionApplied = false;
         const row = poseDragRef.current.activeRow;
         if (skeletonModeRef.current === 'movement' && row) {
           const targetRaw = poseDragRef.current.startValue + delta;
           const sign = newValue >= 0 ? 1 : -1;
+          const distanceToLimit = row.activeRomMax - Math.abs(newValue);
+          if (distanceToLimit <= 15 && distanceToLimit > 0) {
+            // Friction zone — scale incremental delta so the cursor feels heavy.
+            const friction = Math.max(0.3, distanceToLimit / 15);
+            const frictionedDelta = delta * friction;
+            newValue = Math.round(poseDragRef.current.startValue + frictionedDelta);
+            frictionApplied = true;
+          }
           const cappedAbs = Math.min(Math.abs(newValue), row.activeRomMax);
           const clamped = Math.round(sign * cappedAbs);
           if (Math.abs(targetRaw) > row.activeRomMax + 0.5) {
@@ -6264,7 +6295,34 @@ export default function PureThreeGLBViewer({
         }
         poseDragRef.current.lastValue = newValue;
         if (exceededActiveLimit) poseDragRef.current.attemptedExceeded = true;
+        if (inPainfulArc) poseDragRef.current.lastPainfulArc = true;
         onModelConfigChangeRef.current?.(poseDragRef.current.configKey, newValue);
+
+        // Task #301 — when the active limit is exceeded, redistribute
+        // the residual angle into the chain compensators. Snake_case
+        // joint names from the chain table are translated to the
+        // camelCase configKey shape the rest of the engine uses.
+        if (exceededActiveLimit && skeletonModeRef.current === 'movement' && row && !frictionApplied) {
+          const [j, m] = poseDragRef.current.configKey.split('.');
+          const chain = COMPENSATION_CHAIN_BY_KEY.get(`${camelToSnake(j)}:${camelToSnake(m)}`);
+          if (chain) {
+            const residual = Math.abs(poseDragRef.current.startValue + delta) - row.activeRomMax;
+            const triggered: string[] = [];
+            for (const c of chain) {
+              const targetKey = `${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`;
+              const currentVal = (modelConfigRef.current as Record<string, number>)[targetKey] || 0;
+              const sign = currentVal >= 0 ? 1 : (newValue < 0 ? -1 : 1);
+              const compDelta = Math.round(residual * c.ratio) * sign;
+              const lim = DOF_LIMIT_INDEX.get(targetKey);
+              const next = Math.max(lim?.min ?? -180, Math.min(lim?.max ?? 180, currentVal + compDelta));
+              if (next !== currentVal) {
+                onModelConfigChangeRef.current?.(targetKey, next);
+                triggered.push(`${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`);
+              }
+            }
+            poseDragRef.current.compensationsTriggered = triggered;
+          }
+        }
 
         const rect = domElement.getBoundingClientRect();
         // In movement mode add a small annotation to the tooltip so
@@ -6408,6 +6466,13 @@ export default function PureThreeGLBViewer({
               };
             }
           }
+          // Task #301 — a new drag begins, so cancel any pending
+          // 800ms stillness timer from the previous drag.
+          if (movementSettleTimerRef.current !== null) {
+            window.clearTimeout(movementSettleTimerRef.current);
+            movementSettleTimerRef.current = null;
+            pendingMovementAttemptRef.current = null;
+          }
           poseDragRef.current = {
             configKey: a.def.configKey,
             startX: e.clientX,
@@ -6423,6 +6488,8 @@ export default function PureThreeGLBViewer({
             activeRow,
             lastValue: startValue,
             attemptedExceeded: false,
+            lastPainfulArc: false,
+            compensationsTriggered: [],
           };
           controls.enabled = false;
           domElement.style.cursor = 'grabbing';
@@ -6457,31 +6524,34 @@ export default function PureThreeGLBViewer({
 
     const onMouseUp = (_e: MouseEvent) => {
       if (poseDragRef.current) {
-        // Task #301 — fire the active movement attempt callback so
-        // the page can stream a Findings sentence into the AI panel.
-        // Only fired when the drag actually originated against a
-        // capacity-gated DOF in Movement Mode.
         const drag = poseDragRef.current;
+        // Task #301 — instead of firing the AI summary immediately,
+        // capture the drag snapshot and wait 800ms of stillness. Any
+        // new drag inside that window cancels the timer (set in
+        // onMouseDown) so we don't enqueue duplicate findings.
         if (skeletonModeRef.current === 'movement' && drag.activeRow && onActiveMovementAttemptRef.current) {
           const [joint, movement] = drag.configKey.split('.');
           const achievedAngle = drag.lastValue ?? drag.startValue;
-          const inPainfulArc = !!(drag.activeRow.painfulArc
+          const inPainfulArc = !!drag.lastPainfulArc || !!(drag.activeRow.painfulArc
             && Math.abs(achievedAngle) >= drag.activeRow.painfulArc.start
             && Math.abs(achievedAngle) <= drag.activeRow.painfulArc.end);
-          try {
-            onActiveMovementAttemptRef.current({
-              joint,
-              movement,
-              achievedAngle,
-              activeRomMax: drag.activeRow.activeRomMax,
-              passiveRomMax: drag.activeRow.passiveRomMax,
-              inPainfulArc,
-              exceededActiveLimit: !!drag.attemptedExceeded,
-              compensationsTriggered: [],
-            });
-          } catch (err) {
-            console.error('onActiveMovementAttempt threw:', err);
-          }
+          pendingMovementAttemptRef.current = {
+            joint,
+            movement,
+            achievedAngle,
+            activeRomMax: drag.activeRow.activeRomMax,
+            passiveRomMax: drag.activeRow.passiveRomMax,
+            inPainfulArc,
+            exceededActiveLimit: !!drag.attemptedExceeded,
+            compensationsTriggered: drag.compensationsTriggered ?? [],
+          };
+          if (movementSettleTimerRef.current !== null) window.clearTimeout(movementSettleTimerRef.current);
+          movementSettleTimerRef.current = window.setTimeout(() => {
+            const payload = pendingMovementAttemptRef.current;
+            pendingMovementAttemptRef.current = null;
+            movementSettleTimerRef.current = null;
+            if (payload) onActiveMovementAttemptRef.current?.(payload);
+          }, 800);
         }
         poseDragRef.current = null;
         controls.enabled = true;
@@ -6582,6 +6652,13 @@ export default function PureThreeGLBViewer({
     return () => {
       cancelAnimationFrame(poseGlowAnimFrame.current);
       applyExternalBoneSelectionRef.current = null;
+      // Task #301 — clear any pending stillness-debounce timer so we
+      // don't fire onActiveMovementAttempt against an unmounted page.
+      if (movementSettleTimerRef.current !== null) {
+        window.clearTimeout(movementSettleTimerRef.current);
+        movementSettleTimerRef.current = null;
+      }
+      pendingMovementAttemptRef.current = null;
       domElement.removeEventListener('mousemove', onMouseMove);
       domElement.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);

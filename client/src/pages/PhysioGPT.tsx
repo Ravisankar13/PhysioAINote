@@ -5873,8 +5873,9 @@ ${ddxList}`;
   }, [lastClinicalParseResult]);
 
   const activeCapacitiesEnabled = skeletonMode === 'movement' && !!activeCaseId;
-  const { profile: activeCapacityProfile, profileMap: activeCapacityMap, generate: generateActiveCapacity, generating: generatingActiveCapacity }
+  const { profile: activeCapacityProfile, effectiveProfile: activeCapacityEffective, profileMap: activeCapacityMap, generate: generateActiveCapacity, generating: generatingActiveCapacity }
     = useActiveCapacities(activeCaseId, activeCapacitiesEnabled);
+  void activeCapacityEffective;
 
   // Auto-generate the capacity profile the first time the clinician
   // enters Movement Mode for a case that has a research synthesis but
@@ -5940,11 +5941,20 @@ ${ddxList}`;
   }, [lastClinicalParseResult]);
 
   // Lightweight reshape of the capacity map → the prop expected by
-  // PureThreeGLBViewer (lookup by `joint:movement`).
+  // PureThreeGLBViewer (lookup by `joint:movement`). We pass the
+  // *effective* profile (passive×0.85 fallback while AI is generating)
+  // so dragging is gated immediately when the clinician flips into
+  // Movement Mode rather than waiting for the request to return.
   const viewerActiveCapacities = useMemo(() => {
-    if (skeletonMode !== 'movement' || !activeCapacityProfile) return null;
-    return activeCapacityMap;
-  }, [skeletonMode, activeCapacityProfile, activeCapacityMap]);
+    if (skeletonMode !== 'movement') return null;
+    if (activeCapacityMap) return activeCapacityMap;
+    if (activeCapacityEffective) {
+      const m: Record<string, typeof activeCapacityEffective.rows[number]> = {};
+      for (const r of activeCapacityEffective.rows) m[`${r.joint}:${r.movement}`] = r;
+      return m;
+    }
+    return null;
+  }, [skeletonMode, activeCapacityMap, activeCapacityEffective]);
 
   const lastAppliedPcSigRef = useRef<string>('');
   const pcAutoApplyTimerRef = useRef<number | null>(null);
@@ -8036,7 +8046,16 @@ ${ddxList}`;
                 }
               }}
             />
-            ); if (showRecoverySim && recoverySimSlot) return createPortal(__viewer, recoverySimSlot); if (showMechanicsAnalyser && mechanicsAnalyserSlot) return createPortal(__viewer, mechanicsAnalyserSlot); return __viewer; })()}
+            ); if (showRecoverySim && recoverySimSlot) return createPortal(__viewer, recoverySimSlot); if (showMechanicsAnalyser && mechanicsAnalyserSlot) return createPortal(__viewer, mechanicsAnalyserSlot); if (skeletonMode === 'movement') return (
+              <div className="relative w-full h-full ring-2 ring-emerald-500/70 ring-inset rounded-md" data-testid="movement-mode-frame">
+                {__viewer}
+                <div className="absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/90 text-white text-[10px] font-semibold shadow-lg" data-testid="movement-mode-pill">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                  Active Movement Mode
+                  {generatingActiveCapacity && <span className="text-emerald-100 font-normal">· generating capacities…</span>}
+                </div>
+              </div>
+            ); return __viewer; })()}
 
             {expandedSlingDetailId && slingAnalysis && (() => {
               const slingData = slingAnalysis.slings.find(s => s.slingId === expandedSlingDetailId);
@@ -10942,6 +10961,10 @@ ${ddxList}`;
                   const next = !showRecoverySim;
                   setShowRecoverySim(next);
                   if (next && showMechanicsAnalyser) setShowMechanicsAnalyser(false);
+                  // Task #301 — Recovery Sim and Movement Mode are
+                  // mutually exclusive (both reparent / repurpose the
+                  // viewer's behaviour and AI streams).
+                  if (next && skeletonMode === 'movement') setSkeletonMode('posture');
                 }}
               >
                 <Activity className="h-3 w-3 mr-1" />
@@ -10955,6 +10978,7 @@ ${ddxList}`;
                   const next = !showMechanicsAnalyser;
                   setShowMechanicsAnalyser(next);
                   if (next && showRecoverySim) setShowRecoverySim(false);
+                  if (next && skeletonMode === 'movement') setSkeletonMode('posture');
                 }}
                 data-testid="toggle-mechanics-analyser"
               >
@@ -10971,7 +10995,18 @@ ${ddxList}`;
                 size="sm"
                 className={`h-7 text-xs shadow-sm ${skeletonMode === 'movement' ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
-                  setSkeletonMode(prev => prev === 'movement' ? 'posture' : 'movement');
+                  setSkeletonMode(prev => {
+                    const next = prev === 'movement' ? 'posture' : 'movement';
+                    // Task #301 — entering Movement Mode closes the
+                    // sibling viewer panels (Recovery Sim + Mechanics
+                    // Analyser) so the static-posture clinical pipeline
+                    // and movement gating cannot run side-by-side.
+                    if (next === 'movement') {
+                      if (showRecoverySim) setShowRecoverySim(false);
+                      if (showMechanicsAnalyser) setShowMechanicsAnalyser(false);
+                    }
+                    return next;
+                  });
                 }}
                 data-testid="toggle-skeleton-mode"
                 title={skeletonMode === 'movement' ? 'Switch back to Posture Mode' : 'Switch to Active Movement Mode'}
@@ -13880,6 +13915,10 @@ ${ddxList}`;
         </div>
       )}
 
+      {/* Task #301 — In Active Movement Mode the static-posture
+          clinical reasoning AI pipeline is gated off; the per-movement
+          Findings stream replaces it. */}
+      {skeletonMode !== 'movement' && (
       <ClinicalReasoningPanel
         data={clinicalReasoningData}
         isProcessing={clinicalReasoningProcessing}
@@ -13932,6 +13971,7 @@ ${ddxList}`;
         onRequestedTabHandled={() => setReasoningRequestedTab(null)}
         onActiveTabChange={setReasoningActiveTab}
       />
+      )}
 
       <HypothesisTestBench
         isOpen={testBenchOpen}

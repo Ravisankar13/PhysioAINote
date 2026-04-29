@@ -1,12 +1,18 @@
 /**
  * Task #301 — Active Movement Mode
  *
- * Generates per-joint × per-direction active-capacity rows for a case
- * using the literature priors baked into pathologyCompensationEngine
- * plus a single GPT-4o JSON-mode call that overlays case-specific
- * adjustments. The result is persisted on case_research_syntheses
- * (column `active_capacities`) and merged into the same row by the
- * route handler.
+ * Two-stage active-capacity profile:
+ *   1. A DETERMINISTIC baseline composed of passive×0.85 default
+ *      active ROM, then overlaid with literature-derived restriction
+ *      profiles for any AI-inferred pathologies on the case (e.g.
+ *      adhesive capsulitis, RC tendinopathy, plantar fasciitis).
+ *      This mirrors the client `getActiveCapacityFromPathologies`
+ *      helper so the result is the same with or without the AI call.
+ *   2. A single GPT-4o JSON-mode patch step that adjusts only the
+ *      joint × movement combinations the case clinically warrants.
+ *
+ * The baseline always renders even if the AI call fails so the UI
+ * is never blank.
  */
 import { openai } from '../openai';
 
@@ -30,8 +36,16 @@ export type ActiveCapacityProfile = {
   rationaleSummary?: string;
 };
 
-// Mirror of PASSIVE_ROM_TABLE from client/src/lib/pathologyCompensationEngine.ts
-// kept server-side so the service has no client deps.
+export type ActiveCapacityOverridePatch = {
+  joint: string;
+  movement: string;
+  activeRomMin?: number;
+  activeRomMax?: number;
+  painfulArc?: { start: number; end: number; intensity: number } | null;
+  activeStrengthPct?: number;
+  painInhibitionFactor?: number;
+};
+
 const PASSIVE_ROM: Record<string, Record<string, [number, number]>> = {
   leftShoulder:   { flexion: [0, 180], abduction: [0, 180], extension: [0, 60], internalRotation: [0, 70], externalRotation: [0, 90] },
   rightShoulder:  { flexion: [0, 180], abduction: [0, 180], extension: [0, 60], internalRotation: [0, 70], externalRotation: [0, 90] },
@@ -46,6 +60,80 @@ const PASSIVE_ROM: Record<string, Record<string, [number, number]>> = {
   thoracic_spine: { flexion: [0, 40], extension: [0, 20], rotation: [0, 35], lateralFlexion: [0, 25] },
   leftElbow:      { flexion: [0, 140] },
   rightElbow:     { flexion: [0, 140] },
+};
+
+// Mirrors LITERATURE_ACTIVE_OVERLAYS in pathologyCompensationEngine.ts.
+// Keys are normalised pathology slugs that the upstream phenotype
+// extractor emits (see phenotypeService prompts). Each entry lists
+// per-joint × movement multipliers/painful-arcs for the deterministic
+// baseline.
+type Overlay = {
+  joints: Record<string, Record<string, {
+    activeRomMaxFactor?: number;
+    activeStrengthPct?: number;
+    painInhibitionFactor?: number;
+    painfulArc?: { start: number; end: number; intensity: number };
+    rationale?: string;
+  }>>;
+};
+
+const LITERATURE_OVERLAYS: Record<string, Overlay> = {
+  adhesive_capsulitis_left: { joints: {
+    leftShoulder: {
+      flexion: { activeRomMaxFactor: 0.55, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 7 }, rationale: 'Capsular contracture limits AROM with painful end-range.' },
+      abduction: { activeRomMaxFactor: 0.45, activeStrengthPct: 60, painInhibitionFactor: 0.5, painfulArc: { start: 80, end: 120, intensity: 8 }, rationale: 'Marked AROM loss in capsular pattern.' },
+      externalRotation: { activeRomMaxFactor: 0.4, activeStrengthPct: 55, painInhibitionFactor: 0.5, rationale: 'External rotation loss is hallmark.' },
+    },
+  } },
+  adhesive_capsulitis_right: { joints: {
+    rightShoulder: {
+      flexion: { activeRomMaxFactor: 0.55, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 7 } },
+      abduction: { activeRomMaxFactor: 0.45, activeStrengthPct: 60, painInhibitionFactor: 0.5, painfulArc: { start: 80, end: 120, intensity: 8 } },
+      externalRotation: { activeRomMaxFactor: 0.4, activeStrengthPct: 55, painInhibitionFactor: 0.5 },
+    },
+  } },
+  rotator_cuff_tendinopathy_left: { joints: {
+    leftShoulder: {
+      abduction: { activeRomMaxFactor: 0.85, activeStrengthPct: 70, painInhibitionFactor: 0.3, painfulArc: { start: 60, end: 120, intensity: 6 }, rationale: 'Classic painful arc 60–120° from subacromial impingement.' },
+      flexion: { activeRomMaxFactor: 0.9, activeStrengthPct: 75, painInhibitionFactor: 0.25 },
+    },
+  } },
+  rotator_cuff_tendinopathy_right: { joints: {
+    rightShoulder: {
+      abduction: { activeRomMaxFactor: 0.85, activeStrengthPct: 70, painInhibitionFactor: 0.3, painfulArc: { start: 60, end: 120, intensity: 6 } },
+      flexion: { activeRomMaxFactor: 0.9, activeStrengthPct: 75, painInhibitionFactor: 0.25 },
+    },
+  } },
+  meniscus_tear_left: { joints: {
+    leftKnee: { flexion: { activeRomMaxFactor: 0.75, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 6 } } },
+  } },
+  meniscus_tear_right: { joints: {
+    rightKnee: { flexion: { activeRomMaxFactor: 0.75, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 6 } } },
+  } },
+  achilles_tendinopathy_left: { joints: {
+    leftAnkle: { dorsiflexion: { activeRomMaxFactor: 0.7, activeStrengthPct: 70, painInhibitionFactor: 0.3, rationale: 'Painful loaded dorsiflexion from achilles tendinopathy.' } },
+  } },
+  achilles_tendinopathy_right: { joints: {
+    rightAnkle: { dorsiflexion: { activeRomMaxFactor: 0.7, activeStrengthPct: 70, painInhibitionFactor: 0.3 } },
+  } },
+  plantar_fasciitis_left: { joints: {
+    leftAnkle: { dorsiflexion: { activeRomMaxFactor: 0.8, activeStrengthPct: 80, painInhibitionFactor: 0.2 } },
+  } },
+  plantar_fasciitis_right: { joints: {
+    rightAnkle: { dorsiflexion: { activeRomMaxFactor: 0.8, activeStrengthPct: 80, painInhibitionFactor: 0.2 } },
+  } },
+  acute_lbp: { joints: {
+    lumbar_spine: {
+      flexion: { activeRomMaxFactor: 0.5, activeStrengthPct: 60, painInhibitionFactor: 0.5, rationale: 'Acute LBP typically loses lumbar flexion most.' },
+      extension: { activeRomMaxFactor: 0.6, activeStrengthPct: 65, painInhibitionFactor: 0.4 },
+      rotation: { activeRomMaxFactor: 0.6, activeStrengthPct: 70, painInhibitionFactor: 0.4 },
+    },
+  } },
+  lumbar_disc_herniation: { joints: {
+    lumbar_spine: {
+      flexion: { activeRomMaxFactor: 0.45, activeStrengthPct: 55, painInhibitionFactor: 0.6, painfulArc: { start: 30, end: 60, intensity: 7 }, rationale: 'Disc-related flexion intolerance.' },
+    },
+  } },
 };
 
 function buildBaselineRows(): ActiveCapacityRow[] {
@@ -67,7 +155,35 @@ function buildBaselineRows(): ActiveCapacityRow[] {
   return rows;
 }
 
-const SYSTEM_PROMPT = `You are a senior physiotherapist specialised in assessing active movement capacity. You receive a case (free-text condition + case summary + a short summary of the literature retrieved for the case) and a baseline table of joints × movements with passive ROM and a default active ROM. Your job is to PATCH the table with case-specific active-movement findings.
+// Deterministic equivalent of the client `getActiveCapacityFromPathologies`.
+function applyPathologyBaseline(rows: ActiveCapacityRow[], pathologies: string[]): ActiveCapacityRow[] {
+  if (!pathologies?.length) return rows;
+  const map = new Map<string, ActiveCapacityRow>();
+  for (const r of rows) map.set(`${r.joint}:${r.movement}`, r);
+  for (const slug of pathologies) {
+    const overlay = LITERATURE_OVERLAYS[slug];
+    if (!overlay) continue;
+    for (const [joint, dirs] of Object.entries(overlay.joints)) {
+      for (const [movement, patch] of Object.entries(dirs)) {
+        const key = `${joint}:${movement}`;
+        const row = map.get(key);
+        if (!row) continue;
+        const next: ActiveCapacityRow = { ...row };
+        if (typeof patch.activeRomMaxFactor === 'number') {
+          next.activeRomMax = Math.round(row.passiveRomMax * patch.activeRomMaxFactor);
+        }
+        if (typeof patch.activeStrengthPct === 'number') next.activeStrengthPct = patch.activeStrengthPct;
+        if (typeof patch.painInhibitionFactor === 'number') next.painInhibitionFactor = patch.painInhibitionFactor;
+        if (patch.painfulArc) next.painfulArc = patch.painfulArc;
+        if (patch.rationale) next.rationale = patch.rationale;
+        map.set(key, next);
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
+const SYSTEM_PROMPT = `You are a senior physiotherapist specialised in assessing active movement capacity. You receive a case (free-text condition + case summary + AI-inferred phenotype variables + a short literature summary) and a deterministic baseline table of joints × movements with passive ROM and a literature-anchored default active ROM. Your job is to PATCH the table with case-specific active-movement findings.
 
 Return JSON of the shape:
 {
@@ -87,34 +203,36 @@ Return JSON of the shape:
 }
 
 Rules:
-- Patch ONLY the joint × movement combinations that are clinically relevant to the case. Leave the rest at baseline by NOT including them.
+- Patch ONLY the joint × movement combinations that are clinically relevant. Leave the rest at baseline by NOT including them.
 - activeRomMax must always be ≤ passiveRomMax for that joint/movement.
-- Painful arcs only when there is a clear pathomechanical reason (impingement, capsule contracture, meniscus pinching, end-range tendon load, etc.).
-- Use evidence from the supplied literature summary when relevant; do not cite papers explicitly.
+- Painful arcs only when there is a clear pathomechanical reason.
+- Use the case's age, sex and inferred pathologies as context for severity and irritability.
 - Be conservative: prefer mild reductions unless the case clearly warrants severe restriction.
 `;
 
-function safeJSONParse(s: string): any {
+function safeJSONParse(s: string): unknown {
   try { return JSON.parse(s); } catch { return null; }
 }
 
-function applyPatches(baseline: ActiveCapacityRow[], patches: any[]): ActiveCapacityRow[] {
+function applyPatches(baseline: ActiveCapacityRow[], patches: unknown): ActiveCapacityRow[] {
   if (!Array.isArray(patches)) return baseline;
   const map = new Map<string, ActiveCapacityRow>();
   for (const r of baseline) map.set(`${r.joint}:${r.movement}`, r);
   for (const p of patches) {
     if (!p || typeof p !== 'object') continue;
-    const key = `${p.joint}:${p.movement}`;
+    const patch = p as Record<string, unknown>;
+    const key = `${patch.joint}:${patch.movement}`;
     const row = map.get(key);
     if (!row) continue;
     const next: ActiveCapacityRow = { ...row, source: 'ai' };
-    if (typeof p.activeRomMin === 'number') next.activeRomMin = Math.max(row.passiveRomMin, Math.min(row.passiveRomMax, p.activeRomMin));
-    if (typeof p.activeRomMax === 'number') next.activeRomMax = Math.max(next.activeRomMin, Math.min(row.passiveRomMax, p.activeRomMax));
-    if (p.painfulArc === null) next.painfulArc = null;
-    else if (p.painfulArc && typeof p.painfulArc === 'object') {
-      const start = Number(p.painfulArc.start);
-      const end = Number(p.painfulArc.end);
-      const intensity = Number(p.painfulArc.intensity);
+    if (typeof patch.activeRomMin === 'number') next.activeRomMin = Math.max(row.passiveRomMin, Math.min(row.passiveRomMax, patch.activeRomMin));
+    if (typeof patch.activeRomMax === 'number') next.activeRomMax = Math.max(next.activeRomMin, Math.min(row.passiveRomMax, patch.activeRomMax));
+    if (patch.painfulArc === null) next.painfulArc = null;
+    else if (patch.painfulArc && typeof patch.painfulArc === 'object') {
+      const pa = patch.painfulArc as Record<string, unknown>;
+      const start = Number(pa.start);
+      const end = Number(pa.end);
+      const intensity = Number(pa.intensity);
       if (Number.isFinite(start) && Number.isFinite(end) && Number.isFinite(intensity)) {
         next.painfulArc = {
           start: Math.max(row.passiveRomMin, Math.min(row.passiveRomMax, start)),
@@ -123,9 +241,9 @@ function applyPatches(baseline: ActiveCapacityRow[], patches: any[]): ActiveCapa
         };
       }
     }
-    if (typeof p.activeStrengthPct === 'number') next.activeStrengthPct = Math.max(0, Math.min(100, p.activeStrengthPct));
-    if (typeof p.painInhibitionFactor === 'number') next.painInhibitionFactor = Math.max(0, Math.min(1, p.painInhibitionFactor));
-    if (typeof p.rationale === 'string') next.rationale = p.rationale.slice(0, 240);
+    if (typeof patch.activeStrengthPct === 'number') next.activeStrengthPct = Math.max(0, Math.min(100, patch.activeStrengthPct));
+    if (typeof patch.painInhibitionFactor === 'number') next.painInhibitionFactor = Math.max(0, Math.min(1, patch.painInhibitionFactor));
+    if (typeof patch.rationale === 'string') next.rationale = patch.rationale.slice(0, 240);
     map.set(key, next);
   }
   return Array.from(map.values());
@@ -135,8 +253,12 @@ export async function generateActiveCapacities(input: {
   condition: string;
   caseSummary: string;
   literatureSummary?: string;
+  age?: number;
+  sex?: string;
+  inferredPathologies?: string[];
 }): Promise<ActiveCapacityProfile> {
-  const baseline = buildBaselineRows();
+  // Compose the deterministic baseline first so the result is never blank.
+  const baseline = applyPathologyBaseline(buildBaselineRows(), input.inferredPathologies || []);
   const baselinePayload = baseline.map(r => ({
     joint: r.joint,
     movement: r.movement,
@@ -144,10 +266,16 @@ export async function generateActiveCapacities(input: {
     passiveRomMax: r.passiveRomMax,
     defaultActiveRomMin: r.activeRomMin,
     defaultActiveRomMax: r.activeRomMax,
+    painfulArc: r.painfulArc,
+    activeStrengthPct: r.activeStrengthPct,
+    painInhibitionFactor: r.painInhibitionFactor,
   }));
 
   const userPrompt = JSON.stringify({
     condition: input.condition,
+    age: input.age,
+    sex: input.sex,
+    inferredPathologies: input.inferredPathologies || [],
     caseSummary: input.caseSummary.slice(0, 6000),
     literatureSummary: (input.literatureSummary || '').slice(0, 4000),
     baseline: baselinePayload,
@@ -155,7 +283,6 @@ export async function generateActiveCapacities(input: {
 
   try {
     const response = await openai.chat.completions.create({
-      // gpt-4o is the standard model used across this codebase.
       model: 'gpt-4o',
       response_format: { type: 'json_object' },
       temperature: 0.2,
@@ -165,28 +292,28 @@ export async function generateActiveCapacities(input: {
       ],
     });
     const content = response.choices[0]?.message?.content || '{}';
-    const parsed = safeJSONParse(content) || {};
-    const rows = applyPatches(baseline, parsed.patches || []);
+    const parsed = (safeJSONParse(content) as Record<string, unknown> | null) || {};
+    const rows = applyPatches(baseline, parsed.patches);
     return {
       rows,
       generatedAt: new Date().toISOString(),
       rationaleSummary: typeof parsed.rationaleSummary === 'string'
-        ? parsed.rationaleSummary.slice(0, 800)
+        ? (parsed.rationaleSummary as string).slice(0, 800)
         : undefined,
     };
   } catch (err) {
-    console.error('[activeCapacityService] AI generation failed, returning baseline:', err);
+    console.error('[activeCapacityService] AI generation failed, returning deterministic baseline:', err);
     return {
       rows: baseline,
       generatedAt: new Date().toISOString(),
-      rationaleSummary: 'Baseline active capacity (AI generation unavailable).',
+      rationaleSummary: 'Deterministic baseline (AI synthesis unavailable).',
     };
   }
 }
 
 export function applyManualOverride(
   profile: ActiveCapacityProfile,
-  patch: Partial<ActiveCapacityRow> & { joint: string; movement: string }
+  patch: ActiveCapacityOverridePatch,
 ): ActiveCapacityProfile {
   const rows = profile.rows.map(r => {
     if (r.joint !== patch.joint || r.movement !== patch.movement) return r;

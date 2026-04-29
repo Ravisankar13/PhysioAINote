@@ -151,7 +151,9 @@ export const NORMAL_ROM: Record<JointType, Record<string, number>> = {
 };
 
 // Compensation chains - when one joint is restricted, adjacent joints compensate
-const COMPENSATION_CHAINS: Array<{
+// Exported (Task #301) so the active-movement viewer can redistribute
+// residual angles into the chain when the active limit is exceeded.
+export const COMPENSATION_CHAINS: Array<{
   source: { joint: JointType; movement: MovementType };
   compensators: Array<{
     joint: JointType;

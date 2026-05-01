@@ -631,6 +631,8 @@ export default function PhysioGPT() {
   }, []);
 
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
+  const selectedConversationIdRef = useRef<number | null>(null);
+  selectedConversationIdRef.current = selectedConversationId;
   const [message, setMessage] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1147,6 +1149,11 @@ export default function PhysioGPT() {
   // mid-session keeps it paused after a refresh — matching the
   // "persistent autopilot toggle" UX promised in the task spec.
   const AUTOPILOT_PAUSED_STORAGE_KEY = 'physiogpt:voice-autopilot:paused';
+  // Per-conversation status persistence — { [conversationId]: 'done'|'converged'|'error' }.
+  // Used as a re-entry guard so reopening a historical conversation
+  // does NOT auto-rerun the chain. Cleared per conversation when the
+  // user explicitly re-runs from a stage.
+  const AUTOPILOT_STATUS_STORAGE_KEY = 'physiogpt:voice-autopilot:status-by-conv';
   const CONVERGENCE_RUNS = 2;
   const CONVERGENCE_MIN_CONFIDENCE = 0.6;
 
@@ -1176,8 +1183,36 @@ export default function PhysioGPT() {
   }, []);
   const handleAutopilotPauseToggle = useCallback((next: boolean) => {
     setAutopilotPaused(next);
+    if (next) {
+      // Pausing aborts any voice-triggered chain in progress so the
+      // user has to resume + speak again to re-arm.
+      voiceTriggeredRef.current = false;
+    }
     try { window.localStorage.setItem(AUTOPILOT_PAUSED_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
   }, []);
+  /** Per-conversation autopilot-status map (localStorage-backed).
+   *  Used as a re-entry guard so reopening a historical conversation
+   *  does not auto-rerun the chain. Declared here (above the rerun
+   *  handler) to avoid a temporal dead zone reference. */
+  const readAutopilotStatusMap = useCallback((): Record<string, 'done' | 'converged' | 'error'> => {
+    try {
+      const raw = window.localStorage.getItem(AUTOPILOT_STATUS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  }, []);
+  const writeAutopilotStatusForConv = useCallback((cid: number, status: 'done' | 'converged' | 'error' | null) => {
+    try {
+      const raw = window.localStorage.getItem(AUTOPILOT_STATUS_STORAGE_KEY);
+      const map = raw ? JSON.parse(raw) : {};
+      if (status === null) {
+        delete map[String(cid)];
+      } else {
+        map[String(cid)] = status;
+      }
+      window.localStorage.setItem(AUTOPILOT_STATUS_STORAGE_KEY, JSON.stringify(map));
+    } catch { /* quota */ }
+  }, []);
+
   /** Re-run the AI chain starting from a specific stage. The chain
    *  itself owns ordering — this just fires the right entry point and
    *  invalidates downstream input-hash cache so the dedup governor
@@ -1192,6 +1227,13 @@ export default function PhysioGPT() {
         delete stageInputHashRef.current[order[i]];
       }
     }
+    // Explicit user-driven rerun bypasses convergence + persisted
+    // status so the chain can re-engage. Mark voiceTriggered so the
+    // chain treats it as a voice-equivalent invocation.
+    voiceTriggeredRef.current = true;
+    setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
+    const cid = selectedConversationIdRef.current;
+    if (cid) writeAutopilotStatusForConv(cid, null);
     if (id === 'reason') {
       // reasoning trigger reads `lastReasoningTriggerRef`; reset it so
       // the same structural inputs aren't treated as already-handled.
@@ -1220,7 +1262,7 @@ export default function PhysioGPT() {
       clinicalTextInputRef.current?.triggerIncrementalParse();
       return;
     }
-  }, []);
+  }, [writeAutopilotStatusForConv]);
 
   // 5 stage chip statuses, keyed by stage id. Ordered for the dock.
   const initialMonitorStages: AutopilotStageStatus[] = useMemo(() => ([
@@ -1234,6 +1276,19 @@ export default function PhysioGPT() {
   const [monitorStability, setMonitorStability] = useState<AutopilotStability>({
     topLabel: null, stableForRuns: 0, converged: false, destabilized: false,
   });
+  // Orchestrator state machine — derived/observable. Tracks the
+  // currently active stage and the rollup status of the autopilot
+  // run. Persisted into the session snapshot so reopening a
+  // historical case does NOT auto-rerun the chain.
+  const [autopilotStage, setAutopilotStage] = useState<AutopilotStageId | 'idle'>('idle');
+  const [autopilotStatus, setAutopilotStatus] = useState<'idle' | 'running' | 'done' | 'converged' | 'error'>('idle');
+  const autopilotStatusRef = useRef(autopilotStatus);
+  autopilotStatusRef.current = autopilotStatus;
+  // Voice-only gate — chain only runs for voice-triggered case
+  // workups. Set true when pendingVoiceTriggerRef is consumed by
+  // handleClinicalTextParse, cleared when chain settles or user
+  // pauses autopilot.
+  const voiceTriggeredRef = useRef<boolean>(false);
   const monitorStabilityRef = useRef(monitorStability);
   monitorStabilityRef.current = monitorStability;
   // Convenience flag mirrored from monitorStability for use inside
@@ -1269,6 +1324,8 @@ export default function PhysioGPT() {
     setMonitorStages(prev => prev.map(s => s.id === id
       ? { ...s, state: 'running', callCount: s.callCount + 1, lastFiredSec: recordingTimeSec(), lastSkippedReason: null }
       : s));
+    setAutopilotStage(id);
+    setAutopilotStatus('running');
   }, [recordingTimeSec]);
 
   /** Mark a stage as finished (state=done|error|converged|skipped). */
@@ -1279,7 +1336,24 @@ export default function PhysioGPT() {
     setMonitorStages(prev => prev.map(s => s.id === id
       ? { ...s, state: outcome, lastDurationMs: dur, lastSkippedReason: reason ?? null }
       : s));
-  }, []);
+    // Plan is the terminal stage of the chain — its outcome rolls up
+    // to the orchestrator status. Errors at any stage roll up
+    // immediately so the dock can surface them. Terminal statuses
+    // are persisted per-conversation so re-entry doesn't auto-rerun.
+    const cid = selectedConversationIdRef.current;
+    if (outcome === 'error') {
+      setAutopilotStatus('error');
+      if (cid) writeAutopilotStatusForConv(cid, 'error');
+    } else if (id === 'plan') {
+      const next = outcome === 'converged' ? 'converged' : 'done';
+      setAutopilotStatus(next);
+      if (cid) writeAutopilotStatusForConv(cid, next);
+      voiceTriggeredRef.current = false; // chain settled; require new voice trigger
+    } else if (outcome === 'converged' && (id === 'research' || id === 'plan')) {
+      setAutopilotStatus('converged');
+      if (cid) writeAutopilotStatusForConv(cid, 'converged');
+    }
+  }, [writeAutopilotStatusForConv]);
   // Bind the refs forward-declared above so the rerun-from-stage
   // handler (which has to be defined earlier in render order to keep
   // the dock's prop identity stable) can call into these helpers.
@@ -1674,6 +1748,20 @@ export default function PhysioGPT() {
     }
 
     hydratedConversationIdRef.current = selectedConversationId;
+    // Hydrate persisted autopilot status for this conversation (re-entry
+    // guard). If the chain previously settled, restore its terminal
+    // state on the dock so it doesn't re-fire automatically.
+    try {
+      const raw = window.localStorage.getItem(AUTOPILOT_STATUS_STORAGE_KEY);
+      const map = raw ? JSON.parse(raw) : {};
+      const persisted = map[String(selectedConversationId)];
+      if (persisted === 'done' || persisted === 'converged' || persisted === 'error') {
+        setAutopilotStatus(persisted);
+        voiceTriggeredRef.current = false;
+      } else {
+        setAutopilotStatus('idle');
+      }
+    } catch { /* ignore */ }
     // Use the next-saved-snapshot serialization as the baseline so the
     // immediately-following auto-save effect skips the redundant write.
     try {
@@ -2520,16 +2608,14 @@ export default function PhysioGPT() {
   skeletonModeRef.current = skeletonMode;
 
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
-    // Governor — surface parse stage on the AI Activity Monitor.
-    // Each successful parse settles the 'parse' chip to done; the
-    // ClinicalTextInput panel handles the in-flight transition via
-    // its own loading state (we mark start synchronously here for
-    // visibility — the chip flickers running→done within one render
-    // for fast parses, which is the desired UX).
+    // Voice-only gate — only voice-triggered parses arm the autopilot
+    // chain. Manual paste-and-parse from the Clinical Text panel
+    // remains unaffected (chain stays gated by voiceTriggeredRef).
+    if (pendingVoiceTriggerRef.current) {
+      voiceTriggeredRef.current = true;
+    }
+    // Surface parse stage on the AI Activity Monitor.
     markStageStart('parse');
-    // Retain the latest parse for the Patient Context panel (used for
-    // stale-fingerprint comparison + condition-specific prompt
-    // generation).
     setLastClinicalParseResult(result);
     markStageEnd('parse', 'done');
     const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightLabels: string[] } = {
@@ -5113,16 +5199,10 @@ ${ddxList}`;
       return;
     }
     if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
-    // Governor convergence gate — once the orchestrator has marked the
-    // top hypothesis as stable for ≥ CONVERGENCE_RUNS at confidence
-    // ≥ CONVERGENCE_MIN_CONFIDENCE, suppress reasoning re-runs unless
-    // the clinician explicitly forces one (forceRefresh=true) or
-    // material inputs change (which destabilizes the ribbon and
-    // clears the flag automatically).
-    if (!forceRefresh && monitorConvergedRef.current) {
-      markStageEnd('reason', 'converged', 'top hypothesis stable');
-      return;
-    }
+    // NOTE: convergence does NOT block reasoning here — once inputs
+    // change (triggerKey diff above), reasoning must re-engage so
+    // we can detect destabilization. Convergence only suppresses
+    // downstream stages (research/plan) in chainAutopilotAfterReasoning.
 
     lastReasoningTriggerRef.current = triggerKey;
     // Cache the input hash on the dedup ref so per-stage governor
@@ -5712,6 +5792,20 @@ ${ddxList}`;
   const chainAutopilotAfterReasoning = useCallback((data: ClinicalReasoningData) => {
     if (!autopilotEnabledRef.current) return;
     if (autopilotPausedRef.current) return;
+    // Voice-only gate — chain only fires for voice-triggered case
+    // workups. Manual reasoning re-runs (e.g. clinician clicking
+    // "regenerate") do NOT cascade through downstream stages.
+    if (!voiceTriggeredRef.current) return;
+    // Snapshot eligibility hard-guard at execution time. Even if the
+    // dock prop says eligible, the conversation must be in the
+    // snapshot-opted-in set.
+    const cid = selectedConversationIdRef.current;
+    if (!cid || !snapshotEligibleRef.current.has(cid)) return;
+    // Re-entry guard — if this conversation already has a terminal
+    // status persisted, don't auto-rerun. The clinician must use
+    // "Re-run from here" on the dock to bypass it.
+    const persistedStatus = readAutopilotStatusMap()[String(cid)];
+    if (persistedStatus === 'done' || persistedStatus === 'converged') return;
 
     const top = (data.hypotheses || []).find(h => h.status !== 'ruled_out') ?? data.hypotheses?.[0];
     const stab = monitorStabilityRef.current;
@@ -5791,7 +5885,7 @@ ${ddxList}`;
         markStageEnd('plan', 'error', e instanceof Error ? e.message : 'auto-build failed');
       }
     }, 3500);
-  }, [handleAutoBuildClick, markStageEnd, markStageStart]);
+  }, [handleAutoBuildClick, markStageEnd, markStageStart, readAutopilotStatusMap]);
 
   // Bind the actual implementation to the ref so the reasoning
   // trigger (defined earlier in render order) can call it.

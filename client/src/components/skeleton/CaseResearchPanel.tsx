@@ -1226,7 +1226,14 @@ export const CaseResearchPanel = forwardRef<CaseResearchPanelHandle, CaseResearc
               {/* Why we searched this way — single-line case-context summary so the
                   clinician can see at a glance which seed (top hypothesis + region/
                   laterality + chronicity + key patient factors) drove this search. */}
-              {caseContext && (caseContext.topHypothesis?.label || caseContext.region || caseContext.chronicity) && (
+              {caseContext && (
+                caseContext.topHypothesis?.label
+                || caseContext.region
+                || caseContext.chronicity
+                || caseContext.mechanism
+                || (typeof caseContext.severity === 'number')
+                || (caseContext.comorbidities && caseContext.comorbidities.length > 0)
+              ) && (
                 <div
                   className="rounded-md border border-violet-700/40 bg-violet-950/30 px-2 py-1.5 text-[10.5px] leading-snug text-violet-100"
                   data-testid="case-research-why-summary"
@@ -1242,8 +1249,12 @@ export const CaseResearchPanel = forwardRef<CaseResearchPanelHandle, CaseResearc
                     caseContext.region && `region ${caseContext.region}${caseContext.laterality && caseContext.laterality !== 'unspecified' ? ` (${caseContext.laterality})` : ''}`,
                     caseContext.chronicity && `chronicity ${caseContext.chronicity}`,
                     caseContext.irritability && `irritability ${caseContext.irritability}`,
+                    caseContext.mechanism && `mechanism ${caseContext.mechanism.slice(0, 60)}`,
+                    typeof caseContext.severity === 'number' && `severity ${caseContext.severity}/10`,
                     caseContext.patientFactors && caseContext.patientFactors.length > 0
                       && `factors ${caseContext.patientFactors.slice(0, 4).join(', ')}`,
+                    caseContext.comorbidities && caseContext.comorbidities.length > 0
+                      && `comorbidities ${caseContext.comorbidities.slice(0, 4).join(', ')}`,
                   ].filter(Boolean).join(' · ')}
                 </div>
               )}

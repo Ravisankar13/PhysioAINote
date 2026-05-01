@@ -219,11 +219,20 @@ export function formatCaseContextForPrompt(ctx: CaseResearchContext): string {
   if (ctx.chronicity) lines.push(`Chronicity: ${ctx.chronicity}`);
   if (ctx.irritability) lines.push(`Irritability: ${ctx.irritability}`);
   if (ctx.mechanism) lines.push(`Mechanism: ${ctx.mechanism}`);
+  if (typeof ctx.severity === 'number') {
+    lines.push(`Peak pain severity (NPRS 0–10): ${ctx.severity}`);
+  }
   if (ctx.painRegions && ctx.painRegions.length) {
     lines.push(`Pain regions on skeleton: ${ctx.painRegions.slice(0, 8).join(', ')}`);
   }
   if (ctx.patientFactors && ctx.patientFactors.length) {
     lines.push(`Patient factors: ${ctx.patientFactors.slice(0, 8).join(', ')}`);
+  }
+  if (ctx.comorbidities && ctx.comorbidities.length) {
+    // Surface comorbidities explicitly so the AI seeds queries
+    // toward population-specific evidence (e.g. diabetes-aware
+    // tendinopathy, smoking/healing literature, pregnancy-safe rehab).
+    lines.push(`Comorbidities/flags: ${ctx.comorbidities.join(', ')}`);
   }
   if (lines.length === 0) return '';
   return `STRUCTURED CASE CONTEXT (already extracted by the page — prefer these over re-inferring from prose):\n${lines.map(l => `- ${l}`).join('\n')}`;

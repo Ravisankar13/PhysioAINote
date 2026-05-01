@@ -6287,8 +6287,18 @@ export const caseResearchContextSchema = z.object({
   chronicity: z.string().max(40).optional(),
   irritability: z.enum(['low', 'moderate', 'high']).optional(),
   mechanism: z.string().max(200).optional(),
+  // Peak self-reported pain severity 0–10. Drives evidence
+  // weighting toward acute-care vs. self-management literature.
+  severity: z.number().min(0).max(10).optional(),
   painRegions: z.array(z.string().max(80)).max(12).optional(),
   patientFactors: z.array(z.string().max(80)).max(12).optional(),
+  // Discrete comorbidity flags so the engine can up-weight
+  // diabetes-aware tendinopathy guidelines, smoking/healing
+  // literature, pregnancy-safe rehab, etc.
+  comorbidities: z.array(z.enum([
+    'diabetes', 'smoking', 'pregnancy', 'osteoporosis',
+    'cardiovascular', 'autoimmune', 'obesity', 'previousEpisodes',
+  ])).max(8).optional(),
 });
 export type CaseResearchContext = z.infer<typeof caseResearchContextSchema>;
 

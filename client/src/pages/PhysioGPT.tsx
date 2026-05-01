@@ -1359,7 +1359,10 @@ export default function PhysioGPT() {
       setAutopilotStatus(next);
       if (cid) writeAutopilotStatusForConv(cid, next);
       voiceTriggeredRef.current = false; // chain settled; require new voice trigger
-    } else if (outcome === 'converged' && (id === 'research' || id === 'plan')) {
+    } else if (outcome === 'converged' && id === 'research') {
+      // Plan is handled in the branch above as the terminal stage.
+      // Research-converged short-circuits the plan when downstream
+      // chaining is suppressed by monitorConvergedRef.
       setAutopilotStatus('converged');
       if (cid) writeAutopilotStatusForConv(cid, 'converged');
     }
@@ -5235,19 +5238,14 @@ ${ddxList}`;
       return;
     }
     if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
-    // Convergence guard — when the chain has converged AND the caller
-    // didn't explicitly force a rerun, suppress further reasoning. The
-    // triggerKey/lastReasoningTriggerRef check above proves the inputs
-    // are MATERIALLY different; we still suppress so converged cases
-    // don't keep re-firing on minor fluctuations during continuous
-    // voice. An explicit Re-run-from-here (forceRefresh=true) bypasses
-    // this. Convergence is broken (destabilized=true) when the top
-    // hypothesis changes inside chainAutopilotAfterReasoning, so the
-    // gate naturally re-opens on truly new findings.
-    if (!forceRefresh && monitorConvergedRef.current) {
-      markStageEnd('reason', 'converged', 'top hypothesis stable');
-      return;
-    }
+    // NOTE: convergence does NOT block reasoning here. The triggerKey
+    // dedup above already prevents re-firing when structural inputs
+    // are unchanged — that's the "no material change" gate. When
+    // inputs DO change, we MUST run reasoning so the chain can
+    // detect top-hypothesis destabilization (handled inside
+    // chainAutopilotAfterReasoning, which flips destabilized=true
+    // and reopens the downstream chain). Blocking here on convergence
+    // would deadlock re-engagement on truly new findings.
 
     lastReasoningTriggerRef.current = triggerKey;
     // Cache the input hash on the dedup ref so per-stage governor
@@ -14893,6 +14891,55 @@ ${ddxList}`;
                 .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
                 .map(s => s.slice(0, 80))
                 .slice(0, 12);
+              // === Round-8: enrich case context for case-aware research ===
+              // Mechanism string from intake extraction (e.g. "fall on
+              // outstretched hand", "overuse running").
+              const mechanismForCtx = (extractionResult?.mechanism || '').trim().slice(0, 200);
+              // Peak self-reported pain severity 0–10 across captured
+              // symptoms. Drives evidence weighting toward acute-care vs.
+              // self-management literature.
+              const severityForCtx = (() => {
+                const symptoms = extractionResult?.symptoms || [];
+                let max = -Infinity;
+                for (const s of symptoms) {
+                  if (typeof s?.severity === 'number' && Number.isFinite(s.severity)) {
+                    if (s.severity > max) max = s.severity;
+                  }
+                }
+                return Number.isFinite(max) ? Math.max(0, Math.min(10, max)) : null;
+              })();
+              // Irritability prefers the structured intake result; falls
+              // back to patient-factors panel value.
+              const irritabilityForCtx: 'low' | 'moderate' | 'high' | null = (() => {
+                const v = extractionResult?.irritability ?? effectivePatientFactors?.irritability;
+                return v === 'low' || v === 'moderate' || v === 'high' ? v : null;
+              })();
+              // Discrete comorbidity flags. Maps the structured
+              // patient-factors enums into the schema's controlled
+              // vocabulary so the engine can up-weight diabetes-aware
+              // tendinopathy guidelines, smoking/healing literature,
+              // pregnancy-safe rehab, etc.
+              const comorbiditiesForCtx = (() => {
+                const out: Array<'diabetes' | 'smoking' | 'pregnancy' | 'osteoporosis' | 'cardiovascular' | 'autoimmune' | 'obesity' | 'previousEpisodes'> = [];
+                const dm = effectivePatientFactors?.diabetes;
+                if (dm === 'type1' || dm === 'type2' || dm === 'prediabetic') out.push('diabetes');
+                if (effectivePatientFactors?.smoking === 'current') out.push('smoking');
+                // Premenopausal + relevant medication signal is not a
+                // pregnancy proxy; we only flag pregnancy when the
+                // intake notes mention it explicitly.
+                const notes = (effectivePatientFactors?.comorbiditiesNotes || '').toLowerCase();
+                if (/\bpregnan(t|cy)\b/.test(notes)) out.push('pregnancy');
+                if (/\bosteoporo/.test(notes)) out.push('osteoporosis');
+                if (/\b(cad|cardiac|cardiovascular|chf|hypertension|htn)\b/.test(notes)) out.push('cardiovascular');
+                if (/\b(autoimmune|ra\b|rheumatoid|lupus|psoriatic)\b/.test(notes)) out.push('autoimmune');
+                if (effectivePatientFactors?.bmi === 'obese') {
+                  if (!out.includes('obesity')) out.push('obesity');
+                }
+                if ((effectivePatientFactors?.previousEpisodes ?? 0) >= 2 && !out.includes('previousEpisodes')) {
+                  out.push('previousEpisodes');
+                }
+                return out.slice(0, 8);
+              })();
               const caseContext: CaseResearchContext = {
                 ...(topHypoForCtx?.condition && typeof topHypoForCtx.confidence === 'number'
                   ? { topHypothesis: { label: topHypoForCtx.condition.slice(0, 200), confidence: Math.max(0, Math.min(1, topHypoForCtx.confidence)) } }
@@ -14903,8 +14950,12 @@ ${ddxList}`;
                 ...(effectivePatientFactors?.chronicityStage
                   ? { chronicity: String(effectivePatientFactors.chronicityStage).slice(0, 40) }
                   : {}),
+                ...(irritabilityForCtx ? { irritability: irritabilityForCtx } : {}),
+                ...(mechanismForCtx ? { mechanism: mechanismForCtx } : {}),
+                ...(severityForCtx != null ? { severity: severityForCtx } : {}),
                 ...(painRegionsForCtx.length > 0 ? { painRegions: painRegionsForCtx } : {}),
                 ...(patientFactorsForCtx.length > 0 ? { patientFactors: patientFactorsForCtx } : {}),
+                ...(comorbiditiesForCtx.length > 0 ? { comorbidities: comorbiditiesForCtx } : {}),
               };
               const ctxSig = JSON.stringify(caseContext);
               const contentHash = fnv32(`${desc}\u241F${summary}\u241F${patientContextSig}\u241F${ctxSig}`);

@@ -1058,6 +1058,8 @@ export default function PhysioGPT() {
   const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
 
   const [clinicalReasoningData, setClinicalReasoningData] = useState<ClinicalReasoningData | null>(null);
+  const clinicalReasoningDataRef = useRef<ClinicalReasoningData | null>(null);
+  clinicalReasoningDataRef.current = clinicalReasoningData;
   const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
   const [clinicalReasoningProcessing, setClinicalReasoningProcessing] = useState(false);
   const [clinicalReasoningPaused, setClinicalReasoningPaused] = useState(false);
@@ -1109,6 +1111,11 @@ export default function PhysioGPT() {
   const autoEvidenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const evidenceAbortRef = useRef<AbortController | null>(null);
   const evidenceQueryIdRef = useRef(0);
+  // Reasoning fetch is conversation-scoped — bumping the request id on
+  // each call lets the response handler discard stale results landing
+  // after a case switch / new trigger.
+  const reasoningRequestIdRef = useRef(0);
+  const reasoningAbortRef = useRef<AbortController | null>(null);
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
@@ -1210,7 +1217,7 @@ export default function PhysioGPT() {
    *  invalidates downstream input-hash cache so the dedup governor
    *  doesn't short-circuit it. */
   const handleAutopilotRerunFromStage = useCallback((id: AutopilotStageId) => {
-    const order: AutopilotStageId[] = ['parse', 'reason', 'evidence', 'goal', 'research', 'plan'];
+    const order: AutopilotStageId[] = ['parse', 'reason', 'evidence', 'research', 'plan'];
     const fromIdx = order.indexOf(id);
     if (fromIdx >= 0) {
       for (let i = fromIdx; i < order.length; i++) {
@@ -1225,9 +1232,37 @@ export default function PhysioGPT() {
       clinicalTextInputRef.current?.triggerIncrementalParse();
       return;
     }
-    if (id === 'reason' || id === 'evidence' || id === 'goal' || id === 'research') {
+    // Reason: full reasoning rerun (cascades downstream itself).
+    if (id === 'reason') {
       lastReasoningTriggerRef.current = '';
       triggerClinicalReasoningAnalysisRef.current(true);
+      return;
+    }
+    // Evidence: fire evidence directly, then re-run downstream (research + plan)
+    // via chainAutopilotAfterReasoning using the already-cached reasoning data.
+    if (id === 'evidence') {
+      try { handleEvidenceQueryRef.current({ autopilot: true }); } catch { /* fail-soft */ }
+      const cached = clinicalReasoningDataRef.current;
+      if (cached) {
+        try { chainAutopilotAfterReasoningRef.current(cached); } catch { /* fail-soft */ }
+      }
+      return;
+    }
+    // Research: fire research directly via the panel handle; chain
+    // closes the chip from the in-flight poll already wired below.
+    if (id === 'research') {
+      const cached = clinicalReasoningDataRef.current;
+      if (cached) {
+        try { chainAutopilotAfterReasoningRef.current(cached); } catch { /* fail-soft */ }
+      } else {
+        const r = caseResearchPanelRef.current;
+        if (r && !r.isRunning()) {
+          markStageStartRef.current('research');
+          try { r.trigger(true); } catch (e) {
+            markStageEndRef.current('research', 'error', e instanceof Error ? e.message : 'trigger failed');
+          }
+        }
+      }
       return;
     }
     if (id === 'plan') {
@@ -1243,7 +1278,6 @@ export default function PhysioGPT() {
     { id: 'parse',    label: 'Parse',     state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
     { id: 'reason',   label: 'Reason',    state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
     { id: 'evidence', label: 'Evidence',  state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
-    { id: 'goal',     label: 'Goal',      state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
     { id: 'research', label: 'Research',  state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
     { id: 'plan',     label: 'Plan',      state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
   ]), []);
@@ -1781,6 +1815,29 @@ export default function PhysioGPT() {
     const releaseTimer = setTimeout(() => { isHydratingRef.current = false; }, 200);
     return () => clearTimeout(releaseTimer);
   }, [selectedConversationId, conversationData]);
+
+  // Abort any in-flight reasoning / evidence / auto-cascade timers when the
+  // active conversation changes, so a result that lands after a case-switch
+  // can never paint into the new case.
+  useEffect(() => {
+    return () => {
+      if (reasoningAbortRef.current) {
+        try { reasoningAbortRef.current.abort(); } catch { /* fail-soft */ }
+        reasoningAbortRef.current = null;
+      }
+      if (evidenceAbortRef.current) {
+        try { evidenceAbortRef.current.abort(); } catch { /* fail-soft */ }
+        evidenceAbortRef.current = null;
+      }
+      if (autoEvidenceTimerRef.current) {
+        clearTimeout(autoEvidenceTimerRef.current);
+        autoEvidenceTimerRef.current = null;
+      }
+      // Bump request ids so any pending .then() guards short-circuit.
+      reasoningRequestIdRef.current += 1;
+      evidenceQueryIdRef.current += 1;
+    };
+  }, [selectedConversationId]);
 
   // Debounced auto-save of the snapshot to the conversation row.
   useEffect(() => {
@@ -5250,6 +5307,11 @@ ${ddxList}`;
     // checks elsewhere (research/plan rerun, evidence) can compare
     // against it for cross-stage dedup.
     stageInputHashRef.current['reason'] = triggerKey;
+    // Capture the conversation ID at request start so the response
+    // handler + auto-cascade can bail if the user switched cases.
+    const reasoningOriginCid = selectedConversationIdRef.current;
+    reasoningRequestIdRef.current += 1;
+    const reasoningRequestId = reasoningRequestIdRef.current;
     setClinicalReasoningProcessing(true);
     markStageStart('reason');
 
@@ -5311,23 +5373,40 @@ ${ddxList}`;
       structuredInput.duration = durationMatches[2];
     }
 
+    // Cancel any in-flight reasoning request before starting a new one.
+    if (reasoningAbortRef.current) {
+      try { reasoningAbortRef.current.abort(); } catch { /* fail-soft */ }
+      reasoningAbortRef.current = null;
+    }
+    const reasoningAbort = new AbortController();
+    reasoningAbortRef.current = reasoningAbort;
+
     setStructuredReasoningLoading(true);
     fetch('/api/clinical-reasoning/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      signal: reasoningAbort.signal,
       body: JSON.stringify(structuredInput),
     })
       .then(r => r.ok ? r.json() : null)
-      .then(result => { if (result) setStructuredReasoningData(result); })
-      .catch(err => console.error('Structured reasoning error:', err))
-      .finally(() => setStructuredReasoningLoading(false));
+      .then(result => {
+        if (!result) return;
+        if (reasoningRequestIdRef.current !== reasoningRequestId) return;
+        if (selectedConversationIdRef.current !== reasoningOriginCid) return;
+        setStructuredReasoningData(result);
+      })
+      .catch(err => { if (err?.name !== 'AbortError') console.error('Structured reasoning error:', err); })
+      .finally(() => {
+        if (reasoningRequestIdRef.current === reasoningRequestId) setStructuredReasoningLoading(false);
+      });
 
     try {
       const response = await fetch('/api/physiogpt/clinical-reasoning-analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        signal: reasoningAbort.signal,
         body: JSON.stringify({
           painMarkers: markerData,
           skeletonConfig: modelConfig,
@@ -5369,6 +5448,12 @@ ${ddxList}`;
       if (!response.ok) throw new Error('Analysis failed');
       const data = await response.json();
 
+      // Stale-write guard: a newer trigger superseded this request, or
+      // the user switched cases — discard the result so we don't paint
+      // stale reasoning into the active conversation.
+      if (reasoningRequestIdRef.current !== reasoningRequestId) return;
+      if (selectedConversationIdRef.current !== reasoningOriginCid) return;
+
       const reasoningSnapshot: ClinicalReasoningData = {
         hypotheses: data.hypotheses || [],
         findings: data.findings || [],
@@ -5389,20 +5474,37 @@ ${ddxList}`;
       }
 
       // Downstream auto-cascade: only fire evidence + chain when
-      // autopilot is enabled, not paused, and the run was voice-driven.
-      // With autopilot off the user gets parse + reasoning only.
-      if (autopilotEnabledRef.current && !autopilotPausedRef.current && voiceTriggeredRef.current) {
+      // autopilot is enabled, not paused, the run was voice-driven, and
+      // the originating conversation is snapshot-eligible.
+      if (
+        autopilotEnabledRef.current &&
+        !autopilotPausedRef.current &&
+        voiceTriggeredRef.current &&
+        reasoningOriginCid != null &&
+        snapshotEligibleRef.current.has(reasoningOriginCid)
+      ) {
         autoEvidenceTimerRef.current = setTimeout(() => {
           if (!autopilotEnabledRef.current || autopilotPausedRef.current || !voiceTriggeredRef.current) return;
+          if (selectedConversationIdRef.current !== reasoningOriginCid) return;
+          if (!snapshotEligibleRef.current.has(reasoningOriginCid)) return;
           handleEvidenceQueryRef.current({ autopilot: true });
         }, 500);
         try { chainAutopilotAfterReasoningRef.current(reasoningSnapshot); } catch { /* fail-soft */ }
       }
     } catch (error) {
+      if ((error as { name?: string })?.name === 'AbortError') return;
+      // Suppress error chip for stale responses.
+      if (reasoningRequestIdRef.current !== reasoningRequestId) return;
+      if (selectedConversationIdRef.current !== reasoningOriginCid) return;
       console.error('Clinical reasoning analysis error:', error);
       markStageEnd('reason', 'error', error instanceof Error ? error.message : 'request failed');
     } finally {
-      setClinicalReasoningProcessing(false);
+      if (reasoningRequestIdRef.current === reasoningRequestId) {
+        setClinicalReasoningProcessing(false);
+      }
+      if (reasoningAbortRef.current === reasoningAbort) {
+        reasoningAbortRef.current = null;
+      }
     }
   }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations, markStageStart, markStageEnd, writeAutopilotStatusForConv]);
 
@@ -5734,13 +5836,6 @@ ${ddxList}`;
   const handleGoalProfileChange = useCallback((profile: import("@/lib/goalStateEngine").RecoveryGoalProfile | null, gap: import("@/lib/goalStateEngine").GoalGapAnalysis | null) => {
     setActiveGoalProfile(profile);
     setActiveGoalGap(gap);
-    // Auto-pilot goal stage settle — close the chip when the panel
-    // pushes a fresh profile so the chain proceeds to research.
-    const cur = monitorStagesRef.current.find(s => s.id === 'goal');
-    if (cur && cur.state === 'running') {
-      if (profile) markStageEndRef.current('goal', 'done');
-      else markStageEndRef.current('goal', 'skipped', 'no profile produced');
-    }
   }, []);
 
   const handleSessionPrescriptionSelect = useCallback((ctx: import("@/lib/prescriptionAdapterEngine").PrescriptionContext | null, sessionNumber: number | null) => {
@@ -5873,30 +5968,10 @@ ${ddxList}`;
     const downstreamInputHash = `${stageInputHashRef.current['reason'] || ''}|${topLabel}|${topConfidence.toFixed(2)}`;
     const originatingCid = cid;
 
-    // Goal stage — chip is closed when GoalDrivenRecoveryPanel pushes
-    // a profile via handleGoalProfileChange; fail-soft cap below.
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
       if (selectedConversationIdRef.current !== originatingCid) return;
-      if (monitorConvergedRef.current) return;
-      if (stageInputHashRef.current['goal'] === downstreamInputHash) {
-        markStageEnd('goal', 'skipped', 'inputs unchanged');
-        return;
-      }
-      stageInputHashRef.current['goal'] = downstreamInputHash;
-      markStageStart('goal');
-      window.setTimeout(() => {
-        if (selectedConversationIdRef.current !== originatingCid) return;
-        const cur = monitorStagesRef.current.find(s => s.id === 'goal');
-        if (cur && cur.state === 'running') {
-          markStageEnd('goal', 'skipped', 'no profile produced');
-        }
-      }, 8000);
-    }, 800);
-
-    window.setTimeout(() => {
-      if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
-      if (selectedConversationIdRef.current !== originatingCid) return;
+      if (!snapshotEligibleRef.current.has(originatingCid)) return;
       if (monitorConvergedRef.current) return;
       const r = caseResearchPanelRef.current;
       if (!r) return;
@@ -5932,6 +6007,7 @@ ${ddxList}`;
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
       if (selectedConversationIdRef.current !== originatingCid) return;
+      if (!snapshotEligibleRef.current.has(originatingCid)) return;
       if (monitorConvergedRef.current) return;
       if (!hasClinicalTextDataRef.current) return;
       if (autoBuildStateRef.current !== 'idle') return;

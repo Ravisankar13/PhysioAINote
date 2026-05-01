@@ -1226,20 +1226,24 @@ export const CaseResearchPanel = forwardRef<CaseResearchPanelHandle, CaseResearc
               {/* Why we searched this way — single-line case-context summary so the
                   clinician can see at a glance which seed (top hypothesis + region/
                   laterality + chronicity + key patient factors) drove this search. */}
-              {caseContext && (caseContext.topHypothesis || caseContext.region || caseContext.chronicity) && (
+              {caseContext && (caseContext.topHypothesis?.label || caseContext.region || caseContext.chronicity) && (
                 <div
                   className="rounded-md border border-violet-700/40 bg-violet-950/30 px-2 py-1.5 text-[10.5px] leading-snug text-violet-100"
                   data-testid="case-research-why-summary"
                 >
                   <span className="font-semibold text-violet-200">Why we searched this way: </span>
                   {[
-                    caseContext.topHypothesis && `seed "${caseContext.topHypothesis}"`,
-                    caseContext.region && `region ${caseContext.region}${caseContext.laterality ? ` (${caseContext.laterality})` : ''}`,
+                    caseContext.topHypothesis?.label
+                      && `seed "${caseContext.topHypothesis.label}"${
+                          typeof caseContext.topHypothesis.confidence === 'number'
+                            ? ` (conf ${caseContext.topHypothesis.confidence.toFixed(2)})`
+                            : ''
+                        }`,
+                    caseContext.region && `region ${caseContext.region}${caseContext.laterality && caseContext.laterality !== 'unspecified' ? ` (${caseContext.laterality})` : ''}`,
                     caseContext.chronicity && `chronicity ${caseContext.chronicity}`,
-                    caseContext.patientFactors && [
-                      caseContext.patientFactors.age != null ? `age ${caseContext.patientFactors.age}` : null,
-                      caseContext.patientFactors.activityLevel ? caseContext.patientFactors.activityLevel : null,
-                    ].filter(Boolean).join(', '),
+                    caseContext.irritability && `irritability ${caseContext.irritability}`,
+                    caseContext.patientFactors && caseContext.patientFactors.length > 0
+                      && `factors ${caseContext.patientFactors.slice(0, 4).join(', ')}`,
                   ].filter(Boolean).join(' · ')}
                 </div>
               )}

@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 export type VoiceTriggerReason = "silence_pause" | "interval_pulse";
 
 // ─── Task #313 — AI Activity Monitor types ────────────────────────────
-export type AutopilotStageId = "parse" | "reason" | "evidence" | "research" | "plan";
+export type AutopilotStageId = "parse" | "reason" | "evidence" | "goal" | "research" | "plan";
 export type AutopilotStageState =
   | "idle"
   | "running"

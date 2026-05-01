@@ -1220,7 +1220,7 @@ export default function PhysioGPT() {
   const handleAutopilotRerunFromStage = useCallback((id: AutopilotStageId) => {
     // Invalidate cached input hashes for this stage and all downstream
     // ones so the dedup governor doesn't short-circuit the re-run.
-    const order: AutopilotStageId[] = ['parse', 'reason', 'evidence', 'research', 'plan'];
+    const order: AutopilotStageId[] = ['parse', 'reason', 'evidence', 'goal', 'research', 'plan'];
     const fromIdx = order.indexOf(id);
     if (fromIdx >= 0) {
       for (let i = fromIdx; i < order.length; i++) {
@@ -1242,6 +1242,14 @@ export default function PhysioGPT() {
       return;
     }
     if (id === 'evidence') {
+      handleEvidenceQueryRef.current();
+      return;
+    }
+    if (id === 'goal') {
+      // Goal profile is derived from skeleton/reasoning state inside
+      // GoalDrivenRecoveryPanel. A "rerun" from this stage simply
+      // restarts the cascade from evidence so the panel re-pushes a
+      // fresh profile via handleGoalProfileChange.
       handleEvidenceQueryRef.current();
       return;
     }
@@ -1269,6 +1277,7 @@ export default function PhysioGPT() {
     { id: 'parse',    label: 'Parse',     state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
     { id: 'reason',   label: 'Reason',    state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
     { id: 'evidence', label: 'Evidence',  state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+    { id: 'goal',     label: 'Goal',      state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
     { id: 'research', label: 'Research',  state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
     { id: 'plan',     label: 'Plan',      state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
   ]), []);
@@ -1291,6 +1300,10 @@ export default function PhysioGPT() {
   const voiceTriggeredRef = useRef<boolean>(false);
   const monitorStabilityRef = useRef(monitorStability);
   monitorStabilityRef.current = monitorStability;
+  // Mirrors `monitorStages` so the chain timers can read the
+  // current chip state without re-subscribing.
+  const monitorStagesRef = useRef(monitorStages);
+  monitorStagesRef.current = monitorStages;
   // Convenience flag mirrored from monitorStability for use inside
   // triggers/effects without re-reading the full state. When true,
   // governor-driven re-runs are suppressed for ALL stages until the
@@ -5704,6 +5717,13 @@ ${ddxList}`;
   const handleGoalProfileChange = useCallback((profile: import("@/lib/goalStateEngine").RecoveryGoalProfile | null, gap: import("@/lib/goalStateEngine").GoalGapAnalysis | null) => {
     setActiveGoalProfile(profile);
     setActiveGoalGap(gap);
+    // Auto-pilot goal stage settle — close the chip when the panel
+    // pushes a fresh profile so the chain proceeds to research.
+    const cur = monitorStagesRef.current.find(s => s.id === 'goal');
+    if (cur && cur.state === 'running') {
+      if (profile) markStageEndRef.current('goal', 'done');
+      else markStageEndRef.current('goal', 'skipped', 'no profile produced');
+    }
   }, []);
 
   const handleSessionPrescriptionSelect = useCallback((ctx: import("@/lib/prescriptionAdapterEngine").PrescriptionContext | null, sessionNumber: number | null) => {
@@ -5861,7 +5881,35 @@ ${ddxList}`;
     // bail to prevent cross-case contamination.
     const originatingCid = cid;
 
-    // Stage: case-research (delayed so evidence settles first).
+    // Stage: goal-profile derivation. The actual profile is computed
+    // by GoalDrivenRecoveryPanel from current skeleton + reasoning
+    // state and pushed up via handleGoalProfileChange — that callback
+    // closes this chip with markStageEnd('goal','done'). We mark the
+    // start here so the chain is observably ordered:
+    // parse → reason → evidence → goal → research → plan.
+    window.setTimeout(() => {
+      if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
+      if (selectedConversationIdRef.current !== originatingCid) return;
+      if (monitorConvergedRef.current) return;
+      if (stageInputHashRef.current['goal'] === downstreamInputHash) {
+        markStageEnd('goal', 'skipped', 'inputs unchanged');
+        return;
+      }
+      stageInputHashRef.current['goal'] = downstreamInputHash;
+      markStageStart('goal');
+      // Fail-soft cap — if the panel never pushes a profile within
+      // 8 s (e.g. no skeleton data), close the chip as skipped so
+      // research still proceeds.
+      window.setTimeout(() => {
+        if (selectedConversationIdRef.current !== originatingCid) return;
+        const cur = monitorStagesRef.current.find(s => s.id === 'goal');
+        if (cur && cur.state === 'running') {
+          markStageEnd('goal', 'skipped', 'no profile produced');
+        }
+      }, 8000);
+    }, 800);
+
+    // Stage: case-research (delayed so evidence + goal settle first).
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
       if (selectedConversationIdRef.current !== originatingCid) return; // case switched
@@ -5899,7 +5947,7 @@ ${ddxList}`;
       } catch (e) {
         markStageEnd('research', 'error', e instanceof Error ? e.message : 'trigger failed');
       }
-    }, 1500);
+    }, 2000);
 
     // Stage: master plan auto-build. Only fires when there's clinical
     // data on the skeleton (so engines have something to build from)

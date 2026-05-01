@@ -1,10 +1,47 @@
 import { useState, useEffect } from "react";
-import { Mic, ChevronDown, ChevronUp, Undo2, Clock, Activity } from "lucide-react";
+import { Mic, ChevronDown, ChevronUp, Undo2, Clock, Activity, Pause, Play, RotateCw, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 
 export type VoiceTriggerReason = "silence_pause" | "interval_pulse";
+
+// ─── Task #313 — AI Activity Monitor types ────────────────────────────
+export type AutopilotStageId = "parse" | "reason" | "evidence" | "research" | "plan";
+export type AutopilotStageState =
+  | "idle"
+  | "running"
+  | "done"
+  | "skipped"     // dedup — inputs unchanged
+  | "converged"  // top hypothesis stable, chain suppressed
+  | "error"
+  | "blocked";    // paused / not eligible
+
+export interface AutopilotStageStatus {
+  id: AutopilotStageId;
+  label: string;
+  state: AutopilotStageState;
+  /** Total times this stage has fired this session. */
+  callCount: number;
+  /** Recording-time stamp (sec since record start) of the last fire. */
+  lastFiredSec: number | null;
+  /** Last call duration in ms. */
+  lastDurationMs: number | null;
+  /** Why the last attempt was skipped (dedup reason). */
+  lastSkippedReason?: string | null;
+}
+
+export interface AutopilotStability {
+  /** The current top working hypothesis label, or null if none yet. */
+  topLabel: string | null;
+  /** Number of consecutive runs the top hypothesis has been stable for. */
+  stableForRuns: number;
+  /** True when the chain has converged and further reasoning is suppressed. */
+  converged: boolean;
+  /** True when stability was just broken by a new finding. */
+  destabilized: boolean;
+}
 
 export interface VoiceActivityEntry {
   id: string;
@@ -37,6 +74,23 @@ interface VoiceActivityDockProps {
   /** True if any prior session left entries that should be visible. */
   visible: boolean;
   onUndo: (entryId: string) => void;
+  // ── Task #313 AI Activity Monitor (all optional — when omitted, dock
+  //    renders exactly as before) ────────────────────────────────────
+  /** Per-stage status for the five orchestrator stages. */
+  monitorStages?: AutopilotStageStatus[];
+  /** Stability ribbon data (top hypothesis convergence). */
+  monitorStability?: AutopilotStability;
+  /** Whether the AI orchestrator auto-pilot is enabled. */
+  autopilotEnabled?: boolean;
+  /** True when the dock's Pause AI is on (queued, not in-flight). */
+  paused?: boolean;
+  /** Toggle handlers — when omitted, the controls render disabled. */
+  onAutopilotToggle?: (next: boolean) => void;
+  onPauseToggle?: (next: boolean) => void;
+  /** Force-rerun a stage (and downstream) ignoring dedup/convergence. */
+  onRerunFromStage?: (stage: AutopilotStageId) => void;
+  /** Whether the case is eligible for auto-pilot (snapshot-eligible). */
+  autopilotEligible?: boolean;
 }
 
 function fmtClock(sec: number): string {
@@ -83,7 +137,137 @@ function ChunkText({ text }: { text: string }) {
   );
 }
 
-export default function VoiceActivityDock({ entries, isRecording, visible, onUndo }: VoiceActivityDockProps) {
+function stageStateClass(s: AutopilotStageState): string {
+  switch (s) {
+    case "running":   return "bg-blue-900/40 text-blue-200 border-blue-700/50 animate-pulse";
+    case "done":       return "bg-emerald-900/40 text-emerald-200 border-emerald-700/50";
+    case "skipped":   return "bg-gray-800/60 text-gray-400 border-gray-700/50";
+    case "converged": return "bg-emerald-900/30 text-emerald-300 border-emerald-700/40";
+    case "error":     return "bg-rose-900/40 text-rose-200 border-rose-700/50";
+    case "blocked":   return "bg-amber-900/30 text-amber-300/80 border-amber-700/40";
+    default:           return "bg-gray-900/50 text-gray-400 border-gray-700/40";
+  }
+}
+
+function stageStateLabel(s: AutopilotStageState): string {
+  switch (s) {
+    case "running":    return "running";
+    case "done":       return "done";
+    case "skipped":    return "deduped";
+    case "converged":  return "converged";
+    case "error":      return "error";
+    case "blocked":    return "paused";
+    default:           return "idle";
+  }
+}
+
+function fmtMs(ms: number | null): string {
+  if (ms == null) return "—";
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function MonitorBlock(props: {
+  stages: AutopilotStageStatus[];
+  stability?: AutopilotStability;
+  autopilotEnabled: boolean;
+  paused: boolean;
+  eligible: boolean;
+  onPauseToggle?: (next: boolean) => void;
+  onRerunFromStage?: (stage: AutopilotStageId) => void;
+}) {
+  const { stages, stability, autopilotEnabled, paused, eligible, onPauseToggle, onRerunFromStage } = props;
+  const ribbonTone =
+    !eligible ? "bg-gray-900/40 border-gray-700/40 text-gray-400"
+    : stability?.destabilized ? "bg-amber-900/30 border-amber-700/50 text-amber-200"
+    : stability?.converged ? "bg-emerald-900/25 border-emerald-700/50 text-emerald-200"
+    : "bg-blue-900/20 border-blue-700/40 text-blue-200";
+  const ribbonText = !eligible
+    ? "Auto-pilot unavailable for this case (legacy chat conversation)"
+    : !autopilotEnabled
+    ? "Auto-pilot off — voice still parses, but downstream engines won't auto-fire"
+    : stability?.topLabel
+      ? `Top dx: ${stability.topLabel}${stability.stableForRuns > 0 ? ` · stable for ${stability.stableForRuns} run${stability.stableForRuns > 1 ? 's' : ''}` : ''}${stability.converged ? ' · converged' : stability.destabilized ? ' · re-engaged (new finding)' : ''}`
+      : "Listening for working hypothesis…";
+
+  return (
+    <div className="border-t border-gray-800/60 bg-gray-950/60 px-2 py-1.5" data-testid="voice-activity-monitor">
+      {/* Stability ribbon */}
+      <div className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] ${ribbonTone}`} data-testid="monitor-stability-ribbon">
+        {stability?.converged ? <ShieldCheck className="h-3 w-3" /> : stability?.destabilized ? <AlertTriangle className="h-3 w-3" /> : <Activity className="h-3 w-3" />}
+        <span className="truncate font-medium">{ribbonText}</span>
+      </div>
+
+      {/* Stage chips */}
+      <div className="mt-1.5 grid grid-cols-5 gap-1">
+        {stages.map(stage => {
+          const cls = stageStateClass(stage.state);
+          const tooltipParts = [
+            `${stage.callCount} call${stage.callCount === 1 ? '' : 's'} this session`,
+            stage.lastFiredSec != null ? `last fired ${fmtClock(stage.lastFiredSec)}` : 'not yet fired',
+            stage.lastDurationMs != null ? `last ${fmtMs(stage.lastDurationMs)}` : null,
+            stage.lastSkippedReason ? `skipped: ${stage.lastSkippedReason}` : null,
+          ].filter(Boolean) as string[];
+          return (
+            <div
+              key={stage.id}
+              className={`relative rounded border px-1.5 py-1 ${cls}`}
+              title={tooltipParts.join(' · ')}
+              data-testid={`monitor-stage-${stage.id}`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[9px] font-semibold uppercase tracking-tight truncate">{stage.label}</span>
+                {onRerunFromStage && (
+                  <button
+                    className="opacity-60 hover:opacity-100 disabled:opacity-30"
+                    onClick={(e) => { e.stopPropagation(); onRerunFromStage(stage.id); }}
+                    disabled={!eligible || stage.state === 'running'}
+                    title="Re-run from here (force this stage and everything downstream)"
+                    data-testid={`monitor-stage-rerun-${stage.id}`}
+                  >
+                    <RotateCw className="h-2.5 w-2.5" />
+                  </button>
+                )}
+              </div>
+              <div className="text-[8px] opacity-90 mt-0.5 truncate">
+                {stageStateLabel(stage.state)}
+                {stage.callCount > 0 ? ` · ${stage.callCount}×` : ''}
+              </div>
+              {stage.lastFiredSec != null && (
+                <div className="text-[8px] opacity-60 truncate">@{fmtClock(stage.lastFiredSec)}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Pause AI toggle row */}
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <button
+          className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] border transition-colors ${paused
+            ? "bg-amber-900/40 border-amber-700/50 text-amber-200 hover:bg-amber-900/60"
+            : "bg-gray-800/60 border-gray-700/50 text-gray-300 hover:bg-gray-800"}`}
+          onClick={() => onPauseToggle?.(!paused)}
+          disabled={!onPauseToggle || !eligible || !autopilotEnabled}
+          data-testid="monitor-pause-toggle"
+        >
+          {paused ? <Play className="h-2.5 w-2.5" /> : <Pause className="h-2.5 w-2.5" />}
+          {paused ? "Resume AI" : "Pause AI"}
+        </button>
+        <span className="text-[9px] text-gray-500 truncate">
+          {paused ? "queued stages held — in-flight will finish" : autopilotEnabled ? "orchestrator armed" : "manual mode"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export default function VoiceActivityDock({
+  entries, isRecording, visible, onUndo,
+  monitorStages, monitorStability,
+  autopilotEnabled = false, paused = false, autopilotEligible = true,
+  onAutopilotToggle, onPauseToggle, onRerunFromStage,
+}: VoiceActivityDockProps) {
   const [expanded, setExpanded] = useState(false);
   /** Once the user has manually collapsed at least once, we stop
    *  auto-popping the dock open on new entries. Reset by the page
@@ -159,14 +343,48 @@ export default function VoiceActivityDock({ entries, isRecording, visible, onUnd
               </Badge>
             )}
           </div>
-          {expanded ? (
-            <ChevronDown className="h-3 w-3 text-gray-400" />
-          ) : (
-            <ChevronUp className="h-3 w-3 text-gray-400" />
-          )}
+          <div className="flex items-center gap-2">
+            {/* Auto-pilot toggle in the dock header — only shown when monitor data is present. */}
+            {onAutopilotToggle && (
+              <span
+                className="flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+                title="When on, voice recording auto-runs the entire case workup (parse → reasoning → evidence → research → master plan)."
+              >
+                <span className={`text-[9px] uppercase tracking-tight ${autopilotEligible ? 'text-gray-400' : 'text-gray-600'}`}>auto-pilot</span>
+                <Switch
+                  checked={!!autopilotEnabled}
+                  onCheckedChange={(c) => onAutopilotToggle(!!c)}
+                  disabled={!autopilotEligible}
+                  className="scale-75 origin-right"
+                  data-testid="switch-voice-autopilot"
+                />
+              </span>
+            )}
+            {expanded ? (
+              <ChevronDown className="h-3 w-3 text-gray-400" />
+            ) : (
+              <ChevronUp className="h-3 w-3 text-gray-400" />
+            )}
+          </div>
         </button>
 
         {expanded && (
+          <div>
+            {/* AI Activity Monitor (Task #313) — only renders when caller
+                 supplies stages. Auto-pilot off / paused / unavailable
+                 are conveyed inside via the ribbon and toggles. */}
+            {monitorStages && monitorStages.length > 0 && (
+              <MonitorBlock
+                stages={monitorStages}
+                stability={monitorStability}
+                autopilotEnabled={!!autopilotEnabled}
+                paused={!!paused}
+                eligible={autopilotEligible}
+                onPauseToggle={onPauseToggle}
+                onRerunFromStage={onRerunFromStage}
+              />
+            )}
           <div className="border-t border-gray-800/60">
             {entries.length === 0 ? (
               <div className="px-3 py-4 text-[11px] text-gray-500 text-center">
@@ -247,6 +465,7 @@ export default function VoiceActivityDock({ entries, isRecording, visible, onUnd
                 </div>
               </ScrollArea>
             )}
+          </div>
           </div>
         )}
       </div>

@@ -140,7 +140,15 @@ import { forceTimeBuffer, type ForceTimeMetrics, subscribeForceBuffer, augmentFo
 import type { PatientState } from "@/lib/forceCitations";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 import { type ClinicalParseResult, type CompromisedTissue, type ClinicalTextInputHandle, type FollowUpQuestion } from "@/components/skeleton/ClinicalTextInput";
-import { type VoiceActivityEntry, type VoiceTriggerReason } from "@/components/skeleton/VoiceActivityDock";
+import {
+  type AutopilotStability,
+  type AutopilotStageId,
+  type AutopilotStageStatus,
+  type VoiceActivityEntry,
+  type VoiceTriggerReason,
+} from "@/components/skeleton/VoiceActivityDock";
+import type { CaseResearchPanelHandle } from "@/components/skeleton/CaseResearchPanel";
+import type { CaseResearchContext } from "@shared/schema";
 import {
   PatientContextPanel,
   EMPTY_PATIENT_CONTEXT_STATE,
@@ -742,6 +750,8 @@ export default function PhysioGPT() {
   const [electroPlan, setElectroPlan] = useState<import('@/components/skeleton/ElectrophysicalEngineTab').ElectrophysicalPlan | null>(null);
   const [electroPrefill, setElectroPrefill] = useState<{ condition: string; stage: 'acute' | 'subacute' | 'chronic'; nonce: number } | null>(null);
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
+  const hasClinicalTextDataRef = useRef(hasClinicalTextData);
+  hasClinicalTextDataRef.current = hasClinicalTextData;
   // Master Plan auto-organize: nonce bumped only when the "Build full plan"
   // settle effect needs the OrchestratePlanProvider to fire orchestration on
   // its own (no click). Manual "Organize with AI" clicks call the provider's
@@ -767,6 +777,8 @@ export default function PhysioGPT() {
   // Re-clicking the button is a no-op while state !== 'idle'.
   type AutoBuildState = 'idle' | 'generating' | 'organizing';
   const [autoBuildState, setAutoBuildState] = useState<AutoBuildState>('idle');
+  const autoBuildStateRef = useRef<AutoBuildState>('idle');
+  autoBuildStateRef.current = autoBuildState;
   // One-shot trigger flags driving each engine's `pendingGenerate` prop.
   // Cleared by the engine's `onGenerateStarted` callback as soon as
   // generation begins — they say nothing about completion.
@@ -1080,6 +1092,18 @@ export default function PhysioGPT() {
   const [slingActivationOverrides, setSlingActivationOverrides] = useState<Partial<Record<SlingId, number>>>({});
   const triggerClinicalReasoningAnalysisRef = useRef<(forceRefresh?: boolean) => void>(() => {});
   const handleEvidenceQueryRef = useRef<() => void>(() => {});
+  /** Forward-declared autopilot chain — implementation is bound near
+   *  `handleAutoBuildClick` (which depends on later state). The
+   *  reasoning trigger calls into this via the ref to avoid hoisting. */
+  const chainAutopilotAfterReasoningRef = useRef<(data: ClinicalReasoningData) => void>(() => {});
+  /** Forward-declared so the rerun-from-stage handler can fire master-
+   *  plan auto-build without depending on its render-order position. */
+  const handleAutoBuildClickRef = useRef<() => void>(() => {});
+  /** Forward-declared so the rerun-from-stage handler (declared early
+   *  for stable dock prop identity) can call into the stage tracker
+   *  helpers (declared a bit later in render order). */
+  const markStageStartRef = useRef<(id: AutopilotStageId) => void>(() => {});
+  const markStageEndRef = useRef<(id: AutopilotStageId, outcome: 'done' | 'error' | 'converged' | 'skipped', reason?: string) => void>(() => {});
   const autoEvidenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const evidenceAbortRef = useRef<AbortController | null>(null);
   const evidenceQueryIdRef = useRef(0);
@@ -1104,6 +1128,163 @@ export default function PhysioGPT() {
   const VOICE_INTERVAL_MS = 10000;
   const VOICE_INTERVAL_MIN_NEW_CHARS = 50;
 
+  /** Anchor used to compute "00:42"-style stamps for voice-driven
+   *  events. Set when recording starts, cleared when recording stops.
+   *  Hoisted so the autopilot governor below can reference it. */
+  const recordingStartedAtRef = useRef<number | null>(null);
+
+  // ─── Task #313 — AI Call Governor + Activity Monitor ────────────────
+  // The autopilot orchestrates the full case-workup chain (parse →
+  // reason → evidence → research → master-plan) off voice triggers.
+  // The governor prevents runaway AI calls via two cheap checks:
+  //   (1) input-hash dedup — skip a stage if its structural inputs
+  //       haven't changed since the previous run.
+  //   (2) convergence — once the top hypothesis is stable for ≥2
+  //       consecutive runs (and confidence ≥ 0.6) the chain is
+  //       suppressed until inputs shift again.
+  const AUTOPILOT_STORAGE_KEY = 'physiogpt:voice-autopilot:enabled';
+  const CONVERGENCE_RUNS = 2;
+  const CONVERGENCE_MIN_CONFIDENCE = 0.6;
+
+  const [autopilotEnabled, setAutopilotEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const raw = window.localStorage.getItem(AUTOPILOT_STORAGE_KEY);
+      if (raw === null) return true; // default ON
+      return JSON.parse(raw) === true;
+    } catch { return true; }
+  });
+  const [autopilotPaused, setAutopilotPaused] = useState<boolean>(false);
+  const autopilotEnabledRef = useRef(autopilotEnabled);
+  autopilotEnabledRef.current = autopilotEnabled;
+  const autopilotPausedRef = useRef(autopilotPaused);
+  autopilotPausedRef.current = autopilotPaused;
+
+  const handleAutopilotToggle = useCallback((next: boolean) => {
+    setAutopilotEnabled(next);
+    try { window.localStorage.setItem(AUTOPILOT_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
+  }, []);
+  const handleAutopilotPauseToggle = useCallback((next: boolean) => {
+    setAutopilotPaused(next);
+  }, []);
+  /** Re-run the AI chain starting from a specific stage. The chain
+   *  itself owns ordering — this just fires the right entry point and
+   *  invalidates downstream input-hash cache so the dedup governor
+   *  doesn't short-circuit it. */
+  const handleAutopilotRerunFromStage = useCallback((id: AutopilotStageId) => {
+    // Invalidate cached input hashes for this stage and all downstream
+    // ones so the dedup governor doesn't short-circuit the re-run.
+    const order: AutopilotStageId[] = ['parse', 'reason', 'evidence', 'research', 'plan'];
+    const fromIdx = order.indexOf(id);
+    if (fromIdx >= 0) {
+      for (let i = fromIdx; i < order.length; i++) {
+        delete stageInputHashRef.current[order[i]];
+      }
+    }
+    if (id === 'reason') {
+      // reasoning trigger reads `lastReasoningTriggerRef`; reset it so
+      // the same structural inputs aren't treated as already-handled.
+      lastReasoningTriggerRef.current = '';
+      triggerClinicalReasoningAnalysisRef.current(true);
+      return;
+    }
+    if (id === 'evidence') {
+      handleEvidenceQueryRef.current();
+      return;
+    }
+    if (id === 'research') {
+      caseResearchPanelRef.current?.trigger(true);
+      return;
+    }
+    if (id === 'plan') {
+      // Calling `handleAutoBuildClick` directly is fine — the autopilot
+      // monitor effect (above) flips the chip back to done/error when
+      // the build settles.
+      markStageStartRef.current('plan');
+      try { handleAutoBuildClickRef.current(); }
+      catch (e) { markStageEndRef.current('plan', 'error', e instanceof Error ? e.message : 'auto-build failed'); }
+      return;
+    }
+    if (id === 'parse') {
+      clinicalTextInputRef.current?.triggerIncrementalParse();
+      return;
+    }
+  }, []);
+
+  // 5 stage chip statuses, keyed by stage id. Ordered for the dock.
+  const initialMonitorStages: AutopilotStageStatus[] = useMemo(() => ([
+    { id: 'parse',    label: 'Parse',     state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+    { id: 'reason',   label: 'Reason',    state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+    { id: 'evidence', label: 'Evidence',  state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+    { id: 'research', label: 'Research',  state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+    { id: 'plan',     label: 'Plan',      state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+  ]), []);
+  const [monitorStages, setMonitorStages] = useState<AutopilotStageStatus[]>(initialMonitorStages);
+  const [monitorStability, setMonitorStability] = useState<AutopilotStability>({
+    topLabel: null, stableForRuns: 0, converged: false, destabilized: false,
+  });
+  const monitorStabilityRef = useRef(monitorStability);
+  monitorStabilityRef.current = monitorStability;
+
+  // Per-stage input-hash for dedup. Key: stage id → last hash run.
+  const stageInputHashRef = useRef<Partial<Record<AutopilotStageId, string>>>({});
+  // Stage start timestamps so we can compute duration on completion.
+  const stageStartedAtRef = useRef<Partial<Record<AutopilotStageId, number>>>({});
+
+  /** Compute a recording-time stamp for a stage chip. */
+  const recordingTimeSec = useCallback((): number | null => {
+    return recordingStartedAtRef.current
+      ? (Date.now() - recordingStartedAtRef.current) / 1000
+      : null;
+  }, []);
+
+  /** Stable monitor-stage mutator. Merges patch into the named stage. */
+  const updateStage = useCallback((id: AutopilotStageId, patch: Partial<AutopilotStageStatus>) => {
+    setMonitorStages(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+  }, []);
+
+  /** Mark a stage as starting. Bumps callCount, stamps start time, sets state=running. */
+  const markStageStart = useCallback((id: AutopilotStageId) => {
+    stageStartedAtRef.current[id] = Date.now();
+    setMonitorStages(prev => prev.map(s => s.id === id
+      ? { ...s, state: 'running', callCount: s.callCount + 1, lastFiredSec: recordingTimeSec(), lastSkippedReason: null }
+      : s));
+  }, [recordingTimeSec]);
+
+  /** Mark a stage as finished (state=done|error|converged|skipped). */
+  const markStageEnd = useCallback((id: AutopilotStageId, outcome: 'done' | 'error' | 'converged' | 'skipped', reason?: string) => {
+    const startedAt = stageStartedAtRef.current[id];
+    const dur = startedAt ? Date.now() - startedAt : null;
+    delete stageStartedAtRef.current[id];
+    setMonitorStages(prev => prev.map(s => s.id === id
+      ? { ...s, state: outcome, lastDurationMs: dur, lastSkippedReason: reason ?? null }
+      : s));
+  }, []);
+  // Bind the refs forward-declared above so the rerun-from-stage
+  // handler (which has to be defined earlier in render order to keep
+  // the dock's prop identity stable) can call into these helpers.
+  markStageStartRef.current = markStageStart;
+  markStageEndRef.current = markStageEnd;
+
+  /**
+   * Cheap structural hash for governor dedup. Inputs are rounded /
+   * sorted so cosmetic noise (transient float jitter, marker order)
+   * doesn't bust the cache.
+   */
+  const computeStructuralHash = useCallback((parts: unknown): string => {
+    try {
+      const json = JSON.stringify(parts);
+      // FNV-1a 32-bit
+      let h = 0x811c9dc5 >>> 0;
+      for (let i = 0; i < json.length; i++) {
+        h ^= json.charCodeAt(i);
+        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+      }
+      return h.toString(16);
+    } catch { return String(Date.now()); }
+  }, []);
+
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -1111,6 +1292,10 @@ export default function PhysioGPT() {
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const clinicalTextInputRef = useRef<ClinicalTextInputHandle>(null);
+  /** Imperative ref into the Case-Aware Research panel (Task #313).
+   *  Lets the autopilot programmatically (re-)trigger a search after
+   *  the reasoning chain stabilises a top hypothesis. */
+  const caseResearchPanelRef = useRef<CaseResearchPanelHandle>(null);
   /** Scroll target for the Patient Context panel — used by the
    *  "No patient context" badge on downstream AI panels so the
    *  clinician can jump straight to filling in answers. */
@@ -1831,11 +2016,16 @@ export default function PhysioGPT() {
     pendingFollowUpQuestionsRef.current = questions;
   }, []);
 
+  // Task #313 — in-flight tier-3 GPT requests, keyed by spoken text
+  // hash, so we don't fire concurrent requests for the same chunk
+  // while the user is still talking.
+  const followUpGptInFlightRef = useRef<Set<string>>(new Set());
   const tryMatchFollowUpAnswer = useCallback((spokenText: string, questions: FollowUpQuestion[]): boolean => {
     if (!clinicalTextInputRef.current || questions.length === 0) return false;
     const spoken = spokenText.toLowerCase().trim();
     if (spoken.length < 3) return false;
 
+    // Tier 1 — exact option string match (multiple-choice questions).
     for (const fq of questions) {
       if (fq.options && fq.options.length > 0) {
         const matchedOption = fq.options.find(opt =>
@@ -1849,6 +2039,7 @@ export default function PhysioGPT() {
       }
     }
 
+    // Tier 2 — keyword overlap heuristic (open-text questions).
     for (const fq of questions) {
       if (fq.options && fq.options.length > 0) continue;
       const questionKeywords = fq.question.toLowerCase()
@@ -1867,6 +2058,49 @@ export default function PhysioGPT() {
       clinicalTextInputRef.current.submitFollowUpAnswer(questions[0].id, spokenText.trim());
       toast({ title: "Follow-up Answered", description: `Answered: "${questions[0].question.substring(0, 50)}..."` });
       return true;
+    }
+
+    // Tier 3 — GPT-backed semantic match. Fire-and-forget so the
+    // sync caller (transcript loop) keeps its existing pointer; if
+    // the model reports a confident match we apply it asynchronously
+    // and surface it via toast. Fail-soft on any error.
+    if (spoken.length >= 8) {
+      const inflightKey = `${spoken}::${questions.map(q => q.id).join(',')}`;
+      if (!followUpGptInFlightRef.current.has(inflightKey)) {
+        followUpGptInFlightRef.current.add(inflightKey);
+        (async () => {
+          try {
+            const res = await fetch('/api/clinical-text/answer-followup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                spokenText,
+                questions: questions.map(q => ({
+                  id: q.id, question: q.question, options: q.options,
+                })),
+              }),
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const matchedId: string | undefined = data?.questionId;
+            const answer: string | undefined = data?.answer;
+            const confidence: number = typeof data?.confidence === 'number' ? data.confidence : 0;
+            if (!matchedId || !answer || confidence < 0.7) return;
+            const fq = questions.find(q => q.id === matchedId);
+            if (!fq) return;
+            // Re-check the question is still pending — the user may
+            // have already answered it manually while we were waiting.
+            const stillPending = pendingFollowUpQuestionsRef.current.some(q => q.id === matchedId);
+            if (!stillPending) return;
+            clinicalTextInputRef.current?.submitFollowUpAnswer(matchedId, answer);
+            toast({
+              title: 'Follow-up Answered',
+              description: `Answered: "${fq.question.substring(0, 50)}..."`,
+            });
+          } catch { /* fail-soft */ }
+          finally { followUpGptInFlightRef.current.delete(inflightKey); }
+        })();
+      }
     }
 
     return false;
@@ -2224,8 +2458,7 @@ export default function PhysioGPT() {
   /** Bumped on session reset; used as a React key so the dock fully
    *  remounts and clears its internal collapse/unread preferences. */
   const [voiceDockSessionKey, setVoiceDockSessionKey] = useState(0);
-  /** Anchor used to compute "00:42"-style stamps for entries. */
-  const recordingStartedAtRef = useRef<number | null>(null);
+  // (recordingStartedAtRef hoisted above the autopilot governor.)
   /** Trigger metadata set by the silence-debounce / interval-pulse paths
    *  immediately before they call triggerIncrementalParse. The next call
    *  to handleClinicalTextParse consumes it (and clears it). */
@@ -4809,11 +5042,18 @@ ${ddxList}`;
       posture: postureDeviations.map(d => `${d.region}.${d.parameter}:${d.value}`).join(','),
       compensation: compensationSummary ? JSON.stringify(compensationSummary.restrictions) : '',
     });
-    if (!forceRefresh && triggerKey === lastReasoningTriggerRef.current) return;
+    if (!forceRefresh && triggerKey === lastReasoningTriggerRef.current) {
+      // Governor: same structural inputs as the last successful run —
+      // no work to do. Surface the skip in the activity monitor so
+      // clinicians can see the AI didn't burn another call.
+      markStageEnd('reason', 'skipped', 'inputs unchanged');
+      return;
+    }
     if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
 
     lastReasoningTriggerRef.current = triggerKey;
     setClinicalReasoningProcessing(true);
+    markStageStart('reason');
 
     if (evidenceAbortRef.current) {
       evidenceAbortRef.current.abort();
@@ -4931,7 +5171,7 @@ ${ddxList}`;
       if (!response.ok) throw new Error('Analysis failed');
       const data = await response.json();
 
-      setClinicalReasoningData({
+      const reasoningSnapshot: ClinicalReasoningData = {
         hypotheses: data.hypotheses || [],
         findings: data.findings || [],
         flags: data.flags || [],
@@ -4942,7 +5182,9 @@ ${ddxList}`;
         treatmentPlan: data.treatmentPlan || null,
         posturalAnalysis: data.posturalAnalysis || null,
         evidenceReferences: data.evidenceReferences || [],
-      });
+      };
+      setClinicalReasoningData(reasoningSnapshot);
+      markStageEnd('reason', 'done');
 
       if (!clinicalReasoningOpen) {
         setClinicalReasoningOpen(true);
@@ -4951,12 +5193,18 @@ ${ddxList}`;
       autoEvidenceTimerRef.current = setTimeout(() => {
         handleEvidenceQueryRef.current();
       }, 500);
+
+      // Task #313 — autopilot chain. Convergence + stability are
+      // computed inside; this is a no-op when the autopilot toggle
+      // is off or when the chain is paused.
+      try { chainAutopilotAfterReasoningRef.current(reasoningSnapshot); } catch { /* fail-soft */ }
     } catch (error) {
       console.error('Clinical reasoning analysis error:', error);
+      markStageEnd('reason', 'error', error instanceof Error ? error.message : 'request failed');
     } finally {
       setClinicalReasoningProcessing(false);
     }
-  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations]);
+  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations, markStageStart, markStageEnd]);
 
   triggerClinicalReasoningAnalysisRef.current = triggerClinicalReasoningAnalysis;
 
@@ -5374,6 +5622,84 @@ ${ddxList}`;
     setAutoBuildInFlightAdjunct(true);
     setAutoBuildElectroNonce(prev => prev + 1);
   }, [autoBuildState, hasClinicalTextData]);
+  // Bind for the autopilot rerun-from-stage handler (defined earlier
+  // in render order to keep stable references for the dock).
+  handleAutoBuildClickRef.current = handleAutoBuildClick;
+
+  // ─── Task #313 — Autopilot chain implementation ──────────────────────
+  // Wired into `chainAutopilotAfterReasoningRef` so the reasoning trigger
+  // can call back here without a hoisting problem (this depends on
+  // `handleAutoBuildClick` + research panel ref which are defined later
+  // than the trigger). Runs convergence checks, updates the stability
+  // ribbon, then schedules research + master-plan stages.
+  const chainAutopilotAfterReasoning = useCallback((data: ClinicalReasoningData) => {
+    if (!autopilotEnabledRef.current) return;
+    if (autopilotPausedRef.current) return;
+
+    const top = (data.hypotheses || []).find(h => h.status !== 'ruled_out') ?? data.hypotheses?.[0];
+    const stab = monitorStabilityRef.current;
+    const topLabel = top?.condition?.trim() || null;
+    const topConfidence = typeof top?.confidence === 'number' ? top.confidence : 0;
+    const wasSame = !!topLabel && stab.topLabel === topLabel;
+    const newRuns = wasSame ? stab.stableForRuns + 1 : (topLabel ? 1 : 0);
+    const justConverged = newRuns >= CONVERGENCE_RUNS && topConfidence >= CONVERGENCE_MIN_CONFIDENCE;
+
+    setMonitorStability({
+      topLabel,
+      stableForRuns: newRuns,
+      converged: justConverged,
+      destabilized: stab.topLabel !== null && !wasSame,
+    });
+
+    if (justConverged && wasSame) {
+      // Convergence: stop spending AI calls. Surface in the chips so
+      // the clinician can re-run from a stage manually if they want.
+      markStageEnd('research', 'converged', `top hypothesis stable (${topLabel})`);
+      markStageEnd('plan', 'converged', `top hypothesis stable (${topLabel})`);
+      return;
+    }
+
+    if (!topLabel) return;
+
+    // Stage: case-research (delayed so evidence settles first).
+    window.setTimeout(() => {
+      if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
+      const r = caseResearchPanelRef.current;
+      if (!r) return;
+      if (r.isRunning()) return;
+      markStageStart('research');
+      try {
+        r.trigger(false);
+        // No completion callback from the panel; mark done after a
+        // generous window so the chip leaves "running".
+        window.setTimeout(() => markStageEnd('research', 'done'), 8000);
+      } catch (e) {
+        markStageEnd('research', 'error', e instanceof Error ? e.message : 'trigger failed');
+      }
+    }, 1500);
+
+    // Stage: master plan auto-build. Only fires when there's clinical
+    // data on the skeleton (so engines have something to build from)
+    // and no build is currently in flight.
+    window.setTimeout(() => {
+      if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
+      if (!hasClinicalTextDataRef.current) return;
+      if (autoBuildStateRef.current !== 'idle') return;
+      markStageStart('plan');
+      try {
+        handleAutoBuildClick();
+        // The build settles to 'idle' via existing effects; the auto-
+        // build state effect (below) flips the chip to done.
+      } catch (e) {
+        markStageEnd('plan', 'error', e instanceof Error ? e.message : 'auto-build failed');
+      }
+    }, 3500);
+  }, [handleAutoBuildClick, markStageEnd, markStageStart]);
+
+  // Bind the actual implementation to the ref so the reasoning
+  // trigger (defined earlier in render order) can call it.
+  chainAutopilotAfterReasoningRef.current = chainAutopilotAfterReasoning;
+
   // Settle (Phase 1): detect when all four phantom engines have settled
   // (success or failure) and their staggered cart-add cascades have
   // completed (onGenerateComplete is deferred until after the last add).
@@ -5427,6 +5753,26 @@ ${ddxList}`;
       window.clearTimeout(safetyIdleTimer);
     };
   }, [autoBuildState]);
+
+  // Task #313 — flip the autopilot "Plan" stage chip to done/error
+  // when the auto-build finishes. The chip is moved to "running" by
+  // the chain orchestrator when it calls `handleAutoBuildClick`.
+  useEffect(() => {
+    if (autoBuildState !== 'idle') return;
+    setMonitorStages(prev => prev.map(s => {
+      if (s.id !== 'plan' || s.state !== 'running') return s;
+      const failed = autoBuildFailures.size > 0;
+      const startedAt = stageStartedAtRef.current['plan'];
+      const dur = startedAt ? Date.now() - startedAt : null;
+      delete stageStartedAtRef.current['plan'];
+      return {
+        ...s,
+        state: failed ? 'error' : 'done',
+        lastDurationMs: dur,
+        lastSkippedReason: failed ? Array.from(autoBuildFailures).join(', ') : null,
+      };
+    }));
+  }, [autoBuildState, autoBuildFailures]);
 
   const exerciseMtActivePhaseIndex = useMemo(() => {
     if (!treatmentPlanData || !treatmentPlanData.phases || treatmentPlanData.phases.length === 0) return 0;
@@ -14222,13 +14568,65 @@ ${ddxList}`;
                 summary && summary !== desc ? `Clinical summary: ${summary}` : '',
                 patientContextSig ? `Patient context: ${patientContextSig}` : '',
               ].filter(Boolean).join('\n\n');
-              const contentHash = fnv32(`${desc}\u241F${summary}\u241F${patientContextSig}`);
+              // Task #313 — case-aware research context. Built inline
+              // (cheap, deterministic) from the same inputs Patient
+              // Context + Clinical Reasoning are reading. Only fields
+              // we can confidently fill are emitted; everything else is
+              // omitted so the engine falls back to seed parsing. The
+              // hash folds caseContext in so a new top hypothesis or a
+              // new chronicity stage invalidates cached synthesis.
+              const topHypoForCtx = (clinicalReasoningData?.hypotheses || [])
+                .find(h => h.status !== 'ruled_out') ?? clinicalReasoningData?.hypotheses?.[0];
+              const painRegionsForCtx = Array.from(new Set(
+                (lastClinicalParseResult?.pain_markers || [])
+                  .map(m => (m.anatomical_label || '').trim())
+                  .filter(Boolean)
+              )).slice(0, 12);
+              const lateralityCounts = (lastClinicalParseResult?.pain_markers || []).reduce(
+                (acc: { left: number; right: number }, m) => {
+                  const lbl = (m.anatomical_label || '').toLowerCase();
+                  if (/\bleft\b|_l_|_l$/.test(lbl)) acc.left += 1;
+                  if (/\bright\b|_r_|_r$/.test(lbl)) acc.right += 1;
+                  return acc;
+                },
+                { left: 0, right: 0 }
+              );
+              const lateralityForCtx: 'left' | 'right' | 'bilateral' | 'unspecified' =
+                lateralityCounts.left > 0 && lateralityCounts.right > 0 ? 'bilateral'
+                : lateralityCounts.left > 0 ? 'left'
+                : lateralityCounts.right > 0 ? 'right'
+                : 'unspecified';
+              const patientFactorsForCtx = [
+                effectivePatientFactors?.age != null ? `age:${effectivePatientFactors.age}` : null,
+                effectivePatientFactors?.activityLevel ? `activity:${effectivePatientFactors.activityLevel}` : null,
+                effectivePatientFactors?.bmi ? `bmi:${effectivePatientFactors.bmi}` : null,
+              ]
+                .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+                .map(s => s.slice(0, 80))
+                .slice(0, 12);
+              const caseContext: CaseResearchContext = {
+                ...(topHypoForCtx?.condition && typeof topHypoForCtx.confidence === 'number'
+                  ? { topHypothesis: { label: topHypoForCtx.condition.slice(0, 200), confidence: Math.max(0, Math.min(1, topHypoForCtx.confidence)) } }
+                  : {}),
+                ...(summary ? { mainComplaint: summary.slice(0, 200) } : (desc ? { mainComplaint: desc.slice(0, 200) } : {})),
+                ...(painRegionsForCtx.length > 0 ? { region: painRegionsForCtx[0].slice(0, 80) } : {}),
+                ...(lateralityForCtx !== 'unspecified' ? { laterality: lateralityForCtx } : {}),
+                ...(effectivePatientFactors?.chronicityStage
+                  ? { chronicity: String(effectivePatientFactors.chronicityStage).slice(0, 40) }
+                  : {}),
+                ...(painRegionsForCtx.length > 0 ? { painRegions: painRegionsForCtx } : {}),
+                ...(patientFactorsForCtx.length > 0 ? { patientFactors: patientFactorsForCtx } : {}),
+              };
+              const ctxSig = JSON.stringify(caseContext);
+              const contentHash = fnv32(`${desc}\u241F${summary}\u241F${patientContextSig}\u241F${ctxSig}`);
               return (
                 <CaseResearchPanel
+                  ref={caseResearchPanelRef}
                   caseId={caseId}
                   condition={condition}
                   caseSummary={caseSummary}
                   contentHash={contentHash}
+                  caseContext={caseContext}
                   className="w-full"
                 />
               );
@@ -14592,6 +14990,14 @@ ${ddxList}`;
         isRecording={isRecording}
         visible={voiceDockVisible}
         onUndo={handleVoiceActivityUndo}
+        monitorStages={monitorStages}
+        monitorStability={monitorStability}
+        autopilotEnabled={autopilotEnabled}
+        autopilotEligible={isRecording || hasClinicalTextData}
+        paused={autopilotPaused}
+        onAutopilotToggle={handleAutopilotToggle}
+        onPauseToggle={handleAutopilotPauseToggle}
+        onRerunFromStage={handleAutopilotRerunFromStage}
       />
     </Suspense>
     </div>

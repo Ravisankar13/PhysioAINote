@@ -12,7 +12,7 @@ import {
   serializeForBag, serializeForPubMed, serializeForEuropePmc, serializeForTrials,
   type AdapterResult, type NormalizedPaper, type Source, type StructuredQuery, type TrialMetadata,
 } from './types';
-import { researchTreatmentPlanSchema, searchablePhenotypeSchema, type SearchablePhenotype } from '@shared/schema';
+import { researchTreatmentPlanSchema, searchablePhenotypeSchema, type SearchablePhenotype, type CaseResearchContext } from '@shared/schema';
 
 // ---- Public types -------------------------------------------------
 
@@ -194,6 +194,39 @@ export function fallbackPhenotype(condition: string): SearchablePhenotype {
     painType: null,
     painTypeSoft: true,
   };
+}
+
+/** Task #313 — render a structured caseContext block into a small,
+ *  biomedical-flavoured prose preamble that we prepend to the case
+ *  summary going into the inferPhenotype/inferVariables prompts. We
+ *  keep it short and labelled so the model can lift the values
+ *  verbatim into queryTerms instead of having to re-infer them from
+ *  free prose. */
+export function formatCaseContextForPrompt(ctx: CaseResearchContext): string {
+  const lines: string[] = [];
+  if (ctx.topHypothesis?.label) {
+    const conf = ctx.topHypothesis.confidence != null
+      ? ` (confidence ${(ctx.topHypothesis.confidence * 100).toFixed(0)}%)` : '';
+    lines.push(`Working hypothesis: ${ctx.topHypothesis.label}${conf}`);
+  }
+  if (ctx.mainComplaint) lines.push(`Main complaint: ${ctx.mainComplaint}`);
+  if (ctx.region) {
+    const lat = ctx.laterality && ctx.laterality !== 'unspecified' ? ` (${ctx.laterality})` : '';
+    lines.push(`Region: ${ctx.region}${lat}`);
+  } else if (ctx.laterality && ctx.laterality !== 'unspecified') {
+    lines.push(`Laterality: ${ctx.laterality}`);
+  }
+  if (ctx.chronicity) lines.push(`Chronicity: ${ctx.chronicity}`);
+  if (ctx.irritability) lines.push(`Irritability: ${ctx.irritability}`);
+  if (ctx.mechanism) lines.push(`Mechanism: ${ctx.mechanism}`);
+  if (ctx.painRegions && ctx.painRegions.length) {
+    lines.push(`Pain regions on skeleton: ${ctx.painRegions.slice(0, 8).join(', ')}`);
+  }
+  if (ctx.patientFactors && ctx.patientFactors.length) {
+    lines.push(`Patient factors: ${ctx.patientFactors.slice(0, 8).join(', ')}`);
+  }
+  if (lines.length === 0) return '';
+  return `STRUCTURED CASE CONTEXT (already extracted by the page — prefer these over re-inferring from prose):\n${lines.map(l => `- ${l}`).join('\n')}`;
 }
 
 /** Translate the clinician's free-text condition + summary into a
@@ -1330,6 +1363,14 @@ export interface RunCaseResearchOptions {
    *  step and uses this phenotype directly. Used for "Re-run with my
    *  edits". */
   phenotypeOverride?: SearchablePhenotype;
+  /** Task #313 — structured case picture from the orchestrator
+   *  (top hypothesis, mechanism, region/laterality, chronicity,
+   *  irritability, patient factors). When supplied, the engine
+   *  prefers the top hypothesis label as the search seed and
+   *  prepends the structured fields onto the variable-inference
+   *  prompt so retrieval tightens around what the page already
+   *  knows. */
+  caseContext?: CaseResearchContext;
 }
 
 export async function runCaseResearch(
@@ -1337,16 +1378,27 @@ export async function runCaseResearch(
   caseSummary: string,
   options: RunCaseResearchOptions = {},
 ): Promise<CaseResearchOutcome> {
+  // Task #313: when the orchestrator supplies a top working
+  // hypothesis we use its label as the phenotype seed (it's the
+  // single most discriminating phrase the page has produced for this
+  // case). We still pass the full caseSummary so the AI can pick up
+  // modifiers, but the seed phrase is what canonicalCondition will
+  // canonicalise from.
+  const seedCondition = options.caseContext?.topHypothesis?.label?.trim() || condition;
+  const seededSummary = options.caseContext
+    ? `${formatCaseContextForPrompt(options.caseContext)}\n\n${caseSummary}`
+    : caseSummary;
+
   // When the clinician supplied an edited phenotype we treat it as
   // AUTHORITATIVE: bypass both AI calls and derive variables directly
   // from the phenotype's own mechanism / aggravator / region / pain
   // type fields. This is what makes "Re-run with my edits" actually
   // re-run the search with the user's edits, not just re-display them.
   const phenotype: SearchablePhenotype = options.phenotypeOverride
-    ?? await inferPhenotype(condition, caseSummary);
+    ?? await inferPhenotype(seedCondition, seededSummary);
   const variables: InferredVariable[] = options.phenotypeOverride
     ? variablesFromPhenotype(options.phenotypeOverride)
-    : await inferVariables(condition, caseSummary);
+    : await inferVariables(seedCondition, seededSummary);
 
   const ladder = buildQueryLadder(phenotype, variables);
   const totalTiers = ladder.length;

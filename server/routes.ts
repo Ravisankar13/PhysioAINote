@@ -9847,7 +9847,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid request payload", details: parsed.error.flatten() });
       }
-      const { caseSummary, condition, contentHash, phenotypeOverride } = parsed.data;
+      const { caseSummary, condition, contentHash, phenotypeOverride, caseContext } = parsed.data;
       // A phenotype override always forces a fresh run — the clinician
       // explicitly asked to re-search with their edited interpretation.
       const refresh = parsed.data.refresh === true || String(req.query.refresh || "") === "1" || !!phenotypeOverride;
@@ -9859,7 +9859,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       }
 
       const { runCaseResearch } = await import("./services/research/caseResearchEngine");
-      const outcome = await runCaseResearch(condition, caseSummary, { phenotypeOverride });
+      const outcome = await runCaseResearch(condition, caseSummary, { phenotypeOverride, caseContext });
 
       const saved = await storage.upsertCaseResearchSynthesis({
         caseId,
@@ -14650,6 +14650,109 @@ EXAMPLES of good predictions:
       console.error('Error parsing clinical text:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
       res.status(500).json({ error: 'Failed to parse clinical text', details: message });
+    }
+  });
+
+  // ─── Task #313 — GPT-backed follow-up answer matcher ────────────────
+  // The voice flow tries two cheap matchers (option-includes, keyword
+  // density) before this one. Anything paraphrased ("yeah it's been
+  // bothering her for about three weeks" vs question "Acute or
+  // chronic?") slips past both. This endpoint takes the open
+  // follow-up questions, the active question hint, and the latest
+  // utterance and returns a short list of {questionId, answer,
+  // confidence, reason} entries the orchestrator can submit. We keep
+  // it cheap (gpt-4o-mini, low max_tokens) because it fires whenever
+  // the dock's silence-debounce or interval pulse triggers a parse.
+  app.post('/api/clinical-text/answer-followup', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { utterance, questions, activeQuestionId } = req.body || {};
+      if (!utterance || typeof utterance !== 'string' || utterance.trim().length < 4) {
+        return res.json({ matches: [] });
+      }
+      if (!Array.isArray(questions) || questions.length === 0) {
+        return res.json({ matches: [] });
+      }
+      const sanitized = questions
+        .filter((q: any) => q && typeof q.id === 'string' && typeof q.question === 'string')
+        .slice(0, 8)
+        .map((q: any) => ({
+          id: String(q.id),
+          question: String(q.question).slice(0, 220),
+          options: Array.isArray(q.options) ? q.options.slice(0, 8).map((o: any) => String(o).slice(0, 60)) : undefined,
+        }));
+      if (sanitized.length === 0) return res.json({ matches: [] });
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const sys = `You match a clinician's spoken utterance to one or more open follow-up questions and return the most likely answer for each.
+
+Rules:
+- Only return an answer if you are at least 70% confident the utterance contains the answer to that question. Otherwise omit the question entirely.
+- If the question has "options", you MUST return one of the options EXACTLY as written (string match).
+- If the question has no options, return a SHORT clinical phrase (≤ 40 chars) the clinician actually said or paraphrased (e.g. "3 weeks", "after a deadlift", "no leg symptoms").
+- Never invent clinical findings the utterance doesn't contain.
+- Output JSON ONLY: { "matches": [ { "questionId": "q1", "answer": "Subacute (2-6 weeks)", "confidence": 0.82, "reason": "said 'about three weeks'" } ] }
+- Empty matches array if nothing in the utterance answers any of the open questions.`;
+
+      const usr = `Open follow-up questions${activeQuestionId ? ` (active = ${activeQuestionId})` : ''}:
+${sanitized.map(q => `- id="${q.id}" question="${q.question}"${q.options ? ` options=[${q.options.map((o: string) => `"${o}"`).join(', ')}]` : ''}`).join('\n')}
+
+Clinician utterance:
+"""${utterance.slice(0, 1200)}"""
+
+Match now.`;
+
+      const r = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: usr },
+        ],
+        temperature: 0.1,
+        max_tokens: 400,
+        response_format: { type: 'json_object' },
+      });
+
+      let parsed: any = {};
+      try { parsed = JSON.parse(r.choices?.[0]?.message?.content || '{}'); } catch { parsed = {}; }
+      const validIds = new Set(sanitized.map(q => q.id));
+      const optionsByid = new Map(sanitized.map(q => [q.id, q.options]));
+      const matches = (Array.isArray(parsed.matches) ? parsed.matches : [])
+        .filter((m: any) => m && typeof m.questionId === 'string' && validIds.has(m.questionId))
+        .filter((m: any) => typeof m.answer === 'string' && m.answer.trim().length > 0)
+        .filter((m: any) => typeof m.confidence !== 'number' || m.confidence >= 0.7)
+        .map((m: any) => {
+          const opts = optionsByid.get(m.questionId);
+          let answer = String(m.answer).trim().slice(0, 80);
+          // Snap to exact option string if the model returned a near-match.
+          if (opts && opts.length > 0) {
+            const exact = opts.find((o: string) => o.toLowerCase() === answer.toLowerCase());
+            if (exact) answer = exact;
+            else {
+              const fuzzy = opts.find((o: string) => answer.toLowerCase().includes(o.toLowerCase()) || o.toLowerCase().includes(answer.toLowerCase()));
+              if (fuzzy) answer = fuzzy;
+              else return null; // Question with options but no option-snap → discard.
+            }
+          }
+          return {
+            questionId: m.questionId,
+            answer,
+            confidence: typeof m.confidence === 'number' ? m.confidence : 0.7,
+            reason: typeof m.reason === 'string' ? String(m.reason).slice(0, 160) : '',
+          };
+        })
+        .filter((m: any) => m !== null)
+        .slice(0, 5);
+      res.json({ matches });
+    } catch (error: unknown) {
+      console.error('Error in /api/clinical-text/answer-followup:', error);
+      // Fail soft — the orchestrator falls back to its existing tier-3
+      // single-question heuristic when this returns no matches.
+      res.json({ matches: [] });
     }
   });
 

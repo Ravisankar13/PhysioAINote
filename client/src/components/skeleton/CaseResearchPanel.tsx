@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,18 @@ import {
   ExternalLink, BookOpen, ListFilter, Search, Info, ShieldCheck, GripHorizontal,
   Pencil, X, Plus, Microscope, Sparkles, Activity, Award, Quote,
 } from "lucide-react";
-import type { CaseResearchSynthesis, SearchablePhenotype } from "@shared/schema";
+import type { CaseResearchContext, CaseResearchSynthesis, SearchablePhenotype } from "@shared/schema";
+
+/** Imperative handle exposed to parent orchestrators (Task #313).
+ *  The Voice Autopilot uses this to programmatically (re-)trigger the
+ *  case-research engine after the reasoning chain finalises a top
+ *  hypothesis, without requiring the clinician to click the button. */
+export interface CaseResearchPanelHandle {
+  /** Fire a fresh search using the current props. `refresh=true` bypasses the cache. */
+  trigger: (refresh?: boolean) => void;
+  /** True while a request is currently in flight. */
+  isRunning: () => boolean;
+}
 
 /** localStorage key for the user's preferred body height (px). */
 const BODY_HEIGHT_STORAGE_KEY = "caseResearchPanel.bodyHeightPx";
@@ -51,6 +62,10 @@ export interface CaseResearchPanelProps {
   caseSummary: string;
   /** Deterministic content hash (FNV-style or similar) of the inputs. */
   contentHash: string | null;
+  /** Optional structured case picture (Task #313). When supplied the
+   *  engine prefers the top hypothesis label as its search seed and
+   *  uses the structured fields to seed variable inference. */
+  caseContext?: CaseResearchContext;
   /** Hide entirely until the parent has a usable case to search for. */
   visible?: boolean;
   className?: string;
@@ -610,10 +625,10 @@ function renderAnswer(
   return blocks;
 }
 
-export function CaseResearchPanel({
-  caseId, condition, caseSummary, contentHash,
+export const CaseResearchPanel = forwardRef<CaseResearchPanelHandle, CaseResearchPanelProps>(function CaseResearchPanel({
+  caseId, condition, caseSummary, contentHash, caseContext,
   visible = true, className,
-}: CaseResearchPanelProps) {
+}, ref) {
   const [collapsed, setCollapsed] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
   const [showHowSearched, setShowHowSearched] = useState(false);
@@ -728,6 +743,9 @@ export function CaseResearchPanel({
         contentHash,
         refresh: opts.refresh,
         phenotypeOverride: opts.phenotypeOverride,
+        // Task #313 — fold the structured case picture so the engine
+        // can prefer the top hypothesis as its search seed.
+        caseContext,
       }) as CaseResearchSynthesis & { cached?: boolean };
     },
     onSuccess: (data) => {
@@ -749,6 +767,18 @@ export function CaseResearchPanel({
   const trigger = useCallback((refresh: boolean) => {
     runMutation.mutate({ refresh });
   }, [runMutation]);
+
+  // Task #313 — orchestrator-facing imperative API. Lets the Voice
+  // Autopilot fire the engine programmatically once reasoning has
+  // produced a stable top hypothesis (folded into `caseContext`).
+  useImperativeHandle(ref, () => ({
+    trigger: (refresh = false) => {
+      if (!caseId || !condition || !contentHash) return;
+      if (runMutation.isPending) return;
+      runMutation.mutate({ refresh });
+    },
+    isRunning: () => runMutation.isPending,
+  }), [caseId, condition, contentHash, runMutation]);
 
   const triggerWithEdits = useCallback((edits: SearchablePhenotype) => {
     runMutation.mutate({ refresh: true, phenotypeOverride: edits });
@@ -1524,4 +1554,4 @@ export function CaseResearchPanel({
       )}
     </Card>
   );
-}
+});

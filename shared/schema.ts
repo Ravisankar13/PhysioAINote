@@ -6269,13 +6269,36 @@ export type SearchablePhenotype = z.infer<typeof searchablePhenotypeSchema>;
  *  `phenotypeOverride` (optional): when supplied (e.g. from the
  *  clinician's "Edit interpretation" → "Re-run with my edits"), the
  *  engine SKIPS its own AI translation step and uses the supplied
- *  phenotype directly. */
+ *  phenotype directly.
+ *  `caseContext` (optional, Task #313): structured case picture
+ *  assembled by the orchestrator (top working hypothesis, mechanism,
+ *  region/laterality, chronicity, irritability, patient factors).
+ *  When supplied, the engine prefers the top hypothesis label as the
+ *  search seed and seeds variable inference with the structured
+ *  fields so retrieval is more specific than parsing prose. */
+export const caseResearchContextSchema = z.object({
+  topHypothesis: z.object({
+    label: z.string().min(1).max(200),
+    confidence: z.number().min(0).max(1),
+  }).optional(),
+  mainComplaint: z.string().max(200).optional(),
+  region: z.string().max(80).optional(),
+  laterality: z.enum(['left', 'right', 'bilateral', 'unspecified']).optional(),
+  chronicity: z.string().max(40).optional(),
+  irritability: z.enum(['low', 'moderate', 'high']).optional(),
+  mechanism: z.string().max(200).optional(),
+  painRegions: z.array(z.string().max(80)).max(12).optional(),
+  patientFactors: z.array(z.string().max(80)).max(12).optional(),
+});
+export type CaseResearchContext = z.infer<typeof caseResearchContextSchema>;
+
 export const caseResearchRequestSchema = z.object({
   caseSummary: z.string().min(10).max(20000),
   condition: z.string().min(1).max(500),
   contentHash: z.string().min(1).max(128),
   refresh: z.boolean().optional(),
   phenotypeOverride: searchablePhenotypeSchema.optional(),
+  caseContext: caseResearchContextSchema.optional(),
 });
 export type CaseResearchRequest = z.infer<typeof caseResearchRequestSchema>;
 

@@ -1184,7 +1184,7 @@ export default function PhysioGPT() {
   // anything outside this snapshot is either recomputed deterministically from
   // these inputs or considered transient UI noise.
   const currentCaseSnapshot = useMemo<PhysioGptCaseSnapshot>(() => ({
-    version: 1,
+    version: 2,
     modelConfig,
     painMarkers,
     compromisedTissues,
@@ -1215,6 +1215,23 @@ export default function PhysioGPT() {
     unifiedBiomechanicsMovementTask: unifiedBiomechanicsMovementTask ?? null,
     unifiedBiomechanicsProgress,
     unifiedBiomechanicsFaultOverrides,
+    // v2 — AI-generated outputs and skeleton interaction flags so reopening
+    // a case restores the full clinical workspace, not just the inputs.
+    extractionResult,
+    structuredReasoningData,
+    clinicalReasoningData,
+    evidenceEngineResult,
+    customExerciseResult,
+    customManualTherapyResult,
+    activeGoalProfile,
+    activeGoalGap,
+    whatIfScenarios,
+    whatIfComparisonBScenarios,
+    mechanismBoneIds,
+    connectionHighlights,
+    testChainActive,
+    selectedRomJoint,
+    romValues,
   }), [
     modelConfig,
     painMarkers,
@@ -1245,6 +1262,21 @@ export default function PhysioGPT() {
     unifiedBiomechanicsMovementTask,
     unifiedBiomechanicsProgress,
     unifiedBiomechanicsFaultOverrides,
+    extractionResult,
+    structuredReasoningData,
+    clinicalReasoningData,
+    evidenceEngineResult,
+    customExerciseResult,
+    customManualTherapyResult,
+    activeGoalProfile,
+    activeGoalGap,
+    whatIfScenarios,
+    whatIfComparisonBScenarios,
+    mechanismBoneIds,
+    connectionHighlights,
+    testChainActive,
+    selectedRomJoint,
+    romValues,
   ]);
 
   // Hydrate the workspace from caseSnapshot when the loaded conversation
@@ -1305,6 +1337,22 @@ export default function PhysioGPT() {
     setUnifiedBiomechanicsMovementTask(undefined);
     setUnifiedBiomechanicsProgress(0.5);
     setUnifiedBiomechanicsFaultOverrides([]);
+    // v2 — AI-output and skeleton-flag defaults.
+    setExtractionResult(null);
+    setStructuredReasoningData(null);
+    setClinicalReasoningData(null);
+    setEvidenceEngineResult(null);
+    setCustomExerciseResult(null);
+    setCustomManualTherapyResult(null);
+    setActiveGoalProfile(null);
+    setActiveGoalGap(null);
+    setWhatIfScenarios([]);
+    setWhatIfComparisonBScenarios([]);
+    setMechanismBoneIds([]);
+    setConnectionHighlights([]);
+    setTestChainActive(null);
+    setSelectedRomJoint(null);
+    setRomValues({});
 
     // Step 2 — overlay snapshot values where present.
     if (snap && typeof snap === 'object') {
@@ -1369,6 +1417,54 @@ export default function PhysioGPT() {
       }
       if (Array.isArray(snap.unifiedBiomechanicsFaultOverrides)) {
         setUnifiedBiomechanicsFaultOverrides(snap.unifiedBiomechanicsFaultOverrides as Partial<FaultRuleConfig>[]);
+      }
+      // v2 — AI outputs and skeleton interaction flags. The schema's open
+      // shape means older v1 snapshots simply lack these keys, in which
+      // case the defaults from Step 1 stand.
+      if (snap.extractionResult && typeof snap.extractionResult === 'object') {
+        setExtractionResult(snap.extractionResult as ClinicalExtractionResult);
+      }
+      if (snap.structuredReasoningData && typeof snap.structuredReasoningData === 'object') {
+        setStructuredReasoningData(snap.structuredReasoningData as StructuredReasoningResult);
+      }
+      if (snap.clinicalReasoningData && typeof snap.clinicalReasoningData === 'object') {
+        setClinicalReasoningData(snap.clinicalReasoningData as ClinicalReasoningData);
+      }
+      if (snap.evidenceEngineResult && typeof snap.evidenceEngineResult === 'object') {
+        setEvidenceEngineResult(snap.evidenceEngineResult as typeof evidenceEngineResult);
+      }
+      if (snap.customExerciseResult && typeof snap.customExerciseResult === 'object') {
+        setCustomExerciseResult(snap.customExerciseResult as typeof customExerciseResult);
+      }
+      if (snap.customManualTherapyResult && typeof snap.customManualTherapyResult === 'object') {
+        setCustomManualTherapyResult(snap.customManualTherapyResult as typeof customManualTherapyResult);
+      }
+      if (snap.activeGoalProfile && typeof snap.activeGoalProfile === 'object') {
+        setActiveGoalProfile(snap.activeGoalProfile as typeof activeGoalProfile);
+      }
+      if (snap.activeGoalGap && typeof snap.activeGoalGap === 'object') {
+        setActiveGoalGap(snap.activeGoalGap as typeof activeGoalGap);
+      }
+      if (Array.isArray(snap.whatIfScenarios)) {
+        setWhatIfScenarios(snap.whatIfScenarios as WhatIfScenario[]);
+      }
+      if (Array.isArray(snap.whatIfComparisonBScenarios)) {
+        setWhatIfComparisonBScenarios(snap.whatIfComparisonBScenarios as WhatIfScenario[]);
+      }
+      if (Array.isArray(snap.mechanismBoneIds)) {
+        setMechanismBoneIds(snap.mechanismBoneIds as string[]);
+      }
+      if (Array.isArray(snap.connectionHighlights)) {
+        setConnectionHighlights(snap.connectionHighlights as AnatomicalRegion[]);
+      }
+      if (snap.testChainActive && typeof snap.testChainActive === 'object') {
+        setTestChainActive(snap.testChainActive as { connection: KineticChainConnection; originalRegion: string });
+      }
+      if (snap.selectedRomJoint && typeof snap.selectedRomJoint === 'object') {
+        setSelectedRomJoint(snap.selectedRomJoint as RomJointDefinition);
+      }
+      if (snap.romValues && typeof snap.romValues === 'object' && !Array.isArray(snap.romValues)) {
+        setRomValues(snap.romValues as Record<string, number>);
       }
     }
 
@@ -4075,6 +4171,22 @@ ${ddxList}`;
     setUnifiedBiomechanicsMovementTask(undefined);
     setUnifiedBiomechanicsProgress(0.5);
     setUnifiedBiomechanicsFaultOverrides([]);
+    // v2 — AI outputs and skeleton interaction flags.
+    setExtractionResult(null);
+    setStructuredReasoningData(null);
+    setClinicalReasoningData(null);
+    setEvidenceEngineResult(null);
+    setCustomExerciseResult(null);
+    setCustomManualTherapyResult(null);
+    setActiveGoalProfile(null);
+    setActiveGoalGap(null);
+    setWhatIfScenarios([]);
+    setWhatIfComparisonBScenarios([]);
+    setMechanismBoneIds([]);
+    setConnectionHighlights([]);
+    setTestChainActive(null);
+    setSelectedRomJoint(null);
+    setRomValues({});
 
     // Release the hydration guard once the resets have committed.
     setTimeout(() => { isHydratingRef.current = false; }, 100);

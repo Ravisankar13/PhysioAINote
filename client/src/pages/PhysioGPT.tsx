@@ -1143,6 +1143,10 @@ export default function PhysioGPT() {
   //       consecutive runs (and confidence ≥ 0.6) the chain is
   //       suppressed until inputs shift again.
   const AUTOPILOT_STORAGE_KEY = 'physiogpt:voice-autopilot:enabled';
+  // Pause is persisted separately so a clinician who paused autopilot
+  // mid-session keeps it paused after a refresh — matching the
+  // "persistent autopilot toggle" UX promised in the task spec.
+  const AUTOPILOT_PAUSED_STORAGE_KEY = 'physiogpt:voice-autopilot:paused';
   const CONVERGENCE_RUNS = 2;
   const CONVERGENCE_MIN_CONFIDENCE = 0.6;
 
@@ -1154,7 +1158,13 @@ export default function PhysioGPT() {
       return JSON.parse(raw) === true;
     } catch { return true; }
   });
-  const [autopilotPaused, setAutopilotPaused] = useState<boolean>(false);
+  const [autopilotPaused, setAutopilotPaused] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const raw = window.localStorage.getItem(AUTOPILOT_PAUSED_STORAGE_KEY);
+      return raw !== null && JSON.parse(raw) === true;
+    } catch { return false; }
+  });
   const autopilotEnabledRef = useRef(autopilotEnabled);
   autopilotEnabledRef.current = autopilotEnabled;
   const autopilotPausedRef = useRef(autopilotPaused);
@@ -1166,6 +1176,7 @@ export default function PhysioGPT() {
   }, []);
   const handleAutopilotPauseToggle = useCallback((next: boolean) => {
     setAutopilotPaused(next);
+    try { window.localStorage.setItem(AUTOPILOT_PAUSED_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
   }, []);
   /** Re-run the AI chain starting from a specific stage. The chain
    *  itself owns ordering — this just fires the right entry point and
@@ -1225,6 +1236,15 @@ export default function PhysioGPT() {
   });
   const monitorStabilityRef = useRef(monitorStability);
   monitorStabilityRef.current = monitorStability;
+  // Convenience flag mirrored from monitorStability for use inside
+  // triggers/effects without re-reading the full state. When true,
+  // governor-driven re-runs are suppressed for ALL stages until the
+  // structural input hash changes (which destabilizes the ribbon and
+  // automatically clears this flag) or the user manually re-runs a
+  // stage from the dock (which calls handleAutopilotRerunFromStage
+  // and resets the per-stage input-hash cache).
+  const monitorConvergedRef = useRef<boolean>(false);
+  monitorConvergedRef.current = monitorStability.converged && !monitorStability.destabilized;
 
   // Per-stage input-hash for dedup. Key: stage id → last hash run.
   const stageInputHashRef = useRef<Partial<Record<AutopilotStageId, string>>>({});
@@ -2016,10 +2036,13 @@ export default function PhysioGPT() {
     pendingFollowUpQuestionsRef.current = questions;
   }, []);
 
-  // Task #313 — in-flight tier-3 GPT requests, keyed by spoken text
-  // hash, so we don't fire concurrent requests for the same chunk
-  // while the user is still talking.
+  // Task #313 — in-flight tier-3 GPT requests, keyed by
+  // (spoken-text + question-set) so we don't fire concurrent or
+  // duplicate requests for the same chunk while the user is still
+  // talking. Resolved cache keeps the latest few keys to avoid
+  // re-firing on every transcript pulse.
   const followUpGptInFlightRef = useRef<Set<string>>(new Set());
+  const followUpGptCacheRef = useRef<Set<string>>(new Set());
   const tryMatchFollowUpAnswer = useCallback((spokenText: string, questions: FollowUpQuestion[]): boolean => {
     if (!clinicalTextInputRef.current || questions.length === 0) return false;
     const spoken = spokenText.toLowerCase().trim();
@@ -2062,19 +2085,23 @@ export default function PhysioGPT() {
 
     // Tier 3 — GPT-backed semantic match. Fire-and-forget so the
     // sync caller (transcript loop) keeps its existing pointer; if
-    // the model reports a confident match we apply it asynchronously
-    // and surface it via toast. Fail-soft on any error.
+    // the server reports one or more confident matches we apply each
+    // asynchronously. Cached per (spoken text + question-set) to
+    // avoid duplicate model calls for the same chunk. Server returns
+    // `{ matches: [{ questionId, answer, confidence, reason }] }`.
     if (spoken.length >= 8) {
-      const inflightKey = `${spoken}::${questions.map(q => q.id).join(',')}`;
-      if (!followUpGptInFlightRef.current.has(inflightKey)) {
-        followUpGptInFlightRef.current.add(inflightKey);
+      const cacheKey = `${spoken}::${questions.map(q => q.id).sort().join(',')}`;
+      if (!followUpGptInFlightRef.current.has(cacheKey) && !followUpGptCacheRef.current.has(cacheKey)) {
+        followUpGptInFlightRef.current.add(cacheKey);
+        const activeQuestionId = questions[0]?.id;
         (async () => {
           try {
             const res = await fetch('/api/clinical-text/answer-followup', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                spokenText,
+                utterance: spokenText,
+                activeQuestionId,
                 questions: questions.map(q => ({
                   id: q.id, question: q.question, options: q.options,
                 })),
@@ -2082,23 +2109,35 @@ export default function PhysioGPT() {
             });
             if (!res.ok) return;
             const data = await res.json();
-            const matchedId: string | undefined = data?.questionId;
-            const answer: string | undefined = data?.answer;
-            const confidence: number = typeof data?.confidence === 'number' ? data.confidence : 0;
-            if (!matchedId || !answer || confidence < 0.7) return;
-            const fq = questions.find(q => q.id === matchedId);
-            if (!fq) return;
-            // Re-check the question is still pending — the user may
-            // have already answered it manually while we were waiting.
-            const stillPending = pendingFollowUpQuestionsRef.current.some(q => q.id === matchedId);
-            if (!stillPending) return;
-            clinicalTextInputRef.current?.submitFollowUpAnswer(matchedId, answer);
-            toast({
-              title: 'Follow-up Answered',
-              description: `Answered: "${fq.question.substring(0, 50)}..."`,
-            });
+            const matches: Array<{ questionId: string; answer: string; confidence?: number }> =
+              Array.isArray(data?.matches) ? data.matches : [];
+            for (const m of matches) {
+              if (!m?.questionId || !m?.answer) continue;
+              if (typeof m.confidence === 'number' && m.confidence < 0.7) continue;
+              const fq = questions.find(q => q.id === m.questionId);
+              if (!fq) continue;
+              // Re-check the question is still pending — the user may
+              // have already answered it manually while we were waiting.
+              const stillPending = pendingFollowUpQuestionsRef.current.some(q => q.id === m.questionId);
+              if (!stillPending) continue;
+              clinicalTextInputRef.current?.submitFollowUpAnswer(m.questionId, m.answer);
+              toast({
+                title: 'Follow-up Answered',
+                description: `Answered: "${fq.question.substring(0, 50)}..."`,
+              });
+            }
           } catch { /* fail-soft */ }
-          finally { followUpGptInFlightRef.current.delete(inflightKey); }
+          finally {
+            followUpGptInFlightRef.current.delete(cacheKey);
+            // Cache the spoken-text+question-set so the same chunk
+            // doesn't re-trigger the model on repeated transcript
+            // pulses. Bounded LRU-ish via simple size cap.
+            followUpGptCacheRef.current.add(cacheKey);
+            if (followUpGptCacheRef.current.size > 64) {
+              const first = followUpGptCacheRef.current.values().next().value;
+              if (first) followUpGptCacheRef.current.delete(first);
+            }
+          }
         })();
       }
     }
@@ -2481,10 +2520,18 @@ export default function PhysioGPT() {
   skeletonModeRef.current = skeletonMode;
 
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
+    // Governor — surface parse stage on the AI Activity Monitor.
+    // Each successful parse settles the 'parse' chip to done; the
+    // ClinicalTextInput panel handles the in-flight transition via
+    // its own loading state (we mark start synchronously here for
+    // visibility — the chip flickers running→done within one render
+    // for fast parses, which is the desired UX).
+    markStageStart('parse');
     // Retain the latest parse for the Patient Context panel (used for
     // stale-fingerprint comparison + condition-specific prompt
     // generation).
     setLastClinicalParseResult(result);
+    markStageEnd('parse', 'done');
     const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightLabels: string[] } = {
       markerIds: [], muscleIds: [], deviationKeys: [], highlightLabels: [],
     };
@@ -3528,6 +3575,20 @@ ${ddxList}`;
     });
 
     if (!diagnosis && regions.length === 0) return;
+    // Governor — per-stage input-hash dedup. The same diagnosis +
+    // regions set hits the same evidence-catalog rows; skip the call.
+    // Convergence also blocks the chain-driven re-runs.
+    const evidenceHash = `${diagnosis}|${regions.slice().sort().join(',')}`;
+    if (monitorConvergedRef.current && stageInputHashRef.current['evidence'] === evidenceHash) {
+      markStageEnd('evidence', 'converged', 'top hypothesis stable');
+      return;
+    }
+    if (stageInputHashRef.current['evidence'] === evidenceHash) {
+      markStageEnd('evidence', 'skipped', 'inputs unchanged');
+      return;
+    }
+    stageInputHashRef.current['evidence'] = evidenceHash;
+    markStageStart('evidence');
 
     const abortController = new AbortController();
     evidenceAbortRef.current = abortController;
@@ -3563,12 +3624,14 @@ ${ddxList}`;
     .then(data => {
       if (evidenceQueryIdRef.current === currentQueryId) {
         setEvidenceEngineResult(data);
+        markStageEnd('evidence', 'done');
       }
     })
     .catch((err) => {
       if (err?.name === 'AbortError') return;
       if (evidenceQueryIdRef.current === currentQueryId) {
         toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' });
+        markStageEnd('evidence', 'error', err instanceof Error ? err.message : 'request failed');
       }
     })
     .finally(() => {
@@ -3579,7 +3642,7 @@ ${ddxList}`;
         }
       }
     });
-  }, [painMarkers, clinicalBubbleResults, clinicalReasoningData, structuredReasoningData, tissueViewMode, toast]);
+  }, [painMarkers, clinicalBubbleResults, clinicalReasoningData, structuredReasoningData, tissueViewMode, toast, markStageStart, markStageEnd]);
 
   handleEvidenceQueryRef.current = handleEvidenceQuery;
 
@@ -5050,8 +5113,22 @@ ${ddxList}`;
       return;
     }
     if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
+    // Governor convergence gate — once the orchestrator has marked the
+    // top hypothesis as stable for ≥ CONVERGENCE_RUNS at confidence
+    // ≥ CONVERGENCE_MIN_CONFIDENCE, suppress reasoning re-runs unless
+    // the clinician explicitly forces one (forceRefresh=true) or
+    // material inputs change (which destabilizes the ribbon and
+    // clears the flag automatically).
+    if (!forceRefresh && monitorConvergedRef.current) {
+      markStageEnd('reason', 'converged', 'top hypothesis stable');
+      return;
+    }
 
     lastReasoningTriggerRef.current = triggerKey;
+    // Cache the input hash on the dedup ref so per-stage governor
+    // checks elsewhere (research/plan rerun, evidence) can compare
+    // against it for cross-stage dedup.
+    stageInputHashRef.current['reason'] = triggerKey;
     setClinicalReasoningProcessing(true);
     markStageStart('reason');
 
@@ -5661,12 +5738,26 @@ ${ddxList}`;
 
     if (!topLabel) return;
 
+    // Per-stage input-hash dedup — derived from the reasoning input
+    // hash plus the top hypothesis so research/plan don't re-fire
+    // when reasoning's structural inputs haven't materially changed
+    // for those stages either.
+    const downstreamInputHash = `${stageInputHashRef.current['reason'] || ''}|${topLabel}|${topConfidence.toFixed(2)}`;
+
     // Stage: case-research (delayed so evidence settles first).
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
+      if (monitorConvergedRef.current) return;
       const r = caseResearchPanelRef.current;
       if (!r) return;
       if (r.isRunning()) return;
+      if (stageInputHashRef.current['research'] === downstreamInputHash) {
+        // Same downstream inputs — research panel's own contentHash
+        // would have served from cache anyway; surface the skip.
+        markStageEnd('research', 'skipped', 'inputs unchanged');
+        return;
+      }
+      stageInputHashRef.current['research'] = downstreamInputHash;
       markStageStart('research');
       try {
         r.trigger(false);
@@ -5683,8 +5774,14 @@ ${ddxList}`;
     // and no build is currently in flight.
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
+      if (monitorConvergedRef.current) return;
       if (!hasClinicalTextDataRef.current) return;
       if (autoBuildStateRef.current !== 'idle') return;
+      if (stageInputHashRef.current['plan'] === downstreamInputHash) {
+        markStageEnd('plan', 'skipped', 'inputs unchanged');
+        return;
+      }
+      stageInputHashRef.current['plan'] = downstreamInputHash;
       markStageStart('plan');
       try {
         handleAutoBuildClick();
@@ -14993,7 +15090,16 @@ ${ddxList}`;
         monitorStages={monitorStages}
         monitorStability={monitorStability}
         autopilotEnabled={autopilotEnabled}
-        autopilotEligible={isRecording || hasClinicalTextData}
+        // Snapshot eligibility gate — autopilot only fires for
+        // conversations the user has explicitly opted into snapshot
+        // (the same gate used by the periodic snapshot effects). This
+        // prevents the dock from auto-running case workups on legacy
+        // conversations that pre-date the autopilot feature.
+        autopilotEligible={
+          (isRecording || hasClinicalTextData) &&
+          !!selectedConversationId &&
+          snapshotEligibleRef.current.has(selectedConversationId)
+        }
         paused={autopilotPaused}
         onAutopilotToggle={handleAutopilotToggle}
         onPauseToggle={handleAutopilotPauseToggle}

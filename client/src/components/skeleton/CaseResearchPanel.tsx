@@ -1223,6 +1223,27 @@ export const CaseResearchPanel = forwardRef<CaseResearchPanelHandle, CaseResearc
                 </div>
               )}
 
+              {/* Why we searched this way — single-line case-context summary so the
+                  clinician can see at a glance which seed (top hypothesis + region/
+                  laterality + chronicity + key patient factors) drove this search. */}
+              {caseContext && (caseContext.topHypothesis || caseContext.region || caseContext.chronicity) && (
+                <div
+                  className="rounded-md border border-violet-700/40 bg-violet-950/30 px-2 py-1.5 text-[10.5px] leading-snug text-violet-100"
+                  data-testid="case-research-why-summary"
+                >
+                  <span className="font-semibold text-violet-200">Why we searched this way: </span>
+                  {[
+                    caseContext.topHypothesis && `seed "${caseContext.topHypothesis}"`,
+                    caseContext.region && `region ${caseContext.region}${caseContext.laterality ? ` (${caseContext.laterality})` : ''}`,
+                    caseContext.chronicity && `chronicity ${caseContext.chronicity}`,
+                    caseContext.patientFactors && [
+                      caseContext.patientFactors.age != null ? `age ${caseContext.patientFactors.age}` : null,
+                      caseContext.patientFactors.activityLevel ? caseContext.patientFactors.activityLevel : null,
+                    ].filter(Boolean).join(', '),
+                  ].filter(Boolean).join(' · ')}
+                </div>
+              )}
+
               {/* Variables used */}
               <div className="rounded-md border border-slate-700/60 bg-slate-900/60">
                 <button

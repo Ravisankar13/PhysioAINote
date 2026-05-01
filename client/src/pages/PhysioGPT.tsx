@@ -2822,7 +2822,12 @@ export default function PhysioGPT() {
       subjectiveHistoryRef.current = updated;
       setSubjectiveHistoryInput(updated);
       lastReasoningTriggerRef.current = '';
-      setTimeout(() => triggerClinicalReasoningAnalysisRef.current(true), 300);
+      // Pause AI gate — when the autopilot is paused, transcription/
+      // parse keep running but no new AI calls auto-fire.
+      setTimeout(() => {
+        if (autopilotPausedRef.current) return;
+        triggerClinicalReasoningAnalysisRef.current(true);
+      }, 300);
     }
 
     const prev = clinicalTextAppliedRef.current;
@@ -2931,7 +2936,10 @@ export default function PhysioGPT() {
       subjectiveHistoryRef.current = cleaned;
       setSubjectiveHistoryInput(cleaned);
       lastReasoningTriggerRef.current = '';
-      setTimeout(() => triggerClinicalReasoningAnalysisRef.current(true), 300);
+      setTimeout(() => {
+        if (autopilotPausedRef.current) return;
+        triggerClinicalReasoningAnalysisRef.current(true);
+      }, 300);
     }
 
     setCompromisedTissues([]);
@@ -5357,6 +5365,8 @@ ${ddxList}`;
       }
 
       autoEvidenceTimerRef.current = setTimeout(() => {
+        // Pause AI gate — no new auto AI calls when paused.
+        if (autopilotPausedRef.current) return;
         handleEvidenceQueryRef.current();
       }, 500);
 

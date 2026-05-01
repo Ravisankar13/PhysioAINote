@@ -1748,6 +1748,14 @@ export default function PhysioGPT() {
     }
 
     hydratedConversationIdRef.current = selectedConversationId;
+    // Conversation switch — reset orchestrator transient state so a
+    // freshly opened case starts clean: clear per-stage input hashes,
+    // clear stability ribbon (so any prior convergence doesn't bleed
+    // into the new case), and disarm the voice-trigger flag.
+    stageInputHashRef.current = {};
+    setMonitorStability({ topLabel: null, stableForRuns: 0, converged: false, destabilized: false });
+    voiceTriggeredRef.current = false;
+    setMonitorStages(initialMonitorStages);
     // Hydrate persisted autopilot status for this conversation (re-entry
     // guard). If the chain previously settled, restore its terminal
     // state on the dock so it doesn't re-fire automatically.
@@ -2165,11 +2173,12 @@ export default function PhysioGPT() {
       }
     }
 
-    if (questions.length === 1 && spoken.length >= 8) {
-      clinicalTextInputRef.current.submitFollowUpAnswer(questions[0].id, spokenText.trim());
-      toast({ title: "Follow-up Answered", description: `Answered: "${questions[0].question.substring(0, 50)}..."` });
-      return true;
-    }
+    // NOTE: removed the legacy single-question auto-submit shortcut
+    // (questions.length === 1 && spoken.length >= 8). It was
+    // fabrication-prone — auto-attaching arbitrary utterances to the
+    // sole pending question regardless of semantic relevance. The
+    // tier-3 GPT matcher below now owns this case and only fires
+    // submitFollowUpAnswer when its confidence ≥ 0.7.
 
     // Tier 3 — GPT-backed semantic match. Fire-and-forget so the
     // sync caller (transcript loop) keeps its existing pointer; if
@@ -5837,17 +5846,20 @@ ${ddxList}`;
     // when reasoning's structural inputs haven't materially changed
     // for those stages either.
     const downstreamInputHash = `${stageInputHashRef.current['reason'] || ''}|${topLabel}|${topConfidence.toFixed(2)}`;
+    // Capture the conversation ID at chain start. If the user switches
+    // conversations before the queued stages fire, those callbacks
+    // bail to prevent cross-case contamination.
+    const originatingCid = cid;
 
     // Stage: case-research (delayed so evidence settles first).
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
+      if (selectedConversationIdRef.current !== originatingCid) return; // case switched
       if (monitorConvergedRef.current) return;
       const r = caseResearchPanelRef.current;
       if (!r) return;
       if (r.isRunning()) return;
       if (stageInputHashRef.current['research'] === downstreamInputHash) {
-        // Same downstream inputs — research panel's own contentHash
-        // would have served from cache anyway; surface the skip.
         markStageEnd('research', 'skipped', 'inputs unchanged');
         return;
       }
@@ -5855,9 +5867,25 @@ ${ddxList}`;
       markStageStart('research');
       try {
         r.trigger(false);
-        // No completion callback from the panel; mark done after a
-        // generous window so the chip leaves "running".
-        window.setTimeout(() => markStageEnd('research', 'done'), 8000);
+        // The CaseResearchPanel doesn't expose a per-trigger completion
+        // callback (it's React-Query-backed and renders its own state).
+        // Poll its isRunning() to settle the chip — much more accurate
+        // than a fixed timeout. Cap at 60s so we don't poll forever.
+        const pollStart = Date.now();
+        const pollInterval = window.setInterval(() => {
+          if (selectedConversationIdRef.current !== originatingCid) {
+            window.clearInterval(pollInterval);
+            markStageEnd('research', 'error', 'case switched');
+            return;
+          }
+          if (!caseResearchPanelRef.current || !caseResearchPanelRef.current.isRunning()) {
+            window.clearInterval(pollInterval);
+            markStageEnd('research', 'done');
+          } else if (Date.now() - pollStart > 60000) {
+            window.clearInterval(pollInterval);
+            markStageEnd('research', 'error', 'timeout');
+          }
+        }, 500);
       } catch (e) {
         markStageEnd('research', 'error', e instanceof Error ? e.message : 'trigger failed');
       }
@@ -5868,6 +5896,7 @@ ${ddxList}`;
     // and no build is currently in flight.
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
+      if (selectedConversationIdRef.current !== originatingCid) return; // case switched
       if (monitorConvergedRef.current) return;
       if (!hasClinicalTextDataRef.current) return;
       if (autoBuildStateRef.current !== 'idle') return;
@@ -5879,8 +5908,6 @@ ${ddxList}`;
       markStageStart('plan');
       try {
         handleAutoBuildClick();
-        // The build settles to 'idle' via existing effects; the auto-
-        // build state effect (below) flips the chip to done.
       } catch (e) {
         markStageEnd('plan', 'error', e instanceof Error ? e.message : 'auto-build failed');
       }

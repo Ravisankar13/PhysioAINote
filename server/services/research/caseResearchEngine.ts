@@ -229,9 +229,6 @@ export function formatCaseContextForPrompt(ctx: CaseResearchContext): string {
     lines.push(`Patient factors: ${ctx.patientFactors.slice(0, 8).join(', ')}`);
   }
   if (ctx.comorbidities && ctx.comorbidities.length) {
-    // Surface comorbidities explicitly so the AI seeds queries
-    // toward population-specific evidence (e.g. diabetes-aware
-    // tendinopathy, smoking/healing literature, pregnancy-safe rehab).
     lines.push(`Comorbidities/flags: ${ctx.comorbidities.join(', ')}`);
   }
   if (lines.length === 0) return '';

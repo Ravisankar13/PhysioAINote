@@ -14666,11 +14666,12 @@ EXAMPLES of good predictions:
   app.post('/api/clinical-text/answer-followup', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { utterance, questions, activeQuestionId } = req.body || {};
+      const empty = { answered: false, answer: null, confidence: 0, matches: [] };
       if (!utterance || typeof utterance !== 'string' || utterance.trim().length < 4) {
-        return res.json({ matches: [] });
+        return res.json(empty);
       }
       if (!Array.isArray(questions) || questions.length === 0) {
-        return res.json({ matches: [] });
+        return res.json(empty);
       }
       const sanitized = questions
         .filter((q: any) => q && typeof q.id === 'string' && typeof q.question === 'string')
@@ -14680,7 +14681,7 @@ EXAMPLES of good predictions:
           question: String(q.question).slice(0, 220),
           options: Array.isArray(q.options) ? q.options.slice(0, 8).map((o: any) => String(o).slice(0, 60)) : undefined,
         }));
-      if (sanitized.length === 0) return res.json({ matches: [] });
+      if (sanitized.length === 0) return res.json(empty);
 
       const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
       const replitOpenai = new OpenAI({
@@ -14747,12 +14748,21 @@ Match now.`;
         })
         .filter((m: any) => m !== null)
         .slice(0, 5);
-      res.json({ matches });
+      // Also surface the active-question result at the top level
+      // so callers expecting the single-question contract
+      // ({ answered, answer, confidence }) work without changes.
+      const activeMatch = activeQuestionId
+        ? matches.find((m: any) => m.questionId === activeQuestionId)
+        : matches[0];
+      res.json({
+        answered: !!activeMatch,
+        answer: activeMatch?.answer ?? null,
+        confidence: activeMatch?.confidence ?? 0,
+        matches,
+      });
     } catch (error: unknown) {
       console.error('Error in /api/clinical-text/answer-followup:', error);
-      // Fail soft — the orchestrator falls back to its existing tier-3
-      // single-question heuristic when this returns no matches.
-      res.json({ matches: [] });
+      res.json({ answered: false, answer: null, confidence: 0, matches: [] });
     }
   });
 

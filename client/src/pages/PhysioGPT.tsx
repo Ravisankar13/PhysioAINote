@@ -1093,7 +1093,7 @@ export default function PhysioGPT() {
   const slingAnalysisRef = useRef<ReturnType<typeof computeSlingAnalysis> | null>(null);
   const [slingActivationOverrides, setSlingActivationOverrides] = useState<Partial<Record<SlingId, number>>>({});
   const triggerClinicalReasoningAnalysisRef = useRef<(forceRefresh?: boolean) => void>(() => {});
-  const handleEvidenceQueryRef = useRef<() => void>(() => {});
+  const handleEvidenceQueryRef = useRef<(opts?: { autopilot?: boolean }) => void>(() => {});
   /** Forward-declared autopilot chain — implementation is bound near
    *  `handleAutoBuildClick` (which depends on later state). The
    *  reasoning trigger calls into this via the ref to avoid hoisting. */
@@ -1360,9 +1360,6 @@ export default function PhysioGPT() {
       if (cid) writeAutopilotStatusForConv(cid, next);
       voiceTriggeredRef.current = false; // chain settled; require new voice trigger
     } else if (outcome === 'converged' && id === 'research') {
-      // Plan is handled in the branch above as the terminal stage.
-      // Research-converged short-circuits the plan when downstream
-      // chaining is suppressed by monitorConvergedRef.
       setAutopilotStatus('converged');
       if (cid) writeAutopilotStatusForConv(cid, 'converged');
     }
@@ -3683,7 +3680,7 @@ ${ddxList}`;
     }
   }, [extractionResult?.mainComplaint, sessionPrescriptionNum]);
 
-  const handleEvidenceQuery = useCallback(() => {
+  const handleEvidenceQuery = useCallback((opts?: { autopilot?: boolean }) => {
     if (evidenceAbortRef.current) {
       evidenceAbortRef.current.abort();
     }
@@ -3700,17 +3697,17 @@ ${ddxList}`;
     });
 
     if (!diagnosis && regions.length === 0) return;
-    // Governor — per-stage input-hash dedup. The same diagnosis +
-    // regions set hits the same evidence-catalog rows; skip the call.
-    // Convergence also blocks the chain-driven re-runs.
     const evidenceHash = `${diagnosis}|${regions.slice().sort().join(',')}`;
-    if (monitorConvergedRef.current && stageInputHashRef.current['evidence'] === evidenceHash) {
-      markStageEnd('evidence', 'converged', 'top hypothesis stable');
-      return;
-    }
-    if (stageInputHashRef.current['evidence'] === evidenceHash) {
-      markStageEnd('evidence', 'skipped', 'inputs unchanged');
-      return;
+    // Dedup/convergence applies to autopilot-driven calls only.
+    if (opts?.autopilot) {
+      if (monitorConvergedRef.current && stageInputHashRef.current['evidence'] === evidenceHash) {
+        markStageEnd('evidence', 'converged', 'top hypothesis stable');
+        return;
+      }
+      if (stageInputHashRef.current['evidence'] === evidenceHash) {
+        markStageEnd('evidence', 'skipped', 'inputs unchanged');
+        return;
+      }
     }
     stageInputHashRef.current['evidence'] = evidenceHash;
     markStageStart('evidence');
@@ -5091,6 +5088,14 @@ ${ddxList}`;
     if (clinicalReasoningProcessing) return;
     if (clinicalReasoningPaused) return;
     if (skeletonModeRef.current === 'movement') return;
+    // Past-case re-entry guard. forceRefresh=true bypasses.
+    if (!forceRefresh) {
+      const cid = selectedConversationIdRef.current;
+      if (cid) {
+        const persisted = readAutopilotStatusMap()[String(cid)];
+        if (persisted === 'done' || persisted === 'converged') return;
+      }
+    }
 
     const markerData = painMarkersRef.current.map(pm => ({
       label: pm.anatomicalLabel || pm.nearestBone,
@@ -5391,9 +5396,8 @@ ${ddxList}`;
       }
 
       autoEvidenceTimerRef.current = setTimeout(() => {
-        // Pause AI gate — no new auto AI calls when paused.
         if (autopilotPausedRef.current) return;
-        handleEvidenceQueryRef.current();
+        handleEvidenceQueryRef.current({ autopilot: true });
       }, 500);
 
       // Task #313 — autopilot chain. Convergence + stability are
@@ -5406,7 +5410,7 @@ ${ddxList}`;
     } finally {
       setClinicalReasoningProcessing(false);
     }
-  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations, markStageStart, markStageEnd]);
+  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations, markStageStart, markStageEnd, readAutopilotStatusMap]);
 
   triggerClinicalReasoningAnalysisRef.current = triggerClinicalReasoningAnalysis;
 
@@ -14891,53 +14895,33 @@ ${ddxList}`;
                 .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
                 .map(s => s.slice(0, 80))
                 .slice(0, 12);
-              // === Round-8: enrich case context for case-aware research ===
-              // Mechanism string from intake extraction (e.g. "fall on
-              // outstretched hand", "overuse running").
               const mechanismForCtx = (extractionResult?.mechanism || '').trim().slice(0, 200);
-              // Peak self-reported pain severity 0–10 across captured
-              // symptoms. Drives evidence weighting toward acute-care vs.
-              // self-management literature.
               const severityForCtx = (() => {
                 const symptoms = extractionResult?.symptoms || [];
                 let max = -Infinity;
                 for (const s of symptoms) {
-                  if (typeof s?.severity === 'number' && Number.isFinite(s.severity)) {
-                    if (s.severity > max) max = s.severity;
+                  if (typeof s?.severity === 'number' && Number.isFinite(s.severity) && s.severity > max) {
+                    max = s.severity;
                   }
                 }
                 return Number.isFinite(max) ? Math.max(0, Math.min(10, max)) : null;
               })();
-              // Irritability prefers the structured intake result; falls
-              // back to patient-factors panel value.
               const irritabilityForCtx: 'low' | 'moderate' | 'high' | null = (() => {
                 const v = extractionResult?.irritability ?? effectivePatientFactors?.irritability;
                 return v === 'low' || v === 'moderate' || v === 'high' ? v : null;
               })();
-              // Discrete comorbidity flags. Maps the structured
-              // patient-factors enums into the schema's controlled
-              // vocabulary so the engine can up-weight diabetes-aware
-              // tendinopathy guidelines, smoking/healing literature,
-              // pregnancy-safe rehab, etc.
               const comorbiditiesForCtx = (() => {
                 const out: Array<'diabetes' | 'smoking' | 'pregnancy' | 'osteoporosis' | 'cardiovascular' | 'autoimmune' | 'obesity' | 'previousEpisodes'> = [];
                 const dm = effectivePatientFactors?.diabetes;
                 if (dm === 'type1' || dm === 'type2' || dm === 'prediabetic') out.push('diabetes');
                 if (effectivePatientFactors?.smoking === 'current') out.push('smoking');
-                // Premenopausal + relevant medication signal is not a
-                // pregnancy proxy; we only flag pregnancy when the
-                // intake notes mention it explicitly.
                 const notes = (effectivePatientFactors?.comorbiditiesNotes || '').toLowerCase();
                 if (/\bpregnan(t|cy)\b/.test(notes)) out.push('pregnancy');
                 if (/\bosteoporo/.test(notes)) out.push('osteoporosis');
                 if (/\b(cad|cardiac|cardiovascular|chf|hypertension|htn)\b/.test(notes)) out.push('cardiovascular');
                 if (/\b(autoimmune|ra\b|rheumatoid|lupus|psoriatic)\b/.test(notes)) out.push('autoimmune');
-                if (effectivePatientFactors?.bmi === 'obese') {
-                  if (!out.includes('obesity')) out.push('obesity');
-                }
-                if ((effectivePatientFactors?.previousEpisodes ?? 0) >= 2 && !out.includes('previousEpisodes')) {
-                  out.push('previousEpisodes');
-                }
+                if (effectivePatientFactors?.bmi === 'obese' && !out.includes('obesity')) out.push('obesity');
+                if ((effectivePatientFactors?.previousEpisodes ?? 0) >= 2 && !out.includes('previousEpisodes')) out.push('previousEpisodes');
                 return out.slice(0, 8);
               })();
               const caseContext: CaseResearchContext = {

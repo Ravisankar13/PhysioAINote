@@ -245,7 +245,8 @@ import { buildConditionContext, buildCustomExerciseId, buildCustomTechniqueId, c
 import { computeNaturalProgression, resolveNaturalProgressionConditionId } from "@/lib/naturalProgressionEngine";
 import { buildPrescriptionContext } from "@/lib/prescriptionAdapterEngine";
 import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDashboard";
-import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers, derivePsychosocialAndOccupationalDrivers, type PatientFactors } from "@/lib/patientFactorsEngine";
+import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers, derivePsychosocialAndOccupationalDrivers, findConditionProfile, type PatientFactors } from "@/lib/patientFactorsEngine";
+import { generateGoalProfile, generateGenericGoalProfile } from "@/lib/goalStateEngine";
 const PatientFactorsForm = lazy(() => import("@/components/skeleton/PatientFactorsForm"));
 import { countFactorOverrides } from "@/components/skeleton/PatientFactorsForm";
 import { CaseResearchPanel } from "@/components/skeleton/CaseResearchPanel";
@@ -1116,6 +1117,17 @@ export default function PhysioGPT() {
   // after a case switch / new trigger.
   const reasoningRequestIdRef = useRef(0);
   const reasoningAbortRef = useRef<AbortController | null>(null);
+  // Set of stage ids the user explicitly asked to re-run "from here".
+  // Forced stages bypass the convergence governor on the very next chain
+  // pass so a converged top hypothesis cannot suppress an explicit rerun.
+  const forceRerunStagesRef = useRef<Set<AutopilotStageId>>(new Set());
+  // Cancellation for the in-flight async chain runner. Bumped on every
+  // chain entry; each await boundary checks the captured run id.
+  const chainRunIdRef = useRef(0);
+  // Mirror of patientContextSig so the autopilot chain (defined before
+  // patientContextSig in render order) can fold it into the research
+  // dedup hash without restructuring the component.
+  const patientContextSigRef = useRef<string>('');
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
@@ -1215,13 +1227,17 @@ export default function PhysioGPT() {
   /** Re-run the AI chain starting from a specific stage. The chain
    *  itself owns ordering — this just fires the right entry point and
    *  invalidates downstream input-hash cache so the dedup governor
-   *  doesn't short-circuit it. */
+   *  doesn't short-circuit it. The forceRerunStagesRef set is consulted
+   *  by the chain governor so a converged top hypothesis cannot suppress
+   *  an explicitly-requested rerun ("force this stage and everything
+   *  downstream even when converged"). */
   const handleAutopilotRerunFromStage = useCallback((id: AutopilotStageId) => {
     const order: AutopilotStageId[] = ['parse', 'reason', 'evidence', 'research', 'plan'];
     const fromIdx = order.indexOf(id);
     if (fromIdx >= 0) {
       for (let i = fromIdx; i < order.length; i++) {
         delete stageInputHashRef.current[order[i]];
+        forceRerunStagesRef.current.add(order[i]);
       }
     }
     voiceTriggeredRef.current = true;
@@ -5936,12 +5952,30 @@ ${ddxList}`;
 
   // Autopilot chain — runs convergence + stability and schedules the
   // downstream stages (goal/research/plan). Voice-triggered only.
+  /** Stage-governed async autopilot chain runner.
+   *
+   *  Runs evidence → goal-profile → research → plan as an awaited
+   *  sequence. Each stage:
+   *    1. Re-checks the kill switches (autopilot enabled, not paused,
+   *       same conversation, eligible, run id unchanged).
+   *    2. Consults the convergence governor — but a stage present in
+   *       forceRerunStagesRef bypasses that gate (so explicit "Re-run
+   *       from here" requests always run, even when the top hypothesis
+   *       has stabilised).
+   *    3. Consults the input-hash dedup governor — bypassed when forced.
+   *    4. Awaits its own completion before the next stage starts.
+   *
+   *  Research dedup is keyed by the full structured caseContext signal
+   *  (reason hash + top hypothesis + patient context signature) rather
+   *  than just hypothesis label/confidence, so meaningful patient-side
+   *  changes invalidate the cached research run. */
   const chainAutopilotAfterReasoning = useCallback((data: ClinicalReasoningData) => {
     if (!autopilotEnabledRef.current) return;
     if (autopilotPausedRef.current) return;
     if (!voiceTriggeredRef.current) return;
     const cid = selectedConversationIdRef.current;
     if (!cid || !snapshotEligibleRef.current.has(cid)) return;
+
     const top = (data.hypotheses || []).find(h => h.status !== 'ruled_out') ?? data.hypotheses?.[0];
     const stab = monitorStabilityRef.current;
     const topLabel = top?.condition?.trim() || null;
@@ -5957,7 +5991,17 @@ ${ddxList}`;
       destabilized: stab.topLabel !== null && !wasSame,
     });
 
-    if (justConverged && wasSame) {
+    // Snapshot the force-rerun set for *this* chain pass, then clear so
+    // a future natural pass goes back to convergence-suppressed mode.
+    const forced = new Set(forceRerunStagesRef.current);
+    forceRerunStagesRef.current.clear();
+
+    // Convergence short-circuit only applies if no downstream stage was
+    // explicitly forced — otherwise we honour the user's rerun intent.
+    if (
+      justConverged && wasSame &&
+      !forced.has('research') && !forced.has('plan') && !forced.has('evidence')
+    ) {
       markStageEnd('research', 'converged', `top hypothesis stable (${topLabel})`);
       markStageEnd('plan', 'converged', `top hypothesis stable (${topLabel})`);
       return;
@@ -5965,53 +6009,135 @@ ${ddxList}`;
 
     if (!topLabel) return;
 
-    const downstreamInputHash = `${stageInputHashRef.current['reason'] || ''}|${topLabel}|${topConfidence.toFixed(2)}`;
+    // Research dedup key now includes the patient-context signature so
+    // changes to chronicity/factors/comorbidities invalidate the run.
+    const downstreamInputHash =
+      `${stageInputHashRef.current['reason'] || ''}|${topLabel}|${topConfidence.toFixed(2)}|${patientContextSigRef.current || ''}`;
     const originatingCid = cid;
+    chainRunIdRef.current += 1;
+    const myRunId = chainRunIdRef.current;
 
-    window.setTimeout(() => {
-      if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
-      if (selectedConversationIdRef.current !== originatingCid) return;
-      if (!snapshotEligibleRef.current.has(originatingCid)) return;
-      if (monitorConvergedRef.current) return;
-      const r = caseResearchPanelRef.current;
-      if (!r) return;
-      if (r.isRunning()) return;
-      if (stageInputHashRef.current['research'] === downstreamInputHash) {
-        markStageEnd('research', 'skipped', 'inputs unchanged');
-        return;
-      }
-      stageInputHashRef.current['research'] = downstreamInputHash;
-      markStageStart('research');
-      try {
-        r.trigger(false);
+    /** Per-await guard: bail if anything that should pause/cancel us
+     *  changed between stages. */
+    const stillEligible = (): boolean => {
+      if (chainRunIdRef.current !== myRunId) return false;
+      if (!autopilotEnabledRef.current || autopilotPausedRef.current) return false;
+      if (selectedConversationIdRef.current !== originatingCid) return false;
+      if (!snapshotEligibleRef.current.has(originatingCid)) return false;
+      return true;
+    };
+
+    /** Promise wrapper around the research panel's running flag. */
+    const awaitResearch = (): Promise<'done' | 'error' | 'cancelled'> =>
+      new Promise(resolve => {
         const pollStart = Date.now();
-        const pollInterval = window.setInterval(() => {
-          if (selectedConversationIdRef.current !== originatingCid) {
-            window.clearInterval(pollInterval);
-            markStageEnd('research', 'error', 'case switched');
+        const tick = window.setInterval(() => {
+          if (!stillEligible()) {
+            window.clearInterval(tick);
+            resolve('cancelled');
             return;
           }
-          if (!caseResearchPanelRef.current || !caseResearchPanelRef.current.isRunning()) {
-            window.clearInterval(pollInterval);
-            markStageEnd('research', 'done');
-          } else if (Date.now() - pollStart > 60000) {
-            window.clearInterval(pollInterval);
-            markStageEnd('research', 'error', 'timeout');
+          const r = caseResearchPanelRef.current;
+          if (!r || !r.isRunning()) {
+            window.clearInterval(tick);
+            resolve('done');
+            return;
+          }
+          if (Date.now() - pollStart > 60000) {
+            window.clearInterval(tick);
+            resolve('error');
           }
         }, 500);
-      } catch (e) {
-        markStageEnd('research', 'error', e instanceof Error ? e.message : 'trigger failed');
-      }
-    }, 2000);
+      });
 
-    window.setTimeout(() => {
-      if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
-      if (selectedConversationIdRef.current !== originatingCid) return;
-      if (!snapshotEligibleRef.current.has(originatingCid)) return;
-      if (monitorConvergedRef.current) return;
-      if (!hasClinicalTextDataRef.current) return;
-      if (autoBuildStateRef.current !== 'idle') return;
-      if (stageInputHashRef.current['plan'] === downstreamInputHash) {
+    /** Promise wrapper around the plan auto-build state machine. */
+    const awaitPlan = (): Promise<'done' | 'error' | 'cancelled'> =>
+      new Promise(resolve => {
+        const pollStart = Date.now();
+        const tick = window.setInterval(() => {
+          if (!stillEligible()) {
+            window.clearInterval(tick);
+            resolve('cancelled');
+            return;
+          }
+          // 'idle' here means the build has settled (engines complete +
+          // cart cascade finished). 90s budget covers the slow path.
+          if (autoBuildStateRef.current === 'idle') {
+            window.clearInterval(tick);
+            resolve('done');
+            return;
+          }
+          if (Date.now() - pollStart > 90000) {
+            window.clearInterval(tick);
+            resolve('error');
+          }
+        }, 500);
+      });
+
+    (async () => {
+      // Tiny initial yield so React paints the reasoning result before
+      // we start the research stage.
+      await new Promise(r => window.setTimeout(r, 200));
+      if (!stillEligible()) return;
+
+      // ── Stage: research ─────────────────────────────────
+      const r = caseResearchPanelRef.current;
+      const researchForced = forced.has('research') || forced.has('evidence');
+      if (!r) {
+        markStageEnd('research', 'error', 'panel not mounted');
+      } else if (r.isRunning()) {
+        // Already in flight from another path — wait for it instead of
+        // double-firing.
+        const outcome = await awaitResearch();
+        if (outcome !== 'cancelled') markStageEnd('research', outcome);
+      } else if (!researchForced && stageInputHashRef.current['research'] === downstreamInputHash) {
+        markStageEnd('research', 'skipped', 'inputs unchanged');
+      } else {
+        stageInputHashRef.current['research'] = downstreamInputHash;
+        markStageStart('research');
+        try {
+          r.trigger(researchForced);
+          const outcome = await awaitResearch();
+          if (outcome === 'cancelled') return;
+          markStageEnd('research', outcome);
+        } catch (e) {
+          markStageEnd('research', 'error', e instanceof Error ? e.message : 'trigger failed');
+        }
+      }
+
+      if (!stillEligible()) return;
+
+      // ── Stage: goal-profile auto-compute (silent — no chip) ─
+      // Required by the autopilot contract: derive activeGoalProfile
+      // from the predicted condition so downstream prescription /
+      // plan / timeline consumers have a baseline. activeGoalGap is
+      // intentionally left to the timeline UI to compute against the
+      // simulation snapshot — we can't materialise a SessionSnapshot
+      // here without invoking the recovery sim, which is out of band.
+      try {
+        const conditionProfile = findConditionProfile(topLabel);
+        const profile = conditionProfile
+          ? generateGoalProfile(conditionProfile, null, undefined, null, topLabel)
+          : generateGenericGoalProfile(topLabel, null);
+        if (stillEligible()) setActiveGoalProfile(profile);
+      } catch (e) {
+        // Goal profile failure must not block the plan stage.
+        console.warn('[autopilot] goal profile compute failed:', e);
+      }
+
+      if (!stillEligible()) return;
+
+      // ── Stage: plan ────────────────────────────────────
+      const planForced = forced.has('plan');
+      if (!hasClinicalTextDataRef.current) {
+        markStageEnd('plan', 'skipped', 'no clinical text');
+        return;
+      }
+      if (autoBuildStateRef.current !== 'idle') {
+        markStageEnd('plan', 'skipped', 'auto-build busy');
+        return;
+      }
+      if (!planForced && stageInputHashRef.current['plan'] === downstreamInputHash) {
         markStageEnd('plan', 'skipped', 'inputs unchanged');
         return;
       }
@@ -6021,8 +6147,12 @@ ${ddxList}`;
         handleAutoBuildClick();
       } catch (e) {
         markStageEnd('plan', 'error', e instanceof Error ? e.message : 'auto-build failed');
+        return;
       }
-    }, 3500);
+      const outcome = await awaitPlan();
+      if (outcome === 'cancelled') return;
+      markStageEnd('plan', outcome);
+    })();
   }, [handleAutoBuildClick, markStageEnd, markStageStart]);
 
   // Bind the actual implementation to the ref so the reasoning
@@ -7004,6 +7134,9 @@ ${ddxList}`;
     () => buildPatientContextSig(patientContextPayload),
     [patientContextPayload],
   );
+  // Mirror onto ref so the autopilot chain runner (declared earlier in
+  // render order) can fold it into the research dedup hash.
+  patientContextSigRef.current = patientContextSig;
 
   // ─── Active Movement Mode wiring ──────────────────────
   // Compute a stable per-case ID from the same FNV hash used by the

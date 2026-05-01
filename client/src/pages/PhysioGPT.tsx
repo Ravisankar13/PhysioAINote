@@ -1234,40 +1234,37 @@ export default function PhysioGPT() {
     setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
     const cid = selectedConversationIdRef.current;
     if (cid) writeAutopilotStatusForConv(cid, null);
-    if (id === 'reason') {
-      // reasoning trigger reads `lastReasoningTriggerRef`; reset it so
-      // the same structural inputs aren't treated as already-handled.
+    // All stage entrypoints funnel into the same chain so the
+    // re-run cascades downstream (chip + AI calls). Reasoning is
+    // the only AI call that orchestrates the rest via
+    // chainAutopilotAfterReasoning, so any stage at-or-before
+    // research re-enters reasoning with a forced trigger; that
+    // chain re-fires evidence + goal + research + plan in order
+    // (each gated by its own input-hash dedup, which we just
+    // invalidated above).
+    if (id === 'parse') {
+      clinicalTextInputRef.current?.triggerIncrementalParse();
+      // Parse will, in turn, fire reasoning via the existing
+      // setTimeout in handleClinicalTextParse — gated by pause.
+      return;
+    }
+    if (id === 'reason' || id === 'evidence' || id === 'goal' || id === 'research') {
+      // Reset reasoning's structural-inputs guard so the same case
+      // isn't treated as already-handled, then trigger reasoning
+      // which calls chainAutopilotAfterReasoningRef.current(...) on
+      // success — which, in turn, schedules evidence/goal/research/
+      // plan in order.
       lastReasoningTriggerRef.current = '';
       triggerClinicalReasoningAnalysisRef.current(true);
       return;
     }
-    if (id === 'evidence') {
-      handleEvidenceQueryRef.current();
-      return;
-    }
-    if (id === 'goal') {
-      // Goal profile is derived from skeleton/reasoning state inside
-      // GoalDrivenRecoveryPanel. A "rerun" from this stage simply
-      // restarts the cascade from evidence so the panel re-pushes a
-      // fresh profile via handleGoalProfileChange.
-      handleEvidenceQueryRef.current();
-      return;
-    }
-    if (id === 'research') {
-      caseResearchPanelRef.current?.trigger(true);
-      return;
-    }
     if (id === 'plan') {
-      // Calling `handleAutoBuildClick` directly is fine — the autopilot
-      // monitor effect (above) flips the chip back to done/error when
-      // the build settles.
+      // Plan is terminal — no downstream stages to cascade to.
+      // Calling `handleAutoBuildClick` directly is fine; the
+      // autopilot monitor effect flips the chip via markStageEnd.
       markStageStartRef.current('plan');
       try { handleAutoBuildClickRef.current(); }
       catch (e) { markStageEndRef.current('plan', 'error', e instanceof Error ? e.message : 'auto-build failed'); }
-      return;
-    }
-    if (id === 'parse') {
-      clinicalTextInputRef.current?.triggerIncrementalParse();
       return;
     }
   }, [writeAutopilotStatusForConv]);
@@ -6033,21 +6030,19 @@ ${ddxList}`;
   // Task #313 — flip the autopilot "Plan" stage chip to done/error
   // when the auto-build finishes. The chip is moved to "running" by
   // the chain orchestrator when it calls `handleAutoBuildClick`.
+  // Routes through markStageEnd (not direct setMonitorStages) so the
+  // observable autopilotStatus + per-conversation terminal persistence
+  // stay consistent on normal success.
   useEffect(() => {
     if (autoBuildState !== 'idle') return;
-    setMonitorStages(prev => prev.map(s => {
-      if (s.id !== 'plan' || s.state !== 'running') return s;
-      const failed = autoBuildFailures.size > 0;
-      const startedAt = stageStartedAtRef.current['plan'];
-      const dur = startedAt ? Date.now() - startedAt : null;
-      delete stageStartedAtRef.current['plan'];
-      return {
-        ...s,
-        state: failed ? 'error' : 'done',
-        lastDurationMs: dur,
-        lastSkippedReason: failed ? Array.from(autoBuildFailures).join(', ') : null,
-      };
-    }));
+    const cur = monitorStagesRef.current.find(s => s.id === 'plan');
+    if (!cur || cur.state !== 'running') return;
+    const failed = autoBuildFailures.size > 0;
+    if (failed) {
+      markStageEndRef.current('plan', 'error', Array.from(autoBuildFailures).join(', '));
+    } else {
+      markStageEndRef.current('plan', 'done');
+    }
   }, [autoBuildState, autoBuildFailures]);
 
   const exerciseMtActivePhaseIndex = useMemo(() => {

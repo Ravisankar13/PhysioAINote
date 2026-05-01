@@ -14742,7 +14742,7 @@ Clinician utterance:
 Match now.`;
 
       const r = await replitOpenai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: sys },
           { role: 'user', content: usr },

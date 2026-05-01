@@ -3175,8 +3175,11 @@ export interface PhysioGptCaseSnapshot {
   selectedRegion?: string | null;
   planCartItems?: unknown;
   // Terminal autopilot status for the case so reopening a settled
-  // conversation does not auto-rerun the AI chain. Restored on hydration.
-  autopilotStatus?: 'idle' | 'running' | 'done' | 'converged' | 'error';
+  // conversation does not auto-rerun the AI chain. Restricted to
+  // terminal states — transient states ('idle' / 'running') must
+  // not be persisted because they would falsely re-arm the chain on
+  // hydration.
+  autopilotStatus?: 'done' | 'converged' | 'error';
   // Persisted structural input hash from the last successful reasoning
   // run. Restored so the in-memory triggerKey dedup still recognises the
   // case as already-handled after a reload / conversation switch.

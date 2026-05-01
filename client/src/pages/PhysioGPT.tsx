@@ -5608,10 +5608,12 @@ ${ddxList}`;
 
   // Typed-text auto-trigger: when the clinician types directly into
   // the subjective history textarea (not during voice recording),
-  // re-engage reasoning after a 1500ms idle pause. The dedup
-  // governor (lastReasoningTriggerRef + lastMaterialSignatureRef)
-  // suppresses redundant runs; this effect only schedules the call.
-  // During recording the voice cascade owns reasoning, so we skip.
+  // re-engage the chain after a 1500ms idle pause. Manual edits
+  // explicitly RESET convergence (clearing lastMaterialSignatureRef +
+  // monitorStability.converged) so reasoning re-fires even if the
+  // structural signature hasn't changed — typed text is treated as
+  // an authoritative user signal, distinct from passive voice
+  // transcript drift.
   const typedTextTriggerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (isRecording) return;
@@ -5620,7 +5622,15 @@ ${ddxList}`;
     if (typedTextTriggerRef.current) clearTimeout(typedTextTriggerRef.current);
     typedTextTriggerRef.current = setTimeout(() => {
       subjectiveHistoryRef.current = subjectiveHistoryInput;
-      triggerClinicalReasoningAnalysisRef.current(false);
+      lastMaterialSignatureRef.current = '';
+      lastReasoningTriggerRef.current = '';
+      setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
+      const cidNow = selectedConversationIdRef.current;
+      if (cidNow && autopilotStatusRef.current !== 'idle' && autopilotStatusRef.current !== 'running') {
+        setAutopilotStatus('idle');
+        writeAutopilotStatusForConv(cidNow, null);
+      }
+      triggerClinicalReasoningAnalysisRef.current(true);
     }, 1500);
     return () => {
       if (typedTextTriggerRef.current) clearTimeout(typedTextTriggerRef.current);

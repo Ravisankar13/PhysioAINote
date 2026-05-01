@@ -5296,22 +5296,12 @@ ${ddxList}`;
       painDriverSummary = allDrivers.slice(0, 5);
     }
 
-    const triggerKey = JSON.stringify({
-      markers: markerData,
-      history: subjectiveHistoryRef.current,
-      posture: postureDeviations.map(d => `${d.region}.${d.parameter}:${d.value}`).join(','),
-      compensation: compensationSummary ? JSON.stringify(compensationSummary.restrictions) : '',
-    });
-    if (!forceRefresh && triggerKey === lastReasoningTriggerRef.current) {
-      // Governor: same structural inputs as the last successful run —
-      // no work to do. Surface the skip in the activity monitor so
-      // clinicians can see the AI didn't burn another call.
-      markStageEnd('reason', 'skipped', 'inputs unchanged');
-      return;
-    }
-    // Material-change signature: structural findings only. Excludes
-    // subjective text so transcript drift after convergence cannot
-    // re-fire reasoning.
+    // Material signature: structural clinical inputs that should reset
+    // convergence when they change (markers, ROM, posture,
+    // compensation, top extracted findings, key modelConfig posture).
+    // Excludes free-text transcript so post-convergence narration
+    // alone cannot re-fire reasoning.
+    const mc = modelConfigRef.current;
     const materialSig = JSON.stringify({
       markers: painMarkersRef.current
         .map(m => `${m.id}:${m.severity ?? 0}:${m.painMechanism ?? ''}`)
@@ -5323,9 +5313,41 @@ ${ddxList}`;
         .map(d => `${d.region}.${d.parameter}:${Math.round(d.value * 10) / 10}`)
         .sort(),
       compensation: compensationSummary ? JSON.stringify(compensationSummary.restrictions) : '',
+      topFindings: painDriverSummary.map(d => `${d.category}:${d.label}:${d.severity}`),
+      modelConfig: {
+        kyphosis: Math.round(mc?.spine?.thoracicKyphosis ?? 0),
+        forwardHead: Math.round(mc?.spine?.forwardHead ?? 0),
+        pelvisTilt: Math.round(mc?.pelvis?.tilt ?? 0),
+      },
     });
-    // Convergence gate: skip reasoning when chain is converged and
-    // structural findings are unchanged. Force-refresh bypasses.
+
+    // Input hash: full input vector for the LLM call, including
+    // transcript delta. Two identical input hashes → no work to do.
+    const inputHash = JSON.stringify({
+      m: materialSig,
+      transcriptLen: subjectiveHistoryRef.current.length,
+      transcriptHead: subjectiveHistoryRef.current.slice(0, 200),
+      modelTemp: modelConfigRef.current?.spine?.thoracicKyphosis ?? 0,
+    });
+
+    // Material change → reset convergence regardless of dedup.
+    if (lastMaterialSignatureRef.current && materialSig !== lastMaterialSignatureRef.current) {
+      setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
+      const cidNow = selectedConversationIdRef.current;
+      if (cidNow && autopilotStatusRef.current !== 'idle' && autopilotStatusRef.current !== 'running') {
+        setAutopilotStatus('idle');
+        writeAutopilotStatusForConv(cidNow, null);
+      }
+    }
+
+    // Dedup gate (input-hash): identical inputs → skip.
+    if (!forceRefresh && inputHash === lastReasoningTriggerRef.current) {
+      markStageEnd('reason', 'skipped', 'inputs unchanged');
+      return;
+    }
+
+    // Convergence gate: structural findings unchanged AND chain
+    // already converged → skip. Force-refresh bypasses.
     if (
       !forceRefresh &&
       monitorConvergedRef.current &&
@@ -5334,24 +5356,12 @@ ${ddxList}`;
       markStageEnd('reason', 'converged', 'no material change');
       return;
     }
-    // Inputs drifted from the last run — reset convergence so the
-    // chain re-engages on new findings.
-    if (lastReasoningTriggerRef.current && lastReasoningTriggerRef.current !== triggerKey) {
-      setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
-      const cidNow = selectedConversationIdRef.current;
-      if (cidNow && autopilotStatusRef.current !== 'idle' && autopilotStatusRef.current !== 'running') {
-        setAutopilotStatus('idle');
-        writeAutopilotStatusForConv(cidNow, null);
-      }
-    }
+
     if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
     lastMaterialSignatureRef.current = materialSig;
 
-    lastReasoningTriggerRef.current = triggerKey;
-    // Cache the input hash on the dedup ref so per-stage governor
-    // checks elsewhere (research/plan rerun, evidence) can compare
-    // against it for cross-stage dedup.
-    stageInputHashRef.current['reason'] = triggerKey;
+    lastReasoningTriggerRef.current = inputHash;
+    stageInputHashRef.current['reason'] = inputHash;
     // Capture the conversation ID at request start so the response
     // handler + auto-cascade can bail if the user switched cases.
     const reasoningOriginCid = selectedConversationIdRef.current;
@@ -6062,15 +6072,23 @@ ${ddxList}`;
     chainRunIdRef.current += 1;
     const myRunId = chainRunIdRef.current;
 
-    /** Per-await guard: bail if anything that should pause/cancel us
-     *  changed between stages. */
+    /** Cancellation guard: an in-flight stage should bail only when
+     *  the chain itself is invalidated (new run, autopilot disabled,
+     *  conversation switched, snapshot eligibility revoked). Pause is
+     *  intentionally NOT included — pausing must let the current
+     *  stage finish, only blocking the next stage from starting. */
     const stillEligible = (): boolean => {
       if (chainRunIdRef.current !== myRunId) return false;
-      if (!autopilotEnabledRef.current || autopilotPausedRef.current) return false;
+      if (!autopilotEnabledRef.current) return false;
       if (selectedConversationIdRef.current !== originatingCid) return false;
       if (!snapshotEligibleRef.current.has(originatingCid)) return false;
       return true;
     };
+
+    /** Gate to start the NEXT stage. Includes pause so an active pause
+     *  stops further enqueueing without cancelling in-flight work. */
+    const canStartNextStage = (): boolean =>
+      stillEligible() && !autopilotPausedRef.current;
 
     /** Polls evidenceLoadingRef until the query settles (60s cap). */
     const awaitEvidence = (): Promise<'done' | 'error' | 'cancelled'> =>
@@ -6132,13 +6150,10 @@ ${ddxList}`;
       });
 
     (async () => {
-      // Tiny initial yield so React paints the reasoning result before
-      // we start downstream stages.
       await new Promise(r => window.setTimeout(r, 200));
-      if (!stillEligible()) return;
+      if (!canStartNextStage()) return;
 
       // ── Stage: evidence ─────────────────────────────────
-      // Owned by the chain so it runs deterministically before research.
       const evidenceForced = forced.has('evidence');
       if (!evidenceForced && stageInputHashRef.current['evidence'] === downstreamInputHash) {
         markStageEnd('evidence', 'skipped', 'inputs unchanged');
@@ -6160,7 +6175,7 @@ ${ddxList}`;
         }
       }
 
-      if (!stillEligible()) return;
+      if (!canStartNextStage()) return;
 
       // ── Stage: research ─────────────────────────────────
       const r = caseResearchPanelRef.current;
@@ -6187,7 +6202,7 @@ ${ddxList}`;
         }
       }
 
-      if (!stillEligible()) return;
+      if (!canStartNextStage()) return;
 
       // ── Stage: goal-profile auto-compute (silent — no chip) ─
       // Sets activeGoalProfile + activeGoalGap from the predicted
@@ -6251,7 +6266,7 @@ ${ddxList}`;
         console.warn('[autopilot] goal profile compute failed:', e);
       }
 
-      if (!stillEligible()) return;
+      if (!canStartNextStage()) return;
 
       // ── Stage: plan ────────────────────────────────────
       const planForced = forced.has('plan');

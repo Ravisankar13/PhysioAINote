@@ -1052,6 +1052,7 @@ export default function PhysioGPT() {
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const evidenceLoadingRef = useRef(false);
   evidenceLoadingRef.current = evidenceLoading;
+  const evidenceErrorRef = useRef(false);
 
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
@@ -3792,6 +3793,7 @@ ${ddxList}`;
     evidenceQueryIdRef.current += 1;
     const currentQueryId = evidenceQueryIdRef.current;
 
+    evidenceErrorRef.current = false;
     setEvidenceLoading(true);
     const sa = slingAnalysisRef.current;
     const slingCtx = sa ? {
@@ -3827,6 +3829,7 @@ ${ddxList}`;
     .catch((err) => {
       if (err?.name === 'AbortError') return;
       if (evidenceQueryIdRef.current === currentQueryId) {
+        evidenceErrorRef.current = true;
         toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' });
         if (!fromAutopilot) markStageEnd('evidence', 'error', err instanceof Error ? err.message : 'request failed');
       }
@@ -6090,13 +6093,18 @@ ${ddxList}`;
     const canStartNextStage = (): boolean =>
       stillEligible() && !autopilotPausedRef.current;
 
-    /** Polls evidenceLoadingRef until the query settles (60s cap). */
+    /** Polls evidenceLoadingRef until the query settles (60s cap).
+     *  Resolves 'error' when the request rejected (evidenceErrorRef
+     *  set by the catch block) or the budget elapsed; 'done' on
+     *  successful settle; 'cancelled' if the chain was invalidated. */
     const awaitEvidence = (): Promise<'done' | 'error' | 'cancelled'> =>
       new Promise(resolve => {
         const startedAt = Date.now();
         const tick = () => {
           if (!stillEligible()) return resolve('cancelled');
-          if (!evidenceLoadingRef.current) return resolve('done');
+          if (!evidenceLoadingRef.current) {
+            return resolve(evidenceErrorRef.current ? 'error' : 'done');
+          }
           if (Date.now() - startedAt > 60_000) return resolve('error');
           window.setTimeout(tick, 200);
         };

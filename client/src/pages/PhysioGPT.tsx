@@ -1135,24 +1135,12 @@ export default function PhysioGPT() {
    *  Hoisted so the autopilot governor below can reference it. */
   const recordingStartedAtRef = useRef<number | null>(null);
 
-  // ─── Task #313 — AI Call Governor + Activity Monitor ────────────────
-  // The autopilot orchestrates the full case-workup chain (parse →
-  // reason → evidence → research → master-plan) off voice triggers.
-  // The governor prevents runaway AI calls via two cheap checks:
-  //   (1) input-hash dedup — skip a stage if its structural inputs
-  //       haven't changed since the previous run.
-  //   (2) convergence — once the top hypothesis is stable for ≥2
-  //       consecutive runs (and confidence ≥ 0.6) the chain is
-  //       suppressed until inputs shift again.
+  // Autopilot governor: input-hash dedup per stage + convergence
+  // (≥CONVERGENCE_RUNS at ≥CONVERGENCE_MIN_CONFIDENCE).
   const AUTOPILOT_STORAGE_KEY = 'physiogpt:voice-autopilot:enabled';
-  // Pause is persisted separately so a clinician who paused autopilot
-  // mid-session keeps it paused after a refresh — matching the
-  // "persistent autopilot toggle" UX promised in the task spec.
   const AUTOPILOT_PAUSED_STORAGE_KEY = 'physiogpt:voice-autopilot:paused';
-  // Per-conversation status persistence — { [conversationId]: 'done'|'converged'|'error' }.
-  // Used as a re-entry guard so reopening a historical conversation
-  // does NOT auto-rerun the chain. Cleared per conversation when the
-  // user explicitly re-runs from a stage.
+  // Legacy fallback for cases written before autopilotStatus moved into
+  // the case snapshot. New cases persist via PhysioGptCaseSnapshot.
   const AUTOPILOT_STATUS_STORAGE_KEY = 'physiogpt:voice-autopilot:status-by-conv';
   const CONVERGENCE_RUNS = 2;
   const CONVERGENCE_MIN_CONFIDENCE = 0.6;
@@ -1183,17 +1171,21 @@ export default function PhysioGPT() {
   }, []);
   const handleAutopilotPauseToggle = useCallback((next: boolean) => {
     setAutopilotPaused(next);
-    if (next) {
-      // Pausing aborts any voice-triggered chain in progress so the
-      // user has to resume + speak again to re-arm.
-      voiceTriggeredRef.current = false;
+    // Pause only suppresses NEW stage enqueues (the per-stage gates
+    // already check autopilotPausedRef). Resume re-engages immediately
+    // by re-firing the reasoning trigger; the existing input-hash dedup
+    // skips it if nothing changed since pause, otherwise the chain
+    // continues with whatever findings accumulated during the pause —
+    // no fresh voice trigger required.
+    if (!next) {
+      window.setTimeout(() => {
+        try { triggerClinicalReasoningAnalysisRef.current(false); } catch { /* re-engage best-effort */ }
+      }, 100);
     }
     try { window.localStorage.setItem(AUTOPILOT_PAUSED_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
   }, []);
-  /** Per-conversation autopilot-status map (localStorage-backed).
-   *  Used as a re-entry guard so reopening a historical conversation
-   *  does not auto-rerun the chain. Declared here (above the rerun
-   *  handler) to avoid a temporal dead zone reference. */
+  // Legacy localStorage map — read on hydration when the snapshot has
+  // no autopilotStatus, written alongside snapshot persistence.
   const readAutopilotStatusMap = useCallback((): Record<string, 'done' | 'converged' | 'error'> => {
     try {
       const raw = window.localStorage.getItem(AUTOPILOT_STATUS_STORAGE_KEY);
@@ -1218,8 +1210,6 @@ export default function PhysioGPT() {
    *  invalidates downstream input-hash cache so the dedup governor
    *  doesn't short-circuit it. */
   const handleAutopilotRerunFromStage = useCallback((id: AutopilotStageId) => {
-    // Invalidate cached input hashes for this stage and all downstream
-    // ones so the dedup governor doesn't short-circuit the re-run.
     const order: AutopilotStageId[] = ['parse', 'reason', 'evidence', 'goal', 'research', 'plan'];
     const fromIdx = order.indexOf(id);
     if (fromIdx >= 0) {
@@ -1227,41 +1217,20 @@ export default function PhysioGPT() {
         delete stageInputHashRef.current[order[i]];
       }
     }
-    // Explicit user-driven rerun bypasses convergence + persisted
-    // status so the chain can re-engage. Mark voiceTriggered so the
-    // chain treats it as a voice-equivalent invocation.
     voiceTriggeredRef.current = true;
     setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
     const cid = selectedConversationIdRef.current;
     if (cid) writeAutopilotStatusForConv(cid, null);
-    // All stage entrypoints funnel into the same chain so the
-    // re-run cascades downstream (chip + AI calls). Reasoning is
-    // the only AI call that orchestrates the rest via
-    // chainAutopilotAfterReasoning, so any stage at-or-before
-    // research re-enters reasoning with a forced trigger; that
-    // chain re-fires evidence + goal + research + plan in order
-    // (each gated by its own input-hash dedup, which we just
-    // invalidated above).
     if (id === 'parse') {
       clinicalTextInputRef.current?.triggerIncrementalParse();
-      // Parse will, in turn, fire reasoning via the existing
-      // setTimeout in handleClinicalTextParse — gated by pause.
       return;
     }
     if (id === 'reason' || id === 'evidence' || id === 'goal' || id === 'research') {
-      // Reset reasoning's structural-inputs guard so the same case
-      // isn't treated as already-handled, then trigger reasoning
-      // which calls chainAutopilotAfterReasoningRef.current(...) on
-      // success — which, in turn, schedules evidence/goal/research/
-      // plan in order.
       lastReasoningTriggerRef.current = '';
       triggerClinicalReasoningAnalysisRef.current(true);
       return;
     }
     if (id === 'plan') {
-      // Plan is terminal — no downstream stages to cascade to.
-      // Calling `handleAutoBuildClick` directly is fine; the
-      // autopilot monitor effect flips the chip via markStageEnd.
       markStageStartRef.current('plan');
       try { handleAutoBuildClickRef.current(); }
       catch (e) { markStageEndRef.current('plan', 'error', e instanceof Error ? e.message : 'auto-build failed'); }
@@ -1396,9 +1365,8 @@ export default function PhysioGPT() {
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const clinicalTextInputRef = useRef<ClinicalTextInputHandle>(null);
-  /** Imperative ref into the Case-Aware Research panel (Task #313).
-   *  Lets the autopilot programmatically (re-)trigger a search after
-   *  the reasoning chain stabilises a top hypothesis. */
+  /** Imperative ref into the Case-Aware Research panel — lets the
+   *  autopilot programmatically (re-)trigger a search. */
   const caseResearchPanelRef = useRef<CaseResearchPanelHandle>(null);
   /** Scroll target for the Patient Context panel — used by the
    *  "No patient context" badge on downstream AI panels so the
@@ -2164,11 +2132,8 @@ export default function PhysioGPT() {
     pendingFollowUpQuestionsRef.current = questions;
   }, []);
 
-  // Task #313 — in-flight tier-3 GPT requests, keyed by
-  // (spoken-text + question-set) so we don't fire concurrent or
-  // duplicate requests for the same chunk while the user is still
-  // talking. Resolved cache keeps the latest few keys to avoid
-  // re-firing on every transcript pulse.
+  // Tier-3 GPT follow-up dedup — keyed by (spoken-text + question-set)
+  // to avoid concurrent or repeat requests during streaming.
   const followUpGptInFlightRef = useRef<Set<string>>(new Set());
   const followUpGptCacheRef = useRef<Set<string>>(new Set());
   const tryMatchFollowUpAnswer = useCallback((spokenText: string, questions: FollowUpQuestion[]): boolean => {
@@ -5423,15 +5388,16 @@ ${ddxList}`;
         setClinicalReasoningOpen(true);
       }
 
-      autoEvidenceTimerRef.current = setTimeout(() => {
-        if (autopilotPausedRef.current) return;
-        handleEvidenceQueryRef.current({ autopilot: true });
-      }, 500);
-
-      // Task #313 — autopilot chain. Convergence + stability are
-      // computed inside; this is a no-op when the autopilot toggle
-      // is off or when the chain is paused.
-      try { chainAutopilotAfterReasoningRef.current(reasoningSnapshot); } catch { /* fail-soft */ }
+      // Downstream auto-cascade: only fire evidence + chain when
+      // autopilot is enabled, not paused, and the run was voice-driven.
+      // With autopilot off the user gets parse + reasoning only.
+      if (autopilotEnabledRef.current && !autopilotPausedRef.current && voiceTriggeredRef.current) {
+        autoEvidenceTimerRef.current = setTimeout(() => {
+          if (!autopilotEnabledRef.current || autopilotPausedRef.current || !voiceTriggeredRef.current) return;
+          handleEvidenceQueryRef.current({ autopilot: true });
+        }, 500);
+        try { chainAutopilotAfterReasoningRef.current(reasoningSnapshot); } catch { /* fail-soft */ }
+      }
     } catch (error) {
       console.error('Clinical reasoning analysis error:', error);
       markStageEnd('reason', 'error', error instanceof Error ? error.message : 'request failed');
@@ -5873,31 +5839,14 @@ ${ddxList}`;
   // in render order to keep stable references for the dock).
   handleAutoBuildClickRef.current = handleAutoBuildClick;
 
-  // ─── Task #313 — Autopilot chain implementation ──────────────────────
-  // Wired into `chainAutopilotAfterReasoningRef` so the reasoning trigger
-  // can call back here without a hoisting problem (this depends on
-  // `handleAutoBuildClick` + research panel ref which are defined later
-  // than the trigger). Runs convergence checks, updates the stability
-  // ribbon, then schedules research + master-plan stages.
+  // Autopilot chain — runs convergence + stability and schedules the
+  // downstream stages (goal/research/plan). Voice-triggered only.
   const chainAutopilotAfterReasoning = useCallback((data: ClinicalReasoningData) => {
     if (!autopilotEnabledRef.current) return;
     if (autopilotPausedRef.current) return;
-    // Voice-only gate — chain only fires for voice-triggered case
-    // workups. Manual reasoning re-runs (e.g. clinician clicking
-    // "regenerate") do NOT cascade through downstream stages.
     if (!voiceTriggeredRef.current) return;
-    // Snapshot eligibility hard-guard at execution time. Even if the
-    // dock prop says eligible, the conversation must be in the
-    // snapshot-opted-in set.
     const cid = selectedConversationIdRef.current;
     if (!cid || !snapshotEligibleRef.current.has(cid)) return;
-    // No hard re-entry guard here. Reasoning already short-circuits on
-    // unchanged inputs via lastReasoningTriggerRef (restored from the
-    // case snapshot on hydration), and each downstream stage below has
-    // its own per-stage input-hash dedup + monitorConverged gate. That
-    // combination lets the chain re-engage automatically when new
-    // findings shift the structural inputs, while still skipping
-    // identical replays after a reload.
     const top = (data.hypotheses || []).find(h => h.status !== 'ruled_out') ?? data.hypotheses?.[0];
     const stab = monitorStabilityRef.current;
     const topLabel = top?.condition?.trim() || null;
@@ -5914,8 +5863,6 @@ ${ddxList}`;
     });
 
     if (justConverged && wasSame) {
-      // Convergence: stop spending AI calls. Surface in the chips so
-      // the clinician can re-run from a stage manually if they want.
       markStageEnd('research', 'converged', `top hypothesis stable (${topLabel})`);
       markStageEnd('plan', 'converged', `top hypothesis stable (${topLabel})`);
       return;
@@ -5923,22 +5870,11 @@ ${ddxList}`;
 
     if (!topLabel) return;
 
-    // Per-stage input-hash dedup — derived from the reasoning input
-    // hash plus the top hypothesis so research/plan don't re-fire
-    // when reasoning's structural inputs haven't materially changed
-    // for those stages either.
     const downstreamInputHash = `${stageInputHashRef.current['reason'] || ''}|${topLabel}|${topConfidence.toFixed(2)}`;
-    // Capture the conversation ID at chain start. If the user switches
-    // conversations before the queued stages fire, those callbacks
-    // bail to prevent cross-case contamination.
     const originatingCid = cid;
 
-    // Stage: goal-profile derivation. The actual profile is computed
-    // by GoalDrivenRecoveryPanel from current skeleton + reasoning
-    // state and pushed up via handleGoalProfileChange — that callback
-    // closes this chip with markStageEnd('goal','done'). We mark the
-    // start here so the chain is observably ordered:
-    // parse → reason → evidence → goal → research → plan.
+    // Goal stage — chip is closed when GoalDrivenRecoveryPanel pushes
+    // a profile via handleGoalProfileChange; fail-soft cap below.
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
       if (selectedConversationIdRef.current !== originatingCid) return;
@@ -5949,9 +5885,6 @@ ${ddxList}`;
       }
       stageInputHashRef.current['goal'] = downstreamInputHash;
       markStageStart('goal');
-      // Fail-soft cap — if the panel never pushes a profile within
-      // 8 s (e.g. no skeleton data), close the chip as skipped so
-      // research still proceeds.
       window.setTimeout(() => {
         if (selectedConversationIdRef.current !== originatingCid) return;
         const cur = monitorStagesRef.current.find(s => s.id === 'goal');
@@ -5961,10 +5894,9 @@ ${ddxList}`;
       }, 8000);
     }, 800);
 
-    // Stage: case-research (delayed so evidence + goal settle first).
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
-      if (selectedConversationIdRef.current !== originatingCid) return; // case switched
+      if (selectedConversationIdRef.current !== originatingCid) return;
       if (monitorConvergedRef.current) return;
       const r = caseResearchPanelRef.current;
       if (!r) return;
@@ -5977,10 +5909,6 @@ ${ddxList}`;
       markStageStart('research');
       try {
         r.trigger(false);
-        // The CaseResearchPanel doesn't expose a per-trigger completion
-        // callback (it's React-Query-backed and renders its own state).
-        // Poll its isRunning() to settle the chip — much more accurate
-        // than a fixed timeout. Cap at 60s so we don't poll forever.
         const pollStart = Date.now();
         const pollInterval = window.setInterval(() => {
           if (selectedConversationIdRef.current !== originatingCid) {
@@ -6001,12 +5929,9 @@ ${ddxList}`;
       }
     }, 2000);
 
-    // Stage: master plan auto-build. Only fires when there's clinical
-    // data on the skeleton (so engines have something to build from)
-    // and no build is currently in flight.
     window.setTimeout(() => {
       if (!autopilotEnabledRef.current || autopilotPausedRef.current) return;
-      if (selectedConversationIdRef.current !== originatingCid) return; // case switched
+      if (selectedConversationIdRef.current !== originatingCid) return;
       if (monitorConvergedRef.current) return;
       if (!hasClinicalTextDataRef.current) return;
       if (autoBuildStateRef.current !== 'idle') return;
@@ -6082,12 +6007,7 @@ ${ddxList}`;
     };
   }, [autoBuildState]);
 
-  // Task #313 — flip the autopilot "Plan" stage chip to done/error
-  // when the auto-build finishes. The chip is moved to "running" by
-  // the chain orchestrator when it calls `handleAutoBuildClick`.
-  // Routes through markStageEnd (not direct setMonitorStages) so the
-  // observable autopilotStatus + per-conversation terminal persistence
-  // stay consistent on normal success.
+  // Close the autopilot "Plan" chip when auto-build returns to idle.
   useEffect(() => {
     if (autoBuildState !== 'idle') return;
     const cur = monitorStagesRef.current.find(s => s.id === 'plan');
@@ -14894,13 +14814,10 @@ ${ddxList}`;
                 summary && summary !== desc ? `Clinical summary: ${summary}` : '',
                 patientContextSig ? `Patient context: ${patientContextSig}` : '',
               ].filter(Boolean).join('\n\n');
-              // Task #313 — case-aware research context. Built inline
-              // (cheap, deterministic) from the same inputs Patient
-              // Context + Clinical Reasoning are reading. Only fields
-              // we can confidently fill are emitted; everything else is
-              // omitted so the engine falls back to seed parsing. The
-              // hash folds caseContext in so a new top hypothesis or a
-              // new chronicity stage invalidates cached synthesis.
+              // Case-aware research context — built inline from the same
+              // inputs Patient Context + Clinical Reasoning use; folded
+              // into the cache hash so synthesis invalidates when the
+              // top hypothesis or chronicity shifts.
               const topHypoForCtx = (clinicalReasoningData?.hypotheses || [])
                 .find(h => h.status !== 'ruled_out') ?? clinicalReasoningData?.hypotheses?.[0];
               const painRegionsForCtx = Array.from(new Set(

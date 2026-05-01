@@ -6277,12 +6277,11 @@ export type SearchablePhenotype = z.infer<typeof searchablePhenotypeSchema>;
  *  clinician's "Edit interpretation" → "Re-run with my edits"), the
  *  engine SKIPS its own AI translation step and uses the supplied
  *  phenotype directly.
- *  `caseContext` (optional, Task #313): structured case picture
- *  assembled by the orchestrator (top working hypothesis, mechanism,
- *  region/laterality, chronicity, irritability, patient factors).
- *  When supplied, the engine prefers the top hypothesis label as the
- *  search seed and seeds variable inference with the structured
- *  fields so retrieval is more specific than parsing prose. */
+ *  `caseContext` (optional): structured case picture from the
+ *  orchestrator (top hypothesis, mechanism, region/laterality,
+ *  chronicity, irritability, patient factors). When supplied, the
+ *  engine prefers the top hypothesis label as the search seed and
+ *  seeds variable inference with the structured fields. */
 export const caseResearchContextSchema = z.object({
   topHypothesis: z.object({
     label: z.string().min(1).max(200),

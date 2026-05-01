@@ -7,7 +7,6 @@ import { Switch } from "@/components/ui/switch";
 
 export type VoiceTriggerReason = "silence_pause" | "interval_pulse";
 
-// ─── Task #313 — AI Activity Monitor types ────────────────────────────
 export type AutopilotStageId = "parse" | "reason" | "evidence" | "goal" | "research" | "plan";
 export type AutopilotStageState =
   | "idle"
@@ -74,9 +73,8 @@ interface VoiceActivityDockProps {
   /** True if any prior session left entries that should be visible. */
   visible: boolean;
   onUndo: (entryId: string) => void;
-  // ── Task #313 AI Activity Monitor (all optional — when omitted, dock
-  //    renders exactly as before) ────────────────────────────────────
-  /** Per-stage status for the five orchestrator stages. */
+  // AI Activity Monitor (all optional — when omitted, dock renders as before).
+  /** Per-stage status for the orchestrator stages. */
   monitorStages?: AutopilotStageStatus[];
   /** Stability ribbon data (top hypothesis convergence). */
   monitorStability?: AutopilotStability;
@@ -369,22 +367,22 @@ export default function VoiceActivityDock({
           </div>
         </button>
 
+        {/* AI Activity Monitor — visible at all times during recording so
+             the clinician can see autopilot health even when the dock
+             is collapsed. Outside the expanded gate by design. */}
+        {monitorStages && monitorStages.length > 0 && (isRecording || expanded) && (
+          <MonitorBlock
+            stages={monitorStages}
+            stability={monitorStability}
+            autopilotEnabled={!!autopilotEnabled}
+            paused={!!paused}
+            eligible={autopilotEligible}
+            onPauseToggle={onPauseToggle}
+            onRerunFromStage={onRerunFromStage}
+          />
+        )}
         {expanded && (
           <div>
-            {/* AI Activity Monitor (Task #313) — only renders when caller
-                 supplies stages. Auto-pilot off / paused / unavailable
-                 are conveyed inside via the ribbon and toggles. */}
-            {monitorStages && monitorStages.length > 0 && (
-              <MonitorBlock
-                stages={monitorStages}
-                stability={monitorStability}
-                autopilotEnabled={!!autopilotEnabled}
-                paused={!!paused}
-                eligible={autopilotEligible}
-                onPauseToggle={onPauseToggle}
-                onRerunFromStage={onRerunFromStage}
-              />
-            )}
           <div className="border-t border-gray-800/60">
             {entries.length === 0 ? (
               <div className="px-3 py-4 text-[11px] text-gray-500 text-center">

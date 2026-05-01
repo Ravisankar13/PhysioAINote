@@ -16,10 +16,8 @@ import {
 } from "lucide-react";
 import type { CaseResearchContext, CaseResearchSynthesis, SearchablePhenotype } from "@shared/schema";
 
-/** Imperative handle exposed to parent orchestrators (Task #313).
- *  The Voice Autopilot uses this to programmatically (re-)trigger the
- *  case-research engine after the reasoning chain finalises a top
- *  hypothesis, without requiring the clinician to click the button. */
+/** Imperative handle exposed to parent orchestrators — the Voice
+ *  Autopilot uses this to programmatically (re-)trigger a search. */
 export interface CaseResearchPanelHandle {
   /** Fire a fresh search using the current props. `refresh=true` bypasses the cache. */
   trigger: (refresh?: boolean) => void;
@@ -62,9 +60,9 @@ export interface CaseResearchPanelProps {
   caseSummary: string;
   /** Deterministic content hash (FNV-style or similar) of the inputs. */
   contentHash: string | null;
-  /** Optional structured case picture (Task #313). When supplied the
-   *  engine prefers the top hypothesis label as its search seed and
-   *  uses the structured fields to seed variable inference. */
+  /** Optional structured case picture — when supplied the engine
+   *  prefers the top hypothesis label as the search seed and uses
+   *  the structured fields to seed variable inference. */
   caseContext?: CaseResearchContext;
   /** Hide entirely until the parent has a usable case to search for. */
   visible?: boolean;
@@ -743,8 +741,6 @@ export const CaseResearchPanel = forwardRef<CaseResearchPanelHandle, CaseResearc
         contentHash,
         refresh: opts.refresh,
         phenotypeOverride: opts.phenotypeOverride,
-        // Task #313 — fold the structured case picture so the engine
-        // can prefer the top hypothesis as its search seed.
         caseContext,
       }) as CaseResearchSynthesis & { cached?: boolean };
     },
@@ -768,9 +764,7 @@ export const CaseResearchPanel = forwardRef<CaseResearchPanelHandle, CaseResearc
     runMutation.mutate({ refresh });
   }, [runMutation]);
 
-  // Task #313 — orchestrator-facing imperative API. Lets the Voice
-  // Autopilot fire the engine programmatically once reasoning has
-  // produced a stable top hypothesis (folded into `caseContext`).
+  // Orchestrator-facing imperative API for the Voice Autopilot.
   useImperativeHandle(ref, () => ({
     trigger: (refresh = false) => {
       if (!caseId || !condition || !contentHash) return;

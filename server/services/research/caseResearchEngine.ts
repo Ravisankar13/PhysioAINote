@@ -196,12 +196,9 @@ export function fallbackPhenotype(condition: string): SearchablePhenotype {
   };
 }
 
-/** Task #313 — render a structured caseContext block into a small,
- *  biomedical-flavoured prose preamble that we prepend to the case
- *  summary going into the inferPhenotype/inferVariables prompts. We
- *  keep it short and labelled so the model can lift the values
- *  verbatim into queryTerms instead of having to re-infer them from
- *  free prose. */
+/** Render a structured caseContext block into a short labelled
+ *  preamble so the inference prompts can lift values verbatim into
+ *  queryTerms instead of re-inferring them from free prose. */
 export function formatCaseContextForPrompt(ctx: CaseResearchContext): string {
   const lines: string[] = [];
   if (ctx.topHypothesis?.label) {
@@ -1369,13 +1366,11 @@ export interface RunCaseResearchOptions {
    *  step and uses this phenotype directly. Used for "Re-run with my
    *  edits". */
   phenotypeOverride?: SearchablePhenotype;
-  /** Task #313 — structured case picture from the orchestrator
-   *  (top hypothesis, mechanism, region/laterality, chronicity,
-   *  irritability, patient factors). When supplied, the engine
-   *  prefers the top hypothesis label as the search seed and
-   *  prepends the structured fields onto the variable-inference
-   *  prompt so retrieval tightens around what the page already
-   *  knows. */
+  /** Structured case picture from the orchestrator (top hypothesis,
+   *  mechanism, region/laterality, chronicity, irritability, patient
+   *  factors). When supplied, the engine prefers the top hypothesis
+   *  label as the search seed and prepends the structured fields onto
+   *  the variable-inference prompt so retrieval tightens. */
   caseContext?: CaseResearchContext;
 }
 
@@ -1384,12 +1379,9 @@ export async function runCaseResearch(
   caseSummary: string,
   options: RunCaseResearchOptions = {},
 ): Promise<CaseResearchOutcome> {
-  // Task #313: when the orchestrator supplies a top working
-  // hypothesis we use its label as the phenotype seed (it's the
-  // single most discriminating phrase the page has produced for this
-  // case). We still pass the full caseSummary so the AI can pick up
-  // modifiers, but the seed phrase is what canonicalCondition will
-  // canonicalise from.
+  // When the orchestrator supplies a top hypothesis, use its label as
+  // the phenotype seed (most discriminating phrase available for this
+  // case); caseSummary is still passed for modifier pickup.
   const seedCondition = options.caseContext?.topHypothesis?.label?.trim() || condition;
   const seededSummary = options.caseContext
     ? `${formatCaseContextForPrompt(options.caseContext)}\n\n${caseSummary}`

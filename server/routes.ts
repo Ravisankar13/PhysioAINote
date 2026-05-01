@@ -14653,16 +14653,9 @@ EXAMPLES of good predictions:
     }
   });
 
-  // ─── Task #313 — GPT-backed follow-up answer matcher ────────────────
-  // The voice flow tries two cheap matchers (option-includes, keyword
-  // density) before this one. Anything paraphrased ("yeah it's been
-  // bothering her for about three weeks" vs question "Acute or
-  // chronic?") slips past both. This endpoint takes the open
-  // follow-up questions, the active question hint, and the latest
-  // utterance and returns a short list of {questionId, answer,
-  // confidence, reason} entries the orchestrator can submit. We keep
-  // it cheap (gpt-4o-mini, low max_tokens) because it fires whenever
-  // the dock's silence-debounce or interval pulse triggers a parse.
+  // GPT-backed follow-up answer matcher — tier-3 fallback after
+  // option-includes and keyword-density matchers. Cheap model
+  // (gpt-4o-mini) because it fires per silence/pulse trigger.
   app.post('/api/clinical-text/answer-followup', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { utterance, questions, activeQuestionId } = req.body || {};

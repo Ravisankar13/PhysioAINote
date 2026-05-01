@@ -246,7 +246,8 @@ import { computeNaturalProgression, resolveNaturalProgressionConditionId } from 
 import { buildPrescriptionContext } from "@/lib/prescriptionAdapterEngine";
 import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDashboard";
 import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers, derivePsychosocialAndOccupationalDrivers, findConditionProfile, type PatientFactors } from "@/lib/patientFactorsEngine";
-import { generateGoalProfile, generateGenericGoalProfile } from "@/lib/goalStateEngine";
+import { generateGoalProfile, generateGenericGoalProfile, computeGoalGap } from "@/lib/goalStateEngine";
+import type { SessionSnapshot, RomPrediction } from "@/lib/simulationTimelineEngine";
 const PatientFactorsForm = lazy(() => import("@/components/skeleton/PatientFactorsForm"));
 import { countFactorOverrides } from "@/components/skeleton/PatientFactorsForm";
 import { CaseResearchPanel } from "@/components/skeleton/CaseResearchPanel";
@@ -1049,6 +1050,8 @@ export default function PhysioGPT() {
     totalSourcesReturned?: number;
   } | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const evidenceLoadingRef = useRef(false);
+  evidenceLoadingRef.current = evidenceLoading;
 
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
@@ -1057,6 +1060,8 @@ export default function PhysioGPT() {
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
   const [romValues, setRomValues] = useState<Record<string, number>>({});
   const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
+  const romMeasurementsRef = useRef<RomMeasurement[]>([]);
+  romMeasurementsRef.current = romMeasurements;
 
   const [clinicalReasoningData, setClinicalReasoningData] = useState<ClinicalReasoningData | null>(null);
   const clinicalReasoningDataRef = useRef<ClinicalReasoningData | null>(null);
@@ -5489,9 +5494,10 @@ ${ddxList}`;
         setClinicalReasoningOpen(true);
       }
 
-      // Downstream auto-cascade: only fire evidence + chain when
-      // autopilot is enabled, not paused, the run was voice-driven, and
-      // the originating conversation is snapshot-eligible.
+      // Hand the reasoning result to the awaited chain runner. The
+      // runner owns evidence → goal-profile → research → plan as a
+      // single async sequence — we no longer schedule evidence here
+      // via setTimeout, so stage ordering is deterministic.
       if (
         autopilotEnabledRef.current &&
         !autopilotPausedRef.current &&
@@ -5499,12 +5505,6 @@ ${ddxList}`;
         reasoningOriginCid != null &&
         snapshotEligibleRef.current.has(reasoningOriginCid)
       ) {
-        autoEvidenceTimerRef.current = setTimeout(() => {
-          if (!autopilotEnabledRef.current || autopilotPausedRef.current || !voiceTriggeredRef.current) return;
-          if (selectedConversationIdRef.current !== reasoningOriginCid) return;
-          if (!snapshotEligibleRef.current.has(reasoningOriginCid)) return;
-          handleEvidenceQueryRef.current({ autopilot: true });
-        }, 500);
         try { chainAutopilotAfterReasoningRef.current(reasoningSnapshot); } catch { /* fail-soft */ }
       }
     } catch (error) {
@@ -6028,6 +6028,24 @@ ${ddxList}`;
     };
 
     /** Promise wrapper around the research panel's running flag. */
+    /** Wait for the in-flight evidence query to settle (success / fail /
+     *  cancel). Polls evidenceLoadingRef which is synced from React
+     *  state on every render, so we observe the same lifecycle the UI
+     *  does. Times out after 60s to avoid hanging the chain. */
+    const awaitEvidence = (): Promise<'done' | 'error' | 'cancelled'> =>
+      new Promise(resolve => {
+        const startedAt = Date.now();
+        const tick = () => {
+          if (!stillEligible()) return resolve('cancelled');
+          if (!evidenceLoadingRef.current) return resolve('done');
+          if (Date.now() - startedAt > 60_000) return resolve('error');
+          window.setTimeout(tick, 200);
+        };
+        // Give React a frame so the loading flag actually flips true
+        // before we start polling.
+        window.setTimeout(tick, 250);
+      });
+
     const awaitResearch = (): Promise<'done' | 'error' | 'cancelled'> =>
       new Promise(resolve => {
         const pollStart = Date.now();
@@ -6076,8 +6094,35 @@ ${ddxList}`;
 
     (async () => {
       // Tiny initial yield so React paints the reasoning result before
-      // we start the research stage.
+      // we start downstream stages.
       await new Promise(r => window.setTimeout(r, 200));
+      if (!stillEligible()) return;
+
+      // ── Stage: evidence ─────────────────────────────────
+      // Owned by the chain so it always runs BEFORE research. Replaces
+      // the previous setTimeout-based fire-and-forget in
+      // triggerClinicalReasoningAnalysis.
+      const evidenceForced = forced.has('evidence');
+      if (!evidenceForced && stageInputHashRef.current['evidence'] === downstreamInputHash) {
+        markStageEnd('evidence', 'skipped', 'inputs unchanged');
+      } else if (evidenceLoadingRef.current) {
+        // Already in flight from a manual trigger — just wait.
+        const outcome = await awaitEvidence();
+        if (outcome === 'cancelled') return;
+        markStageEnd('evidence', outcome);
+      } else {
+        stageInputHashRef.current['evidence'] = downstreamInputHash;
+        markStageStart('evidence');
+        try {
+          handleEvidenceQueryRef.current({ autopilot: true });
+          const outcome = await awaitEvidence();
+          if (outcome === 'cancelled') return;
+          markStageEnd('evidence', outcome);
+        } catch (e) {
+          markStageEnd('evidence', 'error', e instanceof Error ? e.message : 'evidence trigger failed');
+        }
+      }
+
       if (!stillEligible()) return;
 
       // ── Stage: research ─────────────────────────────────
@@ -6108,18 +6153,68 @@ ${ddxList}`;
       if (!stillEligible()) return;
 
       // ── Stage: goal-profile auto-compute (silent — no chip) ─
-      // Required by the autopilot contract: derive activeGoalProfile
-      // from the predicted condition so downstream prescription /
-      // plan / timeline consumers have a baseline. activeGoalGap is
-      // intentionally left to the timeline UI to compute against the
-      // simulation snapshot — we can't materialise a SessionSnapshot
-      // here without invoking the recovery sim, which is out of band.
+      // Derive activeGoalProfile from the predicted condition AND the
+      // matching activeGoalGap from a baseline SessionSnapshot built
+      // out of the current ROM / pain markers. The gap is what
+      // downstream consumers (timeline, plan generator) actually read,
+      // so leaving it null defeats the purpose of the silent step.
       try {
         const conditionProfile = findConditionProfile(topLabel);
         const profile = conditionProfile
           ? generateGoalProfile(conditionProfile, null, undefined, null, topLabel)
           : generateGenericGoalProfile(topLabel, null);
-        if (stillEligible()) setActiveGoalProfile(profile);
+        if (!stillEligible()) return;
+        setActiveGoalProfile(profile);
+
+        // Build a session-zero baseline snapshot: predicted == current
+        // for every measurable field, so computeGoalGap quantifies the
+        // distance from where the patient is today to the target ROM /
+        // pain / sling integrity defined by the profile.
+        const roms = romMeasurementsRef.current;
+        const baselineRomPredictions: RomPrediction[] = roms.map(m => ({
+          jointId: m.jointId,
+          jointLabel: `${m.jointLabel} ${m.movementLabel}`,
+          plane: 'sagittal',
+          currentDegrees: m.measuredValue,
+          predictedDegrees: m.measuredValue,
+          targetDegrees: m.normalRange?.[1] ?? m.measuredValue,
+          deltaFromBaseline: 0,
+          limitingFactor: 'baseline',
+        }));
+        const pm = painMarkersRef.current;
+        const avgPain = pm.length > 0
+          ? (pm.reduce((s, m) => s + (m.severity ?? 0), 0) / pm.length) * 10
+          : 0;
+        const baselineSnapshot: SessionSnapshot = {
+          sessionNumber: 0,
+          dayOffset: 0,
+          treatments: [],
+          riskScore: 50,
+          riskLevel: 'baseline',
+          painPrediction: avgPain,
+          slingIntegrity: 50,
+          forceReduction: 0,
+          compensationResolution: 0,
+          doseResponseFraction: 0,
+          activeScenarios: [],
+          modelConfig: modelConfigRef.current ?? {},
+          overrides: {},
+          forceMultiplier: 1,
+          romPredictions: baselineRomPredictions,
+          painMarkerPredictions: [],
+          muscleStatePredictions: [],
+          slingPredictions: [],
+          posturalPredictions: [],
+          compensationPredictions: [],
+          functionalMilestones: [],
+          interSessionHealing: null,
+          recoveryPhaseLabel: 'Baseline',
+          isPlateauSession: false,
+          isBreakthroughSession: false,
+          isSetbackSession: false,
+        } as unknown as SessionSnapshot;
+        const gap = computeGoalGap(profile, baselineSnapshot, null);
+        if (stillEligible()) setActiveGoalGap(gap);
       } catch (e) {
         // Goal profile failure must not block the plan stage.
         console.warn('[autopilot] goal profile compute failed:', e);

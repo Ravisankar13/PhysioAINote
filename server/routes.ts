@@ -14657,23 +14657,64 @@ EXAMPLES of good predictions:
   // option-includes and keyword-density matchers. Cheap model
   // (gpt-4o-mini) because it fires per silence/pulse trigger.
   app.post('/api/clinical-text/answer-followup', ensureAuthenticated, async (req: Request, res: Response) => {
+    type RawFollowupQuestion = {
+      id?: unknown;
+      question?: unknown;
+      options?: unknown;
+    };
+    type SanitizedFollowupQuestion = {
+      id: string;
+      question: string;
+      options?: string[];
+    };
+    type RawFollowupMatch = {
+      questionId?: unknown;
+      answer?: unknown;
+      confidence?: unknown;
+      reason?: unknown;
+    };
+    type FollowupMatch = {
+      questionId: string;
+      answer: string;
+      confidence: number;
+      reason: string;
+    };
+    type FollowupResponse = {
+      answered: boolean;
+      answer: string | null;
+      confidence: number;
+      matches: FollowupMatch[];
+    };
+
+    const empty: FollowupResponse = { answered: false, answer: null, confidence: 0, matches: [] };
     try {
-      const { utterance, questions, activeQuestionId } = req.body || {};
-      const empty = { answered: false, answer: null, confidence: 0, matches: [] };
-      if (!utterance || typeof utterance !== 'string' || utterance.trim().length < 4) {
-        return res.json(empty);
-      }
-      if (!Array.isArray(questions) || questions.length === 0) {
-        return res.json(empty);
-      }
-      const sanitized = questions
-        .filter((q: any) => q && typeof q.id === 'string' && typeof q.question === 'string')
+      const body = (req.body ?? {}) as {
+        utterance?: unknown;
+        questions?: unknown;
+        activeQuestionId?: unknown;
+      };
+      const utterance = typeof body.utterance === 'string' ? body.utterance : '';
+      const activeQuestionId = typeof body.activeQuestionId === 'string' ? body.activeQuestionId : null;
+
+      if (!utterance || utterance.trim().length < 4) return res.json(empty);
+      if (!Array.isArray(body.questions) || body.questions.length === 0) return res.json(empty);
+
+      const sanitized: SanitizedFollowupQuestion[] = (body.questions as RawFollowupQuestion[])
+        .filter((q): q is RawFollowupQuestion => !!q && typeof q.id === 'string' && typeof q.question === 'string')
         .slice(0, 8)
-        .map((q: any) => ({
-          id: String(q.id),
-          question: String(q.question).slice(0, 220),
-          options: Array.isArray(q.options) ? q.options.slice(0, 8).map((o: any) => String(o).slice(0, 60)) : undefined,
-        }));
+        .map((q) => {
+          const opts = Array.isArray(q.options)
+            ? (q.options as unknown[])
+                .filter((o): o is string | number => typeof o === 'string' || typeof o === 'number')
+                .slice(0, 8)
+                .map((o) => String(o).slice(0, 60))
+            : undefined;
+          return {
+            id: String(q.id),
+            question: String(q.question).slice(0, 220),
+            ...(opts && opts.length > 0 ? { options: opts } : {}),
+          };
+        });
       if (sanitized.length === 0) return res.json(empty);
 
       const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
@@ -14693,7 +14734,7 @@ Rules:
 - Empty matches array if nothing in the utterance answers any of the open questions.`;
 
       const usr = `Open follow-up questions${activeQuestionId ? ` (active = ${activeQuestionId})` : ''}:
-${sanitized.map(q => `- id="${q.id}" question="${q.question}"${q.options ? ` options=[${q.options.map((o: string) => `"${o}"`).join(', ')}]` : ''}`).join('\n')}
+${sanitized.map(q => `- id="${q.id}" question="${q.question}"${q.options ? ` options=[${q.options.map((o) => `"${o}"`).join(', ')}]` : ''}`).join('\n')}
 
 Clinician utterance:
 """${utterance.slice(0, 1200)}"""
@@ -14711,51 +14752,66 @@ Match now.`;
         response_format: { type: 'json_object' },
       });
 
-      let parsed: any = {};
-      try { parsed = JSON.parse(r.choices?.[0]?.message?.content || '{}'); } catch { parsed = {}; }
+      let parsed: { matches?: unknown } = {};
+      try {
+        const raw = JSON.parse(r.choices?.[0]?.message?.content || '{}') as unknown;
+        if (raw && typeof raw === 'object') parsed = raw as { matches?: unknown };
+      } catch { parsed = {}; }
+
       const validIds = new Set(sanitized.map(q => q.id));
-      const optionsByid = new Map(sanitized.map(q => [q.id, q.options]));
-      const matches = (Array.isArray(parsed.matches) ? parsed.matches : [])
-        .filter((m: any) => m && typeof m.questionId === 'string' && validIds.has(m.questionId))
-        .filter((m: any) => typeof m.answer === 'string' && m.answer.trim().length > 0)
-        .filter((m: any) => typeof m.confidence !== 'number' || m.confidence >= 0.7)
-        .map((m: any) => {
-          const opts = optionsByid.get(m.questionId);
-          let answer = String(m.answer).trim().slice(0, 80);
-          // Snap to exact option string if the model returned a near-match.
+      const optionsById = new Map<string, string[] | undefined>(sanitized.map(q => [q.id, q.options]));
+      const rawMatches: RawFollowupMatch[] = Array.isArray(parsed.matches)
+        ? (parsed.matches as RawFollowupMatch[])
+        : [];
+
+      const matches: FollowupMatch[] = rawMatches
+        .map((m): FollowupMatch | null => {
+          if (!m || typeof m.questionId !== 'string' || !validIds.has(m.questionId)) return null;
+          if (typeof m.answer !== 'string' || m.answer.trim().length === 0) return null;
+          const confidence = typeof m.confidence === 'number' ? m.confidence : 0.7;
+          if (confidence < 0.7) return null;
+
+          let answer = m.answer.trim().slice(0, 80);
+          const opts = optionsById.get(m.questionId);
           if (opts && opts.length > 0) {
-            const exact = opts.find((o: string) => o.toLowerCase() === answer.toLowerCase());
-            if (exact) answer = exact;
-            else {
-              const fuzzy = opts.find((o: string) => answer.toLowerCase().includes(o.toLowerCase()) || o.toLowerCase().includes(answer.toLowerCase()));
+            const lower = answer.toLowerCase();
+            const exact = opts.find(o => o.toLowerCase() === lower);
+            if (exact) {
+              answer = exact;
+            } else {
+              const fuzzy = opts.find(o =>
+                lower.includes(o.toLowerCase()) || o.toLowerCase().includes(lower),
+              );
               if (fuzzy) answer = fuzzy;
-              else return null; // Question with options but no option-snap → discard.
+              else return null; // Optioned question with no snap → discard.
             }
           }
+
           return {
             questionId: m.questionId,
             answer,
-            confidence: typeof m.confidence === 'number' ? m.confidence : 0.7,
-            reason: typeof m.reason === 'string' ? String(m.reason).slice(0, 160) : '',
+            confidence,
+            reason: typeof m.reason === 'string' ? m.reason.slice(0, 160) : '',
           };
         })
-        .filter((m: any) => m !== null)
+        .filter((m): m is FollowupMatch => m !== null)
         .slice(0, 5);
-      // Also surface the active-question result at the top level
-      // so callers expecting the single-question contract
-      // ({ answered, answer, confidence }) work without changes.
+
+      // Surface the active-question result at the top level so callers
+      // expecting the single-question contract still work unchanged.
       const activeMatch = activeQuestionId
-        ? matches.find((m: any) => m.questionId === activeQuestionId)
+        ? matches.find(m => m.questionId === activeQuestionId)
         : matches[0];
-      res.json({
+      const response: FollowupResponse = {
         answered: !!activeMatch,
         answer: activeMatch?.answer ?? null,
         confidence: activeMatch?.confidence ?? 0,
         matches,
-      });
+      };
+      res.json(response);
     } catch (error: unknown) {
       console.error('Error in /api/clinical-text/answer-followup:', error);
-      res.json({ answered: false, answer: null, confidence: 0, matches: [] });
+      res.json(empty);
     }
   });
 

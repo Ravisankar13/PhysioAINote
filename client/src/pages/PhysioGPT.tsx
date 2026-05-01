@@ -1140,6 +1140,12 @@ export default function PhysioGPT() {
   const [visualizationBoneHighlights, setVisualizationBoneHighlights] = useState<Array<{ boneName: string; color: number; intensity: number }>>([]);
   const [activeVisualizationId, setActiveVisualizationId] = useState<string | null>(null);
   const lastReasoningTriggerRef = useRef<string>('');
+  // Material-change signature: structural findings only (markers,
+  // ROM, posture, compensation) — excludes evolving subjective text
+  // so reasoning is not re-fired on every transcript chunk after
+  // convergence. Compared against monitorConvergedRef to gate the
+  // reasoning entry point.
+  const lastMaterialSignatureRef = useRef<string>('');
   const compensationDataRef = useRef<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
   const painMarkersRef = useRef(painMarkers);
   painMarkersRef.current = painMarkers;
@@ -2695,7 +2701,8 @@ export default function PhysioGPT() {
     // Voice-only gate — only voice-triggered parses arm the autopilot
     // chain. Manual paste-and-parse from the Clinical Text panel
     // remains unaffected (chain stays gated by voiceTriggeredRef).
-    if (pendingVoiceTriggerRef.current) {
+    const isVoiceParse = !!pendingVoiceTriggerRef.current;
+    if (isVoiceParse) {
       voiceTriggeredRef.current = true;
     }
     // Surface parse stage on the AI Activity Monitor.
@@ -2896,18 +2903,21 @@ export default function PhysioGPT() {
         : predictionText;
       subjectiveHistoryRef.current = updated;
       setSubjectiveHistoryInput(updated);
-      // Pause AI gate — when the autopilot is paused, transcription/
-      // parse keep running but no new AI calls auto-fire.
-      // Voice-driven reasoning intentionally uses forceRefresh=false
-      // and does NOT reset lastReasoningTriggerRef so the governor's
-      // input-hash dedup (triggerKey) skips this run when structural
-      // inputs (markers + history + posture + compensation) are
-      // unchanged, AND the convergence guard inside
-      // triggerClinicalReasoningAnalysis can suppress further runs
-      // once the chain is converged. Use Re-run-from-here for the
-      // forced-refresh path.
+      // Autopilot toggle gate: only auto-fire downstream reasoning
+      // from a voice-driven parse when (a) autopilot is enabled AND
+      // (b) it isn't paused. With autopilot OFF, voice transcription
+      // + parse remain fully functional but the AI cascade does not
+      // engage — clinicians must hit Re-run-from-here or click into
+      // a stage manually. Manual UI-driven parse paths (paste +
+      // parse from the Clinical Text panel) are not gated here:
+      // they're handled by the painMarkers/modelConfig effect, which
+      // never required the autopilot toggle.
+      if (isVoiceParse && !autopilotEnabledRef.current) {
+        return;
+      }
       setTimeout(() => {
         if (autopilotPausedRef.current) return;
+        if (isVoiceParse && !autopilotEnabledRef.current) return;
         triggerClinicalReasoningAnalysisRef.current(false);
       }, 300);
     }
@@ -3763,19 +3773,21 @@ ${ddxList}`;
 
     if (!diagnosis && regions.length === 0) return;
     const evidenceHash = `${diagnosis}|${regions.slice().sort().join(',')}`;
-    // Dedup/convergence applies to autopilot-driven calls only.
-    if (opts?.autopilot) {
-      if (monitorConvergedRef.current && stageInputHashRef.current['evidence'] === evidenceHash) {
-        markStageEnd('evidence', 'converged', 'top hypothesis stable');
-        return;
-      }
+    const fromAutopilot = !!opts?.autopilot;
+    // Stage marker ownership rule: when called from the autopilot
+    // chain, the chain runner owns markStageStart/End for this stage
+    // (and its own dedup against downstreamInputHash). When called
+    // manually from the UI, this handler owns the markers + the
+    // evidenceHash dedup so manual clicks still surface on the
+    // monitor and respect convergence.
+    if (!fromAutopilot) {
       if (stageInputHashRef.current['evidence'] === evidenceHash) {
         markStageEnd('evidence', 'skipped', 'inputs unchanged');
         return;
       }
+      stageInputHashRef.current['evidence'] = evidenceHash;
+      markStageStart('evidence');
     }
-    stageInputHashRef.current['evidence'] = evidenceHash;
-    markStageStart('evidence');
 
     const abortController = new AbortController();
     evidenceAbortRef.current = abortController;
@@ -3811,14 +3823,14 @@ ${ddxList}`;
     .then(data => {
       if (evidenceQueryIdRef.current === currentQueryId) {
         setEvidenceEngineResult(data);
-        markStageEnd('evidence', 'done');
+        if (!fromAutopilot) markStageEnd('evidence', 'done');
       }
     })
     .catch((err) => {
       if (err?.name === 'AbortError') return;
       if (evidenceQueryIdRef.current === currentQueryId) {
         toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' });
-        markStageEnd('evidence', 'error', err instanceof Error ? err.message : 'request failed');
+        if (!fromAutopilot) markStageEnd('evidence', 'error', err instanceof Error ? err.message : 'request failed');
       }
     })
     .finally(() => {
@@ -5299,12 +5311,43 @@ ${ddxList}`;
       markStageEnd('reason', 'skipped', 'inputs unchanged');
       return;
     }
+    // Material-change signature: a stable hash of ONLY the clinical
+    // findings (marker IDs + severity + mechanism, ROM joint+rounded
+    // value, posture region.parameter+rounded value, compensation
+    // restrictions). Subjective text drift (a fresh transcript chunk
+    // that doesn't introduce new findings) does NOT change this
+    // signature — so once the chain converges, evolving narration
+    // alone will not re-fire reasoning.
+    const materialSig = JSON.stringify({
+      markers: painMarkersRef.current
+        .map(m => `${m.id}:${m.severity ?? 0}:${m.painMechanism ?? ''}`)
+        .sort(),
+      rom: romMeasurementsRef.current
+        .map(m => `${m.jointId}.${m.movementId}:${Math.round(m.measuredValue)}`)
+        .sort(),
+      posture: postureDeviations
+        .map(d => `${d.region}.${d.parameter}:${Math.round(d.value * 10) / 10}`)
+        .sort(),
+      compensation: compensationSummary ? JSON.stringify(compensationSummary.restrictions) : '',
+    });
+    // Convergence gate at REASONING ENTRY (not just downstream).
+    // Once the chain has converged, only force-refresh (manual
+    // re-run-from-here) or a material change in clinical findings
+    // is allowed to spend another reasoning AI call. This prevents
+    // every transcript chunk from re-firing reasoning after
+    // convergence even though triggerKey drifted via subjective text.
+    if (
+      !forceRefresh &&
+      monitorConvergedRef.current &&
+      materialSig === lastMaterialSignatureRef.current
+    ) {
+      markStageEnd('reason', 'converged', 'no material change');
+      return;
+    }
     // Inputs drifted from the last run (manual edit, marker placement,
     // ROM tweak, posture change, new camera finding). Reset the
     // convergence flag and clear the persisted terminal status so the
-    // chain can re-engage on the new evidence. Without this, downstream
-    // stages (gated by monitorConvergedRef) would refuse to re-fire
-    // even though reasoning itself is about to run with new inputs.
+    // chain can re-engage on the new evidence.
     if (lastReasoningTriggerRef.current && lastReasoningTriggerRef.current !== triggerKey) {
       setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
       const cidNow = selectedConversationIdRef.current;
@@ -5314,14 +5357,7 @@ ${ddxList}`;
       }
     }
     if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
-    // NOTE: convergence does NOT block reasoning here. The triggerKey
-    // dedup above already prevents re-firing when structural inputs
-    // are unchanged — that's the "no material change" gate. When
-    // inputs DO change, we MUST run reasoning so the chain can
-    // detect top-hypothesis destabilization (handled inside
-    // chainAutopilotAfterReasoning, which flips destabilized=true
-    // and reopens the downstream chain). Blocking here on convergence
-    // would deadlock re-engagement on truly new findings.
+    lastMaterialSignatureRef.current = materialSig;
 
     lastReasoningTriggerRef.current = triggerKey;
     // Cache the input hash on the dedup ref so per-stage governor
